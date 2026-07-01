@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from uuid import uuid4
@@ -20,6 +20,7 @@ from ..core.access import (
 )
 from .supabase_client import get_supabase_admin
 from . import audit_service
+from . import billing_period_service
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
@@ -30,6 +31,17 @@ BILLING_ROLES = {"support_coordinator", "allied_health", "managing_director"}
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _as_of_date_from_due(due_date: Any) -> date:
+    if not due_date:
+        from ..core.timezone import app_today
+        return app_today()
+    try:
+        return date.fromisoformat(str(due_date)[:10])
+    except ValueError:
+        from ..core.timezone import app_today
+        return app_today()
 
 
 def _money_to_cents(value: Any) -> int:
@@ -284,11 +296,45 @@ async def create_invoice(user: dict, data: dict) -> dict:
         if any(row.get("status") not in {"void", "cancelled"} for row in (existing.data or [])):
             raise HTTPException(status_code=409, detail="This session already has an active invoice.")
 
+    billing_period_id = None
+    participant_id = data.get("participant_id")
+    if participant_id:
+        as_of = _as_of_date_from_due(data.get("due_date"))
+        supabase = get_supabase_admin()
+        participant_result = (
+            supabase.table("patients")
+            .select(
+                "id, organization_id, full_name, email, plan_management_type, plan_management, "
+                "case_manager_name, case_manager_email, case_manager_phone"
+            )
+            .eq("id", str(participant_id))
+            .limit(1)
+            .execute()
+        )
+        participant_row = (participant_result.data or [None])[0]
+        period = billing_period_service.get_or_open_billing_period(
+            str(participant_id),
+            org_id,
+            as_of_date=as_of,
+            participant=participant_row,
+        )
+        billing_period_id = period.get("id")
+        locked_type = str(period.get("locked_plan_management_type") or "")
+        if participant_row and locked_type and not str(data.get("recipient_name") or "").strip():
+            name, email = billing_period_service.suggest_invoice_recipient(
+                participant_row,
+                locked_type,
+            )
+            data["recipient_name"] = name
+            if not data.get("recipient_email") and email:
+                data["recipient_email"] = email
+
     payload = {
         "organization_id": org_id,
         "issued_by": get_user_id(user),
         "participant_id": data.get("participant_id") or None,
         "session_id": data.get("session_id") or None,
+        "billing_period_id": billing_period_id,
         "invoice_number": invoice_number,
         "recipient_name": data.get("recipient_name") or "",
         "recipient_email": data.get("recipient_email") or None,

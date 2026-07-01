@@ -4,7 +4,9 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
   getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
+  getParticipantBillingPeriods, getParticipantCurrentBillingPeriod, planManagementTypeLabel,
   type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
+  type BillingPeriod,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -42,6 +44,7 @@ import {
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +89,7 @@ const participantSchema = z.object({
   primary_disability: z.string().optional(),
   biological_sex: z.string().optional(),
   plan_status: z.string().min(1, "Plan status is required"),
+  plan_management_type: z.enum(["NDIA-managed", "plan-managed", "self-managed"]).optional().or(z.literal("")),
   plan_start_date: z.string().optional(),
   plan_end_date: z.string().optional(),
   total_budget: z.coerce.number().min(0).optional(),
@@ -118,6 +122,7 @@ type ParticipantRecord = {
   primary_disability?: string | null;
   biological_sex?: string | null;
   plan_status?: string;
+  plan_management_type?: string | null;
   plan_start_date?: string | null;
   plan_end_date?: string | null;
   total_budget?: number | string | null;
@@ -386,9 +391,31 @@ function ParticipantForm({
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="plan_management_type"
+            render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel>{translate("patients.field.planManagementType")}</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-plan-management-type">
+                      <SelectValue placeholder={translate("patients.planManagementType.notSet")} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="NDIA-managed">{translate("patients.planManagementType.ndiaManaged")}</SelectItem>
+                    <SelectItem value="plan-managed">{translate("patients.planManagementType.planManaged")}</SelectItem>
+                    <SelectItem value="self-managed">{translate("patients.planManagementType.selfManaged")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           {hasPlan ? (
             <FormItem>
-              <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
+              <Label>{translate("patients.field.totalBudget")}</Label>
               <p className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 Managed via Set Up NDIS Plan
               </p>
@@ -450,7 +477,7 @@ function ParticipantForm({
 }
 
 // ---------------------------------------------------------------------------
-// Edit Participant Inline Panel
+// Edit Participant Modal
 // ---------------------------------------------------------------------------
 
 function EditParticipantPanel({
@@ -477,11 +504,31 @@ function EditParticipantPanel({
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
       plan_status: String(participant.plan_status ?? "active"),
+      plan_management_type: String(participant.plan_management_type ?? ""),
       plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget: Number(participant.total_budget ?? 0),
     },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    editForm.reset({
+      full_name: String(participant.full_name ?? ""),
+      ndis_number: String(participant.ndis_number ?? ""),
+      date_of_birth: participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
+      email: String(participant.email ?? ""),
+      phone: String(participant.phone ?? ""),
+      primary_disability: String(participant.primary_disability ?? ""),
+      biological_sex: String(participant.biological_sex ?? "unspecified"),
+      plan_status: String(participant.plan_status ?? "active"),
+      plan_management_type: String(participant.plan_management_type ?? ""),
+      plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
+      plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
+      total_budget: Number(participant.total_budget ?? 0),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, participant.id]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: ParticipantFormValues) => {
@@ -491,6 +538,7 @@ function EditParticipantPanel({
       if (!payload.primary_disability) delete payload.primary_disability;
       if (!payload.plan_start_date) delete payload.plan_start_date;
       if (!payload.plan_end_date) delete payload.plan_end_date;
+      if (!payload.plan_management_type) delete payload.plan_management_type;
 
       const res = await apiFetch(`/api/participants/${participant.id}`, {
         method: "PATCH",
@@ -515,12 +563,16 @@ function EditParticipantPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <Edit className="h-3.5 w-3.5" /> {open ? translate("patients.closeEdit") : translate("common.edit")}
+      <Button size="sm" variant="outline" className="h-9 gap-1.5 text-[12px] shrink-0" onClick={() => setOpen(true)}>
+        <Edit className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden min-[380px]:inline">{translate("common.edit")}</span>
+        <span className="min-[380px]:hidden">Edit</span>
       </Button>
-      {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.editTitle")}</h4>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{translate("patients.editTitle")}</DialogTitle>
+          </DialogHeader>
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
@@ -529,8 +581,8 @@ function EditParticipantPanel({
             hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -603,11 +655,32 @@ function SetupPlanPanel({
   const [categoryDraft, setCategoryDraft] = useState("");
   const [amountDraft, setAmountDraft] = useState("");
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const categoryBudgetFormRef = useRef<HTMLDivElement>(null);
+
+  const selectableCategories = availableCategories.filter(
+    (c) => editingCategory === c.category || !usedCategoryKeys.has(c.category),
+  );
+  const allCategoriesAllocated =
+    !categoriesQuery.isLoading && !editingCategory && selectableCategories.length === 0;
+  const editingCategoryLabel =
+    existingBudgets.find((b) => b.category === editingCategory)?.category_label
+    ?? availableCategories.find((c) => c.category === editingCategory)?.category_name
+    ?? editingCategory;
 
   const resetCategoryDraft = () => {
     setCategoryDraft("");
     setAmountDraft("");
     setEditingCategory(null);
+  };
+
+  const startEditingCategory = (category?: string, allocated?: number) => {
+    if (!category) return;
+    setEditingCategory(category);
+    setCategoryDraft(category);
+    setAmountDraft(String(allocated ?? 0));
+    requestAnimationFrame(() => {
+      categoryBudgetFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   };
 
   const upsertBudget = useMutation({
@@ -645,8 +718,19 @@ function SetupPlanPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen(true)}>
-        <PlusCircle className="h-3.5 w-3.5" /> {hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}
+      <Button size="sm" variant="outline" className="h-9 gap-1.5 text-[12px] shrink-0" onClick={() => setOpen(true)}>
+        <PlusCircle className="h-3.5 w-3.5 shrink-0" />
+        {hasPlan ? (
+          <>
+            <span className="hidden min-[380px]:inline">Edit Plan Details</span>
+            <span className="min-[380px]:hidden">Edit Plan</span>
+          </>
+        ) : (
+          <>
+            <span className="hidden min-[380px]:inline">{translate("patients.setupPlan")}</span>
+            <span className="min-[380px]:hidden">Set Up Plan</span>
+          </>
+        )}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
@@ -750,12 +834,7 @@ function SetupPlanPanel({
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7"
-                              onClick={() => {
-                                if (!b.category) return;
-                                setEditingCategory(b.category);
-                                setCategoryDraft(b.category);
-                                setAmountDraft(String(b.allocated ?? 0));
-                              }}
+                              onClick={() => startEditingCategory(b.category, b.allocated)}
                             >
                               <Edit2 className="h-3.5 w-3.5" />
                             </Button>
@@ -775,50 +854,62 @@ function SetupPlanPanel({
                     </div>
                   )}
 
-                  <div className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
-                    <Select
-                      value={categoryDraft}
-                      onValueChange={setCategoryDraft}
-                      disabled={!!editingCategory || categoriesQuery.isLoading}
-                    >
-                      <SelectTrigger className="h-9 text-[12px]">
-                        <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableCategories
-                          .filter((c) => editingCategory === c.category || !usedCategoryKeys.has(c.category))
-                          .map((c) => (
-                            <SelectItem key={c.category} value={c.category}>
-                              {c.category_name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="Allocated amount"
-                      value={amountDraft}
-                      onChange={(e) => setAmountDraft(e.target.value)}
-                    />
-                    <div className="flex justify-end gap-2">
-                      {editingCategory && (
-                        <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
-                          Cancel
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
-                        onClick={() =>
-                          upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
-                        }
-                      >
-                        {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                        {editingCategory ? "Update" : "Add"} Category Budget
-                      </Button>
-                    </div>
+                  <div ref={categoryBudgetFormRef} className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
+                    {allCategoriesAllocated ? (
+                      <p className="text-[12px] text-[#6B7280] text-center py-1">
+                        All available support categories already have a budget. Use the edit button on a row above to change an allocation.
+                      </p>
+                    ) : (
+                      <>
+                        {editingCategory ? (
+                          <div className="flex h-9 items-center rounded-md border border-purple-100/60 bg-[#FDFCFF] px-3 text-[12px] font-medium text-[#111827]">
+                            {editingCategoryLabel}
+                          </div>
+                        ) : (
+                          <Select
+                            value={categoryDraft || undefined}
+                            onValueChange={setCategoryDraft}
+                            disabled={categoriesQuery.isLoading}
+                          >
+                            <SelectTrigger className="h-9 text-[12px]">
+                              <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
+                            </SelectTrigger>
+                            <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
+                              {selectableCategories.map((c) => (
+                                <SelectItem key={c.category} value={c.category}>
+                                  {c.category_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Allocated amount"
+                          value={amountDraft}
+                          onChange={(e) => setAmountDraft(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-2">
+                          {editingCategory && (
+                            <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
+                              Cancel
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
+                            onClick={() =>
+                              upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
+                            }
+                          >
+                            {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                            {editingCategory ? "Update" : "Add"} Category Budget
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -848,6 +939,9 @@ type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "ses
 
 function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
+  const { user } = useAuth();
+  const isCoordinator = user?.role === "support_coordinator";
+
   const participantQuery = useOrgQuery(["participant", id], {
     queryFn: () => jsonFetch<ParticipantRecord>(`/api/participants/${id}`),
   });
@@ -860,9 +954,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
     queryFn: () => jsonFetch<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
+  const billingPeriodCurrentQuery = useOrgQuery(["participant", id, "billing-period-current"], {
+    queryFn: () => getParticipantCurrentBillingPeriod(id),
+    enabled: isCoordinator,
+  });
+  const billingPeriodsQuery = useOrgQuery(["participant", id, "billing-periods"], {
+    queryFn: () => getParticipantBillingPeriods(id),
+    enabled: isCoordinator,
+  });
 
-  const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
   const qc = useQueryClient();
 
   // Assign Shift — coordinator only
@@ -1156,39 +1256,61 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     .toUpperCase();
 
   const TABS = [
-    { id: "overview"    as const, label: translate("patients.tab.overview"),    icon: UserCircle   },
-    { id: "plan"        as const, label: translate("patients.tab.plan"),   icon: DollarSign   },
-    ...(isCoordinator ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", icon: ClipboardList }] : [{ id: "goals" as const, label: translate("patients.tab.goals"), icon: Target }]),
-    { id: "sessions"    as const, label: "Shift History", icon: CalendarDays },
-    { id: "compliance"  as const, label: translate("patients.tab.compliance"),  icon: ShieldCheck  },
-    ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
+    { id: "overview"    as const, label: translate("patients.tab.overview"),    shortLabel: "Overview",  icon: UserCircle   },
+    { id: "plan"        as const, label: translate("patients.tab.plan"),        shortLabel: "Plan",      icon: DollarSign   },
+    ...(isCoordinator
+      ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", shortLabel: "Goals", icon: ClipboardList }]
+      : [{ id: "goals" as const, label: translate("patients.tab.goals"), shortLabel: "Goals", icon: Target }]),
+    { id: "sessions"    as const, label: "Shift History", shortLabel: "Shifts",    icon: CalendarDays },
+    { id: "compliance"  as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), shortLabel: "Context", icon: Users }] : []),
+    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", shortLabel: "Clinical", icon: Lock }] : []),
   ];
 
   return (
     <div className="flex flex-col min-h-full">
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-0">
+      <div
+        className="sticky top-0 z-10 border-b border-purple-100/60 px-3 pt-3 pb-0 sm:px-5 sm:pt-5"
+        style={{ background: "var(--cc-bg)" }}
+      >
 
-        {/* Avatar + name + action buttons */}
-        <div className="flex items-center gap-3 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#BE185D] to-[#3730A3] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+        {/* Avatar + name */}
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-[#BE185D] to-[#3730A3] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="hidden">
-              Participant Profile
-            </p>
-            <h3 className="text-[16px] font-black leading-tight truncate" style={{ color: "var(--cc-text)" }}>
+            <p className="hidden">Participant Profile</p>
+            <h3
+              className="text-[16px] font-black leading-snug sm:truncate"
+              style={{ color: "var(--cc-text)" }}
+            >
               {participant.full_name}
             </h3>
+            <p className="text-[11px] mt-0.5 leading-relaxed sm:hidden" style={{ color: "var(--cc-muted)" }}>
+              {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
+              {participant.plan_start_date && participant.plan_end_date && (
+                <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
+              )}
+            </p>
+            
+             {/* NDIS number + plan dates — desktop */}
+              <p className="hidden sm:block text-[11px] text-[#6B7280] leading-relaxed mt-2" style={{ color: "var(--cc-muted)" }}>
+                {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
+                {participant.plan_start_date && participant.plan_end_date && (
+                  <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
+                )}
+              </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+
+          {/* Action buttons — desktop: inline right */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <EditParticipantPanel
               participant={participant}
               hasPlan={hasPlan}
-              onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
+              onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
             />
             <SetupPlanPanel
               participantId={id}
@@ -1198,32 +1320,38 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           </div>
         </div>
 
-        {/* NDIS number + plan dates */}
-        <p className="text-[11px] text-[#6B7280] ml-[52px] -mt-2 mb-3 leading-relaxed">
-          {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
-          {participant.plan_start_date && participant.plan_end_date && (
-            <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
-          )}
-        </p>
-
-        {/* 4-stat strip */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
+        {/* Stat cards — 2×2 on mobile, 4 across on desktop */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3 mt-3">
           {metricCards.map((metric) => {
             const Icon = metric.icon;
             return (
-              <div key={metric.label} className={`rounded-xl border px-2.5 py-2 ${metric.tone}`}>
-                <div className="flex items-center gap-1 mb-1.5">
-                  <Icon className="h-3 w-3 shrink-0 opacity-70" />
-                  <p className="text-[8px] font-black uppercase tracking-[0.13em] opacity-70 leading-none truncate">{metric.label}</p>
+              <div key={metric.label} className={`rounded-xl border px-3 py-2.5 ${metric.tone}`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                  <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
                 </div>
-                <p className="text-[13px] font-black capitalize leading-tight truncate">{metric.value}</p>
+                <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
               </div>
             );
           })}
         </div>
 
+        {/* Action buttons — mobile: below stat cards */}
+        <div className="flex sm:hidden flex-wrap items-center gap-2 mb-3">
+          <EditParticipantPanel
+            participant={participant}
+            hasPlan={hasPlan}
+            onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
+          />
+          <SetupPlanPanel
+            participantId={id}
+            budget={budget}
+            onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
+          />
+        </div>
+
         {/* Tab bar */}
-        <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none">
+        <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none scroll-px-3">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1231,14 +1359,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                className={`flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 min-h-[44px] ${
                   active
                     ? "border-[#3730A3] text-[#3730A3]"
                     : "border-transparent text-[#6B7280] hover:text-[#111827] hover:border-[#E5E7EB]"
                 }`}
               >
-                <Icon size={13} strokeWidth={active ? 2.5 : 2} />
-                {tab.label}
+                <Icon size={14} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.shortLabel}</span>
               </button>
             );
           })}
@@ -1246,7 +1375,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6">
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
@@ -1255,7 +1384,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <ClipboardList className="h-3.5 w-3.5 text-[#3730A3]" />
               <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.personalDetails")}</h4>
             </div>
-            <dl className="grid grid-cols-2 gap-2">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 [translate("patients.field.dateOfBirth"),     safeFormat(participant.date_of_birth)],
                 [translate("patients.field.biologicalSex"),    participant.biological_sex || translate("patients.notSet")],
@@ -1266,6 +1395,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
                   : translate("patients.notSet")],
                 [translate("patients.field.planStatus"),       participant.plan_status || translate("patients.notSet")],
+                [translate("patients.field.planManagementType"), planManagementTypeLabel(participant.plan_management_type, translate)],
                 [translate("patients.field.totalBudget"),      money(totalBudget || budget?.total_funding)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
@@ -1274,6 +1404,75 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               ))}
             </dl>
+          </section>
+        )}
+
+        {activeTab === "overview" && isCoordinator && (
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Lock className="h-3.5 w-3.5 text-[#3730A3]" />
+              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.billingPeriod.title")}</h4>
+            </div>
+
+            {billingPeriodCurrentQuery.isLoading ? (
+              <Skeleton className="h-16 w-full rounded-xl" />
+            ) : (
+              <>
+                {billingPeriodCurrentQuery.data?.type_differs_from_lock && (
+                  <div
+                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900"
+                    role="status"
+                  >
+                    {billingPeriodCurrentQuery.data.message ?? translate("patients.billingPeriod.nextPeriodNote")}
+                  </div>
+                )}
+                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    [translate("patients.billingPeriod.currentType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.current_plan_management_type, translate)],
+                    [translate("patients.billingPeriod.lockedType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.open_period?.locked_plan_management_type, translate)],
+                    [
+                      translate("patients.billingPeriod.periodRange"),
+                      billingPeriodCurrentQuery.data?.open_period
+                        ? `${safeFormat(billingPeriodCurrentQuery.data.open_period.period_start)} – ${safeFormat(billingPeriodCurrentQuery.data.open_period.period_end)}`
+                        : translate("patients.notSet"),
+                    ],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                      <dt className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{label}</dt>
+                      <dd className="text-[12px] font-bold text-[#111827]">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            )}
+
+            {billingPeriodsQuery.data?.items && billingPeriodsQuery.data.items.length > 0 && (
+              <div className="pt-1">
+                <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280] mb-2">
+                  {translate("patients.billingPeriod.history")}
+                </p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {billingPeriodsQuery.data.items.map((period: BillingPeriod) => (
+                    <div
+                      key={period.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-purple-100/60 bg-white px-3 py-2 text-[12px]"
+                    >
+                      <span className="font-semibold text-[#111827]">
+                        {safeFormat(period.period_start)} – {safeFormat(period.period_end)}
+                      </span>
+                      <span className="text-[#6B7280]">
+                        {planManagementTypeLabel(period.locked_plan_management_type, translate)}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${period.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                        {period.status === "open"
+                          ? translate("patients.billingPeriod.statusOpen")
+                          : translate("patients.billingPeriod.statusClosed")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -2029,24 +2228,24 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           return (
             <section className="space-y-4">
               {/* Header */}
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <h3 className="text-[16px] font-bold text-[#111827]">Goals & Tasks</h3>
                   <p className="text-[12px] text-[#6B7280] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 shrink-0">
                   <button type="button"
                     onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalSupportCategory(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false); }}
-                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
+                    className="h-9 px-3 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
                     + Goal
                   </button>
                   <button type="button"
                     onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }}
-                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    className="h-9 px-3 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
                     + Task
                   </button>
                   <button type="button" onClick={() => setShiftModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
                     <CalendarClock size={13} /> Assign Shift
                   </button>
                 </div>
@@ -2082,11 +2281,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 return (
                   <div key={goal.id} className="rounded-lg border border-purple-100/60 bg-white">
                     {/* Goal header */}
-                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex items-start gap-2 min-w-0 flex-1">
                         <Target size={15} className="shrink-0 mt-0.5 text-[#3730A3]" />
                         <div className="min-w-0">
-                          <p className="text-[13px] font-bold text-[#111827] leading-snug">{goal.name}</p>
+                          <p className="text-[13px] font-bold text-[#111827] leading-snug break-words">{goal.name}</p>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>
                               {areaStyle.label}
@@ -2102,27 +2301,27 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
                         <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); }}
-                          className="px-2 py-1 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
+                          className="h-9 px-2.5 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
                           + Task
                         </button>
                         <button type="button" onClick={() => startEditGoal(goal)}
-                          className="p-1.5 rounded hover:bg-gray-100" title="Edit goal">
-                          <Edit2 size={12} className="text-[#6B7280]" />
+                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Edit goal">
+                          <Edit2 size={14} className="text-[#6B7280]" />
                         </button>
                         <button type="button" onClick={() => completeGoalMut.mutate(goal.id)} disabled={completeGoalMut.isPending}
-                          className="p-1.5 rounded hover:bg-green-50" title="Mark completed">
-                          <CheckCircle2 size={12} className="text-[#059669]" />
+                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-green-50" title="Mark completed">
+                          <CheckCircle2 size={14} className="text-[#059669]" />
                         </button>
                         <button type="button" onClick={() => archiveGoalMut.mutate(goal.id)} disabled={archiveGoalMut.isPending}
-                          className="p-1.5 rounded hover:bg-gray-100" title="Archive goal">
-                          <Archive size={12} className="text-[#6B7280]" />
+                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Archive goal">
+                          <Archive size={14} className="text-[#6B7280]" />
                         </button>
                         <button type="button"
                           onClick={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}
-                          className="p-1.5 rounded hover:bg-purple-50" title="View progress">
-                          <BarChart2 size={12} className={progressGoalId === goal.id ? "text-[#3730A3]" : "text-[#6B7280]"} />
+                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="View progress">
+                          <BarChart2 size={14} className={progressGoalId === goal.id ? "text-[#3730A3]" : "text-[#6B7280]"} />
                         </button>
                       </div>
                     </div>
@@ -2583,12 +2782,12 @@ export default function Patients() {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 overflow-hidden">
+    <div className="flex h-[calc(100dvh-8.5rem)] md:h-[calc(100dvh-8rem)] gap-0 md:gap-4 overflow-hidden -mx-4 md:mx-0">
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[330px] shrink-0 flex-col rounded-2xl overflow-hidden`}
-        style={{ background: "var(--cc-bg)", border: "1px solid var(--cc-border)" }}
+        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[330px] shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden`}
+        style={{ background: "var(--cc-bg)", border: showMobileDetail ? "none" : "1px solid var(--cc-border)" }}
       >
         {/* Panel header */}
         <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: "1px solid var(--cc-border)" }}>
@@ -2779,15 +2978,15 @@ export default function Patients() {
 
       {/* ── Right panel — participant detail ──────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col rounded-2xl overflow-hidden`}
-        style={{ background: "var(--cc-bg)", border: "1px solid var(--cc-border)" }}
+        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col rounded-none lg:rounded-2xl overflow-hidden border-0 lg:border`}
+        style={{ background: "var(--cc-bg)", borderColor: "var(--cc-border)" }}
       >
         {selectedId ? (
           <>
             {/* Mobile back button */}
             <button
               type="button"
-              className="lg:hidden flex items-center gap-2 text-[13px] font-semibold px-4 py-3 shrink-0 transition-colors"
+              className="lg:hidden flex items-center gap-2 text-[13px] font-semibold px-3 py-2.5 shrink-0 transition-colors min-h-[44px]"
               style={{ borderBottom: "1px solid var(--cc-border)", color: "var(--cc-plum)" }}
               onClick={() => setShowMobileDetail(false)}
             >

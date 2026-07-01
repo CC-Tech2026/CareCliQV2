@@ -37,6 +37,7 @@ const schema = z.object({
   primary_disability: z.string().optional(),
   biological_sex:     z.string().optional(),
   plan_status:        z.string().min(1, "Plan status is required"),
+  plan_management_type: z.enum(["NDIA-managed", "plan-managed", "self-managed"]).optional().or(z.literal("")),
   plan_start_date:    z.string().optional(),
   plan_end_date:      z.string().optional(),
   total_budget:       z.coerce.number().min(0).optional(),
@@ -67,7 +68,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
     defaultValues: {
       full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
       primary_disability: "", biological_sex: "unspecified", plan_status: "active",
-      plan_start_date: "", plan_end_date: "", total_budget: 0,
+      plan_management_type: "", plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
   });
 
@@ -82,6 +83,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex:     String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
+      plan_management_type: String(participant.plan_management_type ?? ""),
       plan_start_date:    participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date:      participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget:       Number(participant.total_budget ?? 0),
@@ -96,6 +98,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
       if (!payload.primary_disability) delete payload.primary_disability;
       if (!payload.plan_start_date)    delete payload.plan_start_date;
       if (!payload.plan_end_date)      delete payload.plan_end_date;
+      if (!payload.plan_management_type) delete payload.plan_management_type;
 
       const res = await apiFetch(`/api/participants/${id}`, {
         method: "PATCH",
@@ -273,6 +276,25 @@ export default function ParticipantEdit({ id }: { id: string }) {
                     <SelectItem value="pending">{translate("patients.planStatus.pending")}</SelectItem>
                     <SelectItem value="inactive">{translate("patients.planStatus.inactive")}</SelectItem>
                     <SelectItem value="expired">{translate("patients.planStatus.expired")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="plan_management_type" render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.planManagementType")}</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <FormControl>
+                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-plan-management-type" style={{ borderColor: BORDER }}>
+                      <SelectValue placeholder={translate("patients.planManagementType.notSet")} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="NDIA-managed">{translate("patients.planManagementType.ndiaManaged")}</SelectItem>
+                    <SelectItem value="plan-managed">{translate("patients.planManagementType.planManaged")}</SelectItem>
+                    <SelectItem value="self-managed">{translate("patients.planManagementType.selfManaged")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
