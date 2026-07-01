@@ -395,7 +395,7 @@ export function TaskTemplatePanel({
                   </p>
                   {template.primary_shift_type && (
                     <p className="text-[10px] mt-1" style={{ color: MUTED }}>
-                      {translateParams("coordinator.taskTemplate.shiftMeta", { shift: template.primary_shift_type ?? "", recurrence: template.recurrence_type })}
+                      {translateParams("coordinator.taskTemplate.shiftMeta", { shift: template.primary_shift_type ?? "", recurrence: template.recurrence_type ?? "" })}
                     </p>
                   )}
                 </div>

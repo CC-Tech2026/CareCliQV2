@@ -260,7 +260,7 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
                 }}
               >
                 {daysLeft > 0
-                  ? translateParams("client.planExpiresIn", { days: daysLeft })
+                  ? translateParams("client.planExpiresIn", { days: String(daysLeft) })
                   : translate("client.planExpired")}
               </span>
             )}
@@ -312,7 +312,7 @@ function SessionConfidenceCard({ client }: { client: ClientSummary }) {
   return (
     <Section title={translate("client.section.sessionConfidence")} icon={ListChecks}>
       <p className="mb-3 text-sm font-medium" style={{ color: MUTED }}>
-        {translateParams("client.confidence.summary", { ready: readyCount, total: items.length })}
+        {translateParams("client.confidence.summary", { ready: String(readyCount), total: String(items.length) })}
       </p>
       <ul className="space-y-2">
         {items.map((item) => (
@@ -503,7 +503,7 @@ function GoalSelector({
     <div className="space-y-3">
       {goals.map((goal, index) => {
         const isSelected = selected.has(goal.id);
-        const title = goal.title || goal.description || translateParams("client.goalFallback", { number: index + 1 });
+        const title = goal.title || goal.description || translateParams("client.goalFallback", { number: String(index + 1) });
         const note = notes[goal.id];
         return (
           <div key={goal.id} className="rounded-lg border" style={{ borderColor: isSelected ? PLUM : "#EEEAFB" }}>
@@ -988,7 +988,7 @@ function InlineSessionComposer({
                                 color: selected ? PLUM : MUTED,
                               }}
                             >
-                              {goalLabel(goal, idx, translateParams("client.goalFallback", { number: idx + 1 }))}
+                              {goalLabel(goal, idx, translateParams("client.goalFallback", { number: String(idx + 1) }))}
                             </button>
                           );
                         })}
@@ -1419,7 +1419,7 @@ function IncidentReportModal({
                   </span>
                   {r.ndis_reportable && (
                     <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
-                      {translateParams("client.incident.ndisReportableNotify", { hours: r.notification_hours })}
+                      {translateParams("client.incident.ndisReportableNotify", { hours: String(r.notification_hours) })}
                     </span>
                   )}
                 </div>
@@ -1617,7 +1617,7 @@ function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
                 </p>
                 <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>
                   {safeDate(session.session_date, notRecorded)}
-                  {session.duration_minutes ? ` ${translateParams("client.sessions.durationMin", { minutes: session.duration_minutes })}` : ""}
+                  {session.duration_minutes ? ` ${translateParams("client.sessions.durationMin", { minutes: String(session.duration_minutes) })}` : ""}
                 </p>
                 {session.legal_record_text && (
                   <p className="mt-2 text-sm leading-relaxed line-clamp-2" style={{ color: MUTED }}>
@@ -2138,13 +2138,13 @@ export default function MyClientDetail({ id }: { id: string }) {
               <div className="flex items-center gap-2 border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
                 <Target size={14} style={{ color: MUTED }} />
                 <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-                  {translateParams("client.ndisGoalsRecorded", { count: (planQuery.data?.goals || client.goals || []).length })}
+                  {translateParams("client.ndisGoalsRecorded", { count: String((planQuery.data?.goals || client.goals || []).length) })}
                 </p>
               </div>
               <div className="divide-y" style={{ borderColor: BORDER }}>
                 {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
                   const g = goal as Record<string, unknown>;
-                  const title = String(g.title || g.name || translateParams("client.goalFallback", { number: index + 1 }));
+                  const title = String(g.title || g.name || translateParams("client.goalFallback", { number: String(index + 1) }));
                   const description = String(g.description || g.instructions || g.goal_instructions || "");
                   const status = String(g.status || "active");
                   const category = String(g.category || g.support_category || "");

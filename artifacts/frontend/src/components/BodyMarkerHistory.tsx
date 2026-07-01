@@ -217,7 +217,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                             <span className="mt-0.5 h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.hex }} />
                             <div className="min-w-0 flex-1">
                               <p className={cn("text-[11px] font-semibold", cfg.text)}>
-                                {getZoneLabel(m.zone, translate)} — {getMarkerColorLabel(key as any, translate)}
+                                {getZoneLabel(m.zone, translate)} — {getMarkerColorLabel(m.color, translate)}
                               </p>
                               {m.note && (
                                 <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">

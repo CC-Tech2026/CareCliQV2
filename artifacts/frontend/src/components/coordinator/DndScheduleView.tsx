@@ -34,6 +34,7 @@ import {
   type ConflictItem,
   type AvailabilityStatus,
   type WorkerAvailability,
+  type BlackoutDate,
 } from "@/services/coordinatorService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -74,6 +75,7 @@ function DraggableShiftCard({
   shift: CoordinatorShiftRecord;
   compact?: boolean;
 }) {
+  const { translate } = useAccessibility();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: shift.id,
     data: { shift },
@@ -119,6 +121,7 @@ function DraggableShiftCard({
 
 // ── Drag overlay clone ────────────────────────────────────────────────────────
 function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
+  const { translate } = useAccessibility();
   const clrs = statusColors(shift.status);
   const start = shift.scheduled_start ? parseISO(shift.scheduled_start) : null;
   const end   = shift.scheduled_end   ? parseISO(shift.scheduled_end)   : null;
@@ -192,7 +195,7 @@ function ConflictModal({
   onCancel: () => void;
   confirming: boolean;
 }) {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const hard = pending.conflicts.filter((c) => c.severity === "error");
   const soft = [...pending.conflicts.filter((c) => c.severity !== "error"), ...pending.skillWarnings];
 
@@ -330,7 +333,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
   const [pendingUnassign, setPendingUnassign] = useState<{
     shift: CoordinatorShiftRecord; workerName: string; warning?: string;
   } | null>(null);
-  const [workerAvailability, setWorkerAvailability] = useState<Record<string, WorkerAvailability & { blackout_dates?: Array<{ start_date: string; end_date: string }> }>>({});
+  const [workerAvailability, setWorkerAvailability] = useState<Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(true);
 
   // Fetch availability for all workers
@@ -342,7 +345,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
         for (const worker of workers) {
           try {
             const data = await getWorkerAvailability(worker.id);
-            availMap[worker.id] = data;
+            availMap[worker.id] = { ...data.availability, blackout_dates: data.blackout_dates };
           } catch (err) {
             console.warn(`Failed to fetch availability for worker ${worker.id}:`, err);
           }

@@ -102,9 +102,7 @@ function presentMobileBannerNotificationToast(notification: UserNotification): v
   const accent = notificationAccentColor(notification.banner_style);
 
   toast({
-    title: (
-      <span className="text-[13px] font-semibold text-slate-800">{notification.title}</span>
-    ),
+    title: notification.title,
     description: <WorkerBannerToastContent notification={notification} />,
     duration: MOBILE_BANNER_TOAST_MS,
     variant: "default",

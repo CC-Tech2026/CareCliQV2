@@ -207,7 +207,7 @@ export default function MDStaffPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           {worker.compliance_score >= 90 && <Star size={12} strokeWidth={2.5} className="text-amber-500" />}
                           {worker.compliance_score > 0 && worker.compliance_score < 85 && <Shield size={12} strokeWidth={2.5} className="text-red-500" />}
-                          <StatusBadge score={worker.compliance_score} />
+                          <StatusBadge score={worker.compliance_score} translate={translate} />
                         </div>
                       </div>
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">

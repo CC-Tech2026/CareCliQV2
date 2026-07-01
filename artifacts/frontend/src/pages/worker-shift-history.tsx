@@ -234,14 +234,24 @@ function ShiftTrendChart({
                 dataKey="score"
                 stroke={PLUM}
                 strokeWidth={2.5}
-                dot={{ r: 4, fill: PLUM, strokeWidth: 0, cursor: "pointer" }}
-                activeDot={{
-                  r: 6,
-                  onClick: (_, payload) => {
-                    const row = payload?.payload as { shift_id?: string };
-                    if (row?.shift_id) onPointClick?.(row.shift_id);
-                  },
+                dot={(props) => {
+                  const { cx, cy, payload } = props;
+                  const row = payload as { shift_id?: string };
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={4}
+                      fill={PLUM}
+                      strokeWidth={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        if (row?.shift_id) onPointClick?.(row.shift_id);
+                      }}
+                    />
+                  );
                 }}
+                activeDot={{ r: 6 }}
                 connectNulls
               />
             </LineChart>

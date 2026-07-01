@@ -721,7 +721,7 @@ export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
   const { data: inboxUnread } = useOrgQuery(
     ["worker-notifications-unread", orgId],
     {
-      queryFn: () => fetchNotifications({ unread_only: true, limit: 1 }),
+      queryFn: () => fetchNotifications({ unread_only: true }),
       staleTime: Number.POSITIVE_INFINITY,
     },
   );

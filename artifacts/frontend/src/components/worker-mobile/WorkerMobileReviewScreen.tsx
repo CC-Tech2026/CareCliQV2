@@ -77,10 +77,10 @@ export function WorkerMobileReviewScreen({
     window.setTimeout(() => setHighlightMissing(false), 1800);
   };
 
-  const taskLabel = (taskId?: string) =>
-    tasks.find((t) => t.task_id === taskId)?.label;
+  const taskLabel = (taskId?: string | null) =>
+    tasks.find((t) => t.task_id === taskId)?.label ?? undefined;
 
-  const goalTitle = (taskId?: string) =>
+  const goalTitle = (taskId?: string | null) =>
     tasks.find((t) => t.task_id === taskId)?.goal_title ?? undefined;
 
   return (
