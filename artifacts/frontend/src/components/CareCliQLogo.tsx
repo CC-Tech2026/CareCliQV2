@@ -1,3 +1,5 @@
+import { CareCliQLogoSVG } from "./CareCliQLogoSVG";
+
 interface CareCliQLogoProps {
   compact?: boolean;
   className?: string;
@@ -9,12 +11,7 @@ export function CareCliQLogo({ compact = false, className = "" }: CareCliQLogoPr
       className={`flex items-center select-none gap-2 ${compact ? "justify-center" : "justify-start"} ${className}`}
       title="CareCliQ"
     >
-      <img
-        src="/carecliQ_logo_new.png"
-        alt="CareCliQ"
-        className="object-contain shrink-0 transition-opacity duration-150"
-        style={{ height: compact ? 32 : 42, width: compact ? 32 : 42 }}
-      />
+      <CareCliQLogoSVG size={compact ? 32 : 42} />
       {!compact && (
         <span
           className="font-black text-[18px] tracking-tight leading-none"
@@ -38,12 +35,7 @@ interface CareCliQLogoSmProps {
 export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
   return (
     <div className={`flex items-center select-none ${className}`}>
-      <img
-        src="/carecliQ_logo_new.png"
-        alt="CareCliQ"
-        className="object-contain shrink-0"
-        style={{ height: 32, width: 32 }}
-      />
+      <CareCliQLogoSVG size={32} />
     </div>
   );
 }

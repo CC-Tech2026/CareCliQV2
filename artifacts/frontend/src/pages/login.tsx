@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Loader2, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { CareCliQLogoSVG } from "@/components/CareCliQLogoSVG";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 import {
   getRememberDevicePreference,
@@ -233,7 +234,7 @@ export default function Login() {
         />
         <div className="relative z-10 px-6 pt-12 pb-9">
           {/* Logo row */}
-          <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-8 w-auto" />
+          <CareCliQLogoSVG size={32} />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "var(--auth-marketing-muted)" }}>
             {t("auth.login.marketing.tagline")}
           </p>
@@ -285,7 +286,7 @@ export default function Login() {
       >
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
-          <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-10 w-auto object-contain" />
+          <CareCliQLogoSVG size={40} />
         </div>
 
         {/* Mobile drag handle */}

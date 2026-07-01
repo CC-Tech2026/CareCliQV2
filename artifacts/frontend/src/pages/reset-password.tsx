@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, Loader2, LockKeyhole } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { CareCliQLogoSVG } from "@/components/CareCliQLogoSVG";
 
 const PLUM = "var(--cc-plum)";
 const BORDER = "#C7D2FE";
@@ -71,7 +72,7 @@ export default function ResetPassword() {
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F8F8FE]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
-          <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
+          <CareCliQLogoSVG size={36} />
           <div className="h-4 w-[1px] bg-gray-200" />
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">{t("auth.reset.workspace")}</span>
         </div>
