@@ -59,6 +59,7 @@ _RULE_DEFAULTS: dict[str, dict] = {
     # CARECLIQV2-35 — shift vs session duration consistency (supplemental)
     "duration_consistency_warning": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
     "duration_consistency_error":   {"severity": "high",   "is_active": True, "is_blocking": False, "enforcement_tier": "warn"},
+    "R16": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "warn"},
 }
 
 
@@ -1331,6 +1332,17 @@ def run_compliance_check(
         rule_configs,
     )
     rules.extend(duration_rules)
+
+    try:
+        from .long_shift_service import evaluate_check16
+        from .shift_service import get_shift_for_session
+
+        shift_for_r16 = get_shift_for_session(session) if session.get("shift_id") or session.get("id") else None
+        r16 = evaluate_check16(session, shift_for_r16)
+        if r16.get("details", {}).get("applicable") is not False:
+            rules.extend(_apply_supplemental_rule_metadata([r16], rule_configs))
+    except Exception as exc:
+        logger.debug("R16 long shift check skipped: %s", exc)
 
     total = len(rules)
     passed = sum(1 for r in rules if r["status"] == "pass")

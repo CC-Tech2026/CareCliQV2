@@ -1,11 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 60_000;
+const INITIAL_LOAD_GRACE_MS = 5_000;
 
 /**
- * Keeps support-worker dashboard data fresh via polling and lifecycle events.
+ * Keeps support-worker dashboard data fresh via periodic invalidation and lifecycle events.
  * Invalidates worker dashboard, landing (next shift), and compliance queries.
  */
 export function useDashboardRealtime(enabled: boolean) {
@@ -13,10 +14,14 @@ export function useDashboardRealtime(enabled: boolean) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
 
+  const mountedAtRef = useRef(Date.now());
+
   useEffect(() => {
     if (!enabled || !orgId) return;
+    mountedAtRef.current = Date.now();
 
     const invalidate = () => {
+      if (Date.now() - mountedAtRef.current < INITIAL_LOAD_GRACE_MS) return;
       void queryClient.invalidateQueries({ queryKey: [orgId, "dashboard"] });
       void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
     };
@@ -27,14 +32,10 @@ export function useDashboardRealtime(enabled: boolean) {
     };
 
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", invalidate);
-    window.addEventListener("online", invalidate);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", invalidate);
-      window.removeEventListener("online", invalidate);
     };
   }, [enabled, orgId, queryClient]);
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import get_user_id, get_user_organization_id
@@ -198,10 +198,35 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
     full_name = current_user.get("full_name") or current_user.get("email") or "Support Worker"
     first_name = str(full_name).split(" ")[0] if full_name else "there"
 
-    today_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "today")
-    upcoming_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "upcoming")
-    completed_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "completed")
-    counts = shift_service.count_shifts_for_worker(worker_id, org_id)
+    today_iso = app_today()
+    all_rows = shift_service._fetch_worker_shift_rows(worker_id, org_id)
+    counts = shift_service.count_shifts_by_filter(all_rows, today_iso)
+
+    today_rows = shift_service.filter_shift_rows(all_rows, "today", today_iso)
+    upcoming_rows = shift_service.filter_shift_rows(all_rows, "upcoming", today_iso)
+    completed_today_rows = [
+        row
+        for row in shift_service.filter_shift_rows(all_rows, "completed", today_iso)
+        if shift_local_date(row.get("scheduled_start")) == today_iso
+    ]
+
+    today_shifts_raw = []
+    upcoming_shifts_raw = []
+    active_card_count = len(today_rows) + len(upcoming_rows)
+    if active_card_count:
+        active_cards = shift_service.build_worker_shift_cards(
+            today_rows + upcoming_rows,
+            org_id,
+            worker_id,
+        )
+        today_shifts_raw = active_cards[: len(today_rows)]
+        upcoming_shifts_raw = active_cards[len(today_rows) :]
+    completed_shifts_raw = shift_service.build_worker_shift_cards(
+        completed_today_rows,
+        org_id,
+        worker_id,
+        light=True,
+    ) if completed_today_rows else []
 
     today_summaries = [_shift_summary(shift) for shift in today_shifts_raw]
     today_summaries.sort(key=lambda item: item.get("scheduled_start") or "")
@@ -209,17 +234,12 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
     next_shift_raw = _pick_next_shift(today_shifts_raw, upcoming_shifts_raw)
     next_shift = _shift_summary(next_shift_raw) if next_shift_raw else None
 
-    today_iso = app_today()
-    completed_today_shifts = [
-        shift
-        for shift in completed_shifts_raw
-        if shift_local_date(shift.get("scheduled_start")) == today_iso
-    ]
+    completed_today_shifts = completed_shifts_raw
     completed_today = len(completed_today_shifts)
     all_today_for_stats = today_shifts_raw + completed_today_shifts
     minutes_scheduled = sum(_shift_duration_minutes(shift) for shift in all_today_for_stats)
 
-    sessions = await session_service.get_all_sessions(500, current_user)
+    sessions = await session_service.get_sessions_for_dashboard(100, current_user)
     incomplete = [s for s in sessions if s.get("status") not in {"completed", "cancelled"}]
     pending_fixes = [s for s in sessions if _needs_compliance_fix(s)]
 

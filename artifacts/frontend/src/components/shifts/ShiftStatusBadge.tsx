@@ -1,4 +1,4 @@
-import { CalendarClock, CheckCircle2, MapPin, Zap } from "lucide-react";
+import { CalendarClock, CheckCircle2, Coffee, MapPin, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { STATE_STYLES } from "@/lib/shift-utils";
 import type { ShiftVisualState } from "@/services/shiftService";
@@ -21,10 +21,26 @@ const STATE_LABEL_KEYS: Record<ShiftVisualState, string> = {
 type Props = {
   visualState: ShiftVisualState;
   className?: string;
+  onBreak?: boolean;
 };
 
-export function ShiftStatusBadge({ visualState, className }: Props) {
+export function ShiftStatusBadge({ visualState, className, onBreak = false }: Props) {
   const { translate } = useAccessibility();
+
+  if (onBreak) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800",
+          className,
+        )}
+      >
+        <Coffee size={12} className="shrink-0 animate-pulse" strokeWidth={2.5} />
+        On break
+      </span>
+    );
+  }
+
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const Icon = STATUS_ICONS[visualState] ?? CalendarClock;
   const label = translate(STATE_LABEL_KEYS[visualState] ?? STATE_LABEL_KEYS.scheduled);

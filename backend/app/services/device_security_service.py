@@ -58,7 +58,7 @@ async def lookup_geo(ip_address: str | None) -> tuple[str, str]:
     if not ip_address or ip_address in {"unknown", "127.0.0.1", "::1"}:
         return "Unknown city", "Unknown"
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.get(f"http://ip-api.com/json/{ip_address}?fields=status,country,city")
             data = resp.json()
             if data.get("status") == "success":
@@ -392,30 +392,31 @@ def revoke_all_sessions(user_id: str) -> None:
     _admin().table("user_trusted_devices").delete().eq("user_id", user_id).execute()
 
 
-async def record_login_event(
+async def _persist_login_event(
     user_id: str,
     *,
     email: str,
     device_id: str | None,
     user_agent: str | None,
     ip_address: str | None,
-    background_tasks: Any | None = None,
 ) -> tuple[str, str]:
     device_name, os_name = parse_user_agent(user_agent)
     city, country = await lookup_geo(ip_address)
     suspicious = _is_suspicious_login(user_id, device_id, country)
-    _admin().table("user_login_events").insert(
-        {
-            "user_id": user_id,
-            "device_id": device_id,
-            "device_name": device_name,
-            "os_name": os_name,
-            "ip_address": ip_address,
-            "city": city,
-            "country": country,
-            "is_suspicious": suspicious,
-        }
-    ).execute()
+    await asyncio.to_thread(
+        lambda: _admin().table("user_login_events").insert(
+            {
+                "user_id": user_id,
+                "device_id": device_id,
+                "device_name": device_name,
+                "os_name": os_name,
+                "ip_address": ip_address,
+                "city": city,
+                "country": country,
+                "is_suspicious": suspicious,
+            }
+        ).execute()
+    )
     if suspicious:
         token = create_account_security_token(user_id)
         secure_url = f"{settings.frontend_base_url.rstrip('/')}/account/secure?token={token}"
@@ -427,6 +428,54 @@ async def record_login_event(
             secure_url=secure_url,
         )
     return city, country
+
+
+def schedule_login_event_record(
+    background_tasks: Any,
+    user_id: str,
+    *,
+    email: str,
+    device_id: str | None,
+    user_agent: str | None,
+    ip_address: str | None,
+) -> None:
+    """Record login audit/geo off the critical login response path."""
+    background_tasks.add_task(
+        _persist_login_event,
+        user_id,
+        email=email,
+        device_id=device_id,
+        user_agent=user_agent,
+        ip_address=ip_address,
+    )
+
+
+async def record_login_event(
+    user_id: str,
+    *,
+    email: str,
+    device_id: str | None,
+    user_agent: str | None,
+    ip_address: str | None,
+    background_tasks: Any | None = None,
+) -> tuple[str, str]:
+    if background_tasks is not None:
+        schedule_login_event_record(
+            background_tasks,
+            user_id,
+            email=email,
+            device_id=device_id,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+        return "Unknown city", "Unknown"
+    return await _persist_login_event(
+        user_id,
+        email=email,
+        device_id=device_id,
+        user_agent=user_agent,
+        ip_address=ip_address,
+    )
 
 
 def _is_suspicious_login(user_id: str, device_id: str | None, country: str) -> bool:

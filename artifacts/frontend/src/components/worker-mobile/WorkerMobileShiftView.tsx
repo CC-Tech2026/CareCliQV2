@@ -33,6 +33,7 @@ import {
   resolveActiveShiftTasks,
 } from "@/lib/shift-utils";
 import type { ShiftSignature } from "@/services/complianceService";
+import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
 
 export type WorkerMobilePhase = "scheduled" | "session" | "review" | "signature" | "submitted" | "completed";
 
@@ -57,6 +58,7 @@ type Props = {
   setSafetyOpen: (v: boolean) => void;
   isTutorialDemo?: boolean;
   mileageDraftRef?: MutableRefObject<MileageDraftState>;
+  longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
 };
 
 export function WorkerMobileShiftView({
@@ -80,7 +82,16 @@ export function WorkerMobileShiftView({
   isTutorialDemo,
   submissionComplete,
   mileageDraftRef,
+  longShiftBreak: externalBreak,
 }: Props) {
+  const internalBreak = useLongShiftBreak(
+    externalBreak ? null : visualState === "session_active" ? sessionId : null,
+    {
+      shiftId: externalBreak ? null : shift.id,
+      initialStatus: externalBreak ? null : shift.break_status,
+    },
+  );
+  const longShiftBreak = externalBreak ?? internalBreak;
   const [, navigate] = useLocation();
   const [phase, setPhase] = useState<WorkerMobilePhase>(() => {
     if (visualState === "completed") return "completed";
@@ -449,6 +460,8 @@ export function WorkerMobileShiftView({
         visualState={visualState}
         phase="session"
         elapsed={elapsed}
+        onBreak={longShiftBreak.onBreak}
+        breakElapsed={longShiftBreak.breakElapsed}
         showEnd={showEnd}
         onEnd={handleEnd}
         endBusy={busy === "end"}
@@ -462,6 +475,9 @@ export function WorkerMobileShiftView({
         healthAlerts={shift.health_alerts ?? []}
         clockedInAt={clockedInAt}
         sessionId={sessionId}
+        sessionElapsed={elapsed}
+        longShiftBreak={longShiftBreak}
+        initialCheckinStatus={shift.checkin_status}
         tasks={activeTasks}
         onTasksChange={setTasks}
         sessionNotes={sessionNotes}

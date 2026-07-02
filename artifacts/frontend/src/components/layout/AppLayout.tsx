@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
   Sun, Moon, Search, Car, Accessibility, HelpCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -75,6 +75,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/coordinator/rostering",          label: "Rostering",          icon: CalendarDays },
         // { href: "/coordinator/travel",             label: "Travel Expenses",    icon: Car          },
         { href: "/coordinator/live",               label: "Live Monitoring",    icon: Radio        },
+        { href: "/coordinator/monitor",            label: "Long Shift Monitor", icon: Activity     },
         { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
         { href: "/billing",                        label: "Invoices",           icon: CreditCard   },
       ],

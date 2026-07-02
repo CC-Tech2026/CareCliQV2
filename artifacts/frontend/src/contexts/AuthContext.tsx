@@ -13,7 +13,7 @@ import {
   updateStoredUserJson,
 } from "@/lib/auth-session";
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
-import { storeAndApplySupabaseSession } from "@/lib/supabase";
+import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
 import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
@@ -116,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [user, setUser] = useState<AuthUser | null>(() => {
     _currentOrgId = initialUser?.organizationId ?? null;
+    setQueryOrgId(_currentOrgId);
     return initialUser;
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -133,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = null;
     _currentOrgId = null;
     setQueryOrgId(null);
+    clearAppliedSupabaseSession();
     clearPresentedNotifications();
     clearAuthSessionStorage();
     queryClient.clear();

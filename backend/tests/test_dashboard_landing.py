@@ -53,13 +53,17 @@ async def test_build_worker_landing_dashboard_composes_payload():
     today = [_shift()]
     upcoming = [_shift(id="shift-2", scheduled_start=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat())]
 
-    with patch.object(landing.shift_service, "list_shifts_for_worker", side_effect=[today, upcoming, []]), patch.object(
+    with patch.object(landing.shift_service, "_fetch_worker_shift_rows", return_value=today + upcoming), patch.object(
         landing.shift_service,
-        "count_shifts_for_worker",
-        return_value={"today": 1, "upcoming": 1, "completed": 0, "cancelled": 0},
+        "filter_shift_rows",
+        side_effect=lambda rows, name, _today: today if name == "today" else (upcoming if name == "upcoming" else []),
+    ), patch.object(
+        landing.shift_service,
+        "build_worker_shift_cards",
+        side_effect=lambda rows, *_args, **_kwargs: rows,
     ), patch.object(landing, "_worker_compliance_alerts", return_value=[]), patch.object(
         landing.session_service,
-        "get_all_sessions",
+        "get_sessions_for_dashboard",
         new=AsyncMock(return_value=[]),
     ):
         payload = await landing.build_worker_landing_dashboard(user)

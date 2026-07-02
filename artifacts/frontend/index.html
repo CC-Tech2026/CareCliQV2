@@ -7,6 +7,33 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#5533CC" />
+    <script>
+      (function () {
+        var KEY = "carecliq-theme";
+        var LEGACY = "cc-theme";
+        var mode = "system";
+        try {
+          var stored = localStorage.getItem(KEY);
+          if (stored === "light" || stored === "dark" || stored === "system") {
+            mode = stored;
+          } else {
+            var legacy = localStorage.getItem(LEGACY);
+            if (legacy === "light" || legacy === "dark") {
+              mode = legacy;
+              localStorage.setItem(KEY, legacy);
+            }
+            localStorage.removeItem(LEGACY);
+          }
+        } catch (e) {}
+        var isDark =
+          mode === "dark" ||
+          (mode === "system" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var root = document.documentElement;
+        root.classList.toggle("dark", isDark);
+        root.style.colorScheme = isDark ? "dark" : "light";
+      })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CareCliQ" />

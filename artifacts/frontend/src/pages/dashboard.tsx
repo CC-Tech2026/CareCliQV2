@@ -944,9 +944,6 @@ function WorkerDashboardView({
 
   const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
   const complianceDetail = complianceQuery.data;
@@ -1145,16 +1142,10 @@ export default function Dashboard() {
   const workerQuery = useOrgQuery(["dashboard", "worker"], {
     queryFn: getWorkerDashboard,
     enabled: isWorker,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const workerLandingQuery = useOrgQuery(["dashboard", "worker-landing"], {
     queryFn: getWorkerLandingDashboard,
     enabled: isWorker,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const coordinatorQuery = useOrgQuery(["dashboard", "coordinator"], {
     queryFn: getCoordinatorDashboard,
