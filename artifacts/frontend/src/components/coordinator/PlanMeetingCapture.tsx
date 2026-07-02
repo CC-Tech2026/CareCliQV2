@@ -16,11 +16,16 @@ import {
   triggerPlanMeetingAiReview,
   applyPlanMeetingSuggestions,
   transcribePlanMeetingAudio,
+  createMeetingSession,
+  transcribeAndResolveNames,
+  extractGoalsAndTasks,
   type PlanMeeting,
   type PlanMeetingType,
   type SuggestedGoal,
   type SuggestedTask,
   type RecordMeetingPayload,
+  type Stage1ResolutionResult,
+  type Stage2ExtractionResult,
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
@@ -103,49 +108,86 @@ interface Step1Props {
   onCancel: () => void;
 }
 
+interface Stage1ResultsType {
+  sessionId: string;
+  resolvedNames: Record<string, { name: string; confidence: string }>;
+  cleanTranscript: string;
+  rawTranscript: string;
+  segmentIds: any[];
+  flags: any[];
+  participantId: string | null;
+}
+
+interface Stage2ResultsType {
+  goals: any[];
+  tasks: any[];
+  flags: any[];
+}
+
 function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props) {
   const { toast } = useToast();
-  const [form, setForm] = useState<RecordMeetingPayload>({
-    participant_id: participantId,
-    meeting_date: format(new Date(), "yyyy-MM-dd"),
-    meeting_type: "check_in",
-    attendees: [],
-    conversation_notes: "",
-    participant_priorities: "",
-    coordinator_observations: "",
-    agreed_outcomes: "",
-  });
-  const [attendeeInput, setAttendeeInput] = useState("");
-  const [useVoiceDictation, setUseVoiceDictation] = useState(true);
+  const [meetingType, setMeetingType] = useState<PlanMeetingType>("check_in");
+  const [meetingDate, setMeetingDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  
+  // Session creation state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  
+  // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [voiceNotSupported, setVoiceNotSupported] = useState(false);
+  
+  // Stage 1 processing
+  const [stage1Loading, setStage1Loading] = useState(false);
+  const [stage1Results, setStage1Results] = useState<Stage1ResultsType | null>(null);
+  const [showSpeakerConfirmation, setShowSpeakerConfirmation] = useState(false);
+  const [speakerConfirmation, setSpeakerConfirmation] = useState<Record<string, string>>({});
+  
+  // Stage 2 processing
+  const [stage2Loading, setStage2Loading] = useState(false);
+  const [stage2Results, setStage2Results] = useState<Stage2ResultsType | null>(null);
 
-  const mut = useMutation({
-    mutationFn: () => recordPlanMeeting(form),
-    onSuccess: ({ meeting }) => onRecorded(meeting),
-    onError: (err: any) => toast({ variant: "destructive", title: "Failed to save meeting", description: err?.message ?? "" }),
-  });
-
-  const addAttendee = () => {
-    const v = attendeeInput.trim();
-    if (v && !form.attendees.includes(v)) {
-      setForm((f) => ({ ...f, attendees: [...f.attendees, v] }));
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setVoiceNotSupported(true);
     }
-    setAttendeeInput("");
+  }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording) {
+      interval = setInterval(() => setElapsedTime((t) => t + 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
+  const formatTime = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+
+  // ── Step 0: Create Session ─────────────────────────────────────────────────────
+  
+  const createSession = async () => {
+    setIsCreatingSession(true);
+    try {
+      const result = await createMeetingSession(meetingType, meetingDate);
+      setSessionId(result.session_id);
+      toast({ title: "Session created", description: "Ready to record your meeting." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Failed to create session", description: err?.message ?? "" });
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
-  const removeAttendee = (name: string) => {
-    setForm((f) => ({ ...f, attendees: f.attendees.filter((a) => a !== name) }));
-  };
+  // ── Step 1: Record & Transcribe ────────────────────────────────────────────────
 
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setVoiceNotSupported(true);
-        toast({ variant: "destructive", title: "Voice recording not supported", description: "Your browser doesn't support voice recording. Please use manual text entry." });
+        toast({ variant: "destructive", title: "Voice recording not supported", description: "Please use a different browser or device." });
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -160,17 +202,7 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const audioBlob = new Blob(chunks, { type: mimeType });
-        setTranscriptLoading(true);
-        try {
-          const result = await transcribePlanMeetingAudio(audioBlob);
-          setForm((f) => ({ ...f, conversation_notes: result.transcript }));
-          toast({ title: "Transcription complete", description: "Review and edit the transcript before continuing." });
-          setUseVoiceDictation(false);
-        } catch (err: any) {
-          toast({ variant: "destructive", title: "Transcription failed", description: err?.message ?? "Please try again." });
-        } finally {
-          setTranscriptLoading(false);
-        }
+        await transcribeAndResolve(audioBlob);
       };
       recorder.start();
       setMediaRecorder(recorder);
@@ -181,12 +213,12 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
         toast({ variant: "destructive", title: "Microphone access denied", description: "Allow microphone access to use voice dictation." });
       } else if (err.name === "NotFoundError") {
         setVoiceNotSupported(true);
-        toast({ variant: "destructive", title: "No microphone found", description: "Connect a microphone or use manual entry." });
+        toast({ variant: "destructive", title: "No microphone found", description: "Connect a microphone to record." });
       } else if (err.name === "SecurityError") {
         setVoiceNotSupported(true);
-        toast({ variant: "destructive", title: "Security error", description: "Voice recording requires HTTPS. Please use manual text entry." });
+        toast({ variant: "destructive", title: "Security error", description: "Voice recording requires HTTPS." });
       } else {
-        toast({ variant: "destructive", title: "Failed to start recording", description: err?.message ?? "Unknown error." });
+        toast({ variant: "destructive", title: "Failed to start recording", description: err?.message ?? "" });
       }
     }
   };
@@ -207,29 +239,293 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
     setElapsedTime(0);
   };
 
-  const reRecord = () => {
-    setForm((f) => ({ ...f, conversation_notes: "" }));
-    setElapsedTime(0);
-    setUseVoiceDictation(true);
+  // ── Stage 1: Transcribe & Resolve Names ────────────────────────────────────────
+
+  const transcribeAndResolve = async (audioBlob: Blob) => {
+    if (!sessionId) {
+      toast({ variant: "destructive", title: "No session", description: "Please create a session first." });
+      return;
+    }
+    
+    setStage1Loading(true);
+    try {
+      const result = await transcribeAndResolveNames(
+        sessionId,
+        audioBlob,
+        "", // coordinator_name - user can provide during confirmation
+        "", // participant_name
+        [], // others
+      );
+      
+      setStage1Results({
+        sessionId: result.session_id,
+        resolvedNames: result.resolved_names,
+        cleanTranscript: result.clean_transcript,
+        rawTranscript: result.raw_transcript,
+        segmentIds: result.segment_ids,
+        flags: result.flags,
+        participantId: result.participant_id,
+      });
+      
+      setShowSpeakerConfirmation(true);
+      toast({ title: "Stage 1 complete", description: "Review and confirm the speaker identification." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Stage 1 failed", description: err?.message ?? "Transcription or name resolution failed." });
+    } finally {
+      setStage1Loading(false);
+    }
   };
 
-  useEffect(() => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) setVoiceNotSupported(true);
-  }, []);
+  // ── Speaker Confirmation Dialog ────────────────────────────────────────────────
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => setElapsedTime((t) => t + 1), 1000);
+  const confirmSpeakers = async () => {
+    if (!stage1Results) return;
+    
+    // Move to Stage 2
+    await extractGoals();
+  };
+
+  const extractGoals = async () => {
+    if (!sessionId) return;
+    
+    setStage2Loading(true);
+    try {
+      const result = await extractGoalsAndTasks(sessionId);
+      setStage2Results({
+        goals: result.goals,
+        tasks: result.tasks,
+        flags: result.attention_flags,
+      });
+      toast({ title: "Stage 2 complete", description: "Goals and tasks extracted successfully." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Stage 2 failed", description: err?.message ?? "Goal extraction failed." });
+    } finally {
+      setStage2Loading(false);
     }
-    return () => clearInterval(interval);
-  }, [isRecording]);
+  };
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+  const reRecord = () => {
+    setStage1Results(null);
+    setStage2Results(null);
+    setShowSpeakerConfirmation(false);
+    setElapsedTime(0);
+  };
 
-  const canSubmit = form.meeting_date && (form.conversation_notes?.trim() || form.participant_priorities?.trim());
-  const transcriptLength = form.conversation_notes?.length ?? 0;
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  // Before session is created
+  if (!sessionId) {
+    return (
+      <div className="space-y-5">
+        <StepProgress current={1} />
+        
+        <div>
+          <SectionLabel label="Meeting details" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Date</Label>
+              <Input
+                type="date"
+                value={meetingDate}
+                onChange={(e) => setMeetingDate(e.target.value)}
+                className="rounded-xl h-9 text-[13px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Meeting type</Label>
+              <select
+                value={meetingType}
+                onChange={(e) => setMeetingType(e.target.value as PlanMeetingType)}
+                aria-label="Meeting type"
+                className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
+                style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "#fff" }}
+              >
+                {(Object.entries(MEETING_TYPE_META) as [PlanMeetingType, typeof MEETING_TYPE_META[PlanMeetingType]][]).map(([v, m]) => (
+                  <option key={v} value={v}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
+          <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            className="rounded-xl flex-1 gap-1.5"
+            style={{ background: PLUM, color: "#fff" }}
+            disabled={isCreatingSession}
+            onClick={createSession}
+          >
+            {isCreatingSession ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
+            Create Session & Begin Recording
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // After Stage 2 is complete - show results
+  if (stage2Results) {
+    return (
+      <div className="space-y-5">
+        <StepProgress current={2} />
+        
+        <div>
+          <SectionLabel label="Extracted Goals" />
+          {stage2Results.goals.length > 0 ? (
+            <div className="space-y-2">
+              {stage2Results.goals.map((goal: any) => (
+                <div key={goal.goal_id} className="p-3 rounded-xl" style={{ background: GREEN_BG, border: `1px solid ${GREEN_BORDER}` }}>
+                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{goal.description}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Category: {goal.category} • Confidence: {(goal.confidence * 100).toFixed(0)}%</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px]" style={{ color: MUTED }}>No goals extracted.</p>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
+          <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={reRecord}>
+            Re-record
+          </Button>
+          <Button
+            className="rounded-xl flex-1 gap-1.5"
+            style={{ background: GREEN, color: "#fff" }}
+            onClick={() => onRecorded({ id: sessionId } as PlanMeeting)}
+          >
+            <Check size={14} />
+            Continue
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Stage 1 complete - show speaker confirmation
+  if (stage1Results && showSpeakerConfirmation) {
+    return (
+      <div className="space-y-5">
+        <StepProgress current={1} />
+        
+        <div>
+          <SectionLabel label="Speaker Identification" />
+          <p className="text-[12px] mb-3" style={{ color: MUTED }}>Confirm the identified speakers below:</p>
+          
+          {Object.entries(stage1Results.resolvedNames).map(([speaker, data]: [string, any]) => (
+            <div key={speaker} className="p-3 rounded-xl mb-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500">{speaker}</p>
+                  <p className="text-[13px] font-semibold" style={{ color: TEXT }}>{data.name}</p>
+                  <p className="text-[10px]" style={{ color: MUTED }}>Confidence: {data.confidence}</p>
+                </div>
+                <div
+                  className="px-2 py-1 rounded text-[10px] font-semibold"
+                  style={{
+                    background: data.confidence === "confirmed" ? GREEN_BG : "#FEF2F2",
+                    color: data.confidence === "confirmed" ? GREEN : "#EF4444",
+                  }}
+                >
+                  {data.confidence}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {stage1Results.flags.length > 0 && (
+            <div className="p-3 rounded-xl" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+              <p className="text-[11px] font-semibold text-amber-700 mb-1">Flags:</p>
+              {stage1Results.flags.map((flag: any, i: number) => (
+                <p key={i} className="text-[10px] text-amber-600">{flag.description}</p>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
+          <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={reRecord}>
+            Re-record
+          </Button>
+          <Button
+            className="rounded-xl flex-1 gap-1.5"
+            style={{ background: PLUM, color: "#fff" }}
+            disabled={stage2Loading}
+            onClick={confirmSpeakers}
+          >
+            {stage2Loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
+            Extract Goals (Stage 2)
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Recording in progress or loading
+  return (
+    <div className="space-y-5">
+      <StepProgress current={1} />
+
+      {stage1Loading ? (
+        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+          <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: "rgba(55,48,163,0.08)" }}>
+            <Loader2 size={20} className="animate-spin" style={{ color: PLUM }} />
+          </div>
+          <p className="font-black text-[13px] mb-0.5" style={{ color: TEXT }}>Processing your recording</p>
+          <p className="text-[12px]" style={{ color: MUTED }}>Transcribing and identifying speakers…</p>
+        </div>
+      ) : isRecording ? (
+        <div className="rounded-2xl p-6 text-center" style={{ background: "#FEF2F2", border: `2px solid #EF4444` }}>
+          <div className="relative flex items-center justify-center h-20 mb-3">
+            <div className="absolute w-20 h-20 rounded-full bg-red-400 opacity-25 animate-ping" />
+            <div className="absolute w-24 h-24 rounded-full bg-red-300 opacity-15 animate-ping" style={{ animationDelay: "300ms" }} />
+            <button
+              onClick={stopRecording}
+              aria-label="Stop recording"
+              className="relative w-16 h-16 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
+              style={{ background: "#EF4444" }}
+            >
+              <div className="w-5 h-5 rounded-sm bg-white" />
+            </button>
+          </div>
+          <p className="font-black text-[22px] tabular-nums mb-0.5" style={{ color: "#DC2626" }}>
+            {formatTime(elapsedTime)}
+          </p>
+          <p className="text-[12px] mb-4" style={{ color: MUTED }}>Recording in progress · tap to stop</p>
+          <Button variant="ghost" size="sm" className="text-[12px] rounded-xl" style={{ color: MUTED }} onClick={cancelRecording}>
+            Cancel recording
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-2xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
+          <button
+            onClick={startRecording}
+            aria-label="Start recording"
+            className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
+            style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
+          >
+            <Mic size={24} className="text-white" />
+          </button>
+          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>
+            Dictate the meeting conversation
+          </p>
+          <p className="text-[12px]" style={{ color: MUTED }}>
+            Speak naturally — Whisper AI transcribes and identifies speakers automatically
+          </p>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
+        <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div className="space-y-5">
@@ -303,208 +599,6 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
           </div>
         )}
       </div>
-
-      {/* ── Conversation notes ── */}
-      <div>
-        <SectionLabel label="Conversation notes" />
-
-        {voiceNotSupported ? (
-          /* Browser/device doesn't support MediaRecorder */
-          <div className="space-y-2">
-            <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
-              <p className="text-[12px] text-amber-800">
-                Voice dictation is not available on this device. Type the meeting notes below.
-              </p>
-            </div>
-            <textarea
-              value={form.conversation_notes}
-              onChange={(e) => setForm((f) => ({ ...f, conversation_notes: e.target.value }))}
-              rows={5}
-              placeholder="Document the full discussion, key points raised, and any relevant context…"
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none leading-relaxed"
-              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            />
-            <p className="text-[11px] text-right" style={{ color: MUTED }}>{transcriptLength} characters</p>
-          </div>
-
-        ) : !useVoiceDictation ? (
-          /* Manual text mode — also shown after transcript lands */
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              {form.conversation_notes ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: GREEN }}>
-                    <Check size={9} className="text-white" />
-                  </div>
-                  <span className="text-[12px] font-semibold" style={{ color: GREEN }}>
-                    Transcript ready — review and edit below
-                  </span>
-                </div>
-              ) : (
-                <span className="text-[12px]" style={{ color: MUTED }}>Type the meeting conversation below</span>
-              )}
-              <div className="flex items-center gap-1 shrink-0">
-                {form.conversation_notes && (
-                  <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 gap-1" onClick={reRecord} style={{ color: PLUM }}>
-                    <Mic size={10} /> Re-record
-                  </Button>
-                )}
-                {!form.conversation_notes && (
-                  <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 gap-1" onClick={() => setUseVoiceDictation(true)} style={{ color: PLUM }}>
-                    <Mic size={10} /> Use voice
-                  </Button>
-                )}
-              </div>
-            </div>
-            <textarea
-              value={form.conversation_notes}
-              onChange={(e) => setForm((f) => ({ ...f, conversation_notes: e.target.value }))}
-              rows={5}
-              placeholder="Document the full discussion, key points raised, and any relevant context…"
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none leading-relaxed"
-              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            />
-            <p className="text-[11px] text-right" style={{ color: MUTED }}>{transcriptLength} characters</p>
-          </div>
-
-        ) : transcriptLoading ? (
-          /* Whisper is processing */
-          <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-            <div
-              className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-              style={{ background: "rgba(55,48,163,0.08)" }}
-            >
-              <Loader2 size={20} className="animate-spin" style={{ color: PLUM }} />
-            </div>
-            <p className="font-black text-[13px] mb-0.5" style={{ color: TEXT }}>Transcribing your recording</p>
-            <p className="text-[12px]" style={{ color: MUTED }}>Whisper AI is processing the audio…</p>
-          </div>
-
-        ) : isRecording ? (
-          /* Active recording */
-          <div className="rounded-2xl p-6 text-center" style={{ background: "#FEF2F2", border: `2px solid #EF4444` }}>
-            <div className="relative flex items-center justify-center h-20 mb-3">
-              <div className="absolute w-20 h-20 rounded-full bg-red-400 opacity-25 animate-ping" />
-              <div
-                className="absolute w-24 h-24 rounded-full bg-red-300 opacity-15 animate-ping"
-                style={{ animationDelay: "300ms" }}
-              />
-              <button
-                onClick={stopRecording}
-                aria-label="Stop recording"
-                className="relative w-16 h-16 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
-                style={{ background: "#EF4444" }}
-              >
-                <div className="w-5 h-5 rounded-sm bg-white" />
-              </button>
-            </div>
-            <p className="font-black text-[22px] tabular-nums mb-0.5" style={{ color: "#DC2626" }}>
-              {formatTime(elapsedTime)}
-            </p>
-            <p className="text-[12px] mb-4" style={{ color: MUTED }}>Recording in progress · tap to stop</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-[12px] rounded-xl"
-              style={{ color: MUTED }}
-              onClick={cancelRecording}
-            >
-              Cancel recording
-            </Button>
-          </div>
-
-        ) : (
-          /* Idle — ready to dictate */
-          <div
-            className="rounded-2xl p-6 text-center"
-            style={{ background: SOFT, border: `1px dashed ${BORDER}` }}
-          >
-            <button
-              onClick={startRecording}
-              aria-label="Start recording"
-              className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
-              style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
-            >
-              <Mic size={24} className="text-white" />
-            </button>
-            <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>
-              Dictate the meeting conversation
-            </p>
-            <p className="text-[12px]" style={{ color: MUTED }}>
-              Speak naturally — Whisper AI transcribes the meeting automatically
-            </p>
-            <button
-              className="mt-3 text-[12px] underline underline-offset-2 hover:opacity-70 transition-opacity"
-              style={{ color: MUTED }}
-              onClick={() => setUseVoiceDictation(false)}
-            >
-              Type manually instead
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Additional context ── */}
-      <div>
-        <SectionLabel label="Additional context" />
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>
-              What did the participant say they want support with?
-            </Label>
-            <textarea
-              value={form.participant_priorities}
-              onChange={(e) => setForm((f) => ({ ...f, participant_priorities: e.target.value }))}
-              rows={3}
-              placeholder="In the participant's own words…"
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none leading-relaxed"
-              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Coordinator observations</Label>
-            <textarea
-              value={form.coordinator_observations}
-              onChange={(e) => setForm((f) => ({ ...f, coordinator_observations: e.target.value }))}
-              rows={2}
-              placeholder="Clinical or practical observations not captured by the participant…"
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none leading-relaxed"
-              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Agreed outcomes / action items</Label>
-            <textarea
-              value={form.agreed_outcomes}
-              onChange={(e) => setForm((f) => ({ ...f, agreed_outcomes: e.target.value }))}
-              rows={2}
-              placeholder="What was agreed at the end of the meeting?"
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none leading-relaxed"
-              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Actions ── */}
-      <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-        <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          className="rounded-xl flex-1 gap-1.5"
-          style={{ background: PLUM, color: "#fff" }}
-          disabled={!canSubmit || mut.isPending}
-          onClick={() => mut.mutate()}
-        >
-          {mut.isPending ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
-          Save & analyse
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // ── Step 2: AI review ─────────────────────────────────────────────────────────
 

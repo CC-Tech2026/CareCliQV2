@@ -1334,3 +1334,100 @@ export function transcribePlanMeetingAudio(audioBlob: Blob): Promise<{ transcrip
     body: form,
   });
 }
+
+// ── Two-Stage Pipeline Functions ───────────────────────────────────────────────
+
+export type MeetingSessionResponse = {
+  session_id: string;
+  created_at: string;
+};
+
+export function createMeetingSession(
+  meetingType: PlanMeetingType = "check_in",
+  meetingDate?: string,
+  conversationContext?: Record<string, any>,
+): Promise<MeetingSessionResponse> {
+  return jsonFetch<MeetingSessionResponse>("/api/coordinator/plan-meetings/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      meeting_type: meetingType,
+      meeting_date: meetingDate,
+      conversation_context: conversationContext,
+    }),
+  });
+}
+
+export type ResolvedSpeaker = {
+  speaker_label: string;
+  resolved_name: string;
+  role: "coordinator" | "participant" | "other";
+  confidence: "confirmed" | "likely" | "uncertain";
+};
+
+export type Stage1ResolutionResult = {
+  session_id: string;
+  raw_transcript: string;
+  clean_transcript: string;
+  resolved_names: Record<string, { name: string; confidence: string }>;
+  segment_ids: Array<{ segment_id: string; speaker_name: string; text: string }>;
+  participant_id: string | null;
+  flags: Array<{ flag_type: string; severity: string; description: string }>;
+  stage_1_status: string;
+};
+
+export function transcribeAndResolveNames(
+  sessionId: string,
+  audioBlob: Blob,
+  coordinatorName?: string,
+  participantName?: string,
+  others?: string[],
+): Promise<Stage1ResolutionResult> {
+  const form = new FormData();
+  form.append("audio_file", audioBlob, "recording.webm");
+  if (coordinatorName) form.append("coordinator_name", coordinatorName);
+  if (participantName) form.append("participant_name", participantName);
+  if (others && others.length > 0) form.append("others", JSON.stringify(others));
+
+  return jsonFetch<Stage1ResolutionResult>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(sessionId)}/transcribe-and-resolve`,
+    {
+      method: "POST",
+      body: form,
+    },
+  );
+}
+
+export type ExtractedGoal = {
+  goal_id: string;
+  category: string;
+  description: string;
+  confidence: number;
+  source_segment_ids: string[];
+};
+
+export type ExtractedTask = {
+  task_id: string;
+  goal_id: string;
+  category: string;
+  description: string;
+  frequency: string;
+  support_type: string;
+  confidence: number;
+};
+
+export type Stage2ExtractionResult = {
+  session_id: string;
+  goals: ExtractedGoal[];
+  tasks: ExtractedTask[];
+  attention_flags: Array<{ flag_type: string; severity: string; description: string }>;
+  extraction_metadata: { completed_at: string };
+  stage_2_status: string;
+};
+
+export function extractGoalsAndTasks(sessionId: string): Promise<Stage2ExtractionResult> {
+  return jsonFetch<Stage2ExtractionResult>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(sessionId)}/extract-goals-tasks`,
+    { method: "POST" },
+  );
+}
