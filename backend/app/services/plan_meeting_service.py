@@ -450,3 +450,197 @@ def apply_plan_meeting_suggestions(
         "tasks_created": tasks_created,
         "meeting_id": meeting_id,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STAGE 1: Name Resolution & Transcript Cleanup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def run_stage_1_name_resolution(
+    session_id: str,
+    organization_id: str,
+    raw_transcript_segments: list[dict[str, Any]],
+    prefilled_names: Optional[dict[str, Any]] = None,
+    meeting_context: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """
+    STAGE 1: Name Resolution & Transcript Cleanup
+    
+    Takes raw speaker-diarized transcript and resolves speaker identities
+    against optional pre-filled name hints. Cleans up ASR errors without
+    altering meaning. Never invents content.
+    
+    Args:
+        session_id: ID of the plan_meeting_sessions row
+        organization_id: For audit/logging
+        raw_transcript_segments: List of dicts with {segment_id, start, speaker_label, text}
+        prefilled_names: Optional list of {"name": "...", "role": "..."} for matching hints
+        meeting_context: Optional dict with {meeting_type, participant_priorities, ...} for context clues
+    
+    Returns:
+        {
+            "resolved_speakers": [{speaker_label, resolved_name, confidence, ...}],
+            "clean_transcript": [{segment_id, start, speaker_name, text}],
+            "flags": [{segment_id, issue, detail}]
+        }
+    
+    Raises:
+        ValueError if AI not configured
+    """
+    if not _openai_configured():
+        raise ValueError("AI service is not configured.")
+    
+    from .plan_meeting_prompts import (
+        STAGE_1_SYSTEM_PROMPT,
+        STAGE_1_USER_MESSAGE_TEMPLATE,
+    )
+    
+    # Format input for prompt
+    prefilled_json = json.dumps(prefilled_names or [])
+    raw_transcript_json = json.dumps(raw_transcript_segments)
+    
+    # Build user message
+    user_message = STAGE_1_USER_MESSAGE_TEMPLATE.format(
+        prefilled_names_json=prefilled_json,
+        raw_transcript_json=raw_transcript_json,
+    )
+    
+    # Call OpenAI
+    client = _build_openai_client()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": STAGE_1_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0,
+            timeout=30,
+        )
+        result_text = response.choices[0].message.content.strip()
+    except Exception as exc:
+        logger.exception("Stage 1 AI call failed: %s", exc)
+        raise ValueError(f"Stage 1 name resolution failed: {exc}")
+    
+    # Parse JSON output
+    try:
+        result = json.loads(result_text)
+    except json.JSONDecodeError as exc:
+        logger.error("Stage 1 returned non-JSON: %s", result_text[:200])
+        raise ValueError(f"Stage 1 returned invalid JSON: {exc}")
+    
+    # Update session in database with Stage 1 results
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("plan_meeting_sessions").update({
+            "stage_1_status": "complete",
+            "raw_transcript": json.dumps(raw_transcript_segments),
+            "clean_transcript": json.dumps(result.get("clean_transcript", [])),
+            "resolved_names": result.get("resolved_speakers", []),
+            "segment_ids": result.get("clean_transcript", []),  # Preserve segment IDs for Stage 2
+            "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", session_id).execute()
+    except Exception as exc:
+        logger.warning("Failed to update session with Stage 1 results: %s", exc)
+    
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STAGE 2: Goal & Task Extraction
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def run_stage_2_goal_extraction(
+    session_id: str,
+    organization_id: str,
+    clean_transcript: list[dict[str, Any]],
+    support_category_taxonomy: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    """
+    STAGE 2: Goal & Task Extraction
+    
+    Takes clean, speaker-attributed transcript from Stage 1 and extracts
+    candidate NDIS goals and core support tasks, each grounded in specific
+    transcript segments.
+    
+    ⚠️ CRITICAL: Must receive Stage 1's clean_transcript output, NOT raw.
+    Never chains off raw transcript.
+    
+    Args:
+        session_id: ID of the plan_meeting_sessions row
+        organization_id: For audit/logging
+        clean_transcript: Output from Stage 1 run_stage_1_name_resolution()
+        support_category_taxonomy: Optional list of allowed categories. Falls back to defaults if None.
+    
+    Returns:
+        {
+            "draft_goals": [{goal_text, support_category, source_segment_ids, confidence}],
+            "draft_tasks": [{task_text, requirement_level, source_segment_ids, confidence}],
+            "attention_flags": [{type, source_segment_ids, detail}]
+        }
+    
+    Raises:
+        ValueError if AI not configured or transcript empty
+    """
+    if not _openai_configured():
+        raise ValueError("AI service is not configured.")
+    
+    if not clean_transcript:
+        raise ValueError("clean_transcript cannot be empty. Must run Stage 1 first.")
+    
+    from .plan_meeting_prompts import (
+        STAGE_2_SYSTEM_PROMPT,
+        STAGE_2_USER_MESSAGE_TEMPLATE,
+        NDIS_SUPPORT_CATEGORIES,
+    )
+    
+    # Use default taxonomy if not provided
+    taxonomy = support_category_taxonomy or NDIS_SUPPORT_CATEGORIES
+    
+    # Format inputs for prompt
+    support_category_json = json.dumps(taxonomy)
+    clean_transcript_json = json.dumps(clean_transcript)
+    
+    # Build user message
+    user_message = STAGE_2_USER_MESSAGE_TEMPLATE.format(
+        support_category_list=support_category_json,
+        clean_transcript_json=clean_transcript_json,
+    )
+    
+    # Call OpenAI
+    client = _build_openai_client()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": STAGE_2_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0,
+            timeout=30,
+        )
+        result_text = response.choices[0].message.content.strip()
+    except Exception as exc:
+        logger.exception("Stage 2 AI call failed: %s", exc)
+        raise ValueError(f"Stage 2 goal extraction failed: {exc}")
+    
+    # Parse JSON output
+    try:
+        result = json.loads(result_text)
+    except json.JSONDecodeError as exc:
+        logger.error("Stage 2 returned non-JSON: %s", result_text[:200])
+        raise ValueError(f"Stage 2 returned invalid JSON: {exc}")
+    
+    # Update session in database with Stage 2 results
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("plan_meeting_sessions").update({
+            "stage_2_status": "complete",
+            "extracted_goals": result.get("draft_goals", []),
+            "extracted_tasks": result.get("draft_tasks", []),
+            "stage_2_completed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", session_id).execute()
+    except Exception as exc:
+        logger.warning("Failed to update session with Stage 2 results: %s", exc)
+    
+    return result

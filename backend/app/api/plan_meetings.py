@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -22,6 +23,19 @@ router = APIRouter(prefix="/coordinator", tags=["plan-meetings"])
 
 # ── Request / response models ──────────────────────────────────────────────────
 
+# ✅ NEW: Minimal session creation (fixes 422 error)
+class CreateMeetingSessionRequest(BaseModel):
+    meeting_date: Optional[str] = None  # ISO date YYYY-MM-DD
+    meeting_type: str = "check_in"
+    conversation_context: Optional[dict[str, Any]] = None  # {participant_priorities, coordinator_observations, agreed_outcomes}
+
+
+class MeetingSessionResponse(BaseModel):
+    session_id: str
+    created_at: str
+
+
+# DEPRECATED: Old request model (participant_id required)
 class RecordMeetingRequest(BaseModel):
     participant_id: str
     meeting_date: str                          # ISO date YYYY-MM-DD
@@ -42,6 +56,32 @@ class TranscriptionResponse(BaseModel):
     transcript: str
 
 
+# ✅ NEW: Stage 1 resolution output
+class Stage1ResolutionResponse(BaseModel):
+    session_id: str
+    raw_transcript: str
+    clean_transcript: str
+    resolved_names: dict[str, Any]
+    segment_ids: list[dict[str, Any]]
+    participant_id: Optional[str] = None
+    stage_1_status: str = "complete"
+
+
+# ✅ NEW: Stage 2 extraction output
+class Stage2ExtractionResponse(BaseModel):
+    session_id: str
+    goals: list[dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
+    extraction_metadata: dict[str, Any]
+    stage_2_status: str = "complete"
+
+
+class PreFilledNames(BaseModel):
+    coordinator_name: Optional[str] = None
+    participant_name: Optional[str] = None
+    others: list[str] = []
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _require_coordinator(current_user: dict) -> None:
@@ -54,7 +94,59 @@ def _require_coordinator(current_user: dict) -> None:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
-@router.post("/plan-meetings", status_code=status.HTTP_201_CREATED)
+# ✅ NEW: Create meeting session (MINIMAL - fixes 422 error)
+@router.post("/plan-meetings/sessions", status_code=status.HTTP_201_CREATED)
+async def create_meeting_session(
+    body: CreateMeetingSessionRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create a new plan meeting recording session.
+    
+    ⚠️ IMPORTANT: Participant matching happens AFTER transcription (Stage 1), not here.
+    
+    Only requires: organization_id (from JWT), coordinator_id (from JWT), timestamp.
+    Names and participant resolution happen post-transcription.
+    
+    Returns: session_id for audio upload + transcription.
+    """
+    _require_coordinator(current_user)
+    organization_id = get_user_organization_id(current_user)
+    coordinator_id = get_user_id(current_user)
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+
+    payload = {
+        "organization_id": organization_id,
+        "coordinator_id": coordinator_id,
+        "participant_id": None,  # ✅ NULL until Stage 1 resolution
+        "created_at": now,
+        "recorded_at": now,
+        "meeting_date": body.meeting_date,
+        "meeting_type": body.meeting_type,
+        "conversation_context": body.conversation_context or {},
+        "stage_1_status": "pending",
+        "stage_2_status": "pending",
+        "review_status": "pending",
+    }
+
+    try:
+        resp = supabase.table("plan_meeting_sessions").insert(payload).execute()
+    except Exception as exc:
+        logger.exception("Failed to create plan meeting session: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create plan meeting session.")
+
+    if not resp.data:
+        raise HTTPException(status_code=500, detail="Insert returned no data.")
+
+    session = resp.data[0]
+    return MeetingSessionResponse(
+        session_id=session["id"],
+        created_at=session["created_at"],
+    )
+
+
+@router.post("/plan-meetings")
 async def record_plan_meeting(
     body: RecordMeetingRequest,
     current_user: dict = Depends(get_current_user),
@@ -280,3 +372,300 @@ async def apply_suggestions(
         raise HTTPException(status_code=500, detail="Failed to apply suggestions.")
 
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TWO-STAGE PIPELINE ENDPOINTS: Name Resolution + Goal Extraction
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _parse_speaker_segments(raw_text: str) -> list[dict[str, Any]]:
+    """
+    Parse speaker-diarized transcript into structured segments.
+    
+    Expects format: "Speaker A: ...", "Speaker B: ...", etc.
+    (This is what Whisper returns with speaker diarization enabled.)
+    
+    Returns: [{"segment_id": "s1", "start": "00:00:00", "speaker_label": "Speaker A", "text": "..."}]
+    """
+    segments = []
+    lines = raw_text.split("\n")
+    segment_id = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Try to parse "Speaker X: text" format
+        if ":" in line:
+            parts = line.split(":", 1)
+            speaker = parts[0].strip()
+            text = parts[1].strip() if len(parts) > 1 else ""
+            
+            segments.append({
+                "segment_id": f"s{segment_id}",
+                "start": "00:00:00",  # TODO: Parse from transcript metadata if available
+                "speaker_label": speaker,
+                "text": text,
+            })
+            segment_id += 1
+        else:
+            # Single-speaker or untagged line
+            segments.append({
+                "segment_id": f"s{segment_id}",
+                "start": "00:00:00",
+                "speaker_label": "Speaker",
+                "text": line,
+            })
+            segment_id += 1
+    
+    return segments
+
+
+@router.post("/plan-meetings/{session_id}/transcribe-and-resolve", status_code=status.HTTP_200_OK)
+async def transcribe_and_resolve_names(
+    session_id: str,
+    audio_file: UploadFile = File(...),
+    coordinator_name: str | None = None,
+    participant_name: str | None = None,
+    others: str = "[]",  # JSON string
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    ✅ STAGE 1: Transcribe audio + resolve speaker names + clean transcript
+    
+    Flow:
+    1. Transcribe audio using Whisper (with speaker diarization)
+    2. Run Stage 1 prompt to resolve speakers to real names
+    3. Clean transcript (fix ASR errors without changing meaning)
+    4. Store results in plan_meeting_sessions
+    5. Attempt participant matching by name
+    
+    Returns:
+        - clean_transcript: speaker-attributed, cleaned transcript
+        - resolved_names: { Speaker A -> Coordinator John, ... }
+        - segment_ids: preserved for Stage 2 citation
+        - flags: confidence issues, unresolved speakers, ambiguities
+    """
+    _require_coordinator(current_user)
+    organization_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    # Check session exists and belongs to this org
+    try:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select("*")
+            .eq("id", session_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("Failed to fetch session: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to fetch session.")
+    
+    sessions = session_resp.data or []
+    if not sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    
+    session = sessions[0]
+    
+    # ✅ STEP 1: Transcribe audio
+    try:
+        audio_bytes = await audio_file.read()
+        
+        # Validate file size (25MB limit)
+        if len(audio_bytes) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Audio file exceeds 25 MB limit.")
+        
+        # Call Whisper
+        client = _build_openai_client()
+        transcript_response = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=("audio.wav", audio_bytes, "audio/wav"),
+            response_format="verbose_json",
+            language="en",
+        )
+        
+        raw_text = transcript_response.text or ""
+        raw_transcript_segments = _parse_speaker_segments(raw_text)
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Transcription failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Could not transcribe audio: {exc}")
+    
+    # ✅ STEP 2: Run Stage 1 prompt (name resolution & cleanup)
+    try:
+        import json
+        
+        # Parse pre-filled names
+        prefilled_names = []
+        if coordinator_name:
+            prefilled_names.append({"name": coordinator_name, "role": "coordinator"})
+        if participant_name:
+            prefilled_names.append({"name": participant_name, "role": "participant"})
+        try:
+            others_list = json.loads(others) if others != "[]" else []
+            for other_name in others_list:
+                prefilled_names.append({"name": other_name, "role": "other"})
+        except (json.JSONDecodeError, TypeError):
+            pass
+        
+        # Gather meeting context
+        meeting_context = {
+            "meeting_type": session.get("meeting_type"),
+            "conversation_context": session.get("conversation_context", {}),
+        }
+        
+        # Import and run Stage 1
+        from ..services.plan_meeting_service import run_stage_1_name_resolution
+        
+        stage_1_result = await run_stage_1_name_resolution(
+            session_id=session_id,
+            organization_id=organization_id,
+            raw_transcript_segments=raw_transcript_segments,
+            prefilled_names=prefilled_names or None,
+            meeting_context=meeting_context,
+        )
+        
+    except ValueError as exc:
+        logger.exception("Stage 1 failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Name resolution failed: {exc}")
+    except Exception as exc:
+        logger.exception("Unexpected error in Stage 1: %s", exc)
+        raise HTTPException(status_code=500, detail="Stage 1 processing failed.")
+    
+    # ✅ STEP 3: Try to match participant by resolved names
+    participant_id = None
+    resolved_speakers = stage_1_result.get("resolved_speakers", [])
+    for speaker in resolved_speakers:
+        if speaker.get("confidence") in ("confirmed", "likely"):
+            name = speaker.get("resolved_name", "")
+            try:
+                p_resp = (
+                    supabase.table("participants")
+                    .select("id")
+                    .ilike("full_name", f"%{name}%")
+                    .eq("organization_id", organization_id)
+                    .limit(1)
+                    .execute()
+                )
+                if p_resp.data:
+                    participant_id = p_resp.data[0]["id"]
+                    break
+            except Exception:
+                pass
+    
+    # ✅ STEP 4: Update session with participant_id if found
+    if participant_id:
+        try:
+            supabase.table("plan_meeting_sessions").update({
+                "participant_id": participant_id,
+            }).eq("id", session_id).execute()
+        except Exception as exc:
+            logger.warning("Failed to update session with participant_id: %s", exc)
+    
+    return {
+        "session_id": session_id,
+        "raw_transcript": raw_text,
+        "clean_transcript": "\n".join([
+            f"{seg['speaker_name']}: {seg['text']}"
+            for seg in stage_1_result.get("clean_transcript", [])
+        ]),
+        "resolved_names": {
+            speaker["speaker_label"]: {
+                "name": speaker.get("resolved_name"),
+                "confidence": speaker.get("confidence"),
+            }
+            for speaker in resolved_speakers
+        },
+        "segment_ids": stage_1_result.get("clean_transcript", []),
+        "participant_id": participant_id,
+        "flags": stage_1_result.get("flags", []),
+        "stage_1_status": "complete",
+    }
+
+
+@router.post("/plan-meetings/{session_id}/extract-goals-tasks", status_code=status.HTTP_200_OK)
+async def extract_goals_and_tasks(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    ✅ STAGE 2: Extract NDIS goals and core support tasks
+    
+    Prerequisites:
+    - Session must have stage_1_status = 'complete'
+    - Must have clean_transcript and segment_ids from Stage 1
+    
+    Returns:
+        - draft_goals: NDIS goals extracted from transcript
+        - draft_tasks: Core support tasks
+        - attention_flags: Safety risks, restrictive practices, ambiguities
+    """
+    _require_coordinator(current_user)
+    organization_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    # Check session and its Stage 1 completion
+    try:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select("*")
+            .eq("id", session_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("Failed to fetch session: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to fetch session.")
+    
+    sessions = session_resp.data or []
+    if not sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    
+    session = sessions[0]
+    
+    # Verify Stage 1 is complete
+    if session.get("stage_1_status") != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stage 1 must be complete first. Current status: {session.get('stage_1_status')}"
+        )
+    
+    # Get clean transcript from Stage 1
+    clean_transcript = session.get("segment_ids") or []
+    if not clean_transcript:
+        raise HTTPException(status_code=400, detail="No clean transcript from Stage 1. Run transcribe-and-resolve first.")
+    
+    # ✅ STEP 1: Run Stage 2 prompt
+    try:
+        from ..services.plan_meeting_service import run_stage_2_goal_extraction
+        
+        stage_2_result = await run_stage_2_goal_extraction(
+            session_id=session_id,
+            organization_id=organization_id,
+            clean_transcript=clean_transcript,
+        )
+        
+    except ValueError as exc:
+        logger.exception("Stage 2 failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Goal extraction failed: {exc}")
+    except Exception as exc:
+        logger.exception("Unexpected error in Stage 2: %s", exc)
+        raise HTTPException(status_code=500, detail="Stage 2 processing failed.")
+    
+    return {
+        "session_id": session_id,
+        "goals": stage_2_result.get("draft_goals", []),
+        "tasks": stage_2_result.get("draft_tasks", []),
+        "attention_flags": stage_2_result.get("attention_flags", []),
+        "extraction_metadata": {
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "stage_2_status": "complete",
+    }
