@@ -182,6 +182,58 @@ _DASHBOARD_SESSION_COLUMNS = (
 )
 
 
+async def _get_dashboard_sessions_legacy_fallback(
+    supabase,
+    current_user: Optional[dict],
+    *,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Fallback for legacy sessions missing organization_id.
+
+    Some live databases contain older session rows that are linked to participants in
+    the current org but do not have `sessions.organization_id` populated. The primary
+    dashboard query filters by `organization_id`, which makes those rows disappear.
+    This fallback rehydrates dashboard sessions from the user's accessible participants.
+    """
+    from . import participant_service
+
+    participants = await participant_service.get_participants_list_light(current_user)
+    participant_map = {
+        str(row.get("id")): row
+        for row in participants
+        if isinstance(row, dict) and row.get("id")
+    }
+    participant_ids = list(participant_map.keys())
+    if not participant_ids:
+        return []
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(_DASHBOARD_SESSION_COLUMNS)
+            .in_("patient_id", participant_ids)
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Dashboard legacy session fallback failed closed: %s", exc)
+            return []
+        raise
+
+    recovered: List[Dict[str, Any]] = []
+    for session in _safe_rows(result.data):
+        patient_id = str(session.get("patient_id") or session.get("participant_id") or "")
+        participant = participant_map.get(patient_id)
+        if not participant:
+            continue
+        scoped_session = _annotate_session_from_participant(session, participant)
+        if _can_access_legacy_session(scoped_session, current_user, participant):
+            recovered.append(session)
+    return recovered
+
+
 async def get_sessions_for_dashboard(
     limit: int = 200,
     current_user: Optional[dict] = None,
@@ -209,6 +261,12 @@ async def get_sessions_for_dashboard(
         raise
 
     sessions = await _filter_sessions_for_user(_safe_rows(result.data), current_user)
+    if not sessions:
+        sessions = await _get_dashboard_sessions_legacy_fallback(
+            supabase,
+            current_user,
+            limit=limit,
+        )
     if not sessions:
         return []
 
