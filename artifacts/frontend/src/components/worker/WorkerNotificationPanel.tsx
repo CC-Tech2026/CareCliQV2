@@ -497,7 +497,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   const [selectedMessage, setSelectedMessage] = useState<WorkerMessage | null>(null);
 
   const { data: response, isLoading, error, refetch } = useOrgQuery(
-    ["worker-messages", orgId],
+    ["worker-messages"],
     {
       queryFn: () => fetchWorkerMessages(),
     }
@@ -535,9 +535,9 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   const readMut = useMutation({
     mutationFn: markMessageRead,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
-      qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
-      qc.invalidateQueries({ queryKey: ["worker-notifications-unread", orgId] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
     },
   });
 
@@ -550,9 +550,9 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
       );
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
-      qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
-      qc.invalidateQueries({ queryKey: ["worker-notifications-unread", orgId] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
     },
   });
 
@@ -719,7 +719,7 @@ export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
   const orgId = user?.organizationId ?? "__no_org__";
 
   const { data: inboxUnread } = useOrgQuery(
-    ["worker-notifications-unread", orgId],
+    ["worker-notifications-unread"],
     {
       queryFn: () => fetchNotifications({ unread_only: true }),
       staleTime: Number.POSITIVE_INFINITY,

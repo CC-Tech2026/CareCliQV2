@@ -35,6 +35,7 @@ import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
 import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
 import CoordinatorLivePage from "@/pages/coordinator-live";
+import CoordinatorMonitorPage from "@/pages/coordinator-monitor";
 import AuditPack from "@/pages/audit-pack";
 import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
@@ -338,6 +339,12 @@ function Router() {
       <Route path="/coordinator/live">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><CoordinatorLivePage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/monitor">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorMonitorPage /></AppLayout>
         </ProtectedRoute>
       </Route>
 

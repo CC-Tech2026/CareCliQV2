@@ -47,7 +47,7 @@ export default function CoordinatorTravelExpenses() {
   });
   const { data, isLoading, refetch } = useOrgQuery(["coordinator", "travel-submissions"], {
     queryFn: getCoordinatorTravelSubmissions,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   });
 
   const submissions = data?.submissions ?? [];

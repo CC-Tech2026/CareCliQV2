@@ -15,7 +15,7 @@ export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }:
   const { translate } = useAccessibility();
 
   return (
-    <section className="overflow-hidden rounded-2xl border-2 border-red-200 bg-red-50/60 p-4 shadow-sm">
+    <section className="overflow-hidden rounded-2xl border-2 border-red-200 p-4 shadow-sm">
       <p className="flex items-center gap-2 text-sm font-black text-red-700">
         <AlertTriangle size={18} className="shrink-0" />
         {translate("tasks.mandatoryIncomplete")}

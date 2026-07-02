@@ -156,10 +156,11 @@ export default function MyShifts() {
   const list = data?.shifts ?? [];
   const filterCounts = countsData?.counts;
 
-  const { data: todayData } = useOrgQuery(["worker", "shifts", "today"], {
+  const { data: todayStatsData } = useOrgQuery(["worker", "shifts", "today"], {
     queryFn: () => getWorkerShifts("today"),
+    enabled: filter !== "today",
   });
-  const todayShifts = todayData?.shifts ?? [];
+  const todayShifts = filter === "today" ? list : (todayStatsData?.shifts ?? []);
 
   const { data: completedData } = useOrgQuery(["worker", "shifts", "completed"], {
     queryFn: () => getWorkerShifts("completed"),

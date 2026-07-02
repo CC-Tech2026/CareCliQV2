@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +24,14 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
+
+function formatBreakElapsed(secs?: number) {
+  if (!secs || secs <= 0) return "0m";
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 const STATUS_RING: Record<LiveShift["live_status"], { ring: string; bg: string; labelKey: string }> = {
   green:  { ring: "#22C55E", bg: "#F0FDF4", labelKey: "coordinator.live.status.onTrack"  },
@@ -101,7 +109,7 @@ function MessageModal({
   const [type, setType] = useState<ShiftMessage["message_type"]>("text");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages = [], isLoading } = useOrgQuery<ShiftMessage[]>(["shift-messages", shift.id, orgId], { queryFn: () => getShiftMessages(shift.id), enabled: open, refetchInterval: 5000 });
+  const { data: messages = [], isLoading } = useOrgQuery<ShiftMessage[]>(["shift-messages", shift.id, orgId], { queryFn: () => getShiftMessages(shift.id), enabled: open, refetchInterval: 15_000 });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -443,6 +451,27 @@ function LiveShiftCard({
       {/* Task bar */}
       <TaskBar total={shift.task_counts.total} completed={shift.task_counts.completed} />
 
+      {shift.engagement?.is_long_shift && (
+        <div className="rounded-lg border px-2.5 py-2 text-[11px]" style={{ borderColor: BORDER, background: SOFT }}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold" style={{ color: TEXT }}>
+              Engagement: {shift.engagement.engagement_status ?? "GREEN"}
+            </span>
+            {shift.engagement.engagement_score != null && (
+              <span className="font-semibold" style={{ color: MUTED }}>
+                Score {shift.engagement.engagement_score}
+              </span>
+            )}
+          </div>
+          <p className="mt-1" style={{ color: MUTED }}>
+            Gap {Math.floor((shift.engagement.current_gap_secs ?? 0) / 60)}m · Check-ins{" "}
+            {shift.engagement.checkins_completed ?? 0}/{shift.engagement.checkins_required ?? 0}
+            {shift.engagement.break_logged ? " · Break logged" : ""}
+            {shift.engagement.on_break ? ` · On break ${formatBreakElapsed(shift.engagement.break_elapsed_secs)}` : ""}
+          </p>
+        </div>
+      )}
+
       {/* Alerts */}
       {shift.alerts.length > 0 && (
         <div
@@ -632,7 +661,7 @@ export default function CoordinatorLivePage() {
   const [emergShift, setEmergShift] = useState<LiveShift | null>(null);
   const [detailShift, setDetailShift] = useState<LiveShift | null>(null);
 
-  const { data: shifts = [], isLoading, dataUpdatedAt, refetch } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], { queryFn: getLiveShifts, refetchInterval: 10000 });
+  const { data: shifts = [], isLoading, dataUpdatedAt, refetch } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], { queryFn: getLiveShifts, refetchInterval: 30_000 });
 
   const filtered = filter === "all" ? shifts : shifts.filter((s) => s.live_status === filter);
 

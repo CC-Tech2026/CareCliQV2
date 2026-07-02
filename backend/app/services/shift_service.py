@@ -147,6 +147,45 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _track_long_shift_activity(
+    *,
+    shift: dict[str, Any],
+    worker_id: str,
+    event_type: str,
+    session: Optional[dict[str, Any]] = None,
+    metadata: Optional[dict[str, Any]] = None,
+    is_billable: bool = True,
+) -> None:
+    try:
+        from . import long_shift_service
+
+        shift_id = str(shift.get("id") or "")
+        if not shift_id:
+            return
+        session_id = str((session or {}).get("id") or shift.get("session_id") or "") or None
+        patient_id = str(shift.get("participant_id") or "") or None
+        if session:
+            long_shift_service.record_activity_for_session(
+                session,
+                event_type,
+                worker_id,
+                metadata=metadata,
+                is_billable=is_billable,
+            )
+        else:
+            long_shift_service.record_activity(
+                shift_id=shift_id,
+                session_id=session_id,
+                event_type=event_type,
+                worker_id=worker_id,
+                patient_id=patient_id,
+                metadata=metadata,
+                is_billable=is_billable,
+            )
+    except Exception as exc:
+        logger.debug("long shift activity track skipped: %s", exc)
+
+
 PARTICIPANT_RISK_TYPES = (
     "allergy",
     "legal_blindness",
@@ -320,6 +359,9 @@ def build_structured_health_alerts(
     *,
     shift: Optional[dict[str, Any]] = None,
     organization_id: Optional[str] = None,
+    prefetched_allergies: Optional[list[dict[str, Any]]] = None,
+    prefetched_patient_risks: Optional[dict[str, Any]] = None,
+    skip_db_lookups: bool = False,
 ) -> list[dict[str, Any]]:
     """Normalise shift/participant sources into structured risk alerts (CARECLIQV2-158)."""
     alerts: list[dict[str, Any]] = []
@@ -359,8 +401,13 @@ def build_structured_health_alerts(
 
     participant_id = str((shift or {}).get("participant_id") or "")
     org_id = str(organization_id or (shift or {}).get("organization_id") or "")
-    if participant_id and org_id:
-        for row in _fetch_participant_allergies(participant_id, org_id):
+    if participant_id and org_id and not skip_db_lookups:
+        allergy_rows = (
+            prefetched_allergies
+            if prefetched_allergies is not None
+            else _fetch_participant_allergies(participant_id, org_id)
+        )
+        for row in allergy_rows:
             allergen = str(row.get("allergen") or "").strip()
             if not allergen:
                 continue
@@ -378,7 +425,11 @@ def build_structured_health_alerts(
                 severity=severity,
             ))
 
-        patient = _fetch_patient_risk_fields(participant_id, org_id)
+        patient = (
+            prefetched_patient_risks
+            if prefetched_patient_risks is not None
+            else _fetch_patient_risk_fields(participant_id, org_id)
+        )
         if patient.get("behaviour_support_plan"):
             body = str(patient["behaviour_support_plan"]).strip()
             add(_make_risk_alert(
@@ -471,13 +522,22 @@ def _fetch_active_goals_for_participant(
         return []
 
 
-def build_participant_risks(shift: dict[str, Any], organization_id: str) -> list[dict[str, Any]]:
+def build_participant_risks(
+    shift: dict[str, Any],
+    organization_id: str,
+    *,
+    prefetched_allergies: Optional[list[dict[str, Any]]] = None,
+    prefetched_patient_risks: Optional[dict[str, Any]] = None,
+    skip_db_lookups: bool = False,
+) -> list[dict[str, Any]]:
     return build_structured_health_alerts(
         shift.get("health_alerts"),
         shift=shift,
         organization_id=organization_id,
+        prefetched_allergies=prefetched_allergies,
+        prefetched_patient_risks=prefetched_patient_risks,
+        skip_db_lookups=skip_db_lookups,
     )
-
 
 
 def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_id: str) -> None:
@@ -715,7 +775,12 @@ def _org_contact_number(organization_id: str) -> Optional[str]:
     return None
 
 
-def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str, Any]:
+def _shift_card_payload(
+    shift: dict,
+    session: Optional[dict] = None,
+    *,
+    org_contact: Optional[str] = None,
+) -> dict[str, Any]:
     scheduled_start = shift.get("scheduled_start")
     scheduled_end = shift.get("scheduled_end")
     status = shift.get("status") or "scheduled"
@@ -772,7 +837,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "clock_in_method": shift.get("clock_in_method"),
         "clock_in_location": shift.get("clock_in_location"),
         "clock_in_verified": bool(shift.get("clock_in_verified")),
-        "office_contact_number": _org_contact_number(str(shift.get("organization_id") or "")),
+        "office_contact_number": org_contact or _org_contact_number(str(shift.get("organization_id") or "")),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
     return payload
@@ -802,10 +867,22 @@ def _enrich_worker_shift_card(
     organization_id: str,
     session: Optional[dict[str, Any]] = None,
     worker_id: Optional[str] = None,
+    *,
+    prefetched_allergies: Optional[list[dict[str, Any]]] = None,
+    prefetched_patient_risks: Optional[dict[str, Any]] = None,
+    active_goals: Optional[list[dict[str, Any]]] = None,
+    skip_db_lookups: bool = False,
+    skip_briefing: bool = False,
 ) -> dict[str, Any]:
     """Hydrate list/detail cards with participant risks, goals, and completion metadata."""
     participant_id = str(shift.get("participant_id") or "")
-    risks = build_participant_risks(shift, organization_id)
+    risks = build_participant_risks(
+        shift,
+        organization_id,
+        prefetched_allergies=prefetched_allergies,
+        prefetched_patient_risks=prefetched_patient_risks,
+        skip_db_lookups=skip_db_lookups,
+    )
     payload["health_alerts"] = risks
     payload["has_risk_alerts"] = bool(risks) or bool(shift.get("allergies")) or bool(shift.get("health_flags"))
 
@@ -820,9 +897,13 @@ def _enrich_worker_shift_card(
             payload["allergies"] = "; ".join(dict.fromkeys(allergy_lines))
 
     if participant_id:
-        active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
-        if active_goals:
-            payload["active_goals"] = active_goals
+        goals = (
+            active_goals
+            if active_goals is not None
+            else _fetch_active_goals_for_participant(participant_id, organization_id)
+        )
+        if goals:
+            payload["active_goals"] = goals
 
     if payload.get("status") == "completed" or payload.get("visual_state") == "completed":
         payload["completion_summary"] = _build_completion_summary(shift, session)
@@ -835,7 +916,12 @@ def _enrich_worker_shift_card(
         except Exception:
             pass
 
-    if worker_id and payload.get("visual_state") == "scheduled" and not shift.get("clocked_in_at"):
+    if (
+        not skip_briefing
+        and worker_id
+        and payload.get("visual_state") == "scheduled"
+        and not shift.get("clocked_in_at")
+    ):
         try:
             from .briefing_service import is_briefing_complete_for_shift
 
@@ -1267,6 +1353,147 @@ def _fetch_worker_shift_rows(
         raise
 
 
+def _batch_fetch_sessions(session_ids: list[str]) -> dict[str, dict[str, Any]]:
+    ids = list({str(sid) for sid in session_ids if sid})
+    if not ids:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, status, session_date, duration_minutes, start_time, notes, compliance_input_text")
+            .in_("id", ids)
+            .execute()
+        )
+        return {
+            str(row.get("id")): row
+            for row in (resp.data or [])
+            if isinstance(row, dict) and row.get("id")
+        }
+    except Exception:
+        return {}
+
+
+def _batch_fetch_allergies(
+    participant_ids: list[str],
+    organization_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    ids = list({str(pid) for pid in participant_ids if pid})
+    if not ids or not organization_id:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("participant_allergies")
+            .select("id, participant_id, allergen, severity, notes")
+            .in_("participant_id", ids)
+            .eq("organization_id", organization_id)
+            .order("severity", desc=False)
+            .execute()
+        )
+        grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in ids}
+        for row in resp.data or []:
+            if not isinstance(row, dict):
+                continue
+            pid = str(row.get("participant_id") or "")
+            if pid in grouped:
+                grouped[pid].append(dict(row))
+        return grouped
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return {pid: [] for pid in ids}
+        logger.debug("batch allergies lookup failed: %s", exc)
+        return {pid: [] for pid in ids}
+
+
+def _batch_fetch_patient_risk_fields(
+    participant_ids: list[str],
+    organization_id: str,
+) -> dict[str, dict[str, Any]]:
+    ids = list({str(pid) for pid in participant_ids if pid})
+    if not ids or not organization_id:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("patients")
+            .select(
+                "id, allergies, medical_alerts, current_conditions, behaviour_support_plan, "
+                "risk_triggers, risk_management_plan"
+            )
+            .in_("id", ids)
+            .eq("organization_id", organization_id)
+            .execute()
+        )
+        return {
+            str(row.get("id")): row
+            for row in (resp.data or [])
+            if isinstance(row, dict) and row.get("id")
+        }
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return {}
+        logger.debug("batch patient risk lookup failed: %s", exc)
+        return {}
+
+
+def build_worker_shift_cards(
+    rows: list[dict[str, Any]],
+    organization_id: str,
+    worker_id: str,
+    *,
+    light: bool = False,
+) -> list[dict[str, Any]]:
+    """Build enriched shift cards with batched DB lookups."""
+    if not rows:
+        return []
+
+    session_map = _batch_fetch_sessions([
+        str(row.get("session_id") or "")
+        for row in rows
+        if row.get("session_id")
+    ])
+    org_contact = _org_contact_number(organization_id)
+
+    if light:
+        return [
+            _shift_card_payload(
+                shift,
+                session_map.get(str(shift.get("session_id") or "")),
+                org_contact=org_contact,
+            )
+            for shift in rows
+        ]
+
+    participant_ids = list({
+        str(row.get("participant_id") or "")
+        for row in rows
+        if row.get("participant_id")
+    })
+    allergies_map = _batch_fetch_allergies(participant_ids, organization_id)
+    risk_map = _batch_fetch_patient_risk_fields(participant_ids, organization_id)
+    from .goals_service import fetch_active_goals_map_for_participants
+
+    goals_map = fetch_active_goals_map_for_participants(participant_ids, organization_id)
+
+    cards: list[dict[str, Any]] = []
+    for shift in rows:
+        participant_id = str(shift.get("participant_id") or "")
+        session = session_map.get(str(shift.get("session_id") or ""))
+        card = _shift_card_payload(shift, session, org_contact=org_contact)
+        cards.append(_enrich_worker_shift_card(
+            card,
+            shift,
+            organization_id,
+            session,
+            worker_id,
+            prefetched_allergies=allergies_map.get(participant_id, []),
+            prefetched_patient_risks=risk_map.get(participant_id, {}),
+            active_goals=goals_map.get(participant_id, []),
+        ))
+    return cards
+
+
 def count_shifts_for_worker(worker_id: str, organization_id: str) -> dict[str, int]:
     """Lightweight per-filter counts without building full shift cards (CARECLIQV2-133)."""
     rows = _fetch_worker_shift_rows(
@@ -1291,12 +1518,8 @@ def list_shifts_for_worker(
         filter_name=None if bucket == "all" else bucket,
     )
     filtered = filter_shift_rows(rows, bucket, today)
-    cards: list[dict[str, Any]] = []
-    for shift in filtered:
-        session = _get_session_for_shift(shift)
-        card = _shift_card_payload(shift, session)
-        cards.append(_enrich_worker_shift_card(card, shift, organization_id, session, worker_id))
-    return cards
+    light = bucket == "completed"
+    return build_worker_shift_cards(filtered, organization_id, worker_id, light=light)
 
 
 def get_shift_detail_for_worker(
@@ -1333,7 +1556,9 @@ def get_shift_detail_for_worker(
             protocol = get_protocol(participant_id, organization_id)
             protocol = {**protocol, **safety_status}
             payload["safety_protocol"] = protocol
-    active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
+    active_goals = (payload.get("context") or {}).get("goals")
+    if not active_goals:
+        active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
     if active_goals:
         payload["active_goals"] = active_goals
     primary_contact = (payload.get("profile") or {}).get("emergency_contact")
@@ -1358,6 +1583,22 @@ def get_shift_detail_for_worker(
         logger.debug("briefing enrichment failed: %s", exc)
         payload.setdefault("briefing_complete", bool(shift.get("clocked_in_at")))
         payload.setdefault("requires_briefing", not bool(shift.get("clocked_in_at")))
+    session_id = str(payload.get("session_id") or (session or {}).get("id") or "")
+    if session_id:
+        try:
+            from .long_shift_service import get_break_status, get_checkin_status
+
+            break_status = get_break_status(session_id, worker_id, organization_id)
+            if break_status:
+                payload["break_status"] = break_status
+            checkin_status = get_checkin_status(session_id, worker_id, organization_id)
+            if checkin_status:
+                payload["checkin_status"] = checkin_status
+            activity_summary = get_worker_activity_summary(session_id, worker_id, organization_id)
+            if activity_summary:
+                payload["activity_summary"] = activity_summary
+        except Exception as exc:
+            logger.debug("break_status enrichment failed: %s", exc)
     return payload
 
 
@@ -1645,6 +1886,13 @@ def clock_in_shift(
         )
 
     session = _get_session_for_shift(updated)
+    _track_long_shift_activity(
+        shift=updated,
+        worker_id=worker_id,
+        event_type="CLOCK_IN",
+        session=session,
+        metadata={"method": method},
+    )
     return _shift_card_payload(updated, session)
 
 
@@ -1701,6 +1949,19 @@ def update_shift_tasks(
             pass
 
     session = _get_session_for_shift(updated)
+    if session:
+        for task in tasks:
+            if task.get("completed"):
+                _track_long_shift_activity(
+                    shift=updated,
+                    worker_id=worker_id,
+                    session=session,
+                    event_type="TASK_TICKED",
+                    metadata={
+                        "task_id": task.get("task_id"),
+                        "task_name": task.get("label"),
+                    },
+                )
     return _shift_card_payload(updated, session)
 
 
@@ -2002,6 +2263,13 @@ def start_shift_session(
 
     updated_shift = get_shift_by_id(shift_id) or shift
     session = _get_session_for_shift(updated_shift)
+    _track_long_shift_activity(
+        shift=updated_shift,
+        worker_id=str(worker_id),
+        session=session,
+        event_type="CLOCK_IN",
+        metadata={"session_started": True},
+    )
     return _shift_card_payload(updated_shift, session)
 
 
@@ -2253,6 +2521,20 @@ def end_shift(
         raise
 
     session = _get_session_for_shift(updated)
+    if session:
+        _track_long_shift_activity(
+            shift=updated,
+            worker_id=worker_id,
+            session=session,
+            event_type="CLOCK_OUT",
+        )
+        try:
+            from . import long_shift_service
+
+            long_shift_service.evaluate_check16(session, updated)
+            long_shift_service._refresh_billable_duration(str(session.get("id")), updated)
+        except Exception as exc:
+            logger.debug("check16 evaluation on end_shift skipped: %s", exc)
     payload = _shift_card_payload(updated, session)
     payload["completion_summary"] = {
         **_build_completion_summary(updated, session),
@@ -2433,6 +2715,25 @@ def sync_session_task_evidence(
         if _is_missing_schema_error(exc):
             return None
         raise
+
+    if synced_ids:
+        linked_shift = get_shift_for_session(session)
+        if linked_shift:
+            for item in evidence_items:
+                if not isinstance(item, dict):
+                    continue
+                ev_type = str(item.get("type") or item.get("evidence_type") or "photo").lower()
+                event = "VOICE_RECORDED" if "voice" in ev_type or "audio" in ev_type else "PHOTO_ADDED"
+                _track_long_shift_activity(
+                    shift=linked_shift,
+                    worker_id=worker_id,
+                    session=session,
+                    event_type=event,
+                    metadata={
+                        "task_id": item.get("task_id"),
+                        "evidence_id": item.get("id") or item.get("evidence_id"),
+                    },
+                )
 
     return {
         "session_id": session_id,
@@ -2733,6 +3034,15 @@ def sync_session_notes(
             if _is_missing_schema_error(exc):
                 return None
             raise
+
+    if confirmed:
+        _track_long_shift_activity(
+            shift=shift,
+            worker_id=worker_id,
+            session=session,
+            event_type="NOTE_SAVED",
+            metadata={"synced_count": len(confirmed)},
+        )
 
     return {
         "session_id": session_id,

@@ -27,6 +27,7 @@ from ..schemas.participant import (
 
 from .access_log_service import (
     log_participant_read,
+    log_participant_reads_bulk,
     log_security_event,
 )
 
@@ -144,10 +145,10 @@ def _strip_access_columns(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def get_all_participants(
-    current_user: Optional[dict] = None,
+async def _list_accessible_participants(
+    current_user: Optional[dict],
 ) -> List[dict]:
-
+    """Return normalized participant rows the user can access (no goals/plan enrichment)."""
     if not current_user or not user_id(current_user) or not get_user_role(current_user):
         return []
 
@@ -193,22 +194,38 @@ async def get_all_participants(
         if not can_access_participant(scoped_row, current_user):
             continue
 
-        participant_id = str(scoped_row.get("id"))
+        filtered_rows.append(scoped_row)
 
-        await log_participant_read(
-            participant_id,
+    if filtered_rows:
+        await log_participant_reads_bulk(
+            [str(row.get("id")) for row in filtered_rows if row.get("id")],
             user_id=user_id(current_user),
             organization_id=organization_id(current_user),
             purpose="Participant List Access",
         )
 
-        filtered_rows.append(scoped_row)
+    return [_normalize(r) for r in filtered_rows]
+
+
+async def get_all_participants(
+    current_user: Optional[dict] = None,
+) -> List[dict]:
+
+    normalized = await _list_accessible_participants(current_user)
+    if not normalized:
+        return []
 
     from . import goals_service, funding_service
 
-    normalized = [_normalize(r) for r in filtered_rows]
     with_goals = await goals_service.enrich_participants(normalized, active_only=False)
     return await funding_service.enrich_participants_plan_fields(with_goals)
+
+
+async def get_participants_list_light(
+    current_user: Optional[dict] = None,
+) -> List[dict]:
+    """Participant list without goals/plan enrichment — for dashboards and my-clients."""
+    return await _list_accessible_participants(current_user)
 
 
 async def get_participant_by_id(
@@ -671,6 +688,54 @@ async def _get_assignment_ids(current_user: Optional[dict]) -> tuple[set[str], s
             clinical_ids.add(str(patient_id))
 
     return support_ids, clinical_ids
+
+
+_ACCESS_STUB_SELECT = (
+    "id, organization_id, assigned_worker_id, allied_health_id, "
+    "clinician_id, created_by, owner_user_id, support_worker_id"
+)
+
+
+async def get_participant_access_stubs(
+    current_user: Optional[dict],
+    participant_ids: list[str],
+) -> dict[str, dict]:
+    """Minimal participant rows for session access checks — no enrichment or audit logs."""
+    if not current_user or not participant_ids:
+        return {}
+
+    org_id = organization_id(current_user)
+    if not org_id:
+        return {}
+
+    ids = list({str(pid) for pid in participant_ids if pid})
+    if not ids:
+        return {}
+
+    try:
+        result = (
+            get_supabase_admin()
+            .table(TABLE)
+            .select(_ACCESS_STUB_SELECT)
+            .eq("organization_id", org_id)
+            .in_("id", ids)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Participant access stub lookup failed closed: %s", exc)
+            return {}
+        raise
+
+    rows = [r for r in (result.data or []) if isinstance(r, dict)]
+    support_ids, clinical_ids = await _get_assignment_ids(current_user)
+
+    stubs: dict[str, dict] = {}
+    for row in rows:
+        scoped = _annotate_assignment_scope(row, current_user, support_ids, clinical_ids)
+        if can_access_participant(scoped, current_user):
+            stubs[str(scoped.get("id"))] = scoped
+    return stubs
 
 
 def _annotate_assignment_scope(

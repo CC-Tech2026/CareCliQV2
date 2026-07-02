@@ -15,9 +15,16 @@ export function setQueryOrgId(orgId: string | null): void {
   _currentOrgId = orgId;
 }
 
+/** Default cache window for list/dashboard reads (reduces repeat API load while browsing). */
+export const DEFAULT_QUERY_STALE_MS = 60_000;
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: DEFAULT_QUERY_STALE_MS,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
       // Prefix every cache hash with the current org_id so entries from
       // different orgs are stored under distinct keys (CCQ-113 AC).
       queryKeyHashFn: (queryKey) => hashKey([_currentOrgId ?? "__no_org__", ...queryKey]),

@@ -20,6 +20,10 @@ import { WorkerMobileNoteBubble } from "./WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "./WorkerMobileParticipantStrip";
 import { WorkerMobileRiskStrip } from "./WorkerMobileRiskStrip";
 import { WorkerMobileTaskList } from "./WorkerMobileTaskList";
+import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
+import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
+import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
+import type { CheckinWindowStatus } from "@/services/longShiftService";
 
 type Props = {
   shiftId: string;
@@ -38,6 +42,9 @@ type Props = {
   onNotesRefresh: () => void;
   tutorialDemo?: boolean;
   disabled?: boolean;
+  sessionElapsed?: string;
+  longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
+  initialCheckinStatus?: CheckinWindowStatus | null;
 };
 
 function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]) {
@@ -100,6 +107,9 @@ export function WorkerMobileSessionScreen({
   onNotesRefresh,
   tutorialDemo,
   disabled,
+  sessionElapsed,
+  longShiftBreak,
+  initialCheckinStatus,
 }: Props) {
   const { toast } = useToast();
   const { translate } = useAccessibility();
@@ -247,6 +257,26 @@ export function WorkerMobileSessionScreen({
 
         {clockedInAt && (
           <ClockedInBanner clockedInAt={clockedInAt} />
+        )}
+
+        {longShiftBreak?.onBreak && (
+          <BreakStatusBanner
+            variant="mobile"
+            breakElapsed={longShiftBreak.breakElapsed}
+          />
+        )}
+
+        {sessionId && longShiftBreak && (
+          <div className="mx-3 mt-3">
+            <LongShiftEngagementPanel
+              sessionId={sessionId}
+              shiftId={shiftId}
+              clockedInAt={clockedInAt}
+              sessionElapsed={sessionElapsed}
+              breakControl={longShiftBreak}
+              initialCheckinStatus={initialCheckinStatus}
+            />
+          </div>
         )}
 
         <div className="mx-3 mt-3 overflow-hidden rounded-2xl border" style={{ borderColor: WM.border, background: WM.surface }}>

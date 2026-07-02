@@ -200,28 +200,42 @@ def fetch_active_goals_for_shift(
     organization_id: str,
 ) -> list[dict[str, Any]]:
     """Sync helper for shift briefings — active goals only."""
+    return fetch_active_goals_map_for_participants(
+        [participant_id],
+        organization_id,
+    ).get(str(participant_id), [])
 
-    if not participant_id or not organization_id:
-        return []
+
+def fetch_active_goals_map_for_participants(
+    participant_ids: list[str],
+    organization_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Batch-fetch active goals formatted for shift cards (single query)."""
+    ids = [str(pid) for pid in participant_ids if pid]
+    if not ids or not organization_id:
+        return {}
 
     try:
         goals_resp = (
             get_supabase_admin()
             .table(TABLE)
-            .select("id, name, description, goal_area, status, priority, worker_focus")
-            .eq("participant_id", participant_id)
+            .select("id, participant_id, name, description, goal_area, status, priority, worker_focus")
+            .in_("participant_id", ids)
             .eq("organization_id", organization_id)
             .eq("status", "active")
             .order("priority", desc=False)
             .order("created_at")
             .execute()
         )
-        goals: list[dict[str, Any]] = []
+        grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in ids}
         for row in goals_resp.data or []:
             if not isinstance(row, dict):
                 continue
+            pid = str(row.get("participant_id") or "")
+            if pid not in grouped:
+                continue
             normalized = _normalize(row)
-            goals.append({
+            grouped[pid].append({
                 "id": normalized.get("id"),
                 "title": normalized.get("title") or "",
                 "description": normalized.get("description") or "",
@@ -229,10 +243,10 @@ def fetch_active_goals_for_shift(
                 "priority": normalized.get("priority"),
                 "worker_focus": normalized.get("worker_focus") or [],
             })
-        return goals
+        return grouped
     except Exception as exc:
-        logger.debug("fetch_active_goals_for_shift failed: %s", exc)
-        return []
+        logger.debug("fetch_active_goals_map_for_participants failed: %s", exc)
+        return {pid: [] for pid in ids}
 
 
 async def get_goals_map_for_participants(

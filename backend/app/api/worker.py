@@ -276,7 +276,7 @@ def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
     return trend
 
 
-def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
+async def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
     """Return rules from the most recently checked scored session."""
     scored = [
         s for s in sessions
@@ -294,10 +294,20 @@ def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
         )
 
     latest = sorted(scored, key=_sort_key, reverse=True)[0]
+    session_id = str(latest.get("id"))
     insights = _safe_json(latest.get("ai_insights"))
     rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
     rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
-    return rules if isinstance(rules, list) else [], str(latest.get("id"))
+    if isinstance(rules, list) and rules:
+        return rules, session_id
+
+    logs = await funding_service.get_compliance_audit_logs(session_id)
+    if logs:
+        all_rules = logs[0].get("all_rules")
+        if isinstance(all_rules, list) and all_rules:
+            return all_rules, session_id
+
+    return [], session_id
 
 
 def _limited_participant(participant: dict) -> dict:
@@ -391,12 +401,28 @@ async def _worker_sessions_for_participant(participant_id: str, user: dict) -> l
 @router.get("/my-clients")
 async def my_clients(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
-    participants = await participant_service.get_all_participants(current_user)
+    participants = await participant_service.get_participants_list_light(current_user)
+    worker_id = get_user_id(current_user) or ""
+    participant_ids = [str(participant.get("id")) for participant in participants if participant.get("id")]
+    sessions_by_participant = await session_service.get_worker_sessions_grouped(
+        participant_ids,
+        worker_id,
+        current_user,
+    )
     rows: list[dict] = []
     for participant in participants:
         participant_id = str(participant.get("id"))
-        sessions = await _worker_sessions_for_participant(participant_id, current_user)
+        sessions = sessions_by_participant.get(participant_id, [])
         rows.append(_client_row(participant, sessions))
+    if participant_ids:
+        await audit_service.log_action(
+            action_type="worker.sessions.viewed",
+            entity_type="participant",
+            entity_id=None,
+            user_id=worker_id,
+            organization_id=get_user_organization_id(current_user),
+            details={"participant_count": len(participant_ids), "source": "my_clients_list"},
+        )
     return rows
 
 
@@ -482,7 +508,7 @@ async def worker_compliance_detail(
     scores = [float(s["compliance_score"]) for s in scored]
     average = round(sum(scores) / len(scores), 1) if scores else 0
 
-    raw_rules, _ = _latest_rule_results(sessions)
+    raw_rules, _ = await _latest_rule_results(sessions)
     rules = enrich_rule_results(raw_rules)
     failed_rules = [
         {
@@ -1558,3 +1584,285 @@ async def worker_download_evidence(
 
     mime = metadata.get("mime_type") or "application/octet-stream"
     return Response(content=file_bytes, media_type=mime)
+
+
+# ── Check 16 — Long shift engagement ─────────────────────────────────────────
+
+
+class LongShiftCheckinBody(BaseModel):
+    status: str
+    note: Optional[str] = Field(default=None, max_length=500)
+    prompt_triggered_at: Optional[str] = None
+    gap_at_prompt_secs: Optional[int] = None
+
+
+@router.post("/sessions/{session_id}/checkins", status_code=status.HTTP_201_CREATED)
+async def worker_submit_checkin(
+    session_id: str,
+    body: LongShiftCheckinBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit a long-shift engagement check-in (Check 16 T2)."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        result = long_shift_service.submit_checkin(
+            session_id,
+            worker_id,
+            org_id,
+            status=body.status,
+            note=body.note,
+            prompt_triggered_at=body.prompt_triggered_at,
+            gap_at_prompt_secs=body.gap_at_prompt_secs,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result
+
+
+@router.get("/sessions/{session_id}/checkins/status")
+async def worker_session_checkin_status(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Check-in eligibility, cooldown, and next due window for a session."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = long_shift_service.get_checkin_status(session_id, worker_id, org_id)
+    if result is None:
+        session = shift_service._get_worker_session_or_none(session_id, worker_id, org_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        return {
+            "applicable": False,
+            "can_submit_checkin": False,
+            "block_reason": None,
+            "cooldown_remaining_secs": 0,
+            "next_checkin_due_secs": 0,
+            "checkin_overdue": False,
+            "checkins_completed": 0,
+            "checkins_required": 0,
+        }
+    return result
+
+
+@router.get("/shifts/{shift_id}/checkins/status")
+async def worker_shift_checkin_status(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Check-in status for the worker's shift (uses linked session)."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service._get_worker_shift_or_none(shift_id, worker_id, org_id)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    session_id = shift.get("session_id")
+    if not session_id:
+        return {
+            "applicable": False,
+            "can_submit_checkin": False,
+            "block_reason": None,
+            "cooldown_remaining_secs": 0,
+            "next_checkin_due_secs": 0,
+            "checkin_overdue": False,
+            "checkins_completed": 0,
+            "checkins_required": 0,
+        }
+    result = long_shift_service.get_checkin_status(str(session_id), worker_id, org_id)
+    if result is None:
+        return {
+            "applicable": False,
+            "can_submit_checkin": False,
+            "block_reason": None,
+            "cooldown_remaining_secs": 0,
+            "next_checkin_due_secs": 0,
+            "checkin_overdue": False,
+            "checkins_completed": 0,
+            "checkins_required": 0,
+        }
+    return result
+
+
+@router.post("/sessions/{session_id}/breaks/start", status_code=status.HTTP_201_CREATED)
+async def worker_start_break(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Start a billable-paused break timer on an active long shift."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        result = long_shift_service.start_break(session_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result
+
+
+@router.post("/sessions/{session_id}/breaks/end")
+async def worker_end_break(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """End the active break and update billable duration."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        result = long_shift_service.end_break(session_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result
+
+
+@router.get("/shifts/{shift_id}/breaks/status")
+async def worker_shift_break_status(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Break status for the worker's shift (uses linked session). Fallback when session route unavailable."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service._get_worker_shift_or_none(shift_id, worker_id, org_id)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    session_id = shift.get("session_id")
+    if not session_id:
+        return {
+            "active": False,
+            "completed_breaks": 0,
+            "total_break_secs": 0,
+            "max_breaks_per_shift": long_shift_service.MAX_BREAKS_PER_SESSION,
+            "can_start_break": True,
+            "block_reason": None,
+        }
+    result = long_shift_service.get_break_status(str(session_id), worker_id, org_id)
+    if result is None:
+        return {
+            "active": False,
+            "completed_breaks": 0,
+            "total_break_secs": 0,
+            "max_breaks_per_shift": long_shift_service.MAX_BREAKS_PER_SESSION,
+            "can_start_break": True,
+            "block_reason": None,
+        }
+    return result
+
+
+@router.get("/sessions/{session_id}/breaks/active")
+async def worker_get_active_break(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return active break status and elapsed time for the worker's session."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = long_shift_service.get_break_status(session_id, worker_id, org_id)
+    if result is None:
+        session = shift_service._get_worker_session_or_none(session_id, worker_id, org_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        return {
+            "active": False,
+            "completed_breaks": 0,
+            "total_break_secs": 0,
+            "max_breaks_per_shift": long_shift_service.MAX_BREAKS_PER_SESSION,
+            "can_start_break": True,
+            "block_reason": None,
+        }
+    return result
+
+
+@router.get("/sessions/{session_id}/timeline")
+async def worker_session_timeline(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Activity timeline for a shift session (Check 16 audit view)."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    session = shift_service._get_worker_session_or_none(session_id, worker_id, org_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    events = long_shift_service.get_session_timeline(session_id)
+    return {"session_id": session_id, "events": events}
+
+
+@router.post("/sessions/{session_id}/engagement/offline")
+async def worker_session_offline(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pause gap timer when worker device goes offline (Check 16 Q2)."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = long_shift_service.mark_session_offline(session_id, worker_id, org_id)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result
+
+
+@router.post("/sessions/{session_id}/engagement/heartbeat")
+async def worker_session_heartbeat(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Resume gap timer on reconnect and return neutral activity summary."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = long_shift_service.mark_session_online(session_id, worker_id, org_id)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result
+
+
+@router.get("/sessions/{session_id}/engagement/summary")
+async def worker_session_activity_summary(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Neutral worker activity summary — no engagement score (Q5)."""
+    _require_worker(current_user)
+    from ..services import long_shift_service
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = long_shift_service.get_worker_activity_summary(session_id, worker_id, org_id)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return result

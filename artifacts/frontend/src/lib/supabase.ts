@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { apiFetch } from "@/lib/api-fetch";
+import { jsonFetch } from "@/services/http";
 import {
   persistSupabaseSession,
   readStoredSupabaseSession,
@@ -8,6 +8,15 @@ import {
 import { getRememberDevicePreference } from "@/lib/auth-session";
 
 let client: SupabaseClient | null = null;
+let appliedSessionFingerprint: string | null = null;
+
+function sessionFingerprint(session: StoredSupabaseSession): string {
+  return `${session.access_token}:${session.refresh_token}`;
+}
+
+export function clearAppliedSupabaseSession(): void {
+  appliedSessionFingerprint = null;
+}
 
 function supabaseUrl(): string | undefined {
   const value = import.meta.env.SUPABASE_URL;
@@ -44,21 +53,22 @@ export function getSupabaseClient(): SupabaseClient | null {
 export async function applySupabaseSession(session: StoredSupabaseSession): Promise<boolean> {
   const sb = getSupabaseClient();
   if (!sb) return false;
+  const fingerprint = sessionFingerprint(session);
+  if (appliedSessionFingerprint === fingerprint) return true;
   const { error } = await sb.auth.setSession({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
   });
+  if (!error) appliedSessionFingerprint = fingerprint;
   return !error;
 }
 
 async function refreshSupabaseSessionViaApi(refreshToken: string): Promise<boolean> {
   try {
-    const res = await apiFetch("/api/auth/supabase-refresh", {
+    const data = await jsonFetch<{ supabase_session?: StoredSupabaseSession }>("/api/auth/supabase-refresh", {
       method: "POST",
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
-    if (!res.ok) return false;
-    const data = await res.json() as { supabase_session?: StoredSupabaseSession };
     if (!data.supabase_session) return false;
     persistSupabaseSession(data.supabase_session, getRememberDevicePreference());
     return applySupabaseSession(data.supabase_session);

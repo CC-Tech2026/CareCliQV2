@@ -178,6 +178,24 @@ async def _clear_failed_login(user_id: str) -> None:
         logger.debug("Could not clear failed login for %s: %s", user_id, exc)
 
 
+async def _mark_successful_login(user_id: str, *, email_verified: bool | None = None) -> None:
+    """Single users-table write after a successful login."""
+    admin = get_supabase_admin()
+    payload: dict = {
+        "failed_login_count": 0,
+        "locked_until": None,
+        "last_login": datetime.now(timezone.utc).isoformat(),
+    }
+    if email_verified is not None:
+        payload["email_verified"] = email_verified
+    try:
+        await asyncio.to_thread(
+            lambda: admin.table("users").update(payload).eq("id", user_id).execute()
+        )
+    except Exception as exc:
+        logger.debug("Could not mark successful login for %s: %s", user_id, exc)
+
+
 def _supabase_auth_request(
     path: str,
     payload: dict,
@@ -422,20 +440,6 @@ async def _upsert_user_record(
         logger.warning(f"Base upsert also failed for {user_id}: {e2}")
 
 
-async def _touch_last_login(user_id: str) -> None:
-    try:
-        from datetime import datetime, timezone
-
-        supabase = get_supabase_admin()
-        await asyncio.to_thread(
-            lambda: supabase.table("users").update(
-                {"last_login": datetime.now(timezone.utc).isoformat()}
-            ).eq("id", user_id).execute()
-        )
-    except Exception as e:
-        logger.debug(f"Could not update last_login for {user_id}: {e}")
-
-
 async def _resolve_org_member_role(
     user_id: str, org_id: str, fallback_role: str
 ) -> str:
@@ -642,45 +646,42 @@ async def _finalize_login_response(
 
     user_agent = request.headers.get("user-agent")
     client_ip = request.client.host if request.client else "unknown"
+    user_id = str(auth_user.id)
     city, country = await dss.record_login_event(
-        str(auth_user.id),
+        user_id,
         email=str(auth_user.email),
         device_id=device_id,
         user_agent=user_agent,
         ip_address=client_ip,
         background_tasks=background_tasks,
     )
-    dss.create_session(
-        str(auth_user.id),
-        session_jti,
-        device_id=device_id,
-        user_agent=user_agent,
-        ip_address=client_ip,
-        city=city,
-        country=country,
+
+    email_verified_update = (
+        email_verified if email_verified != bool(profile.get("email_verified")) else None
+    )
+    await asyncio.gather(
+        _mark_successful_login(user_id, email_verified=email_verified_update),
+        asyncio.to_thread(
+            dss.create_session,
+            user_id,
+            session_jti,
+            device_id=device_id,
+            user_agent=user_agent,
+            ip_address=client_ip,
+            city=city,
+            country=country,
+        ),
     )
     if device_id and remember_device:
         device_name, os_name = dss.parse_user_agent(user_agent)
-        dss.trust_device(
-            str(auth_user.id),
+        background_tasks.add_task(
+            dss.trust_device,
+            user_id,
             device_id,
             device_name=device_name,
             os_name=os_name,
             user_agent=user_agent,
         )
-
-    await _clear_failed_login(str(auth_user.id))
-    await _touch_last_login(str(auth_user.id))
-    if email_verified != bool(profile.get("email_verified")):
-        try:
-            _admin = get_supabase_admin()
-            await asyncio.to_thread(
-                lambda: _admin.table("users").update(
-                    {"email_verified": email_verified}
-                ).eq("id", str(auth_user.id)).execute()
-            )
-        except Exception as e:
-            logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
     response: dict = {
         "access_token": token,
@@ -764,7 +765,10 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
         await _record_failed_login(login_email, background_tasks)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    profile = await _get_user_profile(str(auth_user.id))
+    profile, mfa_settings = await asyncio.gather(
+        _get_user_profile(str(auth_user.id)),
+        asyncio.to_thread(dss.get_mfa_settings, str(auth_user.id)),
+    )
     role = profile.get("role") or "support_worker"
     full_name = profile.get("full_name") or (
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
@@ -802,7 +806,6 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
         role = await _resolve_org_member_role(str(auth_user.id), organization_id, role)
 
     device_id = (body.device_id or request.headers.get("x-device-id") or "").strip() or None
-    mfa_settings = dss.get_mfa_settings(str(auth_user.id))
     if mfa_settings.get("mfa_enabled") and not dss.is_device_trusted(str(auth_user.id), device_id):
         challenge_payload: dict = {
             "sub": str(auth_user.id),

@@ -19,6 +19,7 @@ from .task_reminder_service import run_task_reminder_pass
 logger = logging.getLogger(__name__)
 
 _scheduler_task: Optional[asyncio.Task] = None
+_long_shift_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -144,15 +145,19 @@ async def run_credential_expiry_pass() -> int:
 
 
 async def run_notification_pass() -> dict[str, int]:
-    shift_count, credential_count, task_count = await asyncio.gather(
+    from .long_shift_service import run_long_shift_monitor_pass
+
+    shift_count, credential_count, task_count, long_shift_count = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
         run_task_reminder_pass(),
+        run_long_shift_monitor_pass(),
     )
     return {
         "shift_reminders": shift_count,
         "credential_expiry": credential_count,
         "task_reminders": task_count,
+        "long_shift_monitor": long_shift_count,
     }
 
 
@@ -175,21 +180,39 @@ async def _scheduler_loop() -> None:
 
 
 def start_notification_scheduler() -> None:
-    global _scheduler_task
+    global _scheduler_task, _long_shift_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
         return
     _scheduler_task = asyncio.create_task(_scheduler_loop())
+    _long_shift_task = asyncio.create_task(_long_shift_monitor_loop())
+
+
+async def _long_shift_monitor_loop() -> None:
+    """Dedicated 5-minute pass for Check 16 live monitoring (addendum §4.6)."""
+    from .long_shift_service import run_long_shift_monitor_pass
+
+    logger.info("Long shift monitor loop started (every 5 min)")
+    while True:
+        try:
+            count = await run_long_shift_monitor_pass()
+            if count:
+                logger.info("Long shift monitor: %s alert(s)", count)
+        except Exception as exc:
+            logger.warning("Long shift monitor loop failed: %s", exc)
+        await asyncio.sleep(300)
 
 
 async def stop_notification_scheduler() -> None:
-    global _scheduler_task
-    if not _scheduler_task:
-        return
-    _scheduler_task.cancel()
-    try:
-        await _scheduler_task
-    except asyncio.CancelledError:
-        pass
+    global _scheduler_task, _long_shift_task
+    for task in (_scheduler_task, _long_shift_task):
+        if not task:
+            continue
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     _scheduler_task = None
+    _long_shift_task = None

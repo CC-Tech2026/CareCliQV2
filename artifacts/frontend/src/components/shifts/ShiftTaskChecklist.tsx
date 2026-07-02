@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -285,8 +285,11 @@ export function ShiftTaskChecklist({
     await persist(next);
   };
 
-  const sorted = [...localTasks].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const goalGroups = groupShiftTasksByGoal(sorted);
+  const sorted = useMemo(
+    () => [...localTasks].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [localTasks],
+  );
+  const goalGroups = useMemo(() => groupShiftTasksByGoal(sorted), [sorted]);
   const noEvidenceCount = countTasksWithoutEvidence(localTasks);
 
   const { notes: complianceNotes } = useGoalLinkedTaskComplianceNotes(
@@ -310,11 +313,15 @@ export function ShiftTaskChecklist({
   useEffect(() => {
     if (!sessionStyle) return;
     setOpenGoals((current) => {
+      let changed = false;
       const next = { ...current };
       goalGroups.forEach((group) => {
-        if (next[group.key] === undefined) next[group.key] = true;
+        if (next[group.key] === undefined) {
+          next[group.key] = true;
+          changed = true;
+        }
       });
-      return next;
+      return changed ? next : current;
     });
   }, [goalGroups, sessionStyle]);
 

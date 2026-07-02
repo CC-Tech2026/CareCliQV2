@@ -777,6 +777,24 @@ export type LiveShift = {
   alerts: Array<{ id: string; alert_type: string; message: string; severity: string }>;
   live_status: "green" | "yellow" | "red";
   elapsed_minutes: number;
+  engagement?: {
+    session_id?: string | null;
+    duration_secs?: number;
+    current_gap_secs?: number;
+    engagement_status?: "GREEN" | "AMBER" | "RED";
+    checkins_completed?: number;
+    checkins_required?: number;
+    next_checkin_due_secs?: number | null;
+    break_logged?: boolean;
+    on_break?: boolean;
+    break_started_at?: string | null;
+    break_elapsed_secs?: number;
+    break_compliant?: boolean;
+    engagement_score?: number | null;
+    last_activity_type?: string | null;
+    last_activity_at?: string | null;
+    is_long_shift?: boolean;
+  };
 };
 
 export type CoordinatorAlert = {
