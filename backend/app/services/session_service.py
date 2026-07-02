@@ -287,7 +287,14 @@ async def get_sessions_for_dashboard(
             return []
         raise
 
-    sessions = await _filter_sessions_for_user(_safe_rows(result.data), current_user)
+    raw_sessions = _safe_rows(result.data)
+    if has_org_wide_access(current_user):
+        # Coordinators and MDs already have org-wide visibility, so keep the
+        # dashboard path aligned to the org-scoped query result directly.
+        sessions = raw_sessions
+    else:
+        sessions = await _filter_sessions_for_user(raw_sessions, current_user)
+
     if not sessions:
         sessions = await _get_dashboard_sessions_legacy_fallback(
             supabase,

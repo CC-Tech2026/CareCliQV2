@@ -46,8 +46,8 @@ function CheckRow({ passed, warning, label, detail }: { passed: boolean; warning
     <div className="flex items-start gap-2">
       <CheckIcon passed={passed} warning={warning} />
       <div className="min-w-0">
-        <span className="text-xs font-bold" style={{ color: T1 }}>{label}</span>
-        {detail && <span className="ml-1.5 text-xs font-medium" style={{ color: T3 }}>— {detail}</span>}
+        <span className="text-xs font-bold dark:text-white" style={{ color: T1 }}>{label}</span>
+        {detail && <span className="ml-1.5 text-xs font-medium dark:text-white" style={{ color: T3 }}>— {detail}</span>}
       </div>
     </div>
   );
@@ -95,7 +95,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
       <div className="flex items-start gap-3 px-5 py-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-black" style={{ color: T1 }}>
+            <span className="text-[13px] font-black dark:text-white" style={{ color: T1 }}>
               {item.participant_name || "Participant"}
             </span>
             <span className="text-[11px] font-medium" style={{ color: T3 }}>
@@ -154,7 +154,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest" style={{ color: T3 }}>
             Flagged tasks
           </p>
-          <ul className="space-y-1 text-xs font-medium" style={{ color: T2 }}>
+          <ul className="space-y-1 text-xs font-medium dark:text-white" style={{ color: T2 }}>
             {evidence.flagged_tasks.map((t, i) => (
               <li key={i}>{String((t as Record<string, unknown>).label ?? "Task")} — {String((t as Record<string, unknown>).flag_type ?? "")}</li>
             ))}
@@ -169,7 +169,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           value={priceItemCode}
           onChange={(e) => setPriceItemCode(e.target.value)}
           disabled={priceItemsLoading || verifyMutation.isPending}
-          className="flex-1 min-w-[220px] rounded-lg border px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2"
+          className="flex-1 min-w-[220px] rounded-lg border px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 dark:text-white"
           style={{ borderColor: BORDER, color: T1, "--tw-ring-color": PLUM } as React.CSSProperties}
         >
           <option value="">
@@ -233,8 +233,8 @@ export default function CoordinatorShiftVerification() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: SOFT }}>
             <CheckCircle2 size={32} style={{ color: PLUM }} />
           </div>
-          <h2 className="text-xl font-black" style={{ color: T1 }}>All caught up</h2>
-          <p className="mt-2 max-w-xs text-sm font-medium" style={{ color: T3 }}>
+          <h2 className="text-xl font-black dark:text-white" style={{ color: T1 }}>All caught up</h2>
+          <p className="mt-2 max-w-xs text-sm font-medium dark:text-white" style={{ color: T3 }}>
             No completed shifts are waiting on verification right now.
           </p>
         </div>
