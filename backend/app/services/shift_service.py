@@ -45,92 +45,98 @@ class ShiftNotScheduledToday(Exception):
     """Shift scheduled_start is not on the current calendar day (CARECLIQV2-90)."""
 
 
-DEFAULT_SHIFT_TASKS: list[dict[str, Any]] = [
+# Fallback task list — used only when participant_task_templates returns no rows for this org.
+# These values are intentionally kept in sync with migration 088 system defaults.
+# Health & Wellness Check is mandatory: coordinators need post-therapy/appointment observations.
+FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
     {
-        "task_id": "default_personal_hygiene",
-        "type": "default",
-        "label": "Personal Hygiene / Showering",
-        "description": "Assist with bathing, grooming, oral care, or personal hygiene routine.",
+        "task_id": "fallback_personal_hygiene",
+        "type": "system",
+        "label": "Personal Hygiene",
+        "description": "Support participant with showering, grooming, and dressing. Observe and note level of independence.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 1,
         "mandatory": True,
-        "goal_id": "daily_living_skills",
-        "goal_title": "Develop Daily Living Skills",
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Participant completed hygiene routine with appropriate support.",
     },
     {
-        "task_id": "default_meal_prep",
-        "type": "default",
+        "task_id": "fallback_meal_prep",
+        "type": "system",
         "label": "Meal Preparation",
-        "description": "Prepare meals, snacks, and support hydration throughout the shift.",
+        "description": "Support participant to prepare or assist with meal. Record what was eaten and any dietary concerns.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 2,
         "mandatory": True,
-        "goal_id": "daily_living_skills",
-        "goal_title": "Develop Daily Living Skills",
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Meals prepared safely with participant involvement where possible.",
     },
     {
-        "task_id": "default_medication",
-        "type": "default",
+        "task_id": "fallback_medication",
+        "type": "system",
         "label": "Medication Administration",
-        "description": "Assist with medication as per the Medication Administration Record.",
+        "description": "Administer medication per dosette box or medication chart. Photo the administration. Record time, dosage, and participant response. Escalate any refusals or reactions immediately.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 3,
         "mandatory": True,
-        "goal_id": "health_wellbeing",
-        "goal_title": "Health & Wellbeing",
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Medications taken as prescribed with no adverse reactions noted.",
     },
     {
-        "task_id": "default_health_wellness",
-        "type": "default",
+        "task_id": "fallback_health_wellness",
+        "type": "system",
         "label": "Health & Wellness Check",
-        "description": "Check vitals, mood, and general wellbeing.",
+        "description": "Observe and record participant's physical and emotional wellbeing at the start of shift: mood, sleep quality, any pain or discomfort, skin integrity, appetite, and hydration.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 4,
-        "mandatory": False,
-        "goal_id": "health_wellbeing",
-        "goal_title": "Health & Wellbeing",
+        "mandatory": True,
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Participant wellbeing observed and any concerns documented.",
     },
     {
-        "task_id": "default_community_access",
-        "type": "default",
+        "task_id": "fallback_community_access",
+        "type": "system",
         "label": "Community Access",
-        "description": "Outings, social, activities",
+        "description": "Support participant to access community activities. Record destination, duration, participation level, and any notable interactions.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 5,
         "mandatory": False,
-        "goal_id": "community_participation",
-        "goal_title": "Community Participation",
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Participant engaged in community activity with support as needed.",
     },
     {
-        "task_id": "default_documentation",
-        "type": "default",
+        "task_id": "fallback_documentation",
+        "type": "system",
         "label": "Documentation / Notes",
-        "description": "Record progress notes, incidents, and participant communication.",
+        "description": "Record factual, observable shift summary. Include: participant mood, activities completed, any incidents or concerns, and goals progress if relevant.",
         "completed": False,
         "completed_at": None,
         "note": "",
         "order": 6,
         "mandatory": True,
-        "goal_id": "documentation_reporting",
-        "goal_title": "Documentation & Reporting",
+        "goal_id": None,
+        "goal_title": None,
         "outcome_tip": "Progress notes capture what was done and participant response.",
     },
 ]
+
+# Back-compat alias — remove once all callers (tests etc.) are updated.
+DEFAULT_SHIFT_TASKS = FALLBACK_SHIFT_TASKS
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -1704,7 +1710,93 @@ def get_participant_preferences_for_worker(
 
 def _default_tasks_copy() -> list[dict[str, Any]]:
     import copy
-    return copy.deepcopy(DEFAULT_SHIFT_TASKS)
+    return copy.deepcopy(FALLBACK_SHIFT_TASKS)
+
+
+def _load_tasks_from_templates(
+    participant_id: str,
+    organization_id: str,
+    shift_type: Optional[str],
+) -> list[dict[str, Any]]:
+    """Build the worker-facing task list from participant_task_templates.
+
+    Combines:
+    - Participant-specific active templates (participant_id = $1)
+    - Org-level system defaults (is_custom = FALSE, participant_id IS NULL)
+
+    Falls back to FALLBACK_SHIFT_TASKS if the table is absent or returns nothing.
+    """
+    try:
+        supabase = get_supabase_admin()
+
+        # System defaults for this org (participant_id IS NULL, is_custom = FALSE)
+        sys_resp = (
+            supabase.table("participant_task_templates")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, sort_order, category, evidence_required")
+            .eq("organization_id", organization_id)
+            .eq("is_custom", False)
+            .is_("participant_id", "null")
+            .eq("status", "active")
+            .order("sort_order")
+            .execute()
+        )
+        system_rows = sys_resp.data or []
+
+        # Participant-specific templates
+        pt_resp = (
+            supabase.table("participant_task_templates")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, sort_order, category, evidence_required")
+            .eq("organization_id", organization_id)
+            .eq("participant_id", participant_id)
+            .eq("status", "active")
+            .order("sort_order")
+            .execute()
+        )
+        participant_rows = pt_resp.data or []
+
+        all_rows = system_rows + participant_rows
+        if not all_rows:
+            return _default_tasks_copy()
+
+        # Filter by shift_type when known
+        norm_type = (shift_type or "").strip().lower()
+        if norm_type:
+            def _matches(row: dict) -> bool:
+                primary = (row.get("primary_shift_type") or "").lower()
+                additional = [s.lower() for s in (row.get("additional_shift_types") or [])]
+                return (
+                    primary in ("", "all")
+                    or primary == norm_type
+                    or norm_type in additional
+                )
+            filtered = [r for r in all_rows if _matches(r)]
+            if filtered:
+                all_rows = filtered
+
+        tasks: list[dict[str, Any]] = []
+        for idx, row in enumerate(all_rows, start=1):
+            tasks.append({
+                "task_id": str(row["id"]),
+                "type": "system" if not row.get("participant_id") else "template",
+                "label": row.get("name") or "",
+                "description": row.get("description") or "",
+                "completed": False,
+                "completed_at": None,
+                "note": "",
+                "order": idx,
+                "mandatory": bool(row.get("is_mandatory")),
+                "goal_id": str(row["linked_goal_id"]) if row.get("linked_goal_id") else None,
+                "goal_title": None,
+                "outcome_tip": None,
+                "evidence_required": row.get("evidence_required") or "none",
+            })
+        return tasks
+
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return _default_tasks_copy()
+        logger.warning("task template load failed, using fallback: %s", exc)
+        return _default_tasks_copy()
 
 
 def _apply_verified_check_in(
@@ -1825,7 +1917,9 @@ def clock_in_shift(
     now = normalized_client_ts or _now_iso()
     tasks = shift.get("tasks") or []
     if not tasks:
-        tasks = _default_tasks_copy()
+        participant_id_str = str(shift.get("participant_id") or "")
+        shift_type_str = str(shift.get("shift_type") or "")
+        tasks = _load_tasks_from_templates(participant_id_str, organization_id, shift_type_str)
 
     update_payload: dict[str, Any] = {
         "status": "in_progress",
@@ -1983,7 +2077,11 @@ def add_custom_shift_task(
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
 
-    tasks = list(shift.get("tasks") or _default_tasks_copy())
+    tasks = list(shift.get("tasks") or _load_tasks_from_templates(
+        str(shift.get("participant_id") or ""),
+        organization_id,
+        str(shift.get("shift_type") or ""),
+    ))
     max_order = max((int(t.get("order") or 0) for t in tasks), default=0)
     tasks.append({
         "task_id": f"custom_{uuid.uuid4().hex[:8]}",

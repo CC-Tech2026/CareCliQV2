@@ -929,7 +929,7 @@ export type TaskTemplate = {
   organization_id?: string;
   name: string;
   description?: string | null;
-  evidence_required: "photo" | "voice" | "text" | "photo+voice" | "optional";
+  evidence_required: "none" | "photo" | "notes" | "photo_and_notes" | "voice" | "photo_and_voice";
   is_mandatory: boolean;
   estimated_duration_minutes?: number | null;
   is_custom?: boolean;
@@ -1210,4 +1210,127 @@ export function confirmShiftVerification(shiftId: string, priceItemCode: string)
       body: JSON.stringify({ price_item_code: priceItemCode }),
     }
   );
+}
+
+// ── Plan Meetings ─────────────────────────────────────────────────────────────
+
+export type PlanMeetingType =
+  | "plan_review"
+  | "initial_setup"
+  | "check_in"
+  | "incident_followup"
+  | "goal_review";
+
+export type PlanMeetingSuggestionsStatus = "pending_review" | "reviewed" | "applied";
+
+export type SuggestedGoal = {
+  name: string;
+  description: string;
+  goal_area: string;
+  support_category: string;
+  success_criteria: string;
+  reasoning: string;
+};
+
+export type SuggestedTask = {
+  template_id: string | null;
+  template_name: string;
+  link_to_goal_name: string | null;
+  shift_type: string;
+  requirement_level: "mandatory" | "optional";
+  customised_notes: string;
+  reasoning: string;
+};
+
+export type PlanMeetingSuggestions = {
+  suggested_goals: SuggestedGoal[];
+  suggested_tasks: SuggestedTask[];
+  flags: string[];
+};
+
+export type PlanMeeting = {
+  id: string;
+  participant_id: string;
+  coordinator_id: string;
+  meeting_date: string;
+  meeting_type: PlanMeetingType;
+  attendees: string[];
+  conversation_notes?: string | null;
+  participant_priorities?: string | null;
+  coordinator_observations?: string | null;
+  agreed_outcomes?: string | null;
+  ai_suggestions_raw?: PlanMeetingSuggestions | null;
+  suggestions_accepted?: Record<string, unknown> | null;
+  suggestions_status: PlanMeetingSuggestionsStatus;
+  ai_generated_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RecordMeetingPayload = {
+  participant_id: string;
+  meeting_date: string;
+  meeting_type: PlanMeetingType;
+  attendees: string[];
+  conversation_notes?: string;
+  participant_priorities?: string;
+  coordinator_observations?: string;
+  agreed_outcomes?: string;
+};
+
+export function recordPlanMeeting(payload: RecordMeetingPayload) {
+  return jsonFetch<{ meeting: PlanMeeting }>("/api/coordinator/plan-meetings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listPlanMeetings(participantId: string) {
+  return jsonFetch<{ meetings: PlanMeeting[] }>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/plan-meetings`,
+  );
+}
+
+export function getPlanMeeting(meetingId: string) {
+  return jsonFetch<{ meeting: PlanMeeting }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}`,
+  );
+}
+
+export function triggerPlanMeetingAiReview(meetingId: string) {
+  return jsonFetch<{ meeting_id: string; suggestions: PlanMeetingSuggestions }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}/ai-review`,
+    { method: "POST" },
+  );
+}
+
+export function applyPlanMeetingSuggestions(
+  meetingId: string,
+  acceptedGoals: SuggestedGoal[],
+  acceptedTasks: SuggestedTask[],
+) {
+  return jsonFetch<{ goals_created: number; tasks_created: number; meeting_id: string }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}/apply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accepted_goals: acceptedGoals, accepted_tasks: acceptedTasks }),
+    },
+  );
+}
+
+export function getPendingPlanMeetings() {
+  return jsonFetch<{ pending: PlanMeeting[]; count: number }>(
+    "/api/coordinator/plan-meetings/pending",
+  );
+}
+
+export function transcribePlanMeetingAudio(audioBlob: Blob): Promise<{ transcript: string }> {
+  const form = new FormData();
+  form.append("audio_file", audioBlob, "recording.webm");
+  return jsonFetch<{ transcript: string }>("/api/coordinator/plan-meetings/transcribe", {
+    method: "POST",
+    body: form,
+  });
 }

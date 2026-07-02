@@ -41,6 +41,7 @@ import {
   Archive,
   X,
   CalendarClock,
+  MessageSquare,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
+import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import {
@@ -935,7 +937,7 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "shift_context" | "restricted";
+type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "plan_meetings" | "shift_context" | "restricted";
 
 function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
@@ -1263,6 +1265,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       : [{ id: "goals" as const, label: translate("patients.tab.goals"), shortLabel: "Goals", icon: Target }]),
     { id: "sessions"    as const, label: "Shift History", shortLabel: "Shifts",    icon: CalendarDays },
     { id: "compliance"  as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Plan Meetings", shortLabel: "Meetings", icon: MessageSquare }] : []),
     ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), shortLabel: "Context", icon: Users }] : []),
     ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", shortLabel: "Clinical", icon: Lock }] : []),
   ];
@@ -2639,6 +2642,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 })}
               </div>
             )}
+          </section>
+        )}
+
+        {/* PLAN MEETINGS TAB — coordinator only */}
+        {activeTab === "plan_meetings" && isCoordinator && (
+          <section className="space-y-3">
+            <PlanMeetingCapture participantId={id} />
           </section>
         )}
 

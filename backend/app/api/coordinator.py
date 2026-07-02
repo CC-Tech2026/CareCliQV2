@@ -3145,7 +3145,7 @@ async def get_goal_progress(
 class TaskTemplateBody(BaseModel):
     name: str
     description: Optional[str] = None
-    evidence_required: str = "optional"
+    evidence_required: str = "none"  # canonical: none, photo, notes, photo_and_notes, voice, photo_and_voice
     is_mandatory: bool = False
     estimated_duration_minutes: Optional[int] = None
     sort_order: int = 0
@@ -3169,31 +3169,37 @@ async def list_task_templates(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """List task templates for a participant (default + custom)."""
+    """List task templates for a participant: org-level system defaults + participant-specific."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
-    default_tasks = [
-        {"id": f"default_{i}", "name": name, "description": desc, "is_custom": False, "is_mandatory": True, "evidence_required": "optional", "sort_order": i}
-        for i, (name, desc) in enumerate([
-            ("Personal Hygiene", "Assist with personal hygiene and grooming"),
-            ("Meal Prep", "Prepare and/or assist with meals"),
-            ("Medication", "Administer and document medications"),
-            ("Community Access", "Support community participation activities"),
-            ("Documentation", "Complete required documentation for the shift"),
-        ])
-    ]
     try:
+        # System defaults seeded by migration 088 (is_custom=FALSE, participant_id IS NULL)
+        sys_resp = (
+            supabase.table("participant_task_templates")
+            .select("*")
+            .eq("organization_id", org_id)
+            .eq("is_custom", False)
+            .is_("participant_id", "null")
+            .eq("status", "active")
+            .order("sort_order")
+            .execute()
+        )
+        # Participant-specific templates (coordinator-authored custom ones)
+        # Note: query uses status (canonical, migration 067). is_active is DEPRECATED;
+        # kept in sync via trigger in migration 087 until coordinator.py callers are updated.
         custom_resp = (
             supabase.table("participant_task_templates")
             .select("*")
             .eq("participant_id", participant_id)
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("status", "active")
             .order("sort_order")
             .execute()
         )
-        custom = custom_resp.data or []
-        return {"default_tasks": default_tasks, "custom_tasks": custom}
+        return {
+            "system_tasks": sys_resp.data or [],
+            "custom_tasks": custom_resp.data or [],
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task templates fetch failed: {exc}")
 

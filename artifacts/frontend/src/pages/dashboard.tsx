@@ -8,6 +8,7 @@ import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendCha
 import { DashboardActionItems } from "@/components/dashboard/DashboardActionItems";
 import { DashboardComplianceAlerts } from "@/components/dashboard/DashboardComplianceAlerts";
 import { DashboardShiftsWidget } from "@/components/dashboard/DashboardShiftsWidget";
+import { PlanMeetingsPendingBanner } from "@/components/dashboard/PlanMeetingsPendingBanner";
 import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
 import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
@@ -1105,6 +1106,9 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
           </div>
         ))}
       </div>
+
+      {/* Plan meetings pending AI review */}
+      <PlanMeetingsPendingBanner />
 
       {/* Action hub — tabbed inline panel */}
       <div className="grid gap-5 xl:grid-cols-[1fr_300px]">

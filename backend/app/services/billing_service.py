@@ -49,6 +49,16 @@ def _money_to_cents(value: Any) -> int:
     return int(amount * 100)
 
 
+def _fmt_dmy(val: Any) -> str:
+    """Format a date value as DD/MM/YYYY (used in invoice template)."""
+    if not val:
+        return ""
+    try:
+        return datetime.fromisoformat(str(val)[:10]).strftime("%d/%m/%Y")
+    except Exception:
+        return str(val)[:10]
+
+
 def _require_org(user: dict) -> str:
     org_id = get_user_organization_id(user)
     if not org_id:
@@ -493,9 +503,243 @@ def _minimal_pdf_bytes(invoice: dict) -> bytes:
     return pdf.encode("utf-8")
 
 
+def _build_template_data(invoice: dict, supabase: Any) -> dict:
+    """Assemble the Jinja2 template context from a billing-service invoice row."""
+    from datetime import timedelta
+
+    org_id = invoice.get("organization_id", "")
+
+    # ── Provider (organizations) ──────────────────────────────────────────
+    org: dict = {}
+    for key in ("organization_id", "id"):
+        try:
+            r = supabase.table("organizations").select(
+                "organization_name, abn, contact_number, email, org_address, ndis_provider_number"
+            ).eq(key, org_id).limit(1).execute()
+            if r.data:
+                org = r.data[0]
+                break
+        except Exception:
+            pass
+
+    # ── Participant ────────────────────────────────────────────────────────
+    participant: dict = {}
+    if invoice.get("participant_id"):
+        try:
+            r = supabase.table("patients").select(
+                "full_name, ndis_number, date_of_birth, address, plan_management_type, "
+                "case_manager_name, case_manager_email, case_manager_phone"
+            ).eq("id", invoice["participant_id"]).limit(1).execute()
+            participant = (r.data or [{}])[0]
+        except Exception:
+            pass
+
+    # ── Plan dates from ndis_plans ─────────────────────────────────────────
+    plan_start_date = ""
+    plan_end_date = ""
+    if invoice.get("participant_id"):
+        try:
+            r = supabase.table("ndis_plans").select(
+                "plan_start, plan_end"
+            ).eq("patient_id", invoice["participant_id"]).order(
+                "created_at", desc=True
+            ).limit(1).execute()
+            plan_row = (r.data or [{}])[0]
+            if plan_row.get("plan_start"):
+                plan_start_date = _fmt_dmy(plan_row["plan_start"])
+            if plan_row.get("plan_end"):
+                plan_end_date = _fmt_dmy(plan_row["plan_end"])
+        except Exception:
+            pass
+
+    # ── Billing period ─────────────────────────────────────────────────────
+    period_start_raw = ""
+    period_end_raw = ""
+    if invoice.get("billing_period_id"):
+        try:
+            r = supabase.table("billing_periods").select(
+                "period_start, period_end"
+            ).eq("id", invoice["billing_period_id"]).limit(1).execute()
+            bp = (r.data or [{}])[0]
+            period_start_raw = str(bp.get("period_start") or "")
+            period_end_raw = str(bp.get("period_end") or "")
+        except Exception:
+            pass
+
+    # ── Date helpers ───────────────────────────────────────────────────────
+    def _fmt_long(val: Any) -> str:
+        if not val:
+            return ""
+        try:
+            return datetime.fromisoformat(str(val)[:10]).strftime("%d %B %Y")
+        except Exception:
+            return str(val)[:10]
+
+    def _fmt_period_start(val: Any) -> str:
+        """'1 June' — no leading zero, no year"""
+        if not val:
+            return ""
+        try:
+            return datetime.fromisoformat(str(val)[:10]).strftime("%d %B").lstrip("0")
+        except Exception:
+            return str(val)[:10]
+
+    def _fmt_period_end(val: Any) -> str:
+        """'30 June 2026' — no leading zero"""
+        if not val:
+            return ""
+        try:
+            return datetime.fromisoformat(str(val)[:10]).strftime("%d %B %Y").lstrip("0")
+        except Exception:
+            return str(val)[:10]
+
+    # ── Invoice dates ──────────────────────────────────────────────────────
+    invoice_date_raw = (
+        invoice.get("issued_at")
+        or invoice.get("created_at")
+        or datetime.now(timezone.utc).isoformat()
+    )
+    date_issued = _fmt_long(invoice_date_raw)
+
+    due_date_raw = invoice.get("due_date")
+    if due_date_raw:
+        due_date = _fmt_long(due_date_raw)
+    else:
+        try:
+            due_date = (
+                datetime.fromisoformat(str(invoice_date_raw)[:10]) + timedelta(days=30)
+            ).strftime("%d %B %Y")
+        except Exception:
+            due_date = ""
+
+    service_period_start = _fmt_period_start(period_start_raw)
+    service_period_end = _fmt_period_end(period_end_raw)
+
+    # ── Plan management ────────────────────────────────────────────────────
+    pmt_full = participant.get("plan_management_type") or ""
+    pmt_lower = pmt_full.lower()
+    if "ndia" in pmt_lower:
+        pmt_code = "NDIA"
+        pmt_display = "NDIA Managed"
+    elif "plan" in pmt_lower:
+        pmt_code = "PLAN"
+        pmt_display = "Plan Managed"
+    elif "self" in pmt_lower:
+        pmt_code = "SELF"
+        pmt_display = "Self Managed"
+    else:
+        pmt_code = ""
+        pmt_display = pmt_full or "—"
+
+    # ── Bill To (recipient from invoice, augmented with case manager info) ─
+    billed_to_name = invoice.get("recipient_name") or ""
+    billed_to_email = invoice.get("recipient_email") or ""
+    billed_to_phone = ""
+    if pmt_code == "PLAN" and not billed_to_name:
+        billed_to_name = participant.get("case_manager_name") or ""
+        billed_to_email = billed_to_email or participant.get("case_manager_email") or ""
+        billed_to_phone = participant.get("case_manager_phone") or ""
+
+    plan_manager_name = participant.get("case_manager_name") or billed_to_name
+    plan_manager_email = participant.get("case_manager_email") or billed_to_email
+
+    # ── Support category (first line item) ────────────────────────────────
+    raw_items: list[dict] = invoice.get("line_items") or []
+    support_category = (raw_items[0].get("support_category") or "") if raw_items else ""
+
+    # ── Line items → template format ──────────────────────────────────────
+    template_items = []
+    for item in raw_items:
+        unit_price = int(item.get("unit_amount_cents") or 0) / 100
+        line_total = int(item.get("line_total_cents") or 0) / 100
+        template_items.append({
+            "item_code": item.get("item_code") or "",
+            "item_name": item.get("description") or "",
+            "item_description": item.get("item_description") or "",
+            "shift_date": item.get("shift_date") or item.get("date") or "",
+            "hours": float(item.get("quantity") or 0),
+            "unit_price": unit_price,
+            "gst_applicable": bool(item.get("gst_applicable", False)),
+            "line_total": line_total,
+        })
+
+    # ── Totals ─────────────────────────────────────────────────────────────
+    invoice_total = int(invoice.get("total_cents") or 0) / 100
+    gst_total = int(invoice.get("tax_cents") or 0) / 100
+    subtotal = invoice_total - gst_total
+
+    # ── Generated timestamp ────────────────────────────────────────────────
+    generated_at = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+
+    return {
+        # Provider
+        "provider_name": org.get("organization_name") or "",
+        "provider_address": org.get("org_address") or "",
+        "provider_email": org.get("email") or "",
+        "provider_phone": org.get("contact_number") or "",
+        "provider_abn": org.get("abn") or "",
+        "provider_ndis_registration": org.get("ndis_provider_number") or "",
+        # Invoice meta
+        "invoice_number": invoice.get("invoice_number") or "",
+        "date_issued": date_issued,
+        "service_period_start": service_period_start,
+        "service_period_end": service_period_end,
+        "due_date": due_date,
+        "status": invoice.get("status") or "draft",
+        # Bill To
+        "billed_to_name": billed_to_name,
+        "billed_to_address_line1": "",
+        "billed_to_address_line2": "",
+        "billed_to_email": billed_to_email,
+        "billed_to_phone": billed_to_phone,
+        "billed_to_abn": "",
+        # Participant
+        "participant_name": participant.get("full_name") or invoice.get("recipient_name") or "",
+        "participant_ndis_number": participant.get("ndis_number") or "",
+        "participant_dob": _fmt_dmy(participant.get("date_of_birth")),
+        "plan_start_date": plan_start_date,
+        "plan_end_date": plan_end_date,
+        # Info strip
+        "plan_management_type": pmt_display,
+        "plan_management_code": pmt_code,
+        "support_category": support_category,
+        "service_agreement_ref": invoice.get("service_agreement_ref") or "",
+        "claim_reference": invoice.get("claim_reference") or "",
+        # Line items
+        "line_items": template_items,
+        # Totals
+        "subtotal": subtotal,
+        "gst_total": gst_total,
+        "travel_amount": 0.0,
+        "invoice_total": invoice_total,
+        # Bank details (no DB columns yet — leave blank, shown as placeholder)
+        "bank_account_name": "",
+        "bank_bsb": "",
+        "bank_account_number": "",
+        "payment_terms_days": 14,
+        # Plan management routing
+        "plan_manager_name": plan_manager_name,
+        "plan_manager_email": plan_manager_email,
+        "plan_management_instruction": "",
+        # Note
+        "invoice_notes": invoice.get("notes") or "",
+        # Footer
+        "ndis_price_guide_version": "NDIS Pricing Arrangements 2025-26 V1.1",
+        "generated_at": generated_at,
+    }
+
+
 async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
     invoice = await get_invoice(invoice_id, user)
-    pdf_bytes = _minimal_pdf_bytes(invoice)
+    supabase = get_supabase_admin()
+
+    try:
+        from . import invoice_service as _inv_svc
+        template_data = _build_template_data(invoice, supabase)
+        pdf_bytes = _inv_svc.render_invoice_pdf(template_data)
+    except Exception:
+        pdf_bytes = _minimal_pdf_bytes(invoice)
+
     path = f"{invoice['organization_id']}/{invoice['id']}/{invoice['invoice_number']}.pdf"
     supabase = get_supabase_admin()
     try:

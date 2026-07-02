@@ -21,7 +21,7 @@ export type RecurrenceFrequency =
 
 export type RequirementLevel = "mandatory" | "optional";
 
-export type EvidenceRequired = "none" | "photo" | "notes" | "photo_and_notes";
+export type EvidenceRequired = "none" | "photo" | "notes" | "photo_and_notes" | "voice" | "photo_and_voice";
 
 export type TaskTemplateStatus = "active" | "paused" | "archived";
 
