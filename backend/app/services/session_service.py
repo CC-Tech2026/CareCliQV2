@@ -176,7 +176,7 @@ async def _filter_sessions_for_user(
 
 
 _DASHBOARD_SESSION_COLUMNS = (
-    "id, organization_id, patient_id, participant_id, worker_id, support_worker_id, "
+    "id, organization_id, patient_id, worker_id, "
     "owner_user_id, created_by, session_date, session_type, duration_minutes, status, "
     "compliance_score, translation_status, compliance_input_text, translated_english_note, notes"
 )
@@ -230,22 +230,6 @@ async def _get_dashboard_sessions_legacy_fallback(
     except Exception as exc:
         if _is_missing_column_error(exc):
             logger.warning("Dashboard legacy session fallback failed closed on patient_id: %s", exc)
-        else:
-            raise
-
-    try:
-        result = (
-            supabase.table("sessions")
-            .select(_DASHBOARD_SESSION_COLUMNS)
-            .in_("participant_id", participant_ids)
-            .order("session_date", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        _merge_rows(_safe_rows(result.data))
-    except Exception as exc:
-        if _is_missing_column_error(exc):
-            logger.warning("Dashboard legacy session fallback failed closed on participant_id: %s", exc)
         else:
             raise
 
