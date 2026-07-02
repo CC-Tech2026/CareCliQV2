@@ -207,6 +207,16 @@ async def _get_dashboard_sessions_legacy_fallback(
     if not participant_ids:
         return []
 
+    recovered_map: Dict[str, Dict[str, Any]] = {}
+
+    def _merge_rows(rows: List[Dict[str, Any]]) -> None:
+        for session in rows:
+            if not isinstance(session, dict):
+                continue
+            session_id = str(session.get("id") or "")
+            if session_id and session_id not in recovered_map:
+                recovered_map[session_id] = session
+
     try:
         result = (
             supabase.table("sessions")
@@ -216,14 +226,31 @@ async def _get_dashboard_sessions_legacy_fallback(
             .limit(limit)
             .execute()
         )
+        _merge_rows(_safe_rows(result.data))
     except Exception as exc:
         if _is_missing_column_error(exc):
-            logger.warning("Dashboard legacy session fallback failed closed: %s", exc)
-            return []
-        raise
+            logger.warning("Dashboard legacy session fallback failed closed on patient_id: %s", exc)
+        else:
+            raise
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(_DASHBOARD_SESSION_COLUMNS)
+            .in_("participant_id", participant_ids)
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        _merge_rows(_safe_rows(result.data))
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Dashboard legacy session fallback failed closed on participant_id: %s", exc)
+        else:
+            raise
 
     recovered: List[Dict[str, Any]] = []
-    for session in _safe_rows(result.data):
+    for session in recovered_map.values():
         patient_id = str(session.get("patient_id") or session.get("participant_id") or "")
         participant = participant_map.get(patient_id)
         if not participant:
