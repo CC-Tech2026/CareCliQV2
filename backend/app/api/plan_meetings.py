@@ -114,6 +114,19 @@ async def create_meeting_session(
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     coordinator_id = get_user_id(current_user)
+    
+    # ✅ FIX: Validate required fields are present
+    if not organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User organization_id not found in JWT claims. Ensure you have organization membership."
+        )
+    if not coordinator_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found in JWT claims. Ensure you are properly authenticated."
+        )
+    
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -123,7 +136,6 @@ async def create_meeting_session(
         "participant_id": body.participant_id,  # Optional: if already known from UI context (e.g., participant details page)
         "created_at": now,
         "recorded_at": now,
-        "meeting_date": body.meeting_date,
         "meeting_type": body.meeting_type,
         "conversation_context": body.conversation_context or {},
         "stage_1_status": "pending",
@@ -134,8 +146,15 @@ async def create_meeting_session(
     try:
         resp = supabase.table("plan_meeting_sessions").insert(payload).execute()
     except Exception as exc:
-        logger.exception("Failed to create plan meeting session: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to create plan meeting session.")
+        logger.exception("Failed to create plan meeting session. Payload: %s. Error: %s", payload, exc)
+        # Re-raise with better error message for client
+        error_msg = str(exc)
+        if "relation" in error_msg.lower() and "does not exist" in error_msg.lower():
+            raise HTTPException(status_code=500, detail="Database table not found. Ensure migrations 090+ have been applied.")
+        elif "foreign key" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Foreign key constraint error: {error_msg[:100]}")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to create plan meeting session: {error_msg[:200]}")
 
     if not resp.data:
         raise HTTPException(status_code=500, detail="Insert returned no data.")
