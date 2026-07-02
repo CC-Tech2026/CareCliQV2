@@ -253,6 +253,7 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
             <select
               value={form.meeting_type}
               onChange={(e) => setForm((f) => ({ ...f, meeting_type: e.target.value as PlanMeetingType }))}
+              aria-label="Meeting type"
               className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
               style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "#fff" }}
             >
@@ -391,6 +392,7 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
               />
               <button
                 onClick={stopRecording}
+                aria-label="Stop recording"
                 className="relative w-16 h-16 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
                 style={{ background: "#EF4444" }}
               >
@@ -420,6 +422,7 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
           >
             <button
               onClick={startRecording}
+              aria-label="Start recording"
               className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
               style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
             >
