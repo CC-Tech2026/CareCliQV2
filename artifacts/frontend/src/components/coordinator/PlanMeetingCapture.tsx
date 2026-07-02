@@ -171,7 +171,9 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
   const createSession = async () => {
     setIsCreatingSession(true);
     try {
-      const result = await createMeetingSession(meetingType, meetingDate);
+      // Pass participantId if already known (e.g., from participant details page)
+      // If not provided, it will be resolved from Stage 1 speaker identification
+      const result = await createMeetingSession(meetingType, meetingDate, undefined, participantId);
       setSessionId(result.session_id);
       toast({ title: "Session created", description: "Ready to record your meeting." });
     } catch (err: any) {

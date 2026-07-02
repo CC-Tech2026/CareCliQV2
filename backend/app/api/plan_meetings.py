@@ -28,6 +28,7 @@ class CreateMeetingSessionRequest(BaseModel):
     meeting_date: Optional[str] = None  # ISO date YYYY-MM-DD
     meeting_type: str = "check_in"
     conversation_context: Optional[dict[str, Any]] = None  # {participant_priorities, coordinator_observations, agreed_outcomes}
+    participant_id: Optional[str] = None  # Optional: if participant already selected in UI (e.g., from participant details page)
 
 
 class MeetingSessionResponse(BaseModel):
@@ -119,7 +120,7 @@ async def create_meeting_session(
     payload = {
         "organization_id": organization_id,
         "coordinator_id": coordinator_id,
-        "participant_id": None,  # ✅ NULL until Stage 1 resolution
+        "participant_id": body.participant_id,  # Optional: if already known from UI context (e.g., participant details page)
         "created_at": now,
         "recorded_at": now,
         "meeting_date": body.meeting_date,
@@ -538,29 +539,32 @@ async def transcribe_and_resolve_names(
         logger.exception("Unexpected error in Stage 1: %s", exc)
         raise HTTPException(status_code=500, detail="Stage 1 processing failed.")
     
-    # ✅ STEP 3: Try to match participant by resolved names
-    participant_id = None
+    # ✅ STEP 3: Try to match participant by resolved names (only if not already set)
+    participant_id = session.get("participant_id")  # Use already-set participant_id if available
     resolved_speakers = stage_1_result.get("resolved_speakers", [])
-    for speaker in resolved_speakers:
-        if speaker.get("confidence") in ("confirmed", "likely"):
-            name = speaker.get("resolved_name", "")
-            try:
-                p_resp = (
-                    supabase.table("participants")
-                    .select("id")
-                    .ilike("full_name", f"%{name}%")
-                    .eq("organization_id", organization_id)
-                    .limit(1)
-                    .execute()
-                )
-                if p_resp.data:
-                    participant_id = p_resp.data[0]["id"]
-                    break
-            except Exception:
-                pass
     
-    # ✅ STEP 4: Update session with participant_id if found
-    if participant_id:
+    if not participant_id:
+        # Only attempt name matching if participant_id wasn't provided at session creation
+        for speaker in resolved_speakers:
+            if speaker.get("confidence") in ("confirmed", "likely"):
+                name = speaker.get("resolved_name", "")
+                try:
+                    p_resp = (
+                        supabase.table("participants")
+                        .select("id")
+                        .ilike("full_name", f"%{name}%")
+                        .eq("organization_id", organization_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    if p_resp.data:
+                        participant_id = p_resp.data[0]["id"]
+                        break
+                except Exception:
+                    pass
+    
+    # ✅ STEP 4: Update session with participant_id if newly matched
+    if participant_id and participant_id != session.get("participant_id"):
         try:
             supabase.table("plan_meeting_sessions").update({
                 "participant_id": participant_id,

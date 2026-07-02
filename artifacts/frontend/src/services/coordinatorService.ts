@@ -1346,6 +1346,7 @@ export function createMeetingSession(
   meetingType: PlanMeetingType = "check_in",
   meetingDate?: string,
   conversationContext?: Record<string, any>,
+  participantId?: string,
 ): Promise<MeetingSessionResponse> {
   return jsonFetch<MeetingSessionResponse>("/api/coordinator/plan-meetings/sessions", {
     method: "POST",
@@ -1354,6 +1355,7 @@ export function createMeetingSession(
       meeting_type: meetingType,
       meeting_date: meetingDate,
       conversation_context: conversationContext,
+      participant_id: participantId, // Optional: if participant already selected in UI
     }),
   });
 }
