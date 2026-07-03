@@ -1,10 +1,6 @@
 -- Migration 090: Create plan_meeting_sessions table
 -- Purpose: Store two-stage LLM processing results for plan meeting recordings
 -- Implements Stage 1 (name resolution) and Stage 2 (goal extraction)
-
--- Migration 090: Create plan_meeting_sessions table
--- Purpose: Store two-stage LLM processing results for plan meeting recordings
--- Implements Stage 1 (name resolution) and Stage 2 (goal extraction)
 -- NOTE: Adapted to current schema:
 --   organizations.organization_id, users.id, patients.id
 
@@ -136,9 +132,6 @@ COMMENT ON COLUMN public.plan_meeting_sessions.attention_flags IS
 
 COMMIT;
 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-----Verify table, indexes, and policies are all in place---------------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 with t as (
   select 'table'::text as object_type, c.relname as object_name
   from pg_class c
