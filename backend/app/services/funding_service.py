@@ -54,6 +54,34 @@ CATEGORY_HOURLY_RATES: Dict[str, float] = {
     "capital": 0.0,
 }
 
+NO_ACTIVE_PLAN_MESSAGE = (
+    "This participant has no active NDIS plan. "
+    "Add or activate a plan before creating goals, tasks, or shifts."
+)
+
+VALID_GOAL_SUPPORT_CATEGORIES = frozenset({
+    "core_daily_activities",
+    "core_transport",
+    "core_consumables",
+    "core_social_community",
+    "cb_support_coordination",
+    "cb_daily_living",
+    "cb_health_wellbeing",
+    "cb_social_skills",
+    "cb_employment",
+    "cb_learning",
+    "capital_assistive_tech",
+    "capital_home_mods",
+})
+
+GOAL_AREA_DEFAULT_SUPPORT_CATEGORY: Dict[str, str] = {
+    "daily_living": "core_daily_activities",
+    "community": "core_social_community",
+    "health": "cb_health_wellbeing",
+    "social": "cb_social_skills",
+    "employment": "cb_employment",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -228,6 +256,25 @@ def calculate_session_cost(
 # ---------------------------------------------------------------------------
 # NDIS Plans
 # ---------------------------------------------------------------------------
+
+
+def normalize_goal_support_category(value: Any) -> Optional[str]:
+    category = str(value or "").strip()
+    if not category:
+        return None
+    if category not in VALID_GOAL_SUPPORT_CATEGORIES:
+        return None
+    return category
+
+
+async def require_active_plan_for_participant(
+    participant_id: str,
+) -> Dict[str, Any]:
+    """Return the participant's active NDIS plan or raise ValueError."""
+    plan = await get_plan_for_participant(participant_id)
+    if not plan:
+        raise ValueError(NO_ACTIVE_PLAN_MESSAGE)
+    return plan
 
 
 async def get_plan_for_participant(
@@ -590,6 +637,45 @@ async def delete_plan_budget(plan_id: str, category: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def record_verified_shift_budget_usage(
+    *,
+    plan_id: str,
+    shift_verification_id: str,
+    session_id: Optional[str],
+    category: str,
+    amount: float,
+    hourly_rate: float,
+    duration_minutes: int,
+    price_item_code: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Insert a budget_usage ledger row when a shift is verified (CARECLIQV2-327)."""
+    try:
+        supabase = get_supabase_admin()
+        payload: Dict[str, Any] = {
+            "plan_id": plan_id,
+            "session_id": session_id,
+            "category": category,
+            "amount": round(float(amount), 2),
+            "hourly_rate": round(float(hourly_rate), 2),
+            "duration_minutes": int(duration_minutes),
+            "description": (
+                f"Shift verification: {price_item_code or 'price item'} "
+                f"({int(duration_minutes)} min)"
+            ),
+            "shift_verification_id": shift_verification_id,
+        }
+        result = supabase.table("budget_usage").insert(payload).execute()
+        rows = _safe_rows(result.data)
+        return rows[0] if rows else payload
+    except Exception as exc:
+        logger.error(
+            "Failed to record budget_usage for shift verification %s: %s",
+            shift_verification_id,
+            exc,
+        )
+        return None
+
+
 async def record_session_budget_usage(
     session_id: str,
     participant_id: str,
@@ -597,7 +683,11 @@ async def record_session_budget_usage(
     session_type: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Record budget usage from a session.
+    Deprecated — do not call on session save.
+
+    Budget deduction must only occur after coordinator shift verification
+    (shift_verifications + record_verified_shift_budget_usage). This helper
+    remains for reference and uses hardcoded CATEGORY_HOURLY_RATES.
     """
 
     try:

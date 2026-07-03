@@ -481,92 +481,25 @@ Key migrations that must be applied for all features:
 
 ## Performance Testing
 
-Load tests use [k6](https://k6.io/) and automatically generate HTML and JSON reports after every run.
+Load tests use [k6](https://k6.io/) with **Coordinator + Worker** role scenarios and auto-generated HTML/JSON reports.
 
-### Running Tests
+**Full setup and user guide:** [`performance/README.md`](performance/README.md)
 
-**Docker (recommended):**
+### Quick start
 
 ```bash
+# 1. Add K6_* credentials to .env (see .env.example)
+
+# 2. Verify login
+docker compose run --rm --entrypoint node k6 /app/performance/scripts/verify-auth.js
+
+# 3. Run test (~2 min)
 docker compose run --rm k6
-```
 
-**Local (requires k6 and Node.js):**
-
-```bash
-./performance/run-test.sh
-```
-
-**Direct k6 (generates a basic report; use `run-test.sh` for full time-series charts):**
-
-```bash
-k6 run performance/load-test.js
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `K6_BASE_URL` | `http://localhost:8000` | API target (`http://backend:8000` in Docker) |
-| `K6_ENV` | `Local` | Environment label: Local / Development / Staging / Production |
-| `K6_TEST_NAME` | `load` | Test name shown in reports |
-| `K6_TEST_EMAIL` | — | Optional login email for authenticated endpoint tests |
-| `K6_TEST_PASSWORD` | — | Optional login password |
-| `K6_SAVE_HISTORY` | `false` | Set `true` to also save timestamped copies in `history/` |
-
-**Example with authenticated endpoints and history:**
-
-```bash
-K6_ENV=Staging K6_TEST_EMAIL=worker@example.com K6_TEST_PASSWORD=secret K6_SAVE_HISTORY=true docker compose run --rm k6
-```
-
-### Opening the HTML Report
-
-After each run, open `performance/reports/report.html` in any browser:
-
-```bash
-# Linux
+# 4. Open report
 xdg-open performance/reports/report.html
-
-# macOS
-open performance/reports/report.html
 ```
 
-Reports are overwritten on each run unless `K6_SAVE_HISTORY=true`, which also saves copies to `performance/reports/history/` (e.g. `2026-07-03_14-30_load.html`).
-
-### Understanding Metrics
-
-| Metric | Description |
-|---|---|
-| **Virtual Users (VUs)** | Simulated concurrent users hitting the API |
-| **Total Requests** | All HTTP requests made during the test |
-| **Error Rate** | Percentage of failed requests (non-2xx or check failures) |
-| **RPS** | Requests per second — throughput under load |
-| **Avg / Min / Max Response Time** | End-to-end HTTP latency in milliseconds |
-| **P90 / P95 / P99** | 90th, 95th, 99th percentile latency — tail latency indicators |
-| **Data Sent / Received** | Total bytes transferred; throughput shows rate per second |
-| **Threshold Results** | Pass/fail against defined SLOs (e.g. `p(95)<2000ms`) |
-| **Failed Checks** | k6 assertions that did not pass (status codes, body content) |
-| **Slowest / Fastest Endpoints** | Per-route latency breakdown |
-
-### Common Causes of Failed Thresholds
-
-| Symptom | Likely Cause |
-|---|---|
-| `http_req_duration` p95 failure | Slow database queries, missing indexes, N+1 queries, cold Supabase instance |
-| `http_req_failed` rate failure | Backend down, auth errors, 5xx from unhandled exceptions |
-| `health_duration` failure | Container resource limits, network latency between k6 and backend |
-| Check failures on `/api/participants` | Invalid test credentials, RLS blocking access, org not assigned |
-| High error rate at ramp-up | Connection pool exhaustion, rate limiting on auth endpoint |
-
-### Performance Tuning Recommendations
-
-1. **Database** — Add indexes on foreign keys and frequently filtered columns; review Supabase performance advisors for RLS `auth_rls_initplan` issues.
-2. **API** — Batch related queries instead of sequential fetches; use pagination for list endpoints.
-3. **Auth** — Cache tokens in k6 `setup()` (already done); avoid re-login per iteration.
-4. **Infrastructure** — Upgrade Supabase compute for production; ensure backend and database are in the same region.
-5. **Thresholds** — Start with relaxed thresholds (`p(95)<2000ms`, error rate `<5%`) and tighten as you optimize.
-
-Raw metrics for programmatic analysis are saved to `performance/reports/report.json`.
+Key env vars: `K6_BASE_URL`, `K6_ENV`, `K6_COORDINATOR_EMAIL`, `K6_COORDINATOR_PASSWORD`, `K6_WORKER_EMAIL`, `K6_WORKER_PASSWORD`.
 
 ---

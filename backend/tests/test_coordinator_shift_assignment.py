@@ -46,6 +46,15 @@ def test_client():
     return TestClient(app)
 
 
+@pytest.fixture
+def mock_active_participant_plan():
+    with patch(
+        "backend.app.api.coordinator._ensure_participant_active_plan",
+        new=AsyncMock(return_value={"id": "plan-123", "status": "active"}),
+    ):
+        yield
+
+
 class TestAssignShiftValidation:
     """Test request validation for shift assignment."""
 
@@ -234,6 +243,7 @@ class TestAssignShiftParticipantValidation:
         app.dependency_overrides.clear()
 
 
+@pytest.mark.usefixtures("mock_active_participant_plan")
 class TestAssignShiftCredentialValidation:
     """Test credential checking for shift assignment."""
 
@@ -543,6 +553,7 @@ class TestAssignShiftCredentialValidation:
         app.dependency_overrides.clear()
 
 
+@pytest.mark.usefixtures("mock_active_participant_plan")
 class TestAssignShiftDurationCalculation:
     """Test duration calculation from start/end times."""
 

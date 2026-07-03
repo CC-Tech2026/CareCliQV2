@@ -963,6 +963,20 @@ export type GoalProgressResponse = {
   evidence_count: number;
 };
 
+/** List goals needing coordinator review for missing support_category */
+export function getGoalsReviewQueue() {
+  return jsonFetch<Array<{
+    id: string;
+    participant_id: string;
+    participant_name?: string | null;
+    name: string;
+    goal_area?: string | null;
+    plan_id?: string | null;
+    status: string;
+    created_at?: string | null;
+  }>>("/api/coordinator/goals/review-queue");
+}
+
 /** List NDIS goals (optionally filtered by participant) */
 export function getNdisGoals(params?: { participant_id?: string; status?: string }) {
   const q = new URLSearchParams();
