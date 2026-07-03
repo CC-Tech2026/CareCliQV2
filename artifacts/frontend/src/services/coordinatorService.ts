@@ -1383,12 +1383,12 @@ export type ResolvedSpeaker = {
 
 export type Stage1ResolutionResult = {
   session_id: string;
-  raw_transcript: string;
-  clean_transcript: string;
+  raw_transcript: Array<{ segment_id?: string; speaker_label?: string; text: string; start?: string }>;
+  clean_transcript: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
   resolved_names: Record<string, { name: string; confidence: string }>;
   segment_ids: Array<{ segment_id: string; speaker_name: string; text: string }>;
   participant_id: string | null;
-  flags: Array<{ flag_type: string; severity: string; description: string }>;
+  flags: Array<{ flag_type?: string; severity?: string; description: string }>;
   stage_1_status: string;
 };
 

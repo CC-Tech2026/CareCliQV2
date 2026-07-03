@@ -112,8 +112,8 @@ interface Step1Props {
 interface Stage1ResultsType {
   sessionId: string;
   resolvedNames: Record<string, { name: string; confidence: string }>;
-  cleanTranscript: string;
-  rawTranscript: string;
+  cleanTranscript: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
+  rawTranscript: Array<{ segment_id?: string; speaker_label?: string; text: string; start?: string }>;
   segmentIds: any[];
   flags: any[];
   participantId: string | null;

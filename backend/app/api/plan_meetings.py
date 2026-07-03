@@ -651,11 +651,8 @@ async def transcribe_and_resolve_names(
     
     return {
         "session_id": session_id,
-        "raw_transcript": raw_text,
-        "clean_transcript": "\n".join([
-            f"{seg['speaker_name']}: {seg['text']}"
-            for seg in stage_1_result.get("clean_transcript", [])
-        ]),
+        "raw_transcript": raw_transcript_segments,  # Return as array of segments
+        "clean_transcript": stage_1_result.get("clean_transcript", []),  # Return as array of segments
         "resolved_names": {
             speaker["speaker_label"]: {
                 "name": speaker.get("resolved_name"),
