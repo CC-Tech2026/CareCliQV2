@@ -718,10 +718,19 @@ async def extract_goals_and_tasks(
             detail=f"Stage 1 must be complete first. Current status: {session.get('stage_1_status')}"
         )
     
-    # Get clean transcript from Stage 1
-    clean_transcript = session.get("segment_ids") or []
-    if not clean_transcript:
-        raise HTTPException(status_code=400, detail="No clean transcript from Stage 1. Run transcribe-and-resolve first.")
+    # Get clean transcript from Stage 1 (stored as JSON string in database)
+    clean_transcript_json = session.get("clean_transcript") or "[]"
+    try:
+        if isinstance(clean_transcript_json, str):
+            clean_transcript = json.loads(clean_transcript_json)
+        else:
+            clean_transcript = clean_transcript_json
+        
+        if not clean_transcript:
+            raise HTTPException(status_code=400, detail="No clean transcript from Stage 1. Run transcribe-and-resolve first.")
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.error(f"Failed to parse clean_transcript: {exc}")
+        raise HTTPException(status_code=400, detail="Invalid clean transcript format from Stage 1.")
     
     # ✅ STEP 1: Run Stage 2 prompt
     try:
