@@ -65,8 +65,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-14 items-center justify-between">
 
             {/* LEFT — logo + org */}
-            <div className="flex items-center gap-4">
-              <CareCliQLogo size={70} />
+            <div className="flex items-center gap-3">
+              <CareCliQLogo size={48} />
               <div
                 className="hidden h-5 w-px sm:block"
                 style={{ background: BORDER }}
