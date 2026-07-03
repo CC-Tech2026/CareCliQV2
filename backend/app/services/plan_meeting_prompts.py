@@ -54,7 +54,7 @@ Output valid JSON only, matching the schema provided in the user message.
 No preamble, no markdown, no commentary outside the JSON."""
 
 STAGE_1_USER_MESSAGE_TEMPLATE = """Pre-filled names (optional, may be empty): {prefilled_names_json}
-Example: [{"name": "Priya Nadan", "role": "participant"}, {"name": "Sarah Lee", "role": "coordinator"}]
+Example: [{{"name": "Priya Nadan", "role": "participant"}}, {{"name": "Sarah Lee", "role": "coordinator"}}]
 
 Raw diarized transcript:
 {raw_transcript_json}
