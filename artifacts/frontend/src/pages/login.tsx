@@ -286,7 +286,7 @@ export default function Login() {
       >
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
-          <CareCliQLogo size={96} />
+          <CareCliQLogo size={120} />
         </div>
 
         {/* Mobile drag handle */}

@@ -626,14 +626,6 @@ export default function Signup() {
             {/* STEP 2 */}
             {step === 2 && (
               <form onSubmit={handleSubmit} className="space-y-4 step-content">
-                {form.account_type === "allied_health" && (
-                  <AlliedHealthFields
-                    form={form}
-                    updateField={updateField}
-                    disabled={busy}
-                    t={t}
-                  />
-                )}
 
                 {form.account_type === "small_provider" && (
                   <SmallProviderFields
@@ -780,95 +772,6 @@ function buildPayload(form: FormData) {
   }
 
   return base;
-}
-
-// ── Allied Health ─────────────────────────────────────────────────────────────
-function AlliedHealthFields({ form, updateField, disabled, t }: { form: FormData; updateField: (f: keyof FormData, v: string) => void; disabled?: boolean; t: (key: string) => string }) {
-  return (
-    <>
-      <div>
-        <Label>{t("auth.signup.field.profession")}</Label>
-
-        <StyledSelect
-          name="ah_profession_type"
-          value={form.ah_profession_type}
-          onChange={(v) => updateField("ah_profession_type", v)}
-          placeholder={t("auth.signup.placeholder.selectProfession")}
-          disabled={disabled}
-          options={[
-            {
-              value: "occupational_therapist",
-              label: t("auth.signup.profession.occupationalTherapist"),
-            },
-            { value: "speech_pathologist", label: t("auth.signup.profession.speechPathologist") },
-            { value: "physiotherapist", label: t("auth.signup.profession.physiotherapist") },
-            {
-              value: "behaviour_support",
-              label: t("auth.signup.profession.behaviourSupport"),
-            },
-            { value: "social_worker", label: t("auth.signup.profession.socialWorker") },
-            { value: "psychologist", label: t("auth.signup.profession.psychologist") },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Label>{t("auth.signup.field.registrationStatus")}</Label>
-
-        <StyledSelect
-          name="ah_registration_status"
-          value={form.ah_registration_status}
-          onChange={(v) => updateField("ah_registration_status", v)}
-          placeholder={t("auth.signup.placeholder.selectStatus")}
-          disabled={disabled}
-          options={[
-            { value: "ahpra_registered", label: t("auth.signup.status.ahpraRegistered") },
-            { value: "ndis_registered", label: t("auth.signup.status.ndisRegistered") },
-            { value: "unregistered", label: t("auth.signup.status.unregistered") },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Label>{t("auth.signup.field.providerNumber")}</Label>
-
-        <StyledInput
-          name="ah_provider_number"
-          value={form.ah_provider_number}
-          onChange={(v) => updateField("ah_provider_number", v)}
-          placeholder={t("auth.signup.placeholder.providerNumber")}
-          disabled={disabled}
-          required={false}
-        />
-      </div>
-
-      <div>
-        <Label>{t("auth.signup.field.specialties")}</Label>
-
-        <StyledInput
-          name="ah_specialties"
-          value={form.ah_specialties}
-          onChange={(v) => updateField("ah_specialties", v)}
-          placeholder={t("auth.signup.placeholder.specialties")}
-          disabled={disabled}
-          required={false}
-        />
-      </div>
-
-      <div>
-        <Label>{t("auth.signup.field.clinicName")}</Label>
-
-        <StyledInput
-          name="ah_clinic_name"
-          value={form.ah_clinic_name}
-          onChange={(v) => updateField("ah_clinic_name", v)}
-          placeholder={t("auth.signup.placeholder.clinic")}
-          disabled={disabled}
-          required={false}
-        />
-      </div>
-    </>
-  );
 }
 
 // ── Small Provider ────────────────────────────────────────────────────────────

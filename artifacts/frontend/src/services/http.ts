@@ -17,7 +17,8 @@ function extractErrorMessage(payload: unknown): string | undefined {
 
 export async function jsonFetch<T>(input: RequestInfo | URL, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (!headers.has("content-type") && init.body) {
+  // Only set content-type for JSON, NOT for FormData (which needs multipart/form-data)
+  if (!headers.has("content-type") && init.body && !(init.body instanceof FormData)) {
     headers.set("content-type", "application/json");
   }
   const response = await apiFetch(input, { ...init, headers });
