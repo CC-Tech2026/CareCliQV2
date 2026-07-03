@@ -525,9 +525,13 @@ async def run_stage_1_name_resolution(
     # Parse JSON output
     try:
         result = json.loads(result_text)
+        logger.info(f"Stage 1 parsed result keys: {result.keys()}")
     except json.JSONDecodeError as exc:
-        logger.error("Stage 1 returned non-JSON: %s", result_text[:200])
+        logger.error("Stage 1 returned non-JSON: %s", result_text[:500])
         raise ValueError(f"Stage 1 returned invalid JSON: {exc}")
+    except Exception as exc:
+        logger.exception(f"Stage 1 result parsing error: {exc}")
+        raise ValueError(f"Stage 1 processing failed: {exc}")
     
     # Update session in database with Stage 1 results
     supabase = get_supabase_admin()

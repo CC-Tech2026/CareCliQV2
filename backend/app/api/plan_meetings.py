@@ -560,9 +560,17 @@ async def transcribe_and_resolve_names(
         try:
             others_list = json.loads(others) if others != "[]" else []
             for other_name in others_list:
-                prefilled_names.append({"name": other_name, "role": "other"})
-        except (json.JSONDecodeError, TypeError):
+                # Handle both string and dict formats
+                if isinstance(other_name, dict) and "name" in other_name:
+                    prefilled_names.append(other_name)  # Already in dict format
+                elif isinstance(other_name, str):
+                    prefilled_names.append({"name": other_name, "role": "other"})
+                logger.debug(f"Parsed other name: {other_name}")
+        except (json.JSONDecodeError, TypeError) as parse_exc:
+            logger.warning(f"Failed to parse 'others' list: {parse_exc}")
             pass
+        
+        logger.info(f"Prefilled names: {json.dumps(prefilled_names)}")
         
         # Gather meeting context
         meeting_context = {
