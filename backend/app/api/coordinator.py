@@ -21,6 +21,10 @@ from ..services.pattern_detection_service import (
     run_pattern_detection_for_org,
 )
 from ..services import participant_service, session_service, shift_service
+from ..services.funding_service import (
+    normalize_goal_support_category,
+    require_active_plan_for_participant,
+)
 from ..services.credential_verification_service import (
     get_shift_credential_requirements,
     verify_worker_credentials,
@@ -47,6 +51,13 @@ def _require_coordinator(user: dict) -> str:
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     return org_id
+
+
+async def _ensure_participant_active_plan(participant_id: str) -> dict[str, Any]:
+    try:
+        return await require_active_plan_for_participant(participant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 def _date_part(value: Any) -> str:
@@ -1415,6 +1426,8 @@ async def assign_shift(
             status_code=500,
             detail=f"Participant lookup failed: {exc}"
         )
+
+    await _ensure_participant_active_plan(body.participant_id)
     
     # Check worker credentials
     shift_type = _normalize_shift_type(body.shift_type)
@@ -2198,6 +2211,8 @@ async def create_unassigned_shift(
     if not p_resp.data:
         raise HTTPException(status_code=404, detail="Participant not found")
     participant = p_resp.data[0]
+
+    await _ensure_participant_active_plan(body.participant_id)
 
     try:
         s_dt = parse_shift_datetime(body.scheduled_start)
@@ -2985,6 +3000,42 @@ class NdisGoalBody(BaseModel):
     plan_id: Optional[str] = None
 
 
+@router.get("/goals/review-queue")
+async def list_goals_missing_support_category(
+    current_user: dict = Depends(get_current_user),
+):
+    """Goals that still need a support_category after backfill (CARECLIQV2-329)."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("ndis_goals")
+            .select("id, participant_id, name, goal_area, plan_id, status, created_at, patients(full_name)")
+            .eq("organization_id", org_id)
+            .is_("support_category", "null")
+            .eq("status", "active")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = resp.data or []
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            patient = row.get("patients") or {}
+            out.append({
+                "id": row.get("id"),
+                "participant_id": row.get("participant_id"),
+                "participant_name": patient.get("full_name") if isinstance(patient, dict) else None,
+                "name": row.get("name"),
+                "goal_area": row.get("goal_area"),
+                "plan_id": row.get("plan_id"),
+                "status": row.get("status"),
+                "created_at": row.get("created_at"),
+            })
+        return out
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Goal review queue failed: {exc}")
+
+
 @router.get("/goals")
 async def list_coordinator_goals(
     participant_id: Optional[str] = Query(default=None),
@@ -3014,6 +3065,13 @@ async def create_ndis_goal(
     """Create a new NDIS goal for a participant."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    support_category = normalize_goal_support_category(body.support_category)
+    if not support_category:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="support_category is required and must be a valid NDIS funding line.",
+        )
+    await _ensure_participant_active_plan(body.participant_id)
     now = datetime.now(timezone.utc).isoformat()
     payload: dict[str, Any] = {
         "participant_id": body.participant_id,
@@ -3021,7 +3079,7 @@ async def create_ndis_goal(
         "created_by": get_user_id(current_user),
         "name": body.name,
         "goal_area": body.goal_area,
-        "support_category": body.support_category,
+        "support_category": support_category,
         "description": body.description,
         "target_date": body.target_date,
         "why_it_matters": body.why_it_matters or body.success_criteria,
@@ -3048,11 +3106,17 @@ async def update_ndis_goal(
     """Update an existing NDIS goal."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    support_category = normalize_goal_support_category(body.support_category)
+    if not support_category:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="support_category is required and must be a valid NDIS funding line.",
+        )
     now = datetime.now(timezone.utc).isoformat()
     update: dict[str, Any] = {
         "name": body.name,
         "goal_area": body.goal_area,
-        "support_category": body.support_category,
+        "support_category": support_category,
         "description": body.description,
         "target_date": body.target_date,
         "why_it_matters": body.why_it_matters or body.success_criteria,
@@ -3434,6 +3498,7 @@ async def create_participant_task(
     """Create a new task instance for a participant under a goal."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    await _ensure_participant_active_plan(participant_id)
     now = datetime.now(timezone.utc).isoformat()
     
     # Verify goal exists if provided

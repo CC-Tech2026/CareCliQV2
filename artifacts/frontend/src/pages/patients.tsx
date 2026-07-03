@@ -1009,7 +1009,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
-    onError: () => toastFn({ title: "Failed to create goal", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to create goal", variant: "destructive" }),
   });
 
   const editGoalMut = useMutation({
@@ -1019,7 +1019,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null); setEditingGoal(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
-    onError: () => toastFn({ title: "Failed to update goal", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to update goal", variant: "destructive" }),
   });
 
   const archiveGoalMut = useMutation({
@@ -1042,7 +1042,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null);
       setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false);
     },
-    onError: () => toastFn({ title: "Failed to create task", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to create task", variant: "destructive" }),
   });
 
   const deleteTaskMut = useMutation({
@@ -1665,6 +1665,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           const activeGoals = ndisGoals.filter((g) => g.status === "active");
           const doneGoals   = ndisGoals.filter((g) => g.status !== "active");
+          const goalsNeedingCategory = activeGoals.filter((g) => !g.support_category);
 
           const startEditGoal = (goal: NdisGoal) => {
             setEditingGoal(goal);
@@ -1916,7 +1917,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <button type="button" onClick={cancelGoalForm}
                   className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
                 <button type="button"
-                  disabled={!goalTitle.trim() || createGoalMut.isPending || editGoalMut.isPending}
+                  disabled={!goalTitle.trim() || !goalSupportCategory || createGoalMut.isPending || editGoalMut.isPending}
                   onClick={() => {
                     const descHtml = goalDescriptionRef.current?.textContent?.trim()
                       ? (goalDescriptionRef.current.innerHTML || null)
@@ -2282,6 +2283,32 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {(createMode === "goal" || createMode === "edit_goal") && goalFormContent}
               {createMode === "tasks" && taskFormContent}
 
+              {/* Goals missing support category — coordinator review */}
+              {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 space-y-2">
+                  <p className="text-[12px] font-bold text-amber-900">
+                    {goalsNeedingCategory.length} goal{goalsNeedingCategory.length !== 1 ? "s" : ""} need a support category
+                  </p>
+                  <p className="text-[11px] text-amber-800">
+                    Link each goal to a funded NDIS budget line so billing and reporting stay accurate.
+                  </p>
+                  <div className="space-y-1.5">
+                    {goalsNeedingCategory.map((goal) => (
+                      <div key={goal.id} className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-3 py-2">
+                        <span className="text-[12px] font-semibold text-[#111827] truncate">{goal.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEditGoal(goal)}
+                          className="shrink-0 text-[11px] font-bold text-amber-900 underline-offset-2 hover:underline"
+                        >
+                          Assign category
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Loading */}
               {ndisGoalsQuery.isLoading && (
                 <div className="flex items-center gap-2 py-4 text-[13px] text-[#6B7280]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
@@ -2318,6 +2345,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               {areaStyle.label}
                             </span>
                             <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            {!goal.support_category && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                Needs category
+                              </span>
+                            )}
                             {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
                           </div>
                           {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
