@@ -1,4 +1,4 @@
-import { CareCliQLogoSVG } from "./CareCliQLogoSVG";
+import { CareCliQLogo as CareCliQLogoImage } from "./CareCliQLogoSVG";
 
 interface CareCliQLogoProps {
   compact?: boolean;
@@ -12,7 +12,7 @@ export function CareCliQLogo({ compact = false, className = "" }: CareCliQLogoPr
       title="CareCliQ"
       style={{ backgroundColor: "transparent" }}
     >
-      <CareCliQLogoSVG size={compact ? 68 : 85} />
+      <CareCliQLogoImage size={compact ? 68 : 85} />
       {!compact && (
         <span
           className="font-black text-[18px] tracking-tight leading-none"
