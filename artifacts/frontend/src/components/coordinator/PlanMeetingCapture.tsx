@@ -379,10 +379,13 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
           <SectionLabel label="Extracted Goals" />
           {stage2Results.goals.length > 0 ? (
             <div className="space-y-2">
-              {stage2Results.goals.map((goal: any) => (
-                <div key={goal.goal_id} className="p-3 rounded-xl" style={{ background: GREEN_BG, border: `1px solid ${GREEN_BORDER}` }}>
-                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{goal.description}</p>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Category: {goal.category} • Confidence: {(goal.confidence * 100).toFixed(0)}%</p>
+              {stage2Results.goals.map((goal: any, i: number) => (
+                <div key={i} className="p-3 rounded-xl" style={{ background: GREEN_BG, border: `1px solid ${GREEN_BORDER}` }}>
+                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{goal.goal_text}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Category: {goal.support_category} • Confidence: {(goal.confidence * 100).toFixed(0)}%</p>
+                  {goal.source_segment_ids && (
+                    <p className="text-[10px] mt-2" style={{ color: MUTED }}>Segments: {goal.source_segment_ids.join(", ")}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -390,6 +393,23 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
             <p className="text-[12px]" style={{ color: MUTED }}>No goals extracted.</p>
           )}
         </div>
+
+        {stage2Results.tasks.length > 0 && (
+          <div>
+            <SectionLabel label="Extracted Tasks" />
+            <div className="space-y-2">
+              {stage2Results.tasks.map((task: any, i: number) => (
+                <div key={i} className="p-3 rounded-xl" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{task.task_text}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Level: {task.requirement_level} • Confidence: {(task.confidence * 100).toFixed(0)}%</p>
+                  {task.source_segment_ids && (
+                    <p className="text-[10px] mt-2" style={{ color: MUTED }}>Segments: {task.source_segment_ids.join(", ")}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
           <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={reRecord}>

@@ -1415,20 +1415,17 @@ export function transcribeAndResolveNames(
 }
 
 export type ExtractedGoal = {
-  goal_id: string;
-  category: string;
-  description: string;
-  confidence: number;
+  goal_text: string;
+  support_category: string;
   source_segment_ids: string[];
+  confidence: number;
 };
 
 export type ExtractedTask = {
-  task_id: string;
-  goal_id: string;
-  category: string;
-  description: string;
-  frequency: string;
-  support_type: string;
+  task_text: string;
+  linked_goal_index?: number;
+  requirement_level: "mandatory" | "optional";
+  source_segment_ids: string[];
   confidence: number;
 };
 

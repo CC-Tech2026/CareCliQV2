@@ -739,6 +739,9 @@ async def extract_goals_and_tasks(
             clean_transcript=clean_transcript,
         )
         
+        logger.info(f"Stage 2 result: {len(stage_2_result.get('draft_goals', []))} goals, {len(stage_2_result.get('draft_tasks', []))} tasks")
+        logger.debug(f"Goals: {stage_2_result.get('draft_goals', [])[:1]}")  # Log first goal as example
+        
     except ValueError as exc:
         logger.exception("Stage 2 failed: %s", exc)
         raise HTTPException(status_code=422, detail=f"Goal extraction failed: {exc}")
