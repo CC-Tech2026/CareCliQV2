@@ -541,7 +541,6 @@ async def run_stage_1_name_resolution(
             "raw_transcript": json.dumps(raw_transcript_segments),
             "clean_transcript": json.dumps(result.get("clean_transcript", [])),
             "resolved_names": result.get("resolved_speakers", []),
-            "segment_ids": result.get("clean_transcript", []),  # Preserve segment IDs for Stage 2
             "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", session_id).execute()
     except Exception as exc:
