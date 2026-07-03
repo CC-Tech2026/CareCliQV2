@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { TranscriptViewer } from "./TranscriptViewer";
 import {
   recordPlanMeeting,
   listPlanMeetings,
@@ -446,6 +447,15 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
               ))}
             </div>
           )}
+        </div>
+
+        {/* Transcript Viewer */}
+        <div>
+          <SectionLabel label="Transcription" />
+          <TranscriptViewer
+            rawTranscript={stage1Results.rawTranscript}
+            cleanTranscript={stage1Results.cleanTranscript}
+          />
         </div>
 
         <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
