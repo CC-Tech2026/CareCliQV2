@@ -1,0 +1,1762 @@
+{
+  "generatedAt": "2026-07-03T03:13:39.545Z",
+  "testName": "load",
+  "environment": "Development",
+  "roles": {
+    "combined": {
+      "generatedAt": "2026-07-03T03:13:39.540Z",
+      "testName": "load",
+      "environment": "Development",
+      "role": "combined",
+      "roleLabel": "Combined",
+      "auth": null,
+      "durationMs": 125140,
+      "durationFormatted": "2m 5s",
+      "virtualUsers": {
+        "max": 5
+      },
+      "requests": {
+        "total": 118,
+        "successful": 118,
+        "failed": 0,
+        "errorRate": 0,
+        "rps": 0.9429439028288317
+      },
+      "responseTime": {
+        "avg": 7459.15284661017,
+        "min": 0.341411,
+        "max": 21897.574326,
+        "p90": 14079.395251,
+        "p95": 16338.829388,
+        "p99": 18077.158927
+      },
+      "dataTransfer": {
+        "sent": 58559,
+        "received": 11891029,
+        "sentFormatted": "57.2 KB",
+        "receivedFormatted": "11.34 MB",
+        "throughputSent": 467.9478983538437,
+        "throughputReceived": 95021.80757551543
+      },
+      "thresholds": [
+        {
+          "metric": "http_req_duration",
+          "threshold": "p(95)<20000",
+          "ok": true
+        },
+        {
+          "metric": "http_req_failed",
+          "threshold": "rate<0.05",
+          "ok": true
+        },
+        {
+          "metric": "health_duration",
+          "threshold": "p(95)<15000",
+          "ok": false
+        },
+        {
+          "metric": "errors",
+          "threshold": "rate<0.05",
+          "ok": true
+        }
+      ],
+      "checks": [],
+      "failedChecks": [],
+      "statusCodes": {
+        "200": 118
+      },
+      "testedEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/alerts",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Alert list for current user",
+          "label": "GET /api/alerts",
+          "tested": true,
+          "count": 11,
+          "avg": 4722.615626181819,
+          "min": 720.34877,
+          "max": 10841.813476,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/alerts/unread",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Unread alerts for current user",
+          "label": "GET /api/alerts/unread",
+          "tested": true,
+          "count": 11,
+          "avg": 5064.983192181818,
+          "min": 577.490832,
+          "max": 12322.587647,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me",
+          "group": "Auth",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Current authenticated user profile",
+          "label": "GET /api/auth/me",
+          "tested": true,
+          "count": 11,
+          "avg": 6356.151409545454,
+          "min": 602.110166,
+          "max": 18077.158927,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/compliance/rules",
+          "group": "Compliance",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Compliance rules catalog",
+          "label": "GET /api/compliance/rules",
+          "tested": true,
+          "count": 11,
+          "avg": 8165.5887534545445,
+          "min": 601.075588,
+          "max": 15324.004057,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/compliance-overview",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Organisation compliance overview",
+          "label": "GET /api/coordinator/compliance-overview",
+          "tested": true,
+          "count": 1,
+          "avg": 7093.665416,
+          "min": 7093.665416,
+          "max": 7093.665416,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/goals",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Goals across coordinator caseload",
+          "label": "GET /api/coordinator/goals",
+          "tested": true,
+          "count": 1,
+          "avg": 10548.063327,
+          "min": 10548.063327,
+          "max": 10548.063327,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/notifications",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator notification feed",
+          "label": "GET /api/coordinator/notifications",
+          "tested": true,
+          "count": 1,
+          "avg": 9846.745807,
+          "min": 9846.745807,
+          "max": 9846.745807,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/shifts",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Shifts visible to coordinator",
+          "label": "GET /api/coordinator/shifts",
+          "tested": true,
+          "count": 3,
+          "avg": 11977.919102999998,
+          "min": 10121.019416,
+          "max": 15121.50162,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/team",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator team roster",
+          "label": "GET /api/coordinator/team",
+          "tested": true,
+          "count": 3,
+          "avg": 12423.512322666667,
+          "min": 9604.0466,
+          "max": 14079.395251,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "group": "coordinator — Health Check, worker — Health Check",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "description": "API health check — tested on every iteration",
+          "label": "GET /api/health",
+          "tested": true,
+          "count": 11,
+          "avg": 3784.902337545455,
+          "min": 222.921966,
+          "max": 21897.574326,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/coordinator",
+          "group": "Dashboard",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator dashboard aggregate data",
+          "label": "GET /api/dashboard/coordinator",
+          "tested": true,
+          "count": 3,
+          "avg": 8603.581531999998,
+          "min": 3983.386762,
+          "max": 13071.078945,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/worker",
+          "group": "Dashboard",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker dashboard aggregate data",
+          "label": "GET /api/dashboard/worker",
+          "tested": true,
+          "count": 4,
+          "avg": 8649.77255775,
+          "min": 2178.082019,
+          "max": 16355.996169,
+          "statuses": {
+            "200": 4
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/worker-landing",
+          "group": "Dashboard",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker landing dashboard",
+          "label": "GET /api/dashboard/worker-landing",
+          "tested": true,
+          "count": 3,
+          "avg": 9112.534034666665,
+          "min": 4038.37443,
+          "max": 16338.829388,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/incidents",
+          "group": "Incidents",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Incident list (org scope)",
+          "label": "GET /api/incidents",
+          "tested": true,
+          "count": 1,
+          "avg": 17762.218332,
+          "min": 17762.218332,
+          "max": 17762.218332,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "List participants for the organisation",
+          "label": "GET /api/participants",
+          "tested": true,
+          "count": 5,
+          "avg": 8821.595320199998,
+          "min": 6092.458909,
+          "max": 10987.585432,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants/{participant_id}",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Single participant detail (uses first participant from list)",
+          "label": "GET /api/participants/{participant_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 9878.380405,
+          "min": 9878.380405,
+          "max": 9878.380405,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants/dashboard-stats",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Dashboard statistics for visible participants",
+          "label": "GET /api/participants/dashboard-stats",
+          "tested": true,
+          "count": 5,
+          "avg": 11378.618871399998,
+          "min": 3322.154329,
+          "max": 17906.407085,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/compliance-overview",
+          "group": "Reports",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Compliance report summary",
+          "label": "GET /api/reports/compliance-overview",
+          "tested": true,
+          "count": 1,
+          "avg": 13492.243977,
+          "min": 13492.243977,
+          "max": 13492.243977,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/sessions/recent",
+          "group": "Sessions",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Recent sessions visible to user",
+          "label": "GET /api/sessions/recent",
+          "tested": true,
+          "count": 11,
+          "avg": 6581.944369000001,
+          "min": 1589.384917,
+          "max": 12284.157404,
+          "statuses": {
+            "200": 11
+          },
+          "skipReason": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "group": "setup",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Login once during setup to obtain auth token",
+          "label": "POST /api/auth/login",
+          "tested": true,
+          "count": 2,
+          "avg": 1175.2915005,
+          "min": 0.341411,
+          "max": 2350.24159,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-clients",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Assigned clients for support worker",
+          "label": "GET /api/worker/my-clients",
+          "tested": true,
+          "count": 5,
+          "avg": 9375.9139444,
+          "min": 1454.477884,
+          "max": 13080.359674,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-clients/{participant_id}",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Client detail for assigned participant",
+          "label": "GET /api/worker/my-clients/{participant_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 11839.248427,
+          "min": 11839.248427,
+          "max": 11839.248427,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-compliance",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker-scoped compliance summary",
+          "label": "GET /api/worker/my-compliance",
+          "tested": true,
+          "count": 2,
+          "avg": 6729.9116575,
+          "min": 3562.442103,
+          "max": 9897.381212,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/feedback/unread-count",
+          "group": "Worker Performance",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Unread shift feedback count",
+          "label": "GET /api/worker/feedback/unread-count",
+          "tested": true,
+          "count": 2,
+          "avg": 10553.580612,
+          "min": 6645.962991,
+          "max": 14461.198233,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/performance-dashboard",
+          "group": "Worker Performance",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker performance metrics",
+          "label": "GET /api/worker/performance-dashboard",
+          "tested": true,
+          "count": 2,
+          "avg": 10330.999427499999,
+          "min": 6043.725971,
+          "max": 14618.272884,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Shifts for authenticated worker",
+          "label": "GET /api/worker/shifts",
+          "tested": true,
+          "count": 2,
+          "avg": 7616.0687245,
+          "min": 3214.960574,
+          "max": 12017.176875,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts/{shift_id}",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Shift detail (uses first available shift)",
+          "label": "GET /api/worker/shifts/{shift_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 12916.436461,
+          "min": 12916.436461,
+          "max": 12916.436461,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts/counts",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Per-filter shift counts",
+          "label": "GET /api/worker/shifts/counts",
+          "tested": true,
+          "count": 2,
+          "avg": 8570.671394,
+          "min": 3983.973457,
+          "max": 13157.369331,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/training/certifications",
+          "group": "Worker Training",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker certification records",
+          "label": "GET /api/worker/training/certifications",
+          "tested": true,
+          "count": 1,
+          "avg": 6579.572661,
+          "min": 6579.572661,
+          "max": 6579.572661,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        }
+      ],
+      "endpoints": {
+        "slowest": [
+          {
+            "name": "GET /api/incidents",
+            "avg": 17762.218332,
+            "min": 17762.218332,
+            "max": 17762.218332,
+            "count": 1
+          },
+          {
+            "name": "GET /api/reports/compliance-overview",
+            "avg": 13492.243977,
+            "min": 13492.243977,
+            "max": 13492.243977,
+            "count": 1
+          },
+          {
+            "name": "GET /api/worker/shifts/{shift_id}",
+            "avg": 12916.436461,
+            "min": 12916.436461,
+            "max": 12916.436461,
+            "count": 1
+          },
+          {
+            "name": "GET /api/coordinator/team",
+            "avg": 12423.512322666667,
+            "min": 9604.0466,
+            "max": 14079.395251,
+            "count": 3
+          },
+          {
+            "name": "GET /api/coordinator/shifts",
+            "avg": 11977.919102999998,
+            "min": 10121.019416,
+            "max": 15121.50162,
+            "count": 3
+          }
+        ],
+        "fastest": [
+          {
+            "name": "POST /api/auth/login",
+            "avg": 1175.2915005,
+            "min": 0.341411,
+            "max": 2350.24159,
+            "count": 2
+          },
+          {
+            "name": "GET /api/health",
+            "avg": 3784.902337545455,
+            "min": 222.921966,
+            "max": 21897.574326,
+            "count": 11
+          },
+          {
+            "name": "GET /api/alerts",
+            "avg": 4722.615626181819,
+            "min": 720.34877,
+            "max": 10841.813476,
+            "count": 11
+          },
+          {
+            "name": "GET /api/alerts/unread",
+            "avg": 5064.983192181818,
+            "min": 577.490832,
+            "max": 12322.587647,
+            "count": 11
+          },
+          {
+            "name": "GET /api/auth/me",
+            "avg": 6356.151409545454,
+            "min": 602.110166,
+            "max": 18077.158927,
+            "count": 11
+          }
+        ]
+      },
+      "executiveSummary": "Combined: 1 threshold(s) failed. Error rate 0.00%, P95 16339ms.",
+      "allThresholdsPass": false
+    },
+    "coordinator": {
+      "generatedAt": "2026-07-03T03:13:39.543Z",
+      "testName": "load",
+      "environment": "Development",
+      "role": "coordinator",
+      "roleLabel": "Coordinator",
+      "auth": {
+        "email": "sa***@sunshine-demo.com",
+        "loginOk": true,
+        "skipReason": null
+      },
+      "durationMs": 121265,
+      "durationFormatted": "2m 1s",
+      "virtualUsers": {
+        "max": 5
+      },
+      "requests": {
+        "total": 56,
+        "successful": 56,
+        "failed": 0,
+        "errorRate": 0,
+        "rps": 0.4617985403867563
+      },
+      "responseTime": {
+        "avg": 7781.393484446428,
+        "min": 222.921966,
+        "max": 17906.407085,
+        "p90": 13587.095117,
+        "p95": 15324.004057,
+        "p99": 17906.407085
+      },
+      "dataTransfer": {
+        "sent": 35658,
+        "received": 8136719,
+        "sentFormatted": "34.8 KB",
+        "receivedFormatted": "7.76 MB",
+        "throughputSent": 294.0502205912671,
+        "throughputReceived": 67098.65995959262
+      },
+      "thresholds": [
+        {
+          "metric": "http_req_duration",
+          "threshold": "p(95)<20000",
+          "ok": true
+        },
+        {
+          "metric": "http_req_failed",
+          "threshold": "rate<0.05",
+          "ok": true
+        },
+        {
+          "metric": "health_duration",
+          "threshold": "p(95)<15000",
+          "ok": true
+        },
+        {
+          "metric": "errors",
+          "threshold": "rate<0.05",
+          "ok": true
+        }
+      ],
+      "checks": [],
+      "failedChecks": [],
+      "statusCodes": {
+        "200": 56
+      },
+      "testedEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/alerts",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Alert list for current user",
+          "label": "GET /api/alerts",
+          "tested": true,
+          "count": 5,
+          "avg": 5498.624667,
+          "min": 720.34877,
+          "max": 10841.813476,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/alerts/unread",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Unread alerts for current user",
+          "label": "GET /api/alerts/unread",
+          "tested": true,
+          "count": 5,
+          "avg": 5144.269363400001,
+          "min": 951.234276,
+          "max": 9233.892259,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me",
+          "group": "Auth",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Current authenticated user profile",
+          "label": "GET /api/auth/me",
+          "tested": true,
+          "count": 5,
+          "avg": 4429.3501978,
+          "min": 732.611052,
+          "max": 9628.876101,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/compliance/rules",
+          "group": "Compliance",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Compliance rules catalog",
+          "label": "GET /api/compliance/rules",
+          "tested": true,
+          "count": 5,
+          "avg": 9353.1278582,
+          "min": 1651.526126,
+          "max": 15324.004057,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/compliance-overview",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Organisation compliance overview",
+          "label": "GET /api/coordinator/compliance-overview",
+          "tested": true,
+          "count": 1,
+          "avg": 7093.665416,
+          "min": 7093.665416,
+          "max": 7093.665416,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/goals",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Goals across coordinator caseload",
+          "label": "GET /api/coordinator/goals",
+          "tested": true,
+          "count": 1,
+          "avg": 10548.063327,
+          "min": 10548.063327,
+          "max": 10548.063327,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/notifications",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator notification feed",
+          "label": "GET /api/coordinator/notifications",
+          "tested": true,
+          "count": 1,
+          "avg": 9846.745807,
+          "min": 9846.745807,
+          "max": 9846.745807,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/shifts",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Shifts visible to coordinator",
+          "label": "GET /api/coordinator/shifts",
+          "tested": true,
+          "count": 3,
+          "avg": 11977.919102999998,
+          "min": 10121.019416,
+          "max": 15121.50162,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/coordinator/team",
+          "group": "Coordinator",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator team roster",
+          "label": "GET /api/coordinator/team",
+          "tested": true,
+          "count": 3,
+          "avg": 12423.512322666667,
+          "min": 9604.0466,
+          "max": 14079.395251,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "group": "coordinator — Health Check",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "description": "API health check — tested on every iteration",
+          "label": "GET /api/health",
+          "tested": true,
+          "count": 5,
+          "avg": 2191.646178,
+          "min": 222.921966,
+          "max": 5385.453982,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/coordinator",
+          "group": "Dashboard",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Coordinator dashboard aggregate data",
+          "label": "GET /api/dashboard/coordinator",
+          "tested": true,
+          "count": 3,
+          "avg": 8603.581531999998,
+          "min": 3983.386762,
+          "max": 13071.078945,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/incidents",
+          "group": "Incidents",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Incident list (org scope)",
+          "label": "GET /api/incidents",
+          "tested": true,
+          "count": 1,
+          "avg": 17762.218332,
+          "min": 17762.218332,
+          "max": 17762.218332,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "List participants for the organisation",
+          "label": "GET /api/participants",
+          "tested": true,
+          "count": 5,
+          "avg": 8821.595320199998,
+          "min": 6092.458909,
+          "max": 10987.585432,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants/{participant_id}",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Single participant detail (uses first participant from list)",
+          "label": "GET /api/participants/{participant_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 9878.380405,
+          "min": 9878.380405,
+          "max": 9878.380405,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants/dashboard-stats",
+          "group": "Participants",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Dashboard statistics for visible participants",
+          "label": "GET /api/participants/dashboard-stats",
+          "tested": true,
+          "count": 5,
+          "avg": 11378.618871399998,
+          "min": 3322.154329,
+          "max": 17906.407085,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/compliance-overview",
+          "group": "Reports",
+          "roles": [
+            "coordinator"
+          ],
+          "requiresCredentials": true,
+          "description": "Compliance report summary",
+          "label": "GET /api/reports/compliance-overview",
+          "tested": true,
+          "count": 1,
+          "avg": 13492.243977,
+          "min": 13492.243977,
+          "max": 13492.243977,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/sessions/recent",
+          "group": "Sessions",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Recent sessions visible to user",
+          "label": "GET /api/sessions/recent",
+          "tested": true,
+          "count": 5,
+          "avg": 6337.0550244,
+          "min": 4031.598753,
+          "max": 9594.512228,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "group": "setup",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Login once during setup to obtain auth token",
+          "label": "POST /api/auth/login",
+          "tested": true,
+          "count": 1,
+          "avg": 2350.24159,
+          "min": 2350.24159,
+          "max": 2350.24159,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        }
+      ],
+      "endpoints": {
+        "slowest": [
+          {
+            "name": "GET /api/incidents",
+            "avg": 17762.218332,
+            "min": 17762.218332,
+            "max": 17762.218332,
+            "count": 1
+          },
+          {
+            "name": "GET /api/reports/compliance-overview",
+            "avg": 13492.243977,
+            "min": 13492.243977,
+            "max": 13492.243977,
+            "count": 1
+          },
+          {
+            "name": "GET /api/coordinator/team",
+            "avg": 12423.512322666667,
+            "min": 9604.0466,
+            "max": 14079.395251,
+            "count": 3
+          },
+          {
+            "name": "GET /api/coordinator/shifts",
+            "avg": 11977.919102999998,
+            "min": 10121.019416,
+            "max": 15121.50162,
+            "count": 3
+          },
+          {
+            "name": "GET /api/participants/dashboard-stats",
+            "avg": 11378.618871399998,
+            "min": 3322.154329,
+            "max": 17906.407085,
+            "count": 5
+          }
+        ],
+        "fastest": [
+          {
+            "name": "GET /api/health",
+            "avg": 2191.646178,
+            "min": 222.921966,
+            "max": 5385.453982,
+            "count": 5
+          },
+          {
+            "name": "POST /api/auth/login",
+            "avg": 2350.24159,
+            "min": 2350.24159,
+            "max": 2350.24159,
+            "count": 1
+          },
+          {
+            "name": "GET /api/auth/me",
+            "avg": 4429.3501978,
+            "min": 732.611052,
+            "max": 9628.876101,
+            "count": 5
+          },
+          {
+            "name": "GET /api/alerts/unread",
+            "avg": 5144.269363400001,
+            "min": 951.234276,
+            "max": 9233.892259,
+            "count": 5
+          },
+          {
+            "name": "GET /api/alerts",
+            "avg": 5498.624667,
+            "min": 720.34877,
+            "max": 10841.813476,
+            "count": 5
+          }
+        ]
+      },
+      "executiveSummary": "Coordinator: 56 requests at 0.5 RPS, 0.00% error rate, P95 15324ms.",
+      "allThresholdsPass": true
+    },
+    "worker": {
+      "generatedAt": "2026-07-03T03:13:39.545Z",
+      "testName": "load",
+      "environment": "Development",
+      "role": "worker",
+      "roleLabel": "Worker",
+      "auth": {
+        "email": "ha***@yopmail.com",
+        "loginOk": true,
+        "skipReason": null
+      },
+      "durationMs": 125140,
+      "durationFormatted": "2m 5s",
+      "virtualUsers": {
+        "max": 5
+      },
+      "requests": {
+        "total": 62,
+        "successful": 62,
+        "failed": 0,
+        "errorRate": 0,
+        "rps": 0.4954451014863353
+      },
+      "responseTime": {
+        "avg": 7168.096786629033,
+        "min": 0.341411,
+        "max": 21897.574326,
+        "p90": 14461.198233,
+        "p95": 16338.829388,
+        "p99": 21897.574326
+      },
+      "dataTransfer": {
+        "sent": 22901,
+        "received": 3754310,
+        "sentFormatted": "22.4 KB",
+        "receivedFormatted": "3.58 MB",
+        "throughputSent": 183.0030365990091,
+        "throughputReceived": 30000.879015502636
+      },
+      "thresholds": [
+        {
+          "metric": "http_req_duration",
+          "threshold": "p(95)<20000",
+          "ok": true
+        },
+        {
+          "metric": "http_req_failed",
+          "threshold": "rate<0.05",
+          "ok": true
+        },
+        {
+          "metric": "health_duration",
+          "threshold": "p(95)<15000",
+          "ok": false
+        },
+        {
+          "metric": "errors",
+          "threshold": "rate<0.05",
+          "ok": true
+        }
+      ],
+      "checks": [],
+      "failedChecks": [],
+      "statusCodes": {
+        "200": 62
+      },
+      "testedEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/alerts",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Alert list for current user",
+          "label": "GET /api/alerts",
+          "tested": true,
+          "count": 6,
+          "avg": 4075.9414254999997,
+          "min": 734.373444,
+          "max": 9241.243944,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/alerts/unread",
+          "group": "Alerts",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Unread alerts for current user",
+          "label": "GET /api/alerts/unread",
+          "tested": true,
+          "count": 6,
+          "avg": 4998.911382833333,
+          "min": 577.490832,
+          "max": 12322.587647,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me",
+          "group": "Auth",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Current authenticated user profile",
+          "label": "GET /api/auth/me",
+          "tested": true,
+          "count": 6,
+          "avg": 7961.819086,
+          "min": 602.110166,
+          "max": 18077.158927,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/compliance/rules",
+          "group": "Compliance",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Compliance rules catalog",
+          "label": "GET /api/compliance/rules",
+          "tested": true,
+          "count": 6,
+          "avg": 7175.972832833333,
+          "min": 601.075588,
+          "max": 14495.170869,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/worker",
+          "group": "Dashboard",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker dashboard aggregate data",
+          "label": "GET /api/dashboard/worker",
+          "tested": true,
+          "count": 4,
+          "avg": 8649.77255775,
+          "min": 2178.082019,
+          "max": 16355.996169,
+          "statuses": {
+            "200": 4
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard/worker-landing",
+          "group": "Dashboard",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker landing dashboard",
+          "label": "GET /api/dashboard/worker-landing",
+          "tested": true,
+          "count": 3,
+          "avg": 9112.534034666665,
+          "min": 4038.37443,
+          "max": 16338.829388,
+          "statuses": {
+            "200": 3
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/sessions/recent",
+          "group": "Sessions",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Recent sessions visible to user",
+          "label": "GET /api/sessions/recent",
+          "tested": true,
+          "count": 6,
+          "avg": 6786.018822833333,
+          "min": 1589.384917,
+          "max": 12284.157404,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "group": "setup",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Login once during setup to obtain auth token",
+          "label": "POST /api/auth/login",
+          "tested": true,
+          "count": 1,
+          "avg": 0.341411,
+          "min": 0.341411,
+          "max": 0.341411,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-clients",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Assigned clients for support worker",
+          "label": "GET /api/worker/my-clients",
+          "tested": true,
+          "count": 5,
+          "avg": 9375.9139444,
+          "min": 1454.477884,
+          "max": 13080.359674,
+          "statuses": {
+            "200": 5
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-clients/{participant_id}",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Client detail for assigned participant",
+          "label": "GET /api/worker/my-clients/{participant_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 11839.248427,
+          "min": 11839.248427,
+          "max": 11839.248427,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/my-compliance",
+          "group": "Worker",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker-scoped compliance summary",
+          "label": "GET /api/worker/my-compliance",
+          "tested": true,
+          "count": 2,
+          "avg": 6729.9116575,
+          "min": 3562.442103,
+          "max": 9897.381212,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "group": "worker — Health Check",
+          "roles": [
+            "coordinator",
+            "worker"
+          ],
+          "description": "API health check — tested on every iteration",
+          "label": "GET /api/health",
+          "tested": true,
+          "count": 6,
+          "avg": 5112.615803833333,
+          "min": 249.545928,
+          "max": 21897.574326,
+          "statuses": {
+            "200": 6
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/feedback/unread-count",
+          "group": "Worker Performance",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Unread shift feedback count",
+          "label": "GET /api/worker/feedback/unread-count",
+          "tested": true,
+          "count": 2,
+          "avg": 10553.580612,
+          "min": 6645.962991,
+          "max": 14461.198233,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/performance-dashboard",
+          "group": "Worker Performance",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker performance metrics",
+          "label": "GET /api/worker/performance-dashboard",
+          "tested": true,
+          "count": 2,
+          "avg": 10330.999427499999,
+          "min": 6043.725971,
+          "max": 14618.272884,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Shifts for authenticated worker",
+          "label": "GET /api/worker/shifts",
+          "tested": true,
+          "count": 2,
+          "avg": 7616.0687245,
+          "min": 3214.960574,
+          "max": 12017.176875,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts/{shift_id}",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Shift detail (uses first available shift)",
+          "label": "GET /api/worker/shifts/{shift_id}",
+          "tested": true,
+          "count": 1,
+          "avg": 12916.436461,
+          "min": 12916.436461,
+          "max": 12916.436461,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/shifts/counts",
+          "group": "Worker Shifts",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Per-filter shift counts",
+          "label": "GET /api/worker/shifts/counts",
+          "tested": true,
+          "count": 2,
+          "avg": 8570.671394,
+          "min": 3983.973457,
+          "max": 13157.369331,
+          "statuses": {
+            "200": 2
+          },
+          "skipReason": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/worker/training/certifications",
+          "group": "Worker Training",
+          "roles": [
+            "worker"
+          ],
+          "requiresCredentials": true,
+          "description": "Worker certification records",
+          "label": "GET /api/worker/training/certifications",
+          "tested": true,
+          "count": 1,
+          "avg": 6579.572661,
+          "min": 6579.572661,
+          "max": 6579.572661,
+          "statuses": {
+            "200": 1
+          },
+          "skipReason": null
+        }
+      ],
+      "endpoints": {
+        "slowest": [
+          {
+            "name": "GET /api/worker/shifts/{shift_id}",
+            "avg": 12916.436461,
+            "min": 12916.436461,
+            "max": 12916.436461,
+            "count": 1
+          },
+          {
+            "name": "GET /api/worker/my-clients/{participant_id}",
+            "avg": 11839.248427,
+            "min": 11839.248427,
+            "max": 11839.248427,
+            "count": 1
+          },
+          {
+            "name": "GET /api/worker/feedback/unread-count",
+            "avg": 10553.580612,
+            "min": 6645.962991,
+            "max": 14461.198233,
+            "count": 2
+          },
+          {
+            "name": "GET /api/worker/performance-dashboard",
+            "avg": 10330.999427499999,
+            "min": 6043.725971,
+            "max": 14618.272884,
+            "count": 2
+          },
+          {
+            "name": "GET /api/worker/my-clients",
+            "avg": 9375.9139444,
+            "min": 1454.477884,
+            "max": 13080.359674,
+            "count": 5
+          }
+        ],
+        "fastest": [
+          {
+            "name": "POST /api/auth/login",
+            "avg": 0.341411,
+            "min": 0.341411,
+            "max": 0.341411,
+            "count": 1
+          },
+          {
+            "name": "GET /api/alerts",
+            "avg": 4075.9414254999997,
+            "min": 734.373444,
+            "max": 9241.243944,
+            "count": 6
+          },
+          {
+            "name": "GET /api/alerts/unread",
+            "avg": 4998.911382833333,
+            "min": 577.490832,
+            "max": 12322.587647,
+            "count": 6
+          },
+          {
+            "name": "GET /api/health",
+            "avg": 5112.615803833333,
+            "min": 249.545928,
+            "max": 21897.574326,
+            "count": 6
+          },
+          {
+            "name": "GET /api/worker/training/certifications",
+            "avg": 6579.572661,
+            "min": 6579.572661,
+            "max": 6579.572661,
+            "count": 1
+          }
+        ]
+      },
+      "executiveSummary": "Worker: 1 threshold(s) failed. Error rate 0.00%, P95 16339ms.",
+      "allThresholdsPass": false
+    }
+  }
+}
