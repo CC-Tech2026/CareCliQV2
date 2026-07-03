@@ -5,7 +5,7 @@ import { CCQ_TOKEN_KEY } from "@/lib/storage-keys";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
-import { CareCliQLogoSVG } from "@/components/CareCliQLogoSVG";
+import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import {
   ArrowLeft,
   ArrowRight,
@@ -410,7 +410,7 @@ export default function Signup() {
 
         <div className="relative z-10 flex flex-col justify-between h-full">
           <div>
-            <CareCliQLogoSVG size={80} />
+            <CareCliQLogo size={80} />
             <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "var(--auth-marketing-muted)" }}>
               {t("auth.signup.marketing.tagline")}
             </p>

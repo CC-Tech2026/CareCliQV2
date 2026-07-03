@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Loader2, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
-import { CareCliQLogoSVG } from "@/components/CareCliQLogoSVG";
+import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 import {
   getRememberDevicePreference,

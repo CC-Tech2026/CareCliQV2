@@ -36,7 +36,7 @@ interface CareCliQLogoSmProps {
 export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
   return (
     <div className={`flex items-center select-none ${className}`} style={{ backgroundColor: "transparent" }}>
-      <CareCliQLogoSVG size={68} />
+      <CareCliQLogoImage size={68} />
     </div>
   );
 }
