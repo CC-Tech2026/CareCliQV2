@@ -501,21 +501,38 @@ async def transcribe_and_resolve_names(
         
         # Call Whisper
         client = _build_openai_client()
+        logger.debug(f"Transcribing {len(audio_bytes)} bytes with Whisper")
         transcript_response = client.audio.transcriptions.create(
             model="whisper-1",
-            file=("audio.wav", audio_bytes, "audio/wav"),
+            file=("audio.webm", audio_bytes, "audio/webm"),
             response_format="verbose_json",
             language="en",
         )
         
         raw_text = transcript_response.text or ""
+        if not raw_text or raw_text.strip() == "":
+            logger.warning("Whisper returned empty transcript")
+            raise ValueError("Whisper returned empty or inaudible audio")
+        
+        logger.debug(f"Transcription successful: {len(raw_text)} chars")
         raw_transcript_segments = _parse_speaker_segments(raw_text)
+        logger.debug(f"Parsed {len(raw_transcript_segments)} segments")
         
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Transcription failed: %s", exc)
-        raise HTTPException(status_code=422, detail=f"Could not transcribe audio: {exc}")
+        error_detail = str(exc)[:200]
+        # Update session with error status
+        try:
+            supabase.table("plan_meeting_sessions").update({
+                "stage_1_status": "error",
+                "stage_1_error": f"Transcription failed: {error_detail}",
+                "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", session_id).execute()
+        except Exception as db_exc:
+            logger.warning("Failed to update session error status: %s", db_exc)
+        raise HTTPException(status_code=422, detail=f"Could not transcribe audio: {error_detail}")
     
     # ✅ STEP 2: Run Stage 1 prompt (name resolution & cleanup)
     try:
@@ -553,10 +570,30 @@ async def transcribe_and_resolve_names(
         
     except ValueError as exc:
         logger.exception("Stage 1 failed: %s", exc)
-        raise HTTPException(status_code=422, detail=f"Name resolution failed: {exc}")
+        error_detail = str(exc)[:200]
+        # Update session with error status
+        try:
+            supabase.table("plan_meeting_sessions").update({
+                "stage_1_status": "error",
+                "stage_1_error": error_detail,
+                "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", session_id).execute()
+        except Exception as db_exc:
+            logger.warning("Failed to update session error status: %s", db_exc)
+        raise HTTPException(status_code=422, detail=f"Name resolution failed: {error_detail}")
     except Exception as exc:
         logger.exception("Unexpected error in Stage 1: %s", exc)
-        raise HTTPException(status_code=500, detail="Stage 1 processing failed.")
+        error_detail = str(exc)[:200]
+        # Update session with error status
+        try:
+            supabase.table("plan_meeting_sessions").update({
+                "stage_1_status": "error",
+                "stage_1_error": error_detail,
+                "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", session_id).execute()
+        except Exception as db_exc:
+            logger.warning("Failed to update session error status: %s", db_exc)
+        raise HTTPException(status_code=500, detail=f"Stage 1 processing failed: {error_detail}")
     
     # ✅ STEP 3: Try to match participant by resolved names (only if not already set)
     participant_id = session.get("participant_id")  # Use already-set participant_id if available
