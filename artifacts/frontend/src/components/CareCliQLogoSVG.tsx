@@ -6,7 +6,7 @@
 export function CareCliQLogoSVG({ size = 64, className = "" }: { size?: number; className?: string }) {
   return (
     <img
-      src="/carecliQ_logo_new.jpeg"
+      src="/carecliQ_logo_new.png"
       alt="CareCliQ"
       width={size}
       height={size}
