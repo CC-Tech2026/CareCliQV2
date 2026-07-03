@@ -23,6 +23,7 @@ A production-grade, multi-tenant clinical management platform built for Australi
 15. [Generated API Client](#generated-api-client)
 16. [Known Constraints & Workarounds](#known-constraints--workarounds)
 17. [Database Migrations](#database-migrations)
+18. [Performance Testing](#performance-testing)
 
 ---
 
@@ -475,3 +476,97 @@ Key migrations that must be applied for all features:
 | Gendered Body Map | `ALTER TABLE patients ADD COLUMN biological_sex` |
 | RBAC | Create `organizations`, `organization_members`, `invitations` tables |
 | Goals | Create `patient_goals` table |
+
+---
+
+## Performance Testing
+
+Load tests use [k6](https://k6.io/) and automatically generate HTML and JSON reports after every run.
+
+### Running Tests
+
+**Docker (recommended):**
+
+```bash
+docker compose run --rm k6
+```
+
+**Local (requires k6 and Node.js):**
+
+```bash
+./performance/run-test.sh
+```
+
+**Direct k6 (generates a basic report; use `run-test.sh` for full time-series charts):**
+
+```bash
+k6 run performance/load-test.js
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `K6_BASE_URL` | `http://localhost:8000` | API target (`http://backend:8000` in Docker) |
+| `K6_ENV` | `Local` | Environment label: Local / Development / Staging / Production |
+| `K6_TEST_NAME` | `load` | Test name shown in reports |
+| `K6_TEST_EMAIL` | — | Optional login email for authenticated endpoint tests |
+| `K6_TEST_PASSWORD` | — | Optional login password |
+| `K6_SAVE_HISTORY` | `false` | Set `true` to also save timestamped copies in `history/` |
+
+**Example with authenticated endpoints and history:**
+
+```bash
+K6_ENV=Staging K6_TEST_EMAIL=worker@example.com K6_TEST_PASSWORD=secret K6_SAVE_HISTORY=true docker compose run --rm k6
+```
+
+### Opening the HTML Report
+
+After each run, open `performance/reports/report.html` in any browser:
+
+```bash
+# Linux
+xdg-open performance/reports/report.html
+
+# macOS
+open performance/reports/report.html
+```
+
+Reports are overwritten on each run unless `K6_SAVE_HISTORY=true`, which also saves copies to `performance/reports/history/` (e.g. `2026-07-03_14-30_load.html`).
+
+### Understanding Metrics
+
+| Metric | Description |
+|---|---|
+| **Virtual Users (VUs)** | Simulated concurrent users hitting the API |
+| **Total Requests** | All HTTP requests made during the test |
+| **Error Rate** | Percentage of failed requests (non-2xx or check failures) |
+| **RPS** | Requests per second — throughput under load |
+| **Avg / Min / Max Response Time** | End-to-end HTTP latency in milliseconds |
+| **P90 / P95 / P99** | 90th, 95th, 99th percentile latency — tail latency indicators |
+| **Data Sent / Received** | Total bytes transferred; throughput shows rate per second |
+| **Threshold Results** | Pass/fail against defined SLOs (e.g. `p(95)<2000ms`) |
+| **Failed Checks** | k6 assertions that did not pass (status codes, body content) |
+| **Slowest / Fastest Endpoints** | Per-route latency breakdown |
+
+### Common Causes of Failed Thresholds
+
+| Symptom | Likely Cause |
+|---|---|
+| `http_req_duration` p95 failure | Slow database queries, missing indexes, N+1 queries, cold Supabase instance |
+| `http_req_failed` rate failure | Backend down, auth errors, 5xx from unhandled exceptions |
+| `health_duration` failure | Container resource limits, network latency between k6 and backend |
+| Check failures on `/api/participants` | Invalid test credentials, RLS blocking access, org not assigned |
+| High error rate at ramp-up | Connection pool exhaustion, rate limiting on auth endpoint |
+
+### Performance Tuning Recommendations
+
+1. **Database** — Add indexes on foreign keys and frequently filtered columns; review Supabase performance advisors for RLS `auth_rls_initplan` issues.
+2. **API** — Batch related queries instead of sequential fetches; use pagination for list endpoints.
+3. **Auth** — Cache tokens in k6 `setup()` (already done); avoid re-login per iteration.
+4. **Infrastructure** — Upgrade Supabase compute for production; ensure backend and database are in the same region.
+5. **Thresholds** — Start with relaxed thresholds (`p(95)<2000ms`, error rate `<5%`) and tighten as you optimize.
+
+Raw metrics for programmatic analysis are saved to `performance/reports/report.json`.
+
+---

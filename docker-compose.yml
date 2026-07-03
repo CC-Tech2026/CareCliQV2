@@ -48,3 +48,25 @@ services:
     ports:
       - "3000:80"
     restart: unless-stopped
+
+  k6:
+    build:
+      context: .
+      dockerfile: performance/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      K6_BASE_URL: ${K6_BASE_URL:-http://backend:8000}
+      K6_ENV: ${K6_ENV:-Local}
+      K6_TEST_NAME: ${K6_TEST_NAME:-load}
+      K6_COORDINATOR_EMAIL: ${K6_COORDINATOR_EMAIL:-}
+      K6_COORDINATOR_PASSWORD: ${K6_COORDINATOR_PASSWORD:-}
+      K6_WORKER_EMAIL: ${K6_WORKER_EMAIL:-}
+      K6_WORKER_PASSWORD: ${K6_WORKER_PASSWORD:-}
+      K6_SAVE_HISTORY: ${K6_SAVE_HISTORY:-false}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./performance:/app/performance

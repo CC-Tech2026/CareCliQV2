@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Report — load</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+      --text: #0f172a; --muted: #64748b; --accent: #2563eb;
+      --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+    header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 2.5rem 0; margin-bottom: 0; }
+    header .container { padding-top: 0; padding-bottom: 0; }
+    header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    header .meta { opacity: 0.85; font-size: 0.9rem; }
+    .tab-bar { display: flex; gap: 0.25rem; padding: 1rem 1.5rem 0; max-width: 1200px; margin: 0 auto; background: var(--bg); border-bottom: 2px solid var(--border); }
+    .tab-btn { padding: 0.75rem 1.5rem; border: none; background: transparent; color: var(--muted); font-size: 0.95rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .summary-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; border-left: 4px solid var(--pass); }
+    .summary-card h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .summary-card p { font-size: 1.05rem; }
+    .auth-banner { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .auth-banner.auth-ok { background: #dcfce7; border: 1px solid #86efac; }
+    .auth-banner.auth-fail { background: #fee2e2; border: 1px solid #fca5a5; }
+    .pass-text { color: var(--pass); font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+    .metric-card .label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; }
+    .metric-card .value { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .metric-card .sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+    section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    section h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { font-weight: 600; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 1.5rem; }
+    .chart-wrap { position: relative; height: 280px; }
+    .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; }
+    .badge.pass { background: #dcfce7; color: var(--pass); }
+    .badge.fail { background: #fee2e2; color: var(--fail); }
+    .badge.skip { background: #f1f5f9; color: var(--muted); }
+    .method-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.75rem; font-family: monospace; }
+    .fail-text { color: var(--fail); font-weight: 600; }
+    .muted { color: var(--muted); font-style: italic; }
+    .guide { color: var(--muted); font-size: 0.9rem; margin: -0.5rem 0 1rem; line-height: 1.55; }
+    .cell-sub { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; margin-top: 0.25rem; line-height: 1.45; }
+    .hint { display: block; font-size: 0.8rem; color: var(--fail); margin-top: 0.35rem; }
+    .metric-card .tip { font-size: 0.7rem; color: var(--muted); margin-top: 0.35rem; line-height: 1.3; }
+    .status-code { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; }
+    .s2xx { background: #dcfce7; color: #166534; }
+    .s3xx { background: #dbeafe; color: #1e40af; }
+    .s4xx { background: #fef3c7; color: #92400e; }
+    .s5xx { background: #fee2e2; color: #991b1b; }
+    footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; }
+    code { background: #f1f5f9; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.85rem; }
+    @media (max-width: 600px) { .charts-grid { grid-template-columns: 1fr; } .tab-bar { overflow-x: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Performance Test Report</h1>
+      <div class="meta">load &middot; Development &middot; 2026-07-03T03:13:39.540Z</div>
+    </div>
+  </header>
+  <div class="tab-bar"><button class="tab-btn active" data-tab="overview">Overview</button><button class="tab-btn" data-tab="coordinator">Coordinator</button><button class="tab-btn" data-tab="worker">Worker</button></div>
+  <div class="container"><div id="panel-overview" class="tab-panel active"><section>
+    <h2>Role Comparison</h2>
+    <p class="guide">Side-by-side summary for Coordinator vs Worker vs Combined. Each role runs 5 concurrent VUs independently.</p>
+    <table>
+      <thead><tr><th>Role</th><th>Max VUs</th><th>Requests</th><th>RPS</th><th>Error Rate</th><th>Avg</th><th>P95</th><th>Thresholds</th></tr></thead>
+      <tbody><tr>
+      <td><strong>Coordinator</strong></td>
+      <td>5</td>
+      <td>56</td>
+      <td>0.5</td>
+      <td>0.00%</td>
+      <td>7781ms</td>
+      <td>15324ms</td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>Worker</strong></td>
+      <td>5</td>
+      <td>62</td>
+      <td>0.5</td>
+      <td>0.00%</td>
+      <td>7168ms</td>
+      <td>16339ms</td>
+      <td><span class="badge fail">FAIL</span></td>
+    </tr><tr>
+      <td><strong>Combined</strong></td>
+      <td>5</td>
+      <td>118</td>
+      <td>0.9</td>
+      <td>0.00%</td>
+      <td>7459ms</td>
+      <td>16339ms</td>
+      <td><span class="badge fail">FAIL</span></td>
+    </tr></tbody>
+    </table>
+  </section>
+    
+    <div class="summary-card" style="border-left-color:var(--fail)">
+      <h2>Executive Summary — Combined</h2>
+      <p>Combined: 1 threshold(s) failed. Error rate 0.00%, P95 16339ms.</p>
+    </div>
+
+    <section>
+      <h2>Tested API Endpoints</h2>
+      <p class="guide">API routes for <strong>Combined</strong>. <strong>29 of 29</strong> endpoints were called.</p>
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Group</th><th>Status</th><th>Results</th><th>HTTP Status</th></tr></thead>
+        <tbody><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts</code><br><span class="cell-sub">Alert list for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 4723ms &middot; 720–10842ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts/unread</code><br><span class="cell-sub">Unread alerts for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 5065ms &middot; 577–12323ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/auth/me</code><br><span class="cell-sub">Current authenticated user profile</span></td>
+      <td>Auth</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 6356ms &middot; 602–18077ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/compliance/rules</code><br><span class="cell-sub">Compliance rules catalog</span></td>
+      <td>Compliance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 8166ms &middot; 601–15324ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/compliance-overview</code><br><span class="cell-sub">Organisation compliance overview</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 7094ms &middot; 7094–7094ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/goals</code><br><span class="cell-sub">Goals across coordinator caseload</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 10548ms &middot; 10548–10548ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/notifications</code><br><span class="cell-sub">Coordinator notification feed</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 9847ms &middot; 9847–9847ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/shifts</code><br><span class="cell-sub">Shifts visible to coordinator</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 11978ms &middot; 10121–15122ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/team</code><br><span class="cell-sub">Coordinator team roster</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 12424ms &middot; 9604–14079ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/health</code><br><span class="cell-sub">API health check — tested on every iteration</span></td>
+      <td>coordinator — Health Check, worker — Health Check</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 3785ms &middot; 223–21898ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/coordinator</code><br><span class="cell-sub">Coordinator dashboard aggregate data</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 8604ms &middot; 3983–13071ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/worker</code><br><span class="cell-sub">Worker dashboard aggregate data</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>4 calls &middot; avg 8650ms &middot; 2178–16356ms</td>
+      <td><span class="status-code s2xx">200</span> 4</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/worker-landing</code><br><span class="cell-sub">Worker landing dashboard</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 9113ms &middot; 4038–16339ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/incidents</code><br><span class="cell-sub">Incident list (org scope)</span></td>
+      <td>Incidents</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 17762ms &middot; 17762–17762ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants</code><br><span class="cell-sub">List participants for the organisation</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 8822ms &middot; 6092–10988ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants/{participant_id}</code><br><span class="cell-sub">Single participant detail (uses first participant from list)</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 9878ms &middot; 9878–9878ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants/dashboard-stats</code><br><span class="cell-sub">Dashboard statistics for visible participants</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 11379ms &middot; 3322–17906ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/reports/compliance-overview</code><br><span class="cell-sub">Compliance report summary</span></td>
+      <td>Reports</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 13492ms &middot; 13492–13492ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/sessions/recent</code><br><span class="cell-sub">Recent sessions visible to user</span></td>
+      <td>Sessions</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>11 calls &middot; avg 6582ms &middot; 1589–12284ms</td>
+      <td><span class="status-code s2xx">200</span> 11</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#2563eb18;color:#2563eb">POST</span></td>
+      <td><code>/api/auth/login</code><br><span class="cell-sub">Login once during setup to obtain auth token</span></td>
+      <td>setup</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 1175ms &middot; 0–2350ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-clients</code><br><span class="cell-sub">Assigned clients for support worker</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 9376ms &middot; 1454–13080ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-clients/{participant_id}</code><br><span class="cell-sub">Client detail for assigned participant</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 11839ms &middot; 11839–11839ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-compliance</code><br><span class="cell-sub">Worker-scoped compliance summary</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 6730ms &middot; 3562–9897ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/feedback/unread-count</code><br><span class="cell-sub">Unread shift feedback count</span></td>
+      <td>Worker Performance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 10554ms &middot; 6646–14461ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/performance-dashboard</code><br><span class="cell-sub">Worker performance metrics</span></td>
+      <td>Worker Performance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 10331ms &middot; 6044–14618ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts</code><br><span class="cell-sub">Shifts for authenticated worker</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 7616ms &middot; 3215–12017ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts/{shift_id}</code><br><span class="cell-sub">Shift detail (uses first available shift)</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 12916ms &middot; 12916–12916ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts/counts</code><br><span class="cell-sub">Per-filter shift counts</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 8571ms &middot; 3984–13157ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/training/certifications</code><br><span class="cell-sub">Worker certification records</span></td>
+      <td>Worker Training</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 6580ms &middot; 6580–6580ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <div class="grid">
+      <div class="metric-card"><div class="label">Test Duration</div><div class="value">2m 5s</div><div class="tip">How long the load test ran, including ramp-up and ramp-down.</div></div>
+      <div class="metric-card"><div class="label">Virtual Users (max)</div><div class="value">5</div><div class="tip">Peak simulated concurrent users during the test.</div></div>
+      <div class="metric-card"><div class="label">Total Requests</div><div class="value">118</div><div class="tip">All HTTP calls made. Higher VUs + longer test = more requests.</div></div>
+      <div class="metric-card"><div class="label">Successful</div><div class="value" style="color:var(--pass)">118</div><div class="tip">Requests that returned 2xx without network errors.</div></div>
+      <div class="metric-card"><div class="label">Failed</div><div class="value" style="color:var(--fail)">0</div><div class="tip">Requests that errored or returned non-2xx status.</div></div>
+      <div class="metric-card"><div class="label">Error Rate</div><div class="value">0.00%</div><div class="tip">Failed ÷ total. Above 5% usually indicates a real problem.</div></div>
+      <div class="metric-card"><div class="label">RPS</div><div class="value">0.9</div><div class="tip">Throughput — how many requests the server handled per second.</div></div>
+      <div class="metric-card"><div class="label">Avg Response</div><div class="value">7459ms</div><div class="tip">Mean latency. Can hide slow outliers — check P95 too.</div></div>
+      <div class="metric-card"><div class="label">P95</div><div class="value">16339ms</div><div class="tip">95% of requests were faster than this. Key SLO metric.</div></div>
+      <div class="metric-card"><div class="label">Data Sent</div><div class="value">57.2 KB</div><div class="sub">467.95/s</div><div class="tip">Upload bandwidth used by the test.</div></div>
+      <div class="metric-card"><div class="label">Data Received</div><div class="value">11.34 MB</div><div class="sub">95021.81/s</div><div class="tip">Download bandwidth from API responses.</div></div>
+    </div>
+
+    <section>
+      <h2>Response Time Percentiles</h2>
+      <p class="guide">Percentiles show the distribution of response times. P50 (median) is typical speed; P95/P99 reveal slow requests that affect real users. A low average with a high P95 means most requests are fast but some are very slow.</p>
+      <div class="grid">
+        <div class="metric-card"><div class="label">Minimum</div><div class="value">0ms</div></div>
+        <div class="metric-card"><div class="label">Average</div><div class="value">7459ms</div></div>
+        <div class="metric-card"><div class="label">Maximum</div><div class="value">21898ms</div></div>
+        <div class="metric-card"><div class="label">P90</div><div class="value">14079ms</div></div>
+        <div class="metric-card"><div class="label">P95</div><div class="value">16339ms</div></div>
+        <div class="metric-card"><div class="label">P99</div><div class="value">18077ms</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Charts</h2>
+      <p class="guide">These graphs show how the system behaved over the course of the test — not just final numbers. Look for error rate spikes, response time climbing with VUs, and whether performance stabilised after ramp-up.</p>
+      <div class="charts-grid">
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Over Time</h3><p class="guide">Average latency per time bucket. Rising lines under steady VUs suggest the server is struggling.</p><div class="chart-wrap"><canvas id="chartResponseTime-overview"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Requests Per Second</h3><p class="guide">Throughput over time. Should roughly track active VUs. Drops may indicate errors or timeouts.</p><div class="chart-wrap"><canvas id="chartRps-overview"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Active Virtual Users</h3><p class="guide">How many simulated users were active. The ramp-up/ramp-down pattern is defined in the test script.</p><div class="chart-wrap"><canvas id="chartVus-overview"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Error Rate</h3><p class="guide">Percentage of failed requests over time. Should stay near 0%. Spikes often correlate with ramp-up or server limits.</p><div class="chart-wrap"><canvas id="chartErrors-overview"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Distribution</h3><p class="guide">How requests are spread across latency buckets. A bar shifted right means more slow requests.</p><div class="chart-wrap"><canvas id="chartHistogram-overview"></canvas></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Threshold Results</h2>
+      <p class="guide">Thresholds are pass/fail performance budgets (SLOs) set before the test runs. They are defined in <code>performance/load-test.js</code>. PASS means the server met the budget under load; FAIL means it did not and needs investigation.</p>
+      <table>
+        <thead><tr><th>Metric &amp; Purpose</th><th>Rule &amp; Meaning</th><th>Result</th></tr></thead>
+        <tbody><tr>
+      <td><strong>http_req_duration</strong><br><span class="cell-sub">Total time for each HTTP request (send → response). Lower is better. This is the main speed metric.</span></td>
+      <td><code>p(95)&lt;20000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>http_req_failed</strong><br><span class="cell-sub">Percentage of requests that returned an error (network failure or non-2xx status). Should stay near 0%.</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>health_duration</strong><br><span class="cell-sub">Response time for GET /api/health only. A lightweight ping — should be the fastest endpoint.</span></td>
+      <td><code>p(95)&lt;15000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span><br><span class="hint">Why it failed: P95 was 16339ms. Check slow endpoints, database queries, or cold-start latency (common on Render free tier).</span></td>
+      <td><span class="badge fail">FAIL</span></td>
+    </tr><tr>
+      <td><strong>errors</strong><br><span class="cell-sub">Percentage of test assertions that failed (e.g. wrong status code or missing body text).</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Failed Checks</h2>
+      <p class="guide">Checks validate response content (e.g. "status is 200", "body contains healthy"). Unlike thresholds, these are per-assertion pass/fail counts. A failed check means the API returned something unexpected — even if it was fast.</p>
+      <table>
+        <thead><tr><th>Check</th><th>Passes</th><th>Fails</th></tr></thead>
+        <tbody><tr><td colspan="3" class="muted">No failed checks</td></tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>HTTP Status Code Distribution</h2>
+      <p class="guide">Breakdown of HTTP status codes returned. Healthy tests are mostly 2xx (green). 4xx = client/auth errors; 5xx = server errors.</p>
+      <table>
+        <thead><tr><th>Status Code</th><th>Count</th></tr></thead>
+        <tbody><tr><td><span class="status-code s2xx">200</span></td><td>118</td></tr></tbody>
+      </table>
+    </section>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+      <section>
+        <h2>Slowest Endpoints</h2>
+        <p class="guide">Routes with the highest average response time. Optimise these first — they are the biggest contributors to slow P95.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>GET /api/incidents</td><td>17762ms</td><td>17762ms</td><td>17762ms</td><td>1</td></tr><tr><td>GET /api/reports/compliance-overview</td><td>13492ms</td><td>13492ms</td><td>13492ms</td><td>1</td></tr><tr><td>GET /api/worker/shifts/{shift_id}</td><td>12916ms</td><td>12916ms</td><td>12916ms</td><td>1</td></tr><tr><td>GET /api/coordinator/team</td><td>12424ms</td><td>9604ms</td><td>14079ms</td><td>3</td></tr><tr><td>GET /api/coordinator/shifts</td><td>11978ms</td><td>10121ms</td><td>15122ms</td><td>3</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Fastest Endpoints</h2>
+        <p class="guide">Routes with the lowest average response time. Use as a baseline — if even simple endpoints are slow, the issue is likely infrastructure (cold start, DB, network) not application logic.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>POST /api/auth/login</td><td>1175ms</td><td>0ms</td><td>2350ms</td><td>2</td></tr><tr><td>GET /api/health</td><td>3785ms</td><td>223ms</td><td>21898ms</td><td>11</td></tr><tr><td>GET /api/alerts</td><td>4723ms</td><td>720ms</td><td>10842ms</td><td>11</td></tr><tr><td>GET /api/alerts/unread</td><td>5065ms</td><td>577ms</td><td>12323ms</td><td>11</td></tr><tr><td>GET /api/auth/me</td><td>6356ms</td><td>602ms</td><td>18077ms</td><td>11</td></tr></tbody>
+        </table>
+      </section>
+    </div>
+    <script data-panel="-overview">
+    (function() {
+      const chartDefaults = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+      const charts = {"responseTimeSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[1175.2915005,598.7707180000001,848.7524088,1896.1874879000002,4312.9857595,3644.3890492,3705.4078460833334,6989.58438275,7499.2635154,6031.8172705,8830.523473199999,6997.884240666666,11451.296879499998,11753.5243434,12916.028237,12696.935066499998,8959.2095975,10385.00569,11352.142597,14550.089631666668,18257.923605,14889.3329425,14138.912521666667,875.58119525]},"rpsSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[0.4,0.6,1,2,1.2,1,2.4,0.8,2,0.4,2,0.6,0.8,1,0.4,1.6,0.4,1,0.4,0.6,0.4,1.2,0.6,0.8]},"vusSeries":{"labels":[],"values":[]},"errorSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},"histogram":{"labels":["<100ms","100-250ms","250-500ms","500ms-1s","1-2s",">2s"],"values":[17,0,0,0,0,83]}};
+      const sid = (id) => id + "-overview";
+      new Chart(document.getElementById(sid('chartResponseTime')), {
+        type: 'line',
+        data: { labels: charts.responseTimeSeries.labels, datasets: [{ data: charts.responseTimeSeries.values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'ms' } } } }
+      });
+      new Chart(document.getElementById(sid('chartRps')), {
+        type: 'line',
+        data: { labels: charts.rpsSeries.labels, datasets: [{ data: charts.rpsSeries.values, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'req/s' } } } }
+      });
+      new Chart(document.getElementById(sid('chartVus')), {
+        type: 'line',
+        data: { labels: charts.vusSeries.labels, datasets: [{ data: charts.vusSeries.values, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)', fill: true, tension: 0.3, stepped: true, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'VUs' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartErrors')), {
+        type: 'line',
+        data: { labels: charts.errorSeries.labels, datasets: [{ data: charts.errorSeries.values, borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '%' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartHistogram')), {
+        type: 'bar',
+        data: { labels: charts.histogram.labels, datasets: [{ data: charts.histogram.values, backgroundColor: ['#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e3a5f'] }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '% of samples' }, beginAtZero: true } } }
+      });
+    })();
+    </script></div><div id="panel-coordinator" class="tab-panel">
+    <div class="auth-banner auth-ok">
+        <strong>Coordinator account:</strong> sa***@sunshine-demo.com
+        &middot; Login: <span class="pass-text">OK</span>
+      </div>
+    <div class="summary-card" style="border-left-color:var(--pass)">
+      <h2>Executive Summary — Coordinator</h2>
+      <p>Coordinator: 56 requests at 0.5 RPS, 0.00% error rate, P95 15324ms.</p>
+    </div>
+
+    <section>
+      <h2>Tested API Endpoints</h2>
+      <p class="guide">API routes for <strong>Coordinator</strong>. <strong>18 of 18</strong> endpoints were called.</p>
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Group</th><th>Status</th><th>Results</th><th>HTTP Status</th></tr></thead>
+        <tbody><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts</code><br><span class="cell-sub">Alert list for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 5499ms &middot; 720–10842ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts/unread</code><br><span class="cell-sub">Unread alerts for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 5144ms &middot; 951–9234ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/auth/me</code><br><span class="cell-sub">Current authenticated user profile</span></td>
+      <td>Auth</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 4429ms &middot; 733–9629ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/compliance/rules</code><br><span class="cell-sub">Compliance rules catalog</span></td>
+      <td>Compliance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 9353ms &middot; 1652–15324ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/compliance-overview</code><br><span class="cell-sub">Organisation compliance overview</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 7094ms &middot; 7094–7094ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/goals</code><br><span class="cell-sub">Goals across coordinator caseload</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 10548ms &middot; 10548–10548ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/notifications</code><br><span class="cell-sub">Coordinator notification feed</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 9847ms &middot; 9847–9847ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/shifts</code><br><span class="cell-sub">Shifts visible to coordinator</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 11978ms &middot; 10121–15122ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/coordinator/team</code><br><span class="cell-sub">Coordinator team roster</span></td>
+      <td>Coordinator</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 12424ms &middot; 9604–14079ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/health</code><br><span class="cell-sub">API health check — tested on every iteration</span></td>
+      <td>coordinator — Health Check</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 2192ms &middot; 223–5385ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/coordinator</code><br><span class="cell-sub">Coordinator dashboard aggregate data</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 8604ms &middot; 3983–13071ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/incidents</code><br><span class="cell-sub">Incident list (org scope)</span></td>
+      <td>Incidents</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 17762ms &middot; 17762–17762ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants</code><br><span class="cell-sub">List participants for the organisation</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 8822ms &middot; 6092–10988ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants/{participant_id}</code><br><span class="cell-sub">Single participant detail (uses first participant from list)</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 9878ms &middot; 9878–9878ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/participants/dashboard-stats</code><br><span class="cell-sub">Dashboard statistics for visible participants</span></td>
+      <td>Participants</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 11379ms &middot; 3322–17906ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/reports/compliance-overview</code><br><span class="cell-sub">Compliance report summary</span></td>
+      <td>Reports</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 13492ms &middot; 13492–13492ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/sessions/recent</code><br><span class="cell-sub">Recent sessions visible to user</span></td>
+      <td>Sessions</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 6337ms &middot; 4032–9595ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#2563eb18;color:#2563eb">POST</span></td>
+      <td><code>/api/auth/login</code><br><span class="cell-sub">Login once during setup to obtain auth token</span></td>
+      <td>setup</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 2350ms &middot; 2350–2350ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <div class="grid">
+      <div class="metric-card"><div class="label">Test Duration</div><div class="value">2m 1s</div><div class="tip">How long the load test ran, including ramp-up and ramp-down.</div></div>
+      <div class="metric-card"><div class="label">Virtual Users (max)</div><div class="value">5</div><div class="tip">Peak simulated concurrent users during the test.</div></div>
+      <div class="metric-card"><div class="label">Total Requests</div><div class="value">56</div><div class="tip">All HTTP calls made. Higher VUs + longer test = more requests.</div></div>
+      <div class="metric-card"><div class="label">Successful</div><div class="value" style="color:var(--pass)">56</div><div class="tip">Requests that returned 2xx without network errors.</div></div>
+      <div class="metric-card"><div class="label">Failed</div><div class="value" style="color:var(--fail)">0</div><div class="tip">Requests that errored or returned non-2xx status.</div></div>
+      <div class="metric-card"><div class="label">Error Rate</div><div class="value">0.00%</div><div class="tip">Failed ÷ total. Above 5% usually indicates a real problem.</div></div>
+      <div class="metric-card"><div class="label">RPS</div><div class="value">0.5</div><div class="tip">Throughput — how many requests the server handled per second.</div></div>
+      <div class="metric-card"><div class="label">Avg Response</div><div class="value">7781ms</div><div class="tip">Mean latency. Can hide slow outliers — check P95 too.</div></div>
+      <div class="metric-card"><div class="label">P95</div><div class="value">15324ms</div><div class="tip">95% of requests were faster than this. Key SLO metric.</div></div>
+      <div class="metric-card"><div class="label">Data Sent</div><div class="value">34.8 KB</div><div class="sub">294.05/s</div><div class="tip">Upload bandwidth used by the test.</div></div>
+      <div class="metric-card"><div class="label">Data Received</div><div class="value">7.76 MB</div><div class="sub">67098.66/s</div><div class="tip">Download bandwidth from API responses.</div></div>
+    </div>
+
+    <section>
+      <h2>Response Time Percentiles</h2>
+      <p class="guide">Percentiles show the distribution of response times. P50 (median) is typical speed; P95/P99 reveal slow requests that affect real users. A low average with a high P95 means most requests are fast but some are very slow.</p>
+      <div class="grid">
+        <div class="metric-card"><div class="label">Minimum</div><div class="value">223ms</div></div>
+        <div class="metric-card"><div class="label">Average</div><div class="value">7781ms</div></div>
+        <div class="metric-card"><div class="label">Maximum</div><div class="value">17906ms</div></div>
+        <div class="metric-card"><div class="label">P90</div><div class="value">13587ms</div></div>
+        <div class="metric-card"><div class="label">P95</div><div class="value">15324ms</div></div>
+        <div class="metric-card"><div class="label">P99</div><div class="value">17906ms</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Charts</h2>
+      <p class="guide">These graphs show how the system behaved over the course of the test — not just final numbers. Look for error rate spikes, response time climbing with VUs, and whether performance stabilised after ramp-up.</p>
+      <div class="charts-grid">
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Over Time</h3><p class="guide">Average latency per time bucket. Rising lines under steady VUs suggest the server is struggling.</p><div class="chart-wrap"><canvas id="chartResponseTime-coordinator"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Requests Per Second</h3><p class="guide">Throughput over time. Should roughly track active VUs. Drops may indicate errors or timeouts.</p><div class="chart-wrap"><canvas id="chartRps-coordinator"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Active Virtual Users</h3><p class="guide">How many simulated users were active. The ramp-up/ramp-down pattern is defined in the test script.</p><div class="chart-wrap"><canvas id="chartVus-coordinator"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Error Rate</h3><p class="guide">Percentage of failed requests over time. Should stay near 0%. Spikes often correlate with ramp-up or server limits.</p><div class="chart-wrap"><canvas id="chartErrors-coordinator"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Distribution</h3><p class="guide">How requests are spread across latency buckets. A bar shifted right means more slow requests.</p><div class="chart-wrap"><canvas id="chartHistogram-coordinator"></canvas></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Threshold Results</h2>
+      <p class="guide">Thresholds are pass/fail performance budgets (SLOs) set before the test runs. They are defined in <code>performance/load-test.js</code>. PASS means the server met the budget under load; FAIL means it did not and needs investigation.</p>
+      <table>
+        <thead><tr><th>Metric &amp; Purpose</th><th>Rule &amp; Meaning</th><th>Result</th></tr></thead>
+        <tbody><tr>
+      <td><strong>http_req_duration</strong><br><span class="cell-sub">Total time for each HTTP request (send → response). Lower is better. This is the main speed metric.</span></td>
+      <td><code>p(95)&lt;20000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>http_req_failed</strong><br><span class="cell-sub">Percentage of requests that returned an error (network failure or non-2xx status). Should stay near 0%.</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>health_duration</strong><br><span class="cell-sub">Response time for GET /api/health only. A lightweight ping — should be the fastest endpoint.</span></td>
+      <td><code>p(95)&lt;15000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>errors</strong><br><span class="cell-sub">Percentage of test assertions that failed (e.g. wrong status code or missing body text).</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Failed Checks</h2>
+      <p class="guide">Checks validate response content (e.g. "status is 200", "body contains healthy"). Unlike thresholds, these are per-assertion pass/fail counts. A failed check means the API returned something unexpected — even if it was fast.</p>
+      <table>
+        <thead><tr><th>Check</th><th>Passes</th><th>Fails</th></tr></thead>
+        <tbody><tr><td colspan="3" class="muted">No failed checks</td></tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>HTTP Status Code Distribution</h2>
+      <p class="guide">Breakdown of HTTP status codes returned. Healthy tests are mostly 2xx (green). 4xx = client/auth errors; 5xx = server errors.</p>
+      <table>
+        <thead><tr><th>Status Code</th><th>Count</th></tr></thead>
+        <tbody><tr><td><span class="status-code s2xx">200</span></td><td>56</td></tr></tbody>
+      </table>
+    </section>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+      <section>
+        <h2>Slowest Endpoints</h2>
+        <p class="guide">Routes with the highest average response time. Optimise these first — they are the biggest contributors to slow P95.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>GET /api/incidents</td><td>17762ms</td><td>17762ms</td><td>17762ms</td><td>1</td></tr><tr><td>GET /api/reports/compliance-overview</td><td>13492ms</td><td>13492ms</td><td>13492ms</td><td>1</td></tr><tr><td>GET /api/coordinator/team</td><td>12424ms</td><td>9604ms</td><td>14079ms</td><td>3</td></tr><tr><td>GET /api/coordinator/shifts</td><td>11978ms</td><td>10121ms</td><td>15122ms</td><td>3</td></tr><tr><td>GET /api/participants/dashboard-stats</td><td>11379ms</td><td>3322ms</td><td>17906ms</td><td>5</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Fastest Endpoints</h2>
+        <p class="guide">Routes with the lowest average response time. Use as a baseline — if even simple endpoints are slow, the issue is likely infrastructure (cold start, DB, network) not application logic.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>GET /api/health</td><td>2192ms</td><td>223ms</td><td>5385ms</td><td>5</td></tr><tr><td>POST /api/auth/login</td><td>2350ms</td><td>2350ms</td><td>2350ms</td><td>1</td></tr><tr><td>GET /api/auth/me</td><td>4429ms</td><td>733ms</td><td>9629ms</td><td>5</td></tr><tr><td>GET /api/alerts/unread</td><td>5144ms</td><td>951ms</td><td>9234ms</td><td>5</td></tr><tr><td>GET /api/alerts</td><td>5499ms</td><td>720ms</td><td>10842ms</td><td>5</td></tr></tbody>
+        </table>
+      </section>
+    </div>
+    <script data-panel="-coordinator">
+    (function() {
+      const chartDefaults = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+      const charts = {"responseTimeSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:20 AM","3:13:30 AM"],"values":[2350.24159,628.01628,801.3980326666666,2099.1668485000005,5998.977369,3827.625238666666,3734.338522833333,4976.463117,8348.836973599999,5417.67155,9851.3242744,6997.884240666666,9181.265592,10993.388683,15324.004057,11981.53604925,7974.865185,9871.9321605,11352.142597,15674.6567245,14160.293024499997,9878.380405]},"rpsSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:20 AM","3:13:30 AM"],"values":[0.2,0.2,0.6,0.8,0.4,0.6,1.2,0.2,1,0.2,1,0.6,0.2,0.6,0.2,0.8,0.2,0.4,0.4,0.4,0.8,0.2]},"vusSeries":{"labels":[],"values":[]},"errorSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:30 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:05 AM","3:13:10 AM","3:13:20 AM","3:13:30 AM"],"values":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},"histogram":{"labels":["<100ms","100-250ms","250-500ms","500ms-1s","1-2s",">2s"],"values":[0,17,0,0,0,83]}};
+      const sid = (id) => id + "-coordinator";
+      new Chart(document.getElementById(sid('chartResponseTime')), {
+        type: 'line',
+        data: { labels: charts.responseTimeSeries.labels, datasets: [{ data: charts.responseTimeSeries.values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'ms' } } } }
+      });
+      new Chart(document.getElementById(sid('chartRps')), {
+        type: 'line',
+        data: { labels: charts.rpsSeries.labels, datasets: [{ data: charts.rpsSeries.values, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'req/s' } } } }
+      });
+      new Chart(document.getElementById(sid('chartVus')), {
+        type: 'line',
+        data: { labels: charts.vusSeries.labels, datasets: [{ data: charts.vusSeries.values, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)', fill: true, tension: 0.3, stepped: true, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'VUs' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartErrors')), {
+        type: 'line',
+        data: { labels: charts.errorSeries.labels, datasets: [{ data: charts.errorSeries.values, borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '%' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartHistogram')), {
+        type: 'bar',
+        data: { labels: charts.histogram.labels, datasets: [{ data: charts.histogram.values, backgroundColor: ['#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e3a5f'] }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '% of samples' }, beginAtZero: true } } }
+      });
+    })();
+    </script></div><div id="panel-worker" class="tab-panel">
+    <div class="auth-banner auth-ok">
+        <strong>Worker account:</strong> ha***@yopmail.com
+        &middot; Login: <span class="pass-text">OK</span>
+      </div>
+    <div class="summary-card" style="border-left-color:var(--fail)">
+      <h2>Executive Summary — Worker</h2>
+      <p>Worker: 1 threshold(s) failed. Error rate 0.00%, P95 16339ms.</p>
+    </div>
+
+    <section>
+      <h2>Tested API Endpoints</h2>
+      <p class="guide">API routes for <strong>Worker</strong>. <strong>18 of 18</strong> endpoints were called.</p>
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Group</th><th>Status</th><th>Results</th><th>HTTP Status</th></tr></thead>
+        <tbody><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts</code><br><span class="cell-sub">Alert list for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 4076ms &middot; 734–9241ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/alerts/unread</code><br><span class="cell-sub">Unread alerts for current user</span></td>
+      <td>Alerts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 4999ms &middot; 577–12323ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/auth/me</code><br><span class="cell-sub">Current authenticated user profile</span></td>
+      <td>Auth</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 7962ms &middot; 602–18077ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/compliance/rules</code><br><span class="cell-sub">Compliance rules catalog</span></td>
+      <td>Compliance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 7176ms &middot; 601–14495ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/worker</code><br><span class="cell-sub">Worker dashboard aggregate data</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>4 calls &middot; avg 8650ms &middot; 2178–16356ms</td>
+      <td><span class="status-code s2xx">200</span> 4</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/dashboard/worker-landing</code><br><span class="cell-sub">Worker landing dashboard</span></td>
+      <td>Dashboard</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>3 calls &middot; avg 9113ms &middot; 4038–16339ms</td>
+      <td><span class="status-code s2xx">200</span> 3</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/sessions/recent</code><br><span class="cell-sub">Recent sessions visible to user</span></td>
+      <td>Sessions</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 6786ms &middot; 1589–12284ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#2563eb18;color:#2563eb">POST</span></td>
+      <td><code>/api/auth/login</code><br><span class="cell-sub">Login once during setup to obtain auth token</span></td>
+      <td>setup</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 0ms &middot; 0–0ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-clients</code><br><span class="cell-sub">Assigned clients for support worker</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>5 calls &middot; avg 9376ms &middot; 1454–13080ms</td>
+      <td><span class="status-code s2xx">200</span> 5</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-clients/{participant_id}</code><br><span class="cell-sub">Client detail for assigned participant</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 11839ms &middot; 11839–11839ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/my-compliance</code><br><span class="cell-sub">Worker-scoped compliance summary</span></td>
+      <td>Worker</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 6730ms &middot; 3562–9897ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/health</code><br><span class="cell-sub">API health check — tested on every iteration</span></td>
+      <td>worker — Health Check</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>6 calls &middot; avg 5113ms &middot; 250–21898ms</td>
+      <td><span class="status-code s2xx">200</span> 6</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/feedback/unread-count</code><br><span class="cell-sub">Unread shift feedback count</span></td>
+      <td>Worker Performance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 10554ms &middot; 6646–14461ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/performance-dashboard</code><br><span class="cell-sub">Worker performance metrics</span></td>
+      <td>Worker Performance</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 10331ms &middot; 6044–14618ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts</code><br><span class="cell-sub">Shifts for authenticated worker</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 7616ms &middot; 3215–12017ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts/{shift_id}</code><br><span class="cell-sub">Shift detail (uses first available shift)</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 12916ms &middot; 12916–12916ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/shifts/counts</code><br><span class="cell-sub">Per-filter shift counts</span></td>
+      <td>Worker Shifts</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>2 calls &middot; avg 8571ms &middot; 3984–13157ms</td>
+      <td><span class="status-code s2xx">200</span> 2</td>
+    </tr><tr>
+      <td><span class="method-badge" style="background:#16a34a18;color:#16a34a">GET</span></td>
+      <td><code>/api/worker/training/certifications</code><br><span class="cell-sub">Worker certification records</span></td>
+      <td>Worker Training</td>
+      <td><span class="badge pass">TESTED</span></td>
+      <td>1 calls &middot; avg 6580ms &middot; 6580–6580ms</td>
+      <td><span class="status-code s2xx">200</span> 1</td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <div class="grid">
+      <div class="metric-card"><div class="label">Test Duration</div><div class="value">2m 5s</div><div class="tip">How long the load test ran, including ramp-up and ramp-down.</div></div>
+      <div class="metric-card"><div class="label">Virtual Users (max)</div><div class="value">5</div><div class="tip">Peak simulated concurrent users during the test.</div></div>
+      <div class="metric-card"><div class="label">Total Requests</div><div class="value">62</div><div class="tip">All HTTP calls made. Higher VUs + longer test = more requests.</div></div>
+      <div class="metric-card"><div class="label">Successful</div><div class="value" style="color:var(--pass)">62</div><div class="tip">Requests that returned 2xx without network errors.</div></div>
+      <div class="metric-card"><div class="label">Failed</div><div class="value" style="color:var(--fail)">0</div><div class="tip">Requests that errored or returned non-2xx status.</div></div>
+      <div class="metric-card"><div class="label">Error Rate</div><div class="value">0.00%</div><div class="tip">Failed ÷ total. Above 5% usually indicates a real problem.</div></div>
+      <div class="metric-card"><div class="label">RPS</div><div class="value">0.5</div><div class="tip">Throughput — how many requests the server handled per second.</div></div>
+      <div class="metric-card"><div class="label">Avg Response</div><div class="value">7168ms</div><div class="tip">Mean latency. Can hide slow outliers — check P95 too.</div></div>
+      <div class="metric-card"><div class="label">P95</div><div class="value">16339ms</div><div class="tip">95% of requests were faster than this. Key SLO metric.</div></div>
+      <div class="metric-card"><div class="label">Data Sent</div><div class="value">22.4 KB</div><div class="sub">183.00/s</div><div class="tip">Upload bandwidth used by the test.</div></div>
+      <div class="metric-card"><div class="label">Data Received</div><div class="value">3.58 MB</div><div class="sub">30000.88/s</div><div class="tip">Download bandwidth from API responses.</div></div>
+    </div>
+
+    <section>
+      <h2>Response Time Percentiles</h2>
+      <p class="guide">Percentiles show the distribution of response times. P50 (median) is typical speed; P95/P99 reveal slow requests that affect real users. A low average with a high P95 means most requests are fast but some are very slow.</p>
+      <div class="grid">
+        <div class="metric-card"><div class="label">Minimum</div><div class="value">0ms</div></div>
+        <div class="metric-card"><div class="label">Average</div><div class="value">7168ms</div></div>
+        <div class="metric-card"><div class="label">Maximum</div><div class="value">21898ms</div></div>
+        <div class="metric-card"><div class="label">P90</div><div class="value">14461ms</div></div>
+        <div class="metric-card"><div class="label">P95</div><div class="value">16339ms</div></div>
+        <div class="metric-card"><div class="label">P99</div><div class="value">21898ms</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Charts</h2>
+      <p class="guide">These graphs show how the system behaved over the course of the test — not just final numbers. Look for error rate spikes, response time climbing with VUs, and whether performance stabilised after ramp-up.</p>
+      <div class="charts-grid">
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Over Time</h3><p class="guide">Average latency per time bucket. Rising lines under steady VUs suggest the server is struggling.</p><div class="chart-wrap"><canvas id="chartResponseTime-worker"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Requests Per Second</h3><p class="guide">Throughput over time. Should roughly track active VUs. Drops may indicate errors or timeouts.</p><div class="chart-wrap"><canvas id="chartRps-worker"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Active Virtual Users</h3><p class="guide">How many simulated users were active. The ramp-up/ramp-down pattern is defined in the test script.</p><div class="chart-wrap"><canvas id="chartVus-worker"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Error Rate</h3><p class="guide">Percentage of failed requests over time. Should stay near 0%. Spikes often correlate with ramp-up or server limits.</p><div class="chart-wrap"><canvas id="chartErrors-worker"></canvas></div></div>
+        <div><h3 style="font-size:0.95rem;margin-bottom:0.75rem;color:var(--muted)">Response Time Distribution</h3><p class="guide">How requests are spread across latency buckets. A bar shifted right means more slow requests.</p><div class="chart-wrap"><canvas id="chartHistogram-worker"></canvas></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Threshold Results</h2>
+      <p class="guide">Thresholds are pass/fail performance budgets (SLOs) set before the test runs. They are defined in <code>performance/load-test.js</code>. PASS means the server met the budget under load; FAIL means it did not and needs investigation.</p>
+      <table>
+        <thead><tr><th>Metric &amp; Purpose</th><th>Rule &amp; Meaning</th><th>Result</th></tr></thead>
+        <tbody><tr>
+      <td><strong>http_req_duration</strong><br><span class="cell-sub">Total time for each HTTP request (send → response). Lower is better. This is the main speed metric.</span></td>
+      <td><code>p(95)&lt;20000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>http_req_failed</strong><br><span class="cell-sub">Percentage of requests that returned an error (network failure or non-2xx status). Should stay near 0%.</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr><tr>
+      <td><strong>health_duration</strong><br><span class="cell-sub">Response time for GET /api/health only. A lightweight ping — should be the fastest endpoint.</span></td>
+      <td><code>p(95)&lt;15000</code><br><span class="cell-sub">95th percentile latency must stay below the limit. 5% of requests may be slower, but 95% must be within budget.</span><br><span class="hint">Why it failed: P95 was 16339ms. Check slow endpoints, database queries, or cold-start latency (common on Render free tier).</span></td>
+      <td><span class="badge fail">FAIL</span></td>
+    </tr><tr>
+      <td><strong>errors</strong><br><span class="cell-sub">Percentage of test assertions that failed (e.g. wrong status code or missing body text).</span></td>
+      <td><code>rate&lt;0.05</code><br><span class="cell-sub">Fewer than 5% of requests may fail. Allows minor transient errors but flags systemic problems.</span></td>
+      <td><span class="badge pass">PASS</span></td>
+    </tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Failed Checks</h2>
+      <p class="guide">Checks validate response content (e.g. "status is 200", "body contains healthy"). Unlike thresholds, these are per-assertion pass/fail counts. A failed check means the API returned something unexpected — even if it was fast.</p>
+      <table>
+        <thead><tr><th>Check</th><th>Passes</th><th>Fails</th></tr></thead>
+        <tbody><tr><td colspan="3" class="muted">No failed checks</td></tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>HTTP Status Code Distribution</h2>
+      <p class="guide">Breakdown of HTTP status codes returned. Healthy tests are mostly 2xx (green). 4xx = client/auth errors; 5xx = server errors.</p>
+      <table>
+        <thead><tr><th>Status Code</th><th>Count</th></tr></thead>
+        <tbody><tr><td><span class="status-code s2xx">200</span></td><td>62</td></tr></tbody>
+      </table>
+    </section>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+      <section>
+        <h2>Slowest Endpoints</h2>
+        <p class="guide">Routes with the highest average response time. Optimise these first — they are the biggest contributors to slow P95.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>GET /api/worker/shifts/{shift_id}</td><td>12916ms</td><td>12916ms</td><td>12916ms</td><td>1</td></tr><tr><td>GET /api/worker/my-clients/{participant_id}</td><td>11839ms</td><td>11839ms</td><td>11839ms</td><td>1</td></tr><tr><td>GET /api/worker/feedback/unread-count</td><td>10554ms</td><td>6646ms</td><td>14461ms</td><td>2</td></tr><tr><td>GET /api/worker/performance-dashboard</td><td>10331ms</td><td>6044ms</td><td>14618ms</td><td>2</td></tr><tr><td>GET /api/worker/my-clients</td><td>9376ms</td><td>1454ms</td><td>13080ms</td><td>5</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Fastest Endpoints</h2>
+        <p class="guide">Routes with the lowest average response time. Use as a baseline — if even simple endpoints are slow, the issue is likely infrastructure (cold start, DB, network) not application logic.</p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Avg</th><th>Min</th><th>Max</th><th>Count</th></tr></thead>
+          <tbody><tr><td>POST /api/auth/login</td><td>0ms</td><td>0ms</td><td>0ms</td><td>1</td></tr><tr><td>GET /api/alerts</td><td>4076ms</td><td>734ms</td><td>9241ms</td><td>6</td></tr><tr><td>GET /api/alerts/unread</td><td>4999ms</td><td>577ms</td><td>12323ms</td><td>6</td></tr><tr><td>GET /api/health</td><td>5113ms</td><td>250ms</td><td>21898ms</td><td>6</td></tr><tr><td>GET /api/worker/training/certifications</td><td>6580ms</td><td>6580ms</td><td>6580ms</td><td>1</td></tr></tbody>
+        </table>
+      </section>
+    </div>
+    <script data-panel="-worker">
+    (function() {
+      const chartDefaults = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+      const charts = {"responseTimeSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[0.341411,584.147937,919.7839730000001,1760.8679141666664,3469.98995475,3369.5347650000003,3676.477169333333,7660.624804666666,6649.6900571999995,6645.962991,7809.722671999999,12207.973975333332,12893.727834000001,10508.052417,13412.33408375,9943.55401,10727.054709666665,12300.955446,18257.923605,16347.4127785,16269.17858,875.58119525]},"rpsSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[0.2,0.4,0.4,1.2,0.8,0.4,1.2,0.6,1,0.2,1,0.6,0.4,0.2,0.8,0.2,0.6,0.2,0.4,0.4,0.4,0.8]},"vusSeries":{"labels":[],"values":[]},"errorSeries":{"labels":["3:11:30 AM","3:11:40 AM","3:11:45 AM","3:11:50 AM","3:11:55 AM","3:12:00 AM","3:12:05 AM","3:12:10 AM","3:12:15 AM","3:12:20 AM","3:12:25 AM","3:12:35 AM","3:12:40 AM","3:12:45 AM","3:12:50 AM","3:12:55 AM","3:13:00 AM","3:13:10 AM","3:13:15 AM","3:13:20 AM","3:13:30 AM","3:13:35 AM"],"values":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},"histogram":{"labels":["<100ms","100-250ms","250-500ms","500ms-1s","1-2s",">2s"],"values":[17,0,0,0,0,83]}};
+      const sid = (id) => id + "-worker";
+      new Chart(document.getElementById(sid('chartResponseTime')), {
+        type: 'line',
+        data: { labels: charts.responseTimeSeries.labels, datasets: [{ data: charts.responseTimeSeries.values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'ms' } } } }
+      });
+      new Chart(document.getElementById(sid('chartRps')), {
+        type: 'line',
+        data: { labels: charts.rpsSeries.labels, datasets: [{ data: charts.rpsSeries.values, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'req/s' } } } }
+      });
+      new Chart(document.getElementById(sid('chartVus')), {
+        type: 'line',
+        data: { labels: charts.vusSeries.labels, datasets: [{ data: charts.vusSeries.values, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)', fill: true, tension: 0.3, stepped: true, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: 'VUs' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartErrors')), {
+        type: 'line',
+        data: { labels: charts.errorSeries.labels, datasets: [{ data: charts.errorSeries.values, borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '%' }, beginAtZero: true } } }
+      });
+      new Chart(document.getElementById(sid('chartHistogram')), {
+        type: 'bar',
+        data: { labels: charts.histogram.labels, datasets: [{ data: charts.histogram.values, backgroundColor: ['#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e3a5f'] }] },
+        options: { ...chartDefaults, scales: { y: { title: { display: true, text: '% of samples' }, beginAtZero: true } } }
+      });
+    })();
+    </script></div></div>
+  <footer>Generated by CareCliQ Performance Testing &middot; k6</footer>
+  <script>
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
