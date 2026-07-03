@@ -494,34 +494,46 @@ async def transcribe_and_resolve_names(
     # ✅ STEP 1: Transcribe audio
     try:
         audio_bytes = await audio_file.read()
+        logger.info(f"Audio file read: {len(audio_bytes)} bytes, filename: {audio_file.filename}, content-type: {audio_file.content_type}")
         
         # Validate file size (25MB limit)
         if len(audio_bytes) > 25 * 1024 * 1024:
+            logger.error(f"Audio file exceeds 25 MB: {len(audio_bytes)} bytes")
             raise HTTPException(status_code=413, detail="Audio file exceeds 25 MB limit.")
+        
+        if len(audio_bytes) < 1000:
+            logger.warning(f"Audio file very small: {len(audio_bytes)} bytes - may be invalid or silent")
         
         # Call Whisper
         client = _build_openai_client()
-        logger.debug(f"Transcribing {len(audio_bytes)} bytes with Whisper")
-        transcript_response = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=("audio.webm", audio_bytes, "audio/webm"),
-            response_format="verbose_json",
-            language="en",
-        )
+        logger.info(f"Calling Whisper with {len(audio_bytes)} bytes, format: {audio_file.content_type}")
+        try:
+            transcript_response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=(audio_file.filename or "audio.webm", audio_bytes, audio_file.content_type or "audio/webm"),
+                response_format="verbose_json",
+                language="en",
+            )
+            logger.info(f"Whisper response received successfully")
+        except Exception as whisper_exc:
+            logger.error(f"Whisper API error: {whisper_exc}")
+            raise
         
         raw_text = transcript_response.text or ""
-        if not raw_text or raw_text.strip() == "":
-            logger.warning("Whisper returned empty transcript")
-            raise ValueError("Whisper returned empty or inaudible audio")
+        logger.info(f"Transcription result: {len(raw_text)} chars")
         
-        logger.debug(f"Transcription successful: {len(raw_text)} chars")
+        if not raw_text or raw_text.strip() == "":
+            logger.warning("Whisper returned empty transcript - audio may be silent or inaudible")
+            raise ValueError("Whisper returned empty or inaudible audio. Please ensure your microphone is working and try again with clearer audio.")
+        
+        logger.debug(f"Raw transcript: {raw_text[:200]}")
         raw_transcript_segments = _parse_speaker_segments(raw_text)
-        logger.debug(f"Parsed {len(raw_transcript_segments)} segments")
+        logger.info(f"Parsed {len(raw_transcript_segments)} transcript segments")
         
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Transcription failed: %s", exc)
+        logger.exception(f"Transcription step failed with exception: {type(exc).__name__}: {exc}")
         error_detail = str(exc)[:200]
         # Update session with error status
         try:
@@ -530,6 +542,7 @@ async def transcribe_and_resolve_names(
                 "stage_1_error": f"Transcription failed: {error_detail}",
                 "stage_1_completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", session_id).execute()
+            logger.info(f"Updated session {session_id} with error status")
         except Exception as db_exc:
             logger.warning("Failed to update session error status: %s", db_exc)
         raise HTTPException(status_code=422, detail=f"Could not transcribe audio: {error_detail}")
