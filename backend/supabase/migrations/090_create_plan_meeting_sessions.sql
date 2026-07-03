@@ -78,6 +78,22 @@ CREATE INDEX IF NOT EXISTS idx_plan_meeting_sessions_participant
     WHERE participant_id IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- ROW-LEVEL SECURITY HELPER: Ensure cs_user_org_id() function exists
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.cs_user_org_id()
+RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT organization_id
+  FROM   public.organization_members
+  WHERE  user_id   = auth.uid()
+    AND  is_active = true
+  LIMIT 1;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- ROW-LEVEL SECURITY: Coordinator can access their organization's sessions
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -87,8 +103,8 @@ ALTER TABLE public.plan_meeting_sessions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS coordinator_plan_meeting_sessions ON public.plan_meeting_sessions;
 CREATE POLICY coordinator_plan_meeting_sessions ON public.plan_meeting_sessions
     FOR ALL
-    USING (organization_id = cs_user_org_id())
-    WITH CHECK (organization_id = cs_user_org_id());
+    USING (organization_id = public.cs_user_org_id())
+    WITH CHECK (organization_id = public.cs_user_org_id());
 
 -- Policy: Participants can view their own sessions
 DROP POLICY IF EXISTS participant_plan_meeting_sessions ON public.plan_meeting_sessions;
