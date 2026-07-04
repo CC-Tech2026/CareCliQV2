@@ -1,32 +1,25 @@
-import { Fragment, useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Sparkles, CheckCircle2, X, ChevronRight, Loader2,
-  AlertTriangle, Check, FileText, MessageSquare, Mic,
-  ChevronDown, ChevronUp,
+  Mic, Pause, Play, Loader2, Check, X, Pencil,
+  AlertTriangle, FileText, MessageSquare, Download,
 } from "lucide-react";
-import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { downloadBlob } from "@/lib/download-file";
 import { TranscriptViewer } from "./TranscriptViewer";
 import {
-  recordPlanMeeting,
-  listPlanMeetings,
-  triggerPlanMeetingAiReview,
-  applyPlanMeetingSuggestions,
-  transcribePlanMeetingAudio,
   createMeetingSession,
   transcribeAndResolveNames,
   extractGoalsAndTasks,
+  applyPlanMeetingSuggestions,
+  listPlanMeetings,
   type PlanMeeting,
   type PlanMeetingType,
-  type SuggestedGoal,
-  type SuggestedTask,
-  type RecordMeetingPayload,
   type Stage1ResolutionResult,
   type Stage2ExtractionResult,
+  type ExtractedGoalPayload,
+  type ExtractedTaskPayload,
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
@@ -37,55 +30,31 @@ const SOFT   = "var(--cc-soft)";
 const GREEN  = "#166534";
 const GREEN_BG     = "rgba(22,101,52,0.06)";
 const GREEN_BORDER = "rgba(22,101,52,0.2)";
+const CORAL  = "#BE185D";
 
 const MEETING_TYPE_META: Record<PlanMeetingType, { label: string; abbr: string; color: string; bg: string }> = {
   plan_review:       { label: "Plan Review",        abbr: "PR", color: "#3730A3", bg: "rgba(55,48,163,0.08)"  },
   initial_setup:     { label: "Initial Setup",      abbr: "IS", color: GREEN,     bg: GREEN_BG               },
   check_in:          { label: "Check-In",           abbr: "CI", color: "#0369A1", bg: "rgba(3,105,161,0.08)"  },
-  incident_followup: { label: "Incident Follow-Up", abbr: "IF", color: "#BE185D", bg: "rgba(190,24,93,0.08)"  },
+  incident_followup: { label: "Incident Follow-Up", abbr: "IF", color: CORAL,     bg: "rgba(190,24,93,0.08)"  },
   goal_review:       { label: "Goal Review",        abbr: "GR", color: "#B45309", bg: "rgba(180,83,9,0.08)"   },
 };
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
-  pending_review: { label: "Pending AI review", bg: "#FFFBEB", color: "#92400E" },
-  reviewed:       { label: "AI reviewed",       bg: "#EFF6FF", color: "#1D4ED8" },
-  applied:        { label: "Applied",           bg: "#F0FDF4", color: GREEN     },
+  pending_review: { label: "Pending review", bg: "#FFFBEB", color: "#92400E" },
+  reviewed:       { label: "Reviewed",       bg: "#EFF6FF", color: "#1D4ED8" },
+  applied:        { label: "Applied",        bg: "#F0FDF4", color: GREEN     },
 };
 
-// ── Step progress ──────────────────────────────────────────────────────────────
+function formatLabel(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-function StepProgress({ current }: { current: 1 | 2 | 3 }) {
-  const steps = [
-    { n: 1, label: "Notes" },
-    { n: 2, label: "AI analysis" },
-    { n: 3, label: "Apply" },
-  ] as const;
-
-  return (
-    <div className="flex items-center mb-5">
-      {steps.map((s, i) => (
-        <Fragment key={s.n}>
-          <div className="flex flex-col items-center gap-1.5 shrink-0">
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black"
-              style={{
-                background: current > s.n ? GREEN : current === s.n ? PLUM : BORDER,
-                color: current >= s.n ? "#fff" : MUTED,
-              }}
-            >
-              {current > s.n ? <Check size={10} /> : s.n}
-            </div>
-            <p className="text-[10px] font-semibold whitespace-nowrap" style={{ color: current === s.n ? TEXT : MUTED }}>
-              {s.label}
-            </p>
-          </div>
-          {i < 2 && (
-            <div className="flex-1 h-px mx-2 mb-4" style={{ background: current > i + 1 ? GREEN : BORDER }} />
-          )}
-        </Fragment>
-      ))}
-    </div>
-  );
+function confidenceStyle(confidence: number): { bg: string; color: string; label: string } {
+  const pct = Math.round(confidence * 100);
+  if (pct >= 85) return { bg: GREEN_BG, color: GREEN, label: `${pct}%` };
+  if (pct >= 60) return { bg: "#FFFBEB", color: "#B45309", label: `${pct}%` };
+  return { bg: "#FEF2F2", color: CORAL, label: `${pct}%` };
 }
 
 // ── Section divider ────────────────────────────────────────────────────────────
@@ -101,54 +70,168 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-// ── Step 1: Record meeting ─────────────────────────────────────────────────────
+// ── Draft item types ────────────────────────────────────────────────────────────
 
-interface Step1Props {
+type DraftStatus = "pending" | "accepted" | "rejected";
+
+interface DraftGoal {
+  localId: string;
+  text: string;
+  support_category: string;
+  source_segment_ids: string[];
+  confidence: number;
+  status: DraftStatus;
+}
+
+interface DraftTask {
+  localId: string;
+  text: string;
+  requirement_level: "mandatory" | "optional";
+  source_segment_ids: string[];
+  confidence: number;
+  linkedGoalLocalId: string | null;
+  status: DraftStatus;
+}
+
+function resolveQuote(
+  segmentIds: string[],
+  cleanTranscript: Stage1ResolutionResult["clean_transcript"],
+): { speaker: string; text: string } | null {
+  const matches = cleanTranscript.filter((seg) => seg.segment_id && segmentIds.includes(seg.segment_id));
+  if (matches.length === 0) return null;
+  return {
+    speaker: matches[0].speaker_name || "Participant",
+    text: matches.map((m) => m.text).join(" "),
+  };
+}
+
+// ── Draft card ──────────────────────────────────────────────────────────────────
+
+function DraftCard({
+  kind, text, badgeLabel, confidence, quote, editing, editValue,
+  onToggleAccept, onStartEdit, onChangeEdit, onSaveEdit, onCancelEdit, onReject, accepted,
+}: {
+  kind: "goal" | "task";
+  text: string;
+  badgeLabel: string;
+  confidence: number;
+  quote: { speaker: string; text: string } | null;
+  editing: boolean;
+  editValue: string;
+  accepted: boolean;
+  onToggleAccept: () => void;
+  onStartEdit: () => void;
+  onChangeEdit: (v: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onReject: () => void;
+}) {
+  const conf = confidenceStyle(confidence);
+  return (
+    <div className="rounded-xl p-3" style={{ border: `2px solid ${accepted ? GREEN : BORDER}`, background: accepted ? GREEN_BG : "#fff" }}>
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>
+          {kind === "goal" ? "Goal" : "Task"} · {badgeLabel}
+        </span>
+        <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: conf.bg, color: conf.color }}>
+          {conf.label}
+        </span>
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editValue}
+            onChange={(e) => onChangeEdit(e.target.value)}
+            rows={3}
+            aria-label={kind === "goal" ? "Edit goal text" : "Edit task text"}
+            placeholder={kind === "goal" ? "Goal description" : "Task description"}
+            className="w-full text-[12px] rounded-lg p-2 outline-none"
+            style={{ border: `1px solid ${BORDER}`, color: TEXT }}
+          />
+          <div className="flex gap-2">
+            <Button size="sm" className="rounded-lg" style={{ background: PLUM, color: "#fff" }} onClick={onSaveEdit}>
+              Save
+            </Button>
+            <Button size="sm" variant="outline" className="rounded-lg" style={{ borderColor: BORDER }} onClick={onCancelEdit}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-[13px] font-semibold mb-1.5" style={{ color: TEXT }}>{text}</p>
+          {quote && (
+            <p className="text-[11px] italic px-2.5 py-1.5 rounded-lg mb-2 leading-relaxed" style={{ background: SOFT, color: MUTED }}>
+              "{quote.text}" <span className="not-italic font-semibold">— {quote.speaker}</span>
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleAccept}
+              className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-black rounded-lg py-1.5 hover:opacity-90 transition-opacity"
+              style={{ background: accepted ? GREEN : PLUM, color: "#fff" }}
+            >
+              <Check size={13} /> {accepted ? "Accepted" : "Accept"}
+            </button>
+            <button
+              type="button"
+              onClick={onStartEdit}
+              aria-label="Edit"
+              className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+              style={{ border: `1px solid ${BORDER}` }}
+            >
+              <Pencil size={13} style={{ color: MUTED }} />
+            </button>
+            <button
+              type="button"
+              onClick={onReject}
+              aria-label="Reject"
+              className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+              style={{ border: `1px solid ${BORDER}` }}
+            >
+              <X size={13} style={{ color: CORAL }} />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Record + review flow ─────────────────────────────────────────────────────────
+
+type Phase = "idle" | "recording" | "processing" | "review";
+
+interface RecordMeetingFlowProps {
   participantId: string;
-  onRecorded: (meeting: PlanMeeting) => void;
+  onDone: () => void;
   onCancel: () => void;
 }
 
-interface Stage1ResultsType {
-  sessionId: string;
-  resolvedNames: Record<string, { name: string; confidence: string }>;
-  cleanTranscript: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
-  rawTranscript: Array<{ segment_id?: string; speaker_label?: string; text: string; start?: string }>;
-  segmentIds: any[];
-  flags: any[];
-  participantId: string | null;
-}
-
-interface Stage2ResultsType {
-  goals: any[];
-  tasks: any[];
-  flags: any[];
-}
-
-function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props) {
+function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlowProps) {
   const { toast } = useToast();
+  const qc = useQueryClient();
+
   const [meetingType, setMeetingType] = useState<PlanMeetingType>("check_in");
-  const [meetingDate, setMeetingDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  
-  // Session creation state
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
-  
-  // Recording state
-  const [isRecording, setIsRecording] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [phase, setPhase] = useState<Phase>("idle");
   const [voiceNotSupported, setVoiceNotSupported] = useState(false);
-  
-  // Stage 1 processing
-  const [stage1Loading, setStage1Loading] = useState(false);
-  const [stage1Results, setStage1Results] = useState<Stage1ResultsType | null>(null);
-  const [showSpeakerConfirmation, setShowSpeakerConfirmation] = useState(false);
-  const [speakerConfirmation, setSpeakerConfirmation] = useState<Record<string, string>>({});
-  
-  // Stage 2 processing
-  const [stage2Loading, setStage2Loading] = useState(false);
-  const [stage2Results, setStage2Results] = useState<Stage2ResultsType | null>(null);
+  const [startingSession, setStartingSession] = useState(false);
+
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const [processingMessage, setProcessingMessage] = useState("Transcribing audio…");
+  const [stage1Results, setStage1Results] = useState<Stage1ResolutionResult | null>(null);
+  const [attentionFlags, setAttentionFlags] = useState<Stage2ExtractionResult["attention_flags"]>([]);
+  const [draftGoals, setDraftGoals] = useState<DraftGoal[]>([]);
+  const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
+  const [activeTab, setActiveTab] = useState<"drafts" | "transcript">("drafts");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -157,63 +240,62 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    if (phase === "recording" && !isPaused) {
       interval = setInterval(() => setElapsedTime((t) => t + 1), 1000);
     }
-    return () => clearInterval(interval);
-  }, [isRecording]);
+    return () => { if (interval) clearInterval(interval); };
+  }, [phase, isPaused]);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // ── Step 0: Create Session ─────────────────────────────────────────────────────
-  
-  const createSession = async () => {
-    setIsCreatingSession(true);
-    try {
-      // Pass participantId if already known (e.g., from participant details page)
-      // If not provided, it will be resolved from Stage 1 speaker identification
-      const result = await createMeetingSession(meetingType, meetingDate, undefined, participantId);
-      setSessionId(result.session_id);
-      toast({ title: "Session created", description: "Ready to record your meeting." });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to create session", description: err?.message ?? "" });
-    } finally {
-      setIsCreatingSession(false);
+  const canPause = !!mediaRecorder && typeof mediaRecorder.pause === "function";
+
+  // ── Start: mic permission → create session → begin recording ──────────────────
+
+  const beginRecording = (stream: MediaStream) => {
+    let mimeType = "audio/webm;codecs=opus";
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = "audio/mp4";
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "audio/webm";
     }
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const audioBlob = new Blob(chunks, { type: mimeType });
+      await processRecording(audioBlob);
+    };
+    recorder.start();
+    setMediaRecorder(recorder);
+    setElapsedTime(0);
+    setIsPaused(false);
+    setPhase("recording");
   };
 
-  // ── Step 1: Record & Transcribe ────────────────────────────────────────────────
-
-  const startRecording = async () => {
+  const handleMicTap = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setVoiceNotSupported(true);
+      toast({ variant: "destructive", title: "Voice recording not supported", description: "Please use a different browser or device." });
+      return;
+    }
+    setStartingSession(true);
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setVoiceNotSupported(true);
-        toast({ variant: "destructive", title: "Voice recording not supported", description: "Please use a different browser or device." });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try {
+        const session = await createMeetingSession(meetingType, new Date().toISOString().slice(0, 10), undefined, participantId);
+        setSessionId(session.session_id);
+      } catch (err: any) {
+        stream.getTracks().forEach((t) => t.stop());
+        toast({ variant: "destructive", title: "Failed to create session", description: err?.message ?? "" });
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let mimeType = "audio/webm;codecs=opus";
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = "audio/mp4";
-        if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "audio/webm";
-      }
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const audioBlob = new Blob(chunks, { type: mimeType });
-        await transcribeAndResolve(audioBlob);
-      };
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-      setElapsedTime(0);
+      beginRecording(stream);
     } catch (err: any) {
       if (err.name === "NotAllowedError") {
-        toast({ variant: "destructive", title: "Microphone access denied", description: "Allow microphone access to use voice dictation." });
+        toast({ variant: "destructive", title: "Microphone access denied", description: "Allow microphone access to record." });
       } else if (err.name === "NotFoundError") {
         setVoiceNotSupported(true);
         toast({ variant: "destructive", title: "No microphone found", description: "Connect a microphone to record." });
@@ -223,871 +305,463 @@ function Step1RecordMeeting({ participantId, onRecorded, onCancel }: Step1Props)
       } else {
         toast({ variant: "destructive", title: "Failed to start recording", description: err?.message ?? "" });
       }
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
+  const togglePause = () => {
+    if (!mediaRecorder) return;
+    try {
+      if (isPaused) { mediaRecorder.resume(); setIsPaused(false); }
+      else { mediaRecorder.pause(); setIsPaused(true); }
+    } catch {
+      // pause/resume unsupported on this browser mid-stream — ignore
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
+    if (mediaRecorder && phase === "recording") {
+      setProcessingMessage("Finishing recording…");
+      setPhase("processing");
       mediaRecorder.stop();
-      setIsRecording(false);
     }
   };
 
   const cancelRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      if (mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    if (mediaRecorder) {
+      mediaRecorder.onstop = null;
+      if (phase === "recording") mediaRecorder.stop();
+      if (mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach((t) => t.stop());
     }
+    setMediaRecorder(null);
     setElapsedTime(0);
+    setIsPaused(false);
+    setPhase("idle");
   };
 
-  // ── Stage 1: Transcribe & Resolve Names ────────────────────────────────────────
+  // ── Processing: Stage 1 → Stage 2, auto-chained ────────────────────────────────
 
-  const transcribeAndResolve = async (audioBlob: Blob) => {
-    if (!sessionId) {
-      toast({ variant: "destructive", title: "No session", description: "Please create a session first." });
-      return;
-    }
-    
-    setStage1Loading(true);
-    try {
-      const result = await transcribeAndResolveNames(
-        sessionId,
-        audioBlob,
-        "", // coordinator_name - user can provide during confirmation
-        "", // participant_name
-        [], // others
-      );
-      
-      setStage1Results({
-        sessionId: result.session_id,
-        resolvedNames: result.resolved_names,
-        cleanTranscript: result.clean_transcript,
-        rawTranscript: result.raw_transcript,
-        segmentIds: result.segment_ids,
-        flags: result.flags,
-        participantId: result.participant_id,
-      });
-      
-      setShowSpeakerConfirmation(true);
-      toast({ title: "Stage 1 complete", description: "Review and confirm the speaker identification." });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Stage 1 failed", description: err?.message ?? "Transcription or name resolution failed." });
-    } finally {
-      setStage1Loading(false);
-    }
-  };
-
-  // ── Speaker Confirmation Dialog ────────────────────────────────────────────────
-
-  const confirmSpeakers = async () => {
-    if (!stage1Results) return;
-    
-    // Move to Stage 2
-    await extractGoals();
-  };
-
-  const extractGoals = async () => {
+  const processRecording = async (audioBlob: Blob) => {
     if (!sessionId) return;
-    
-    setStage2Loading(true);
     try {
-      const result = await extractGoalsAndTasks(sessionId);
-      setStage2Results({
-        goals: result.goals,
-        tasks: result.tasks,
-        flags: result.attention_flags,
-      });
-      toast({ title: "Stage 2 complete", description: "Goals and tasks extracted successfully." });
+      setProcessingMessage("Transcribing audio…");
+      const stage1 = await transcribeAndResolveNames(sessionId, audioBlob, "", "", []);
+      setStage1Results(stage1);
+
+      setProcessingMessage("Drafting goals & tasks…");
+      const stage2 = await extractGoalsAndTasks(sessionId);
+
+      setDraftGoals(stage2.goals.map((g, i) => ({
+        localId: `g-${i}`,
+        text: g.goal_text,
+        support_category: g.support_category,
+        source_segment_ids: g.source_segment_ids,
+        confidence: g.confidence,
+        status: "pending",
+      })));
+      setDraftTasks(stage2.tasks.map((t, i) => ({
+        localId: `t-${i}`,
+        text: t.task_text,
+        requirement_level: t.requirement_level,
+        source_segment_ids: t.source_segment_ids,
+        confidence: t.confidence,
+        linkedGoalLocalId: t.linked_goal_index != null ? `g-${t.linked_goal_index}` : null,
+        status: "pending",
+      })));
+      setAttentionFlags(stage2.attention_flags);
+      setActiveTab("drafts");
+      setPhase("review");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Stage 2 failed", description: err?.message ?? "Goal extraction failed." });
-    } finally {
-      setStage2Loading(false);
+      toast({ variant: "destructive", title: "Processing failed", description: err?.message ?? "Transcription or goal extraction failed." });
+      setPhase("idle");
     }
   };
 
   const reRecord = () => {
+    setSessionId(null);
     setStage1Results(null);
-    setStage2Results(null);
-    setShowSpeakerConfirmation(false);
+    setAttentionFlags([]);
+    setDraftGoals([]);
+    setDraftTasks([]);
+    setEditingId(null);
     setElapsedTime(0);
+    setPhase("idle");
   };
 
-  // ──────────────────────────────────────────────────────────────────────────────
+  // ── Review: accept / edit / reject ─────────────────────────────────────────────
 
-  // Before session is created
-  if (!sessionId) {
+  const toggleAcceptGoal = (localId: string) =>
+    setDraftGoals((prev) => prev.map((g) => g.localId === localId ? { ...g, status: g.status === "accepted" ? "pending" : "accepted" } : g));
+  const toggleAcceptTask = (localId: string) =>
+    setDraftTasks((prev) => prev.map((t) => t.localId === localId ? { ...t, status: t.status === "accepted" ? "pending" : "accepted" } : t));
+
+  const rejectGoal = (localId: string) => setDraftGoals((prev) => prev.map((g) => g.localId === localId ? { ...g, status: "rejected" } : g));
+  const rejectTask = (localId: string) => setDraftTasks((prev) => prev.map((t) => t.localId === localId ? { ...t, status: "rejected" } : t));
+
+  const startEdit = (localId: string, currentText: string) => { setEditingId(localId); setEditValue(currentText); };
+  const cancelEdit = () => { setEditingId(null); setEditValue(""); };
+  const saveEdit = (kind: "goal" | "task", localId: string) => {
+    if (kind === "goal") setDraftGoals((prev) => prev.map((g) => g.localId === localId ? { ...g, text: editValue } : g));
+    else setDraftTasks((prev) => prev.map((t) => t.localId === localId ? { ...t, text: editValue } : t));
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const visibleGoals = draftGoals.filter((g) => g.status !== "rejected");
+  const visibleTasks = draftTasks.filter((t) => t.status !== "rejected");
+  const acceptedGoals = draftGoals.filter((g) => g.status === "accepted");
+  const acceptedTasks = draftTasks.filter((t) => t.status === "accepted");
+  const totalAccepted = acceptedGoals.length + acceptedTasks.length;
+
+  const cleanTranscript = stage1Results?.clean_transcript ?? [];
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+
+  const exportRows = () => [
+    ...visibleGoals.map((g) => ({ type: "Goal", text: g.text, category: formatLabel(g.support_category), confidence: g.confidence, quote: resolveQuote(g.source_segment_ids, cleanTranscript) })),
+    ...visibleTasks.map((t) => ({ type: "Task", text: t.text, category: formatLabel(t.requirement_level), confidence: t.confidence, quote: resolveQuote(t.source_segment_ids, cleanTranscript) })),
+  ];
+
+  const exportCsv = () => {
+    const rows = exportRows();
+    const csv = [
+      ["Type", "Item", "Category", "Confidence", "Quote"],
+      ...rows.map((r) => [r.type, r.text, r.category, `${Math.round(r.confidence * 100)}%`, r.quote ? `${r.quote.speaker}: ${r.quote.text}` : ""]),
+    ].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    downloadBlob(new Blob([csv], { type: "text/csv" }), "plan-meeting-drafts.csv");
+  };
+
+  const exportPdf = async () => {
+    const rows = exportRows();
+    const { jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Plan Meeting Drafts", 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text(`Generated ${new Date().toLocaleString()}`, 14, 25);
+    autoTable(doc, {
+      startY: 32,
+      head: [["Type", "Item", "Category", "Confidence", "Quote"]],
+      body: rows.map((r) => [r.type, r.text, r.category, `${Math.round(r.confidence * 100)}%`, r.quote ? `${r.quote.speaker}: ${r.quote.text}` : "—"]),
+      styles: { fontSize: 8 },
+      columnStyles: { 1: { cellWidth: 55 }, 4: { cellWidth: 55 } },
+    });
+    doc.save("plan-meeting-drafts.pdf");
+  };
+
+  // ── Apply ───────────────────────────────────────────────────────────────────
+
+  const applyMut = useMutation({
+    mutationFn: () => {
+      const goalPayload: ExtractedGoalPayload[] = acceptedGoals.map((g) => ({
+        goal_text: g.text,
+        support_category: g.support_category,
+      }));
+      const taskPayload: ExtractedTaskPayload[] = acceptedTasks.map((t) => {
+        const linkedGoal = t.linkedGoalLocalId ? acceptedGoals.find((g) => g.localId === t.linkedGoalLocalId) : undefined;
+        return {
+          task_text: t.text,
+          requirement_level: t.requirement_level,
+          linked_goal_text: linkedGoal?.text ?? null,
+        };
+      });
+      return applyPlanMeetingSuggestions(sessionId as string, goalPayload, taskPayload);
+    },
+    onSuccess: (result) => {
+      toast({ title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.` });
+      qc.invalidateQueries({ queryKey: ["plan-meetings", participantId] });
+      qc.invalidateQueries({ queryKey: ["ndis-goals"] });
+      qc.invalidateQueries({ queryKey: ["participant-tasks"] });
+      onDone();
+    },
+    onError: (err: any) => toast({ variant: "destructive", title: "Failed to apply", description: err?.message ?? "" }),
+  });
+
+  // ── Render: idle ────────────────────────────────────────────────────────────
+
+  if (phase === "idle") {
     return (
-      <div className="space-y-5">
-        <StepProgress current={1} />
-        
-        <div>
-          <SectionLabel label="Meeting details" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Date</Label>
-              <Input
-                type="date"
-                value={meetingDate}
-                onChange={(e) => setMeetingDate(e.target.value)}
-                className="rounded-xl h-9 text-[13px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold" style={{ color: MUTED }}>Meeting type</Label>
-              <select
-                value={meetingType}
-                onChange={(e) => setMeetingType(e.target.value as PlanMeetingType)}
-                aria-label="Meeting type"
-                className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
-                style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "#fff" }}
-              >
-                {(Object.entries(MEETING_TYPE_META) as [PlanMeetingType, typeof MEETING_TYPE_META[PlanMeetingType]][]).map(([v, m]) => (
-                  <option key={v} value={v}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-[11px] font-semibold" style={{ color: MUTED }}>Meeting type</span>
+          <select
+            value={meetingType}
+            onChange={(e) => setMeetingType(e.target.value as PlanMeetingType)}
+            aria-label="Meeting type"
+            className="text-[12px] font-semibold rounded-full px-3 py-1 outline-none"
+            style={{ border: `1px solid ${BORDER}`, color: PLUM, background: "#fff" }}
+          >
+            {(Object.entries(MEETING_TYPE_META) as [PlanMeetingType, typeof MEETING_TYPE_META[PlanMeetingType]][]).map(([v, m]) => (
+              <option key={v} value={v}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
+          <button
+            type="button"
+            onClick={handleMicTap}
+            disabled={startingSession || voiceNotSupported}
+            aria-label="Start recording"
+            className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
+            style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
+          >
+            {startingSession ? <Loader2 size={26} className="animate-spin text-white" /> : <Mic size={26} className="text-white" />}
+          </button>
+          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>Tap to start recording</p>
+          <p className="text-[12px]" style={{ color: MUTED }}>
+            Speak naturally — CareCliQ transcribes the conversation and drafts NDIS goals and tasks automatically.
+          </p>
         </div>
 
         <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
           <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            className="rounded-xl flex-1 gap-1.5"
-            style={{ background: PLUM, color: "#fff" }}
-            disabled={isCreatingSession}
-            onClick={createSession}
-          >
-            {isCreatingSession ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
-            Create Session & Begin Recording
-          </Button>
         </div>
       </div>
     );
   }
 
-  // After Stage 2 is complete - show results
-  if (stage2Results) {
+  // ── Render: recording ───────────────────────────────────────────────────────
+
+  if (phase === "recording") {
     return (
-      <div className="space-y-5">
-        <StepProgress current={2} />
-        
-        <div>
-          <SectionLabel label="Extracted Goals" />
-          {stage2Results.goals.length > 0 ? (
-            <div className="space-y-2">
-              {stage2Results.goals.map((goal: any, i: number) => (
-                <div key={i} className="p-3 rounded-xl" style={{ background: GREEN_BG, border: `1px solid ${GREEN_BORDER}` }}>
-                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{goal.goal_text}</p>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Category: {goal.support_category} • Confidence: {(goal.confidence * 100).toFixed(0)}%</p>
-                  {goal.source_segment_ids && (
-                    <p className="text-[10px] mt-2" style={{ color: MUTED }}>Segments: {goal.source_segment_ids.join(", ")}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[12px]" style={{ color: MUTED }}>No goals extracted.</p>
-          )}
-        </div>
-
-        {stage2Results.tasks.length > 0 && (
-          <div>
-            <SectionLabel label="Extracted Tasks" />
-            <div className="space-y-2">
-              {stage2Results.tasks.map((task: any, i: number) => (
-                <div key={i} className="p-3 rounded-xl" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
-                  <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{task.task_text}</p>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Level: {task.requirement_level} • Confidence: {(task.confidence * 100).toFixed(0)}%</p>
-                  {task.source_segment_ids && (
-                    <p className="text-[10px] mt-2" style={{ color: MUTED }}>Segments: {task.source_segment_ids.join(", ")}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-          <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={reRecord}>
-            Re-record
-          </Button>
-          <Button
-            className="rounded-xl flex-1 gap-1.5"
-            style={{ background: GREEN, color: "#fff" }}
-            onClick={() => onRecorded({ id: sessionId } as PlanMeeting)}
-          >
-            <Check size={14} />
-            Continue
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Stage 1 complete - show speaker confirmation
-  if (stage1Results && showSpeakerConfirmation) {
-    return (
-      <div className="space-y-5">
-        <StepProgress current={1} />
-        
-        <div>
-          <SectionLabel label="Speaker Identification" />
-          <p className="text-[12px] mb-3" style={{ color: MUTED }}>Confirm the identified speakers below:</p>
-          
-          {Object.entries(stage1Results.resolvedNames).map(([speaker, data]: [string, any]) => (
-            <div key={speaker} className="p-3 rounded-xl mb-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-500">{speaker}</p>
-                  <p className="text-[13px] font-semibold" style={{ color: TEXT }}>{data.name}</p>
-                  <p className="text-[10px]" style={{ color: MUTED }}>Confidence: {data.confidence}</p>
-                </div>
-                <div
-                  className="px-2 py-1 rounded text-[10px] font-semibold"
-                  style={{
-                    background: data.confidence === "confirmed" ? GREEN_BG : "#FEF2F2",
-                    color: data.confidence === "confirmed" ? GREEN : "#EF4444",
-                  }}
-                >
-                  {data.confidence}
-                </div>
-              </div>
-            </div>
-          ))}
-          
-          {stage1Results.flags.length > 0 && (
-            <div className="p-3 rounded-xl" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-              <p className="text-[11px] font-semibold text-amber-700 mb-1">Flags:</p>
-              {stage1Results.flags.map((flag: any, i: number) => (
-                <p key={i} className="text-[10px] text-amber-600">{flag.description}</p>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Transcript Viewer */}
-        <div>
-          <SectionLabel label="Transcription" />
-          <TranscriptViewer
-            rawTranscript={stage1Results.rawTranscript}
-            cleanTranscript={stage1Results.cleanTranscript}
-          />
-        </div>
-
-        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-          <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={reRecord}>
-            Re-record
-          </Button>
-          <Button
-            className="rounded-xl flex-1 gap-1.5"
-            style={{ background: PLUM, color: "#fff" }}
-            disabled={stage2Loading}
-            onClick={confirmSpeakers}
-          >
-            {stage2Loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
-            Extract Goals (Stage 2)
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Recording in progress or loading
-  return (
-    <div className="space-y-5">
-      <StepProgress current={1} />
-
-      {stage1Loading ? (
-        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-          <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: "rgba(55,48,163,0.08)" }}>
-            <Loader2 size={20} className="animate-spin" style={{ color: PLUM }} />
-          </div>
-          <p className="font-black text-[13px] mb-0.5" style={{ color: TEXT }}>Processing your recording</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>Transcribing and identifying speakers…</p>
-        </div>
-      ) : isRecording ? (
-        <div className="rounded-2xl p-6 text-center" style={{ background: "#FEF2F2", border: `2px solid #EF4444` }}>
-          <div className="relative flex items-center justify-center h-20 mb-3">
-            <div className="absolute w-20 h-20 rounded-full bg-red-400 opacity-25 animate-ping" />
-            <div className="absolute w-24 h-24 rounded-full bg-red-300 opacity-15 animate-ping" style={{ animationDelay: "300ms" }} />
-            <button
-              onClick={stopRecording}
-              aria-label="Stop recording"
-              className="relative w-16 h-16 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
-              style={{ background: "#EF4444" }}
-            >
-              <div className="w-5 h-5 rounded-sm bg-white" />
-            </button>
-          </div>
-          <p className="font-black text-[22px] tabular-nums mb-0.5" style={{ color: "#DC2626" }}>
-            {formatTime(elapsedTime)}
-          </p>
-          <p className="text-[12px] mb-4" style={{ color: MUTED }}>Recording in progress · tap to stop</p>
-          <Button variant="ghost" size="sm" className="text-[12px] rounded-xl" style={{ color: MUTED }} onClick={cancelRecording}>
-            Cancel recording
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-2xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <button
-            onClick={startRecording}
-            aria-label="Start recording"
-            className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
-            style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
-          >
-            <Mic size={24} className="text-white" />
-          </button>
-          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>
-            Dictate the meeting conversation
-          </p>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            Speak naturally — Whisper AI transcribes and identifies speakers automatically
-          </p>
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-        <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ── Step 2: AI review ─────────────────────────────────────────────────────────
-
-interface Step2Props {
-  meeting: PlanMeeting;
-  onReviewed: (goals: SuggestedGoal[], tasks: SuggestedTask[]) => void;
-  onBack: () => void;
-}
-
-function Step2AiReview({ meeting, onReviewed, onBack }: Step2Props) {
-  const { toast } = useToast();
-  const [suggestions, setSuggestions] = useState(meeting.ai_suggestions_raw ?? null);
-  const [accepted, setAccepted] = useState<{ goals: Set<number>; tasks: Set<number> }>({
-    goals: new Set(),
-    tasks: new Set(),
-  });
-
-  const reviewMut = useMutation({
-    mutationFn: () => triggerPlanMeetingAiReview(meeting.id),
-    onSuccess: ({ suggestions: s }) => setSuggestions(s),
-    onError: (err: any) => toast({ variant: "destructive", title: "AI analysis failed", description: err?.message ?? "" }),
-  });
-
-  const toggleGoal = (i: number) =>
-    setAccepted((a) => { const g = new Set(a.goals); g.has(i) ? g.delete(i) : g.add(i); return { ...a, goals: g }; });
-
-  const toggleTask = (i: number) =>
-    setAccepted((a) => { const t = new Set(a.tasks); t.has(i) ? t.delete(i) : t.add(i); return { ...a, tasks: t }; });
-
-  const toggleAllGoals = () => {
-    if (!suggestions) return;
-    const all = suggestions.suggested_goals.map((_, i) => i);
-    const allOn = all.every(i => accepted.goals.has(i));
-    setAccepted(a => ({ ...a, goals: allOn ? new Set() : new Set(all) }));
-  };
-
-  const toggleAllTasks = () => {
-    if (!suggestions) return;
-    const all = suggestions.suggested_tasks.map((_, i) => i);
-    const allOn = all.every(i => accepted.tasks.has(i));
-    setAccepted(a => ({ ...a, tasks: allOn ? new Set() : new Set(all) }));
-  };
-
-  const proceed = () => {
-    const goals = (suggestions?.suggested_goals ?? []).filter((_, i) => accepted.goals.has(i));
-    const tasks = (suggestions?.suggested_tasks ?? []).filter((_, i) => accepted.tasks.has(i));
-    onReviewed(goals, tasks);
-  };
-
-  const meta = MEETING_TYPE_META[meeting.meeting_type];
-  const totalSelected = accepted.goals.size + accepted.tasks.size;
-
-  return (
-    <div className="space-y-5">
-      <StepProgress current={2} />
-
-      {/* Meeting context card */}
-      <div className="rounded-xl p-3 flex items-start gap-3" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black"
-          style={{ background: meta.bg, color: meta.color }}
+      <div className="rounded-2xl p-6 text-center" style={{ background: "#FEF2F2", border: "2px solid #EF4444" }}>
+        <span
+          className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1 rounded-full mb-4"
+          style={{ background: "#fff", color: "#DC2626" }}
         >
-          {meta.abbr}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-black text-[12px]" style={{ color: TEXT }}>{meta.label}</p>
-          <p className="text-[11px]" style={{ color: MUTED }}>{meeting.meeting_date}</p>
-          {meeting.participant_priorities && (
-            <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: MUTED }}>
-              <span className="font-semibold" style={{ color: TEXT }}>Participant: </span>
-              {meeting.participant_priorities.slice(0, 180)}
-              {meeting.participant_priorities.length > 180 ? "…" : ""}
-            </p>
+          <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" /> {isPaused ? "Paused" : "Recording"}
+        </span>
+        <p className="font-black text-[36px] tabular-nums mb-1" style={{ color: "#DC2626" }}>{formatTime(elapsedTime)}</p>
+        <p className="text-[12px] mb-5" style={{ color: MUTED }}>
+          Stay present with the participant — just a timer and a stop button.
+        </p>
+        <div className="flex items-center justify-center gap-4">
+          {canPause && (
+            <button
+              type="button"
+              onClick={togglePause}
+              aria-label={isPaused ? "Resume recording" : "Pause recording"}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-white hover:opacity-90 transition-opacity"
+              style={{ border: `1px solid ${BORDER}` }}
+            >
+              {isPaused ? <Play size={18} style={{ color: TEXT }} /> : <Pause size={18} style={{ color: TEXT }} />}
+            </button>
           )}
+          <button
+            type="button"
+            onClick={stopRecording}
+            aria-label="Stop recording"
+            className="w-16 h-16 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
+            style={{ background: "#EF4444" }}
+          >
+            <div className="w-5 h-5 rounded-sm bg-white" />
+          </button>
+        </div>
+        <button type="button" className="mt-4 text-[12px] font-semibold hover:opacity-70 transition-opacity" style={{ color: MUTED }} onClick={cancelRecording}>
+          Cancel recording
+        </button>
+      </div>
+    );
+  }
+
+  // ── Render: processing ──────────────────────────────────────────────────────
+
+  if (phase === "processing") {
+    return (
+      <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+        <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: "rgba(55,48,163,0.08)" }}>
+          <Loader2 size={20} className="animate-spin" style={{ color: PLUM }} />
+        </div>
+        <p className="font-black text-[13px] mb-0.5" style={{ color: TEXT }}>{processingMessage}</p>
+        <p className="text-[12px]" style={{ color: MUTED }}>This can take up to a minute for longer recordings.</p>
+      </div>
+    );
+  }
+
+  // ── Render: review (Drafts / Transcript) ────────────────────────────────────
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("drafts")}
+            className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
+            style={{ background: activeTab === "drafts" ? PLUM : "#fff", color: activeTab === "drafts" ? "#fff" : TEXT, border: `1px solid ${activeTab === "drafts" ? PLUM : BORDER}` }}
+          >
+            Drafts ({visibleGoals.length + visibleTasks.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("transcript")}
+            className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
+            style={{ background: activeTab === "transcript" ? PLUM : "#fff", color: activeTab === "transcript" ? "#fff" : TEXT, border: `1px solid ${activeTab === "transcript" ? PLUM : BORDER}` }}
+          >
+            Transcript
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" className="rounded-xl text-[12px]" style={{ color: MUTED }} onClick={reRecord}>
+            Record again
+          </Button>
+          <Button size="sm" variant="ghost" className="rounded-xl text-[12px]" style={{ color: MUTED }} onClick={onCancel}>
+            Discard
+          </Button>
         </div>
       </div>
 
-      {/* Run AI CTA */}
-      {!suggestions && !reviewMut.isPending && (
-        <div className="rounded-2xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <div
-            className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-            style={{ background: "rgba(55,48,163,0.08)" }}
-          >
-            <Sparkles size={20} style={{ color: PLUM }} />
-          </div>
-          <p
-            className="font-black text-[14px] mb-1"
-            style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
-          >
-            Ready to analyse this meeting
-          </p>
-          <p className="text-[12px] mb-4 mx-auto" style={{ color: MUTED, maxWidth: "26rem" }}>
-            CareCliQ AI will extract NDIS goals and task templates from the conversation notes.
-            Capacity Building supports are automatically excluded.
-          </p>
-          <Button
-            className="rounded-xl gap-2 px-6"
-            style={{ background: PLUM, color: "#fff" }}
-            onClick={() => reviewMut.mutate()}
-          >
-            <Sparkles size={14} />
-            Run AI analysis
-          </Button>
-        </div>
-      )}
-
-      {/* AI processing */}
-      {reviewMut.isPending && (
-        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-          <div
-            className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-            style={{ background: "rgba(55,48,163,0.08)" }}
-          >
-            <Loader2 size={20} className="animate-spin" style={{ color: PLUM }} />
-          </div>
-          <p className="font-black text-[13px] mb-0.5" style={{ color: TEXT }}>Analysing meeting notes</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>Extracting NDIS goals and task recommendations…</p>
-        </div>
-      )}
-
-      {/* Results */}
-      {suggestions && (
-        <div className="space-y-5">
-          {/* Summary strip */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[12px] font-black" style={{ color: TEXT }}>
-              {suggestions.suggested_goals.length} goal{suggestions.suggested_goals.length !== 1 ? "s" : ""} · {suggestions.suggested_tasks.length} task{suggestions.suggested_tasks.length !== 1 ? "s" : ""} suggested
-            </span>
-            {totalSelected > 0 && (
-              <span
-                className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: "rgba(55,48,163,0.08)", color: PLUM }}
-              >
-                {totalSelected} selected
-              </span>
-            )}
+      {activeTab === "drafts" ? (
+        <div className="space-y-3 pb-16">
+          <div className="rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+            <p className="text-[11px] leading-relaxed" style={{ color: MUTED }}>
+              Nothing here is saved yet — accept the items you want, then Apply to create them for this participant.
+            </p>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportCsv}>
+                <Download size={11} /> CSV
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportPdf}>
+                <Download size={11} /> PDF
+              </Button>
+            </div>
           </div>
 
-          {/* AI flags */}
-          {suggestions.flags.length > 0 && (
+          {(attentionFlags.length > 0 || (stage1Results?.flags.length ?? 0) > 0) && (
             <div className="rounded-xl p-3 space-y-1" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
               <p className="text-[11px] font-black uppercase tracking-wide text-amber-700 flex items-center gap-1">
-                <AlertTriangle size={11} /> AI notes
+                <AlertTriangle size={11} /> Review notes
               </p>
-              {suggestions.flags.map((f, i) => (
-                <p key={i} className="text-[12px] text-amber-800 leading-relaxed">{f}</p>
+              {attentionFlags.map((f, i) => (
+                <p key={`af-${i}`} className="text-[12px] text-amber-800 leading-relaxed">{f.description}</p>
+              ))}
+              {stage1Results?.flags.map((f, i) => (
+                <p key={`sf-${i}`} className="text-[12px] text-amber-800 leading-relaxed">{f.description}</p>
               ))}
             </div>
           )}
 
-          {/* Suggested goals */}
-          {suggestions.suggested_goals.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>
-                  NDIS goals ({suggestions.suggested_goals.length})
-                </p>
-                <button
-                  className="text-[11px] font-semibold hover:opacity-70 transition-opacity"
-                  style={{ color: PLUM }}
-                  onClick={toggleAllGoals}
-                >
-                  {suggestions.suggested_goals.every((_, i) => accepted.goals.has(i)) ? "Deselect all" : "Select all"}
-                </button>
-              </div>
-              {suggestions.suggested_goals.map((g, i) => {
-                const on = accepted.goals.has(i);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => toggleGoal(i)}
-                    className="w-full text-left rounded-xl p-3 transition-colors"
-                    style={{
-                      border: `2px solid ${on ? PLUM : BORDER}`,
-                      background: on ? "rgba(55,48,163,0.04)" : "#fff",
-                    }}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div
-                        className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                        style={{ borderColor: on ? PLUM : BORDER, background: on ? PLUM : "transparent" }}
-                      >
-                        {on && <Check size={9} className="text-white" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-[12px]" style={{ color: TEXT }}>{g.name}</p>
-                        <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{g.support_category}</p>
-                        {g.description && (
-                          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: TEXT }}>{g.description}</p>
-                        )}
-                        {g.reasoning && (
-                          <p className="text-[10px] mt-1.5 italic px-2 py-1 rounded-lg" style={{ background: SOFT, color: MUTED }}>
-                            "{g.reasoning}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+          {visibleGoals.length === 0 && visibleTasks.length === 0 && (
+            <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+              <p className="font-semibold text-[13px] mb-1" style={{ color: TEXT }}>No drafts left</p>
+              <p className="text-[12px]" style={{ color: MUTED }}>Everything was rejected, or nothing was found in this recording.</p>
             </div>
           )}
 
-          {/* Suggested tasks */}
-          {suggestions.suggested_tasks.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>
-                  Task templates ({suggestions.suggested_tasks.length})
-                </p>
-                <button
-                  className="text-[11px] font-semibold hover:opacity-70 transition-opacity"
-                  style={{ color: PLUM }}
-                  onClick={toggleAllTasks}
-                >
-                  {suggestions.suggested_tasks.every((_, i) => accepted.tasks.has(i)) ? "Deselect all" : "Select all"}
-                </button>
-              </div>
-              {suggestions.suggested_tasks.map((t, i) => {
-                const on = accepted.tasks.has(i);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => toggleTask(i)}
-                    className="w-full text-left rounded-xl p-3 transition-colors"
-                    style={{
-                      border: `2px solid ${on ? PLUM : BORDER}`,
-                      background: on ? "rgba(55,48,163,0.04)" : "#fff",
-                    }}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div
-                        className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                        style={{ borderColor: on ? PLUM : BORDER, background: on ? PLUM : "transparent" }}
-                      >
-                        {on && <Check size={9} className="text-white" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-[12px]" style={{ color: TEXT }}>{t.template_name}</p>
-                        <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
-                          {t.shift_type} shift · {t.requirement_level}
-                          {t.link_to_goal_name && <> · Goal: {t.link_to_goal_name}</>}
-                        </p>
-                        {t.customised_notes && (
-                          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: TEXT }}>{t.customised_notes}</p>
-                        )}
-                        {t.reasoning && (
-                          <p className="text-[10px] mt-1.5 italic px-2 py-1 rounded-lg" style={{ background: SOFT, color: MUTED }}>
-                            "{t.reasoning}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {visibleGoals.map((g) => (
+            <DraftCard
+              key={g.localId}
+              kind="goal"
+              text={g.text}
+              badgeLabel={formatLabel(g.support_category)}
+              confidence={g.confidence}
+              quote={resolveQuote(g.source_segment_ids, cleanTranscript)}
+              accepted={g.status === "accepted"}
+              editing={editingId === g.localId}
+              editValue={editValue}
+              onToggleAccept={() => toggleAcceptGoal(g.localId)}
+              onStartEdit={() => startEdit(g.localId, g.text)}
+              onChangeEdit={setEditValue}
+              onSaveEdit={() => saveEdit("goal", g.localId)}
+              onCancelEdit={cancelEdit}
+              onReject={() => rejectGoal(g.localId)}
+            />
+          ))}
 
-          {suggestions.suggested_goals.length === 0 && suggestions.suggested_tasks.length === 0 && (
-            <div className="rounded-xl p-5 text-center" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-              <p className="font-semibold text-[13px] mb-1" style={{ color: TEXT }}>No suggestions generated</p>
-              <p className="text-[12px]" style={{ color: MUTED }}>
-                The AI did not find sufficient detail to suggest NDIS goals or tasks.
-                Add more context to the meeting notes and try again.
-              </p>
-            </div>
-          )}
+          {visibleTasks.map((t) => (
+            <DraftCard
+              key={t.localId}
+              kind="task"
+              text={t.text}
+              badgeLabel={formatLabel(t.requirement_level)}
+              confidence={t.confidence}
+              quote={resolveQuote(t.source_segment_ids, cleanTranscript)}
+              accepted={t.status === "accepted"}
+              editing={editingId === t.localId}
+              editValue={editValue}
+              onToggleAccept={() => toggleAcceptTask(t.localId)}
+              onStartEdit={() => startEdit(t.localId, t.text)}
+              onChangeEdit={setEditValue}
+              onSaveEdit={() => saveEdit("task", t.localId)}
+              onCancelEdit={cancelEdit}
+              onReject={() => rejectTask(t.localId)}
+            />
+          ))}
         </div>
+      ) : (
+        <TranscriptViewer
+          rawTranscript={stage1Results?.raw_transcript ?? []}
+          cleanTranscript={cleanTranscript}
+          defaultExpanded
+        />
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-        <Button variant="outline" className="rounded-xl" style={{ borderColor: BORDER }} onClick={onBack}>
-          Back
-        </Button>
-        {suggestions && (
+      {totalAccepted > 0 && (
+        <div className="sticky bottom-0 -mx-4 px-4 py-3 border-t flex items-center justify-between gap-3" style={{ background: "#fff", borderColor: BORDER }}>
+          <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{totalAccepted} item{totalAccepted !== 1 ? "s" : ""} accepted</p>
           <Button
-            className="rounded-xl flex-1 gap-1.5"
-            style={{ background: PLUM, color: "#fff" }}
-            disabled={totalSelected === 0}
-            onClick={proceed}
+            className="rounded-xl gap-1.5"
+            style={{ background: GREEN, color: "#fff" }}
+            disabled={applyMut.isPending}
+            onClick={() => applyMut.mutate()}
           >
-            <ChevronRight size={14} />
-            Review {totalSelected} selected item{totalSelected !== 1 ? "s" : ""}
+            {applyMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Apply {totalAccepted} item{totalAccepted !== 1 ? "s" : ""}
           </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Step 3: Apply ─────────────────────────────────────────────────────────────
-
-interface Step3Props {
-  meeting: PlanMeeting;
-  acceptedGoals: SuggestedGoal[];
-  acceptedTasks: SuggestedTask[];
-  onApplied: () => void;
-  onBack: () => void;
-}
-
-function Step3Apply({ meeting, acceptedGoals, acceptedTasks, onApplied, onBack }: Step3Props) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-
-  const mut = useMutation({
-    mutationFn: () => applyPlanMeetingSuggestions(meeting.id, acceptedGoals, acceptedTasks),
-    onSuccess: (result) => {
-      toast({ title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.` });
-      qc.invalidateQueries({ queryKey: ["plan-meetings", meeting.participant_id] });
-      qc.invalidateQueries({ queryKey: ["ndis-goals"] });
-      qc.invalidateQueries({ queryKey: ["participant-tasks"] });
-      onApplied();
-    },
-    onError: (err: any) => toast({ variant: "destructive", title: "Failed to apply", description: err?.message ?? "" }),
-  });
-
-  const goalCount  = acceptedGoals.length;
-  const taskCount  = acceptedTasks.length;
-  const summaryParts: string[] = [];
-  if (goalCount > 0) summaryParts.push(`${goalCount} NDIS goal${goalCount !== 1 ? "s" : ""}`);
-  if (taskCount > 0) summaryParts.push(`${taskCount} task template${taskCount !== 1 ? "s" : ""}`);
-
-  return (
-    <div className="space-y-5">
-      <StepProgress current={3} />
-
-      {/* Impact banner */}
-      <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: GREEN_BG, border: `1px solid ${GREEN_BORDER}` }}>
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: GREEN }}
-        >
-          <CheckCircle2 size={16} className="text-white" />
-        </div>
-        <div>
-          <p className="font-black text-[13px]" style={{ color: GREEN }}>Ready to apply</p>
-          <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>
-            {summaryParts.join(" and ")} will be created for this participant.
-          </p>
-        </div>
-      </div>
-
-      {/* Goals */}
-      {acceptedGoals.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>
-            Goals ({acceptedGoals.length})
-          </p>
-          {acceptedGoals.map((g, i) => (
-            <div
-              key={i}
-              className="rounded-xl p-3 flex gap-2.5"
-              style={{ border: `1px solid ${BORDER}`, background: "#fff" }}
-            >
-              <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: GREEN }} />
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-[12px]" style={{ color: TEXT }}>{g.name}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{g.support_category} · {g.goal_area}</p>
-                {g.success_criteria && (
-                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: TEXT }}>Success: {g.success_criteria}</p>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       )}
-
-      {/* Tasks */}
-      {acceptedTasks.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>
-            Task templates ({acceptedTasks.length})
-          </p>
-          {acceptedTasks.map((t, i) => (
-            <div
-              key={i}
-              className="rounded-xl p-3 flex gap-2.5"
-              style={{ border: `1px solid ${BORDER}`, background: "#fff" }}
-            >
-              <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: GREEN }} />
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-[12px]" style={{ color: TEXT }}>{t.template_name}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{t.shift_type} · {t.requirement_level}</p>
-                {t.customised_notes && (
-                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: TEXT }}>{t.customised_notes}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
-        <Button
-          variant="outline"
-          className="rounded-xl"
-          style={{ borderColor: BORDER }}
-          onClick={onBack}
-          disabled={mut.isPending}
-        >
-          Back
-        </Button>
-        <Button
-          className="rounded-xl flex-1 gap-1.5"
-          style={{ background: GREEN, color: "#fff" }}
-          disabled={mut.isPending}
-          onClick={() => mut.mutate()}
-        >
-          {mut.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-          Apply changes
-        </Button>
-      </div>
     </div>
   );
 }
 
 // ── Meeting history row ────────────────────────────────────────────────────────
 
-function MeetingHistoryRow({
-  meeting,
-  onContinueReview,
-}: {
-  meeting: PlanMeeting;
-  onContinueReview: (m: PlanMeeting) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const meta   = MEETING_TYPE_META[meeting.meeting_type];
+function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
+  const meta = MEETING_TYPE_META[meeting.meeting_type] ?? MEETING_TYPE_META.check_in;
   const status = STATUS_META[meeting.suggestions_status] ?? STATUS_META.pending_review;
+  const dateLabel = useMemo(() => {
+    try {
+      return new Date(meeting.meeting_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return meeting.meeting_date;
+    }
+  }, [meeting.meeting_date]);
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
-      {/* Row header */}
-      <button
-        type="button"
-        className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors"
-        onClick={() => setExpanded((v) => !v)}
+    <div className="rounded-xl flex items-center gap-3 p-3" style={{ border: `1px solid ${BORDER}` }}>
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black"
+        style={{ background: meta.bg, color: meta.color }}
       >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black"
-          style={{ background: meta.bg, color: meta.color }}
-        >
-          {meta.abbr}
+        {meta.abbr}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-black text-[12px]" style={{ color: TEXT }}>{meta.label}</p>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: status.bg, color: status.color }}>
+            {status.label}
+          </span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-black text-[12px]" style={{ color: TEXT }}>{meta.label}</p>
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-              style={{ background: status.bg, color: status.color }}
-            >
-              {status.label}
-            </span>
-          </div>
-          <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
-            {meeting.meeting_date}
-            {meeting.attendees?.length > 0 && ` · ${meeting.attendees.join(", ")}`}
-          </p>
-        </div>
-        {expanded
-          ? <ChevronUp size={14} className="shrink-0" style={{ color: MUTED }} />
-          : <ChevronDown size={14} className="shrink-0" style={{ color: MUTED }} />
-        }
-      </button>
-
-      {/* Expanded details */}
-      {expanded && (
-        <div className="border-t px-4 pb-4 pt-3 space-y-3" style={{ borderColor: BORDER }}>
-          {meeting.participant_priorities && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide mb-1" style={{ color: MUTED }}>
-                Participant priorities
-              </p>
-              <p className="text-[12px] leading-relaxed" style={{ color: TEXT }}>{meeting.participant_priorities}</p>
-            </div>
-          )}
-          {meeting.coordinator_observations && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide mb-1" style={{ color: MUTED }}>Observations</p>
-              <p className="text-[12px] leading-relaxed" style={{ color: TEXT }}>{meeting.coordinator_observations}</p>
-            </div>
-          )}
-          {meeting.agreed_outcomes && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide mb-1" style={{ color: MUTED }}>Agreed outcomes</p>
-              <p className="text-[12px] leading-relaxed" style={{ color: TEXT }}>{meeting.agreed_outcomes}</p>
-            </div>
-          )}
-          {meeting.ai_suggestions_raw?.flags?.length ? (
-            <div className="rounded-lg p-2.5" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-              <p className="text-[10px] font-black text-amber-700 uppercase mb-1">AI flags</p>
-              {meeting.ai_suggestions_raw.flags.map((f, i) => (
-                <p key={i} className="text-[11px] text-amber-800">{f}</p>
-              ))}
-            </div>
-          ) : null}
-          {meeting.suggestions_status === "pending_review" && meeting.ai_suggestions_raw && (
-            <Button
-              size="sm"
-              className="rounded-xl gap-1"
-              style={{ background: PLUM, color: "#fff" }}
-              onClick={() => onContinueReview(meeting)}
-            >
-              <Sparkles size={12} /> Continue AI review
-            </Button>
-          )}
-        </div>
-      )}
+        <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{dateLabel}</p>
+      </div>
     </div>
   );
 }
 
 // ── Main exported component ────────────────────────────────────────────────────
 
-type Step = "list" | "step1" | "step2" | "step3";
-
 interface PlanMeetingCaptureProps {
   participantId: string;
 }
 
 export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
-  const [step, setStep]               = useState<Step>("list");
-  const [activeMeeting, setActiveMeeting] = useState<PlanMeeting | null>(null);
-  const [acceptedGoals, setAcceptedGoals] = useState<SuggestedGoal[]>([]);
-  const [acceptedTasks, setAcceptedTasks] = useState<SuggestedTask[]>([]);
+  const [recording, setRecording] = useState(false);
   const qc = useQueryClient();
 
   const meetingsQuery = useQuery({
@@ -1096,55 +770,20 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
     select: (d) => d.meetings,
   });
 
-  const reset = () => {
-    setStep("list");
-    setActiveMeeting(null);
-    setAcceptedGoals([]);
-    setAcceptedTasks([]);
+  const handleDone = () => {
+    setRecording(false);
     qc.invalidateQueries({ queryKey: ["plan-meetings", participantId] });
   };
 
-  if (step === "step1") {
+  if (recording) {
     return (
       <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
-        <Step1RecordMeeting
-          participantId={participantId}
-          onRecorded={(m) => { setActiveMeeting(m); setStep("step2"); }}
-          onCancel={reset}
-        />
+        <RecordMeetingFlow participantId={participantId} onDone={handleDone} onCancel={() => setRecording(false)} />
       </div>
     );
   }
 
-  if (step === "step2" && activeMeeting) {
-    return (
-      <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
-        <Step2AiReview
-          meeting={activeMeeting}
-          onReviewed={(goals, tasks) => { setAcceptedGoals(goals); setAcceptedTasks(tasks); setStep("step3"); }}
-          onBack={() => setStep("step1")}
-        />
-      </div>
-    );
-  }
-
-  if (step === "step3" && activeMeeting) {
-    return (
-      <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
-        <Step3Apply
-          meeting={activeMeeting}
-          acceptedGoals={acceptedGoals}
-          acceptedTasks={acceptedTasks}
-          onApplied={reset}
-          onBack={() => setStep("step2")}
-        />
-      </div>
-    );
-  }
-
-  // ── List view ──
-  const meetings    = meetingsQuery.data ?? [];
-  const pendingCount = meetings.filter(m => m.suggestions_status === "pending_review" && m.ai_suggestions_raw).length;
+  const meetings = meetingsQuery.data ?? [];
 
   return (
     <div className="space-y-3">
@@ -1156,23 +795,16 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
             <p className="font-black text-[13px]" style={{ color: TEXT }}>Plan Meetings</p>
           </div>
           {meetings.length > 0 && (
-            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-              <span className="text-[12px]" style={{ color: MUTED }}>
-                <span className="font-black" style={{ color: TEXT }}>{meetings.length}</span> recorded
-              </span>
-              {pendingCount > 0 && (
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FFFBEB", color: "#92400E" }}>
-                  {pendingCount} pending AI review
-                </span>
-              )}
-            </div>
+            <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>
+              <span className="font-black" style={{ color: TEXT }}>{meetings.length}</span> recorded
+            </p>
           )}
         </div>
         <Button
           size="sm"
           className="rounded-xl gap-1 px-3 shrink-0"
           style={{ background: PLUM, color: "#fff" }}
-          onClick={() => setStep("step1")}
+          onClick={() => setRecording(true)}
         >
           <FileText size={12} /> Record meeting
         </Button>
@@ -1202,7 +834,7 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
             size="sm"
             className="mt-4 rounded-xl gap-1 px-4"
             style={{ background: PLUM, color: "#fff" }}
-            onClick={() => setStep("step1")}
+            onClick={() => setRecording(true)}
           >
             <FileText size={12} /> Record first meeting
           </Button>
@@ -1212,13 +844,7 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
       {/* Meeting list */}
       {meetings.length > 0 && (
         <div className="space-y-2">
-          {meetings.map((m) => (
-            <MeetingHistoryRow
-              key={m.id}
-              meeting={m}
-              onContinueReview={(m) => { setActiveMeeting(m); setStep("step2"); }}
-            />
-          ))}
+          {meetings.map((m) => <MeetingRow key={m.id} meeting={m} />)}
         </div>
       )}
     </div>

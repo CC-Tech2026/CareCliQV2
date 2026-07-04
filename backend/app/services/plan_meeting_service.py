@@ -335,6 +335,13 @@ def apply_plan_meeting_suggestions(
 ) -> dict[str, Any]:
     """Apply coordinator-reviewed suggestions: create ndis_goals and task templates.
 
+    `meeting_id` may be either a legacy `participant_plan_meetings` id (text-notes
+    flow) or a two-stage-pipeline `plan_meeting_sessions` id (record + transcribe
+    flow) — both are looked up here so one function serves both, instead of a
+    parallel near-duplicate. Goal/task dicts are read with fallbacks so both the
+    legacy `SuggestedGoal`/`SuggestedTask` shape (name/description/...) and the
+    newer `ExtractedGoal`/`ExtractedTask` shape (goal_text/task_text/...) work.
+
     Returns counts of what was created.
     """
     supabase = get_supabase_admin()
@@ -349,16 +356,30 @@ def apply_plan_meeting_suggestions(
         .execute()
     )
     rows = meeting_resp.data or []
+    source = "legacy"
+    if not rows:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select("participant_id, organization_id")
+            .eq("id", meeting_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = session_resp.data or []
+        source = "session"
     if not rows:
         raise ValueError("Plan meeting not found.")
     meeting = rows[0]
+    if not meeting.get("participant_id"):
+        raise ValueError("This meeting has no participant identified yet.")
     participant_id = str(meeting["participant_id"])
 
     goals_created = 0
     goal_name_to_id: dict[str, str] = {}
 
     for g in accepted_goals:
-        name = (g.get("name") or "").strip()
+        name = (g.get("name") or g.get("goal_text") or "").strip()
         if not name:
             continue
         payload: dict[str, Any] = {
@@ -366,7 +387,7 @@ def apply_plan_meeting_suggestions(
             "organization_id": organization_id,
             "created_by": coordinator_id,
             "name": name,
-            "description": g.get("description") or "",
+            "description": g.get("description") or g.get("goal_text") or "",
             "goal_area": g.get("goal_area") or "other",
             "support_category": g.get("support_category") or None,
             "success_criteria": g.get("success_criteria") or None,
@@ -384,13 +405,12 @@ def apply_plan_meeting_suggestions(
 
     tasks_created = 0
     for t in accepted_tasks:
-        template_id = t.get("template_id")
-        template_name = (t.get("template_name") or "").strip()
+        template_name = (t.get("template_name") or t.get("task_text") or "").strip()
         if not template_name:
             continue
 
         linked_goal_id: Optional[str] = None
-        link_name = (t.get("link_to_goal_name") or "").strip().lower()
+        link_name = (t.get("link_to_goal_name") or t.get("linked_goal_text") or "").strip().lower()
         if link_name:
             linked_goal_id = goal_name_to_id.get(link_name)
             if not linked_goal_id:
@@ -415,7 +435,7 @@ def apply_plan_meeting_suggestions(
             "organization_id": organization_id,
             "created_by": coordinator_id,
             "name": template_name,
-            "description": t.get("customised_notes") or "",
+            "description": t.get("customised_notes") or t.get("task_text") or "",
             "is_custom": True,
             "is_active": True,
             "status": "active",
@@ -433,17 +453,24 @@ def apply_plan_meeting_suggestions(
         except Exception as exc:
             logger.warning("Failed to create task template '%s': %s", template_name, exc)
 
-    accepted_payload = {
-        "accepted_goals": accepted_goals,
-        "accepted_tasks": accepted_tasks,
-        "applied_at": now,
-        "applied_by": coordinator_id,
-    }
-    supabase.table("participant_plan_meetings").update({
-        "suggestions_accepted": accepted_payload,
-        "suggestions_status": "applied",
-        "updated_at": now,
-    }).eq("id", meeting_id).execute()
+    if source == "legacy":
+        accepted_payload = {
+            "accepted_goals": accepted_goals,
+            "accepted_tasks": accepted_tasks,
+            "applied_at": now,
+            "applied_by": coordinator_id,
+        }
+        supabase.table("participant_plan_meetings").update({
+            "suggestions_accepted": accepted_payload,
+            "suggestions_status": "applied",
+            "updated_at": now,
+        }).eq("id", meeting_id).execute()
+    else:
+        supabase.table("plan_meeting_sessions").update({
+            "review_status": "approved",
+            "reviewed_by": coordinator_id,
+            "reviewed_at": now,
+        }).eq("id", meeting_id).execute()
 
     return {
         "goals_created": goals_created,

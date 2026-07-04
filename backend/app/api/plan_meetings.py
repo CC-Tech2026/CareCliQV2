@@ -211,13 +211,19 @@ async def list_plan_meetings(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """List all plan meetings recorded for a participant, newest first."""
+    """List all plan meetings recorded for a participant, newest first.
+
+    Merges the legacy text-notes meetings (`participant_plan_meetings`) with the
+    two-stage-pipeline recordings (`plan_meeting_sessions`) into one list, so
+    older history stays visible alongside new recordings without a second
+    endpoint/query on the frontend.
+    """
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     supabase = get_supabase_admin()
 
     try:
-        resp = (
+        legacy_resp = (
             supabase.table("participant_plan_meetings")
             .select(
                 "id, meeting_date, meeting_type, attendees, suggestions_status, "
@@ -233,14 +239,53 @@ async def list_plan_meetings(
         logger.exception("Failed to list plan meetings: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to load plan meetings.")
 
-    return {"meetings": resp.data or []}
+    legacy_meetings = [{**row, "source": "legacy"} for row in (legacy_resp.data or [])]
+
+    session_meetings: list[dict[str, Any]] = []
+    try:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select("id, meeting_type, created_at, recorded_at, coordinator_id, stage_2_status, review_status")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        for row in session_resp.data or []:
+            suggestions_status = "applied" if row.get("review_status") == "approved" else "pending_review"
+            session_meetings.append({
+                "id": row["id"],
+                "meeting_date": row.get("recorded_at") or row.get("created_at"),
+                "meeting_type": row.get("meeting_type") or "check_in",
+                "attendees": [],
+                "suggestions_status": suggestions_status,
+                "ai_generated_at": None,
+                "created_at": row.get("created_at"),
+                "coordinator_id": row.get("coordinator_id"),
+                "participant_priorities": None,
+                "coordinator_observations": None,
+                "agreed_outcomes": None,
+                "source": "session",
+            })
+    except Exception as exc:
+        logger.exception("Failed to list plan meeting sessions: %s", exc)
+
+    meetings = legacy_meetings + session_meetings
+    meetings.sort(key=lambda m: m.get("meeting_date") or "", reverse=True)
+
+    return {"meetings": meetings}
 
 
 @router.get("/plan-meetings/pending")
 async def list_pending_meetings(
     current_user: dict = Depends(get_current_user),
 ):
-    """Return meetings with AI suggestions awaiting coordinator review (dashboard banner)."""
+    """Return meetings with AI suggestions awaiting coordinator review (dashboard banner).
+
+    Combines legacy `participant_plan_meetings` rows with two-stage-pipeline
+    `plan_meeting_sessions` rows that have finished extraction but haven't been
+    applied yet, so the banner stays accurate as recordings move to the new flow.
+    """
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     supabase = get_supabase_admin()
@@ -262,7 +307,31 @@ async def list_pending_meetings(
         logger.exception("Failed to list pending meetings: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to load pending meetings.")
 
-    return {"pending": resp.data or [], "count": len(resp.data or [])}
+    pending = list(resp.data or [])
+
+    try:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select("id, participant_id, meeting_type, recorded_at, created_at, stage_2_completed_at")
+            .eq("organization_id", organization_id)
+            .eq("stage_2_status", "complete")
+            .eq("review_status", "pending")
+            .order("stage_2_completed_at", desc=True)
+            .execute()
+        )
+        for row in session_resp.data or []:
+            pending.append({
+                "id": row["id"],
+                "participant_id": row.get("participant_id"),
+                "meeting_date": row.get("recorded_at") or row.get("created_at"),
+                "meeting_type": row.get("meeting_type") or "check_in",
+                "ai_generated_at": row.get("stage_2_completed_at"),
+                "suggestions_status": "pending_review",
+            })
+    except Exception as exc:
+        logger.exception("Failed to list pending plan meeting sessions: %s", exc)
+
+    return {"pending": pending, "count": len(pending)}
 
 
 @router.get("/plan-meetings/{meeting_id}")

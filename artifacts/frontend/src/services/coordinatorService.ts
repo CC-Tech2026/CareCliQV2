@@ -1278,7 +1278,9 @@ export type PlanMeeting = {
   suggestions_status: PlanMeetingSuggestionsStatus;
   ai_generated_at?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  /** "legacy" = text-notes meeting, "session" = recorded two-stage-pipeline meeting */
+  source?: "legacy" | "session";
 };
 
 export type RecordMeetingPayload = {
@@ -1319,10 +1321,27 @@ export function triggerPlanMeetingAiReview(meetingId: string) {
   );
 }
 
+/** Goal payload accepted by the apply endpoint when applying two-stage-pipeline drafts (session-based). */
+export type ExtractedGoalPayload = {
+  goal_text: string;
+  support_category?: string | null;
+};
+
+/** Task payload accepted by the apply endpoint when applying two-stage-pipeline drafts (session-based). */
+export type ExtractedTaskPayload = {
+  task_text: string;
+  requirement_level: "mandatory" | "optional";
+  linked_goal_text?: string | null;
+};
+
+/**
+ * `meetingId` may be a legacy `participant_plan_meetings` id or a
+ * `plan_meeting_sessions` id — the backend resolves either transparently.
+ */
 export function applyPlanMeetingSuggestions(
   meetingId: string,
-  acceptedGoals: SuggestedGoal[],
-  acceptedTasks: SuggestedTask[],
+  acceptedGoals: (SuggestedGoal | ExtractedGoalPayload)[],
+  acceptedTasks: (SuggestedTask | ExtractedTaskPayload)[],
 ) {
   return jsonFetch<{ goals_created: number; tasks_created: number; meeting_id: string }>(
     `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}/apply`,
