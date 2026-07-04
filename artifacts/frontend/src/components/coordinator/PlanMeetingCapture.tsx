@@ -57,19 +57,6 @@ function confidenceStyle(confidence: number): { bg: string; color: string; label
   return { bg: "#FEF2F2", color: CORAL, label: `${pct}%` };
 }
 
-// ── Section divider ────────────────────────────────────────────────────────────
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.15em] shrink-0" style={{ color: MUTED }}>
-        {label}
-      </p>
-      <div className="flex-1 h-px" style={{ background: BORDER }} />
-    </div>
-  );
-}
-
 // ── Draft item types ────────────────────────────────────────────────────────────
 
 type DraftStatus = "pending" | "accepted" | "rejected";
@@ -254,7 +241,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
 
   // ── Start: mic permission → create session → begin recording ──────────────────
 
-  const beginRecording = (stream: MediaStream) => {
+  const beginRecording = (stream: MediaStream, sid: string) => {
     let mimeType = "audio/webm;codecs=opus";
     if (!MediaRecorder.isTypeSupported(mimeType)) {
       mimeType = "audio/mp4";
@@ -266,7 +253,10 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       const audioBlob = new Blob(chunks, { type: mimeType });
-      await processRecording(audioBlob);
+      // `sid` is captured directly (not read from `sessionId` state) because this
+      // handler is wired up once, synchronously, before the setSessionId() state
+      // update above has taken effect — reading state here would see a stale null.
+      await processRecording(audioBlob, sid);
     };
     recorder.start();
     setMediaRecorder(recorder);
@@ -284,15 +274,17 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     setStartingSession(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let sid: string;
       try {
         const session = await createMeetingSession(meetingType, new Date().toISOString().slice(0, 10), undefined, participantId);
-        setSessionId(session.session_id);
+        sid = session.session_id;
+        setSessionId(sid);
       } catch (err: any) {
         stream.getTracks().forEach((t) => t.stop());
         toast({ variant: "destructive", title: "Failed to create session", description: err?.message ?? "" });
         return;
       }
-      beginRecording(stream);
+      beginRecording(stream, sid);
     } catch (err: any) {
       if (err.name === "NotAllowedError") {
         toast({ variant: "destructive", title: "Microphone access denied", description: "Allow microphone access to record." });
@@ -342,15 +334,14 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
 
   // ── Processing: Stage 1 → Stage 2, auto-chained ────────────────────────────────
 
-  const processRecording = async (audioBlob: Blob) => {
-    if (!sessionId) return;
+  const processRecording = async (audioBlob: Blob, sid: string) => {
     try {
       setProcessingMessage("Transcribing audio…");
-      const stage1 = await transcribeAndResolveNames(sessionId, audioBlob, "", "", []);
+      const stage1 = await transcribeAndResolveNames(sid, audioBlob, "", "", []);
       setStage1Results(stage1);
 
       setProcessingMessage("Drafting goals & tasks…");
-      const stage2 = await extractGoalsAndTasks(sessionId);
+      const stage2 = await extractGoalsAndTasks(sid);
 
       setDraftGoals(stage2.goals.map((g, i) => ({
         localId: `g-${i}`,
