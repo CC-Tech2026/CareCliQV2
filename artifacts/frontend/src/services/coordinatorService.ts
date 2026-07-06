@@ -1289,6 +1289,9 @@ export type PlanMeetingDetail = PlanMeeting & {
   clean_transcript?: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
   extracted_goals?: ExtractedGoal[];
   extracted_tasks?: ExtractedTask[];
+  consent_given_by?: ConsentGivenBy | null;
+  consent_method?: ConsentMethod | null;
+  consent_confirmed_at?: string | null;
 };
 
 export type RecordMeetingPayload = {
@@ -1387,11 +1390,16 @@ export type MeetingSessionResponse = {
   created_at: string;
 };
 
+export type ConsentGivenBy = "participant" | "nominee" | "guardian";
+export type ConsentMethod = "verbal" | "written";
+
 export function createMeetingSession(
   meetingType: PlanMeetingType = "check_in",
-  meetingDate?: string,
-  conversationContext?: Record<string, any>,
-  participantId?: string,
+  meetingDate: string | undefined,
+  conversationContext: Record<string, any> | undefined,
+  participantId: string | undefined,
+  consentGivenBy: ConsentGivenBy,
+  consentMethod: ConsentMethod,
 ): Promise<MeetingSessionResponse> {
   return jsonFetch<MeetingSessionResponse>("/api/coordinator/plan-meetings/sessions", {
     method: "POST",
@@ -1401,6 +1409,8 @@ export function createMeetingSession(
       meeting_date: meetingDate,
       conversation_context: conversationContext,
       participant_id: participantId, // Optional: if participant already selected in UI
+      consent_given_by: consentGivenBy,
+      consent_method: consentMethod,
     }),
   });
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mic, Pause, Play, Loader2, Check, X, Pencil,
-  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft,
+  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,8 @@ import {
   type Stage2ExtractionResult,
   type ExtractedGoalPayload,
   type ExtractedTaskPayload,
+  type ConsentGivenBy,
+  type ConsentMethod,
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
@@ -190,15 +192,29 @@ function DraftCard({
 
 // ── Record + review flow ─────────────────────────────────────────────────────────
 
+function ConsentPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 h-10 rounded-full text-[13px] font-bold transition-all"
+      style={active ? { background: PLUM, color: "#fff" } : { background: "#fff", color: TEXT, border: `1px solid ${BORDER}` }}
+    >
+      {label}
+    </button>
+  );
+}
+
 type Phase = "idle" | "recording" | "processing" | "review";
 
 interface RecordMeetingFlowProps {
   participantId: string;
+  participantName: string;
   onDone: () => void;
   onCancel: () => void;
 }
 
-function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlowProps) {
+function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }: RecordMeetingFlowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -206,6 +222,10 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   const [phase, setPhase] = useState<Phase>("idle");
   const [voiceNotSupported, setVoiceNotSupported] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
+
+  const [consentGivenBy, setConsentGivenBy] = useState<ConsentGivenBy>("participant");
+  const [consentMethod, setConsentMethod] = useState<ConsentMethod>("verbal");
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -267,6 +287,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   };
 
   const handleMicTap = async () => {
+    if (!consentConfirmed) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setVoiceNotSupported(true);
       toast({ variant: "destructive", title: "Voice recording not supported", description: "Please use a different browser or device." });
@@ -277,7 +298,14 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       let sid: string;
       try {
-        const session = await createMeetingSession(meetingType, new Date().toISOString().slice(0, 10), undefined, participantId);
+        const session = await createMeetingSession(
+          meetingType,
+          new Date().toISOString().slice(0, 10),
+          undefined,
+          participantId,
+          consentGivenBy,
+          consentMethod,
+        );
         sid = session.session_id;
         setSessionId(sid);
       } catch (err: any) {
@@ -330,6 +358,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     setMediaRecorder(null);
     setElapsedTime(0);
     setIsPaused(false);
+    setConsentConfirmed(false);
     setPhase("idle");
   };
 
@@ -378,6 +407,8 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     setDraftTasks([]);
     setEditingId(null);
     setElapsedTime(0);
+    // Each new recording attempt needs its own consent confirmation.
+    setConsentConfirmed(false);
     setPhase("idle");
   };
 
@@ -483,6 +514,11 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   // ── Render: idle ────────────────────────────────────────────────────────────
 
   if (phase === "idle") {
+    const consentGivenByLabel = consentGivenBy === "participant" ? participantName : `${participantName}'s ${consentGivenBy}`;
+    const nowLabel = new Date().toLocaleString("en-AU", {
+      day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
+    });
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-center gap-2">
@@ -500,22 +536,60 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
           </select>
         </div>
 
-        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <button
-            type="button"
-            onClick={handleMicTap}
-            disabled={startingSession || voiceNotSupported}
-            aria-label="Start recording"
-            className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
-            style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
-          >
-            {startingSession ? <Loader2 size={26} className="animate-spin text-white" /> : <Mic size={26} className="text-white" />}
-          </button>
-          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>Tap to start recording</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            Speak naturally — CareCliQ transcribes the conversation and drafts NDIS goals and tasks automatically.
-          </p>
+        <div className="rounded-2xl p-5 flex items-start gap-3" style={{ background: CORAL }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.2)" }}>
+            <ShieldCheck size={18} className="text-white" />
+          </div>
+          <div>
+            <p className="font-black text-[15px] text-white">Consent required</p>
+            <p className="text-[13px] text-white mt-0.5" style={{ opacity: 0.9 }}>
+              Recording cannot start without explicit consent.
+            </p>
+          </div>
         </div>
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: MUTED }}>Consent given by</p>
+          <div className="flex gap-2">
+            <ConsentPill label="Participant" active={consentGivenBy === "participant"} onClick={() => setConsentGivenBy("participant")} />
+            <ConsentPill label="Nominee" active={consentGivenBy === "nominee"} onClick={() => setConsentGivenBy("nominee")} />
+            <ConsentPill label="Guardian" active={consentGivenBy === "guardian"} onClick={() => setConsentGivenBy("guardian")} />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: MUTED }}>Method</p>
+          <div className="flex gap-2">
+            <ConsentPill label="Verbal" active={consentMethod === "verbal"} onClick={() => setConsentMethod("verbal")} />
+            <ConsentPill label="Written" active={consentMethod === "written"} onClick={() => setConsentMethod("written")} />
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2.5 rounded-2xl p-4 cursor-pointer" style={{ border: `1px solid ${BORDER}` }}>
+          <input
+            type="checkbox"
+            checked={consentConfirmed}
+            onChange={(e) => setConsentConfirmed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded shrink-0"
+          />
+          <span className="text-[13px]" style={{ color: TEXT }}>
+            I confirm <strong>{consentGivenByLabel}</strong> has been informed the conversation will be recorded and has given {consentMethod} consent.
+          </span>
+        </label>
+
+        <p className="text-center text-[11px]" style={{ color: MUTED }}>Recorded {nowLabel}</p>
+
+        <button
+          type="button"
+          onClick={handleMicTap}
+          disabled={!consentConfirmed || startingSession || voiceNotSupported}
+          aria-label="Confirm consent and start recording"
+          className="w-full h-12 rounded-full flex items-center justify-center gap-2 font-black text-[14px] text-white hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+          style={{ background: CORAL }}
+        >
+          {startingSession ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
+          Confirm consent &amp; record
+        </button>
 
         <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
           <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
@@ -917,9 +991,10 @@ function MeetingRow({ meeting, onSelect }: { meeting: PlanMeeting; onSelect: (id
 
 interface PlanMeetingCaptureProps {
   participantId: string;
+  participantName: string;
 }
 
-export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
+export function PlanMeetingCapture({ participantId, participantName }: PlanMeetingCaptureProps) {
   const [recording, setRecording] = useState(false);
   const [viewingMeetingId, setViewingMeetingId] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
@@ -940,7 +1015,7 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
   if (recording) {
     return (
       <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
-        <RecordMeetingFlow participantId={participantId} onDone={handleDone} onCancel={() => setRecording(false)} />
+        <RecordMeetingFlow participantId={participantId} participantName={participantName} onDone={handleDone} onCancel={() => setRecording(false)} />
       </div>
     );
   }

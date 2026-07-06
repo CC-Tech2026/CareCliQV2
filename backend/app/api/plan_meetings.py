@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -29,6 +29,11 @@ class CreateMeetingSessionRequest(BaseModel):
     meeting_type: str = "check_in"
     conversation_context: Optional[dict[str, Any]] = None  # {participant_priorities, coordinator_observations, agreed_outcomes}
     participant_id: Optional[str] = None  # Optional: if participant already selected in UI (e.g., from participant details page)
+    # Required: a recording cannot start without explicit, auditable consent. The
+    # person consenting may not be the participant themselves (a nominee or
+    # guardian can consent on their behalf) — see `consent_given_by`.
+    consent_given_by: Literal["participant", "nominee", "guardian"]
+    consent_method: Literal["verbal", "written"]
 
 
 class MeetingSessionResponse(BaseModel):
@@ -141,6 +146,11 @@ async def create_meeting_session(
         "stage_1_status": "pending",
         "stage_2_status": "pending",
         "review_status": "pending",
+        "consent_given_by": body.consent_given_by,
+        "consent_method": body.consent_method,
+        # Server-authoritative timestamp — never trust a client-supplied time for
+        # an auditable consent record.
+        "consent_confirmed_at": now,
     }
 
     try:
@@ -394,7 +404,8 @@ async def get_plan_meeting(
                 "id, participant_id, meeting_type, created_at, recorded_at, coordinator_id, "
                 "stage_1_status, stage_2_status, review_status, reviewed_by, reviewed_at, "
                 "raw_transcript, clean_transcript, resolved_names, "
-                "extracted_goals, extracted_tasks, attention_flags"
+                "extracted_goals, extracted_tasks, attention_flags, "
+                "consent_given_by, consent_method, consent_confirmed_at"
             )
             .eq("id", meeting_id)
             .eq("organization_id", organization_id)
@@ -428,6 +439,9 @@ async def get_plan_meeting(
             "extracted_goals": _parse_json_field(session.get("extracted_goals"), []),
             "extracted_tasks": _parse_json_field(session.get("extracted_tasks"), []),
             "attention_flags": _parse_json_field(session.get("attention_flags"), []),
+            "consent_given_by": session.get("consent_given_by"),
+            "consent_method": session.get("consent_method"),
+            "consent_confirmed_at": session.get("consent_confirmed_at"),
         },
     }
 

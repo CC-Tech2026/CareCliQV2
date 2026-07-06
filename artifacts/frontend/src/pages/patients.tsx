@@ -2840,7 +2840,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
         {/* PLAN MEETINGS TAB — coordinator only */}
         {activeTab === "plan_meetings" && isCoordinator && (
           <section className="space-y-3">
-            <PlanMeetingCapture participantId={id} />
+            <PlanMeetingCapture participantId={id} participantName={participant.full_name} />
           </section>
         )}
 
