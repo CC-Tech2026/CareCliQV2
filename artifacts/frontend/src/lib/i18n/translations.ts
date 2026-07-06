@@ -2645,6 +2645,7 @@ export const en: Dict = {
   "compliance.centre.tab.participants": "Participant compliance",
   "compliance.centre.tab.incidents": "Incidents",
   "compliance.centre.tab.auditPack": "Audit Pack",
+  "compliance.centre.subtitle": "Everything NDIS-related — staff, participants, incidents, and audit history — in one place.",
 
   "compliance.centre.credType.ndisScreening": "NDIS Screening",
   "compliance.centre.credType.wwcc": "WWCC",

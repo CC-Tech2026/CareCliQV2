@@ -18,7 +18,7 @@ import {
   Download, AlertTriangle, ShieldAlert, ShieldCheck, Users, HeartHandshake,
   ListChecks, FileX, Search, BarChart3, Flag,
   FileCheck2, Info, ArrowRight, Eye, FilePlus, FileText, List,
-  ArrowDownCircle, CircleCheck,
+  ArrowDownCircle, CircleCheck, LayoutDashboard, Loader2, Inbox,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -28,6 +28,9 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
+// Solid colors sampled from the CareCliQ logo mark — no gradients.
+const LOGO_PINK = "#E94B8C";
+const LOGO_PURPLE = "#6B3FA0";
 
 function scoreColor(score: number) {
   return score >= 85 ? "#16A34A" : score >= 60 ? "#D97706" : "#DC2626";
@@ -85,6 +88,27 @@ function FilterChip({ label, active, icon, onClick }: { label: string; active: b
   );
 }
 
+function LoadingBlock({ label }: { label: string }) {
+  return (
+    <div className="py-16 flex flex-col items-center justify-center gap-2">
+      <Loader2 size={22} className="animate-spin" style={{ color: LOGO_PURPLE }} />
+      <p className="text-[12px] font-medium" style={{ color: MUTED }}>{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({ label, sub }: { label: string; sub?: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center gap-2 text-center">
+      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(107,63,160,0.08)" }}>
+        <Inbox size={18} style={{ color: LOGO_PURPLE }} />
+      </div>
+      <p className="text-[13px] font-bold" style={{ color: TEXT }}>{label}</p>
+      {sub && <p className="text-[11px] max-w-xs" style={{ color: MUTED }}>{sub}</p>}
+    </div>
+  );
+}
+
 function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" | "pu" | "gy" }) {
   const map: Record<string, { bg: string; color: string }> = {
     gn: { bg: "rgba(22,163,74,0.1)", color: "#16A34A" },
@@ -104,16 +128,25 @@ function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" 
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
 type SubTab = "overview" | "staff" | "participants" | "incidents" | "audit_pack";
 const SUB_TABS: SubTab[] = ["overview", "staff", "participants", "incidents", "audit_pack"];
+const TAB_ICONS: Record<SubTab, typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  staff: Users,
+  participants: HeartHandshake,
+  incidents: ShieldAlert,
+  audit_pack: FileCheck2,
+};
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Compliance() {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const search = useSearch();
   const [, navigate] = useLocation();
   const initialTab = (new URLSearchParams(search).get("tab") as SubTab | null) ?? "overview";
   const [activeTab, setActiveTabState] = useState<SubTab>(
     SUB_TABS.includes(initialTab) ? initialTab : "overview",
   );
+  // Shared cache with OverviewPanel (same queryKey) — just for the header's live score badge.
+  const { data: headerOverview } = useQuery({ queryKey: ["compliance-centre", "overview"], queryFn: getComplianceCentreOverview });
 
   function setActiveTab(tab: SubTab) {
     setActiveTabState(tab);
@@ -128,27 +161,55 @@ export default function Compliance() {
     audit_pack: translate("compliance.centre.tab.auditPack"),
   };
 
+  const overallScore = headerOverview?.kpis.overall_score;
+
   return (
     <div className="flex flex-col gap-3 pb-8">
-      <div className="flex items-center justify-between gap-3 border-b pb-3" style={{ borderColor: BORDER }}>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("compliance.page.title")}</h1>
+      <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: LOGO_PURPLE }}>
+        <div className="relative w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.16)" }}>
+          <ShieldCheck size={22} className="text-white" />
+          {(headerOverview?.urgent_actions.length ?? 0) > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
+              style={{ background: LOGO_PINK, borderColor: LOGO_PURPLE }}
+              title={translateParams(
+                headerOverview!.urgent_actions.length !== 1 ? "compliance.centre.overview.urgentActionPlural" : "compliance.centre.overview.urgentAction",
+                { count: String(headerOverview!.urgent_actions.length) },
+              )}
+            />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-black tracking-tight text-white">{translate("compliance.page.title")}</h1>
+          <p className="text-[12px] font-medium mt-0.5" style={{ color: "rgba(255,255,255,0.82)" }}>{translate("compliance.centre.subtitle")}</p>
+        </div>
+        {overallScore != null && (
+          <div className="hidden sm:flex flex-col items-end shrink-0 pl-4" style={{ borderLeft: "1px solid rgba(255,255,255,0.25)" }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.7)" }}>
+              {translate("compliance.centre.overview.statOverallScore")}
+            </span>
+            <span className="text-2xl font-black text-white leading-tight">{Math.round(overallScore)}</span>
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-1 border-b pb-0 flex-wrap" style={{ borderColor: BORDER }}>
-        {SUB_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className="px-3.5 py-2 text-[13px] font-bold border-b-2 -mb-px transition-colors"
-            style={{
-              color: activeTab === tab ? PLUM : MUTED,
-              borderColor: activeTab === tab ? PLUM : "transparent",
-            }}
-          >
-            {tabLabels[tab]}
-          </button>
-        ))}
+      <div className="flex gap-1 rounded-xl p-1 flex-wrap" style={{ background: SOFT }}>
+        {SUB_TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab];
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-bold transition-colors"
+              style={active ? { background: LOGO_PURPLE, color: "#fff" } : { background: "transparent", color: MUTED }}
+            >
+              <Icon size={14} />
+              {tabLabels[tab]}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "overview" && <OverviewPanel onNavigateTab={setActiveTab} />}
@@ -170,7 +231,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   const arcColor = scoreColor(avg);
   const circ = 2 * Math.PI * 34;
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: MUTED }}>{translate("common.loading")}</div>;
+  if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
     <div className="space-y-3">
@@ -381,7 +442,7 @@ function StaffPanel() {
     downloadBlob(new Blob([csv], { type: "text/csv" }), "staff-compliance.csv");
   }
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: MUTED }}>{translate("common.loading")}</div>;
+  if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
     <div className="space-y-3">
@@ -461,7 +522,7 @@ function StaffPanel() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={10} className="px-4 py-6 text-center text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.staff.noMatches")}</td></tr>
+                <tr><td colSpan={10}><EmptyState label={translate("compliance.centre.staff.noMatches")} /></td></tr>
               )}
             </tbody>
           </table>
@@ -524,7 +585,7 @@ function ParticipantsPanel() {
     downloadBlob(new Blob([csv], { type: "text/csv" }), "participant-compliance.csv");
   }
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: MUTED }}>{translate("common.loading")}</div>;
+  if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
     <div className="space-y-3">
@@ -616,7 +677,7 @@ function ParticipantsPanel() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.participants.noMatches")}</td></tr>
+                <tr><td colSpan={8}><EmptyState label={translate("compliance.centre.participants.noMatches")} /></td></tr>
               )}
             </tbody>
           </table>
@@ -648,7 +709,7 @@ function IncidentsPanel() {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "incidents"], queryFn: getComplianceCentreIncidents });
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: MUTED }}>{translate("common.loading")}</div>;
+  if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   function actionFor(incident: NonNullable<typeof data>["incidents"][number]) {
     if (incident.status !== "closed" && incident.incident_type === "restrictive_practice") {
@@ -724,7 +785,7 @@ function IncidentsPanel() {
                 </tr>
               ))}
               {(data?.incidents.length ?? 0) === 0 && (
-                <tr><td colSpan={7} className="px-4 py-6 text-center text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.incidents.noIncidents")}</td></tr>
+                <tr><td colSpan={7}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
               )}
             </tbody>
           </table>

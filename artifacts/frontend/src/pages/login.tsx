@@ -419,7 +419,6 @@ export default function Login() {
                     disabled={busy}
                     autoComplete="username"
                     required
-                    aria-invalid={!!identifierError}
                     className="login-input w-full h-12 px-4 rounded-xl text-[14px] font-medium outline-none transition-all border"
                     style={{
                       background: INPUT_BG,

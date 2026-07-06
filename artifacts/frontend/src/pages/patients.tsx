@@ -58,6 +58,7 @@ import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
+import { FormPanel } from "@/components/FormPanel";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import {
@@ -82,6 +83,233 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+// ---------------------------------------------------------------------------
+// Template Presets
+// ---------------------------------------------------------------------------
+
+type TaskTemplate = {
+  label: string;
+  category: ParticipantTask["category"];
+  shift_type: ParticipantTask["shift_type"];
+  priority: ParticipantTask["priority"];
+  evidence_required: ParticipantTask["evidence_required"];
+  is_mandatory: boolean;
+  description: string;
+  outcome_tip?: string;
+};
+
+const SHIFT_SYSTEM_TASK_TEMPLATES: Record<string, TaskTemplate> = {
+  personal_hygiene: {
+    label: "Personal Hygiene",
+    category: "personal_care",
+    shift_type: "morning",
+    priority: "high",
+    evidence_required: "none",
+    is_mandatory: true,
+    description: "Support participant with showering, grooming, and dressing. Observe and note level of independence.",
+    outcome_tip: "Participant completed hygiene routine with appropriate support.",
+  },
+  meal_prep: {
+    label: "Meal Preparation",
+    category: "personal_care",
+    shift_type: "morning",
+    priority: "high",
+    evidence_required: "notes",
+    is_mandatory: true,
+    description: "Support participant to prepare or assist with meal. Record what was eaten and any dietary concerns.",
+    outcome_tip: "Meals prepared safely with participant involvement where possible.",
+  },
+  medication: {
+    label: "Medication Administration",
+    category: "medication",
+    shift_type: "morning",
+    priority: "high",
+    evidence_required: "photo_and_notes",
+    is_mandatory: true,
+    description: "Administer medication per dosette box or medication chart. Photo the administration. Record time, dosage, and participant response. Escalate any refusals or reactions immediately.",
+    outcome_tip: "Medications taken as prescribed with no adverse reactions noted.",
+  },
+  health_wellness: {
+    label: "Health & Wellness Check",
+    category: "personal_care",
+    shift_type: "morning",
+    priority: "high",
+    evidence_required: "notes",
+    is_mandatory: true,
+    description: "Observe and record participant's physical and emotional wellbeing at the start of shift: mood, sleep quality, any pain or discomfort, skin integrity, appetite, and hydration.",
+    outcome_tip: "Participant wellbeing observed and any concerns documented.",
+  },
+  community_access: {
+    label: "Community Access",
+    category: "community_access",
+    shift_type: "afternoon",
+    priority: "medium",
+    evidence_required: "notes",
+    is_mandatory: false,
+    description: "Support participant to access community activities. Record destination, duration, participation level, and any notable interactions.",
+    outcome_tip: "Participant engaged in community activity with support as needed.",
+  },
+  documentation: {
+    label: "Documentation & Notes",
+    category: "personal_care",
+    shift_type: "anytime",
+    priority: "high",
+    evidence_required: "notes",
+    is_mandatory: true,
+    description: "Record factual, observable shift summary. Include: participant mood, activities completed, any incidents or concerns, and goals progress if relevant.",
+    outcome_tip: "Progress notes capture what was done and participant response.",
+  },
+};
+
+const GOAL_AREA_TASK_PRESETS: Record<string, TaskTemplate[]> = {
+  daily_living: [
+    {
+      label: "Personal Care Routine",
+      category: "personal_care",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "notes",
+      is_mandatory: true,
+      description: "Support participant with daily personal care activities including hygiene, dressing, and grooming to promote independence.",
+    },
+    {
+      label: "Meal Preparation Support",
+      category: "personal_care",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "notes",
+      is_mandatory: true,
+      description: "Assist with meal planning and preparation, ensuring nutritional needs are met and participant involvement is maximized.",
+    },
+    {
+      label: "Medication Management",
+      category: "medication",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "photo_and_notes",
+      is_mandatory: true,
+      description: "Administer prescribed medications safely and document administration with evidence of compliance.",
+    },
+    {
+      label: "Health Monitoring",
+      category: "personal_care",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "notes",
+      is_mandatory: true,
+      description: "Regular health checks including vital signs observation and wellbeing assessment as per medical requirements.",
+    },
+  ],
+  community: [
+    {
+      label: "Community Access Planning",
+      category: "community_access",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Plan and facilitate access to community activities, events, and social venues aligned with participant interests.",
+    },
+    {
+      label: "Transport Support",
+      category: "transport",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Provide transport assistance to community outings, appointments, and social activities as required.",
+    },
+    {
+      label: "Social Interaction Facilitation",
+      category: "community_access",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Support participant to engage in social activities, community events, and peer interaction to build relationships.",
+    },
+  ],
+  health: [
+    {
+      label: "Health Observation & Reporting",
+      category: "personal_care",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "notes",
+      is_mandatory: true,
+      description: "Observe and document participant health status, any changes, symptoms, or concerns for medical review.",
+    },
+    {
+      label: "Wellness Monitoring",
+      category: "personal_care",
+      shift_type: "morning",
+      priority: "high",
+      evidence_required: "notes",
+      is_mandatory: true,
+      description: "Regular monitoring of physical and mental wellbeing, including mood, energy levels, pain, and overall health status.",
+    },
+    {
+      label: "Medical Appointment Support",
+      category: "personal_care",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Accompany and support participant to medical appointments, ensuring accurate communication and follow-up.",
+    },
+  ],
+  social: [
+    {
+      label: "Social Engagement Activities",
+      category: "community_access",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Facilitate social engagement through visits, activities, or interactions that promote social connection and wellbeing.",
+    },
+    {
+      label: "Communication Support",
+      category: "community_access",
+      shift_type: "anytime",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Support participant communication with family, friends, and community through phone, video, or in-person visits.",
+    },
+  ],
+  employment: [
+    {
+      label: "Employment Preparation",
+      category: "community_access",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Support participant in job search, interview preparation, resume development, or workplace integration tasks.",
+    },
+    {
+      label: "Work Support & Coaching",
+      category: "community_access",
+      shift_type: "afternoon",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Provide on-the-job coaching, workplace adaptation support, and task guidance to ensure employment success.",
+    },
+  ],
+  other: [
+    {
+      label: "General Support Task",
+      category: "personal_care",
+      shift_type: "anytime",
+      priority: "medium",
+      evidence_required: "notes",
+      is_mandatory: false,
+      description: "Custom support task tailored to participant needs and goals.",
+    },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -1040,7 +1268,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
       setCreateMode(null);
-      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false);
+      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null);
     },
     onError: (err: Error) => toastFn({ title: err.message || "Failed to create task", variant: "destructive" }),
   });
@@ -1173,6 +1401,20 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
   const [taskAiSuggestions, setTaskAiSuggestions] = useState<{ names: string[]; instructions: string[]; category: string | null; priority: string | null } | null>(null);
   const [taskAiLoading, setTaskAiLoading] = useState(false);
+  const [appliedTemplate, setAppliedTemplate] = useState<TaskTemplate | null>(null);
+
+  const applyTaskTemplate = (template: TaskTemplate) => {
+    setTaskTitle(template.label);
+    setTaskInstructions(template.description);
+    setTaskCategory((template.category as any) || "personal_care");
+    setTaskShiftType((template.shift_type as any) || "morning");
+    setTaskPriority((template.priority as any) || "medium");
+    setTaskEvidenceRequired((template.evidence_required as any) || "none");
+    setIsMandatory(template.is_mandatory);
+    setTaskTitleAiApplied(true);
+    setTaskInstructionsAiApplied(true);
+    setAppliedTemplate(template);
+  };
 
   // Sync contenteditable description div when goal form opens or switches between modes
   useEffect(() => {
@@ -1685,16 +1927,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           };
 
           const goalFormContent = (
-            <div className="rounded-xl border border-purple-100 bg-white shadow-sm p-5 space-y-4">
-              {/* Header */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="text-[14px] font-bold text-[#111827]">{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</h4>
-                  <p className="text-[11px] text-[#6B7280] mt-0.5">{participant.full_name}</p>
-                </div>
-                <button type="button" onClick={cancelGoalForm} title="Close" aria-label="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={15} className="text-[#9CA3AF]" /></button>
-              </div>
-
+            <div className="space-y-4">
               {/* AI Goal Assistant panel */}
               <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -1832,6 +2065,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               </div>
 
+              {/* Goal-area task suggestions hint */}
+              {goalCategory && (
+                <div className="text-[10px] text-[#6B7280] bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <p className="font-semibold text-purple-700 mb-1">Common tasks for this goal area:</p>
+                  <p className="text-purple-600">{GOAL_AREA_TASK_PRESETS[goalCategory]?.map(t => t.label).join(", ") || "No templates available"}</p>
+                </div>
+              )}
+
               {/* NDIS support category */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">
@@ -1942,15 +2183,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           );
 
           const taskFormContent = (
-            <div className="rounded-xl border border-purple-200 bg-white shadow-md p-6 space-y-5">
-              <div className="flex items-start justify-between pb-4 border-b border-purple-100">
-                <div>
-                  <h3 className="text-[16px] font-bold text-[#111827]">Create New Task</h3>
-                  <p className="text-[12px] text-[#6B7280] mt-1">Setting up support for <span className="font-semibold">{participant.full_name}</span></p>
-                </div>
-                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }} title="Close" aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"><X size={16} className="text-[#9CA3AF]" /></button>
-              </div>
-
+            <div className="space-y-5">
               {/* PURPOSE SELECTION - FIRST FIELD */}
               <div className="space-y-2">
                 <label className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">What is this task for?</label>
@@ -2084,6 +2317,52 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       ? 'Get task ideas grounded in the linked goal'
                       : 'Get AI-powered task name and instruction suggestions'}
                   </p>
+                )}
+              </div>
+
+              {/* TEMPLATE PRESETS */}
+              <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Quick-start templates</label>
+
+                {/* System templates */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-[#6B7280]">Or start with a system task template:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.values(SHIFT_SYSTEM_TASK_TEMPLATES).map(template => (
+                      <button
+                        key={template.label}
+                        type="button"
+                        onClick={() => applyTaskTemplate(template)}
+                        className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                      >
+                        {template.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Goal-area templates (conditional) */}
+                {linkedGoalId && (
+                  <div className="space-y-2 border-t border-blue-200 pt-2">
+                    <p className="text-[10px] text-[#6B7280]">Or use a preset for this goal area:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(() => {
+                        const linkedGoal = goals.find(g => g.id === linkedGoalId);
+                        const goalArea = linkedGoal?.goal_area || 'daily_living';
+                        const templates = GOAL_AREA_TASK_PRESETS[goalArea] || [];
+                        return templates.map(template => (
+                          <button
+                            key={template.label}
+                            type="button"
+                            onClick={() => applyTaskTemplate(template)}
+                            className="rounded-full border border-purple-300 bg-white px-3 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition-colors"
+                          >
+                            {template.label}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -2227,11 +2506,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   }`}
                 />
                 {taskInstructionsAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
+                {appliedTemplate?.outcome_tip && <p className="text-[10px] text-emerald-600 flex items-center gap-1 pt-1"><CheckCircle2 size={12} /> {appliedTemplate.outcome_tip}</p>}
               </div>
 
               {/* ACTION BUTTONS */}
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }}
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
                   className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
                 <button type="button" disabled={!taskTitle.trim() || createTaskMut.isPending}
                   onClick={() => createTaskMut.mutate({
@@ -2255,7 +2535,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           return (
             <section className="space-y-4">
-              {/* Header */}
+              {/* Header — spans full width */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <h3 className="text-[16px] font-bold text-[#111827]">Goals & Tasks</h3>
@@ -2268,7 +2548,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     + Goal
                   </button>
                   <button type="button"
-                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }}
+                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
                     className="h-9 px-3 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
                     + Task
                   </button>
@@ -2279,9 +2559,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               </div>
 
-              {/* Goal / task create-edit forms */}
-              {(createMode === "goal" || createMode === "edit_goal") && goalFormContent}
-              {createMode === "tasks" && taskFormContent}
+              {/* Content grid: List on left, Form panel on right (desktop) */}
+              <div className="grid xl:grid-cols-[1fr_40%] gap-4 xl:gap-6 items-start">
+                {/* Left column: Goals & Tasks list */}
+                <div className="space-y-4">
 
               {/* Goals missing support category — coordinator review */}
               {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
@@ -2361,7 +2642,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
-                        <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); }}
+                        <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
                           className="h-9 px-2.5 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
                           + Task
                         </button>
@@ -2518,51 +2799,32 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Right column: Form panel (desktop only) */}
+            <FormPanel
+              isOpen={createMode === "goal" || createMode === "edit_goal"}
+              title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
+              subtitle={participant.full_name}
+              onClose={cancelGoalForm}
+              showLogo
+            >
+              {goalFormContent}
+            </FormPanel>
+
+            <FormPanel
+              isOpen={createMode === "tasks"}
+              title="Create New Task"
+              subtitle={`Setting up support for ${participant.full_name}`}
+              onClose={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
+              showLogo
+            >
+              {taskFormContent}
+            </FormPanel>
+          </div>  {/* Close grid */}
             </section>
           );
         })()}
-
-        {/* GOALS TAB */}
-        {activeTab === "goals" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.ndisGoals")}</h4>
-              {goals.length > 0 && (
-                <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
-                  {goals.length}
-                </span>
-              )}
-            </div>
-            {goals.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.goals.empty")}</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.goals.emptyHint")}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {goals.map((goal, index) => (
-                  <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-4 py-3 flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-[#EEEAFB] flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-[10px] font-black text-[#3730A3]">{index + 1}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-[#111827] leading-snug">{normalizeGoalTitle(goal, index)}</p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mt-1 capitalize">
-                        {String(goal.status || "active")}
-                        {goal.category ? ` · ${String(goal.category)}` : ""}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(String(goal.status || "active"))}`}>
-                      {String(goal.status || "active")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
 
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
