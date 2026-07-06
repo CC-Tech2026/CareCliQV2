@@ -34,6 +34,7 @@ import {
 } from "@/lib/shift-utils";
 import type { ShiftSignature } from "@/services/complianceService";
 import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
+import { DuringShiftActionsSidebar } from "@/components/shifts/DuringShiftActionsSidebar";
 
 export type WorkerMobilePhase = "scheduled" | "session" | "review" | "signature" | "submitted" | "completed";
 
@@ -115,6 +116,13 @@ export function WorkerMobileShiftView({
   const riskAckAlerts = shift.health_alerts ?? [];
   const showEnd = visualState === "session_active" && phase === "session";
   const isFullImmersive = phase !== "scheduled";
+  const showDuringShiftFab =
+    (visualState === "clocked_in" || visualState === "session_active") &&
+    (phase === "session" || phase === "review");
+
+  const handleMessageOffice = () => {
+    navigate(`/my-shifts/${shift.id}/message-office`);
+  };
 
   const { notes: complianceNotes, sessionNotes, refresh: refreshComplianceNotes } =
     useGoalLinkedTaskComplianceNotes(sessionId, activeTasks);
@@ -345,6 +353,14 @@ export function WorkerMobileShiftView({
             onOpenIncidentReport={() => openIncidentReport()}
           />
         )}
+
+        {showDuringShiftFab && (
+          <DuringShiftActionsSidebar
+            onMessageOffice={handleMessageOffice}
+            officePhone={shift.office_contact_number ?? undefined}
+            pinned
+          />
+        )}
       </div>
     );
   }
@@ -512,6 +528,14 @@ export function WorkerMobileShiftView({
           rules={compliance.rules}
           onClose={() => setComplianceOpen(false)}
           onOpenIncidentReport={() => openIncidentReport()}
+        />
+      )}
+
+      {showDuringShiftFab && (
+        <DuringShiftActionsSidebar
+          onMessageOffice={handleMessageOffice}
+          officePhone={shift.office_contact_number ?? undefined}
+          pinned
         />
       )}
     </div>

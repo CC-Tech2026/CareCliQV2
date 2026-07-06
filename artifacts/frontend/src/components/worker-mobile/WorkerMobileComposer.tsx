@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Mic, MicOff, Paperclip } from "lucide-react";
+import { ArrowUp, Camera, ChevronRight, Languages, Loader2, Mic, MicOff, Paperclip } from "lucide-react";
 import { WM } from "@/lib/worker-mobile-tokens";
 import { SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
 import {
@@ -13,6 +13,29 @@ import {
   type SessionNoteType,
 } from "@/services/sessionNotesService";
 import { mirrorSessionNoteToTaskEvidence } from "@/lib/merge-session-evidence";
+import { translateToEnglish } from "@/services/translationService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+
+const LANGUAGE_OPTIONS = [
+  { value: "auto", labelKey: "shift.session.lang.auto" },
+  { value: "en", labelKey: "shift.session.lang.en" },
+  { value: "es", labelKey: "shift.session.lang.es" },
+  { value: "fr", labelKey: "shift.session.lang.fr" },
+  { value: "ar", labelKey: "shift.session.lang.ar" },
+  { value: "tl", labelKey: "shift.session.lang.tl" },
+  { value: "zh", labelKey: "shift.session.lang.zh" },
+  { value: "hi", labelKey: "shift.session.lang.hi" },
+] as const;
+
+const SPEECH_LANGUAGE_CODES: Record<string, string> = {
+  en: "en-AU",
+  es: "es-ES",
+  fr: "fr-FR",
+  ar: "ar-SA",
+  tl: "fil-PH",
+  zh: "zh-CN",
+  hi: "hi-IN",
+};
 
 type Props = {
   sessionId?: string | null;
@@ -22,6 +45,18 @@ type Props = {
   onNoteSaved?: (note: SessionNoteRecord) => void;
 };
 
+async function toEnglishNote(text: string, language: string): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  const source = language === "auto" ? "auto" : language;
+  if (source === "en") return trimmed;
+  const result = await translateToEnglish(trimmed, source);
+  if (result.translated && result.status !== "failed" && result.status !== "unsupported") {
+    return result.translated;
+  }
+  return trimmed;
+}
+
 export function WorkerMobileComposer({
   sessionId,
   taskId,
@@ -29,13 +64,19 @@ export function WorkerMobileComposer({
   disabled,
   onNoteSaved,
 }: Props) {
+  const { translate } = useAccessibility();
   const [value, setValue] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("auto");
   const [listening, setListening] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const placeholder = taskLabel ?? "Start typing a note…";
+  const placeholder = taskLabel ?? translate("worker.composer.placeholder");
+  const showSubmit = Boolean(taskId) && inputFocused && !listening && !submitting;
+  const showTranslateBadge = value.trim().length > 0 && language !== "en";
 
   const saveNote = useCallback(
     async (content: string, noteType: SessionNoteType = "text", fileName?: string) => {
@@ -56,6 +97,8 @@ export function WorkerMobileComposer({
 
       onNoteSaved?.(payload);
       setValue("");
+      setInputFocused(false);
+      inputRef.current?.blur();
 
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         enqueuePendingSessionNote(sessionId, payload);
@@ -79,16 +122,21 @@ export function WorkerMobileComposer({
     [sessionId, taskId, disabled, onNoteSaved],
   );
 
-  const handleSend = () => {
-    if (!value.trim()) return;
-    if (!taskId) return;
-    void saveNote(value, "text");
+  const handleSend = async () => {
+    if (!value.trim() || !taskId || submitting) return;
+    setSubmitting(true);
+    try {
+      const english = await toEnglishNote(value, language);
+      await saveNote(english, "text");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -122,7 +170,10 @@ export function WorkerMobileComposer({
     const rec = new SR();
     rec.continuous = false;
     rec.interimResults = true;
-    rec.lang = language === "tl" ? "fil-PH" : language === "ar" ? "ar-SA" : "en-AU";
+    rec.lang =
+      language === "auto"
+        ? "en-AU"
+        : SPEECH_LANGUAGE_CODES[language] ?? "en-AU";
     let final = "";
     rec.onresult = (ev) => {
       let text = "";
@@ -134,11 +185,20 @@ export function WorkerMobileComposer({
     };
     rec.onend = () => {
       setListening(false);
-      if (final.trim()) void saveNote(final, "voice");
+      if (final.trim()) {
+        void (async () => {
+          const english = await toEnglishNote(final, language);
+          await saveNote(english, "voice");
+        })();
+      }
     };
     rec.start();
     return () => {
-      try { rec.stop(); } catch { /* noop */ }
+      try {
+        rec.stop();
+      } catch {
+        /* noop */
+      }
     };
   }, [listening, saveNote, language]);
 
@@ -147,21 +207,47 @@ export function WorkerMobileComposer({
       className="shrink-0 border-t px-3 py-3 pb-safe"
       style={{ borderColor: WM.border, background: WM.surface }}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium" style={{ color: WM.muted }}>
-          Input language
-        </span>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="h-8 rounded-full border px-3 text-[12px] font-semibold"
-          style={{ borderColor: WM.infoBorder, background: WM.infoBg, color: WM.infoTitle }}
-          aria-label="Input language"
+      <div className="mb-2 flex items-center gap-2">
+        <span
+          className="shrink-0 text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: WM.muted }}
         >
-          <option value="en">English</option>
-          <option value="tl">Tagalog</option>
-          <option value="ar">Arabic</option>
-        </select>
+          {translate("shift.session.inputLanguage")}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {showTranslateBadge && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold"
+              style={{ background: WM.infoBg, color: WM.purple, border: `1px solid ${WM.infoBorder}` }}
+            >
+              <Languages size={13} />
+              {translate("worker.composer.translateToEn")}
+            </span>
+          )}
+          <label className="relative shrink-0">
+          <span className="sr-only">{translate("shift.session.inputLanguage")}</span>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            disabled={disabled}
+            className="h-8 min-w-[7rem] appearance-none rounded-full border py-0 pl-3 pr-8 text-[12px] font-semibold"
+            style={{ borderColor: WM.border, background: WM.bg, color: WM.text }}
+            aria-label={translate("shift.session.inputLanguage")}
+          >
+            {LANGUAGE_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {translate(item.labelKey)}
+              </option>
+            ))}
+          </select>
+          <ChevronRight
+            size={14}
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+            style={{ color: WM.muted }}
+            aria-hidden
+          />
+        </label>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -170,31 +256,34 @@ export function WorkerMobileComposer({
           style={{ borderColor: WM.border, background: WM.bg }}
         >
           <input
+            ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             onKeyDown={handleKeyDown}
-            disabled={disabled}
-            placeholder={placeholder}
+            disabled={disabled || !taskId}
+            placeholder={taskId ? placeholder : translate("worker.composer.selectTask")}
             className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
             style={{ color: WM.text }}
           />
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || !taskId}
             onClick={() => fileRef.current?.click()}
             className="flex h-8 w-8 shrink-0 items-center justify-center"
             style={{ color: WM.muted }}
-            aria-label="Attach file"
+            aria-label={translate("shift.session.attachFile")}
           >
             <Paperclip size={17} />
           </button>
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || !taskId}
             onClick={() => cameraRef.current?.click()}
             className="flex h-8 w-8 shrink-0 items-center justify-center"
             style={{ color: WM.muted }}
-            aria-label="Take photo"
+            aria-label={translate("shift.session.capturePhoto")}
           >
             <Camera size={17} />
           </button>
@@ -202,39 +291,69 @@ export function WorkerMobileComposer({
 
         <button
           type="button"
-          disabled={disabled}
+          disabled={disabled || !taskId || submitting}
           onPointerDown={() => {
-            if (!value.trim()) setListening(true);
+            if (!showSubmit && !value.trim()) setListening(true);
           }}
           onClick={() => {
-            if (value.trim()) {
-              handleSend();
+            if (showSubmit) {
+              void handleSend();
             } else if (listening) {
               setListening(false);
+            } else if (!value.trim()) {
+              setListening(true);
             }
           }}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white shadow-md"
-          style={{ background: WM.pink }}
-          aria-label={listening ? "Stop recording" : value.trim() ? "Send note" : "Record voice note"}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white shadow-md disabled:opacity-50"
+          style={{ background: showSubmit ? WM.purple : WM.pink }}
+          aria-label={
+            showSubmit
+              ? translate("worker.composer.sendNote")
+              : listening
+                ? translate("shift.session.stopDictation")
+                : translate("shift.session.startDictation")
+          }
         >
-          {listening ? <MicOff size={22} /> : <Mic size={22} />}
+          {submitting ? (
+            <Loader2 size={22} className="animate-spin" />
+          ) : showSubmit ? (
+            <ArrowUp size={22} strokeWidth={2.5} />
+          ) : listening ? (
+            <MicOff size={22} />
+          ) : (
+            <Mic size={22} />
+          )}
         </button>
       </div>
 
       <p className="mt-2 text-center text-[11px] font-medium" style={{ color: WM.muted }}>
-        Hold mic to record · tap to send when typing
+        {showTranslateBadge
+          ? translate("worker.composer.submitHint")
+          : translate("worker.composer.submitHintEn")}
       </p>
 
-      <input ref={fileRef} type="file" className="hidden" onChange={(e) => {
-        const f = e.target.files?.[0];
-        if (f) void saveNote(`[Attachment: ${f.name}]`, "file", f.name);
-        e.target.value = "";
-      }} />
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-        const f = e.target.files?.[0];
-        if (f) void saveNote(`[Attachment: ${f.name}]`, "photo", f.name);
-        e.target.value = "";
-      }} />
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void saveNote(`[Attachment: ${f.name}]`, "file", f.name);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void saveNote(`[Attachment: ${f.name}]`, "photo", f.name);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
