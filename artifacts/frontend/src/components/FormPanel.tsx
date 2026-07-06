@@ -47,7 +47,7 @@ export function FormPanel({
 
       {/* Desktop: Fixed Right-Side Panel (32% width, visible on xl+) */}
       <div className="hidden xl:block fixed right-0 top-0 bottom-0 w-[32%] z-40">
-        <div className="flex flex-col bg-white border-l border-[#E5E7EB] h-full shadow-lg">
+        <div className="flex flex-col bg-white border-l-4 border-l-[#E5D9FF] h-full shadow-2xl">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
           <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4">
             {children}
@@ -59,11 +59,11 @@ export function FormPanel({
       <div className="hidden md:block xl:hidden">
         {/* Background overlay */}
         <div
-          className="fixed inset-0 bg-black bg-opacity-30 z-40 transition-opacity"
+          className="fixed inset-0 bg-black bg-opacity-40 z-40 transition-opacity backdrop-blur-sm"
           onClick={onClose}
         />
         {/* Drawer panel */}
-        <div className="fixed right-0 top-0 h-screen w-[60%] bg-white shadow-lg z-50 flex flex-col">
+        <div className="fixed right-0 top-0 h-screen w-[60%] bg-white shadow-2xl z-50 flex flex-col border-l-4 border-l-[#E5D9FF]">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
           <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
             {children}
@@ -73,7 +73,7 @@ export function FormPanel({
 
       {/* Mobile: Fullscreen Form (visible on md and below) */}
       <div className="md:hidden">
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+        <div className="fixed inset-0 bg-white z-50 flex flex-col border-t-4 border-t-[#E5D9FF]">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
           <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
             {children}

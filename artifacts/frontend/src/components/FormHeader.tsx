@@ -10,26 +10,26 @@ interface FormHeaderProps {
 
 export function FormHeader({ title, subtitle, onClose, showLogo = true }: FormHeaderProps) {
   return (
-    <div className="border-b border-[#E5E7EB] bg-white px-4 py-3 sm:px-6 sm:py-4 flex items-start justify-between gap-3">
+    <div className="bg-gradient-to-r from-white via-white to-[#F3F0FF] border-b-2 border-[#E5D9FF] px-4 py-5 sm:px-6 sm:py-6 flex items-start justify-between gap-4">
       <div className="min-w-0 flex-1">
         {showLogo && (
-          <div className="mb-2">
-            <CareCliQLogo compact className="h-7" />
+          <div className="mb-3">
+            <CareCliQLogo compact className="h-8" />
           </div>
         )}
-        <h2 className="text-[16px] sm:text-[18px] font-black text-[#111827] tracking-tight" style={{ fontFamily: "var(--app-font-display)" }}>
+        <h2 className="text-[18px] sm:text-[20px] font-black text-[#1F2937] tracking-tight leading-snug" style={{ fontFamily: "var(--app-font-display)" }}>
           {title}
         </h2>
-        {subtitle && <p className="text-[12px] text-[#6B7280] mt-1">{subtitle}</p>}
+        {subtitle && <p className="text-[13px] text-[#6B7280] mt-2 font-semibold">{subtitle}</p>}
       </div>
       <button
         type="button"
         onClick={onClose}
-        className="shrink-0 p-1.5 rounded-lg hover:bg-[#F3F4F6] transition-colors text-[#6B7280] hover:text-[#111827]"
+        className="shrink-0 p-2 rounded-lg hover:bg-[#F0ECFF] transition-all text-[#6B7280] hover:text-[#3730A3] hover:shadow-sm"
         title="Close"
         aria-label="Close form"
       >
-        <X size={18} />
+        <X size={20} />
       </button>
     </div>
   );
