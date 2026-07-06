@@ -2534,6 +2534,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           );
 
           return (
+            <>
             <section className="space-y-4">
               {/* Header — spans full width */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2819,6 +2820,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             >
               {taskFormContent}
             </FormPanel>
+            </>
           );
         })()}
 
