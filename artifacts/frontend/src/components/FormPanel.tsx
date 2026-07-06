@@ -15,7 +15,7 @@ interface FormPanelProps {
 /**
  * Smart Adaptive Form Panel with CareCliQ branding
  *
- * Desktop (xl, 1280px+): Inline side panel (40% width), content flows naturally
+ * Desktop (xl, 1280px+): Fixed right-side panel (40% width)
  * Tablet (md-lg, 768-1279px): Slide-over drawer from right (60% width), background dims
  * Mobile (< 768px): Fullscreen form with back button and breadcrumb
  */
@@ -45,11 +45,11 @@ export function FormPanel({
         </div>
       )}
 
-      {/* Desktop: Inline Side Panel (40% width, visible on xl+) - renders as part of content flow */}
-      <div className="hidden xl:block">
-        <div className="flex flex-col bg-white border border-[#E5E7EB] rounded-lg shadow-sm h-fit sticky top-4">
+      {/* Desktop: Fixed Right-Side Panel (40% width, visible on xl+) */}
+      <div className="hidden xl:block fixed right-0 top-0 h-screen w-[40%] z-40">
+        <div className="flex flex-col bg-white border-l border-[#E5E7EB] h-full shadow-lg">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
-          <div className="overflow-y-auto max-h-[calc(100vh-120px)] px-4 py-4 sm:px-6 space-y-4">
+          <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4">
             {children}
           </div>
         </div>
