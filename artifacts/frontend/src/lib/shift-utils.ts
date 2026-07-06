@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow, parseISO, differenceInMinutes } from "date-fns";
+import { format, formatDistanceToNow, parseISO, differenceInMinutes, subMinutes, addDays } from "date-fns";
 import type { ShiftTask, ShiftVisualState } from "@/services/shiftService";
 import { CC, CC_STATUS } from "@/lib/brand-tokens";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
@@ -235,6 +235,97 @@ export function isShiftToday(shift: { scheduled_start?: string; status?: string 
   }
 }
 
+const CLOCK_IN_EARLY_MINUTES = 15;
+
+/** End datetime; rolls to next calendar day when end time is before start (e.g. 9pm–2am). */
+export function resolveShiftScheduledEnd(start?: string, end?: string): Date | null {
+  if (!start || !end) return null;
+  try {
+    const startDt = parseISO(start);
+    let endDt = parseISO(end);
+    if (endDt.getTime() <= startDt.getTime()) {
+      endDt = addDays(endDt, 1);
+    }
+    return endDt;
+  } catch {
+    return null;
+  }
+}
+
+type ShiftWindowFields = {
+  scheduled_start?: string;
+  scheduled_end?: string;
+  status?: string;
+  visual_state?: ShiftVisualState;
+};
+
+/** True when the shift should appear on My Shifts (15 min before start through scheduled end). */
+export function isShiftWithinListWindow(shift: ShiftWindowFields, now = new Date()): boolean {
+  if (shift.status === "cancelled") return false;
+  if (shift.visual_state === "clocked_in" || shift.visual_state === "session_active") return true;
+  if (!shift.scheduled_start) return false;
+  try {
+    const start = parseISO(shift.scheduled_start);
+    const end = resolveShiftScheduledEnd(shift.scheduled_start, shift.scheduled_end) ?? start;
+    const earliest = subMinutes(start, CLOCK_IN_EARLY_MINUTES);
+    return now >= earliest && now <= end;
+  } catch {
+    return false;
+  }
+}
+
+/** Completed for today's list — backend status only. */
+export function isShiftCompletedForList(shift: ShiftWindowFields): boolean {
+  return shift.status === "completed" || shift.visual_state === "completed";
+}
+
+function compareScheduledStart(a: ShiftWindowFields, b: ShiftWindowFields): number {
+  if (!a.scheduled_start && !b.scheduled_start) return 0;
+  if (!a.scheduled_start) return 1;
+  if (!b.scheduled_start) return -1;
+  try {
+    return parseISO(a.scheduled_start).getTime() - parseISO(b.scheduled_start).getTime();
+  } catch {
+    return 0;
+  }
+}
+
+/** The one shift that should show Directions / Call / Clock In on My Shifts today. */
+export function getPrimaryTodayShiftId(shifts: ShiftWindowFields[], now = new Date()): string | null {
+  const today = shifts.filter((s) => isShiftToday(s) && s.status !== "cancelled");
+
+  const active = today.find(
+    (s) => s.visual_state === "session_active" || s.visual_state === "clocked_in",
+  );
+  if (active?.id) return active.id;
+
+  const incomplete = today
+    .filter((s) => !isShiftCompletedForList(s))
+    .sort(compareScheduledStart);
+
+  const inWindow = incomplete.find((s) => isShiftWithinListWindow(s, now));
+  return inWindow?.id ?? null;
+}
+
+/** Today's shifts: primary first, upcoming middle, completed last. */
+export function sortTodayShiftsForList<T extends ShiftWindowFields & { id: string }>(
+  shifts: T[],
+  now = new Date(),
+): T[] {
+  const primaryId = getPrimaryTodayShiftId(shifts, now);
+
+  return shifts
+    .filter((s) => isShiftToday(s) && s.status !== "cancelled")
+    .sort((a, b) => {
+      const aDone = isShiftCompletedForList(a);
+      const bDone = isShiftCompletedForList(b);
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      if (a.id === primaryId) return -1;
+      if (b.id === primaryId) return 1;
+      return compareScheduledStart(a, b);
+    });
+}
+
 export function isCustomShiftTask(task: ShiftTask) {
   return task.type === "custom" || task.task_id.startsWith("custom_");
 }
@@ -453,8 +544,12 @@ type ShiftBriefingOptions = {
   review?: boolean;
 };
 
+/** Temporarily disabled — re-enable when pre-shift briefing is ready for workers. */
+const BRIEFING_GATE_ENABLED = false;
+
 /** Scheduled shifts need the full briefing until explicitly complete (list API may omit flags). */
 export function shiftNeedsBriefing(shift: ShiftBriefingFields, options?: ShiftBriefingOptions): boolean {
+  if (!BRIEFING_GATE_ENABLED) return Boolean(options?.tutorial);
   if (shift.visual_state !== "scheduled") return false;
   if (options?.tutorial) return true;
   if (options?.review) return true;

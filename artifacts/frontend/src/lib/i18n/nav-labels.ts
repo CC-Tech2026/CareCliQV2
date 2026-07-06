@@ -135,6 +135,9 @@ export function pageLabelForPath(
   location: string,
   translate: (key: string) => string,
 ): string {
+  if (location.includes("/message-office")) {
+    return translate("shift.during.messageOffice");
+  }
   for (const [prefix, key] of ROUTE_LABEL_KEYS) {
     if (location === prefix || location.startsWith(prefix + "/")) {
       return translate(key);

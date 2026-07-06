@@ -22,7 +22,6 @@ import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import { SessionTimeline } from "@/components/shifts/SessionTimeline";
 import { ShiftProgressStepper } from "@/components/shifts/ShiftProgressStepper";
 import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
-import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
 import { ShiftTravelExpenseCard, type MileageDraftState } from "@/components/shifts/ShiftTravelExpenseCard";
 import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpenseCard";
@@ -43,9 +42,6 @@ import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
 import { RiskAcknowledgementLoadingOverlay } from "@/components/shifts/RiskAcknowledgementLoadingOverlay";
-import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
-import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
-import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
 import {
   cacheParticipantContext,
   loadCachedParticipantContext,
@@ -112,8 +108,6 @@ import {
   shiftHasRiskAlerts,
   shiftInitials,
   shiftNeedsRiskAck,
-  shiftNeedsBriefing,
-  shiftBriefingHref,
   taskFeedSummary,
   timerAnchorIso,
 } from "@/lib/shift-utils";
@@ -341,13 +335,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   useEffect(() => {
     if (id) void recordShiftViewed(id).catch(() => undefined);
   }, [id]);
-
-  useEffect(() => {
-    if (!shift) return;
-    if (shiftNeedsBriefing(shift) && !isTutorialDemo) {
-      window.location.replace(shiftBriefingHref(id));
-    }
-  }, [shift, id, isTutorialDemo]);
 
   useEffect(() => {
     if (!shift) return;
@@ -1873,35 +1860,12 @@ function ShiftWorkflow({
         />
       )}
 
-      <ParticipantProfileCard
-        profile={displayProfile}
-        fallbackName={shift.participant_name}
-        open={profileOpen}
-        onToggle={() => setProfileOpen(!profileOpen)}
-      />
-
-      <ParticipantPreferencesCard
-        preferences={displayPreferences}
-        open={preferencesOpen}
-        onToggle={() => setPreferencesOpen(!preferencesOpen)}
-      />
-
-      <ParticipantContextPanel
-        context={displayContext}
-        participantFirstName={participantFirstName}
-        syncedAt={contextSyncedAt}
-        open={contextOpen}
-        onToggle={() => setContextOpen(!contextOpen)}
-      />
-
       <SupportInstructionsAccordion
         instructions={shift.support_instructions}
         open={supportOpen}
         onToggle={() => setSupportOpen(!supportOpen)}
         sectionId="shift-support-instructions"
       />
-
-      <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
 
       {goalLinkedTaskFeedSection}
 

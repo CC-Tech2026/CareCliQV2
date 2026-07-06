@@ -911,6 +911,21 @@ def _enrich_worker_shift_card(
         if goals:
             payload["active_goals"] = goals
 
+    if prefetched_patient_risks:
+        profile = dict(payload.get("profile") or {})
+        emergency = _parse_emergency_contact(prefetched_patient_risks.get("emergency_contact"))
+        if emergency:
+            profile["emergency_contact"] = emergency
+        cm_name = (prefetched_patient_risks.get("case_manager_name") or "").strip()
+        if cm_name:
+            profile["case_manager"] = {
+                "name": cm_name,
+                "phone": prefetched_patient_risks.get("case_manager_phone"),
+                "email": prefetched_patient_risks.get("case_manager_email"),
+            }
+        if profile:
+            payload["profile"] = profile
+
     if payload.get("status") == "completed" or payload.get("visual_state") == "completed":
         payload["completion_summary"] = _build_completion_summary(shift, session)
         try:
@@ -1425,7 +1440,8 @@ def _batch_fetch_patient_risk_fields(
             .table("patients")
             .select(
                 "id, allergies, medical_alerts, current_conditions, behaviour_support_plan, "
-                "risk_triggers, risk_management_plan"
+                "risk_triggers, risk_management_plan, emergency_contact, "
+                "case_manager_name, case_manager_phone, case_manager_email"
             )
             .in_("id", ids)
             .eq("organization_id", organization_id)

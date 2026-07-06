@@ -572,15 +572,7 @@ def _briefing_schema_available() -> bool:
 
 def ensure_briefing_completed(shift: dict[str, Any], worker_id: str) -> None:
     """Raise ValueError when pre-shift briefing is required but incomplete."""
-    if shift.get("clocked_in_at") or shift.get("status") in {"in_progress", "completed"}:
-        return
-    if not _briefing_schema_available():
-        return
-    shift_id = str(shift.get("id") or "")
-    if not _briefing_ack_lookup_available(shift_id, worker_id):
-        return
-    if not is_briefing_complete_for_shift(shift, worker_id):
-        raise ValueError("Complete the pre-shift briefing before clocking in.")
+    return
 
 
 def update_participant_background_summary(

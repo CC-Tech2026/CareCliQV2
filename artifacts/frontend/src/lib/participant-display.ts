@@ -23,11 +23,18 @@ export function formatDobWithAge(dob?: string | null) {
 export function emergencyContactDisplay(contact: ParticipantProfile["emergency_contact"]) {
   if (!contact) return null;
   if (typeof contact === "string") {
-    return { text: contact, phone: contact.match(/[\d+() -]{8,}/)?.[0] };
+    return { text: contact, phone: contact.match(/[\d+() -]{8,}/)?.[0], name: null, relationship: null };
   }
+  const name = contact.name?.trim() || null;
+  const relationship = contact.relationship?.trim() || null;
+  const phone = contact.phone?.trim() || undefined;
+  const detail = [relationship, phone].filter(Boolean).join(" · ");
   return {
-    text: contact.display || [contact.name, contact.relationship, contact.phone].filter(Boolean).join(" — "),
-    phone: contact.phone || undefined,
+    name,
+    relationship,
+    phone,
+    text: contact.display || [name, detail].filter(Boolean).join(" — ") || phone || name || "",
+    detail,
   };
 }
 

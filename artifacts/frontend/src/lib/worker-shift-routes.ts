@@ -6,3 +6,10 @@ export function isWorkerMobileShiftDetailPath(pathname: string): boolean {
   if (segment === "requests") return false;
   return true;
 }
+
+/** Mobile header back target for worker shift sub-pages. */
+export function workerMobileShiftBackHref(pathname: string): string {
+  const messageOffice = pathname.match(/^\/my-shifts\/([^/]+)\/message-office$/);
+  if (messageOffice) return `/my-shifts/${messageOffice[1]}`;
+  return "/my-shifts";
+}

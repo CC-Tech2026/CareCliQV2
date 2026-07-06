@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { format } from "date-fns";
 import {
   AlertTriangle,
+  ArrowUp,
   Camera,
   Check,
+  ChevronRight,
   FileText,
+  Languages,
+  Loader2,
   MessageCircle,
   Mic,
   Paperclip,
@@ -42,12 +46,36 @@ import {
 } from "@/lib/shift-utils";
 import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { translateToEnglish } from "@/services/translationService";
 
 const NOTE_MAX = 500;
 const VOICE_MAX_SECONDS = 60;
 const MAX_PHOTOS = 2;
 const MAX_FILES = 3;
 const SAVED_STATUS_MS = 1500;
+
+const INPUT_LANGUAGE_OPTIONS = [
+  { value: "auto", labelKey: "shift.session.lang.auto" },
+  { value: "en", labelKey: "shift.session.lang.en" },
+  { value: "es", labelKey: "shift.session.lang.es" },
+  { value: "fr", labelKey: "shift.session.lang.fr" },
+  { value: "ar", labelKey: "shift.session.lang.ar" },
+  { value: "tl", labelKey: "shift.session.lang.tl" },
+  { value: "zh", labelKey: "shift.session.lang.zh" },
+  { value: "hi", labelKey: "shift.session.lang.hi" },
+] as const;
+
+async function noteToEnglish(text: string, language: string): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  const source = language === "auto" ? "auto" : language;
+  if (source === "en") return trimmed;
+  const result = await translateToEnglish(trimmed, source);
+  if (result.translated && result.status !== "failed" && result.status !== "unsupported") {
+    return result.translated;
+  }
+  return trimmed;
+}
 
 type SaveState = "idle" | "saving" | "saved" | "offline";
 
@@ -108,7 +136,11 @@ export function ShiftTaskEvidencePanel({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [playingVoice, setPlayingVoice] = useState(false);
+  const [inputLanguage, setInputLanguage] = useState("auto");
+  const [inputFocused, setInputFocused] = useState(false);
+  const [submittingNote, setSubmittingNote] = useState(false);
 
+  const noteInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -322,34 +354,44 @@ export function ShiftTaskEvidencePanel({
 
   const submitProgressUpdate = useCallback(async () => {
     const trimmed = note.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || submittingNote) return;
     if (isMandatoryTask(task) && trimmed.length < 20) return;
 
-    const record: TaskEvidenceRecord = {
-      evidence_id: newEvidenceId(),
-      task_id: task.task_id,
-      goal_id: task.goal_id ?? null,
-      session_id: sessionId,
-      type: "text",
-      content: trimmed.slice(0, NOTE_MAX),
-      created_at: new Date().toISOString(),
-      synced: false,
-    };
+    setSubmittingNote(true);
+    try {
+      const english = await noteToEnglish(trimmed, inputLanguage);
+      const record: TaskEvidenceRecord = {
+        evidence_id: newEvidenceId(),
+        task_id: task.task_id,
+        goal_id: task.goal_id ?? null,
+        session_id: sessionId,
+        type: "text",
+        content: english.slice(0, NOTE_MAX),
+        created_at: new Date().toISOString(),
+        synced: false,
+      };
 
-    await onTaskPatch({ note: trimmed });
-    setNote("");
-    await appendThreadEvidence(record);
+      await onTaskPatch({ note: english });
+      setNote("");
+      setInputFocused(false);
+      noteInputRef.current?.blur();
+      await appendThreadEvidence(record);
 
-    if (!task.completed && canMarkTaskComplete({ ...task, note: trimmed })) {
-      await onMarkComplete({ note: trimmed });
+      if (!task.completed && canMarkTaskComplete({ ...task, note: english })) {
+        await onMarkComplete({ note: english });
+      }
+    } finally {
+      setSubmittingNote(false);
     }
   }, [
     appendThreadEvidence,
     disabled,
+    inputLanguage,
     note,
     onMarkComplete,
     onTaskPatch,
     sessionId,
+    submittingNote,
     task,
     task.goal_id,
     task.task_id,
@@ -692,6 +734,7 @@ export function ShiftTaskEvidencePanel({
           || r.type === "photo"
           || r.type === "voice",
       ) || saveState === "saved";
+    const showTranslateBadge = note.trim().length > 0 && inputLanguage !== "en";
 
     return (
       <div className="relative border-t border-cc-border bg-cc-soft p-3" data-tutorial="task-evidence-panel">
@@ -810,6 +853,37 @@ export function ShiftTaskEvidencePanel({
           </div>
         )}
 
+        <div className="mb-2 flex items-center gap-2">
+          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-cc-muted">
+            {translate("shift.session.inputLanguage")}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {showTranslateBadge && (
+              <span className="cc-plum-panel inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold text-cc-plum">
+                <Languages size={13} />
+                {translate("worker.composer.translateToEn")}
+              </span>
+            )}
+            <label className="relative shrink-0">
+            <span className="sr-only">{translate("shift.session.inputLanguage")}</span>
+            <select
+              value={inputLanguage}
+              onChange={(e) => setInputLanguage(e.target.value)}
+              disabled={disabled}
+              className="h-8 min-w-[7rem] appearance-none rounded-full border border-cc-border bg-cc-surface py-0 pl-3 pr-8 text-[12px] font-semibold text-cc-text"
+              aria-label={translate("shift.session.inputLanguage")}
+            >
+              {INPUT_LANGUAGE_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {translate(item.labelKey)}
+                </option>
+              ))}
+            </select>
+            <ChevronRight size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-cc-muted" aria-hidden />
+          </label>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2" data-tutorial="task-evidence-actions">
           <button
             type="button"
@@ -837,13 +911,16 @@ export function ShiftTaskEvidencePanel({
             onChange={(e) => void handleFileUpload(e)}
           />
           <input
+            ref={noteInputRef}
             data-tutorial="task-evidence-note"
             value={note}
             disabled={disabled}
             maxLength={NOTE_MAX}
             placeholder={translate("shift.evidence.progressPlaceholder")}
-            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
+            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -853,16 +930,48 @@ export function ShiftTaskEvidencePanel({
           />
           <button
             type="button"
-            disabled={disabled || Boolean(voiceRecord)}
-            onClick={() => (recording ? stopRecording() : void startRecording())}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#6D4BDA] text-white"
-            aria-label={translate("shift.evidence.recordVoice")}
+            disabled={disabled || Boolean(voiceRecord) || submittingNote}
+            onPointerDown={() => {
+              if (!inputFocused && !note.trim()) void startRecording();
+            }}
+            onClick={() => {
+              if (inputFocused && !submittingNote) {
+                void submitProgressUpdate();
+              } else if (recording) {
+                stopRecording();
+              } else if (!note.trim()) {
+                void startRecording();
+              }
+            }}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
+            style={{ background: inputFocused && !recording ? PLUM : "#6D4BDA" }}
+            aria-label={
+              inputFocused
+                ? translate("worker.composer.sendNote")
+                : recording
+                  ? translate("shift.evidence.stop")
+                  : translate("shift.evidence.recordVoice")
+            }
           >
-            <Mic size={14} />
+            {submittingNote ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : inputFocused && !recording ? (
+              <ArrowUp size={16} strokeWidth={2.5} />
+            ) : recording ? (
+              <Square size={12} />
+            ) : (
+              <Mic size={14} />
+            )}
           </button>
         </div>
 
-        <p className="mt-2 text-[10px] font-bold" style={{ color: MUTED }}>
+        <p className="mt-2 text-[10px] font-bold text-cc-muted">
+          {showTranslateBadge
+            ? translate("worker.composer.submitHint")
+            : translate("worker.composer.submitHintEn")}
+        </p>
+
+        <p className="mt-1 text-[10px] font-bold" style={{ color: MUTED }}>
           {evidenceAddedFlash && <span className="text-emerald-700">{translate("shift.evidence.added")}</span>}
           {saveState === "saving" && (uploadingFile ? translate("shift.evidence.uploadingFile") : translate("common.saving"))}
           {saveState === "saved" && translate("shift.evidence.saved")}
