@@ -2799,30 +2799,30 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               )}
             </div>
             </section>
+
+            {/* Goal & Task Form Panels - Fixed right-side overlay */}
+            <FormPanel
+              isOpen={createMode === "goal" || createMode === "edit_goal"}
+              title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
+              subtitle={participant.full_name}
+              onClose={cancelGoalForm}
+              showLogo
+            >
+              {goalFormContent}
+            </FormPanel>
+
+            <FormPanel
+              isOpen={createMode === "tasks"}
+              title="Create New Task"
+              subtitle={`Setting up support for ${participant.full_name}`}
+              onClose={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
+              showLogo
+            >
+              {taskFormContent}
+            </FormPanel>
             </>
           );
         })()}
-
-        {/* Goal & Task Form Panels - Fixed right-side overlay at page level */}
-        <FormPanel
-          isOpen={createMode === "goal" || createMode === "edit_goal"}
-          title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
-          subtitle={participant.full_name}
-          onClose={cancelGoalForm}
-          showLogo
-        >
-          {goalFormContent}
-        </FormPanel>
-
-        <FormPanel
-          isOpen={createMode === "tasks"}
-          title="Create New Task"
-          subtitle={`Setting up support for ${participant.full_name}`}
-          onClose={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-          showLogo
-        >
-          {taskFormContent}
-        </FormPanel>
 
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
