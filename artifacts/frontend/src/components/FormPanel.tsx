@@ -45,8 +45,8 @@ export function FormPanel({
         </div>
       )}
 
-      {/* Desktop: Fixed Right-Side Panel (40% width, visible on xl+) */}
-      <div className="hidden xl:block fixed right-0 top-0 h-screen w-[40%] z-40">
+      {/* Desktop: Fixed Right-Side Panel (32% width, visible on xl+) */}
+      <div className="hidden xl:block fixed right-0 top-0 h-screen w-[32%] z-40">
         <div className="flex flex-col bg-white border-l border-[#E5E7EB] h-full shadow-lg">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
           <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4">
