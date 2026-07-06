@@ -1485,3 +1485,128 @@ export function extractGoalsAndTasks(sessionId: string): Promise<Stage2Extractio
     { method: "POST" },
   );
 }
+
+// ── Compliance centre ─────────────────────────────────────────────────────────
+
+export type ComplianceUrgentAction = {
+  severity: "critical" | "high";
+  type: "incident" | "credential" | "agreement";
+  label: string;
+  detail: string;
+  link: string;
+};
+
+export type ComplianceStaffSnapshotRow = {
+  user_id: string;
+  full_name: string;
+  expiry_date: string | null;
+  avg_score: number | null;
+  rp_flag: boolean;
+};
+
+export type ComplianceParticipantSnapshotRow = {
+  participant_id: string;
+  full_name: string;
+  agreement_unsigned: boolean;
+  has_flag: boolean;
+  note_quality: number | null;
+};
+
+export type ComplianceCentreOverview = {
+  kpis: {
+    overall_score: number;
+    compliant_sessions: number;
+    at_risk_sessions: number;
+    open_incidents: number;
+  };
+  urgent_actions: ComplianceUrgentAction[];
+  bands: { compliant: number; at_risk: number; non_compliant: number };
+  common_issues: Array<{ rule_code: string; label: string; count: number; pct: number }>;
+  staff_snapshot: ComplianceStaffSnapshotRow[];
+  participant_snapshot: ComplianceParticipantSnapshotRow[];
+};
+
+export function getComplianceCentreOverview() {
+  return jsonFetch<ComplianceCentreOverview>("/api/compliance/centre/overview");
+}
+
+export type ComplianceCredentialCell = { status: string; expiry_date: string | null };
+
+export type ComplianceStaffRow = {
+  user_id: string;
+  full_name: string;
+  credentials: Record<string, ComplianceCredentialCell>;
+  avg_score: number | null;
+  rp_flag: boolean;
+  groups: string[];
+};
+
+export type ComplianceCentreStaff = {
+  kpis: {
+    total_workers: number;
+    fully_compliant: number;
+    expiring_credentials: number;
+    action_required: number;
+  };
+  fixed_credential_types: string[];
+  workers: ComplianceStaffRow[];
+  generated_at: string;
+};
+
+export function getComplianceCentreStaff() {
+  return jsonFetch<ComplianceCentreStaff>("/api/compliance/centre/staff");
+}
+
+export type ComplianceParticipantRow = {
+  participant_id: string;
+  full_name: string;
+  ndis_number: string | null;
+  plan_status: string;
+  agreement_status: "unsigned" | "signed" | "expired";
+  agreement_signed_at: string | null;
+  sessions_count: number;
+  avg_note_quality: number | null;
+  flags: string[];
+  worker_name: string;
+  groups: string[];
+};
+
+export type ComplianceCentreParticipants = {
+  kpis: {
+    total_participants: number;
+    agreements_signed: number;
+    avg_note_quality: number;
+    open_flags: number;
+  };
+  participants: ComplianceParticipantRow[];
+  date_from: string;
+  date_to: string;
+};
+
+export function getComplianceCentreParticipants(dateFrom?: string, dateTo?: string) {
+  const params = new URLSearchParams();
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo) params.set("date_to", dateTo);
+  const qs = params.toString();
+  return jsonFetch<ComplianceCentreParticipants>(`/api/compliance/centre/participants${qs ? `?${qs}` : ""}`);
+}
+
+export type ComplianceIncidentRow = {
+  id: string;
+  incident_date: string;
+  worker_name: string;
+  participant_name: string;
+  incident_type: string;
+  description: string;
+  status: string;
+  ndis_reportable: boolean;
+};
+
+export type ComplianceCentreIncidents = {
+  kpis: { open_incidents: number; rp_flags: number; resolved_this_month: number };
+  incidents: ComplianceIncidentRow[];
+};
+
+export function getComplianceCentreIncidents() {
+  return jsonFetch<ComplianceCentreIncidents>("/api/compliance/centre/incidents");
+}
