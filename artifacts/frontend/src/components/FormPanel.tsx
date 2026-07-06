@@ -46,7 +46,7 @@ export function FormPanel({
       )}
 
       {/* Desktop: Fixed Right-Side Panel (32% width, visible on xl+) */}
-      <div className="hidden xl:block fixed right-0 top-[120px] bottom-0 w-[32%] z-40">
+      <div className="hidden xl:block fixed right-0 bottom-0 w-[32%] z-40" style={{ top: "240px" }}>
         <div className="flex flex-col bg-white border-l border-[#E5E7EB] h-full shadow-lg">
           <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
           <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4">
