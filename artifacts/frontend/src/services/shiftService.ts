@@ -99,6 +99,7 @@ export type ParticipantProfile = {
   case_manager?: {
     name?: string | null;
     phone?: string | null;
+    email?: string | null;
   };
   primary_disability?: string;
   medications?: string;

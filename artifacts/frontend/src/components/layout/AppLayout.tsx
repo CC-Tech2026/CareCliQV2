@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isWorkerMobileShiftDetailPath } from "@/lib/worker-shift-routes";
+import { isWorkerMobileShiftDetailPath, workerMobileShiftBackHref } from "@/lib/worker-shift-routes";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -562,6 +562,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isMobile      = useIsMobile();
   const hideWorkerMobileBottomNav =
     isWorker && isMobile && isWorkerMobileShiftDetailPath(location);
+  const hideWorkerMobileTopNav =
+    isWorker && isMobile && location.includes("/message-office");
 
   const toggleCollapse = () => {
     const next = isExpanded; // if currently expanded → pin collapsed; if collapsed → pin open
@@ -628,16 +630,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-h-0 bg-cc-surface overflow-hidden relative">
 
           {/* ── Mobile header ─────────────────────────────────────────────── */}
+          {!hideWorkerMobileTopNav && (
           <header
             className="md:hidden safe-header-mobile flex items-center justify-between px-4 shrink-0 z-10"
             style={{ borderBottom: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
           >
             {hideWorkerMobileBottomNav ? (
               <Link
-                href="/my-shifts"
+                href={workerMobileShiftBackHref(location)}
                 className="flex h-9 w-9 items-center justify-center rounded-full border active:opacity-75 transition-opacity"
                 style={{ borderColor: BORDER }}
-                aria-label={translate("shift.briefing.backToList")}
+                aria-label={location.includes("/message-office") ? translate("shift.during.backToShift") : translate("shift.briefing.backToList")}
               >
                 <ArrowLeft size={17} style={{ color: TEXT }} />
               </Link>
@@ -685,6 +688,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </header>
+          )}
 
           {/* ── Desktop topbar ─────────────────────────────────────────────── */}
           <header
