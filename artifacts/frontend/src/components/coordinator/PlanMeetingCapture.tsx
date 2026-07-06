@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mic, Pause, Play, Loader2, Check, X, Pencil,
-  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft, ShieldCheck,
+  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft, ShieldCheck, Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -152,9 +152,11 @@ function DraftCard({
         <>
           <p className="text-[13px] font-semibold mb-1.5" style={{ color: TEXT }}>{text}</p>
           {quote && (
-            <p className="text-[11px] italic px-2.5 py-1.5 rounded-lg mb-2 leading-relaxed" style={{ background: SOFT, color: MUTED }}>
-              "{quote.text}" <span className="not-italic font-semibold">— {quote.speaker}</span>
-            </p>
+            <div className="rounded-lg mb-2 px-2.5 py-2" style={{ background: SOFT }}>
+              <Quote size={12} style={{ color: PLUM }} />
+              <p className="text-[11px] italic leading-relaxed mt-1" style={{ color: MUTED }}>{quote.text}</p>
+              <p className="text-[10px] font-semibold mt-1" style={{ color: MUTED }}>— {quote.speaker}</p>
+            </div>
           )}
           <div className="flex items-center gap-2">
             <button
@@ -668,7 +670,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
             type="button"
             onClick={() => setActiveTab("drafts")}
             className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
-            style={{ background: activeTab === "drafts" ? PLUM : "#fff", color: activeTab === "drafts" ? "#fff" : TEXT, border: `1px solid ${activeTab === "drafts" ? PLUM : BORDER}` }}
+            style={{ background: activeTab === "drafts" ? CORAL : "#fff", color: activeTab === "drafts" ? "#fff" : TEXT, border: `1px solid ${activeTab === "drafts" ? CORAL : BORDER}` }}
           >
             Drafts ({visibleGoals.length + visibleTasks.length})
           </button>
@@ -676,7 +678,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
             type="button"
             onClick={() => setActiveTab("transcript")}
             className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
-            style={{ background: activeTab === "transcript" ? PLUM : "#fff", color: activeTab === "transcript" ? "#fff" : TEXT, border: `1px solid ${activeTab === "transcript" ? PLUM : BORDER}` }}
+            style={{ background: activeTab === "transcript" ? CORAL : "#fff", color: activeTab === "transcript" ? "#fff" : TEXT, border: `1px solid ${activeTab === "transcript" ? CORAL : BORDER}` }}
           >
             Transcript
           </button>
@@ -693,18 +695,20 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
 
       {activeTab === "drafts" ? (
         <div className="space-y-3 pb-16">
-          <div className="rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-            <p className="text-[11px] leading-relaxed" style={{ color: MUTED }}>
-              Nothing here is saved yet — accept the items you want, then Apply to create them for this participant.
+          <div className="rounded-xl p-3 flex items-start gap-2.5" style={{ background: "rgba(55,48,163,0.06)" }}>
+            <ShieldCheck size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+            <p className="text-[11px] leading-relaxed" style={{ color: PLUM }}>
+              Nothing is final in CareCliQ. Approve items, then export back to your system of record.
             </p>
-            <div className="flex gap-2 shrink-0">
-              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportCsv}>
-                <Download size={11} /> CSV
-              </Button>
-              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportPdf}>
-                <Download size={11} /> PDF
-              </Button>
-            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: PLUM, color: "#fff" }} onClick={exportCsv}>
+              <FileText size={11} /> CSV
+            </Button>
+            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: CORAL, color: "#fff" }} onClick={exportPdf}>
+              <FileText size={11} /> PDF
+            </Button>
           </div>
 
           {(attentionFlags.length > 0 || (stage1Results?.flags.length ?? 0) > 0) && (
