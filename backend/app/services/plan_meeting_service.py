@@ -390,7 +390,7 @@ def apply_plan_meeting_suggestions(
             "description": g.get("description") or g.get("goal_text") or "",
             "goal_area": g.get("goal_area") or "other",
             "support_category": g.get("support_category") or None,
-            "success_criteria": g.get("success_criteria") or None,
+            "why_it_matters": g.get("success_criteria") or None,
             "status": "active",
             "created_at": now,
             "updated_at": now,

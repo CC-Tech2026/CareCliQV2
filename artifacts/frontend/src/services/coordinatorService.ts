@@ -1283,6 +1283,14 @@ export type PlanMeeting = {
   source?: "legacy" | "session";
 };
 
+/** Full detail for a single meeting — includes transcript + extracted goals/tasks for recorded (session-based) meetings. */
+export type PlanMeetingDetail = PlanMeeting & {
+  raw_transcript?: Array<{ segment_id?: string; speaker_label?: string; text: string; start?: string }>;
+  clean_transcript?: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
+  extracted_goals?: ExtractedGoal[];
+  extracted_tasks?: ExtractedTask[];
+};
+
 export type RecordMeetingPayload = {
   participant_id: string;
   meeting_date: string;
@@ -1302,14 +1310,18 @@ export function recordPlanMeeting(payload: RecordMeetingPayload) {
   });
 }
 
-export function listPlanMeetings(participantId: string) {
+export function listPlanMeetings(participantId: string, filters?: { dateFrom?: string; dateTo?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters?.dateTo) params.set("date_to", filters.dateTo);
+  const qs = params.toString();
   return jsonFetch<{ meetings: PlanMeeting[] }>(
-    `/api/coordinator/participants/${encodeURIComponent(participantId)}/plan-meetings`,
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/plan-meetings${qs ? `?${qs}` : ""}`,
   );
 }
 
 export function getPlanMeeting(meetingId: string) {
-  return jsonFetch<{ meeting: PlanMeeting }>(
+  return jsonFetch<{ meeting: PlanMeetingDetail }>(
     `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}`,
   );
 }

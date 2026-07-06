@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mic, Pause, Play, Loader2, Check, X, Pencil,
-  AlertTriangle, FileText, MessageSquare, Download,
+  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ import {
   extractGoalsAndTasks,
   applyPlanMeetingSuggestions,
   listPlanMeetings,
+  getPlanMeeting,
   type PlanMeeting,
   type PlanMeetingType,
   type Stage1ResolutionResult,
@@ -462,10 +463,18 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
       return applyPlanMeetingSuggestions(sessionId as string, goalPayload, taskPayload);
     },
     onSuccess: (result) => {
-      toast({ title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.` });
+      const goalsShort = result.goals_created < acceptedGoals.length;
+      const tasksShort = result.tasks_created < acceptedTasks.length;
+      toast({
+        title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.`,
+        variant: goalsShort || tasksShort ? "destructive" : undefined,
+        description: goalsShort || tasksShort ? "Some accepted items failed to save — check Goals & Tasks and try again." : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["plan-meetings", participantId] });
-      qc.invalidateQueries({ queryKey: ["ndis-goals"] });
-      qc.invalidateQueries({ queryKey: ["participant-tasks"] });
+      // Goals/tasks queries are org-scoped via useOrgQuery, which prepends orgId to
+      // the real query key — match by key membership instead of a fixed prefix.
+      qc.invalidateQueries({ predicate: (query) => query.queryKey.includes("ndis-goals") });
+      qc.invalidateQueries({ predicate: (query) => query.queryKey.includes("participant-tasks") });
       onDone();
     },
     onError: (err: any) => toast({ variant: "destructive", title: "Failed to apply", description: err?.message ?? "" }),
@@ -713,19 +722,177 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
 
 // ── Meeting history row ────────────────────────────────────────────────────────
 
-function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
+const REQUIREMENT_META: Record<string, { label: string; bg: string; color: string }> = {
+  mandatory: { label: "Mandatory", bg: "#FEF2F2", color: CORAL },
+  optional:  { label: "Optional",  bg: SOFT,      color: MUTED },
+};
+
+function MeetingDetailView({ meetingId, onBack }: { meetingId: string; onBack: () => void }) {
+  const detailQuery = useQuery({
+    queryKey: ["plan-meeting-detail", meetingId],
+    queryFn: () => getPlanMeeting(meetingId),
+    select: (d) => d.meeting,
+  });
+
+  const meeting = detailQuery.data;
+  const meta = meeting ? MEETING_TYPE_META[meeting.meeting_type] ?? MEETING_TYPE_META.check_in : null;
+  const status = meeting ? STATUS_META[meeting.suggestions_status] ?? STATUS_META.pending_review : null;
+  const dateLabel = useMemo(() => {
+    if (!meeting) return "";
+    try {
+      const hasTime = /T\d{2}:\d{2}/.test(meeting.meeting_date);
+      const d = new Date(meeting.meeting_date);
+      const datePart = d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      if (!hasTime) return datePart;
+      const timePart = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+      return `${datePart} · ${timePart}`;
+    } catch {
+      return meeting.meeting_date;
+    }
+  }, [meeting]);
+
+  const goals = meeting?.extracted_goals ?? [];
+  const tasks = meeting?.extracted_tasks ?? [];
+  const legacyNotes: Array<[string, string]> = meeting
+    ? ([
+        ["Participant priorities", meeting.participant_priorities],
+        ["Coordinator observations", meeting.coordinator_observations],
+        ["Agreed outcomes", meeting.agreed_outcomes],
+        ["Notes", meeting.conversation_notes],
+      ].filter(([, v]) => !!v) as Array<[string, string]>)
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-[12px] font-semibold hover:opacity-70 transition-opacity"
+        style={{ color: PLUM }}
+      >
+        <ArrowLeft size={14} /> Back to meetings
+      </button>
+
+      {meeting && meta && status && (
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-black"
+            style={{ background: meta.bg, color: meta.color }}
+          >
+            {meta.abbr}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-black text-[13px]" style={{ color: TEXT }}>{meta.label}</p>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: status.bg, color: status.color }}>
+                {status.label}
+              </span>
+            </div>
+            <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{dateLabel}</p>
+          </div>
+        </div>
+      )}
+
+      {detailQuery.isLoading && (
+        <div className="text-center py-8">
+          <Loader2 size={20} className="animate-spin mx-auto" style={{ color: MUTED }} />
+        </div>
+      )}
+
+      {!detailQuery.isLoading && (detailQuery.isError || !meeting) && (
+        <p className="text-[12px] py-2" style={{ color: MUTED }}>Couldn't load this meeting's details.</p>
+      )}
+
+      {meeting && meeting.source === "legacy" && (
+        legacyNotes.length === 0 ? (
+          <p className="text-[12px] py-2" style={{ color: MUTED }}>No notes recorded for this meeting.</p>
+        ) : (
+          <div className="space-y-3">
+            {legacyNotes.map(([label, value]) => (
+              <div key={label}>
+                <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>{label}</p>
+                <p className="text-[12px] mt-0.5" style={{ color: TEXT }}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {meeting && meeting.source !== "legacy" && (
+        <div className="space-y-3">
+          <TranscriptViewer
+            rawTranscript={meeting.raw_transcript ?? []}
+            cleanTranscript={meeting.clean_transcript ?? []}
+          />
+
+          {(goals.length > 0 || tasks.length > 0) && (
+            <div className="rounded-xl overflow-hidden border" style={{ borderColor: BORDER }}>
+              <div className="p-3" style={{ background: SOFT }}>
+                <p className="font-semibold text-[13px]" style={{ color: TEXT }}>Goals &amp; tasks from this meeting</p>
+                <p className="text-[11px]" style={{ color: MUTED }}>What the AI extracted from the conversation</p>
+              </div>
+              <div className="border-t p-3 space-y-2" style={{ borderColor: BORDER }}>
+                {goals.map((g, i) => (
+                  <div key={i} className="rounded-lg p-2.5 flex items-start gap-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                    <Target size={13} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                    <div className="min-w-0">
+                      <p className="text-[12px]" style={{ color: TEXT }}>{g.goal_text}</p>
+                      {g.support_category && (
+                        <span className="text-[10px] font-semibold" style={{ color: MUTED }}>{g.support_category}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {tasks.map((t, i) => {
+                  const req = REQUIREMENT_META[t.requirement_level] ?? REQUIREMENT_META.optional;
+                  return (
+                    <div key={i} className="rounded-lg p-2.5 flex items-start gap-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                      <ListChecks size={13} className="shrink-0 mt-0.5" style={{ color: GREEN }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px]" style={{ color: TEXT }}>{t.task_text}</p>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: req.bg, color: req.color }}>
+                        {req.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {goals.length === 0 && tasks.length === 0 && (
+            <p className="text-[12px]" style={{ color: MUTED }}>No goals or tasks were extracted from this meeting.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeetingRow({ meeting, onSelect }: { meeting: PlanMeeting; onSelect: (id: string) => void }) {
   const meta = MEETING_TYPE_META[meeting.meeting_type] ?? MEETING_TYPE_META.check_in;
   const status = STATUS_META[meeting.suggestions_status] ?? STATUS_META.pending_review;
   const dateLabel = useMemo(() => {
     try {
-      return new Date(meeting.meeting_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      const hasTime = /T\d{2}:\d{2}/.test(meeting.meeting_date);
+      const d = new Date(meeting.meeting_date);
+      const datePart = d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      if (!hasTime) return datePart;
+      const timePart = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+      return `${datePart} · ${timePart}`;
     } catch {
       return meeting.meeting_date;
     }
   }, [meeting.meeting_date]);
 
   return (
-    <div className="rounded-xl flex items-center gap-3 p-3" style={{ border: `1px solid ${BORDER}` }}>
+    <button
+      type="button"
+      onClick={() => onSelect(meeting.id)}
+      className="w-full rounded-xl flex items-center gap-3 p-3 text-left hover:opacity-80 transition-opacity"
+      style={{ border: `1px solid ${BORDER}` }}
+    >
       <div
         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black"
         style={{ background: meta.bg, color: meta.color }}
@@ -741,7 +908,8 @@ function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
         </div>
         <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{dateLabel}</p>
       </div>
-    </div>
+      <ChevronRight size={14} className="shrink-0" style={{ color: MUTED }} />
+    </button>
   );
 }
 
@@ -753,11 +921,14 @@ interface PlanMeetingCaptureProps {
 
 export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
   const [recording, setRecording] = useState(false);
+  const [viewingMeetingId, setViewingMeetingId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const qc = useQueryClient();
 
   const meetingsQuery = useQuery({
-    queryKey: ["plan-meetings", participantId],
-    queryFn: () => listPlanMeetings(participantId),
+    queryKey: ["plan-meetings", participantId, dateFrom, dateTo],
+    queryFn: () => listPlanMeetings(participantId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
     select: (d) => d.meetings,
   });
 
@@ -774,7 +945,17 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
     );
   }
 
+  if (viewingMeetingId) {
+    return (
+      <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
+        <MeetingDetailView meetingId={viewingMeetingId} onBack={() => setViewingMeetingId(null)} />
+      </div>
+    );
+  }
+
   const meetings = meetingsQuery.data ?? [];
+  const hasFilter = !!(dateFrom || dateTo);
+  const clearFilter = () => { setDateFrom(""); setDateTo(""); };
 
   return (
     <div className="space-y-3">
@@ -801,6 +982,42 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
         </Button>
       </div>
 
+      {/* Date filter */}
+      {(meetings.length > 0 || hasFilter) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>
+            From
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="ml-1.5 rounded-lg border px-2 py-1 text-[11px]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </label>
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>
+            To
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="ml-1.5 rounded-lg border px-2 py-1 text-[11px]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </label>
+          {hasFilter && (
+            <button
+              type="button"
+              onClick={clearFilter}
+              className="text-[11px] font-semibold hover:opacity-70 transition-opacity"
+              style={{ color: PLUM }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Loading */}
       {meetingsQuery.isLoading && (
         <div className="text-center py-6">
@@ -808,8 +1025,24 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
         </div>
       )}
 
-      {/* Empty state */}
-      {!meetingsQuery.isLoading && meetings.length === 0 && (
+      {/* Empty state — filtered to zero results */}
+      {!meetingsQuery.isLoading && meetings.length === 0 && hasFilter && (
+        <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
+          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>No meetings in this date range</p>
+          <p className="text-[12px]" style={{ color: MUTED }}>Try a different range, or clear the filter to see all meetings.</p>
+          <button
+            type="button"
+            onClick={clearFilter}
+            className="mt-3 text-[12px] font-semibold hover:opacity-70 transition-opacity"
+            style={{ color: PLUM }}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
+      {/* Empty state — no meetings recorded at all */}
+      {!meetingsQuery.isLoading && meetings.length === 0 && !hasFilter && (
         <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
           <div
             className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center"
@@ -835,7 +1068,7 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
       {/* Meeting list */}
       {meetings.length > 0 && (
         <div className="space-y-2">
-          {meetings.map((m) => <MeetingRow key={m.id} meeting={m} />)}
+          {meetings.map((m) => <MeetingRow key={m.id} meeting={m} onSelect={setViewingMeetingId} />)}
         </div>
       )}
     </div>

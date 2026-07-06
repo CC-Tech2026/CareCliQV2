@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, FileText } from "lucide-react";
 
 const PLUM = "#3730A3";
 const BORDER = "#E5E7EB";
@@ -41,10 +41,10 @@ export function TranscriptViewer({ rawTranscript = [], cleanTranscript = [], def
       >
         <div className="flex items-center gap-2">
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[12px] font-black shrink-0"
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
             style={{ background: PLUM, color: "#fff" }}
           >
-            📝
+            <FileText size={16} />
           </div>
           <div className="text-left">
             <p className="font-semibold text-[13px]" style={{ color: TEXT }}>

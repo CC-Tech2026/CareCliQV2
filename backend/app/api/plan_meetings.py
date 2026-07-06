@@ -209,6 +209,8 @@ async def record_plan_meeting(
 @router.get("/participants/{participant_id}/plan-meetings")
 async def list_plan_meetings(
     participant_id: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     """List all plan meetings recorded for a participant, newest first.
@@ -217,13 +219,16 @@ async def list_plan_meetings(
     two-stage-pipeline recordings (`plan_meeting_sessions`) into one list, so
     older history stays visible alongside new recordings without a second
     endpoint/query on the frontend.
+
+    `date_from` / `date_to` are optional ISO dates (YYYY-MM-DD) that filter the
+    list to meetings recorded within that (inclusive) range.
     """
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     supabase = get_supabase_admin()
 
     try:
-        legacy_resp = (
+        legacy_query = (
             supabase.table("participant_plan_meetings")
             .select(
                 "id, meeting_date, meeting_type, attendees, suggestions_status, "
@@ -232,9 +237,12 @@ async def list_plan_meetings(
             )
             .eq("participant_id", participant_id)
             .eq("organization_id", organization_id)
-            .order("meeting_date", desc=True)
-            .execute()
         )
+        if date_from:
+            legacy_query = legacy_query.gte("meeting_date", date_from)
+        if date_to:
+            legacy_query = legacy_query.lte("meeting_date", date_to)
+        legacy_resp = legacy_query.order("meeting_date", desc=True).execute()
     except Exception as exc:
         logger.exception("Failed to list plan meetings: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to load plan meetings.")
@@ -243,14 +251,17 @@ async def list_plan_meetings(
 
     session_meetings: list[dict[str, Any]] = []
     try:
-        session_resp = (
+        session_query = (
             supabase.table("plan_meeting_sessions")
             .select("id, meeting_type, created_at, recorded_at, coordinator_id, stage_2_status, review_status")
             .eq("participant_id", participant_id)
             .eq("organization_id", organization_id)
-            .order("created_at", desc=True)
-            .execute()
         )
+        if date_from:
+            session_query = session_query.gte("created_at", f"{date_from}T00:00:00")
+        if date_to:
+            session_query = session_query.lte("created_at", f"{date_to}T23:59:59.999999")
+        session_resp = session_query.order("created_at", desc=True).execute()
         for row in session_resp.data or []:
             suggestions_status = "applied" if row.get("review_status") == "approved" else "pending_review"
             session_meetings.append({
@@ -334,12 +345,27 @@ async def list_pending_meetings(
     return {"pending": pending, "count": len(pending)}
 
 
+def _parse_json_field(value: Any, default: Any) -> Any:
+    """Session transcript/goal/task columns are sometimes written as JSON strings
+    (via json.dumps) even for JSONB columns — parse defensively either way."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            return json.loads(value) if value else default
+        except json.JSONDecodeError:
+            return default
+    return value
+
+
 @router.get("/plan-meetings/{meeting_id}")
 async def get_plan_meeting(
     meeting_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get a single plan meeting including AI suggestions."""
+    """Get a single plan meeting including AI suggestions — and, for recorded
+    (session-based) meetings, the transcript and extracted goals/tasks so the
+    meeting history view can show what happened in a past meeting."""
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     supabase = get_supabase_admin()
@@ -358,10 +384,52 @@ async def get_plan_meeting(
         raise HTTPException(status_code=500, detail="Failed to load plan meeting.")
 
     rows = resp.data or []
-    if not rows:
+    if rows:
+        return {"meeting": {**rows[0], "source": "legacy"}}
+
+    try:
+        session_resp = (
+            supabase.table("plan_meeting_sessions")
+            .select(
+                "id, participant_id, meeting_type, created_at, recorded_at, coordinator_id, "
+                "stage_1_status, stage_2_status, review_status, reviewed_by, reviewed_at, "
+                "raw_transcript, clean_transcript, resolved_names, "
+                "extracted_goals, extracted_tasks, attention_flags"
+            )
+            .eq("id", meeting_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("Failed to get plan meeting session: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to load plan meeting.")
+
+    session_rows = session_resp.data or []
+    if not session_rows:
         raise HTTPException(status_code=404, detail="Plan meeting not found.")
 
-    return {"meeting": rows[0]}
+    session = session_rows[0]
+    suggestions_status = "applied" if session.get("review_status") == "approved" else "pending_review"
+    return {
+        "meeting": {
+            "id": session["id"],
+            "participant_id": session.get("participant_id"),
+            "coordinator_id": session.get("coordinator_id"),
+            "meeting_date": session.get("recorded_at") or session.get("created_at"),
+            "meeting_type": session.get("meeting_type") or "check_in",
+            "attendees": [],
+            "suggestions_status": suggestions_status,
+            "created_at": session.get("created_at"),
+            "source": "session",
+            "raw_transcript": _parse_json_field(session.get("raw_transcript"), []),
+            "clean_transcript": _parse_json_field(session.get("clean_transcript"), []),
+            "resolved_names": _parse_json_field(session.get("resolved_names"), {}),
+            "extracted_goals": _parse_json_field(session.get("extracted_goals"), []),
+            "extracted_tasks": _parse_json_field(session.get("extracted_tasks"), []),
+            "attention_flags": _parse_json_field(session.get("attention_flags"), []),
+        },
+    }
 
 
 @router.post("/plan-meetings/{meeting_id}/ai-review")
