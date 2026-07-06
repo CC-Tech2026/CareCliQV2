@@ -2559,12 +2559,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               </div>
 
-              {/* Content grid: List on left, Form panel on right (desktop) */}
-              <div className="grid xl:grid-cols-[1fr_40%] gap-4 xl:gap-6 items-start">
-                {/* Left column: Goals & Tasks list */}
-                <div className="space-y-4">
-
-              {/* Goals missing support category — coordinator review */}
+              {/* Content: Goals & Tasks list (full width) */}
+              <div className="space-y-4">
+                  {/* Goals missing support category — coordinator review */}
               {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 space-y-2">
                   <p className="text-[12px] font-bold text-amber-900">
@@ -2800,8 +2797,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               )}
             </div>
+            </section>
 
-            {/* Right column: Form panel (desktop only) */}
+            {/* Goal & Task Form Panels - Independent overlays */}
             <FormPanel
               isOpen={createMode === "goal" || createMode === "edit_goal"}
               title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
@@ -2821,8 +2819,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             >
               {taskFormContent}
             </FormPanel>
-          </div>  {/* Close grid */}
-            </section>
           );
         })()}
 
