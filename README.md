@@ -231,7 +231,6 @@ Routes are guarded by the `ProtectedRoute` component which checks:
 |---|---|
 | `admin` / `support_coordinator` | All routes including `/compliance`, `/reports`, `/patients/new`, `/team` |
 | `support_worker` | `/dashboard`, `/my-clients`, `/sessions`, `/incidents`, `/settings` |
-| `allied_health` | `/dashboard`, `/patients` (read-only), `/sessions`, `/reports` |
 
 ### Key Pages
 
@@ -305,7 +304,6 @@ The backend uses the **service role key** (`SUPABASE_SERVICE_ROLE_KEY`) for admi
 | `admin` | Full access — all participants, sessions, billing, team management |
 | `support_coordinator` | Same as admin minus owner-level org settings |
 | `support_worker` | Only allocated participants + own sessions and incidents |
-| `allied_health` | Clinical read access — participants and reports, no billing |
 
 ### Role Source of Truth
 

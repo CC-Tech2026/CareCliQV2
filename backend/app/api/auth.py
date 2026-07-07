@@ -253,7 +253,6 @@ def _is_auth_user_email_verified(auth_user) -> bool:
 # ---------------------------------------------------------------------------
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
-    "allied_health": "allied_health",
     "small_provider": "support_coordinator",
     "managing_director": "managing_director",
 }

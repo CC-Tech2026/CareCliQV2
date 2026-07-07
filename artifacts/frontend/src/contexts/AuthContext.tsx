@@ -16,8 +16,8 @@ import { clearPresentedNotifications } from "@/lib/worker-notification-presenter
 import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
 import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 
-export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
-export type AccountType = "independent_worker" | "allied_health" | "small_provider";
+export type UserRole = "support_coordinator" | "support_worker" | "managing_director";
+export type AccountType = "independent_worker" | "small_provider";
 
 export interface AuthUser {
   id: string;

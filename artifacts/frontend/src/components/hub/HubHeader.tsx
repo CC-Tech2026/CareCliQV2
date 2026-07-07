@@ -10,7 +10,6 @@ const ROLE_KEY: Record<string, string> = {
   support_worker: "hub.role.supportWorker",
   support_coordinator: "hub.role.supportCoordinator",
   managing_director: "hub.role.managingDirector",
-  allied_health: "hub.role.alliedHealth",
   admin: "hub.role.admin",
 };
 
@@ -18,7 +17,6 @@ const ROLE_CTA_KEY: Record<string, { label: string; href: string }> = {
   support_worker: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   support_coordinator: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   managing_director: { label: "hub.header.cta.executive", href: "/md/executive" },
-  allied_health: { label: "hub.header.cta.caseload", href: "/patients" },
   admin: { label: "hub.header.cta.dashboard", href: "/dashboard" },
 };
 

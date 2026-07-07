@@ -37,7 +37,7 @@ const BORDER = "var(--cc-border)";
 // Canonical snake_case values for the credential types the Staff compliance
 // table tracks as fixed columns (see migration 095). Values with no clean
 // legacy equivalent (Police Check, Other, AHPRA Registration, etc.) stay as
-// plain display strings — unchanged from before.
+// plain display strings ï¿½ unchanged from before.
 const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
   ndis_screening: "NDIS Worker Screening",
   wwcc: "Working with Children Check (WWCC)",
@@ -135,14 +135,14 @@ function CredentialRow({
         </div>
         <p className="mt-1 text-xs font-medium text-[#6A6A77]">
           {credentialTypeLabel(credential.credential_type)}
-          {credential.issuer ? ` • ${credential.issuer}` : ""}
+          {credential.issuer ? ` ï¿½ ${credential.issuer}` : ""}
           {credential.expiry_date
-            ? ` • ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
+            ? ` ï¿½ ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
             : ""}
         </p>
         {credential.user && (
           <p className="mt-1 text-xs text-[#6A6A77]">
-            {credential.user.full_name || credential.user.email} • {credential.user.role?.replace("_", " ")}
+            {credential.user.full_name || credential.user.email} ï¿½ {credential.user.role?.replace("_", " ")}
           </p>
         )}
         {credential.file_url && (
@@ -250,7 +250,7 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
 
         {alertsLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-[#6A6A77]">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin" /> Loadingï¿½
           </div>
         ) : workers.length === 0 ? (
           <p className="mt-2 rounded-xl bg-[#F4EDE6] p-3 text-sm font-bold text-[#E8457A]">
@@ -325,7 +325,7 @@ export default function Credentials() {
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
   const orgId = user?.organizationId ?? "__no_org__";
-  const credentialTypes = user?.role === "allied_health" ? ALLIED_TYPES : WORKER_TYPES;
+  const credentialTypes = WORKER_TYPES;
   const ruleCredentialTypes = useMemo(() => {
     const merged = [...WORKER_TYPES, ...ALLIED_TYPES];
     return [...new Set(merged)].sort((a, b) => a.localeCompare(b));
@@ -474,7 +474,7 @@ export default function Credentials() {
       )}
       <div>
         <p className="hidden" style={{ color: CORAL }}>
-          {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Allied Health" : "Support Worker"}
+          {isCoordinator ? "Organisation" : "Support Worker"}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {isCoordinator ? "Team Credential Wallet" : translate("credentials.title")}

@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 ROLE_LABELS = {
     "support_worker": "Support Worker",
-    "allied_health": "Allied Health Professional",
     "support_coordinator": "Support Coordinator",
 }
 

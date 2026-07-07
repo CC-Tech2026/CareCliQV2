@@ -244,7 +244,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
                 "preferred_contact_method, phone"
             )
             .eq("organization_id", org_id)
-            .in_("role", ["support_worker", "allied_health", "support_coordinator"])
+            .in_("role", ["support_worker", "support_coordinator"])
         )
         if id_filter is not None:
             query = query.in_("id", id_filter)

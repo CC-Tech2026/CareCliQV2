@@ -78,12 +78,6 @@ interface FormData {
   password: string;
   confirm_password: string;
 
-  ah_profession_type: string;
-  ah_registration_status: string;
-  ah_provider_number: string;
-  ah_specialties: string;
-  ah_clinic_name: string;
-
   sp_organisation_name: string;
   sp_provider_type: string;
   sp_registration_status: string;
@@ -98,12 +92,6 @@ const EMPTY: FormData = {
   email: "",
   password: "",
   confirm_password: "",
-
-  ah_profession_type: "",
-  ah_registration_status: "",
-  ah_provider_number: "",
-  ah_specialties: "",
-  ah_clinic_name: "",
 
   sp_organisation_name: "",
   sp_provider_type: "",
@@ -790,14 +778,6 @@ function buildPayload(form: FormData) {
     if (form.sp_participant_volume)
       base.participant_volume = form.sp_participant_volume;
     if (form.sp_contact_number) base.contact_number = form.sp_contact_number;
-  } else if (form.account_type === "allied_health") {
-    base.onboarding_data = {
-      profession_type: form.ah_profession_type,
-      registration_status: form.ah_registration_status,
-      provider_number: form.ah_provider_number,
-      specialties: form.ah_specialties,
-      clinic_name: form.ah_clinic_name,
-    };
   }
 
   return base;

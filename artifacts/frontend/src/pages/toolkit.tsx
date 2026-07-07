@@ -64,8 +64,8 @@ function ItemRow({
         </div>
         <p className="mt-1 text-xs text-[#6A6A77]">
           {coordinator
-            ? `${category} • ${item.quantity} ${unitLabel} available${item.minimum_quantity ? ` • minimum ${item.minimum_quantity}` : ""}${item.expiry_date ? ` • expires ${item.expiry_date}` : ""}`
-            : `${translateParams("toolkit.unitsAvailable", { category, count: String(item.quantity) })}${item.minimum_quantity ? ` • ${translateParams("toolkit.minimum", { count: String(item.minimum_quantity) })}` : ""}${item.expiry_date ? ` • ${translateParams("toolkit.expiresOn", { date: item.expiry_date })}` : ""}`}
+            ? `${category} ï¿½ ${item.quantity} ${unitLabel} available${item.minimum_quantity ? ` ï¿½ minimum ${item.minimum_quantity}` : ""}${item.expiry_date ? ` ï¿½ expires ${item.expiry_date}` : ""}`
+            : `${translateParams("toolkit.unitsAvailable", { category, count: String(item.quantity) })}${item.minimum_quantity ? ` ï¿½ ${translateParams("toolkit.minimum", { count: String(item.minimum_quantity) })}` : ""}${item.expiry_date ? ` ï¿½ ${translateParams("toolkit.expiresOn", { date: item.expiry_date })}` : ""}`}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -185,7 +185,7 @@ export default function Toolkit() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
-          {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Clinical" : "Support Worker"}
+          {isCoordinator ? "Organisation" : "Support Worker"}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {isCoordinator ? "Team Toolkit" : translate("toolkit.title")}
@@ -289,7 +289,7 @@ export default function Toolkit() {
                 <div key={request.id} className="flex flex-wrap items-center gap-3 py-3">
                   <div className="flex-1">
                     <p className="font-bold text-[#1A1A2E]">{request.item?.name || request.item_id}</p>
-                    <p className="text-xs text-[#6A6A77]">{request.quantity_requested} requested • {request.status}</p>
+                    <p className="text-xs text-[#6A6A77]">{request.quantity_requested} requested ï¿½ {request.status}</p>
                   </div>
                   {request.status === "pending" && (
                     <>

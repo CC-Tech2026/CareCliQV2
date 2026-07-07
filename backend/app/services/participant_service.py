@@ -12,7 +12,6 @@ from ..core.access import (
     ACCESS_METADATA_FIELDS,
     can_access_participant,
     get_user_role,
-    is_allied_health,
     is_coordinator,
     is_support_worker,
     owner_payload,
@@ -651,7 +650,7 @@ async def _get_assignment_ids(current_user: Optional[dict]) -> tuple[set[str], s
     The first set is support-worker scope, the second set is clinical/allied
     health scope. Fail closed on missing assignment metadata.
     """
-    if not current_user or not (is_support_worker(current_user) or is_allied_health(current_user)):
+    if not current_user or not is_support_worker(current_user):
         return set(), set()
 
     uid = user_id(current_user)

@@ -81,13 +81,10 @@ import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
-const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "managing_director"] as const;
 
 // Support Coordinator / CareCliQ Parent only — oversight, billing, team, compliance.
 const COORDINATOR_ROLES = ["support_coordinator"] as const;
-
-// Coordinator + allied health — reports contain clinical documentation allied health needs.
-const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 const WORKER_ROLES = ["support_worker"] as const;
 
 // Managing Director only
@@ -389,7 +386,7 @@ function Router() {
       </Route>
 
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -412,13 +409,13 @@ function Router() {
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Sessions /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><SessionNew /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -475,19 +472,19 @@ function Router() {
 
       {/* ── Reports — support coordinator + allied health ────────────────── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/billing">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Billing /></AppLayout>
         </ProtectedRoute>
       </Route>

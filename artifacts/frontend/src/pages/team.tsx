@@ -53,7 +53,6 @@ type Tab = "overview" | "management" | "shifts";
 
 const INVITE_ROLE_KEYS: Record<string, string> = {
   support_worker: "team.invite.role.supportWorker",
-  allied_health: "team.invite.role.alliedHealth",
   support_coordinator: "team.invite.role.coordinator",
 };
 
@@ -463,7 +462,6 @@ export default function Team() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="support_worker">{translate("team.invite.role.supportWorker")}</SelectItem>
-                  <SelectItem value="allied_health">{translate("team.invite.role.alliedHealth")}</SelectItem>
                   <SelectItem value="support_coordinator">{translate("team.invite.role.coordinator")}</SelectItem>
                 </SelectContent>
               </Select>

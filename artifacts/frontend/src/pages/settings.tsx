@@ -192,13 +192,11 @@ function PanelCard({
 // ---------------------------------------------------------------------------
 const ROLE_LABELS: Record<string, string> = {
   support_coordinator: "CareCliQ Parent",
-  allied_health:       "CareCliQ Pro",
   support_worker:      "CareCliQ Child",
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   support_coordinator: { bg: "rgba(55,48,163,0.1)",   color: "#E8457A" },
-  allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
 };
 
@@ -1867,7 +1865,6 @@ export default function Settings() {
                           >
                             <option value="support_worker">Support Worker</option>
                             <option value="support_coordinator">Support Coordinator</option>
-                            <option value="allied_health">Allied Health</option>
                           </select>
                         ) : (
                           <span

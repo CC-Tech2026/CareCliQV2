@@ -238,11 +238,6 @@ export const ROLE_COLORS = {
     bg: "#EDE9FE",
     accent: BRAND.secondary,
   },
-  allied_health: {
-    color: "#059669",          // Teal - Clinical practice
-    bg: "#D1FAE5",
-    accent: STATUS.success,
-  },
   managing_director: {
     color: "#DC2626",          // Red - Executive oversight
     bg: "#FEE2E2",

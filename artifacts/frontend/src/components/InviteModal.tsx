@@ -45,12 +45,6 @@ const ROLE_OPTIONS = [
     accessKey: "hub.invite.role.supportWorkerAccess",
   },
   {
-    value: "allied_health",
-    labelKey: "hub.invite.role.alliedHealth",
-    descKey: "hub.invite.role.alliedHealthDesc",
-    accessKey: "hub.invite.role.alliedHealthAccess",
-  },
-  {
     value: "support_coordinator",
     labelKey: "hub.invite.role.coordinator",
     descKey: "hub.invite.role.coordinatorDesc",

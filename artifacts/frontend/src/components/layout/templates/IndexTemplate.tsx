@@ -26,7 +26,7 @@ interface IndexHeaderProps {
 
 export function IndexHeader({ title, count, primaryAction, className }: IndexHeaderProps) {
   return (
-    <div className={cn("flex items-end justify-between gap-4", className)}>
+    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4", className)}>
       <div className="min-w-0">
         <h1
           className="text-xl font-black tracking-tight truncate"

@@ -13,7 +13,6 @@ const BORDER = "#FADAE4";
 
 const ROLE_KEYS: Record<string, string> = {
   support_worker:      "auth.invite.role.supportWorker",
-  allied_health:       "auth.invite.role.alliedHealth",
   support_coordinator: "auth.invite.role.supportCoordinator",
 };
 

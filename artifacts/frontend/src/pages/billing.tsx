@@ -75,7 +75,7 @@ export default function Billing() {
   const { toast } = useToast();
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
-  const canInvoice = user?.role === "support_coordinator" || user?.role === "allied_health";
+  const canInvoice = user?.role === "support_coordinator";
 
   const [loading,            setLoading           ] = useState(true);
   const [savingSubscription, setSavingSubscription] = useState(false);
@@ -316,7 +316,7 @@ export default function Billing() {
         {/* ── Page header ───────────────────────────────────────────────────── */}
         <div>
           <p className="hidden text-cc-muted">
-            {user?.role === "allied_health" ? translate("billing.role.alliedHealth") : translate("billing.role.coordinator")}
+            {translate("billing.role.coordinator")}
           </p>
           <h1 className="text-xl font-black tracking-tight text-cc-plum">
             {translate("billing.title")}
@@ -443,7 +443,7 @@ export default function Billing() {
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
 
           {/* Invoice form */}
-          <Card title={user?.role === "allied_health" ? translate("billing.newInvoice") : translate("billing.issueInvoice")}>
+          <Card title={translate("billing.issueInvoice")}>
             <div className="space-y-4">
               <div>
                 <Label className="text-xs font-bold text-cc-muted">{translate("billing.participant")}</Label>

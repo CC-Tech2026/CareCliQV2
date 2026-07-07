@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..services import ai_service, participant_service, session_service
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.supabase_client import get_supabase_admin
-from ..core.access import get_user_id, get_user_organization_id, is_allied_health
+from ..core.access import get_user_id, get_user_organization_id
 from ..core.security import get_current_user
 from .security import require_recent_reauth
 import logging
@@ -12,7 +12,7 @@ import json
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-REPORT_ROLES = {"support_coordinator", "allied_health"}
+REPORT_ROLES = {"support_coordinator"}
 
 
 def _require_report_access(current_user: dict) -> None:
@@ -199,8 +199,6 @@ async def report_history(current_user: dict = Depends(get_current_user)):
         .order("created_at", desc=True)
         .limit(100)
     )
-    if is_allied_health(current_user):
-        query = query.eq("generated_by", get_user_id(current_user))
     result = query.execute()
     return result.data or []
 

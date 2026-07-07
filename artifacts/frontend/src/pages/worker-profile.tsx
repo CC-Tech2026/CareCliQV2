@@ -41,7 +41,6 @@ const BORDER = "var(--cc-border)";
 
 const ROLE_KEYS: Record<string, string> = {
   support_worker: "profile.role.supportWorker",
-  allied_health: "profile.role.alliedHealth",
   support_coordinator: "profile.role.coordinator",
 };
 

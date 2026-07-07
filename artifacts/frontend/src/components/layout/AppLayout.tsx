@@ -38,7 +38,7 @@ const TEXT   = "var(--cc-text)";
 const BORDER = "var(--cc-border)";
 const ACTIVE = "var(--cc-active-bg)";
 
-type NavRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
+type NavRole = "support_coordinator" | "support_worker" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties };
 
 interface NavItem {
@@ -68,7 +68,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Settings & Help",
       items: [
-        { href: "/settings",    label: "Settings",   icon: Settings      },
         { href: "/toolkit",     label: "Toolkit",    icon: Wrench        },
         { href: "/worker/help", label: "Help",       icon: HelpCircle    },
       ],
@@ -92,39 +91,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
         { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
         { href: "/accessibility", label: "Accessibility", icon: Accessibility },
-      ],
-    },
-  ],
-  allied_health: [
-    { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
-    {
-      group: "Clinical",
-      items: [
-        { href: "/patients", label: "Caseload",  icon: UserRound    },
-        { href: "/sessions", label: "Sessions",  icon: CalendarDays },
-      ],
-    },
-    {
-      group: "Quality",
-      items: [
-        { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-        { href: "/reports",   label: "Reports",   icon: FileBarChart2 },
-      ],
-    },
-    {
-      group: "Admin",
-      items: [
-        { href: "/billing",     label: "Invoices",    icon: CreditCard },
-        { href: "/credentials", label: "Credentials", icon: BadgeCheck },
-        { href: "/toolkit",     label: "Toolkit",     icon: Wrench     },
-      ],
-    },
-    {
-      group: "Account",
-      items: [
-        { href: "/worker/profile",  label: "My Profile",    icon: UserRound     },
-        { href: "/worker/security", label: "Security",      icon: LockKeyhole   },
-        { href: "/accessibility",   label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -163,11 +129,6 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/my-clients",    label: "My Clients", icon: UserRound       },
     { href: "/my-compliance", label: "Compliance", icon: ShieldCheck     },
   ],
-  allied_health: [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/patients",  label: "Caseload",  icon: UserRound       },
-    { href: "/sessions",  label: "Sessions",  icon: CalendarDays    },
-  ],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
     { href: "/md/executive",  label: "Executive", icon: BarChart2       },
@@ -189,13 +150,6 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
     { href: "/my-shifts",    label: "Shifts",    icon: Clock           },
     { href: "/my-clients",   label: "Clients",   icon: UserRound       },
     { href: "/my-compliance",label: "Compliance",icon: ShieldCheck     },
-  ],
-  allied_health: [
-    { href: "/dashboard",   label: "Home",     icon: LayoutDashboard },
-    { href: "/patients",    label: "Caseload", icon: UserRound       },
-    { href: "/sessions",    label: "Sessions", icon: CalendarDays    },
-    { href: "/reports",     label: "Reports",  icon: FileBarChart2   },
-    { href: "/credentials", label: "Creds",    icon: BadgeCheck      },
   ],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
