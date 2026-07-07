@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Plus, TrendingUp, Zap, Settings, Lock } from "lucide-react";
+import { Check, Loader2, Plus, TrendingUp, Zap, Settings, Lock, FileText, Clock } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getRevenueReport, getParticipantCurrentBillingPeriod, planManagementTypeLabel } from "@/services/coordinatorService";
@@ -10,6 +10,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
+import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -324,26 +325,16 @@ export default function Billing() {
         </div>
 
         {/* ── Inline stat strip ─────────────────────────────────────────────── */}
-        <div
-          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-cc-border bg-white px-5 py-4"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-cc-text">{invoices.length}</span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.invoices")}</span>
-          </div>
-          <div className="h-4 w-px bg-cc-border" />
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-black ${totalOutstanding > 0 ? "text-amber-600" : "text-cc-text"}`}>
-              {cents(totalOutstanding)}
-            </span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.outstanding")}</span>
-          </div>
-          <div className="h-4 w-px bg-cc-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-emerald-700">{cents(totalPaid)}</span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.paid")}</span>
-          </div>
-        </div>
+        <KpiGrid className="sm:grid-cols-3 lg:grid-cols-3">
+          <KpiCard label={translate("billing.stat.invoices")} value={invoices.length} icon={<FileText />} />
+          <KpiCard
+            label={translate("billing.stat.outstanding")}
+            value={cents(totalOutstanding)}
+            tone={totalOutstanding > 0 ? "warning" : "neutral"}
+            icon={<Clock />}
+          />
+          <KpiCard label={translate("billing.stat.paid")} value={cents(totalPaid)} tone="success" icon={<Check />} />
+        </KpiGrid>
 
         {/* ── Subscription management (coordinator only) ────────────────────── */}
         {isCoordinator && subscription && (

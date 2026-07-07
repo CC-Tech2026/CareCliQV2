@@ -13,10 +13,11 @@ import {
 } from "@/services/coordinatorService";
 import { getAuditEngagementPack } from "@/services/longShiftService";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { KpiCard, KpiGrid, kpiTint, toneColour, type StatTone } from "@/components/ui/stat-card";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM  = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
@@ -29,6 +30,13 @@ function complianceColour(score?: number | null) {
   return "#DC2626";
 }
 
+function complianceTone(score?: number | null): StatTone {
+  if (score == null) return "neutral";
+  if (score >= 85) return "success";
+  if (score >= 60) return "warning";
+  return "danger";
+}
+
 function TrendIcon({ score }: { score?: number | null }) {
   if (score == null) return <Minus size={14} color={MUTED} />;
   if (score >= 85) return <TrendingUp size={14} color="#16A34A" />;
@@ -39,7 +47,7 @@ function TrendIcon({ score }: { score?: number | null }) {
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
 /** Rendered both at the standalone /audit-pack route and as a Compliance
- * Centre sub-tab — kept as one component so the two never drift apart. */
+ * Centre sub-tab ï¿½ kept as one component so the two never drift apart. */
 export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
@@ -97,34 +105,34 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
   const statCards = useMemo(() => [
     {
-      icon: ShieldCheck,
+      icon: <ShieldCheck />,
       label: translate("auditPack.stat.teamCompliance"),
       value: compliance.data ? `${compliance.data.average_score}%` : translate("common.emDash"),
-      colour: complianceColour(compliance.data?.average_score),
+      tone: complianceTone(compliance.data?.average_score),
     },
     {
-      icon: FileCheck2,
+      icon: <FileCheck2 />,
       label: translate("auditPack.stat.sessionRecords"),
       value: compliance.data?.total_sessions ?? translate("common.emDash"),
-      colour: PLUM,
+      tone: "brand" as const,
     },
     {
-      icon: AlertTriangle,
+      icon: <AlertTriangle />,
       label: translate("auditPack.stat.rpFlags"),
       value: flags.data?.length ?? translate("common.emDash"),
-      colour: CORAL,
+      tone: "danger" as const,
     },
     {
-      icon: Flag,
+      icon: <Flag />,
       label: translate("auditPack.stat.needsReview"),
       value: flagged.data?.length ?? translate("common.emDash"),
-      colour: "#D97706",
+      tone: "warning" as const,
     },
   ], [translate, compliance.data, flags.data, flagged.data]);
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Header — skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
+      {/* Header ï¿½ skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
       <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
         {!embedded && (
           <div>
@@ -142,33 +150,24 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
       </div>
 
       {/* Stat strip */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border bg-white px-5 py-3" style={{ borderColor: BORDER }}>
-        {statCards.map(({ icon: Icon, label, value, colour }, i) => (
-          <div key={label} className="flex items-center gap-6">
-            {i > 0 && <div className="h-7 w-px hidden sm:block" style={{ background: BORDER }} />}
-            <div className="flex items-center gap-2">
-              <Icon size={16} style={{ color: colour }} className="shrink-0" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>{label}</p>
-                <p className="text-lg font-black leading-tight mt-0.5" style={{ color: TEXT }}>{value}</p>
-              </div>
-            </div>
-          </div>
+      <KpiGrid>
+        {statCards.map(({ icon, label, value, tone }) => (
+          <KpiCard key={label} label={label} value={value} tone={tone} icon={icon} />
         ))}
-      </div>
+      </KpiGrid>
 
       {/* Compliance status strip */}
       {compliance.data && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {[
-            { label: translate("auditPack.compliant"), count: compliance.data.compliant, bg: "#DCFCE7", colour: "#16A34A" },
-            { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, bg: "#FEF3C7", colour: "#D97706" },
-            { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, bg: "#FEE2E2", colour: "#DC2626" },
-          ].map(({ label, count, bg, colour }) => (
-            <div key={label} className="rounded-xl p-3 text-center" style={{ background: bg }}>
-              <p className="text-2xl font-black" style={{ color: colour }}>{count}</p>
-              <p className="text-xs font-bold mt-0.5" style={{ color: colour }}>{label}</p>
-            </div>
+            { label: translate("auditPack.compliant"), count: compliance.data.compliant, tone: "success" as const },
+            { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, tone: "warning" as const },
+            { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, tone: "danger" as const },
+          ].map(({ label, count, tone }) => (
+            <Card key={label} className="rounded-2xl border-0 shadow-sm p-4 text-center" style={{ background: kpiTint(tone) }}>
+              <p className="text-2xl font-black" style={{ color: toneColour[tone] }}>{count}</p>
+              <p className="text-xs font-bold mt-0.5" style={{ color: toneColour[tone] }}>{label}</p>
+            </Card>
           ))}
         </div>
       )}
@@ -243,7 +242,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                     {engagement.data.check16_compliance_row.name} ({engagement.data.check16_compliance_row.rule})
                   </p>
                   <p style={{ color: MUTED }}>
-                    Period result: {engagement.data.check16_compliance_row.period_result} ·{" "}
+                    Period result: {engagement.data.check16_compliance_row.period_result} ï¿½{" "}
                     {engagement.data.check16_compliance_row.sessions_flagged} sessions flagged
                   </p>
                 </div>
@@ -257,11 +256,11 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                   {engagement.data.long_shift_engagement_log.map((row) => (
                     <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
                       <p className="font-bold" style={{ color: TEXT }}>
-                        {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
+                        {row.participant_name || "Participant"} ï¿½ {row.worker_name || "Worker"}
                       </p>
                       <p style={{ color: MUTED }}>
-                        {row.shift_duration_hours}h · Check-ins {row.checkins_completed}/{row.checkins_required} ·
-                        Max gap {row.max_activity_gap_mins}m · Break {row.break_duration_mins}m · Score {row.engagement_score}
+                        {row.shift_duration_hours}h ï¿½ Check-ins {row.checkins_completed}/{row.checkins_required} ï¿½
+                        Max gap {row.max_activity_gap_mins}m ï¿½ Break {row.break_duration_mins}m ï¿½ Score {row.engagement_score}
                       </p>
                     </div>
                   ))}
@@ -284,8 +283,8 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                     >
                       <p className="font-bold" style={{ color: TEXT }}>{row.participant_name || "Participant"}</p>
                       <p style={{ color: MUTED }}>
-                        Billed {row.billed_hours ?? "N/A"}h · Billable {row.billable_hours ?? "N/A"}h · Break {row.break_hours ?? 0}h
-                        {row.flagged ? " · discrepancy flagged" : ""}
+                        Billed {row.billed_hours ?? "N/A"}h ï¿½ Billable {row.billable_hours ?? "N/A"}h ï¿½ Break {row.break_hours ?? 0}h
+                        {row.flagged ? " ï¿½ discrepancy flagged" : ""}
                       </p>
                     </div>
                   ))}

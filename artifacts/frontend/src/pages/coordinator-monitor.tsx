@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import { Activity, AlertTriangle, Radio } from "lucide-react";
+import { Activity, AlertTriangle, Radio, Users, CheckCircle2, ShieldAlert } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { Card } from "@/components/ui/card";
+import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import {
   getMonitorLive,
   getEngagementSummary,
@@ -30,7 +32,7 @@ function ShiftCard({ shift }: { shift: LiveLongShift }) {
   const colours = statusColour(shift.status);
   const gapMins = Math.floor((shift.current_gap_secs ?? 0) / 60);
   return (
-    <article className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+    <Card className="rounded-2xl border-0 shadow-sm p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-black" style={{ color: PLUM }}>
@@ -80,7 +82,7 @@ function ShiftCard({ shift }: { shift: LiveLongShift }) {
           <AlertTriangle size={12} /> Coordinator alerted
         </p>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -128,23 +130,16 @@ export default function CoordinatorMonitorPage() {
       </div>
 
       {summary && (
-        <div className="grid gap-3 sm:grid-cols-4">
-          {[
-            { label: "Active", value: summary.total_active },
-            { label: "Green", value: summary.green_count },
-            { label: "Amber", value: summary.amber_count },
-            { label: "Red", value: summary.red_count },
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-xl border bg-white p-4 text-center" style={{ borderColor: BORDER }}>
-              <p className="text-2xl font-black" style={{ color: PLUM }}>{value}</p>
-              <p className="text-xs font-bold" style={{ color: MUTED }}>{label}</p>
-            </div>
-          ))}
-        </div>
+        <KpiGrid className="sm:grid-cols-4">
+          <KpiCard label="Active" value={summary.total_active} icon={<Users />} />
+          <KpiCard label="Green" value={summary.green_count} tone="success" icon={<CheckCircle2 />} />
+          <KpiCard label="Amber" value={summary.amber_count} tone="warning" icon={<AlertTriangle />} />
+          <KpiCard label="Red" value={summary.red_count} tone="danger" icon={<ShieldAlert />} />
+        </KpiGrid>
       )}
 
       {heatmap.data && (
-        <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+        <Card className="rounded-2xl border-0 shadow-sm p-5">
           <div className="mb-3 flex items-center gap-2">
             <Activity size={18} style={{ color: PLUM }} />
             <h2 className="text-sm font-black" style={{ color: PLUM }}>Engagement heatmap</h2>
@@ -153,22 +148,22 @@ export default function CoordinatorMonitorPage() {
             {heatmap.data.passed_check16} of {heatmap.data.total_long_shifts} long shifts passed Check 16
             ({heatmap.data.pass_rate_pct}%)
           </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              { key: "80_100", label: "80–100 Fully engaged", colour: "#16A34A" },
-              { key: "60_79", label: "60–79 Mostly engaged", colour: "#D97706" },
-              { key: "40_59", label: "40–59 Low engagement", colour: "#DC2626" },
-              { key: "below_40", label: "<40 Review required", colour: "#7F1D1D" },
-            ].map(({ key, label, colour }) => (
-              <div key={key} className="rounded-lg border p-3" style={{ borderColor: BORDER }}>
+              { key: "80_100", label: "80–100 Fully engaged", colour: "#16A34A", bg: "#DCFCE7" },
+              { key: "60_79", label: "60–79 Mostly engaged", colour: "#D97706", bg: "#FEF3C7" },
+              { key: "40_59", label: "40–59 Low engagement", colour: "#DC2626", bg: "#FEE2E2" },
+              { key: "below_40", label: "<40 Review required", colour: "#7F1D1D", bg: "#FEE2E2" },
+            ].map(({ key, label, colour, bg }) => (
+              <div key={key} className="rounded-xl p-3" style={{ background: bg }}>
                 <p className="text-lg font-black" style={{ color: colour }}>
                   {dist[key] ?? 0}
                 </p>
-                <p className="text-[10px] font-bold" style={{ color: MUTED }}>{label}</p>
+                <p className="text-[10px] font-bold" style={{ color: colour }}>{label}</p>
               </div>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
       <section className="space-y-3">

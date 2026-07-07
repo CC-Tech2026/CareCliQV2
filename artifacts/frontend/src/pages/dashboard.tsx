@@ -16,7 +16,7 @@ import { StaffCompliancePanel } from "@/components/dashboard/coordinator/StaffCo
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
 import { PageHeader } from "@/components/healthcare/PageHeader";
 import { Button } from "@/components/ui/button";
-import { StatCard, StatCardGroup, type StatTone } from "@/components/ui/stat-card";
+import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
   AlertTriangle,
   ArrowRight,
@@ -31,6 +31,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   TrendingUp,
+  HeartHandshake,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -1062,12 +1063,12 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
   const workersAtRisk      = data.workers_needing_support ?? data.workers_needing_attention.length;
   const score              = Math.max(0, Math.min(100, data.team_compliance_score || 0));
 
-  const metrics: Array<{ label: string; value: string | number; tone: StatTone; href: string }> = [
-    { label: "Participants",    value: teamParticipants,        tone: "neutral",                                                   href: "/patients"   },
-    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral",                                                   href: "/sessions"   },
-    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger", href: "/compliance" },
-    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success",               href: "/incidents"  },
-    { label: "Need support",    value: workersAtRisk,           tone: workersAtRisk > 0 ? "danger" : "success",                    href: "/team"       },
+  const metrics: Array<{ label: string; value: string | number; tone: StatTone; href: string; icon: React.ReactElement<{ size?: number }> }> = [
+    { label: "Participants",    value: teamParticipants,        tone: "neutral",                                                   href: "/patients",   icon: <Users /> },
+    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral",                                                   href: "/sessions",   icon: <CalendarDays /> },
+    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger", href: "/compliance", icon: <ShieldCheck /> },
+    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success",               href: "/incidents",  icon: <AlertTriangle /> },
+    { label: "Need support",    value: workersAtRisk,           tone: workersAtRisk > 0 ? "danger" : "success",                    href: "/team",       icon: <HeartHandshake /> },
   ];
 
   return (
@@ -1092,13 +1093,13 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       </div>
 
       {/* KPI strip — each tile links to its source page */}
-      <StatCardGroup>
+      <KpiGrid className="sm:grid-cols-2 lg:grid-cols-5">
         {metrics.map((m, i) => (
           <Link key={i} href={m.href}>
-            <StatCard label={m.label} value={m.value} tone={m.tone} className="cursor-pointer hover:opacity-75 transition-opacity" />
+            <KpiCard label={m.label} value={m.value} tone={m.tone} icon={m.icon} className="cursor-pointer hover:opacity-75 transition-opacity" />
           </Link>
         ))}
-      </StatCardGroup>
+      </KpiGrid>
 
       {/* Plan meetings banner */}
       <PlanMeetingsPendingBanner />

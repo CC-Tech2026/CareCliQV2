@@ -7,11 +7,12 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
-  CheckCircle2, XCircle, MinusCircle, UserCheck,
+  CheckCircle2, XCircle, MinusCircle, UserCheck, Activity,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -553,16 +554,6 @@ function DayPanel({
   );
 }
 
-function KpiCard({ label, value, sub, color = TEXT }: { label: string; value: string | number; sub?: string; color?: string }) {
-  return (
-    <div className="rounded-xl border bg-white px-4 py-4" style={{ borderColor: BORDER }}>
-      <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{label}</p>
-      <p className="mt-1.5 text-2xl font-black leading-none" style={{ color }}>{value}</p>
-      {sub && <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{sub}</p>}
-    </div>
-  );
-}
-
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
   const [viewMode,     setViewMode]     = useState<ViewMode>("month");
@@ -680,36 +671,16 @@ export default function CoordinatorRosteringPage() {
       </div>
 
       {/* Inline stat strip instead of 4 identical cards */}
-      <div
-        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-white px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <div className="flex items-center gap-2">
-          <CalendarDays size={14} style={{ color: MUTED }} />
-          <span className="text-sm font-black" style={{ color: TEXT }}>{shiftsToday.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.today")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-          <span className="text-sm font-black text-blue-700">{activeShifts.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.activeNow")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: PLUM }} />
-          <span className="text-sm font-black" style={{ color: PLUM }}>{scheduledCount}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.upcoming")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <Users2 size={14} style={{ color: MUTED }} />
-          <span className="text-sm font-black" style={{ color: TEXT }}>{workers.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>
-            {workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
-          </span>
-        </div>
-      </div>
+      <KpiGrid className="sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays />} />
+        <KpiCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity />} />
+        <KpiCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 />} />
+        <KpiCard
+          label={workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
+          value={workers.length}
+          icon={<Users2 />}
+        />
+      </KpiGrid>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
