@@ -51,7 +51,10 @@ type Props = {
   submissionComplete?: boolean;
   onClockIn: () => void;
   onAutoStartSession: () => Promise<void>;
+  onAttemptEndShift: () => void | Promise<boolean>;
   onShiftComplete: () => Promise<void>;
+  endValidating?: boolean;
+  focusMobileTaskId?: string | null;
   ackChecked: boolean;
   setAckChecked: (v: boolean) => void;
   onRequestAcknowledge: () => void;
@@ -74,7 +77,10 @@ export function WorkerMobileShiftView({
   participantFirstName,
   onClockIn,
   onAutoStartSession,
+  onAttemptEndShift,
   onShiftComplete,
+  endValidating = false,
+  focusMobileTaskId,
   ackChecked,
   setAckChecked,
   onRequestAcknowledge,
@@ -104,6 +110,7 @@ export function WorkerMobileShiftView({
   const [incidentDraft, setIncidentDraft] = useState<{ noteId?: string; content?: string } | null>(null);
   const [autoStarted, setAutoStarted] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [endingReview, setEndingReview] = useState(false);
 
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const isSessionLike = visualState === "clocked_in" || visualState === "session_active";
@@ -214,8 +221,17 @@ export function WorkerMobileShiftView({
   };
 
   const handleEnd = () => {
-    void refreshComplianceNotes();
-    setPhase("review");
+    if (endingReview || endValidating || busy !== null) return;
+    void (async () => {
+      setEndingReview(true);
+      try {
+        await refreshComplianceNotes();
+        const canProceed = await onAttemptEndShift();
+        if (canProceed) setPhase("review");
+      } finally {
+        setEndingReview(false);
+      }
+    })();
   };
 
   const openIncidentReport = (noteId?: string, content?: string) => {
@@ -480,7 +496,7 @@ export function WorkerMobileShiftView({
         breakElapsed={longShiftBreak.breakElapsed}
         showEnd={showEnd}
         onEnd={handleEnd}
-        endBusy={busy === "end"}
+        endBusy={endValidating || endingReview || busy === "end"}
         onBack={() => navigate("/my-shifts")}
       />
 
@@ -494,6 +510,7 @@ export function WorkerMobileShiftView({
         sessionElapsed={elapsed}
         longShiftBreak={longShiftBreak}
         initialCheckinStatus={shift.checkin_status}
+        focusTaskId={focusMobileTaskId}
         tasks={activeTasks}
         onTasksChange={setTasks}
         sessionNotes={sessionNotes}
@@ -505,7 +522,7 @@ export function WorkerMobileShiftView({
         onOpenIncidentReport={openIncidentReport}
         onNotesRefresh={refreshComplianceNotes}
         tutorialDemo={isTutorialDemo}
-        disabled={busy !== null}
+        disabled={busy !== null || endValidating || endingReview}
       />
 
       {incidentDraft && (

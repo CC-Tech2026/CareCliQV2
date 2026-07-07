@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { WM } from "@/lib/worker-mobile-tokens";
 import type { ShiftVisualState } from "@/services/shiftService";
 
@@ -107,10 +107,11 @@ export function WorkerMobileTopbar({
           type="button"
           onClick={onEnd}
           disabled={endBusy}
-          className="h-8 shrink-0 rounded-lg px-3 text-[12px] font-semibold text-white disabled:opacity-60"
+          aria-busy={endBusy}
+          className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold text-white disabled:opacity-60"
           style={{ background: WM.pink }}
         >
-          End
+          {endBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : "End"}
         </button>
       )}
     </header>

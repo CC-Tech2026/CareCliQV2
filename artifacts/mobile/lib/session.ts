@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import {
   CCQ_DEVICE_ID_KEY,
   CCQ_TOKEN_KEY,
+  CCQ_USER_KEY,
   migrateLegacyCareScribeStorageKeys,
 } from "./storage-keys";
 
@@ -22,6 +23,31 @@ async function ensureStorageMigrated(): Promise<void> {
 
 export function setMobileAuthToken(token: string | null): void {
   memoryToken = token;
+}
+
+export async function persistMobileAuthSession(
+  token: string,
+  userJson: string,
+): Promise<void> {
+  setMobileAuthToken(token);
+  await ensureStorageMigrated();
+  await AsyncStorage.setItem(CCQ_TOKEN_KEY, token);
+  await AsyncStorage.setItem(CCQ_USER_KEY, userJson);
+}
+
+export async function clearMobileAuthSession(): Promise<void> {
+  memoryToken = null;
+  await ensureStorageMigrated();
+  await AsyncStorage.multiRemove([CCQ_TOKEN_KEY, CCQ_USER_KEY]);
+}
+
+export async function readStoredUserJson(): Promise<string | null> {
+  await ensureStorageMigrated();
+  try {
+    return await AsyncStorage.getItem(CCQ_USER_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export async function readMobileAuthToken(): Promise<string | null> {

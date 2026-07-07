@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _scheduler_task: Optional[asyncio.Task] = None
 _long_shift_task: Optional[asyncio.Task] = None
+_random_checkin_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -146,18 +147,21 @@ async def run_credential_expiry_pass() -> int:
 
 async def run_notification_pass() -> dict[str, int]:
     from .long_shift_service import run_long_shift_monitor_pass
+    from .random_checkin_service import run_random_checkin_pass
 
-    shift_count, credential_count, task_count, long_shift_count = await asyncio.gather(
+    shift_count, credential_count, task_count, long_shift_count, random_checkin_count = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
         run_task_reminder_pass(),
         run_long_shift_monitor_pass(),
+        run_random_checkin_pass(),
     )
     return {
         "shift_reminders": shift_count,
         "credential_expiry": credential_count,
         "task_reminders": task_count,
         "long_shift_monitor": long_shift_count,
+        "random_checkins": random_checkin_count,
     }
 
 
@@ -180,13 +184,29 @@ async def _scheduler_loop() -> None:
 
 
 def start_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task
+    global _scheduler_task, _long_shift_task, _random_checkin_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
         return
     _scheduler_task = asyncio.create_task(_scheduler_loop())
     _long_shift_task = asyncio.create_task(_long_shift_monitor_loop())
+    _random_checkin_task = asyncio.create_task(_random_checkin_loop())
+
+
+async def _random_checkin_loop() -> None:
+    """Minute pass for random compliance check-in prompts and missed handling."""
+    from .random_checkin_service import run_random_checkin_pass
+
+    logger.info("Random check-in monitor started (every 60 sec)")
+    while True:
+        try:
+            count = await run_random_checkin_pass()
+            if count:
+                logger.info("Random check-in pass: %s action(s)", count)
+        except Exception as exc:
+            logger.warning("Random check-in loop failed: %s", exc)
+        await asyncio.sleep(60)
 
 
 async def _long_shift_monitor_loop() -> None:
@@ -205,8 +225,8 @@ async def _long_shift_monitor_loop() -> None:
 
 
 async def stop_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task
-    for task in (_scheduler_task, _long_shift_task):
+    global _scheduler_task, _long_shift_task, _random_checkin_task
+    for task in (_scheduler_task, _long_shift_task, _random_checkin_task):
         if not task:
             continue
         task.cancel()
@@ -216,3 +236,4 @@ async def stop_notification_scheduler() -> None:
             pass
     _scheduler_task = None
     _long_shift_task = None
+    _random_checkin_task = None
