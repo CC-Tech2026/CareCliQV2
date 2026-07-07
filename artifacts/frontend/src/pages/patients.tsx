@@ -2911,7 +2911,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <a
-                        href={`/sessions/${selectedSession.id}`}
+                        href={`/sessions/${selectedSession.id}?from=participant`}
                         className="flex items-center gap-1 text-[11px] font-bold hover:underline"
                         style={{ color: "var(--cc-plum)" }}
                       >
@@ -3067,7 +3067,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
                   const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
                   return (
-                    <Link key={item.session_id} href={`/sessions/${item.session_id}`}>
+                    <Link key={item.session_id} href={`/sessions/${item.session_id}?from=participant`}>
                       <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#F4EDE6] transition-colors cursor-pointer">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
