@@ -2474,6 +2474,8 @@ export const en: Dict = {
   "nav.goalsPlanning": "Goals & Planning",
   "nav.auditPack": "Audit Pack",
   "nav.rostering": "Rostering",
+
+  "nav.qualityCompliance": "Compliance",
   "nav.liveMonitoring": "Live Monitoring",
   "nav.live": "Live",
   "nav.invoices": "Invoices",

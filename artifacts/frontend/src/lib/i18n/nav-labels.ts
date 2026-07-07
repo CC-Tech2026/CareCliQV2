@@ -8,10 +8,10 @@ const SHARED_NAV_KEYS: Record<string, string> = {
   "/team": "nav.team",
   "/patients": "nav.participants",
   "/sessions": "nav.sessions",
-  "/compliance": "nav.complianceCentre",
+  "/compliance": "nav.qualityCompliance",
   "/audit-pack": "nav.auditPack",
   "/incidents": "nav.incidents",
-  "/coordinator/rostering": "nav.rostering",
+  "/coordinator/rostering": "nav.schedule",
   "/coordinator/travel": "nav.travel",
   "/coordinator/live": "nav.liveMonitoring",
   "/billing": "nav.invoices",
@@ -84,7 +84,7 @@ export function groupLabelForName(
 
 /** Route prefix → i18n key for mobile/desktop page title. */
 const ROUTE_LABEL_KEYS: [string, string][] = [
-  ["/coordinator/rostering", "nav.rostering"],
+  ["/coordinator/rostering", "nav.schedule"],
   ["/coordinator/live", "nav.liveMonitoring"],
   ["/session-new", "nav.newShift"],
   ["/session/", "nav.shiftDetail"],
@@ -93,7 +93,7 @@ const ROUTE_LABEL_KEYS: [string, string][] = [
   ["/incident-new", "nav.newIncident"],
   ["/incident/", "nav.incidentDetail"],
   ["/incidents", "nav.incidents"],
-  ["/compliance", "nav.complianceCentre"],
+  ["/compliance", "nav.qualityCompliance"],
   ["/my-compliance", "nav.compliance"],
   ["/my-shifts", "nav.shifts"],
   ["/calendar", "nav.schedule"],
