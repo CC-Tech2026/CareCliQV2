@@ -76,18 +76,21 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
   support_worker: [
     { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
     {
+      group: "My Work",
       items: [
-        { href: "/my-shifts",     label: "My Shifts",  icon: Clock     },
-        { href: "/my-clients",    label: "My Clients", icon: UserRound },
-        { href: "/worker/profile",label: "Me",         icon: UserRound },
+        { href: "/my-shifts",           label: "My Shifts",   icon: Clock     },
+        { href: "/worker/availability",  label: "Availability", icon: UserCheck },
+        { href: "/my-clients",          label: "My Clients",  icon: UserRound },
       ],
     },
     {
-      group: "Resources",
+      group: "Safety & Resources",
       items: [
-        { href: "/incidents",      label: "Report Incident", icon: AlertTriangle },
-        { href: "/toolkit",        label: "Toolkit",         icon: Wrench        },
-        { href: "/worker/help",    label: "Help",            icon: HelpCircle    },
+        { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
+        { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
+        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
+        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
+        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -157,7 +160,7 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
     { href: "/my-shifts",     label: "My Shifts",  icon: Clock           },
     { href: "/my-clients",    label: "My Clients", icon: UserRound       },
-    { href: "/worker/profile",label: "Me",         icon: UserRound       },
+    { href: "/my-compliance", label: "Compliance", icon: ShieldCheck     },
   ],
   allied_health: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -181,10 +184,10 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
     { href: "/billing",               label: "Invoices",   icon: CreditCard      },
   ],
   support_worker: [
-    { href: "/dashboard",     label: "Home",    icon: LayoutDashboard },
-    { href: "/my-shifts",     label: "Shifts",  icon: Clock           },
-    { href: "/my-clients",    label: "Clients", icon: UserRound       },
-    { href: "/worker/profile",label: "Me",      icon: UserRound       },
+    { href: "/dashboard",    label: "Home",      icon: LayoutDashboard },
+    { href: "/my-shifts",    label: "Shifts",    icon: Clock           },
+    { href: "/my-clients",   label: "Clients",   icon: UserRound       },
+    { href: "/my-compliance",label: "Compliance",icon: ShieldCheck     },
   ],
   allied_health: [
     { href: "/dashboard",   label: "Home",     icon: LayoutDashboard },

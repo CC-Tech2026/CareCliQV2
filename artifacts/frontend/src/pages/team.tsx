@@ -354,7 +354,7 @@ export default function Team() {
                     className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-sm font-black text-white"
                     style={{ background: "var(--cc-text)" }}
                   >
-                    {(w.full_name || "?")[0].toUpperCase()}
+                    {(w.full_name || "?").charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
                     <p className="font-black text-sm truncate" style={{ color: TEXT }}>{w.full_name}</p>
