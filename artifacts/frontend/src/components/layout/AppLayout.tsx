@@ -14,6 +14,7 @@ import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/wo
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
+import { AutoBreadcrumb } from "@/components/layout/AutoBreadcrumb";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -828,6 +829,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 : "px-4 py-4 safe-scroll-bottom",
             )}
           >
+            <AutoBreadcrumb />
             {children}
           </main>
 
