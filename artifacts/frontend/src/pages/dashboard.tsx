@@ -11,6 +11,8 @@ import { DashboardShiftsWidget } from "@/components/dashboard/DashboardShiftsWid
 import { PlanMeetingsPendingBanner } from "@/components/dashboard/PlanMeetingsPendingBanner";
 import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
 import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
+import { ActionQueue } from "@/components/dashboard/coordinator/ActionQueue";
+import { StaffCompliancePanel } from "@/components/dashboard/coordinator/StaffCompliancePanel";
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
 import { PageHeader } from "@/components/healthcare/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -1054,18 +1056,18 @@ function WorkerDashboardView({
 
 
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
-  const teamParticipants = data.team_participants ?? data.participants ?? 0;
-  const sessionsThisWeek = data.sessions_this_week ?? data.todays_sessions.length;
-  const incidentsThisMonth = data.incidents_this_month ?? data.incident_alerts.length;
-  const workersNeedingSupport = data.workers_needing_support ?? data.workers_needing_attention.length;
-  const score = Math.max(0, Math.min(100, data.team_compliance_score || 0));
+  const teamParticipants   = data.team_participants ?? data.participants ?? 0;
+  const sessionsThisWeek   = data.sessions_this_week ?? data.todays_sessions.length;
+  const incidentsThisMonth = data.incidents_this_month ?? (data.incident_alerts ?? []).length;
+  const workersAtRisk      = data.workers_needing_support ?? data.workers_needing_attention.length;
+  const score              = Math.max(0, Math.min(100, data.team_compliance_score || 0));
 
-  const metrics: Array<{ label: string; value: string | number; tone: StatTone }> = [
-    { label: "Participants",    value: teamParticipants,        tone: "neutral" },
-    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral" },
-    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger" },
-    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success" },
-    { label: "Need support",    value: workersNeedingSupport,   tone: workersNeedingSupport > 0 ? "danger" : "success" },
+  const metrics: Array<{ label: string; value: string | number; tone: StatTone; href: string }> = [
+    { label: "Participants",    value: teamParticipants,        tone: "neutral",                                                   href: "/patients"   },
+    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral",                                                   href: "/sessions"   },
+    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger", href: "/compliance" },
+    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success",               href: "/incidents"  },
+    { label: "Need support",    value: workersAtRisk,           tone: workersAtRisk > 0 ? "danger" : "success",                    href: "/team"       },
   ];
 
   return (
@@ -1074,9 +1076,11 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>Dashboard</h1>
-          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {format(new Date(), "EEEE, d MMMM yyyy")}
+          </h1>
+          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+            {"Here's what needs your attention today"}
           </p>
         </div>
         <Link href="/team">
@@ -1087,23 +1091,28 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
         </Link>
       </div>
 
-      {/* Metrics strip � single panel with internal dividers, no individual cards */}
+      {/* KPI strip — each tile links to its source page */}
       <StatCardGroup>
         {metrics.map((m, i) => (
-          <StatCard key={i} label={m.label} value={m.value} tone={m.tone} />
+          <Link key={i} href={m.href}>
+            <StatCard label={m.label} value={m.value} tone={m.tone} className="cursor-pointer hover:opacity-75 transition-opacity" />
+          </Link>
         ))}
       </StatCardGroup>
 
-      {/* Plan meetings pending AI review */}
+      {/* Plan meetings banner */}
       <PlanMeetingsPendingBanner />
 
-      {/* Action hub � tabbed inline panel */}
+      {/* Main layout: action feed + staff panel  |  today rail */}
       <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
-        <CoordinatorActionHub data={data} />
+        <div className="space-y-5">
+          <ActionQueue data={data} />
+          <StaffCompliancePanel data={data} />
+        </div>
         <CoordinatorSessionsCard sessions={data.todays_sessions} />
       </div>
 
-      {/* Common issues */}
+      {/* Common compliance issues */}
       <CoordinatorCommonIssuesCard issues={data.common_issues} />
     </div>
   );
