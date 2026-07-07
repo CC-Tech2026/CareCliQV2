@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -20,11 +20,10 @@ const CORAL  = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const INPUT_BG = "var(--auth-input-bg)";
 
-// Solid colors sampled from the CareCliQ logo mark — no gradients.
-const LOGO_PINK = "#E94B8C";
-const LOGO_PURPLE = "#6B3FA0";
+// Solid brand colors � no gradients.
+const LOGO_PURPLE = "#7C3AED";
 
-// ── 6-box OTP input ───────────────────────────────────────────────────────────
+// -- 6-box OTP input -----------------------------------------------------------
 function OtpInput({
   value, onChange, disabled, error,
 }: {
@@ -94,7 +93,7 @@ function OtpInput({
   );
 }
 
-// ── Field wrapper ─────────────────────────────────────────────────────────────
+// -- Field wrapper -------------------------------------------------------------
 function Field({
   label, right, error, valid, children,
 }: {
@@ -122,7 +121,7 @@ function Field({
             className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[11px] font-black"
             style={{ color: "#22C55E" }}
           >
-            ✓
+            ?
           </span>
         )}
       </div>
@@ -139,7 +138,7 @@ function Field({
 }
 
 const TRUST_AVATARS = [
-  { i: "SM", bg: "#3730A3" }, { i: "AK", bg: "#0D7C66" },
+  { i: "SM", bg: "#E8457A" }, { i: "AK", bg: "#0D7C66" },
   { i: "LP", bg: "#7B3F9E" }, { i: "JW", bg: "#C0392B" }, { i: "RN", bg: "#1A6FA8" },
 ];
 
@@ -229,7 +228,7 @@ export default function Login() {
         .auth-glow { animation: authGlowPulse 9s ease-in-out infinite; }
       ` }} />
 
-      {/* ── Mobile-only brand header ────────────────────────────────────── */}
+      {/* -- Mobile-only brand header -------------------------------------- */}
       <div className="lg:hidden relative overflow-hidden" style={{ background: "var(--auth-marketing-bg)" }}>
         <div
           className="absolute inset-0 pointer-events-none auth-glow"
@@ -269,10 +268,10 @@ export default function Login() {
             style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
           >
             <p className="text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
-              “{t("auth.login.marketing.testimonialQuote")}”
+              �{t("auth.login.marketing.testimonialQuote")}�
             </p>
             <p className="mt-2 text-[11px] font-bold" style={{ color: LOGO_PURPLE }}>
-              {t("auth.login.marketing.testimonialName")} · {t("auth.login.marketing.testimonialRole")}
+              {t("auth.login.marketing.testimonialName")} � {t("auth.login.marketing.testimonialRole")}
             </p>
           </div>
 
@@ -296,12 +295,12 @@ export default function Login() {
         </div>
       </div>
 
-      {/* ── Form panel ─────────────────────────────────────────────────── */}
+      {/* -- Form panel --------------------------------------------------- */}
       <div
         className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10 bg-[var(--auth-form-bg)]"
         style={{ borderRight: "1px solid var(--cc-border)", animation: "panelIn 0.38s ease-out" }}
       >
-        {/* Logo — desktop only */}
+        {/* Logo � desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
           <CareCliQLogo size={120} />
         </div>
@@ -329,7 +328,7 @@ export default function Login() {
               </p>
             </div>
 
-            {/* ── MFA step ── */}
+            {/* -- MFA step -- */}
             {mfaStep ? (
               <form onSubmit={handleMfaSubmit} className="space-y-5" noValidate key="mfa">
                 <button
@@ -392,7 +391,7 @@ export default function Login() {
                   type="submit"
                   disabled={busy || !mfaComplete}
                   className="w-full h-12 rounded-xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
-                  style={{ background: PLUM }}
+                  style={{ background: "var(--cc-cta)" }}
                 >
                   {busy
                     ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.login.verifying")}</span></>
@@ -401,7 +400,7 @@ export default function Login() {
                 </button>
               </form>
             ) : (
-              /* ── Sign-in step ── */
+              /* -- Sign-in step -- */
               <form onSubmit={handleSignIn} className="space-y-5" noValidate key="signin">
                 <Field
                   label={t("auth.login.identifier")}
@@ -447,7 +446,7 @@ export default function Login() {
                     id="login-password"
                     value={password}
                     onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(null); }}
-                    placeholder="••••••••"
+                    placeholder="��������"
                     disabled={busy}
                     autoComplete="current-password"
                     required
@@ -479,7 +478,7 @@ export default function Login() {
                   type="submit"
                   disabled={busy}
                   className="w-full h-12 rounded-xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
-                  style={{ background: PLUM }}
+                  style={{ background: "var(--cc-cta)" }}
                 >
                   {busy
                     ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.login.signingIn")}</span></>
@@ -512,7 +511,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* ── Product panel (desktop only) ───────────────────────────────── */}
+      {/* -- Product panel (desktop only) --------------------------------- */}
       <div
         className="hidden lg:flex flex-1 flex-col p-12 xl:p-16 overflow-hidden relative"
         style={{ background: "var(--auth-marketing-bg)" }}
@@ -555,7 +554,7 @@ export default function Login() {
               className="rounded-2xl p-5"
               style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
-              <Quote size={18} style={{ color: LOGO_PINK }} />
+              <Quote size={18} style={{ color: LOGO_PURPLE }} />
               <p className="mt-3 text-[14px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
                 {t("auth.login.marketing.testimonialQuote")}
               </p>
@@ -571,7 +570,7 @@ export default function Login() {
                     {t("auth.login.marketing.testimonialName")}
                   </p>
                   <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
-                    {t("auth.login.marketing.testimonialRole")} · {t("auth.login.marketing.testimonialOrg")}
+                    {t("auth.login.marketing.testimonialRole")} � {t("auth.login.marketing.testimonialOrg")}
                   </p>
                 </div>
               </div>

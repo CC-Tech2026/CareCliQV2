@@ -37,7 +37,7 @@ export default function WorkerPerformanceDashboardPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("performance.eyebrow")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("performance.title")}
         </h1>
         <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
@@ -55,7 +55,7 @@ export default function WorkerPerformanceDashboardPage() {
               {translate("performance.complianceAvg")}
             </p>
             <p className="mt-2 text-5xl font-black tracking-tight" style={{ color: TEXT }}>
-              {data?.average_score_30d ?? "—"}
+              {data?.average_score_30d ?? "N/A"}
               {data?.average_score_30d != null && (
                 <span className="text-2xl font-black" style={{ color: MUTED }}>%</span>
               )}
@@ -165,7 +165,7 @@ export default function WorkerPerformanceDashboardPage() {
         <Link href="/worker/training">
           <section
             className="block rounded-2xl border p-5 shadow-sm transition hover:shadow-md"
-            style={{ borderColor: BORDER, background: "linear-gradient(135deg, var(--cc-bg) 0%, var(--cc-surface) 100%)" }}
+            style={{ borderColor: BORDER, background: "var(--cc-surface)" }}
           >
             <div className="flex items-start gap-3">
               <div

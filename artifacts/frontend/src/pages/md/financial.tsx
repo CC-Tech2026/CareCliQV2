@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { DollarSign, AlertTriangle, ArrowLeft, TrendingUp, FileText, PieChart } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -67,7 +67,7 @@ function MonthBar({ label, revenue, max }: { label: string; revenue: number; max
         </span>
       </div>
       <div className="h-2 rounded-full" style={{ background: BORDER }}>
-        <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: PLUM }} />
+        <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: "var(--cc-text)" }} />
       </div>
     </div>
   );
@@ -199,7 +199,7 @@ export default function MDFinancialPage() {
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
                   <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Cost per Session</p>
                   <p className="text-2xl font-black" style={{ color: TEXT }}>
-                    {costPerSession !== null ? fmt(costPerSession) : "—"}
+                    {costPerSession !== null ? fmt(costPerSession) : "N/A"}
                   </p>
                   <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
                     {costPerSession !== null ? `Avg across ${rev?.session_count ?? 0} sessions` : "No session cost data yet"}
@@ -210,7 +210,7 @@ export default function MDFinancialPage() {
                     {grossMarginPct !== null ? "Gross Margin" : "Est. Gross Margin"}
                   </p>
                   <p className="text-2xl font-black" style={{ color: grossMarginPct !== null ? (grossMarginPct >= 0 ? "#10B981" : "#EF4444") : MUTED }}>
-                    {grossMarginPct !== null ? `${grossMarginPct}%` : "—"}
+                    {grossMarginPct !== null ? `${grossMarginPct}%` : "N/A"}
                   </p>
                   <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
                     {grossMarginPct !== null ? "Revenue minus session costs" : "No billing data yet"}
@@ -219,7 +219,7 @@ export default function MDFinancialPage() {
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
                   <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Total Session Costs</p>
                   <p className="text-2xl font-black" style={{ color: totalSessionCosts !== null ? TEXT : MUTED }}>
-                    {totalSessionCosts !== null ? fmt(totalSessionCosts) : "—"}
+                    {totalSessionCosts !== null ? fmt(totalSessionCosts) : "N/A"}
                   </p>
                   <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
                     {totalSessionCosts !== null ? "From NDIS budget usage records" : "No cost records yet"}

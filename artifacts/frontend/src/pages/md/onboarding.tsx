@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, GraduationCap, Users, CheckCircle2, Clock, AlertTriangle,
@@ -206,7 +206,7 @@ function OverviewTab() {
                     <td className="py-2.5 pr-4 text-[12px] font-medium capitalize" style={{ color: MUTED }}>
                       {row.role.replace(/_/g, " ")}
                     </td>
-                    <td className="py-2.5 pr-4 text-[12px] font-medium" style={{ color: MUTED }}>{row.program_name || "—"}</td>
+                    <td className="py-2.5 pr-4 text-[12px] font-medium" style={{ color: MUTED }}>{row.program_name || "N/A"}</td>
                     <td className="py-2.5 pr-4">
                       <span
                         className="inline-block max-w-[140px] truncate rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -356,7 +356,7 @@ function StageSheet({
               rows={5}
               className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
               style={{ borderColor: BORDER }}
-              placeholder="Describe what the new starter should do in this stage…"
+              placeholder="Describe what the new starter should do in this stage�"
             />
           </div>
 
@@ -371,7 +371,7 @@ function StageSheet({
                     type="checkbox"
                     checked={!!reqs[key]}
                     onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#3730A3]"
+                    className="h-4 w-4 rounded accent-[#E8457A]"
                   />
                   <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
                 </label>
@@ -390,12 +390,12 @@ function StageSheet({
                   className="text-[11px] font-bold underline"
                   style={{ color: PLUM }}
                 >
-                  {resourcesLoading ? "Loading…" : "Load resources"}
+                  {resourcesLoading ? "Loading�" : "Load resources"}
                 </button>
               )}
             </div>
             {resourcesLoaded && allResources.length === 0 && (
-              <p className="text-[12px]" style={{ color: MUTED }}>No resources in library yet — upload some in the Resources tab.</p>
+              <p className="text-[12px]" style={{ color: MUTED }}>No resources in library yet. Upload some in the Resources tab.</p>
             )}
             {resourcesLoaded && allResources.length > 0 && (
               <div className="max-h-44 overflow-y-auto space-y-1.5 rounded-lg border p-2" style={{ borderColor: BORDER }}>
@@ -405,11 +405,11 @@ function StageSheet({
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#3730A3] shrink-0"
+                      className="h-4 w-4 rounded accent-[#E8457A] shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
-                      <p className="text-[10px] font-medium uppercase" style={{ color: MUTED }}>{r.resource_type}{r.category ? ` · ${r.category}` : ""}</p>
+                      <p className="text-[10px] font-medium uppercase" style={{ color: MUTED }}>{r.resource_type}{r.category ? ` � ${r.category}` : ""}</p>
                     </div>
                   </label>
                 ))}
@@ -435,7 +435,7 @@ function StageSheet({
             onClick={handleSave}
             disabled={saving || !title.trim()}
             className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             {saving ? <Loader2 size={13} className="animate-spin" /> : null}
             Save Stage
@@ -626,7 +626,7 @@ function BuilderTab() {
         <button
           onClick={() => setShowNewProgram(true)}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-black text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           <Plus size={12} strokeWidth={2.5} /> New Program
         </button>
@@ -639,7 +639,7 @@ function BuilderTab() {
             value={newProgramName}
             onChange={(e) => setNewProgramName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") createProgram(); if (e.key === "Escape") setShowNewProgram(false); }}
-            placeholder="Program name…"
+            placeholder="Program name�"
             className="flex-1 rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
             style={{ borderColor: BORDER }}
           />
@@ -647,7 +647,7 @@ function BuilderTab() {
             onClick={createProgram}
             disabled={savingProgram || !newProgramName.trim()}
             className="rounded-lg px-3 py-2 text-[12px] font-black text-white disabled:opacity-50"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             {savingProgram ? <Loader2 size={13} className="animate-spin" /> : "Create"}
           </button>
@@ -679,8 +679,8 @@ function BuilderTab() {
               onClick={() => selectProgram(p)}
               className="rounded-lg border px-4 py-2 text-[12px] font-black transition"
               style={{
-                borderColor: selectedProgram?.id === p.id ? PLUM : BORDER,
-                background: selectedProgram?.id === p.id ? PLUM : "var(--cc-bg)",
+                borderColor: selectedProgram?.id === p.id ? "var(--cc-text)" : BORDER,
+                background: selectedProgram?.id === p.id ? "var(--cc-cta)" : "var(--cc-bg)",
                 color: selectedProgram?.id === p.id ? "#fff" : TEXT,
               }}
             >
@@ -694,7 +694,7 @@ function BuilderTab() {
         <section className="rounded-2xl border bg-white p-5 shadow-sm space-y-4" style={{ borderColor: BORDER }}>
           <div className="flex items-center justify-between">
             <h3 className="text-[13px] font-black" style={{ color: TEXT }}>
-              Stages — {selectedProgram.name}
+              Stages: {selectedProgram.name}
             </h3>
             <button
               onClick={addStage}
@@ -710,7 +710,7 @@ function BuilderTab() {
           ) : stages.length === 0 ? (
             <div className="rounded-xl p-6 text-center" style={{ background: SOFT }}>
               <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                No stages yet — click "Add Stage" to build your onboarding flow.
+                No stages yet. Click "Add Stage" to build your onboarding flow.
               </p>
             </div>
           ) : (
@@ -748,7 +748,7 @@ function BuilderTab() {
 }
 
 function ResourceTypeIcon({ type }: { type: string }) {
-  if (type === "video") return <FileVideo size={20} strokeWidth={2} style={{ color: "#7C3AED" }} />;
+  if (type === "video") return <FileVideo size={20} strokeWidth={2} style={{ color: "#E8457A" }} />;
   if (type === "pdf")   return <FileText  size={20} strokeWidth={2} style={{ color: CORAL }} />;
   if (type === "link")  return <Link2     size={20} strokeWidth={2} style={{ color: "#0EA5E9" }} />;
   return <FileText size={20} strokeWidth={2} style={{ color: PLUM }} />;
@@ -820,7 +820,7 @@ function ResourcesTab() {
         <button
           onClick={() => setShowUpload(true)}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-black text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           <Upload size={12} strokeWidth={2.5} /> Upload Resource
         </button>
@@ -870,7 +870,7 @@ function ResourcesTab() {
                 <input
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
-                  placeholder="Resource name…"
+                  placeholder="Resource name�"
                   className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                   style={{ borderColor: BORDER }}
                 />
@@ -896,7 +896,7 @@ function ResourcesTab() {
                 onClick={handleUpload}
                 disabled={uploading || !selectedFile || !uploadName.trim()}
                 className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
                 Upload
@@ -1113,7 +1113,7 @@ function ApprovalsTab() {
                     autoFocus
                     value={changesNote}
                     onChange={(e) => setChangesNote(e.target.value)}
-                    placeholder="Describe what needs to be changed or resubmitted…"
+                    placeholder="Describe what needs to be changed or resubmitted�"
                     rows={3}
                     className="w-full rounded-lg border px-3 py-2.5 text-[13px] resize-none outline-none focus:ring-1"
                     style={{ borderColor: BORDER }}

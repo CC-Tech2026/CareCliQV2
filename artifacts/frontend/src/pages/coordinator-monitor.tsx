@@ -19,7 +19,7 @@ function statusColour(status: string) {
 }
 
 function scoreBand(score?: number | null) {
-  if (score == null) return "—";
+  if (score == null) return "N/A";
   if (score >= 80) return "Fully engaged";
   if (score >= 60) return "Mostly engaged";
   if (score >= 40) return "Low engagement";
@@ -59,7 +59,7 @@ function ShiftCard({ shift }: { shift: LiveLongShift }) {
         <div>
           <p style={{ color: MUTED }}>Score</p>
           <p className="font-bold" style={{ color: PLUM }}>
-            {shift.engagement_score ?? "—"} · {scoreBand(shift.engagement_score)}
+            {shift.engagement_score ?? "N/A"} · {scoreBand(shift.engagement_score)}
           </p>
         </div>
         <div>
@@ -119,7 +119,7 @@ export default function CoordinatorMonitorPage() {
         <p className="text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
           Check 16
         </p>
-        <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: PLUM }}>
+        <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: "var(--cc-text)" }}>
           <Radio size={22} /> Long shift monitor
         </h1>
         <p className="mt-1 text-sm" style={{ color: MUTED }}>

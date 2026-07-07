@@ -38,7 +38,7 @@ export function FormPanel({
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center gap-1 text-[12px] font-bold text-[#3730A3] hover:text-[#2D2A7F] transition-colors"
+            className="flex items-center gap-1 text-[12px] font-bold text-[#E8457A] hover:text-[#2D2A7F] transition-colors"
           >
             <ChevronLeft size={16} /> Back to Goals & Tasks
           </button>

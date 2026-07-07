@@ -58,7 +58,7 @@ export function ShiftStageBanner({
 
   const name = participantName || translate("common.participant");
   const text = onBreak
-    ? `On break — billing paused · ${name}`
+    ? `On break: billing paused · ${name}`
     : translateParams(textKey!, { name });
   const shortText = onBreak ? "On break" : translate(shortKey!);
   const Icon = BANNER_ICONS[bannerKey] ?? PlayCircle;

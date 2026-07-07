@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,7 @@ export default function ProfileCompletion() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#E8457A]" />
         <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
@@ -108,13 +108,13 @@ export default function ProfileCompletion() {
         <p className="hidden" style={{ color: CORAL }}>
           {isAllied ? translate("profileCompletion.alliedHealth") : translate("profileCompletion.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("profileCompletion.title")}
         </h1>
-        <p className="mt-2 text-sm text-[#6B7280]">{translate("profileCompletion.subtitle")}</p>
+        <p className="mt-2 text-sm text-[#6A6A77]">{translate("profileCompletion.subtitle")}</p>
       </div>
-      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 shadow-sm">
-        <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
+      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
+        <div className="mb-6 rounded-2xl bg-[#F4EDE6] p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -142,7 +142,7 @@ export default function ProfileCompletion() {
                   title={translate("profileCompletion.discipline")}
                   value={profile.discipline || ""}
                   onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
-                  className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
                 >
                   <option value="">{translate("profileCompletion.selectDiscipline")}</option>
                   {DISCIPLINE_OPTIONS.map((opt) => (
@@ -158,7 +158,7 @@ export default function ProfileCompletion() {
                 <Label>{translate("profileCompletion.businessName")}</Label>
                 <Input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} className="mt-1 rounded-xl" />
               </div>
-              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#111827]">
+              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#1A1A2E]">
                 <input
                   type="checkbox"
                   checked={!!profile.professional_indemnity_confirmed}
@@ -169,16 +169,16 @@ export default function ProfileCompletion() {
             </>
           )}
         </div>
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm text-[#6B7280]">
+        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm text-[#6A6A77]">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
+            <ShieldCheck className="h-5 w-5 text-[#E8457A]" />
             <span>
               {isAllied
                 ? translate("profileCompletion.roleConfirmedAllied")
                 : translate("profileCompletion.roleConfirmedWorker")}
             </span>
           </div>
-          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: PLUM }}>
+          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {translate("profileCompletion.save")}
           </Button>

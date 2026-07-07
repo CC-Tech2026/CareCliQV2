@@ -457,7 +457,7 @@ function MessageRow({
         <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: message.is_read ? 400 : 600 }}>
           {message.title}
         </p>
-        <p className="text-[12px] text-[#6B7280] mt-0.5 line-clamp-2 whitespace-pre-wrap">
+        <p className="text-[12px] text-[#6A6A77] mt-0.5 line-clamp-2 whitespace-pre-wrap">
           {message.message}
         </p>
         <div className="flex items-center gap-2 mt-2">

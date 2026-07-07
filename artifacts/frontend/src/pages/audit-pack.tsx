@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   AlertTriangle, FileCheck2, ShieldCheck, Download,
@@ -20,7 +20,7 @@ const CORAL = "var(--cc-coral)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT  = "#F8F8FE";
+const SOFT  = "#F4EDE6";
 
 function complianceColour(score?: number | null) {
   if (score == null) return MUTED;
@@ -39,8 +39,8 @@ function TrendIcon({ score }: { score?: number | null }) {
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
 /** Rendered both at the standalone /audit-pack route and as a Compliance
- * Centre sub-tab — kept as one component so the two never drift apart. */
-export function AuditPackPanel() {
+ * Centre sub-tab � kept as one component so the two never drift apart. */
+export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
 
@@ -124,17 +124,18 @@ export function AuditPackPanel() {
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="hidden" style={{ color: CORAL }}>{translate("common.coordinator")}</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("auditPack.title")}</h1>
-          <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
-        </div>
+      {/* Header � skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
+      <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("auditPack.title")}</h1>
+            <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
+          </div>
+        )}
         <Button
           onClick={handleExport}
           className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           <Download size={15} /> {translate("auditPack.export")}
         </Button>
@@ -190,7 +191,7 @@ export function AuditPackPanel() {
         ))}
       </div>
 
-      {/* ── Summary tab ── */}
+      {/* -- Summary tab -- */}
       {activeTab === "summary" && (
         <section className="rounded-2xl bg-white p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>{translate("auditPack.rpFlagsTitle")}</h2>
@@ -200,7 +201,7 @@ export function AuditPackPanel() {
           ) : (
             <div className="space-y-2">
               {(flags.data || []).map((flag, index) => (
-                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EEEAFB" }}>
+                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EDE3FC" }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || translate("common.participant")}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
@@ -242,7 +243,7 @@ export function AuditPackPanel() {
                     {engagement.data.check16_compliance_row.name} ({engagement.data.check16_compliance_row.rule})
                   </p>
                   <p style={{ color: MUTED }}>
-                    Period result: {engagement.data.check16_compliance_row.period_result} ·{" "}
+                    Period result: {engagement.data.check16_compliance_row.period_result} �{" "}
                     {engagement.data.check16_compliance_row.sessions_flagged} sessions flagged
                   </p>
                 </div>
@@ -250,17 +251,17 @@ export function AuditPackPanel() {
 
               <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
-                  Section 3a — Long shift engagement log
+                  Section 3a: Long shift engagement log
                 </h2>
                 <div className="mt-3 space-y-2">
                   {engagement.data.long_shift_engagement_log.map((row) => (
                     <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
                       <p className="font-bold" style={{ color: TEXT }}>
-                        {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
+                        {row.participant_name || "Participant"} � {row.worker_name || "Worker"}
                       </p>
                       <p style={{ color: MUTED }}>
-                        {row.shift_duration_hours}h · Check-ins {row.checkins_completed}/{row.checkins_required} ·
-                        Max gap {row.max_activity_gap_mins}m · Break {row.break_duration_mins}m · Score {row.engagement_score}
+                        {row.shift_duration_hours}h � Check-ins {row.checkins_completed}/{row.checkins_required} �
+                        Max gap {row.max_activity_gap_mins}m � Break {row.break_duration_mins}m � Score {row.engagement_score}
                       </p>
                     </div>
                   ))}
@@ -283,8 +284,8 @@ export function AuditPackPanel() {
                     >
                       <p className="font-bold" style={{ color: TEXT }}>{row.participant_name || "Participant"}</p>
                       <p style={{ color: MUTED }}>
-                        Billed {row.billed_hours ?? "—"}h · Billable {row.billable_hours ?? "—"}h · Break {row.break_hours ?? 0}h
-                        {row.flagged ? " · discrepancy flagged" : ""}
+                        Billed {row.billed_hours ?? "N/A"}h � Billable {row.billable_hours ?? "N/A"}h � Break {row.break_hours ?? 0}h
+                        {row.flagged ? " � discrepancy flagged" : ""}
                       </p>
                     </div>
                   ))}
@@ -297,7 +298,7 @@ export function AuditPackPanel() {
         </div>
       )}
 
-      {/* ── Worker performance tab ── */}
+      {/* -- Worker performance tab -- */}
       {activeTab === "workers" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
@@ -343,7 +344,7 @@ export function AuditPackPanel() {
         </section>
       )}
 
-      {/* ── Flagged sessions tab ── */}
+      {/* -- Flagged sessions tab -- */}
       {activeTab === "flagged" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
@@ -373,7 +374,7 @@ export function AuditPackPanel() {
                     <a
                       href={`/sessions/${s.id}`}
                       className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                      style={{ background: PLUM }}
+                      style={{ background: "var(--cc-cta)" }}
                     >
                       {translate("auditPack.review")}
                     </a>

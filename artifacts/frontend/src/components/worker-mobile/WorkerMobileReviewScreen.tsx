@@ -151,7 +151,7 @@ export function WorkerMobileReviewScreen({
                 Medication note missing
               </p>
               <p className="text-[12px]" style={{ color: WM.warnText }}>
-                Tap to add — required before submitting
+                Tap to add. Required before submitting
               </p>
             </div>
             <ChevronDown size={16} style={{ color: WM.warnText }} />

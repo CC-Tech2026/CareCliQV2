@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { ArrowLeft, AlertTriangle, Loader2, Siren } from "lucide-react";
 import { createIncident } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// -- Design tokens -------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
 const T1     = "#1C1626";
 const T2     = "#374151";
@@ -300,7 +300,7 @@ export default function IncidentNew() {
             onClick={handleSubmit}
             disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
             {saving ? translate("incidents.new.saving") : translate("incidents.new.log")}

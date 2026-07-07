@@ -105,7 +105,7 @@ export default function WorkerFeedbackPage() {
           onClick={() => ackMut.mutate()}
           disabled={ackMut.isPending}
           className="w-full rounded-2xl py-4 text-base font-black text-white shadow-md"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           {ackMut.isPending ? translate("feedback.saving") : translate("feedback.gotIt")}
         </button>

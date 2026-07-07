@@ -68,7 +68,7 @@ export function WorkerMobileNoteBubble({
 
       {isFlagged && (
         <p className="mb-1.5 text-[10px] font-semibold" style={{ color: isFail ? WM.alertText : WM.warnTitle }}>
-          {isFail ? "✗ Compliance flag raised" : "⚠ Incident filed — pending review"}
+          {isFail ? "Compliance flag raised" : "Incident filed: pending review"}
         </p>
       )}
 
@@ -118,7 +118,7 @@ export function WorkerMobileNoteBubble({
               style={{ borderColor: WM.alertBorder, background: WM.surface }}
             >
               <p className="text-[11px] font-semibold" style={{ color: WM.alertText }}>
-                Rule {flag.ruleId} — {flag.ruleName}
+                Rule {flag.ruleId}: {flag.ruleName}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed" style={{ color: WM.alertText }}>
                 {flag.message}

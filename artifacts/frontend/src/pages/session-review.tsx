@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,14 +22,14 @@ import { jsonFetch } from "@/services/http";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
-const T1     = "#111827";
+const T1     = "#1A1A2E";
 const T2     = "#374151";
-const T3     = "#6B7280";
+const T3     = "#6A6A77";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
 function safeDate(v?: string | null, fmt = "d MMM yyyy") {
-  if (!v) return "—";
+  if (!v) return "N/A";
   try { return format(v.includes("T") ? parseISO(v) : new Date(v + "T00:00:00"), fmt); }
   catch { return v; }
 }
@@ -190,7 +190,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
       });
   }, [detail]);
 
-  const notes = (detail?.notes as string) || (detail?.legal_record_text as string) || session.review_note || "—";
+  const notes = (detail?.notes as string) || (detail?.legal_record_text as string) || session.review_note || "N/A";
 
   async function handleApprove() {
     setApproving(true);
@@ -209,10 +209,10 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   return (
     <>
       <div
-        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#3730A3]" : ""}`}
+        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#E8457A]" : ""}`}
         style={{ borderColor: selected ? PLUM : BORDER }}
       >
-        {/* ── Card header ── */}
+        {/* -- Card header -- */}
         <div className="flex items-start gap-3 px-5 py-4">
           <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
             <Checkbox checked={selected} onCheckedChange={onToggle} aria-label={translate("sessions.review.selectAll")} />
@@ -220,12 +220,12 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Flag size={13} className="text-[#BE185D] shrink-0" />
+              <Flag size={13} className="text-[#7C3AED] shrink-0" />
               <span className="text-[13px] font-black" style={{ color: T1 }}>
                 {session.participant_name || translate("common.participant")}
               </span>
               <span className="text-[11px] font-medium" style={{ color: T3 }}>
-                {safeDate(session.session_date)} · {(session.session_type || "session").replace(/_/g, " ")}
+                {safeDate(session.session_date)} � {(session.session_type || "session").replace(/_/g, " ")}
               </span>
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -272,7 +272,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
           </div>
         </div>
 
-        {/* ── Expanded detail ── */}
+        {/* -- Expanded detail -- */}
         {expanded && (
           <div className="border-t px-5 py-4 space-y-4" style={{ borderColor: BORDER }}>
             {/* Notes preview */}
@@ -301,7 +301,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
                           {r.rule.replace(/_/g, " ")}
                         </span>
                         {r.message && (
-                          <span className="ml-1.5 text-xs font-medium" style={{ color: T3 }}>— {r.message}</span>
+                          <span className="ml-1.5 text-xs font-medium" style={{ color: T3 }}>: {r.message}</span>
                         )}
                       </div>
                     </div>
@@ -417,7 +417,7 @@ export default function SessionReview() {
           <p className="hidden" style={{ color: CORAL }}>
             Quality & Safety
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate("sessions.review.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
@@ -462,10 +462,10 @@ export default function SessionReview() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
               <div className="flex gap-3">
-                <div className="h-4 w-4 rounded bg-[#E5E7EB]" />
+                <div className="h-4 w-4 rounded bg-[#E8E8EA]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
-                  <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
+                  <div className="h-4 w-48 rounded bg-[#E8E8EA]" />
+                  <div className="h-3 w-32 rounded bg-[#E8E8EA]" />
                 </div>
               </div>
             </div>
@@ -486,7 +486,7 @@ export default function SessionReview() {
           <Link href="/sessions">
             <button
               className="mt-6 rounded-full px-5 py-2.5 text-sm font-black text-white"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {translate("sessions.review.viewAll")}
             </button>

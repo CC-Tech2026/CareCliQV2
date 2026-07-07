@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -135,12 +135,12 @@ export default function CoordinatorOnboarding() {
         <div className="flex justify-center mb-4">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-text)" }}
           >
             <Sparkles className="text-white" size={26} />
           </div>
         </div>
-        <h1 className="text-xl font-black mb-2" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black mb-2" style={{ color: "var(--cc-text)" }}>
           {welcomeTitle}
         </h1>
         <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: MUTED }}>
@@ -229,7 +229,7 @@ export default function CoordinatorOnboarding() {
                     <p
                       className="text-[14px] font-bold"
                       style={{
-                        color: done ? "#111827" : "#111827",
+                        color: done ? "#1A1A2E" : "#1A1A2E",
                         textDecoration: done && !isAuto ? "line-through" : "none",
                         opacity: done && !isAuto ? 0.6 : 1,
                       }}
@@ -285,7 +285,7 @@ export default function CoordinatorOnboarding() {
           type="button"
           onClick={handleGoToDashboard}
           className="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           {allDone ? translate("coordinator.onboarding.goToDashboard") : translate("coordinator.onboarding.continueToDashboard")}
           <ArrowRight size={16} />

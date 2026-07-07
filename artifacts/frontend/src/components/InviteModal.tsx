@@ -251,10 +251,10 @@ export function InviteModal({
       >
         <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg text-[#111827]">
+          <DialogTitle className="flex items-center gap-2 text-lg text-[#1A1A2E]">
             <UserPlus
               size={18}
-              className="text-[#3730A3]"
+              className="text-[#E8457A]"
             />
 
             {result
@@ -327,7 +327,7 @@ export function InviteModal({
 
               {selectedRole && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
-                  <p className="text-xs font-medium text-[#111827]">
+                  <p className="text-xs font-medium text-[#1A1A2E]">
                     {translate(selectedRole.labelKey)}
                   </p>
 
@@ -335,7 +335,7 @@ export function InviteModal({
                     {translate(selectedRole.descKey)}
                   </p>
 
-                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#3730A3]">
+                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#E8457A]">
                     <ShieldCheck
                       size={13}
                       className="mt-0.5 shrink-0"
@@ -371,7 +371,7 @@ export function InviteModal({
                 </p>
 
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {result.email} —{" "}
+                  {result.email} ·{" "}
                   {translate(ROLE_OPTIONS.find((r) => r.value === result.role)?.labelKey ?? result.role)}
                 </p>
               </div>

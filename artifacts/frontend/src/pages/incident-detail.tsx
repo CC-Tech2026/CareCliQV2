@@ -1,4 +1,4 @@
-ï»¿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -251,7 +251,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                   <User size={13} />
                   {incident.participant_name}
                   {incident.participant_ndis && (
-                    <span style={{ color: "#7A6A8A" }}>Â· NDIS {incident.participant_ndis}</span>
+                    <span style={{ color: "#7A6A8A" }}>· NDIS {incident.participant_ndis}</span>
                   )}
                 </p>
               )}
@@ -311,7 +311,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               <div className="col-span-2">
                 <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.ndisPracticeStandard")}</p>
                 <p className="flex items-center gap-1.5" style={{ color: "var(--cc-text)" }}>
-                  <Shield size={12} style={{ color: "#3730A3" }} />
+                  <Shield size={12} style={{ color: "#E8457A" }} />
                   {incident.practice_standard}
                 </p>
               </div>
@@ -397,7 +397,7 @@ export default function IncidentDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Similar past incidents â€” CARECLIQV2-32 */}
+      {/* Similar past incidents — CARECLIQV2-32 */}
       {(patternsLoading || showPatternsPanel) && (
         <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
@@ -420,8 +420,8 @@ export default function IncidentDetail({ id }: { id: string }) {
               {patternData.ai_summary && (
                 <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(241,115,138,0.06)", border: "1px solid rgba(241,115,138,0.15)" }}>
                   <div className="flex items-center gap-2">
-                    <Sparkles size={14} style={{ color: "#3730A3" }} />
-                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#3730A3" }}>{translate("incidents.detail.aiPatternAnalysis")}</p>
+                    <Sparkles size={14} style={{ color: "#E8457A" }} />
+                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#E8457A" }}>{translate("incidents.detail.aiPatternAnalysis")}</p>
                   </div>
                   <div className="space-y-3 text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     <div>
@@ -512,7 +512,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               }
               disabled={updateMutation.isPending}
               className="rounded-xl h-9 text-[13px] text-white"
-              style={{ background: "var(--cc-plum)" }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {updateMutation.isPending
                 ? <Loader2 size={13} className="animate-spin mr-1.5" />

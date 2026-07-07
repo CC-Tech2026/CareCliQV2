@@ -71,7 +71,7 @@ export function HubHeader() {
       />
       <span
         className="pointer-events-none absolute top-8 right-32 h-16 w-16 rounded-full opacity-[0.08]"
-        style={{ background: "#BE185D" }}
+        style={{ background: "#7C3AED" }}
       />
       <span
         className="pointer-events-none absolute bottom-6 -left-6 h-24 w-24 rounded-full opacity-[0.08]"
@@ -102,7 +102,7 @@ export function HubHeader() {
         <button
           onClick={() => navigate(cta.href)}
           className="mt-6 flex items-center gap-2 rounded-full px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
-          style={{ background: "#FFFFFF", color: "#3730A3" }}
+          style={{ background: "#FFFFFF", color: "#E8457A" }}
         >
           {translate(cta.label)}
           <ArrowRight size={13} strokeWidth={2.5} />

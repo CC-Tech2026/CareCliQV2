@@ -36,7 +36,7 @@ export function EvidenceSyncBanner({ online, snapshot, onRetry, className }: Pro
     const base = translateParams(failed === 1 ? "shift.evidence.uploadFailed" : "shift.evidence.uploadFailedPlural", {
       count: String(failed),
     });
-    message = lastError ? `${base} — ${lastError}` : base;
+    message = lastError ? `${base}: ${lastError}` : base;
   } else if (pending > 0) {
     message = translateParams(pending === 1 ? "shift.evidence.pending" : "shift.evidence.pendingPlural", {
       count: String(pending),

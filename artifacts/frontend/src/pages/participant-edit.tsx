@@ -20,7 +20,7 @@ import { ArrowLeft, Edit, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM        = "#3730A3";
+const PLUM        = "#E8457A";
 const CORAL       = "#F1738A";
 const T1          = "#1C1626";
 const T2          = "#374151";
@@ -340,7 +340,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               type="submit"
               disabled={updateMutation.isPending}
               className="flex items-center justify-center gap-2 h-11 sm:h-10 px-6 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {updateMutation.isPending ? (
                 <>

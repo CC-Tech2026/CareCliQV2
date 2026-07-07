@@ -367,7 +367,7 @@ export default function Billing() {
                   title={translate("billing.plan")}
                   value={subscription.plan_name}
                   onChange={e => setSubscription({ ...subscription, plan_name: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
                 >
                   {["starter", "team", "pro", "enterprise"].map(p => (
                     <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
@@ -380,7 +380,7 @@ export default function Billing() {
                   title={translate("billing.status")}
                   value={subscription.status}
                   onChange={e => setSubscription({ ...subscription, status: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
                 >
                   {["trialing", "active", "past_due", "cancelled", "manual_review"].map(s => (
                     <option key={s} value={s}>{s.replace("_", " ")}</option>
@@ -709,7 +709,7 @@ function RevenueReportPanel() {
                       <div key={m.month} className="flex items-center gap-4 px-4 py-3 hover:bg-[#F8F6FE] transition-colors">
                         <p className="text-sm font-black w-20 shrink-0 text-cc-text">{m.month}</p>
                         <div className="flex-1 min-w-0">
-                          <div className="h-1.5 overflow-hidden rounded-full bg-[#EEEAFB]">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-[#EDE3FC]">
                             <div className="h-full rounded-full bg-emerald-600" style={{ width: `${paidPct}%` }} />
                           </div>
                         </div>

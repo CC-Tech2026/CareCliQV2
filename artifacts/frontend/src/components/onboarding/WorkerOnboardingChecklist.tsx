@@ -28,7 +28,7 @@ export function WorkerOnboardingChecklist({
   const { translate } = useAccessibility();
 
   return (
-    <div className="divide-y divide-[#EEEAFB] rounded-2xl border border-[#E5E7EB] bg-white">
+    <div className="divide-y divide-[#EDE3FC] rounded-2xl border border-[#E8E8EA] bg-white">
       {items.map((item) => (
         <label key={item.key} className="flex cursor-pointer items-center gap-3 px-4 py-3 transition hover:bg-[#F8F6FE]">
           <input
@@ -40,9 +40,9 @@ export function WorkerOnboardingChecklist({
           {item.completed ? (
             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
           ) : (
-            <Circle className="h-5 w-5 text-[#6B7280]" />
+            <Circle className="h-5 w-5 text-[#6A6A77]" />
           )}
-          <span className="text-sm font-bold text-[#111827]">{checklistLabel(item, translate)}</span>
+          <span className="text-sm font-bold text-[#1A1A2E]">{checklistLabel(item, translate)}</span>
         </label>
       ))}
     </div>

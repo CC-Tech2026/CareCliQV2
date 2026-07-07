@@ -57,7 +57,7 @@ const BAND_STYLES: Record<ComplianceBand, { bg: string; text: string; labelKey: 
 };
 
 function formatShiftDate(value?: string) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   try {
     return format(parseISO(value), "EEE d MMM yyyy");
   } catch {
@@ -166,7 +166,7 @@ function EvidenceLightboxImage({
 }
 
 function formatDuration(minutes?: number | null) {
-  if (!minutes) return "—";
+  if (!minutes) return "N/A";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h && m) return `${h}h ${m}m`;
@@ -177,7 +177,7 @@ function formatDuration(minutes?: number | null) {
 function ComplianceBadge({ score, band }: { score?: number | null; band: ComplianceBand }) {
   const { translate } = useAccessibility();
   const style = BAND_STYLES[band] ?? BAND_STYLES.unknown;
-  const label = style.labelKey ? translate(style.labelKey) : "—";
+  const label = style.labelKey ? translate(style.labelKey) : "N/A";
   const Icon =
     band === "green" ? CheckCircle2 : band === "amber" ? AlertCircle : band === "red" ? AlertCircle : HelpCircle;
   return (
@@ -187,7 +187,7 @@ function ComplianceBadge({ score, band }: { score?: number | null; band: Complia
       aria-label={`Compliance ${score ?? "unknown"} percent, ${label}`}
     >
       <Icon size={14} aria-hidden />
-      {score != null ? `${score}%` : "—"}
+      {score != null ? `${score}%` : "N/A"}
       <span className="font-bold opacity-80">{label}</span>
     </span>
   );
@@ -220,7 +220,7 @@ function ShiftTrendChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EEEAFB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EDE3FC" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
               <ReferenceLine y={90} stroke="#10B981" strokeDasharray="4 4" />
@@ -595,7 +595,7 @@ export default function WorkerShiftHistoryPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("nav.performance")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("shiftHistory.title")}
         </h1>
         <p className="mt-2 max-w-xl text-sm font-medium" style={{ color: MUTED }}>

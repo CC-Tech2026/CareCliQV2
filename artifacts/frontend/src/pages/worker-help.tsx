@@ -73,7 +73,7 @@ function IntercomPanel({ appId, translate }: { appId?: string | null; translate:
       </p>
       <Button
         className="mt-4 rounded-xl"
-        style={{ background: PLUM }}
+        style={{ background: "var(--cc-cta)" }}
         onClick={() => {
           const w = window as Window & { Intercom?: (...args: unknown[]) => void };
           w.Intercom?.("show");

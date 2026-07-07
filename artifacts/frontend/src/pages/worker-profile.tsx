@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, LockKeyhole, Pencil, Save, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -278,7 +278,7 @@ export default function WorkerProfile() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#E8457A]" />
         <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
@@ -293,10 +293,10 @@ export default function WorkerProfile() {
           <p className="hidden" style={{ color: CORAL }}>
             {translate("profile.account")}
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate("profile.title")}
           </h1>
-          <p className="mt-2 text-sm text-[#6B7280]">
+          <p className="mt-2 text-sm text-[#6A6A77]">
             {translate("profile.subtitle")}
           </p>
         </div>
@@ -305,7 +305,7 @@ export default function WorkerProfile() {
             type="button"
             onClick={() => setEditMode(true)}
             className="rounded-xl gap-2"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Pencil className="h-4 w-4" />
             {translate("profile.edit")}
@@ -342,12 +342,12 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <UserRound className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <UserRound className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("profile.details")}</h2>
-            <p className="text-sm text-[#6B7280]">{translate("profile.detailsHint")}</p>
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.details")}</h2>
+            <p className="text-sm text-[#6A6A77]">{translate("profile.detailsHint")}</p>
           </div>
         </div>
 
@@ -384,7 +384,7 @@ export default function WorkerProfile() {
                   className="mt-1 rounded-xl"
                 />
                 {profile.pending_email ? (
-                  <p className="mt-1 text-xs text-[#6B7280]">
+                  <p className="mt-1 text-xs text-[#6A6A77]">
                     {translateParams("profile.pendingVerification", { email: profile.pending_email })}
                   </p>
                 ) : null}
@@ -412,11 +412,11 @@ export default function WorkerProfile() {
                     <option key={value} value={value}>{contactLabel(value)}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-[#6B7280]">
+                <p className="mt-1 text-xs text-[#6A6A77]">
                   {translate("profile.preferredContactHint")}
                 </p>
               </div>
-              <p className="md:col-span-2 text-xs text-[#6B7280]">
+              <p className="md:col-span-2 text-xs text-[#6A6A77]">
                 {translate("profile.saveContactHint")}
               </p>
             </>
@@ -448,12 +448,12 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <LockKeyhole className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("profile.changePassword")}</h2>
-            <p className="text-sm text-[#6B7280]">{translate("profile.passwordPolicyHint")}</p>
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.changePassword")}</h2>
+            <p className="text-sm text-[#6A6A77]">{translate("profile.passwordPolicyHint")}</p>
           </div>
         </div>
 
@@ -484,11 +484,11 @@ export default function WorkerProfile() {
                     <div
                       key={index}
                       className="h-1.5 flex-1 rounded-full"
-                      style={{ background: index < strength ? PLUM : "#E5E7EB" }}
+                      style={{ background: index < strength ? "var(--cc-text)" : "#E8E8EA" }}
                     />
                   ))}
                 </div>
-                <p className="mt-1 text-xs font-medium text-[#6B7280]">
+                <p className="mt-1 text-xs font-medium text-[#6A6A77]">
                   {translate("profile.strength")} {strengthLabel(strength)}
                 </p>
               </div>
@@ -509,7 +509,7 @@ export default function WorkerProfile() {
               type="submit"
               disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
               className="rounded-xl"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("profile.updatePassword")}
             </Button>
@@ -519,16 +519,16 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#111827]">{translate("profile.desktopNotifications")}</h2>
-          <p className="text-sm text-[#6B7280]">
+          <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.desktopNotifications")}</h2>
+          <p className="text-sm text-[#6A6A77]">
             {translate("profile.desktopHint")}
           </p>
         </div>
         {!getDesktopNotificationSupport() ? (
-          <p className="text-sm text-[#6B7280]">{translate("profile.desktopNotSupported")}</p>
+          <p className="text-sm text-[#6A6A77]">{translate("profile.desktopNotSupported")}</p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm font-semibold text-[#111827]">
+            <p className="text-sm font-semibold text-[#1A1A2E]">
               {desktopPermission === "granted" && desktopEnabled
                 ? translate("profile.desktopStatusEnabled")
                 : desktopPermission === "denied"
@@ -539,7 +539,7 @@ export default function WorkerProfile() {
               <Button
                 type="button"
                 className="rounded-xl"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
                 onClick={() => void handleEnableDesktopNotifications()}
               >
                 {translate("profile.enableDesktop")}
@@ -560,15 +560,15 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#111827]">{translate("profile.notificationPrefs")}</h2>
-          <p className="text-sm text-[#6B7280]">
+          <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.notificationPrefs")}</h2>
+          <p className="text-sm text-[#6A6A77]">
             {translate("profile.notificationPrefsHint")}
           </p>
         </div>
 
         {notificationPrefs ? (
           <div className="space-y-4">
-            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
+            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#6A6A77]">
               <span>{translate("profile.event")}</span>
               {CHANNELS.map((channel) => (
                 <span key={channel} className="text-center">{channelLabel(channel)}</span>
@@ -580,10 +580,10 @@ export default function WorkerProfile() {
                 className="grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1.4fr_repeat(3,0.5fr)] md:items-center"
                 style={{ borderColor: BORDER }}
               >
-                <p className="text-sm font-semibold text-[#111827]">{eventLabel(event)}</p>
+                <p className="text-sm font-semibold text-[#1A1A2E]">{eventLabel(event)}</p>
                 {CHANNELS.map((channel) => (
                   <div key={channel} className="flex items-center justify-between md:justify-center gap-3">
-                    <span className="text-xs text-[#6B7280] md:hidden">{channelLabel(channel)}</span>
+                    <span className="text-xs text-[#6A6A77] md:hidden">{channelLabel(channel)}</span>
                     <Switch
                       checked={notificationPrefs[event][channel]}
                       disabled={savingPrefs}

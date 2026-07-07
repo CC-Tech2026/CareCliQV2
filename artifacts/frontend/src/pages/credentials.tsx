@@ -1,4 +1,4 @@
-ï»¿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { BadgeCheck, Bell, FileUp, Loader2, ShieldCheck, Trash2 } from "lucide-react";
@@ -37,7 +37,7 @@ const BORDER = "var(--cc-border)";
 // Canonical snake_case values for the credential types the Staff compliance
 // table tracks as fixed columns (see migration 095). Values with no clean
 // legacy equivalent (Police Check, Other, AHPRA Registration, etc.) stay as
-// plain display strings â€” unchanged from before.
+// plain display strings — unchanged from before.
 const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
   ndis_screening: "NDIS Worker Screening",
   wwcc: "Working with Children Check (WWCC)",
@@ -95,7 +95,7 @@ function statusClass(status: string) {
   if (status === "valid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "expiring") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "expired" || status === "rejected") return "bg-red-50 text-red-700 border-red-200";
-  return "bg-[#F8F8FE] text-[#3730A3] border-[#E5E7EB]";
+  return "bg-[#F4EDE6] text-[#E8457A] border-[#E8E8EA]";
 }
 
 function statusLabel(status: string, translate: (key: string) => string) {
@@ -125,28 +125,28 @@ function CredentialRow({
   const { translate, translateParams } = useAccessibility();
 
   return (
-    <div className="grid gap-3 border-b border-[#EEEAFB] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div className="grid gap-3 border-b border-[#EDE3FC] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-black text-[#111827]">{credential.title}</p>
+          <p className="font-black text-[#1A1A2E]">{credential.title}</p>
           <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black uppercase ${statusClass(credential.status)}`}>
             {coordinator ? credential.status.replace("_", " ") : statusLabel(credential.status, translate)}
           </span>
         </div>
-        <p className="mt-1 text-xs font-medium text-[#6B7280]">
+        <p className="mt-1 text-xs font-medium text-[#6A6A77]">
           {credentialTypeLabel(credential.credential_type)}
-          {credential.issuer ? ` â€¢ ${credential.issuer}` : ""}
+          {credential.issuer ? ` • ${credential.issuer}` : ""}
           {credential.expiry_date
-            ? ` â€¢ ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
+            ? ` • ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
             : ""}
         </p>
         {credential.user && (
-          <p className="mt-1 text-xs text-[#6B7280]">
-            {credential.user.full_name || credential.user.email} â€¢ {credential.user.role?.replace("_", " ")}
+          <p className="mt-1 text-xs text-[#6A6A77]">
+            {credential.user.full_name || credential.user.email} • {credential.user.role?.replace("_", " ")}
           </p>
         )}
         {credential.file_url && (
-          <a href={credential.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-bold text-[#3730A3]">
+          <a href={credential.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-bold text-[#E8457A]">
             {coordinator ? "View uploaded document" : translate("credentials.viewDocument")}
           </a>
         )}
@@ -154,7 +154,7 @@ function CredentialRow({
       <div className="flex flex-wrap gap-2">
         {!coordinator && credential.status !== "valid" && (
           <>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#E5E7EB] px-3 py-2 text-xs font-bold text-[#3730A3] hover:bg-[#F8F6FE]">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#E8E8EA] px-3 py-2 text-xs font-bold text-[#E8457A] hover:bg-[#F8F6FE]">
               <FileUp className="h-4 w-4" />
               {translate("credentials.uploadFile")}
               <input
@@ -167,7 +167,7 @@ function CredentialRow({
                 }}
               />
             </label>
-            <Button variant="ghost" size="sm" className="gap-1 text-[#BE185D]" onClick={() => onDelete(credential)}>
+            <Button variant="ghost" size="sm" className="gap-1 text-[#7C3AED]" onClick={() => onDelete(credential)}>
               <Trash2 className="h-3.5 w-3.5" />
               {translate("credentials.delete")}
             </Button>
@@ -179,7 +179,7 @@ function CredentialRow({
               <ShieldCheck className="h-3.5 w-3.5" />
               Verify
             </Button>
-            <Button variant="ghost" size="sm" className="text-[#BE185D]" onClick={() => onReview(credential, "rejected")}>
+            <Button variant="ghost" size="sm" className="text-[#7C3AED]" onClick={() => onReview(credential, "rejected")}>
               Reject
             </Button>
           </>
@@ -241,24 +241,24 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
   return (
     <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="font-black text-[#111827]">Send Credential Reminders</h2>
+        <h2 className="font-black text-[#1A1A2E]">Send Credential Reminders</h2>
         <Button variant="outline" size="sm" className="rounded-xl" onClick={onClose}>Close</Button>
       </div>
-      <p className="text-sm text-[#6B7280]">
+      <p className="text-sm text-[#6A6A77]">
         Select workers with expiring or expired credentials to send them an in-app reminder.
       </p>
 
         {alertsLoading ? (
-          <div className="flex items-center gap-2 py-4 text-sm text-[#6B7280]">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loadingâ€¦
+          <div className="flex items-center gap-2 py-4 text-sm text-[#6A6A77]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : workers.length === 0 ? (
-          <p className="mt-2 rounded-xl bg-[#F8F8FE] p-3 text-sm font-bold text-[#3730A3]">
+          <p className="mt-2 rounded-xl bg-[#F4EDE6] p-3 text-sm font-bold text-[#E8457A]">
             No workers with expiring credentials found.
           </p>
         ) : (
           <div className="mt-2 space-y-2">
-            <button className="text-xs font-bold text-[#3730A3] underline" onClick={toggleAll}>
+            <button className="text-xs font-bold text-[#E8457A] underline" onClick={toggleAll}>
               {selectedIds.size === workers.length ? "Deselect all" : "Select all"}
             </button>
             <div className="max-h-48 overflow-y-auto space-y-1">
@@ -268,9 +268,9 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
                     type="checkbox"
                     checked={selectedIds.has(id)}
                     onChange={() => toggle(id)}
-                    className="h-4 w-4 accent-[#3730A3]"
+                    className="h-4 w-4 accent-[#E8457A]"
                   />
-                  <span className="text-sm font-semibold text-[#111827]">{name}</span>
+                  <span className="text-sm font-semibold text-[#1A1A2E]">{name}</span>
                 </label>
               ))}
             </div>
@@ -284,7 +284,7 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
               <button
                 key={template}
                 type="button"
-                className="rounded-full border border-[#E5E7EB] bg-[#F8F6FE] px-3 py-1 text-xs font-bold text-[#3730A3]"
+                className="rounded-full border border-[#E8E8EA] bg-[#F8F6FE] px-3 py-1 text-xs font-bold text-[#E8457A]"
                 onClick={() => setCustomMessage(template)}
               >
                 Use Template
@@ -294,7 +294,7 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
           <textarea
             title="Custom message"
             placeholder="Enter your custom message here..."
-            className="mt-1 w-full rounded-xl border border-[#E5E7EB] p-3 text-sm"
+            className="mt-1 w-full rounded-xl border border-[#E8E8EA] p-3 text-sm"
             rows={3}
             value={customMessage}
             onChange={(e) => setCustomMessage(e.target.value)}
@@ -306,7 +306,7 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
         <Button
           disabled={selectedIds.size === 0 || mutation.isPending}
           className="rounded-xl gap-1"
-          style={{ background: "var(--cc-plum)" }}
+          style={{ background: "var(--cc-cta)" }}
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
@@ -476,7 +476,7 @@ export default function Credentials() {
         <p className="hidden" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Allied Health" : "Support Worker"}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {isCoordinator ? "Team Credential Wallet" : translate("credentials.title")}
         </h1>
       </div>
@@ -497,8 +497,8 @@ export default function Credentials() {
             ]
         ).map(([label, value]) => (
           <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-xs font-bold uppercase text-[#6B7280]">{label}</p>
-            <p className="mt-1 text-2xl font-black text-[#111827]">{value}</p>
+            <p className="text-xs font-bold uppercase text-[#6A6A77]">{label}</p>
+            <p className="mt-1 text-2xl font-black text-[#1A1A2E]">{value}</p>
           </div>
         ))}
       </div>
@@ -511,7 +511,7 @@ export default function Credentials() {
           <Button
             size="sm"
             className="gap-1.5 rounded-xl"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
             onClick={() => setShowBulkReminders(true)}
           >
             <Bell className="h-3.5 w-3.5" />
@@ -523,8 +523,8 @@ export default function Credentials() {
       {isCoordinator && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4">
-            <h2 className="font-black text-[#111827]">Shift Credential Rules</h2>
-            <p className="mt-1 text-sm text-[#6B7280]">
+            <h2 className="font-black text-[#1A1A2E]">Shift Credential Rules</h2>
+            <p className="mt-1 text-sm text-[#6A6A77]">
               Configure which credential types are required per shift type. Shift assignment will block when required credentials are missing.
             </p>
           </div>
@@ -536,7 +536,7 @@ export default function Credentials() {
                 title="Shift type"
                 value={ruleShiftType}
                 onChange={(event) => setRuleShiftType(event.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
+                className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
               >
                 {SHIFT_TYPES.map((type) => (
                   <option key={type} value={type}>{type.replace(/_/g, " ")}</option>
@@ -549,7 +549,7 @@ export default function Credentials() {
                 title="Required credential"
                 value={ruleCredentialType}
                 onChange={(event) => setRuleCredentialType(event.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
+                className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
               >
                 {ruleCredentialTypes.map((type) => (
                   <option key={type} value={type}>{credentialTypeLabel(type)}</option>
@@ -559,7 +559,7 @@ export default function Credentials() {
             <div className="flex justify-end">
               <Button
                 className="gap-2 rounded-xl"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
                 disabled={createRuleMutation.isPending}
                 onClick={() => createRuleMutation.mutate()}
               >
@@ -570,23 +570,23 @@ export default function Credentials() {
           </div>
 
           <div className="mt-4 rounded-2xl bg-[#F8F6FE] p-3">
-            {shiftRulesLoading && <p className="text-sm font-semibold text-[#6B7280]">Loading rules...</p>}
+            {shiftRulesLoading && <p className="text-sm font-semibold text-[#6A6A77]">Loading rules...</p>}
             {!shiftRulesLoading && shiftRules.length === 0 && (
-              <p className="text-sm font-semibold text-[#6B7280]">No shift credential rules configured yet.</p>
+              <p className="text-sm font-semibold text-[#6A6A77]">No shift credential rules configured yet.</p>
             )}
             {!shiftRulesLoading && shiftRules.length > 0 && (
               <div className="space-y-2">
                 {shiftRules.map((rule) => (
-                  <div key={rule.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 py-2">
-                    <p className="text-sm font-semibold text-[#111827]">
+                  <div key={rule.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E8E8EA] bg-white px-3 py-2">
+                    <p className="text-sm font-semibold text-[#1A1A2E]">
                       <span className="capitalize">{humanize(rule.shift_type)}</span>
-                      <span className="text-[#6B7280]"> requires </span>
+                      <span className="text-[#6A6A77]"> requires </span>
                       {rule.required_credential_type}
                     </p>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-[#BE185D]"
+                      className="text-[#7C3AED]"
                       disabled={deleteRuleMutation.isPending}
                       onClick={() => deleteRuleMutation.mutate(rule)}
                     >
@@ -603,8 +603,8 @@ export default function Credentials() {
       {!isCoordinator && (
         <form onSubmit={submit} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex items-center gap-2">
-            <BadgeCheck className="h-5 w-5 text-[#3730A3]" />
-            <h2 className="font-black text-[#111827]">{translate("credentials.add")}</h2>
+            <BadgeCheck className="h-5 w-5 text-[#E8457A]" />
+            <h2 className="font-black text-[#1A1A2E]">{translate("credentials.add")}</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div>
@@ -613,7 +613,7 @@ export default function Credentials() {
                 title="Credential type"
                 value={form.credential_type}
                 onChange={(event) => setForm({ ...form, credential_type: event.target.value })}
-                className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
+                className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
               >
                 {credentialTypes.map((type) => <option key={type} value={type}>{credentialTypeLabel(type)}</option>)}
               </select>
@@ -640,7 +640,7 @@ export default function Credentials() {
             </div>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: PLUM }}>
+            <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
               {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
               {translate("credentials.save")}
             </Button>
@@ -667,7 +667,7 @@ export default function Credentials() {
                   onClick={() => setStatusFilter(filter)}
                   className="rounded-full border px-3 py-1 text-xs font-bold"
                   style={{
-                    borderColor: active ? PLUM : "#E5E7EB",
+                    borderColor: active ? PLUM : "#E8E8EA",
                     background: active ? "var(--cc-soft)" : "var(--cc-bg)",
                     color: active ? PLUM : MUTED,
                   }}
@@ -689,12 +689,12 @@ export default function Credentials() {
         )}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && data.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No credentials have been recorded yet." : translate("credentials.empty")}
           </p>
         )}
         {!isLoading && data.length > 0 && filteredData.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No credentials match your current search or status filter." : translate("credentials.noMatch")}
           </p>
         )}

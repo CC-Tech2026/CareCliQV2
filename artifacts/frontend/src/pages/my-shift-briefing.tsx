@@ -173,7 +173,7 @@ export default function MyShiftBriefing() {
           <div className="flex items-start gap-3">
             <span
               className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${PLUM} 0%, #5B21B6 100%)` }}
+              style={{ background: PLUM }}
             >
               <ClipboardList size={18} aria-hidden />
             </span>

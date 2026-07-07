@@ -34,7 +34,7 @@ function formatAud(cents: number) {
 }
 
 function formatDate(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "N/A";
   return new Date(iso).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",

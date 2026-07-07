@@ -125,7 +125,7 @@ export function LongShiftEngagementPanel({
         toast({ title: "Break ended" });
       } else {
         await startBreak();
-        toast({ title: "Break started — billing paused" });
+        toast({ title: "Break started: billing paused" });
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Break action failed";
@@ -252,9 +252,9 @@ export function LongShiftEngagementPanel({
             <p className="text-[11px] font-medium text-amber-700">
               Routine check-in unavailable
               {checkinControl.cooldownRemainingSecs > 0
-                ? ` — wait ${formatCheckinWaitLabel(checkinControl.cooldownRemainingSecs)}`
+                ? `, wait ${formatCheckinWaitLabel(checkinControl.cooldownRemainingSecs)}`
                 : checkinControl.nextDueSecs > 0
-                  ? ` — due in ${formatCheckinWaitLabel(checkinControl.nextDueSecs)}`
+                  ? `, due in ${formatCheckinWaitLabel(checkinControl.nextDueSecs)}`
                   : ""}
               . Needs attention and incident reports are always available.
             </p>

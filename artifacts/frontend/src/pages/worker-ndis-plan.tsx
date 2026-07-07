@@ -34,7 +34,7 @@ export default function WorkerNdisPlan() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("ndisPlan.title")}</h1>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("ndisPlan.title")}</h1>
       </div>
       <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-2">
@@ -47,7 +47,7 @@ export default function WorkerNdisPlan() {
         {error && <p className="text-sm font-bold text-red-600">{(error as Error).message}</p>}
         <div className="grid gap-4 lg:grid-cols-2">
           {data.map((client) => (
-            <div key={client.id} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+            <div key={client.id} className="rounded-lg border p-4" style={{ borderColor: "#EDE3FC" }}>
               <p className="text-base font-black" style={{ color: TEXT }}>{client.full_name}</p>
               <p className="mb-3 text-sm font-medium" style={{ color: MUTED }}>
                 {client.plan_status || translate("ndisPlan.statusNotRecorded")} · {translate("ndisPlan.readOnly")}

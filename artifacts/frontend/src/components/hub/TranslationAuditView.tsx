@@ -109,7 +109,7 @@ export function TranslationAuditView({ messages, className }: TranslationAuditVi
                     {msg.translatedContent ?? (
                       <span className="italic text-muted-foreground">
                         {msg.translationStatus === "failed"
-                          ? "Translation failed — review manually"
+                          ? "Translation failed. Review manually"
                           : "No translation"}
                       </span>
                     )}

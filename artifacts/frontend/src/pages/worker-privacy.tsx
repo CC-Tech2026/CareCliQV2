@@ -125,7 +125,7 @@ export default function WorkerPrivacy() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("privacy.eyebrow")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("privacy.title")}
         </h1>
         <p className="mt-2 text-sm text-cc-muted">
@@ -158,7 +158,7 @@ export default function WorkerPrivacy() {
         <Button
           type="button"
           className="rounded-xl gap-2"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
           disabled={exportBusy}
           onClick={() => void handleExport()}
         >

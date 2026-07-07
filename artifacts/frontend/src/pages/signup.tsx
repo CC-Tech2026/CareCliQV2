@@ -23,9 +23,8 @@ const CORAL = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const BG = "var(--auth-input-bg)";
 
-// Solid colors sampled from the CareCliQ logo mark — no gradients.
-const LOGO_PINK = "#E94B8C";
-const LOGO_PURPLE = "#6B3FA0";
+// Solid brand colors — no gradients.
+const LOGO_PURPLE = "#7C3AED";
 
 // ── Password Strength Indicator ───────────────────────────────────────────────
 function PasswordStrengthBar({ password, t }: { password: string; t: (key: string) => string }) {
@@ -57,7 +56,7 @@ function PasswordStrengthBar({ password, t }: { password: string; t: (key: strin
             key={i}
             className="flex-1 h-1.5 rounded-full transition-all duration-300"
             style={{
-              background: i < score ? colors[score - 1] : "#E5E7EB",
+              background: i < score ? colors[score - 1] : "#E8E8EA",
             }}
           />
         ))}
@@ -474,7 +473,7 @@ export default function Signup() {
               className="mt-8 max-w-[380px] rounded-2xl p-4"
               style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
-              <Quote size={16} style={{ color: LOGO_PINK }} />
+              <Quote size={16} style={{ color: LOGO_PURPLE }} />
               <p className="mt-2.5 text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
                 {t("auth.signup.marketing.testimonialQuote")}
               </p>

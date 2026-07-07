@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -30,7 +30,7 @@ const CORAL = "var(--cc-coral)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT  = "#F8F8FE";
+const SOFT  = "#F4EDE6";
 
 function complianceColour(score: number | null | undefined): string {
   if (score == null) return MUTED;
@@ -152,23 +152,23 @@ export default function Team() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="hidden" style={{ color: CORAL }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("team.title")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("team.title")}</h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>{translateParams(workers.length === 1 ? "team.memberCount" : "team.memberCountPlural", { count: String(workers.length) })}</p>
         </div>
         <div className="flex gap-2">
           {tab !== "shifts" && (
             <Button
+              variant="navy"
               onClick={() => setTab("shifts")}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
-              style={{ background: PLUM }}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
             >
               <Clock size={16} /> {translate("team.assignShift")}
             </Button>
           )}
           <Button
+            variant="navy"
             onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
-            style={{ background: PLUM }}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
           >
             <UserPlus size={16} /> {translate("team.inviteWorker")}
           </Button>
@@ -193,7 +193,7 @@ export default function Team() {
         ))}
       </div>
 
-      {/* ── OVERVIEW TAB ─────────────────────────────────── */}
+      {/* -- OVERVIEW TAB ----------------------------------- */}
       {tab === "overview" && (() => {
         const activeCount      = workers.filter((w) => w.is_active !== false).length;
         const weekSessions     = workers.reduce((s, w) => s + (w.sessions_this_week ?? 0), 0);
@@ -215,7 +215,7 @@ export default function Team() {
             {!stats.isLoading && workers.length > 0 && (
               <div className="grid lg:grid-cols-[1fr_220px] gap-5 items-start">
 
-                {/* LEFT — worker table */}
+                {/* LEFT � worker table */}
                 <div className="rounded-xl border overflow-x-auto" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
                   <table className="w-full">
                     <thead>
@@ -283,14 +283,14 @@ export default function Team() {
                   </table>
                 </div>
 
-                {/* RIGHT — team stat sidebar */}
+                {/* RIGHT � team stat sidebar */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{translate("team.snapshot")}</p>
 
                   {/* Stat tiles */}
                   {[
                     { labelKey: "team.stat.activeWorkers",   value: activeCount,       color: "#16A34A", bg: "rgba(22,163,74,0.06)"  },
-                    { labelKey: "team.stat.sessionsThisWeek", value: weekSessions,      color: PLUM,      bg: "rgba(55,48,163,0.06)"  },
+                    { labelKey: "team.stat.sessionsThisWeek", value: weekSessions,      color: TEXT,      bg: "rgba(26,26,46,0.04)"  },
                     { labelKey: "team.stat.avgCompliance",   value: avgCompliance != null ? `${avgCompliance}%` : translate("common.emDash"),
                       color: avgCompliance != null ? complianceColour(avgCompliance) : MUTED,
                       bg: "rgba(55,48,163,0.04)" },
@@ -316,14 +316,13 @@ export default function Team() {
                     </div>
                   )}
 
-                  <button
-                    type="button"
+                  <Button
+                    variant="navy"
                     onClick={() => setTab("management")}
-                    className="w-full rounded-xl px-4 py-2.5 text-[12px] font-black transition hover:opacity-90 text-white"
-                    style={{ background: PLUM }}
+                    className="w-full rounded-xl px-4 py-2.5 text-[12px] font-black"
                   >
                     {translate("team.manageTeam")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -338,7 +337,7 @@ export default function Team() {
         );
       })()}
 
-      {/* ── MANAGEMENT TAB ───────────────────────────────── */}
+      {/* -- MANAGEMENT TAB --------------------------------- */}
       {tab === "management" && (
         <div className="space-y-4">
           {stats.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
@@ -353,7 +352,7 @@ export default function Team() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-sm font-black text-white"
-                    style={{ background: PLUM }}
+                    style={{ background: "var(--cc-text)" }}
                   >
                     {(w.full_name || "?")[0].toUpperCase()}
                   </div>
@@ -475,10 +474,9 @@ export default function Team() {
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.cancel")}</Button>
             <Button
+              variant="navy"
               onClick={handleInvite}
               disabled={!inviteEmail.trim() || inviteSending}
-              className="text-white"
-              style={{ background: PLUM }}
             >
               {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
             </Button>
@@ -529,10 +527,9 @@ export default function Team() {
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>{translate("common.cancel")}</Button>
             <Button
+              variant="navy"
               onClick={() => assignPatientId && assignMut.mutate({ workerId: assignWorker.id, patientId: assignPatientId })}
               disabled={!assignPatientId || assignMut.isPending}
-              className="text-white"
-              style={{ background: PLUM }}
             >
               {assignMut.isPending ? translate("team.assign.assigning") : translate("team.assign.assign")}
             </Button>
@@ -540,7 +537,7 @@ export default function Team() {
         </section>
       )}
 
-      {/* ── SHIFT ASSIGNMENTS TAB ───────────────────────────────── */}
+      {/* -- SHIFT ASSIGNMENTS TAB --------------------------------- */}
       {tab === "shifts" && (
         <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
           <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
@@ -557,9 +554,9 @@ export default function Team() {
                     onClick={() => { setSelectedWorkerForShift(w); setShiftFormOpen(false); }}
                     className="w-full text-left rounded-lg p-3 transition-all"
                     style={{
-                      background: selectedWorkerForShift?.id === w.id ? PLUM : "transparent",
+                      background: selectedWorkerForShift?.id === w.id ? "var(--cc-text)" : "transparent",
                       color: selectedWorkerForShift?.id === w.id ? "#fff" : TEXT,
-                      border: `1px solid ${selectedWorkerForShift?.id === w.id ? PLUM : BORDER}`,
+                      border: `1px solid ${selectedWorkerForShift?.id === w.id ? "var(--cc-text)" : BORDER}`,
                     }}
                   >
                     <p className="font-semibold text-[13px]">{w.full_name}</p>
@@ -584,7 +581,7 @@ export default function Team() {
                       className="p-1 rounded hover:bg-gray-200 transition"
                       style={{ color: MUTED }}
                     >
-                      ✕
+                      ?
                     </button>
                   </div>
 
@@ -594,8 +591,8 @@ export default function Team() {
                         <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("team.shifts.createOrManage")}</p>
                         <p className="text-xs mt-1 mb-4" style={{ color: MUTED }}>{translate("team.shifts.createHint")}</p>
                         <Button
+                          variant="navy"
                           className="rounded-xl gap-2"
-                          style={{ background: PLUM, color: "#fff" }}
                           onClick={() => setShiftFormOpen(true)}
                         >
                           <Plus size={16} /> {translate("team.shifts.createShift")}
@@ -641,7 +638,7 @@ function CredentialChip({ label, status }: { label: string; status: "verified" |
     verified: { bg: "#DCFCE7", color: "#16A34A", Icon: CheckCircle2 },
     inactive: { bg: "#F3F4F6", color: "var(--cc-muted)", Icon: XCircle },
     warn:     { bg: "#FEF3C7", color: "#D97706", Icon: AlertTriangle },
-    info:     { bg: "#EEF2FF", color: "#4F46E5", Icon: FileText },
+    info:     { bg: "#F2EBFD", color: "#4F46E5", Icon: FileText },
   }[status];
   const { bg, color, Icon } = config;
   return (

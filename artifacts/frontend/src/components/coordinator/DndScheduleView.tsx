@@ -52,7 +52,7 @@ const ROW_HEIGHT = 56; // px per worker row
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   unassigned: { bg: "#FEF2F2", color: "#DC2626", border: "#FCA5A5" },
-  scheduled:  { bg: "#EDE9FF", color: "#3730A3", border: "#C4B5FD" },
+  scheduled:  { bg: "#FCE3EB", color: "#E8457A", border: "#C4B5FD" },
   in_progress:{ bg: "#DBEAFE", color: "#1D4ED8", border: "#93C5FD" },
   clocked_in: { bg: "#DBEAFE", color: "#1D4ED8", border: "#93C5FD" },
   completed:  { bg: "#DCFCE7", color: "#166534", border: "#86EFAC" },
@@ -162,7 +162,7 @@ function DroppableCell({
       style={{
         minWidth: CELL_WIDTH,
         minHeight: ROW_HEIGHT,
-        background: isOver ? "#EDE9FF" : "transparent",
+        background: isOver ? "#FCE3EB" : "transparent",
         borderLeft: `1px solid ${BORDER}`,
         transition: "background 0.1s",
         position: "relative",
@@ -605,7 +605,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                   ))}
                 </div>
               )}
-              <p className="mt-3 rounded-lg bg-[#F8F8FE] px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
+              <p className="mt-3 rounded-lg bg-[#F4EDE6] px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
                 Drag a shift card onto a worker row to assign.
               </p>
             </div>
@@ -741,7 +741,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                               >
                                 <div className="flex-1 overflow-hidden px-1.5 py-1">
                                   <p className="truncate text-[9px] font-black leading-none" style={{ color: statusColors(cellShift.status).color }}>
-                                    {cellShift.participant_name?.split(" ")[0] || "—"}
+                                    {cellShift.participant_name?.split(" ")[0] || "N/A"}
                                   </p>
                                 </div>
                                 <button

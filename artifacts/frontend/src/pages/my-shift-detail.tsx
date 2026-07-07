@@ -1084,7 +1084,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#BE185D] hover:bg-[#d92854]"
+              className="bg-[#7C3AED] hover:bg-[#d92854]"
               onClick={(event) => {
                 event.preventDefault();
                 setEndShiftOpen(false);
@@ -1470,10 +1470,10 @@ function ShiftWorkflow({
     : null;
 
   const timerLabel = longShiftBreak?.onBreak
-    ? "On break — billing paused"
+    ? "On break: billing paused"
     : isSessionActive
-      ? "Session active — documenting"
-      : "At location — tap Start Session";
+      ? "Session active, documenting"
+      : "At location. Tap Start Session";
 
   const timerBg = longShiftBreak?.onBreak
     ? "var(--cc-status-warning-bg)"
@@ -1657,7 +1657,7 @@ function ShiftWorkflow({
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
-                {durationLabel ? ` — ${durationLabel} scheduled` : ""}
+                {durationLabel ? `, ${durationLabel} scheduled` : ""}
               </p>
               {shift.participant_address && (
                 <p className="mt-1 flex items-start gap-1.5 text-sm font-medium" style={{ color: MUTED }}>
@@ -1755,7 +1755,7 @@ function ShiftWorkflow({
           ) : (
             <>
               <MapPin size={18} className="mr-2 inline" />
-              Clock In — I&apos;ve Arrived
+              Clock In: I&apos;ve Arrived
             </>
           )}
         </Button>

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { CheckCircle2, Clock3 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -240,7 +240,7 @@ export default function Approvals() {
             </button>
             <button
               className="flex-1 h-11 rounded-lg font-bold text-sm text-white transition-opacity hover:opacity-90"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {translateParams("approvals.approve", { count: String(approvedCount) })}
             </button>
@@ -308,7 +308,7 @@ export default function Approvals() {
                     <div className="w-[220px] px-6 py-4 border-r flex items-center gap-3 bg-white" style={{ borderColor: BORDER }}>
                       <div
                         className="flex h-9 w-9 items-center justify-center rounded-full text-white text-xs font-bold shrink-0"
-                        style={{ background: PLUM }}
+                        style={{ background: "var(--cc-text)" }}
                       >
                         {staff.initials}
                       </div>

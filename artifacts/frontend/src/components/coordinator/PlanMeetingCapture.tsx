@@ -33,10 +33,10 @@ const SOFT   = "var(--cc-soft)";
 const GREEN  = "#166534";
 const GREEN_BG     = "rgba(22,101,52,0.06)";
 const GREEN_BORDER = "rgba(22,101,52,0.2)";
-const CORAL  = "#BE185D";
+const CORAL  = "#7C3AED";
 
 const MEETING_TYPE_META: Record<PlanMeetingType, { label: string; abbr: string; color: string; bg: string }> = {
-  plan_review:       { label: "Plan Review",        abbr: "PR", color: "#3730A3", bg: "rgba(55,48,163,0.08)"  },
+  plan_review:       { label: "Plan Review",        abbr: "PR", color: "#E8457A", bg: "rgba(55,48,163,0.08)"  },
   initial_setup:     { label: "Initial Setup",      abbr: "IS", color: GREEN,     bg: GREEN_BG               },
   check_in:          { label: "Check-In",           abbr: "CI", color: "#0369A1", bg: "rgba(3,105,161,0.08)"  },
   incident_followup: { label: "Incident Follow-Up", abbr: "IF", color: CORAL,     bg: "rgba(190,24,93,0.08)"  },
@@ -155,7 +155,7 @@ function DraftCard({
             <div className="rounded-lg mb-2 px-2.5 py-2" style={{ background: SOFT }}>
               <Quote size={12} style={{ color: PLUM }} />
               <p className="text-[11px] italic leading-relaxed mt-1" style={{ color: MUTED }}>{quote.text}</p>
-              <p className="text-[10px] font-semibold mt-1" style={{ color: MUTED }}>— {quote.speaker}</p>
+              <p className="text-[10px] font-semibold mt-1" style={{ color: MUTED }}>{quote.speaker}</p>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -470,7 +470,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
     autoTable(doc, {
       startY: 32,
       head: [["Type", "Item", "Category", "Confidence", "Quote"]],
-      body: rows.map((r) => [r.type, r.text, r.category, `${Math.round(r.confidence * 100)}%`, r.quote ? `${r.quote.speaker}: ${r.quote.text}` : "—"]),
+      body: rows.map((r) => [r.type, r.text, r.category, `${Math.round(r.confidence * 100)}%`, r.quote ? `${r.quote.speaker}: ${r.quote.text}` : "N/A"]),
       styles: { fontSize: 8 },
       columnStyles: { 1: { cellWidth: 55 }, 4: { cellWidth: 55 } },
     });
@@ -501,7 +501,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
       toast({
         title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.`,
         variant: goalsShort || tasksShort ? "destructive" : undefined,
-        description: goalsShort || tasksShort ? "Some accepted items failed to save — check Goals & Tasks and try again." : undefined,
+        description: goalsShort || tasksShort ? "Some accepted items failed to save. Check Goals & Tasks and try again." : undefined,
       });
       qc.invalidateQueries({ queryKey: ["plan-meetings", participantId] });
       // Goals/tasks queries are org-scoped via useOrgQuery, which prepends orgId to
@@ -615,7 +615,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
         </span>
         <p className="font-black text-[36px] tabular-nums mb-1" style={{ color: "#DC2626" }}>{formatTime(elapsedTime)}</p>
         <p className="text-[12px] mb-5" style={{ color: MUTED }}>
-          Stay present with the participant — just a timer and a stop button.
+          Stay present with the participant. Just a timer and a stop button.
         </p>
         <div className="flex items-center justify-center gap-4">
           {canPause && (

@@ -104,7 +104,7 @@ export default function WorkerSyncStatusPage() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-black text-safe" style={{ color: TEXT }}>
-                    {item.label} — {item.detail} — {translate("sync.page.queued")} {queuedLabel}
+                    {item.label} · {item.detail} · {translate("sync.page.queued")} {queuedLabel}
                   </p>
                   {result && !result.ok && (
                     <p className="mt-1 text-xs text-red-600">{result.error}</p>

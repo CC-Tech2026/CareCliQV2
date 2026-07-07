@@ -46,7 +46,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                 {i > 0 && (
                   <div
                     className="absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: connectorDone ? PLUM : "#E5E7EB" }}
+                    style={{ background: connectorDone ? PLUM : "#E8E8EA" }}
                   />
                 )}
                 <div
@@ -58,7 +58,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                   )}
                   style={{
                     background: active && !done ? PLUM : undefined,
-                    borderColor: !done && !active ? "#E5E7EB" : undefined,
+                    borderColor: !done && !active ? "#E8E8EA" : undefined,
                     color: !done && !active ? MUTED : undefined,
                   }}
                 >
@@ -67,7 +67,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                 {i < STEP_KEYS.length - 1 && (
                   <div
                     className="absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: done ? PLUM : "#E5E7EB" }}
+                    style={{ background: done ? PLUM : "#E8E8EA" }}
                   />
                 )}
               </div>

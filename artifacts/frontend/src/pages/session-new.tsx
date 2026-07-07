@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -26,7 +26,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// -- Design tokens -------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
@@ -35,7 +35,7 @@ const T3     = "#7A6A8A";
 const BORDER = "var(--cc-border)";
 const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
-// ── Quick intents ─────────────────────────────────────────────────────────────
+// -- Quick intents -------------------------------------------------------------
 const QUICK_INTENT_KEYS = [
   "sessions.new.intent.mobility", "sessions.new.intent.pain", "sessions.new.intent.assessment",
   "sessions.new.intent.behaviour", "sessions.new.intent.rehab", "sessions.new.intent.equipment",
@@ -46,7 +46,7 @@ const TAG_KEYS = [
   "sessions.new.tag.communication", "sessions.new.tag.behavior", "sessions.new.tag.equipment", "sessions.new.tag.review",
 ] as const;
 
-// ── Schema ────────────────────────────────────────────────────────────────────
+// -- Schema --------------------------------------------------------------------
 const sessionSchema = z.object({
   participant_id:    z.string().min(1),
   session_date:      z.date(),
@@ -59,7 +59,7 @@ const sessionSchema = z.object({
 });
 type SessionFormValues = z.infer<typeof sessionSchema>;
 
-// ── Card wrapper ──────────────────────────────────────────────────────────────
+// -- Card wrapper --------------------------------------------------------------
 function FormCard({
   icon, title, children, accent = false,
 }: { icon?: React.ReactNode; title: string; children: React.ReactNode; accent?: boolean }) {
@@ -79,7 +79,7 @@ function FormCard({
   );
 }
 
-// ── Label ─────────────────────────────────────────────────────────────────────
+// -- Label ---------------------------------------------------------------------
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[12px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: T3 }}>
@@ -88,7 +88,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// -- Page ----------------------------------------------------------------------
 export default function SessionNew() {
   const { translate } = useAccessibility();
   const [, setLocation] = useLocation();
@@ -145,7 +145,7 @@ export default function SessionNew() {
   return (
     <div className="space-y-6 pb-10">
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div>
         <h1 className="text-[24px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
           {translate("sessions.new.title")}
@@ -158,7 +158,7 @@ export default function SessionNew() {
       <Form {...form}>
         <form className="space-y-5">
 
-          {/* ── Session Setup ── */}
+          {/* -- Session Setup -- */}
           <FormCard icon={<Activity size={16} />} title={translate("sessions.new.setup")}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
@@ -276,7 +276,7 @@ export default function SessionNew() {
             </div>
           </FormCard>
 
-          {/* ── Goals — only after participant selected ── */}
+          {/* -- Goals � only after participant selected -- */}
           {selectedParticipantId && (
             <div
               className="bg-white rounded-2xl overflow-hidden"
@@ -351,7 +351,7 @@ export default function SessionNew() {
             </div>
           )}
 
-          {/* ── Intelligence layer ── */}
+          {/* -- Intelligence layer -- */}
           <FormCard icon={<Zap size={16} />} title={translate("sessions.new.intelligence")} accent>
             <div className="space-y-6">
 
@@ -433,7 +433,7 @@ export default function SessionNew() {
             </div>
           </FormCard>
 
-          {/* ── Actions ── */}
+          {/* -- Actions -- */}
           <div className="flex items-center justify-between pt-1">
             <button
               type="button"
@@ -461,7 +461,7 @@ export default function SessionNew() {
                 disabled={startDisabled || createSessionMutation.isPending}
                 title={startDisabled ? translate("sessions.new.startDisabled") : undefined}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 disabled:opacity-40"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {createSessionMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 {translate("sessions.new.startSession")}

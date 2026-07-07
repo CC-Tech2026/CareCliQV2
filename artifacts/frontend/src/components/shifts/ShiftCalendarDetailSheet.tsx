@@ -117,7 +117,8 @@ export function shiftBlockStyle(shift: CalendarShift) {
   }
   if (shift.calendar_status === "tentative") {
     return {
-      background: `repeating-linear-gradient(45deg, ${colour}22, ${colour}22 6px, ${colour}11 6px, ${colour}11 12px)`,
+      background: `${colour}11`,
+      border: `1px dashed ${colour}`,
       borderLeft: `3px solid ${colour}`,
       color: colour,
     };

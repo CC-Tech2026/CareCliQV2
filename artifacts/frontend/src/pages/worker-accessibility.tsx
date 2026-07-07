@@ -101,7 +101,7 @@ export default function WorkerAccessibility() {
               type="button"
               variant={prefs.font_size === opt.id ? "default" : "outline"}
               className="h-auto min-h-[44px] py-2 text-xs font-bold"
-              style={prefs.font_size === opt.id ? { background: PLUM } : undefined}
+              style={prefs.font_size === opt.id ? { background: "var(--cc-cta)" } : undefined}
               disabled={saving}
               aria-pressed={prefs.font_size === opt.id}
               onClick={() => run(() => setFontSize(opt.id))}
@@ -220,7 +220,7 @@ export default function WorkerAccessibility() {
               type="button"
               variant={language === opt.id ? "default" : "outline"}
               className="min-h-[44px] font-bold"
-              style={language === opt.id ? { background: PLUM } : undefined}
+              style={language === opt.id ? { background: "var(--cc-cta)" } : undefined}
               disabled={saving}
               role="radio"
               aria-checked={language === opt.id}

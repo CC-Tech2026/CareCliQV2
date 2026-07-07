@@ -149,6 +149,8 @@
   --font-display: var(--app-font-display);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+  --font-stat: var(--app-font-stat);
+  --font-marketing: var(--app-font-marketing);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -200,9 +202,9 @@
    inline style={{ color: "var(--cc-plum)" }} etc. They adapt to .dark class.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* ── Core brand ── */
-  --cc-plum:       #3730A3;   /* deep indigo — primary actions, active states    */
-  --cc-coral:      #BE185D;   /* deep rose   — incidents, destructive, alerts    */
+  /* ── Core brand (CareCliQ 4-colour system) ── */
+  --cc-plum:       #E8457A;   /* CareCliQ Pink   — primary actions, active states (dominant) */
+  --cc-coral:      #7C3AED;   /* CareCliQ Purple — incidents, destructive, alerts (sparing accent) */
   --cc-green:      #166534;   /* forest green — compliance success, health +ve   */
   /* ── Extended status ── */
   --cc-amber:      #B45309;   /* amber-700   — warnings, shift-related actions   */
@@ -210,47 +212,54 @@
   --cc-sky:        #0369A1;   /* sky-700     — informational states              */
   --cc-sky-tint:   #F0F9FF;
   /* ── Neutrals ── */
-  --cc-text:       #111827;
-  --cc-muted:      #6B7280;
-  --cc-border:     #E5E7EB;
+  --cc-text:       #1A1A2E;   /* Charcoal Navy */
+  --cc-muted:      #6A6A77;   /* Charcoal Navy @ 65% over white */
+  --cc-border:     #E8E8EA;   /* Charcoal Navy @ 10% over white */
   /* ── Surfaces ── */
-  --cc-bg:         #FFFFFF;
-  --cc-surface:    #FFFFFF;
-  --cc-soft:       #F8F8FE;
-  --cc-ring-track: #EEEAFB;
+  --cc-bg:         #FDF6EE;   /* Warm Off-White — page canvas */
+  --cc-surface:    #FFFFFF;   /* cards/panels stay white for lift off the page */
+  --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg */
+  --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
-  --cc-active-bg:  #EEF2FF;
+  --cc-active-bg:  #FDECF2;
   /* ── Alert pill ── */
-  --cc-alert-bg:   #FCE7F3;
+  --cc-alert-bg:   #F5EFFE;
   /* ── Status badges ── */
   --cc-status-success:      #166534;
   --cc-status-success-bg:   #ECFDF5;
   --cc-status-warning:      #B45309;
   --cc-status-warning-bg:   #FFFBEB;
-  --cc-status-critical:     #BE185D;
-  --cc-status-critical-bg:  #FCE7F3;
+  --cc-status-critical:     #7C3AED;
+  --cc-status-critical-bg:  #F5EFFE;
   --cc-status-info:         #0369A1;
   --cc-status-info-bg:      #F0F9FF;
-  /* ── Shadow language (plum-tinted, for modals/overlays only — no card shadows) ── */
-  --cc-shadow-sm:  0 2px 8px rgba(55,48,163,0.06), 0 1px 3px rgba(55,48,163,0.04);
-  --cc-shadow-md:  0 4px 16px rgba(55,48,163,0.09), 0 2px 6px rgba(55,48,163,0.04);
-  --cc-shadow-lg:  0 20px 60px rgba(55,48,163,0.13), 0 8px 24px rgba(55,48,163,0.06);
-  --cc-card-shadow: 0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px color-mix(in srgb, var(--cc-border) 85%, transparent);
+  /* Compliance/safety danger severity — deliberately real red, NOT brand pink/purple (see
+     DESIGN_BRIEF.md: "pink = brand/action, red = danger, users must never confuse the two").
+     Distinct from --cc-status-critical, which is the brand's destructive-ACTION colour
+     (delete buttons etc). Pending founding-team sign-off, functional-only, never decorative. */
+  --cc-status-danger:       #DC2626;
+  --cc-status-danger-bg:    #FEF2F2;
+  /* ── Shadow language (pink-tinted, for modals/overlays only — no card shadows) ── */
+  --cc-shadow-sm:  0 2px 8px rgba(232,69,122,0.06), 0 1px 3px rgba(232,69,122,0.04);
+  --cc-shadow-md:  0 4px 16px rgba(232,69,122,0.09), 0 2px 6px rgba(232,69,122,0.04);
+  --cc-shadow-lg:  0 20px 60px rgba(232,69,122,0.13), 0 8px 24px rgba(232,69,122,0.06);
+  --cc-card-shadow: 0 1px 4px rgba(232,69,122,0.06), 0 0 0 1px color-mix(in srgb, var(--cc-border) 85%, transparent);
   --cc-card-divider: color-mix(in srgb, var(--cc-border) 75%, transparent);
-  --cc-plum-subtle: rgba(55, 48, 163, 0.04);
-  --cc-plum-soft: rgba(55, 48, 163, 0.08);
-  --cc-plum-medium: rgba(55, 48, 163, 0.14);
-  --cc-plum-ring: rgba(55, 48, 163, 0.20);
-  --cc-plum-border: rgba(55, 48, 163, 0.12);
-  --cc-coral-soft: rgba(190, 24, 93, 0.08);
-  --cc-coral-ring: rgba(190, 24, 93, 0.20);
+  --cc-plum-subtle: rgba(232, 69, 122, 0.04);
+  --cc-plum-soft: rgba(232, 69, 122, 0.08);
+  --cc-plum-medium: rgba(232, 69, 122, 0.14);
+  --cc-plum-ring: rgba(232, 69, 122, 0.20);
+  --cc-plum-border: rgba(232, 69, 122, 0.12);
+  --cc-coral-soft: rgba(124, 58, 237, 0.08);
+  --cc-coral-ring: rgba(124, 58, 237, 0.20);
+  --cc-cta: #7C3AED; /* CTA in light mode — near-black so buttons stay visible on light canvas */
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
 
   /* Worker mobile spec v2 — light */
-  --wm-pink: #D4537E;
-  --wm-purple: #7F77DD;
+  --wm-pink: #E8457A;
+  --wm-purple: #7C3AED;
   --wm-amber: #EF9F27;
   --wm-red: #E24B4A;
   --wm-green: #639922;
@@ -284,33 +293,31 @@
   /* Auth pages (login / signup) */
   --auth-shell-bg: #FFFFFF;
   --auth-form-bg: #FFFFFF;
-  --auth-marketing-bg: linear-gradient(135deg, #F5F3FF 0%, #FFF9F0 100%);
-  --auth-marketing-glow:
-    radial-gradient(ellipse at 5% 110%, rgba(55,48,163,0.08) 0%, transparent 55%),
-    radial-gradient(ellipse at 95% -5%, rgba(190,24,93,0.06) 0%, transparent 45%);
+  --auth-marketing-bg: #FDF6EE;
+  --auth-marketing-glow: none;
   /* Faint node-and-line motif tiled across the auth marketing panels — texture, not decoration */
   --auth-motif-svg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22220%22%20height%3D%22220%22%3E%0A%20%20%3Ccircle%20cx%3D%2226%22%20cy%3D%22150%22%20r%3D%222.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2250%22%20cy%3D%22172%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2226%22%20y1%3D%22150%22%20x2%3D%2250%22%20y2%3D%22172%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22158%22%20cy%3D%2234%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22130%22%20cy%3D%2218%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22158%22%20y1%3D%2234%22%20x2%3D%22130%22%20y2%3D%2218%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2296%22%20r%3D%222.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2264%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2296%22%20y1%3D%2296%22%20x2%3D%2296%22%20y2%3D%2264%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22176%22%20cy%3D%22148%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22198%22%20cy%3D%22170%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22176%22%20y1%3D%22148%22%20x2%3D%22198%22%20y2%3D%22170%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2264%22%20cy%3D%2238%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2234%22%20cy%3D%22100%22%20r%3D%221.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%22196%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E%0A");
   --auth-motif-opacity: 0.06;
-  --auth-headline: #2D1B4E;
-  --auth-marketing-muted: #6B5B95;
-  --auth-marketing-body: #5A4A78;
-  --auth-accent: #3730A3;
-  --auth-input-border: #C7D2FE;
-  --auth-input-bg: #F8F8FE;
+  --auth-headline: #1A1A2E;
+  --auth-marketing-muted: #6A6A77;
+  --auth-marketing-body: #33334A;
+  --auth-accent: #7C3AED;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
+  --auth-input-border: #E8E8EA;
+  --auth-input-bg: #F4EDE6;
   --auth-card-bg: rgba(255, 255, 255, 0.7);
-  --auth-card-border: rgba(55, 48, 163, 0.15);
-  --auth-stat-card-bg: rgba(55, 48, 163, 0.06);
-  --auth-stat-card-border: rgba(55, 48, 163, 0.12);
-  --auth-stat-label: #5A4A78;
-  --auth-stat-value: #2D1B4E;
+  --auth-card-border: rgba(26, 26, 46, 0.10);
+  --auth-stat-card-bg: rgba(26, 26, 46, 0.04);
+  --auth-stat-card-border: rgba(26, 26, 46, 0.10);
+  --auth-stat-label: #6A6A77;
+  --auth-stat-value: #1A1A2E;
   --auth-footer: #94A3B8;
-  --auth-drag-handle: #E5E7EB;
+  --auth-drag-handle: #E8E8EA;
 }
 
 .dark {
   /* Brand — lighter for legibility on dark */
-  --cc-plum:       #818CF8;
-  --cc-coral:      #F472B6;
+  --cc-plum:       #F472B6;
+  --cc-coral:      #A78BFA;
   --cc-green:      #4ADE80;
   /* Extended status — lighter for dark bg */
   --cc-amber:      #FCD34D;
@@ -321,22 +328,24 @@
   --cc-text:       #F9FAFB;
   --cc-muted:      #9CA3AF;
   --cc-border:     #374151;
-  /* Surfaces */
-  --cc-bg:         #111827;
-  --cc-surface:    #1F2937;
-  --cc-soft:       #374151;
+  /* Surfaces (Charcoal Navy family) */
+  --cc-bg:         #1A1A2E;
+  --cc-surface:    #2C2C3F;
+  --cc-soft:       #242438;
   --cc-ring-track: #374151;
   /* Nav state */
-  --cc-active-bg:  #1E1B4B;
+  --cc-active-bg:  #3B2742;
   /* Alert pill */
-  --cc-alert-bg:   rgba(190, 24, 93, 0.2);
+  --cc-alert-bg:   rgba(167, 139, 250, 0.2);
   /* Status badges */
   --cc-status-success:      #4ADE80;
   --cc-status-success-bg:   rgba(74, 222, 128, 0.12);
   --cc-status-warning:      #FCD34D;
   --cc-status-warning-bg:   rgba(252, 211, 77, 0.12);
-  --cc-status-critical:     #F472B6;
-  --cc-status-critical-bg:  rgba(244, 114, 182, 0.12);
+  --cc-status-critical:     #A78BFA;
+  --cc-status-critical-bg:  rgba(167, 139, 250, 0.12);
+  --cc-status-danger:       #F87171;
+  --cc-status-danger-bg:    rgba(248, 113, 113, 0.12);
   --cc-status-info:         #38BDF8;
   --cc-status-info-bg:      rgba(56, 189, 248, 0.12);
   /* Shadows — subtler on dark */
@@ -345,17 +354,18 @@
   --cc-shadow-lg:  0 20px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
   --cc-card-shadow: 0 1px 4px rgba(0,0,0,0.28), 0 0 0 1px var(--cc-border);
   --cc-card-divider: var(--cc-border);
-  --cc-plum-subtle: rgba(129, 140, 248, 0.08);
-  --cc-plum-soft: rgba(129, 140, 248, 0.12);
-  --cc-plum-medium: rgba(129, 140, 248, 0.18);
-  --cc-plum-ring: rgba(129, 140, 248, 0.28);
-  --cc-plum-border: rgba(129, 140, 248, 0.22);
-  --cc-coral-soft: rgba(244, 114, 182, 0.12);
-  --cc-coral-ring: rgba(244, 114, 182, 0.28);
+  --cc-plum-subtle: rgba(244, 114, 182, 0.08);
+  --cc-plum-soft: rgba(244, 114, 182, 0.12);
+  --cc-plum-medium: rgba(244, 114, 182, 0.18);
+  --cc-plum-ring: rgba(244, 114, 182, 0.28);
+  --cc-plum-border: rgba(244, 114, 182, 0.22);
+  --cc-coral-soft: rgba(167, 139, 250, 0.12);
+  --cc-coral-ring: rgba(167, 139, 250, 0.28);
+  --cc-cta: #A78BFA;  /* CTA in dark mode — near-white so buttons stay visible on dark canvas */
 
   /* Worker mobile spec v2 — dark */
   --wm-pink: #F472B6;
-  --wm-purple: #A5B4FC;
+  --wm-purple: #A78BFA;
   --wm-amber: #FCD34D;
   --wm-red: #F87171;
   --wm-green: #4ADE80;
@@ -386,23 +396,21 @@
   --wm-task-done-text: #6B7280;
   --wm-missing-bg: rgba(252, 211, 77, 0.08);
 
-  --auth-shell-bg: #111827;
-  --auth-form-bg: #1F2937;
-  --auth-marketing-bg: linear-gradient(135deg, #1e1b4b 0%, #111827 55%, #0f172a 100%);
-  --auth-marketing-glow:
-    radial-gradient(ellipse at 5% 110%, rgba(129, 140, 248, 0.12) 0%, transparent 55%),
-    radial-gradient(ellipse at 95% -5%, rgba(244, 114, 182, 0.08) 0%, transparent 45%);
+  --auth-shell-bg: #1A1A2E;
+  --auth-form-bg: #2C2C3F;
+  --auth-marketing-bg: #1A1A2E;
+  --auth-marketing-glow: none;
   --auth-motif-opacity: 0.09;
   --auth-headline: #F9FAFB;
   --auth-marketing-muted: #9CA3AF;
   --auth-marketing-body: #D1D5DB;
-  --auth-accent: #818CF8;
+  --auth-accent: #A78BFA;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
   --auth-input-border: #4B5563;
   --auth-input-bg: #374151;
   --auth-card-bg: rgba(31, 41, 55, 0.85);
-  --auth-card-border: rgba(129, 140, 248, 0.2);
-  --auth-stat-card-bg: rgba(129, 140, 248, 0.1);
-  --auth-stat-card-border: rgba(129, 140, 248, 0.18);
+  --auth-card-border: rgba(249, 250, 251, 0.12);
+  --auth-stat-card-bg: rgba(249, 250, 251, 0.05);
+  --auth-stat-card-border: rgba(249, 250, 251, 0.12);
   --auth-stat-label: #9CA3AF;
   --auth-stat-value: #F9FAFB;
   --auth-footer: #6B7280;
@@ -436,28 +444,27 @@
 .dark .bg-\[\#F7F5FF\]     { background-color: var(--cc-soft)      !important; }
 .dark .bg-\[\#FAFAFA\]     { background-color: var(--cc-soft)      !important; }
 .dark .hover\:bg-\[\#FAFAFA\]:hover { background-color: var(--cc-soft) !important; }
-.dark .hover\:bg-\[\#EDE9FF\]:hover { background-color: var(--cc-active-bg) !important; }
-.dark .bg-\[\#F8F8FE\],
+.dark .hover\:bg-\[\#EBE1FC\]:hover { background-color: var(--cc-active-bg) !important; }
+.dark .bg-\[\#F4EDE6\],
 .dark .bg-\[\#FCFBFF\],
 .dark .bg-\[\#F0EDF8\],
-.dark .bg-\[\#EEF2FF\]     { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[\#F2EBFD\]     { background-color: var(--cc-soft)      !important; }
 .dark .hover\:bg-\[\#F8F6FE\]:hover,
-.dark .hover\:bg-\[\#F8F8FE\]:hover,
-.dark .hover\:bg-\[\#EEF2FF\]:hover { background-color: var(--cc-soft) !important; }
+.dark .hover\:bg-\[\#F4EDE6\]:hover,
+.dark .hover\:bg-\[\#F2EBFD\]:hover { background-color: var(--cc-soft) !important; }
 .dark .bg-\[\#F0EDFC\],
 .dark .bg-\[\#FDFCFF\]     { background-color: var(--cc-soft)      !important; }
 .dark .border-purple-100\/60,
 .dark .border-purple-100\/70 { border-color: var(--cc-border)     !important; }
-.dark .text-\[\#111827\]   { color: var(--cc-text)                 !important; }
-.dark .text-\[\#6B7280\]   { color: var(--cc-muted)                !important; }
-.dark .text-\[\#3730A3\]   { color: var(--cc-plum)                 !important; }
-.dark .text-\[\#BE185D\]   { color: var(--cc-coral)                !important; }
-.dark .border-\[\#E5E7EB\],
-.dark .border-\[\#E2E8F0\],
-.dark .border-\[\#EEEAFB\] { border-color: var(--cc-border)         !important; }
-.dark .divide-\[\#EEEAFB\] > * + * { border-color: var(--cc-border) !important; }
-.dark .hover\:border-\[\#C7D2FE\]:hover { border-color: var(--cc-plum) !important; }
-.dark .ring-\[\#E5E7EB\]   { --tw-ring-color: var(--cc-border)     !important; }
+.dark .text-\[\#1A1A2E\]   { color: var(--cc-text)                 !important; }
+.dark .text-\[\#6A6A77\]   { color: var(--cc-muted)                !important; }
+.dark .text-\[\#7C3AED\]   { color: var(--cc-plum)                 !important; }
+.dark .text-\[\#E8457A\]   { color: var(--cc-coral)                !important; }
+.dark .border-\[\#E8E8EA\],
+.dark .border-\[\#EDE3FC\] { border-color: var(--cc-border)         !important; }
+.dark .divide-\[\#EDE3FC\] > * + * { border-color: var(--cc-border) !important; }
+.dark .hover\:border-\[\#E5D8FB\]:hover { border-color: var(--cc-plum) !important; }
+.dark .ring-\[\#E8E8EA\]   { --tw-ring-color: var(--cc-border)     !important; }
 
 /* Semantic status pills & alerts */
 .dark .bg-emerald-50  { background-color: var(--cc-status-success-bg)  !important; }
@@ -640,17 +647,17 @@
 
   /* Page surface — clean white */
   --background: 0 0% 100%;
-  --foreground: 240 73% 19%;   /* navy text */
+  --foreground: 240 28% 14%;   /* Charcoal Navy text */
 
   /* Borders & inputs */
-  --border: 240 15% 88%;
-  --input: 240 15% 88%;
-  --ring: 229 100% 66%;        /* blue ring */
+  --border: 240 10% 89%;
+  --input: 240 10% 89%;
+  --ring: 340 78% 59%;         /* CareCliQ Pink ring */
 
   /* Cards — crisp white */
   --card: 0 0% 100%;
-  --card-foreground: 240 73% 19%;
-  --card-border: 240 12% 90%;
+  --card-foreground: 240 28% 14%;
+  --card-border: 240 10% 90%;
 
   /* ── Pink sidebar (#FA879F) ── */
   --sidebar: 348 92% 75%;
@@ -664,40 +671,43 @@
 
   /* Popovers */
   --popover: 0 0% 100%;
-  --popover-foreground: 240 73% 19%;
-  --popover-border: 240 15% 88%;
+  --popover-foreground: 240 28% 14%;
+  --popover-border: 240 10% 89%;
 
-  /* Primary — blue #5271FF */
-  --primary: 229 100% 66%;
+  /* Primary — CareCliQ Pink #E8457A (dominant brand colour) */
+  --primary: 340 78% 59%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary — soft lime tint */
-  --secondary: 66 80% 90%;
-  --secondary-foreground: 66 70% 18%;
+  /* Secondary — warm neutral tint */
+  --secondary: 32 25% 93%;
+  --secondary-foreground: 240 28% 20%;
 
-  /* Muted — cool grey */
-  --muted: 240 12% 94%;
-  --muted-foreground: 240 18% 50%;
+  /* Muted — Charcoal Navy tinted neutral */
+  --muted: 240 10% 93%;
+  --muted-foreground: 240 8% 44%;
 
-  /* Accent — light pink tint */
-  --accent: 348 70% 93%;
-  --accent-foreground: 348 60% 28%;
+  /* Accent — light CareCliQ Purple tint */
+  --accent: 262 40% 94%;
+  --accent-foreground: 262 60% 28%;
 
-  /* Destructive — stays red */
-  --destructive: 0 84.2% 60.2%;
+  /* Destructive — CareCliQ Purple #7C3AED (sparing accent) */
+  --destructive: 262 83% 58%;
   --destructive-foreground: 0 0% 100%;
 
   /* Charts — brand palette */
-  --chart-1: 229 100% 66%;  /* blue  */
-  --chart-2: 66  97%  48%;  /* lime  */
+  --chart-1: 340 78% 59%;  /* CareCliQ Pink   */
+  --chart-2: 262 83% 58%;  /* CareCliQ Purple */
   --chart-3: 348 92%  75%;  /* pink  */
   --chart-4: 280 65%  60%;  /* violet */
   --chart-5: 25  90%  58%;  /* amber  */
 
   --app-font-sans: 'Inter', sans-serif;
-  --app-font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --app-font-display: 'Poppins', 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
+  --app-font-stat: 'Nunito', 'Inter', sans-serif;
+  /* Marketing/long-form copy only (onboarding, empty states, auth marketing panels) — not the app shell default. */
+  --app-font-marketing: 'Plus Jakarta Sans', 'Inter', sans-serif;
   --radius: .5rem; /* 8px */
   --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00); /*replace with H S L */
   --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00); /*replace with H S L */
@@ -750,15 +760,15 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 229 55% 8%;
+  --background: 240 30% 8%;
   --foreground: 0 0% 95%;
-  --border: 229 40% 18%;
-  --input: 229 40% 18%;
-  --ring: 229 81% 65%;
+  --border: 240 20% 20%;
+  --input: 240 20% 20%;
+  --ring: 329 86% 70%;
 
-  --card: 229 50% 11%;
+  --card: 240 25% 13%;
   --card-foreground: 0 0% 95%;
-  --card-border: 229 40% 18%;
+  --card-border: 240 20% 20%;
 
   --sidebar: 229 60% 7%;
   --sidebar-foreground: 0 0% 94%;
@@ -769,27 +779,27 @@
   --sidebar-accent-foreground: 0 0% 96%;
   --sidebar-ring: 229 81% 65%;
 
-  --popover: 229 50% 11%;
+  --popover: 240 25% 13%;
   --popover-foreground: 0 0% 95%;
-  --popover-border: 229 40% 18%;
+  --popover-border: 240 20% 20%;
 
-  --primary: 229 81% 65%;
+  --primary: 329 86% 70%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 229 40% 18%;
+  --secondary: 240 20% 20%;
   --secondary-foreground: 0 0% 92%;
 
-  --muted: 229 40% 16%;
-  --muted-foreground: 229 20% 62%;
+  --muted: 240 18% 18%;
+  --muted-foreground: 240 12% 62%;
 
-  --accent: 323 40% 22%;
-  --accent-foreground: 323 80% 85%;
+  --accent: 255 40% 24%;
+  --accent-foreground: 255 75% 85%;
 
-  --destructive: 0 62.8% 42%;
+  --destructive: 255 92% 76%;
   --destructive-foreground: 0 0% 100%;
 
-  --chart-1: 229 81% 65%;
-  --chart-2: 66  73% 56%;
+  --chart-1: 329 86% 70%;
+  --chart-2: 255 92% 76%;
   --chart-3: 323 84% 72%;
   --chart-4: 280 65% 65%;
   --chart-5: 25  90% 60%;

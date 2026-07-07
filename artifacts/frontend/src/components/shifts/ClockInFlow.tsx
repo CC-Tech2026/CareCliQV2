@@ -185,7 +185,7 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
       <Dialog open={open && !scannerOpen} onOpenChange={(next) => !next && onClose()}>
         <DialogContent className="max-w-md rounded-2xl" data-tutorial="clock-in-modal">
           <DialogHeader>
-            <DialogTitle className="text-[#111827]">{translate("clockin.title")}</DialogTitle>
+            <DialogTitle className="text-[#1A1A2E]">{translate("clockin.title")}</DialogTitle>
             <DialogDescription>
               {tutorialDemo
                 ? translate("clockin.tutorial")
@@ -202,7 +202,7 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
               >
                 <MapPin className="h-6 w-6 shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-black text-[#111827]">{translate("clockin.useGps")}</p>
+                  <p className="font-black text-[#1A1A2E]">{translate("clockin.useGps")}</p>
                   <p className="text-xs text-muted-foreground">{translate("clockin.gpsHint")}</p>
                 </div>
               </button>
@@ -213,7 +213,7 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
               >
                 <QrCode className="h-6 w-6 shrink-0 text-violet-600" />
                 <div>
-                  <p className="font-black text-[#111827]">{translate("clockin.scanQr")}</p>
+                  <p className="font-black text-[#1A1A2E]">{translate("clockin.scanQr")}</p>
                   <p className="text-xs text-muted-foreground">{translate("clockin.qrHint")}</p>
                 </div>
               </button>
@@ -267,17 +267,17 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div className="space-y-2">
                     <p>
-                      <span className="font-bold text-[#111827]">{translate("clockin.dateTime")} </span>
+                      <span className="font-bold text-[#1A1A2E]">{translate("clockin.dateTime")} </span>
                       {nowLabel}
                     </p>
                     <p>
-                      <span className="font-bold text-[#111827]">{translate("clockin.method")} </span>
+                      <span className="font-bold text-[#1A1A2E]">{translate("clockin.method")} </span>
                       {method === "gps" ? translate("clockin.methodGps") : translate("clockin.methodQr")}
                     </p>
                     {(yourLocationLabel || resolvingAddress) && (
                       <div>
                         <p>
-                          <span className="font-bold text-[#111827]">{translate("clockin.yourLocation")}: </span>
+                          <span className="font-bold text-[#1A1A2E]">{translate("clockin.yourLocation")}: </span>
                           {method === "gps" && locationAddress
                             ? locationAddress
                             : yourLocationLabel ?? translate("clockin.lookingUpAddress")}
@@ -292,7 +292,7 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
                     )}
                     {shift.participant_address && (
                       <p>
-                        <span className="font-bold text-[#111827]">{translate("clockin.shiftAddress")} </span>
+                        <span className="font-bold text-[#1A1A2E]">{translate("clockin.shiftAddress")} </span>
                         {shift.participant_address}
                       </p>
                     )}

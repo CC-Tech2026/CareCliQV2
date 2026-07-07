@@ -17,15 +17,15 @@ const TYPE_CONFIG: Record<
   CommunityType,
   { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; labelKey: string; color: string; bg: string; chip: string }
 > = {
-  birthday:    { icon: Cake,     labelKey: "hub.community.type.birthday",    color: CORAL,     bg: "#FCE7F3", chip: "bg-pink-50 text-pink-700" },
-  anniversary: { icon: Award,    labelKey: "hub.community.type.anniversary", color: PLUM,      bg: "#EEEAFB", chip: "bg-purple-50 text-purple-700" },
+  birthday:    { icon: Cake,     labelKey: "hub.community.type.birthday",    color: CORAL,     bg: "#FDF0F4", chip: "bg-pink-50 text-pink-700" },
+  anniversary: { icon: Award,    labelKey: "hub.community.type.anniversary", color: PLUM,      bg: "#EDE3FC", chip: "bg-purple-50 text-purple-700" },
   new_starter: { icon: Sparkles, labelKey: "hub.community.type.newStarter", color: "#0EA5E9", bg: "#E0F2FE", chip: "bg-sky-50 text-sky-700" },
   shoutout:    { icon: Heart,    labelKey: "hub.community.type.shoutout",   color: "#10B981", bg: "#D1FAE5", chip: "bg-emerald-50 text-emerald-700" },
 };
 
 const AVATAR_COLORS = [
-  { bg: "#EEEAFB", color: PLUM },
-  { bg: "#FCE7F3", color: CORAL },
+  { bg: "#EDE3FC", color: PLUM },
+  { bg: "#FDF0F4", color: CORAL },
   { bg: "#D1FAE5", color: "#059669" },
   { bg: "#E0F2FE", color: "#0284C7" },
   { bg: "#FEF3C7", color: "#D97706" },

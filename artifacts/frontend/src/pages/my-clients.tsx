@@ -42,7 +42,7 @@ function ClientCard({ client, translate, translateParams }: { client: WorkerClie
         {/* Avatar */}
         <div
           className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-[13px] font-black text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-text)" }}
         >
           {initials(client.full_name)}
         </div>

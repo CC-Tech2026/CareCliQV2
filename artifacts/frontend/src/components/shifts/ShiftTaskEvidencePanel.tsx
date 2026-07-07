@@ -744,14 +744,7 @@ export function ShiftTaskEvidencePanel({
           </p>
         )}
 
-        <div
-          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-cc-border bg-cc-surface p-3"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, var(--cc-border) 1px, transparent 0)",
-            backgroundSize: "14px 14px",
-          }}
-        >
+        <div className="mb-3 min-h-[120px] rounded-xl border border-dashed border-cc-border bg-cc-soft p-3">
           {records.length === 0 ? (
             <div className="flex h-full min-h-[96px] flex-col items-center justify-center text-center">
               <span className="mb-2 grid h-10 w-10 place-items-center rounded-full bg-[#F1EAFF]">
@@ -825,7 +818,7 @@ export function ShiftTaskEvidencePanel({
         )}
 
         {cameraOpen && (
-          <div className="mb-2 space-y-2 rounded-xl border border-[#E5E7EB] bg-white p-2">
+          <div className="mb-2 space-y-2 rounded-xl border border-[#E8E8EA] bg-white p-2">
             <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
             <div className="flex gap-2">
               <Button
@@ -1032,8 +1025,8 @@ export function ShiftTaskEvidencePanel({
   }
 
   return (
-    <div className="border-t border-[#E5E7EB]">
-      <div className="space-y-2 border-b border-[#E5E7EB] px-3 py-3" style={{ background: SOFT }}>
+    <div className="border-t border-[#E8E8EA]">
+      <div className="space-y-2 border-b border-[#E8E8EA] px-3 py-3" style={{ background: SOFT }}>
         <p className="text-sm font-black" style={{ color: TEXT }}>
           {task.label}
         </p>
@@ -1077,7 +1070,7 @@ export function ShiftTaskEvidencePanel({
             <Camera size={13} /> {translate("shift.evidence.photoStrong")} <span className="text-emerald-600">{translate("shift.evidence.strongCheck")}</span>
           </p>
           {cameraOpen ? (
-            <div className="space-y-2 rounded-xl border border-[#E5E7EB] p-2">
+            <div className="space-y-2 rounded-xl border border-[#E8E8EA] p-2">
               <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
               <div className="flex gap-2">
                 <Button className="flex-1 rounded-xl font-bold text-white" style={{ background: PLUM }} onClick={() => void capturePhoto()}>
@@ -1135,7 +1128,7 @@ export function ShiftTaskEvidencePanel({
               type="button"
               disabled={disabled || recording}
               onClick={() => void startRecording()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F8F8FE] py-3.5 text-sm font-bold"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8EA] bg-[#F4EDE6] py-3.5 text-sm font-bold"
               style={{ color: PLUM }}
             >
               <Mic size={18} /> {translate("shift.evidence.startVoice")}

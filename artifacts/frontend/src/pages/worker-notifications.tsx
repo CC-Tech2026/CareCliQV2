@@ -100,7 +100,7 @@ export default function WorkerNotificationsPage() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("nav.notifications")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("notifications.title")}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>

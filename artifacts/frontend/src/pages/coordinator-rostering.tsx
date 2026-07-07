@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
@@ -41,7 +41,7 @@ const SOFT   = "var(--cc-soft)";
 type ViewMode = "month" | "week" | "schedule" | "list";
 
 const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
-  scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#EDE9FF", color: "#3730A3" },
+  scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#FCE3EB", color: "#E8457A" },
   in_progress: { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
   clocked_in:  { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
   completed:   { labelKey: "coordinator.rostering.status.completed", bg: "#DCFCE7", color: "#166534" },
@@ -71,7 +71,7 @@ function ShiftChip({ shift }: { shift: CoordinatorShiftRecord }) {
       style={{ background: cfg.bg, color: cfg.color }}
       title={translateParams("coordinator.rostering.shiftChipTitle", { participant, worker, time: timeSuffix })}
     >
-      {shift.participant_name?.split(" ")[0] || "—"}
+      {shift.participant_name?.split(" ")[0] || "N/A"}
       {d ? ` ${format(d, "HH:mm")}` : ""}
     </div>
   );
@@ -144,7 +144,7 @@ function MonthGrid({
                 <span
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-black"
                   style={{
-                    background: today ? PLUM : "transparent",
+                    background: today ? "var(--cc-text)" : "transparent",
                     color: today ? "white" : isSelected ? PLUM : inMonth ? TEXT : MUTED,
                   }}
                 >
@@ -176,10 +176,10 @@ const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
 type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
-/** Returns 0=Mon … 6=Sun matching the available_days encoding in WorkerAvailability */
+/** Returns 0=Mon � 6=Sun matching the available_days encoding in WorkerAvailability */
 function ccDayIndex(date: Date): number {
-  const js = getDay(date); // 0=Sun, 1=Mon … 6=Sat
-  return js === 0 ? 6 : js - 1; // convert to 0=Mon … 6=Sun
+  const js = getDay(date); // 0=Sun, 1=Mon � 6=Sat
+  return js === 0 ? 6 : js - 1; // convert to 0=Mon � 6=Sun
 }
 
 function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
@@ -247,7 +247,7 @@ function RosterGrid({
                   <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
                     <User2 size={10} />
                     {s.participant_name?.split(" ")[0] || "Shift"}
-                    {d ? ` · ${format(d, "d MMM, h:mm a")}` : ""}
+                    {d ? ` � ${format(d, "d MMM, h:mm a")}` : ""}
                   </span>
                 );
               })}
@@ -261,7 +261,7 @@ function RosterGrid({
         <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Availability</span>
         {[
           { color: "#DCFCE7", border: "#86EFAC", text: "#166534", label: "Available" },
-          { color: "#EDE9FF", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
+          { color: "#FCE3EB", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
           { color: "#FEF3C7", border: "#FCD34D", text: "#92400E", label: "On leave" },
           { color: "#F1F5F9", border: "#CBD5E1", text: "#64748B", label: "Not rostered" },
         ].map((l) => (
@@ -298,7 +298,7 @@ function RosterGrid({
                     </div>
                     <div
                       className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? PLUM : "transparent", color: isToday(d) ? "white" : TEXT }}
+                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "white" : TEXT }}
                     >
                       {format(d, "d")}
                     </div>
@@ -323,7 +323,7 @@ function RosterGrid({
                     <div className="flex items-center gap-2.5">
                       <div
                         className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-sm"
-                        style={{ background: PLUM }}
+                        style={{ background: "var(--cc-text)" }}
                       >
                         {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                       </div>
@@ -428,10 +428,10 @@ function RosterGrid({
                                   className="rounded-lg px-2 py-1.5 text-[10px] font-bold"
                                   style={{ background: cfg.bg, color: cfg.color, borderLeft: `3px solid ${cfg.color}` }}
                                 >
-                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "—"}</div>
+                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "N/A"}</div>
                                   {start && (
                                     <div className="mt-0.5 font-medium opacity-80">
-                                      {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
+                                      {format(start, "h:mm a")}{end ? `�${format(end, "h:mm a")}` : ""}
                                     </div>
                                   )}
                                 </div>
@@ -500,7 +500,7 @@ function DayPanel({
             size="sm"
             onClick={onAssign}
             className="flex items-center gap-1.5 rounded-full text-white text-xs"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={12} /> {translate("coordinator.rostering.assign")}
           </Button>
@@ -528,9 +528,9 @@ function DayPanel({
                   </span>
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <Clock3 size={11} />
-                    {start ? format(start, "h:mm a") : "—"}
-                    {end ? ` – ${format(end, "h:mm a")}` : ""}
-                    {durH ? ` · ${durH}h` : ""}
+                    {start ? format(start, "h:mm a") : "N/A"}
+                    {end ? ` � ${format(end, "h:mm a")}` : ""}
+                    {durH ? ` � ${durH}h` : ""}
                   </span>
                 </div>
                 <p className="text-[14px] font-black" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
@@ -651,14 +651,14 @@ export default function CoordinatorRosteringPage() {
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
-    : `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+    : `${format(weekStart, "d MMM")} � ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
 
   return (
     <div className="space-y-5 pb-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("coordinator.rostering.title")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -672,7 +672,7 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setAssignOpen(true)}
             className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
           </Button>
@@ -719,7 +719,7 @@ export default function CoordinatorRosteringPage() {
               type="button"
               onClick={() => setViewMode(mode)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === mode ? PLUM : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
+              style={{ background: viewMode === mode ? "var(--cc-cta)" : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
             >
               {translate(`coordinator.rostering.view.${mode}`)}
             </button>
@@ -839,7 +839,7 @@ export default function CoordinatorRosteringPage() {
                 >
                   <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: PLUM }}>
+                    <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
                       {(shift.worker_name || "W").split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                     </div>
                     <p className="truncate text-[12px]" style={{ color: MUTED }}>{shift.worker_name || translate("common.worker")}</p>
@@ -848,9 +848,9 @@ export default function CoordinatorRosteringPage() {
                     {start ? (
                       <>
                         <p className="text-[12px] font-bold" style={{ color: TEXT }}>{format(start, "d MMM yyyy")}</p>
-                        <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` � ${format(end, "h:mm a")}` : ""}</p>
                       </>
-                    ) : <span style={{ color: MUTED }}>—</span>}
+                    ) : <span style={{ color: MUTED }}>N/A</span>}
                   </div>
                   <p className="truncate text-[11px]" style={{ color: MUTED }}>
                     {(shift.shift_type ?? "standard_support").replace(/_/g, " ")}
@@ -873,7 +873,7 @@ export default function CoordinatorRosteringPage() {
         initialDate={assignTarget?.date}
       />
 
-      {/* ── Schedule (DnD) view ──────────────────────────────────────────── */}
+      {/* -- Schedule (DnD) view -------------------------------------------- */}
       {viewMode === "schedule" && (
         <div className="space-y-4">
           {/* Period nav for schedule view */}
@@ -887,7 +887,7 @@ export default function CoordinatorRosteringPage() {
               <ChevronLeft size={15} />
             </button>
             <span>
-              {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
+              {format(weekStart, "d MMM")} � {format(addDays(weekStart, 6), "d MMM yyyy")}
             </span>
             <button title={translate("coordinator.rostering.nextWeek")} onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
@@ -932,15 +932,15 @@ export default function CoordinatorRosteringPage() {
                 <button
                   key={w.id}
                   onClick={() => setAvailWorker((prev) => prev?.id === w.id ? null : w)}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F8F8FE]"
+                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
                   style={{
                     borderColor: availWorker?.id === w.id ? PLUM : BORDER,
-                    background:  availWorker?.id === w.id ? "#EDE9FF" : "var(--cc-bg)",
+                    background:  availWorker?.id === w.id ? "#FCE3EB" : "var(--cc-bg)",
                   }}
                 >
                   <div
                     className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white"
-                    style={{ background: PLUM }}
+                    style={{ background: "var(--cc-cta)" }}
                   >
                     {w.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                   </div>
@@ -957,7 +957,7 @@ export default function CoordinatorRosteringPage() {
         </div>
       )}
 
-      {/* ── Bulk/Recurring shift modal ───────────────────────────────────── */}
+      {/* -- Bulk/Recurring shift modal ------------------------------------- */}
       <BulkShiftModal
         open={bulkOpen}
         onOpenChange={setBulkOpen}

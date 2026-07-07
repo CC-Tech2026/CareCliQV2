@@ -541,7 +541,7 @@ function QuickNoteField({
           disabled={disabled}
           className={cn(
             "w-full rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-medium italic",
-            flag ? "border-red-200 bg-red-50" : "border-[#E5E7EB] bg-[#F8F6FE]",
+            flag ? "border-red-200 bg-red-50" : "border-[#E8E8EA] bg-[#F8F6FE]",
           )}
           style={{ color: MUTED }}
           onClick={() => {
@@ -563,7 +563,7 @@ function QuickNoteField({
         rows={2}
         value={draft}
         placeholder={translate("tasks.contextPlaceholder")}
-        className="w-full resize-none rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs"
+        className="w-full resize-none rounded-lg border border-[#E8E8EA] bg-white px-2.5 py-1.5 text-xs"
         onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
         onBlur={() => {
           onSave(draft.trim());

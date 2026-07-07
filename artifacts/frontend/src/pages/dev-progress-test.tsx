@@ -29,7 +29,7 @@ import {
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
-const APP_BG = "#F8F8FE";
+const APP_BG = "#F4EDE6";
 const ACTIVE = "var(--cc-active-bg)";
 const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;
@@ -376,7 +376,7 @@ function DurationRulesStatusNote({
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
       style={{
-        borderColor: hasError ? "#FECACA" : hasWarning ? "#FDE68A" : none ? "#E2E8F0" : "#BBF7D0",
+        borderColor: hasError ? "#FECACA" : hasWarning ? "#FDE68A" : none ? "#E8E8EA" : "#BBF7D0",
         background: hasError ? "#FEF2F2" : hasWarning ? "#FFFBEB" : none ? "#F8FAFC" : "#F0FDF4",
         color: hasError ? "#991B1B" : hasWarning ? "#92400E" : "#475569",
       }}
@@ -493,7 +493,7 @@ function BudgetRulesStatusNote({
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
       style={{
-        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E5E7EB",
+        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E8E8EA",
         background: exceeded ? "#FEF2F2" : warning ? "#FFFBEB" : hasPlan ? "#F0FDF4" : "#F8F7FC",
         color: TEXT,
       }}

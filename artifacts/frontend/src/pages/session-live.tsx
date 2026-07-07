@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
@@ -214,8 +214,8 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-[#F8F8FE] text-[#6B7280] border-[#E5E7EB]", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-[#FCE7F3] text-[#BE185D] border-[#F8C0CE]", icon: Activity },
+  not_started: { label: "Not Started", cls: "bg-[#F4EDE6] text-[#6A6A77] border-[#E8E8EA]", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-[#FDF0F4] text-[#7C3AED] border-[#F8C0CE]", icon: Activity },
   achieved: { label: "Achieved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
   needs_review: { label: "Needs Review", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: AlertCircle },
 };
@@ -325,7 +325,7 @@ function MessageBubble({
   if (msg.type === "system") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#6B7280] shadow-sm">{msg.content}</span>
+        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#6A6A77] shadow-sm">{msg.content}</span>
       </div>
     );
   }
@@ -335,10 +335,10 @@ function MessageBubble({
     const AIcon = def?.icon ?? Activity;
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-full px-3 py-1 shadow-sm">
-          <AIcon className="h-2.5 w-2.5 text-[#3730A3] shrink-0" />
-          <span className="text-[10px] text-[#111827] font-semibold">{msg.activityType || msg.content}</span>
-          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-white border border-[#E8E8EA] rounded-full px-3 py-1 shadow-sm">
+          <AIcon className="h-2.5 w-2.5 text-[#E8457A] shrink-0" />
+          <span className="text-[10px] text-[#1A1A2E] font-semibold">{msg.activityType || msg.content}</span>
+          <span className="text-[9px] text-[#6A6A77]">� {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -347,39 +347,39 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#FCE7F3] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
-          <Target className="h-2.5 w-2.5 text-[#BE185D] shrink-0" />
-          <span className="text-[10px] text-[#111827] font-semibold">{msg.content}</span>
-          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-[#FDF0F4] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
+          <Target className="h-2.5 w-2.5 text-[#7C3AED] shrink-0" />
+          <span className="text-[10px] text-[#1A1A2E] font-semibold">{msg.content}</span>
+          <span className="text-[9px] text-[#6A6A77]">� {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
   }
 
-  // Worker messages: text, voice, image, file — right aligned
+  // Worker messages: text, voice, image, file � right aligned
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#E8E8EA] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
                 <div className="flex items-center gap-1 text-white/60 text-[9px]">
                   <Camera className="h-2.5 w-2.5" />
-                  <span>Photo evidence • {format(msg.timestamp, "HH:mm")}</span>
+                  <span>Photo evidence � {format(msg.timestamp, "HH:mm")}</span>
                 </div>
               </div>
             </div>
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#F8F8FE] rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#3730A3]" />
+              <div className="h-9 w-9 bg-[#F4EDE6] rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#E8457A]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[#111827] text-sm font-semibold leading-tight truncate">{msg.content}</p>
-                <p className="text-[#6B7280] text-[10px]">Document attached</p>
+                <p className="text-[#1A1A2E] text-sm font-semibold leading-tight truncate">{msg.content}</p>
+                <p className="text-[#6A6A77] text-[10px]">Document attached</p>
               </div>
             </div>
           )}
@@ -387,37 +387,37 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#3730A3]">
+                  <div className="flex items-center gap-1 text-[#E8457A]">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
                   {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
-                    <span className="text-[9px] bg-[#F8F8FE] text-[#6B7280] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] bg-[#F4EDE6] text-[#6A6A77] px-1.5 py-0.5 rounded-full">
                       {msg.detectedLanguage.toUpperCase()}
                     </span>
                   )}
                   {msg.isTranslating && (
-                    <div className="flex items-center gap-1 text-[#6B7280]">
+                    <div className="flex items-center gap-1 text-[#6A6A77]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                      <span className="text-[9px]">Translating…</span>
+                      <span className="text-[9px]">Translating�</span>
                     </div>
                   )}
                 </div>
               )}
               {(msg.type === "text" || msg.type === "voice") && (
-                <p className="text-[#111827] text-sm leading-relaxed">{msg.content}</p>
+                <p className="text-[#1A1A2E] text-sm leading-relaxed">{msg.content}</p>
               )}
               {msg.type === "voice" && (
                 <div className="mt-2 pt-2 border-t border-[#E8D5E8]">
                   <div className="mb-1">
                     {msg.isTranslating ? (
-                      <span className="text-[9px] text-[#6B7280]">Translating...</span>
+                      <span className="text-[9px] text-[#6A6A77]">Translating...</span>
                     ) : msg.translationStatus === "translated" ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#3730A3]">Translated to English</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#E8457A]">Translated to English</span>
                     ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
                       <span className="text-[9px] font-semibold text-red-600">Translation failed - retry</span>
                     ) : msg.translationStatus === "not_required" ? (
-                      <span className="text-[9px] text-[#6B7280]">English legal output</span>
+                      <span className="text-[9px] text-[#6A6A77]">English legal output</span>
                     ) : null}
                   </div>
                   {msg.translated ? (
@@ -425,7 +425,7 @@ function MessageBubble({
                       <p className="text-[#374151] text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-[#6B7280] text-xs italic">English translation unavailable</p>
+                    <p className="text-[#6A6A77] text-xs italic">English translation unavailable</p>
                   ) : null}
                 </div>
               )}
@@ -475,20 +475,20 @@ export default function SessionLive() {
 
   const { settings } = useSettings();
 
-  // ── Primary state ──
+  // -- Primary state --
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [inputText, setInputText] = useState("");
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
-  // ── Timer ──
+  // -- Timer --
   const [isActive, setIsActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef<Date | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const autoStartAppliedRef = useRef(false);
 
-  // ── Voice ──
+  // -- Voice --
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState("");
   const [selectedDocumentationLanguage, setSelectedDocumentationLanguage] = useState(
@@ -499,19 +499,19 @@ export default function SessionLive() {
   const stopIntentRef = useRef(false);
   const languageManuallySelectedRef = useRef(false);
 
-  // ── Body markers ──
+  // -- Body markers --
   const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
   const bodyMarkersInitRef = useRef(false);
   const bodyMarkersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Translation ──
+  // -- Translation --
   const [translationView, setTranslationView] = useState<TranslationView>("original");
 
-  // ── UI panels ──
+  // -- UI panels --
   const [showActivitySheet, setShowActivitySheet] = useState(false);
   const [bodyMapOpen, setBodyMapOpen] = useState(false);
 
-  // ── Approval modal ──
+  // -- Approval modal --
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState<LiveSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -525,16 +525,16 @@ export default function SessionLive() {
     progressTowardGoals: "",
   });
 
-  // ── Modals ──
+  // -- Modals --
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  // ── RP detection ──
+  // -- RP detection --
   const [rpFlags, setRpFlags] = useState<RPFlag[]>([]);
   const [showRpBottomSheet, setShowRpBottomSheet] = useState(false);
   const [rpAcknowledged, setRpAcknowledged] = useState(false);
   const rpDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Post-save result ──
+  // -- Post-save result --
   interface PostSaveResult {
     score: number;
     status: string;
@@ -547,17 +547,17 @@ export default function SessionLive() {
   const [previewProgressLoading, setPreviewProgressLoading] = useState(false);
   const [previewProgressNotice, setPreviewProgressNotice] = useState<string | null>(null);
 
-  // ── Reminder ──
+  // -- Reminder --
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
 
-  // ── Refs ──
+  // -- Refs --
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileAttachRef = useRef<HTMLInputElement>(null);
   const messagesInitRef = useRef(false);
 
-  // ── Derived ──
+  // -- Derived --
   const activityMessages = messages.filter((m) => m.type === "activity");
   const voiceMessages = messages.filter((m) => m.type === "voice");
   const imageMessages = messages.filter((m) => m.type === "image");
@@ -578,7 +578,7 @@ export default function SessionLive() {
     if (sessionLanguage) setSelectedDocumentationLanguage(sessionLanguage);
   }, [session]);
 
-  // ── addMessage helper ──
+  // -- addMessage helper --
   const addMessage = useCallback(
     (msg: Omit<ChatMessage, "id">): ChatMessage => {
       const newMsg: ChatMessage = { ...msg, id: crypto.randomUUID() };
@@ -628,12 +628,12 @@ export default function SessionLive() {
     });
   }, [id]);
 
-  // ── Auto-scroll ──
+  // -- Auto-scroll --
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isRecording]);
 
-  // ── Keep combined notes in sync ──
+  // -- Keep combined notes in sync --
   useEffect(() => {
     if (hasManuallyEditedNotesRef.current) return;
     // Combine structured notes into editable text
@@ -646,7 +646,7 @@ export default function SessionLive() {
     setEditableNotes(combinedNotes);
   }, [structuredNotes]);
 
-  // ── Load existing messages ──
+  // -- Load existing messages --
   useEffect(() => {
     if (!session?.id || messagesInitRef.current) return;
     messagesInitRef.current = true;
@@ -797,7 +797,7 @@ export default function SessionLive() {
         setPreviewDeltaSummaries(summaries);
         if (summaries.length === 0) {
           setPreviewProgressNotice(
-            "No measurable progress detected yet. You can still approve — progress will be extracted on save.",
+            "No measurable progress detected yet. You can still approve. Progress will be extracted on save.",
           );
         }
       })
@@ -827,7 +827,7 @@ export default function SessionLive() {
     goals,
   ]);
 
-  // ── Init body markers ──
+  // -- Init body markers --
   useEffect(() => {
     if (!session || bodyMarkersInitRef.current) return;
     bodyMarkersInitRef.current = true;
@@ -838,7 +838,7 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
-  // ── Body markers debounced save ──
+  // -- Body markers debounced save --
   const bodyMarkersAutoSaveSkipRef = useRef(true);
   useEffect(() => {
     if (bodyMarkersAutoSaveSkipRef.current) {
@@ -864,7 +864,7 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyMarkers]);
 
-  // ── Init goals ──
+  // -- Init goals --
   useEffect(() => {
     if (session && goals.length === 0) {
       const addressed = session.goals_addressed ?? [];
@@ -885,7 +885,7 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, resolvedGoalTitles.join(",")]);
 
-  // ── Timer ──
+  // -- Timer --
   useEffect(() => {
     if (isActive) {
       timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -897,7 +897,7 @@ export default function SessionLive() {
     };
   }, [isActive]);
 
-  // ── Auto-start from settings ──
+  // -- Auto-start from settings --
   useEffect(() => {
     if (!session || !settings || autoStartAppliedRef.current || isActive) return;
     if (settings.sessionDefaults?.autoStartTimer) {
@@ -911,7 +911,7 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, settings]);
 
-  // ── Start reminder ──
+  // -- Start reminder --
   useEffect(() => {
     if (!session || isActive || reminderDismissed) return;
     reminderTimerRef.current = setTimeout(() => {
@@ -940,7 +940,7 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isActive]);
 
-  // ── RP detection ──
+  // -- RP detection --
   useEffect(() => {
     if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
     rpDebounceRef.current = setTimeout(() => {
@@ -1016,7 +1016,7 @@ export default function SessionLive() {
     setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: newStatus } : g)));
     addMessage({
       type: "goal_update",
-      content: `${goal.name} → ${GOAL_STATUS_CONFIG[newStatus].label}`,
+      content: `${goal.name} ? ${GOAL_STATUS_CONFIG[newStatus].label}`,
       timestamp: new Date(),
       goalId,
       goalStatus: newStatus,
@@ -1478,16 +1478,16 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E5E7EB]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#3730A3]" />
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E8E8EA]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#E8457A]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E5E7EB]">
-        <p className="text-[#6B7280]">Session not found</p>
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E8E8EA]">
+        <p className="text-[#6A6A77]">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
         </Button>
@@ -1524,25 +1524,25 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E5E7EB] bg-white shadow-[0_14px_40px_rgba(55,48,163,0.08)]">
+    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E8E8EA] bg-white shadow-[0_14px_40px_rgba(55,48,163,0.08)]">
 
-      {/* ── Top control bar ── */}
+      {/* -- Top control bar -- */}
       <div
         className="shrink-0 border-b border-[#E8D5E8] bg-white"
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#3730A3] text-sm transition-colors font-semibold"
+            className="flex items-center gap-1.5 text-[#6A6A77] hover:text-[#E8457A] text-sm transition-colors font-semibold"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
           <div className="min-w-0 flex-1 px-1">
-            <h1 className="text-[#111827] font-black text-base tracking-tight leading-tight truncate">
+            <h1 className="text-[#1A1A2E] font-black text-base tracking-tight leading-tight truncate">
               {participantName}
             </h1>
-            <p className="text-[#6B7280] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
+            <p className="text-[#6A6A77] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1555,7 +1555,7 @@ export default function SessionLive() {
                 languageManuallySelectedRef.current = true;
                 setSelectedDocumentationLanguage(event.target.value);
               }}
-              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E5E7EB] bg-[#F8F8FE] px-3 text-[12px] font-bold text-[#111827] outline-none hover:bg-white disabled:opacity-50"
+              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E8E8EA] bg-[#F4EDE6] px-3 text-[12px] font-bold text-[#1A1A2E] outline-none hover:bg-white disabled:opacity-50"
             >
               {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
                 <option key={language.code} value={language.code}>
@@ -1565,8 +1565,8 @@ export default function SessionLive() {
             </select>
 
             <div className="hidden sm:flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
-              <div className="flex rounded-full border border-[#E5E7EB] bg-[#F8F8FE] p-0.5 overflow-hidden">
+              <Globe className="h-3.5 w-3.5 text-[#6A6A77] shrink-0" />
+              <div className="flex rounded-full border border-[#E8E8EA] bg-[#F4EDE6] p-0.5 overflow-hidden">
                 {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                   <button
                     key={v}
@@ -1574,8 +1574,8 @@ export default function SessionLive() {
                     className={cn(
                       "px-2.5 py-1 text-[10px] font-bold rounded-full transition-colors",
                       translationView === v
-                        ? "bg-white text-[#3730A3] shadow-sm"
-                        : "text-[#6B7280] hover:text-[#3730A3]",
+                        ? "bg-white text-[#E8457A] shadow-sm"
+                        : "text-[#6A6A77] hover:text-[#E8457A]",
                     )}
                   >
                     {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
@@ -1590,7 +1590,7 @@ export default function SessionLive() {
               disabled={!isActive || isUploadingAttachment}
               aria-label="Add photo evidence"
               title="Add photo evidence"
-              className="h-9 w-9 rounded-full border border-[#E5E7EB] bg-white text-[#3730A3] hover:bg-[#F8F8FE] disabled:opacity-40 flex items-center justify-center transition-colors"
+              className="h-9 w-9 rounded-full border border-[#E8E8EA] bg-white text-[#E8457A] hover:bg-[#F4EDE6] disabled:opacity-40 flex items-center justify-center transition-colors"
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
@@ -1598,7 +1598,7 @@ export default function SessionLive() {
             {elapsed > 0 && (
               <button
                 onClick={() => setShowRestartConfirm(true)}
-                className="hidden sm:inline-flex text-[#6B7280] hover:text-[#3730A3] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F8F8FE] transition-colors"
+                className="hidden sm:inline-flex text-[#6A6A77] hover:text-[#E8457A] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F4EDE6] transition-colors"
               >
                 Restart
               </button>
@@ -1616,7 +1616,7 @@ export default function SessionLive() {
               <Button
                 onClick={handleStop}
                 className="gap-1 text-white font-bold px-3 py-2 h-9 text-xs rounded-full"
-                style={{ background: "var(--cc-plum)" }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 <Square className="h-3 w-3 fill-white" />
                 End
@@ -1628,7 +1628,7 @@ export default function SessionLive() {
         {/* Timer bar */}
         <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-[#F0ECFA] bg-[#F8F6FF]">
           <div className="flex items-center gap-2.5">
-            <span className="font-mono text-lg font-black text-[#111827] tracking-tight">
+            <span className="font-mono text-lg font-black text-[#1A1A2E] tracking-tight">
               {formatDuration(elapsed)}
             </span>
             <span
@@ -1636,7 +1636,7 @@ export default function SessionLive() {
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border",
                 isActive
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-white text-[#6B7280] border-[#E5E7EB]",
+                  : "bg-white text-[#6A6A77] border-[#E8E8EA]",
               )}
             >
               <span
@@ -1653,7 +1653,7 @@ export default function SessionLive() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-medium text-[#6B7280]">
+          <div className="flex items-center gap-3 text-[10px] font-medium text-[#6A6A77]">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {session.duration_minutes}m planned
@@ -1665,11 +1665,11 @@ export default function SessionLive() {
         </div>
       </div>
 
-      {/* ── Goals strip (tap chips to cycle status) ── */}
+      {/* -- Goals strip (tap chips to cycle status) -- */}
       {goals.length > 0 ? (
         <div className="shrink-0 border-b border-[#E8D5E8] bg-white px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0">
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#6A6A77] shrink-0">
               <Target className="h-3 w-3" /> Goals:
             </span>
             {goals.map((goal) => (
@@ -1681,12 +1681,12 @@ export default function SessionLive() {
                   GOAL_STATUS_CONFIG[goal.status].cls,
                 )}
               >
-                {goal.name.length > 22 ? goal.name.slice(0, 22) + "…" : goal.name}
+                {goal.name.length > 22 ? goal.name.slice(0, 22) + "�" : goal.name}
               </button>
             ))}
             <button
               onClick={() => setBodyMapOpen((o) => !o)}
-              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#6B7280] hover:text-[#3730A3] transition-colors"
+              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#6A6A77] hover:text-[#E8457A] transition-colors"
             >
               <HeartPulse className="h-3 w-3" />
               {bodyMapOpen ? "Hide" : "Body Map"}
@@ -1697,12 +1697,12 @@ export default function SessionLive() {
         <div className="shrink-0 bg-amber-50 border-b border-amber-100 px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
           <p className="text-amber-800 text-[11px] font-medium">
-            No goals linked — non-compliant. Add goals in session setup.
+            No goals linked, non-compliant. Add goals in session setup.
           </p>
         </div>
       )}
 
-      {/* ── Compliance banner ── */}
+      {/* -- Compliance banner -- */}
       {bannerVisible && (
         <div
           className={cn(
@@ -1747,16 +1747,16 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Body map (collapsible) ── */}
+      {/* -- Body map (collapsible) -- */}
       {bodyMapOpen && (
         <div className="shrink-0 bg-[#F8F6FF] border-b border-[#E8D5E8] px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] font-bold text-[#6A6A77] uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
             </h3>
             <button
               onClick={() => setBodyMapOpen(false)}
-              className="text-[#6B7280] hover:text-[#3730A3]"
+              className="text-[#6A6A77] hover:text-[#E8457A]"
               title={translate("sessions.live.bodyMap.close")}
               aria-label={translate("sessions.live.bodyMap.close")}
             >
@@ -1771,13 +1771,13 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Chat feed ── */}
+      {/* -- Chat feed -- */}
       <div className="flex-1 overflow-y-auto bg-[#F6F4FB] px-3 py-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
-            <MessageSquare className="h-10 w-10 text-[#C7D2FE] mb-3" />
-            <p className="text-[#111827] text-sm font-bold">{translate("sessions.live.chat.started")}</p>
-            <p className="text-[#6B7280] text-xs mt-1">{translate("sessions.live.chat.startedHint")}</p>
+            <MessageSquare className="h-10 w-10 text-[#FADAE4] mb-3" />
+            <p className="text-[#1A1A2E] text-sm font-bold">{translate("sessions.live.chat.started")}</p>
+            <p className="text-[#6A6A77] text-xs mt-1">{translate("sessions.live.chat.startedHint")}</p>
           </div>
         )}
 
@@ -1791,11 +1791,11 @@ export default function SessionLive() {
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
             <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5 text-[#BE185D]">
+              <div className="flex items-center gap-2 mb-1.5 text-[#7C3AED]">
                 <Radio className="h-3 w-3 animate-pulse" />
                 <span className="text-[9px] font-bold uppercase tracking-wider">{translate("sessions.live.chat.listening")}</span>
               </div>
-              <p className="text-[#6B7280] text-sm italic">
+              <p className="text-[#6A6A77] text-sm italic">
                 {recordingText || translate("sessions.live.chat.speakClearly")}
               </p>
             </div>
@@ -1805,7 +1805,7 @@ export default function SessionLive() {
         <div ref={chatBottomRef} className="h-2" />
       </div>
 
-      {/* ── RP warning (above input) ── */}
+      {/* -- RP warning (above input) -- */}
       {rpFlags.length > 0 && !showSummary && (
         <div className="shrink-0 bg-red-50 border-t border-red-100 px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
@@ -1824,10 +1824,10 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E5E7EB] shadow-[0_-8px_24px_rgba(55,48,163,0.06)]">
+      {/* -- Bottom input bar -- */}
+      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E8E8EA] shadow-[0_-8px_24px_rgba(55,48,163,0.06)]">
         <div className="client-translation-composer flex items-center gap-2 sm:gap-3">
-          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#C7D2FE] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
+          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#FADAE4] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -1839,14 +1839,14 @@ export default function SessionLive() {
               }}
               placeholder={translate("sessions.live.input.message")}
               disabled={!isActive}
-              className="min-w-0 flex-1 bg-transparent text-[#111827] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 bg-transparent text-[#1A1A2E] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
             />
             <button
               type="button"
               aria-label={translate("sessions.live.input.attach")}
               onClick={() => fileAttachRef.current?.click()}
               disabled={!isActive || isUploadingAttachment}
-              className="h-10 w-10 rounded-full flex items-center justify-center text-[#3730A3] hover:bg-[#F8F8FE] transition-colors disabled:opacity-40 shrink-0"
+              className="h-10 w-10 rounded-full flex items-center justify-center text-[#E8457A] hover:bg-[#F4EDE6] transition-colors disabled:opacity-40 shrink-0"
             >
               {isUploadingAttachment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
             </button>
@@ -1858,7 +1858,7 @@ export default function SessionLive() {
             disabled={!isActive}
             title={isRecording ? translate("sessions.live.input.stopRecording") : translate("sessions.live.input.startVoice")}
             className={cn(
-              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(55,48,163,0.24)] ring-4 ring-white border border-[#E5E7EB] transition-all shrink-0 disabled:opacity-45",
+              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(55,48,163,0.24)] ring-4 ring-white border border-[#E8E8EA] transition-all shrink-0 disabled:opacity-45",
               isRecording
                 ? "bg-[#FF2D6F] animate-pulse"
                 : "bg-gradient-to-br from-[#6D35D8] to-[#FF2D6F] hover:scale-[1.02]",
@@ -1890,21 +1890,21 @@ export default function SessionLive() {
         aria-label={translate("sessions.live.input.attach")}
       />
 
-      {/* ── Activity sheet ── */}
+      {/* -- Activity sheet -- */}
       {showActivitySheet && (
         <div
           className="absolute inset-0 z-40 flex items-end bg-black/20"
           onClick={() => setShowActivitySheet(false)}
         >
           <div
-            className="w-full bg-white border-t border-[#E5E7EB] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full bg-white border-t border-[#E8E8EA] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[#111827] font-bold text-sm">Log Activity</h3>
+              <h3 className="text-[#1A1A2E] font-bold text-sm">Log Activity</h3>
               <button
                 onClick={() => setShowActivitySheet(false)}
-                className="text-[#6B7280] hover:text-[#3730A3]"
+                className="text-[#6A6A77] hover:text-[#E8457A]"
                 title="Close activity sheet"
                 aria-label="Close activity sheet"
               >
@@ -1917,8 +1917,8 @@ export default function SessionLive() {
                 return (
                   <div key={cat.label}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <CatIcon className="h-3 w-3 text-[#6B7280]" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#6B7280]">
+                      <CatIcon className="h-3 w-3 text-[#6A6A77]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#6A6A77]">
                         {cat.label}
                       </span>
                     </div>
@@ -1948,7 +1948,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Practitioner Approval Modal ── */}
+      {/* -- Practitioner Approval Modal -- */}
       <Dialog
         open={showSummary}
         onOpenChange={(open) => {
@@ -1958,11 +1958,11 @@ export default function SessionLive() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl p-0 bg-white" style={{ border: "1px solid rgba(232,213,232,0.5)" }}>
           <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
             <DialogTitle className="font-bold text-[18px] flex items-center gap-2" style={{ color: "#1C1626" }}>
-              <Shield className="h-5 w-5" style={{ color: "#3730A3" }} />
+              <Shield className="h-5 w-5" style={{ color: "#E8457A" }} />
               Review &amp; Approve Session Notes
             </DialogTitle>
             <DialogDescription className="text-[12px] mt-1" style={{ color: "#7A6A8A" }}>
-              Review the auto-generated notes below. Edit anything before approving — data is only
+              Review the auto-generated notes below. Edit anything before approving. Data is only
               saved on your explicit approval.
             </DialogDescription>
           </div>
@@ -1990,7 +1990,7 @@ export default function SessionLive() {
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
                 className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
-                style={{ background: "var(--cc-plum)" }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 <FileText className="h-4 w-4" />
                 View Session Record
@@ -1998,7 +1998,7 @@ export default function SessionLive() {
             </div>
           ) : summaryLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#3730A3" }} />
+              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#E8457A" }} />
             </div>
           ) : summary ? (
             <div className="p-6 space-y-5">
@@ -2074,7 +2074,7 @@ export default function SessionLive() {
                 <p className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A8A" }}>
                   <FileText className="h-3.5 w-3.5" /> Structured Case Notes
                   <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
-                    — required for NDIS compliance
+                    : required for NDIS compliance
                   </span>
                 </p>
                 {(
@@ -2194,7 +2194,7 @@ export default function SessionLive() {
                 <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5" style={{ color: "#7A6A8A" }}>
                   <FileText className="h-3.5 w-3.5" /> Clinical Record
                   <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
-                    — auto-generated · editable
+                    : auto-generated � editable
                   </span>
                 </label>
                 <SmartTextarea
@@ -2204,7 +2204,7 @@ export default function SessionLive() {
                     setEditableNotes(v);
                   }}
                   rows={6}
-                  placeholder="Combined clinical record…"
+                  placeholder="Combined clinical record�"
                   className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
                   style={{ background: "var(--cc-bg)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                 />
@@ -2221,7 +2221,7 @@ export default function SessionLive() {
                       <span
                         key={i}
                         className="text-[10px] px-2.5 py-1 rounded-full font-medium"
-                        style={{ background: "rgba(55,48,163,0.07)", color: "#3730A3" }}
+                        style={{ background: "rgba(55,48,163,0.07)", color: "#E8457A" }}
                       >
                         {a}
                       </span>
@@ -2281,7 +2281,7 @@ export default function SessionLive() {
                     Progress Summary
                     {previewDeltaSummaries.length > 0 && (
                       <span className="font-normal normal-case tracking-normal">
-                        — confirm before approving
+                        : confirm before approving
                       </span>
                     )}
                   </p>
@@ -2291,7 +2291,7 @@ export default function SessionLive() {
                       style={{ color: previewDeltaSummaries.length > 0 ? "#047857" : "#B45309" }}
                     >
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Generating progress summary…
+                      Generating progress summary�
                     </div>
                   ) : previewDeltaSummaries.length > 0 ? (
                     <ul className="space-y-2">
@@ -2330,7 +2330,7 @@ export default function SessionLive() {
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
                   className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
-                  style={{ background: "var(--cc-plum)" }}
+                  style={{ background: "var(--cc-cta)" }}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2338,7 +2338,7 @@ export default function SessionLive() {
                     <Shield className="h-4 w-4" />
                   )}
                   {isSaving
-                    ? "Saving…"
+                    ? "Saving�"
                     : liveCompliance.blocking
                       ? "Fix Issues to Approve"
                       : "Approve & Save"}
@@ -2349,7 +2349,7 @@ export default function SessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* ── RP Bottom Sheet ── */}
+      {/* -- RP Bottom Sheet -- */}
       {showRpBottomSheet && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center">
           <div
@@ -2410,14 +2410,14 @@ export default function SessionLive() {
                 ) : (
                   <Shield className="h-4 w-4" />
                 )}
-                {isSaving ? "Saving…" : "Confirm & Save"}
+                {isSaving ? "Saving�" : "Confirm & Save"}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Restart Confirm ── */}
+      {/* -- Restart Confirm -- */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>

@@ -26,7 +26,7 @@ function BgOrb({ className, style }: { className?: string; style?: React.CSSProp
     <div
       className={`absolute rounded-full pointer-events-none ${className ?? ""}`}
       style={{
-        background: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%)",
+        background: "rgba(255,255,255,0.12)",
         animation: "cs-orb-pulse 5s ease-in-out infinite",
         ...style,
       }}

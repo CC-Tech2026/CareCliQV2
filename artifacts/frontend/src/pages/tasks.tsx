@@ -1,4 +1,4 @@
-﻿import { Link } from "wouter";
+import { Link } from "wouter";
 import { useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { ClipboardList, Loader2, CalendarDays } from "lucide-react";
@@ -33,7 +33,7 @@ export default function Tasks() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("common.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("tasks.page.title")}
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
@@ -60,7 +60,7 @@ export default function Tasks() {
             {translate("tasks.page.emptyHint")}
           </p>
           <Link href="/my-shifts">
-            <Button className="mt-4 rounded-full font-bold gap-2" style={{ background: PLUM }}>
+            <Button className="mt-4 rounded-full font-bold gap-2" style={{ background: "var(--cc-cta)" }}>
               <CalendarDays size={16} /> {translate("tasks.page.goToShifts")}
             </Button>
           </Link>

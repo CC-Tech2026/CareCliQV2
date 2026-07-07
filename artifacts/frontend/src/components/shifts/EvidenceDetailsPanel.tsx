@@ -13,7 +13,7 @@ type Props = {
 };
 
 function formatTs(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   try {
     const d = new Date(value);
     return `${d.toLocaleString()} (UTC: ${format(d, "yyyy-MM-dd HH:mm")}Z)`;

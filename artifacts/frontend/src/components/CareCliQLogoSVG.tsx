@@ -41,10 +41,7 @@ export function CareCliQLogoWithText({ size = 64, className = "" }: { size?: num
         className="font-black tracking-tight"
         style={{
           fontSize: `${textSize}px`,
-          background: "linear-gradient(135deg, #E94B8C 0%, #6B3FA0 100%)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          backgroundClip: "text",
+          color: "#7C3AED",
         }}
       >
         CareCliQ

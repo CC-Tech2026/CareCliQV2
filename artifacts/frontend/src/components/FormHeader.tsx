@@ -20,12 +20,12 @@ export function FormHeader({ title, subtitle, onClose, showLogo = true }: FormHe
         <h2 className="text-[18px] sm:text-[20px] font-black text-[#1F2937] tracking-tight leading-snug" style={{ fontFamily: "var(--app-font-display)" }}>
           {title}
         </h2>
-        {subtitle && <p className="text-[13px] text-[#6B7280] mt-2 font-semibold">{subtitle}</p>}
+        {subtitle && <p className="text-[13px] text-[#6A6A77] mt-2 font-semibold">{subtitle}</p>}
       </div>
       <button
         type="button"
         onClick={onClose}
-        className="shrink-0 p-2 rounded-lg hover:bg-[#F0ECFF] transition-all text-[#6B7280] hover:text-[#3730A3] hover:shadow-sm"
+        className="shrink-0 p-2 rounded-lg hover:bg-[#F0ECFF] transition-all text-[#6A6A77] hover:text-[#E8457A] hover:shadow-sm"
         title="Close"
         aria-label="Close form"
       >

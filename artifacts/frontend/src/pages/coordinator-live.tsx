@@ -71,7 +71,7 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
 function TaskBar({ total, completed }: { total: number; completed: number }) {
   const { translate } = useAccessibility();
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E5E7EB";
+  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E8E8EA";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
@@ -153,7 +153,7 @@ function MessageModal({
               onClick={() => setType(t.v)}
               className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
               style={{
-                background: type === t.v ? PLUM : SOFT,
+                background: type === t.v ? "var(--cc-cta)" : SOFT,
                 color: type === t.v ? "#fff" : MUTED,
               }}
             >
@@ -178,7 +178,7 @@ function MessageModal({
                 <div
                   className="max-w-[80%] px-3 py-2 rounded-2xl text-[13px]"
                   style={{
-                    background: mine ? PLUM : "var(--cc-bg)",
+                    background: mine ? "var(--cc-cta)" : "var(--cc-bg)",
                     color: mine ? "#fff" : TEXT,
                     border: mine ? "none" : `1px solid ${BORDER}`,
                   }}
@@ -202,8 +202,8 @@ function MessageModal({
           />
           <Button
             size="sm"
+            variant="navy"
             className="rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
             disabled={!text.trim() || sendMut.isPending}
             onClick={() => sendMut.mutate()}
           >
@@ -404,7 +404,7 @@ function LiveShiftCard({
               {shift.worker_name}
             </p>
             <p className="text-[11px] font-medium" style={{ color: MUTED }}>
-              {shift.participant_name ?? "—"}
+              {shift.participant_name ?? "N/A"}
             </p>
           </div>
         </div>
@@ -574,7 +574,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
           />
           <Button
             className="w-full rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             disabled={!note.trim() || flagMut.isPending}
             onClick={() => flagMut.mutate()}
           >
@@ -679,11 +679,11 @@ export default function CoordinatorLivePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: PLUM }}>
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-text)" }}>
             <Radio size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
               {translate("coordinator.live.title")}
             </h1>
             <p className="text-[12px]" style={{ color: MUTED }}>

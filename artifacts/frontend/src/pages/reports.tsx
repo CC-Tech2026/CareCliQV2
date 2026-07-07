@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
@@ -26,7 +26,7 @@ import {
   ClipboardList, Lightbulb, Star,
 } from "lucide-react";
 
-// ── Design tokens ──────────────────────────────────────────────────────────────
+// -- Design tokens --------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
@@ -36,7 +36,7 @@ const BORDER = "var(--cc-border)";
 const CARD   = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 const BG     = "#F7F5FC";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// -- Helpers --------------------------------------------------------------------
 async function apiFetch<T = unknown>(path: string): Promise<T> {
   return jsonFetch<T>(`/api${path}`);
 }
@@ -70,7 +70,7 @@ function ComplianceBadge({ score }: { score?: number | null }) {
   const labelKey = score >= 85 ? "reports.status.compliant" : score >= 60 ? "reports.status.atRisk" : "reports.status.nonCompliant";
   return (
     <span className="inline-flex items-center text-[11px] font-bold px-2.5 h-5 rounded-full"
-      style={{ background: scoreBg(score), color: scoreColor(score) }}>{translate(labelKey)} · {Math.round(score)}%</span>
+      style={{ background: scoreBg(score), color: scoreColor(score) }}>{translate(labelKey)} � {Math.round(score)}%</span>
   );
 }
 
@@ -246,7 +246,7 @@ function ClinicalReportGenerator() {
   );
 }
 
-// ── Tab definitions ────────────────────────────────────────────────────────────
+// -- Tab definitions ------------------------------------------------------------
 const TABS = [
   { id: "hub",        labelKey: "reports.tabs.hub",        icon: LayoutDashboard  },
   { id: "sessions",   labelKey: "reports.tabs.sessions",   icon: FileText         },
@@ -260,9 +260,9 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 1. DOCUMENTATION HUB
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function HubSection() {
   const { translate } = useAccessibility();
   const { data: sessions = [] } = useGetSessions({ limit: 100 });
@@ -287,36 +287,36 @@ function HubSection() {
     <div className="space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label={translate("reports.hub.sessionsNeedingNotes")}   value={missingNotes.length}      icon={FileText}      color={CORAL}     />
+        <StatCard label={translate("reports.hub.sessionsNeedingNotes")}   value={missingNotes.length}      icon={FileText}      color="#D97706"    />
         <StatCard label={translate("reports.hub.auditRisks")}      value={auditRisks.length}         icon={ShieldAlert}   color="#DC2626"   />
         <StatCard label={translate("reports.hub.openIncidents")}            value={iStats?.open ?? (incidents.filter((i: any) => i.status !== "closed" && i.status !== "resolved").length)} icon={AlertTriangle} color="#D97706" />
-        <StatCard label={translate("reports.hub.complianceScore")}          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "—"} icon={ShieldCheck} color="#16A34A" />
+        <StatCard label={translate("reports.hub.complianceScore")}          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "N/A"} icon={ShieldCheck} color="#16A34A" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Incomplete session notes */}
         <Card>
           <CardHeader title={translate("reports.hub.incompleteNotes")}
-            action={<Link href="/sessions"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} →</span></Link>} />
+            action={<Link href="/sessions"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} ?</span></Link>} />
           {missingNotes.length === 0
             ? <EmptyState icon={CheckCircle2} title={translate("reports.hub.allNotesComplete")} sub={translate("reports.hub.allNotesCompleteHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {missingNotes.slice(0, 6).map((s: any) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
                     <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors">
-                      <div className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${CORAL}12` }}>
-                        <FileText size={13} style={{ color: CORAL }} />
+                      <div className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(217,119,6,0.08)" }}>
+                        <FileText size={13} style={{ color: "#D97706" }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>
                           {s.participant_name ?? translate("reports.unknownParticipant")}
                         </p>
                         <p className="text-[11px]" style={{ color: T3 }}>
-                          {format(parseISO(s.session_date), "MMM d")} · {(s.session_type ?? "session").replace(/_/g, " ")}
+                          {format(parseISO(s.session_date), "MMM d")} � {(s.session_type ?? "session").replace(/_/g, " ")}
                         </p>
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: "rgba(241,115,138,0.1)", color: CORAL }}>{translate("reports.hub.missing")}</span>
+                        style={{ background: "rgba(217,119,6,0.1)", color: "#D97706" }}>{translate("reports.hub.missing")}</span>
                     </div>
                   </Link>
                 ))}
@@ -327,7 +327,7 @@ function HubSection() {
         {/* Compliance alerts feed */}
         <Card>
           <CardHeader title={translate("reports.hub.complianceAlerts")}
-            action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} →</span></Link>} />
+            action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} ?</span></Link>} />
           {(alerts as any[]).length === 0
             ? <EmptyState icon={ShieldCheck} title={translate("reports.hub.noAlerts")} sub={translate("reports.hub.noAlertsHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
@@ -366,7 +366,7 @@ function HubSection() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
-                      <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min</p>
+                      <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
                     <ChevronRight size={14} className="shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" style={{ color: T3 }} />
@@ -380,9 +380,9 @@ function HubSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 2. SESSION REPORTS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function SessionReportsSection() {
   const { translate } = useAccessibility();
   const [search, setSearch] = useState("");
@@ -414,7 +414,7 @@ function SessionReportsSection() {
           {[["all","reports.filter.all"],["compliant","reports.status.compliant"],["at_risk","reports.status.atRisk"],["non_compliant","reports.status.nonCompliant"],["draft","reports.status.draft"]].map(([v, l]) => (
             <button key={v} onClick={() => setFilter(v)}
               className="px-3 h-9 rounded-xl text-[12px] font-semibold border transition-all"
-              style={{ background: filter === v ? PLUM : "var(--cc-bg)", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
+              style={{ background: filter === v ? "var(--cc-cta)" : "var(--cc-bg)", color: filter === v ? "white" : T2, borderColor: filter === v ? "var(--cc-cta)" : BORDER }}>
               {translate(l)}
             </button>
           ))}
@@ -436,7 +436,7 @@ function SessionReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min
+                        {(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min
                       </p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
@@ -451,9 +451,9 @@ function SessionReportsSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 3. INCIDENT REPORTS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function IncidentReportsSection() {
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
@@ -473,7 +473,7 @@ function IncidentReportsSection() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={PLUM}      />
+        <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={T3}      />
         <StatCard label={translate("reports.hub.openIncidents")}     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   />
         <StatCard label={translate("reports.incidents.ndisReportable")}    value={stats?.ndis_pending ?? 0}          icon={AlertTriangle} color="#EA580C"   />
         <StatCard label={translate("reports.incidents.critical")}  value={critical}                           icon={Siren}         color="#DC2626"   />
@@ -485,8 +485,7 @@ function IncidentReportsSection() {
           <Input placeholder={translate("reports.incidents.search")} value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
-        <Button onClick={() => navigate("/incidents/new")} size="sm" className="shrink-0"
-          style={{ background: PLUM, color: "white" }}>
+        <Button variant="navy" onClick={() => navigate("/incidents/new")} size="sm" className="shrink-0">
           <Plus size={14} className="mr-1.5" />{translate("reports.incidents.new")}
         </Button>
       </div>
@@ -503,7 +502,7 @@ function IncidentReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{inc.title ?? "Incident Report"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {inc.participant_name ?? "—"} · {format(parseISO(inc.incident_date ?? inc.created_at), "MMM d, yyyy")}
+                        {inc.participant_name ?? "N/A"} � {format(parseISO(inc.incident_date ?? inc.created_at), "MMM d, yyyy")}
                       </p>
                     </div>
                     <SeverityBadge sev={inc.severity ?? "medium"} />
@@ -518,9 +517,9 @@ function IncidentReportsSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 4. PARTICIPANT NOTES
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function ParticipantNotesSection() {
   const { translate } = useAccessibility();
   const [selected, setSelected] = useState<string | null>(null);
@@ -558,12 +557,12 @@ function ParticipantNotesSection() {
                 style={{ background: selected === p.id ? `${PLUM}08` : undefined }}>
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-black"
-                    style={{ background: selected === p.id ? PLUM : T3 }}>
+                    style={{ background: selected === p.id ? "var(--cc-text)" : T3 }}>
                     {(p.full_name ?? "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold truncate" style={{ color: selected === p.id ? PLUM : T1 }}>{p.full_name}</p>
-                    <p className="text-[11px]" style={{ color: T3 }}>{p.ndis_number ?? "—"}</p>
+                    <p className="text-[11px]" style={{ color: T3 }}>{p.ndis_number ?? "N/A"}</p>
                   </div>
                 </div>
               </button>
@@ -579,8 +578,8 @@ function ParticipantNotesSection() {
               <EmptyState icon={Users} title={translate("reports.notes.selectParticipant")} sub={translate("reports.notes.selectParticipantHint")} />
             </Card>
           : <Card className="h-full flex flex-col">
-              <CardHeader title={`${selectedPart?.full_name ?? "Participant"} — Care Notes`}
-                action={<Link href={`/patients`}><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.notes.viewProfile")} →</span></Link>} />
+              <CardHeader title={`${selectedPart?.full_name ?? "Participant"}: Care Notes`}
+                action={<Link href={`/patients`}><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.notes.viewProfile")} ?</span></Link>} />
               {partSessions.length === 0
                 ? <EmptyState icon={BookOpen} title={translate("reports.notes.empty")} sub={translate("reports.notes.emptyHint")} />
                 : <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: BORDER }}>
@@ -594,7 +593,7 @@ function ParticipantNotesSection() {
                             <ComplianceBadge score={s.compliance_score} />
                           </div>
                           <p className="text-[13px] font-semibold" style={{ color: T1 }}>
-                            {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min
+                            {(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min
                           </p>
                           {legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 line-clamp-2" style={{ color: T2 }}>
@@ -613,7 +612,7 @@ function ParticipantNotesSection() {
                             </div>
                           )}
                           {!legalNoteText(s) && (
-                            <p className="text-[12px] mt-1.5 italic" style={{ color: CORAL }}>{translate("reports.notes.noNotes")}</p>
+                            <p className="text-[12px] mt-1.5 italic" style={{ color: "#D97706" }}>{translate("reports.notes.noNotes")}</p>
                           )}
                         </div>
                       </Link>
@@ -627,9 +626,9 @@ function ParticipantNotesSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 5. COMPLIANCE REPORTS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function ComplianceReportsSection() {
   const { translate } = useAccessibility();
   const { data: rawOv, isLoading } = useGetComplianceOverview();
@@ -718,7 +717,7 @@ function ComplianceReportsSection() {
 
           <Card>
             <CardHeader title={translate("reports.compliance.auditLog")}
-              action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.compliance.fullCentre")} →</span></Link>} />
+              action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.compliance.fullCentre")} ?</span></Link>} />
             {sessions.length === 0
               ? <EmptyState icon={FileBarChart2} title={translate("reports.compliance.noData")} sub={translate("reports.compliance.noDataHint")} />
               : <div className="divide-y" style={{ borderColor: BORDER }}>
@@ -728,7 +727,7 @@ function ComplianceReportsSection() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
-                            {format(parseISO(s.session_date), "MMM d, yyyy")} · {(s.session_type ?? "session").replace(/_/g, " ")}
+                            {format(parseISO(s.session_date), "MMM d, yyyy")} � {(s.session_type ?? "session").replace(/_/g, " ")}
                           </p>
                         </div>
                         <ComplianceBadge score={s.compliance_score} />
@@ -745,9 +744,9 @@ function ComplianceReportsSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 6. AUDIT READINESS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function AuditReadinessSection() {
   const { translate } = useAccessibility();
   const { data: rawOv } = useGetComplianceOverview();
@@ -763,7 +762,7 @@ function AuditReadinessSection() {
 
   const checks = [
     { label: "Session notes documented",       pct: noteRate,       pass: noteRate >= 80     },
-    { label: "Compliance score ≥ 85%",         pct: score,          pass: score >= 85         },
+    { label: "Compliance score = 85%",         pct: score,          pass: score >= 85         },
     { label: "Sessions reviewed (30 days)",    pct: Math.min(recentSessions.length * 10, 100), pass: recentSessions.length >= 5 },
     { label: "Compliant session rate",         pct: compliantPct,   pass: compliantPct >= 80  },
     { label: "NDIS goals documented",          pct: 75,             pass: false,  warn: true  },
@@ -831,9 +830,9 @@ function AuditReadinessSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 7. AI INSIGHTS & FLAGS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function AIInsightsSection() {
   const { translate } = useAccessibility();
   const { data: alerts = [] }   = useGetUnreadAlerts();
@@ -882,7 +881,7 @@ function AIInsightsSection() {
                           {a.session_id && (
                             <Link href={`/sessions/${a.session_id}`}>
                               <span className="text-[11px] font-semibold mt-1.5 inline-block cursor-pointer" style={{ color: PLUM }}>
-                                View session →
+                                View session ?
                               </span>
                             </Link>
                           )}
@@ -928,7 +927,7 @@ function AIInsightsSection() {
                 <Link key={s.id} href={`/sessions/${s.id}`}>
                   <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group border-t" style={{ borderColor: BORDER }}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "—"}</p>
+                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "N/A"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>{format(parseISO(s.session_date), "MMM d")}</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
@@ -943,9 +942,9 @@ function AIInsightsSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 8. TEMPLATES & FORMS
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 const TEMPLATES = [
   { id: "progress_note",    title: "Progress Note",         desc: "Structured NDIS progress note template with goal links, outcomes, and participant response sections.", icon: FileText,      badge: "Core" },
   { id: "incident_report",  title: "Incident Report",       desc: "NDIS-compliant incident report capturing severity, actions taken, and required escalation steps.",    icon: AlertTriangle, badge: "Mandatory" },
@@ -963,7 +962,7 @@ const BADGE_COLORS: Record<string, [string, string]> = {
   Operational: ["#D97706", "rgba(245,158,11,0.1)"],
   Compliance:  ["#16A34A", "rgba(22,163,74,0.1)"],
   Onboarding:  ["#2563EB", "rgba(37,99,235,0.1)"],
-  Review:      ["#7C3AED", "rgba(124,58,237,0.1)"],
+  Review:      ["#E8457A", "rgba(232,69,122,0.1)"],
   Daily:       [T3,        `${PLUM}10`],
 };
 
@@ -998,7 +997,7 @@ function TemplatesSection() {
                 <button
                   onClick={() => navigate("/sessions/new")}
                   className="flex-1 h-8 rounded-lg text-[12px] font-semibold text-white transition-all hover:opacity-90"
-                  style={{ background: PLUM }}>
+                  style={{ background: "var(--cc-cta)" }}>
                   {translate("reports.templates.use")}
                 </button>
               </div>
@@ -1010,9 +1009,9 @@ function TemplatesSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 9. EXPORT CENTRE
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 function ExportCentreSection() {
   const { translate } = useAccessibility();
   const [exporting, setExporting] = useState<string | null>(null);
@@ -1039,9 +1038,9 @@ function ExportCentreSection() {
         startY: 50,
         head: [["Participant", "Date", "Type", "Score", "Status"]],
         body: sessions_list.map((s: any) => [
-          s.participant_name ?? "—",
+          s.participant_name ?? "N/A",
           format(parseISO(s.session_date), "dd/MM/yyyy"),
-          (s.session_type ?? "—").replace(/_/g, " "),
+          (s.session_type ?? "N/A").replace(/_/g, " "),
           s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : "Draft",
           scoreLabel(s.compliance_score ?? 0),
         ]),
@@ -1143,9 +1142,9 @@ function ExportCentreSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 export default function Reports() {
   const { translate } = useAccessibility();
   const [activeTab, setActiveTab] = useState<TabId>("hub");
@@ -1172,13 +1171,13 @@ export default function Reports() {
           <p className="hidden" style={{ color: CORAL }}>
             Reports &amp; Documentation
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate(activeTab_.labelKey)}
           </h1>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Vertical sidebar nav — desktop */}
+          {/* Vertical sidebar nav � desktop */}
           <aside className="hidden lg:block w-56 shrink-0">
             <nav className="bg-white rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD }}>
               {TABS.map(t => {
@@ -1198,7 +1197,7 @@ export default function Reports() {
             </nav>
           </aside>
 
-          {/* Horizontal tabs — mobile */}
+          {/* Horizontal tabs � mobile */}
           <div className="lg:hidden overflow-x-auto pb-1 -mx-4 px-4">
             <div className="flex gap-2 min-w-max">
               {TABS.map(t => {
@@ -1208,9 +1207,9 @@ export default function Reports() {
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all border"
                     style={{
-                      background: active ? PLUM : "var(--cc-bg)",
+                      background: active ? "var(--cc-cta)" : "var(--cc-bg)",
                       color: active ? "white" : T2,
-                      borderColor: active ? PLUM : BORDER,
+                      borderColor: active ? "var(--cc-text)" : BORDER,
                     }}>
                     <Icon size={12} />
                     {translate(t.labelKey)}

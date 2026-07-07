@@ -25,8 +25,11 @@ export const CC_STATUS = {
   successBg: "var(--cc-status-success-bg)",
   warning: "var(--cc-status-warning)",
   warningBg: "var(--cc-status-warning-bg)",
-  critical: "var(--cc-status-critical)",
-  criticalBg: "var(--cc-status-critical-bg)",
+  // Real red — compliance/safety danger severity, deliberately distinct from the brand's own
+  // destructive-action colour (which is Purple). See DESIGN_BRIEF.md: "pink = brand/action,
+  // red = danger, users must never confuse the two."
+  critical: "var(--cc-status-danger)",
+  criticalBg: "var(--cc-status-danger-bg)",
   info: "var(--cc-status-info)",
   infoBg: "var(--cc-status-info-bg)",
 } as const;

@@ -82,7 +82,7 @@ function shiftStatusCfg(shift: CalendarShift, translate: (key: string) => string
   if (shift.calendar_status === "tentative") {
     return { label: translate("calendar.status.tentative"), bg: "#FEF3C7", color: "#D97706" };
   }
-  return { label: translate("calendar.status.scheduled"), bg: "#EDE9FF", color: 'var(--cc-plum)' };
+  return { label: translate("calendar.status.scheduled"), bg: "#FCE3EB", color: 'var(--cc-plum)' };
 }
 
 function WorkerShiftChip({
@@ -189,7 +189,7 @@ function WorkerMonthGrid({
                 <span
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-black"
                   style={{
-                    background: today ? PLUM : "transparent",
+                    background: today ? "var(--cc-text)" : "transparent",
                     color: today ? "white" : isSelected ? PLUM : inMonth ? TEXT : MUTED,
                   }}
                 >
@@ -425,7 +425,7 @@ export default function WorkerScheduleCalendar() {
       y += 5;
       doc.setFont("helvetica", "normal");
       for (const s of dayShifts) {
-        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end)} — ${anonymiseName(s.participant_name)}`;
+        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end)} · ${anonymiseName(s.participant_name)}`;
         doc.text(line, 18, y);
         y += 5;
       }
@@ -471,7 +471,7 @@ export default function WorkerScheduleCalendar() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("common.supportWorker")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("calendar.title")}
           </h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>
@@ -520,7 +520,7 @@ export default function WorkerScheduleCalendar() {
               type="button"
               onClick={() => setViewMode(m)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === m ? PLUM : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
+              style={{ background: viewMode === m ? "var(--cc-cta)" : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
             >
               {translate(m === "month" ? "calendar.month" : "calendar.week")}
             </button>
@@ -561,7 +561,7 @@ export default function WorkerScheduleCalendar() {
             type="button"
             onClick={() => feedMut.mutate()}
             className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black text-white"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Link2 size={14} /> {feedMut.isPending ? translate("calendar.generating") : translate("calendar.share")}
           </button>
@@ -681,11 +681,12 @@ export default function WorkerScheduleCalendar() {
         <LegendItem
           label={translate("calendar.legend.tentative")}
           swatch={{
-            background: `repeating-linear-gradient(45deg, ${PLUM}44, ${PLUM}44 4px, ${PLUM}22 4px, ${PLUM}22 8px)`,
+            background: "transparent",
+            border: `2px dashed ${PLUM}`,
           }}
         />
         <LegendItem label={translate("calendar.legend.cancelled")} swatch={{ background: "#CBD5E1", textDecoration: "line-through" }} />
-        <LegendItem label={translate("calendar.legend.timeOff")} swatch={{ background: "#E2E8F0" }} />
+        <LegendItem label={translate("calendar.legend.timeOff")} swatch={{ background: "#E8E8EA" }} />
       </div>
 
       <WorkerShiftConfirmDialog

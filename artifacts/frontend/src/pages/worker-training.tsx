@@ -118,7 +118,7 @@ export default function WorkerTrainingPage() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("performance.eyebrow")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("training.title")}
           </h1>
         </div>

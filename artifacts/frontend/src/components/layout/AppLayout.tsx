@@ -269,7 +269,7 @@ function GlobalSearch({ sections, translate }: { sections: NavSection[]; transla
         style={{
           border: `1px solid ${focused ? "var(--cc-plum)" : "var(--cc-border)"}`,
           background: focused ? "var(--cc-bg)" : "color-mix(in srgb, var(--cc-soft) 70%, transparent)",
-          boxShadow: focused ? "0 0 0 3px rgba(55,48,163,0.08)" : "none",
+          boxShadow: focused ? "0 0 0 3px var(--cc-plum-soft)" : "none",
           width: focused ? 200 : 160,
         }}
       >
@@ -391,7 +391,7 @@ function SidebarContents({
                         background: active
                           ? PLUM
                           : isIncident && !compact
-                            ? "rgba(190,24,93,0.06)"
+                            ? "var(--cc-coral-soft)"
                             : "transparent",
                         color: active ? "#fff" : isIncident ? CORAL : MUTED,
                         fontWeight: active ? 700 : isIncident ? 600 : 500,
@@ -448,9 +448,9 @@ function SidebarContents({
             <div
               className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-black transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
               style={{
-                background: "rgba(190,24,93,0.09)",
+                background: "var(--cc-coral-soft)",
                 color: CORAL,
-                border: "1.5px solid rgba(190,24,93,0.18)",
+                border: "1.5px solid var(--cc-coral-ring)",
               }}
             >
               <AlertTriangle size={14} strokeWidth={2.5} />
@@ -475,7 +475,7 @@ function SidebarContents({
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
               style={{
-                background: alertCount > 0 ? "#BE185D" : "#16A34A",
+                background: alertCount > 0 ? "var(--cc-coral)" : "var(--cc-status-success)",
                 borderColor: "var(--cc-bg)",
               }}
               title={alertCount > 0
@@ -496,7 +496,7 @@ function SidebarContents({
               <div
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
                 style={{
-                  background: alertCount > 0 ? "#BE185D" : "#16A34A",
+                  background: alertCount > 0 ? "var(--cc-coral)" : "var(--cc-status-success)",
                   borderColor: "var(--cc-bg)",
                 }}
                 title={alertCount > 0
@@ -783,7 +783,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     type="button"
                     aria-label={translateParams("layout.compliance.needAttention", { count: String(alertCount) })}
                     className="relative flex items-center gap-1.5 px-3 h-8 rounded-full text-[12px] font-bold transition-all hover:opacity-90 whitespace-nowrap"
-                    style={{ background: "var(--cc-alert-bg)", color: CORAL, border: "1px solid rgba(190,24,93,0.18)" }}
+                    style={{ background: "var(--cc-alert-bg)", color: CORAL, border: "1px solid var(--cc-coral-ring)" }}
                   >
                     <AlertTriangle size={13} strokeWidth={2.5} />
                     <span className="font-black">{alertCount}</span>

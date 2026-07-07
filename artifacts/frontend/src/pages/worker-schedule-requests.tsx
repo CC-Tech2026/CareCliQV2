@@ -339,7 +339,7 @@ export default function WorkerScheduleRequests() {
               <option value="">{translate("scheduleRequests.selectShift")}</option>
               {(shiftsData?.shifts ?? []).map((s: WorkerShift) => (
                 <option key={s.id} value={s.id}>
-                  {s.participant_name} — {s.scheduled_start ? format(parseISO(s.scheduled_start), "EEE d MMM h:mm a") : s.id}
+                  {s.participant_name} · {s.scheduled_start ? format(parseISO(s.scheduled_start), "EEE d MMM h:mm a") : s.id}
                 </option>
               ))}
             </select>

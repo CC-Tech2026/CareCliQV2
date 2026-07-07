@@ -37,6 +37,7 @@ import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
 import CoordinatorLivePage from "@/pages/coordinator-live";
 import CoordinatorMonitorPage from "@/pages/coordinator-monitor";
 import AuditPack from "@/pages/audit-pack";
+import DesignSystem from "@/pages/design-system";
 import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Credentials from "@/pages/credentials";
@@ -103,6 +104,12 @@ function Router() {
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
+
+      <Route path="/design-system">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><DesignSystem /></AppLayout>
+        </ProtectedRoute>
+      </Route>
 
       <Route path="/verify-email">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>

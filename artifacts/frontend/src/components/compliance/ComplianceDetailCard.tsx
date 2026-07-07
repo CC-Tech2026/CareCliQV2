@@ -44,7 +44,7 @@ function statusIcon(status: string) {
 function scoreRingColor(score: number) {
   if (score >= 85) return PLUM;
   if (score >= 60) return "#D97706";
-  return "#BE185D";
+  return "#7C3AED";
 }
 
 export function ComplianceDetailCard({
@@ -153,7 +153,7 @@ export function ComplianceDetailCard({
                             <HelpCircle className="h-3.5 w-3.5" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs bg-[#111827] text-white">
+                        <TooltipContent side="top" className="max-w-xs bg-[#1A1A2E] text-white">
                           <p className="text-xs leading-relaxed">{rule.explanation}</p>
                         </TooltipContent>
                       </Tooltip>

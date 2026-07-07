@@ -274,7 +274,7 @@ export function WorkerMobileShiftView({
 
     return {
       participantName: shift.participant_name ?? "Participant",
-      duration: formatMobileShiftDuration(shift, elapsed || undefined) || duration || "—",
+      duration: formatMobileShiftDuration(shift, elapsed || undefined) || duration || "N/A",
       tasksCompleted,
       tasksTotal,
       score: compliance.score,

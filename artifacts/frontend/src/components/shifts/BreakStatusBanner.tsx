@@ -36,7 +36,7 @@ export function BreakStatusBanner({
             <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
           </span>
           <Coffee size={14} className="shrink-0" aria-hidden />
-          On break — billing paused
+          On break: billing paused
         </span>
         <div className="shrink-0 text-right">
           <span className="font-mono text-sm font-black text-amber-700">{breakElapsed}</span>

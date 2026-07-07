@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -203,9 +203,9 @@ function checkLiveCompliance(
     const nowMs = Date.now();
     const deltaDays = (nowMs - sessionMs) / (1000 * 60 * 60 * 24);
     if (deltaDays > 7) {
-      issues.push({ type: "error", rule: "48_hour_overdue", msg: `Notes are ${Math.floor(deltaDays)} days overdue — NDIS requires documentation within 48 hours of service` });
+      issues.push({ type: "error", rule: "48_hour_overdue", msg: `Notes are ${Math.floor(deltaDays)} days overdue. NDIS requires documentation within 48 hours of service` });
     } else if (deltaDays > 2) {
-      issues.push({ type: "warning", rule: "48_hour_warning", msg: `Session was ${Math.floor(deltaDays)} days ago — NDIS recommends documenting within 48 hours` });
+      issues.push({ type: "warning", rule: "48_hour_warning", msg: `Session was ${Math.floor(deltaDays)} days ago. NDIS recommends documenting within 48 hours` });
     }
   }
   return issues;
@@ -379,7 +379,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Stage 6: AI note improvement — per-rule suggestions + full rewrite
+  // Stage 6: AI note improvement � per-rule suggestions + full rewrite
   const improveNoteMutation = useMutation({
     mutationFn: async () => {
       const failed = rulesResult?.failed_rules ?? [];
@@ -411,13 +411,13 @@ export default function SessionDetail({ id }: { id?: string }) {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: `Compliance re-run complete — ${data.score.toFixed(0)}%` });
+      toast({ title: `Compliance re-run complete: ${data.score.toFixed(0)}%` });
       refetch();
     },
     onError: () => toast({ title: translate("sessions.detail.toast.complianceFailed"), variant: "destructive" }),
   });
 
-  // Save notes — with blocking modal if critical issues
+  // Save notes � with blocking modal if critical issues
   const doSaveNotes = () => {
     if (!sessionId) return;
     updateSession.mutate({ sessionId, data: { notes } }, {
@@ -431,7 +431,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   };
 
   const handleSaveNotes = () => {
-    // Stage 3: RP gate — must acknowledge before saving if RP detected
+    // Stage 3: RP gate � must acknowledge before saving if RP detected
     if (liveRpFlags.length > 0 && !rpAcknowledged) {
       setShowRpAcknowledge(true);
     } else if (criticalLiveIssues.length > 0) {
@@ -618,7 +618,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   {liveRpFlags.slice(0, 6).map((flag, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-md px-2 py-1.5">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span><strong>"{flag.phrase}"</strong> — {flag.message}</span>
+                      <span><strong>"{flag.phrase}"</strong>: {flag.message}</span>
                     </li>
                   ))}
                 </ul>
@@ -653,13 +653,13 @@ export default function SessionDetail({ id }: { id?: string }) {
               }}
               className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
             >
-              Acknowledged — Save Notes
+              Acknowledged: Save Notes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Review flag banner — visible for workers when session is flagged */}
+      {/* Review flag banner � visible for workers when session is flagged */}
       {(session as unknown as { review_flag?: boolean; review_note?: string; review_requested_by?: string }).review_flag && (
         <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
           <Flag className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
@@ -762,7 +762,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </Button>
           <Button
             className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ background: "var(--cc-plum)" }}
+            style={{ background: "var(--cc-cta)" }}
             onClick={handleAIAnalysis}
             disabled={isAISaving || hasBlockers}
             title={hasBlockers ? translate("sessions.detail.fixBlockers") : undefined}
@@ -776,7 +776,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left column — notes + transcription + structural outputs */}
+        {/* Left column � notes + transcription + structural outputs */}
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "var(--cc-card-shadow)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "var(--cc-card-divider)" }}>
@@ -841,7 +841,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                           : "bg-amber-50 text-amber-700 border-b border-amber-100"
                       }`}>
                         {criticalLiveIssues.length > 0 ? (
-                          <><XCircle className="h-3.5 w-3.5" /> {criticalLiveIssues.length} critical issue{criticalLiveIssues.length > 1 ? "s" : ""} — review before saving</>
+                          <><XCircle className="h-3.5 w-3.5" /> {criticalLiveIssues.length} critical issue{criticalLiveIssues.length > 1 ? "s" : ""}, review before saving</>
                         ) : (
                           <><AlertTriangle className="h-3.5 w-3.5" /> {liveIssues.length} compliance warning{liveIssues.length > 1 ? "s" : ""}</>
                         )}
@@ -861,7 +861,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   {liveIssues.length === 0 && notes.length > 50 && (
                     <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      Notes look good — no compliance issues detected
+                      Notes look good, no compliance issues detected
                     </div>
                   )}
                   {/* Character count metrics */}
@@ -961,7 +961,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-muted)" }}>Key Observations</p>
                     <ul className="space-y-1">
                       {aiInsights.key_observations.map((obs: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-coral)" }}>•</span>{obs}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-coral)" }}>�</span>{obs}</li>
                       ))}
                     </ul>
                   </div>
@@ -971,7 +971,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-muted)" }}>Next Session</p>
                     <ul className="space-y-1">
                       {aiInsights.next_session_recommendations.map((rec: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>→</span>{rec}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>?</span>{rec}</li>
                       ))}
                     </ul>
                   </div>
@@ -981,7 +981,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest text-red-500 font-semibold mb-1.5">Concerns</p>
                     <ul className="space-y-1">
                       {aiInsights.concerns.map((c: string, i: number) => (
-                        <li key={i} className="text-[13px] text-red-700 flex gap-2"><span>⚠</span>{c}</li>
+                        <li key={i} className="text-[13px] text-red-700 flex gap-2"><span>?</span>{c}</li>
                       ))}
                     </ul>
                   </div>
@@ -991,7 +991,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-plum)" }}>AI Recommendations</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_recommendations.map((r: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>→</span>{r}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>?</span>{r}</li>
                       ))}
                     </ul>
                   </div>
@@ -1001,7 +1001,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest text-amber-600 font-semibold mb-1.5">Compliance Flags</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_flags.map((f: string, i: number) => (
-                        <li key={i} className="text-[12px] text-amber-700 flex gap-2 bg-amber-50 rounded px-2 py-1"><span>⚑</span>{f}</li>
+                        <li key={i} className="text-[12px] text-amber-700 flex gap-2 bg-amber-50 rounded px-2 py-1"><span>?</span>{f}</li>
                       ))}
                     </ul>
                   </div>
@@ -1044,7 +1044,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           })()}
         </div>
 
-        {/* Right column — compliance score breakdowns + linked targets + metadata tools */}
+        {/* Right column � compliance score breakdowns + linked targets + metadata tools */}
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
@@ -1087,7 +1087,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               {rulesResult && (
                 <div className="pt-2 space-y-3">
 
-                  {/* Block tier — Must Fix */}
+                  {/* Block tier � Must Fix */}
                   {blockFailures.length > 0 && (
                     <div className="rounded-xl border border-red-200 bg-red-50/70 overflow-hidden">
                       <div className="px-3 py-2 bg-red-100/60 border-b border-red-200 flex items-center gap-1.5">
@@ -1109,7 +1109,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
 
-                  {/* Warn tier — Acknowledge to Proceed */}
+                  {/* Warn tier � Acknowledge to Proceed */}
                   {warnFailures.length > 0 && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50/50 overflow-hidden">
                       <div className="px-3 py-2 bg-amber-100/60 border-b border-amber-200 flex items-center gap-1.5">
@@ -1152,7 +1152,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
 
-                  {/* Info tier — Suggestions */}
+                  {/* Info tier � Suggestions */}
                   {infoFailures.length > 0 && (
                     <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden">
                       <div className="px-3 py-2 bg-blue-50/60 border-b border-blue-100 flex items-center gap-1.5">
@@ -1228,7 +1228,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                 </div>
               )}
 
-              {/* Stage 6: AI Note Improvement — per-rule suggestions + full rewrite */}
+              {/* Stage 6: AI Note Improvement � per-rule suggestions + full rewrite */}
               {rulesResult?.failed_rules?.length > 0 && (
                 <div className="pt-2">
                   {!improveNoteMutation.data ? (
@@ -1240,7 +1240,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       disabled={improveNoteMutation.isPending}
                     >
                       {improveNoteMutation.isPending
-                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating improved note…</>
+                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating improved note�</>
                         : <><Sparkles className="h-3.5 w-3.5 text-purple-500" /> Improve Note with AI</>}
                     </Button>
                   ) : (

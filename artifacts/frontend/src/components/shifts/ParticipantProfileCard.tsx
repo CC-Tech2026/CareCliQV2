@@ -73,9 +73,9 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                 {caseManager.phone ? (
                   <a
                     href={`tel:${caseManager.phone}`}
-                    className="underline decoration-[#3730A3]/30 underline-offset-2"
+                    className="underline decoration-[#E8457A]/30 underline-offset-2"
                   >
-                    {caseManager.name} — {caseManager.phone}
+                    {caseManager.name} · {caseManager.phone}
                   </a>
                 ) : (
                   caseManager.name
@@ -92,7 +92,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                 </dt>
                 <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
                   {href && value ? (
-                    <a href={href} className="underline decoration-[#3730A3]/30 underline-offset-2">
+                    <a href={href} className="underline decoration-[#E8457A]/30 underline-offset-2">
                       {value}
                     </a>
                   ) : (

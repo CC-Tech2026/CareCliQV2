@@ -1,4 +1,4 @@
-﻿import { Link } from "wouter";
+import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
@@ -13,6 +13,8 @@ import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
 import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
 import { PageHeader } from "@/components/healthcare/PageHeader";
+import { Button } from "@/components/ui/button";
+import { StatCard, StatCardGroup, type StatTone } from "@/components/ui/stat-card";
 import {
   AlertTriangle,
   ArrowRight,
@@ -143,20 +145,19 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
-          <p className="rounded-lg bg-[#F8F8FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg bg-[#F4EDE6] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             {translate("dashboard.noClientsToday")}
           </p>
         )}
         {clients.map((client) => (
           <Link key={client.id} href={`/my-clients/${client.id}`}>
-            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]">
-              <div className="grid h-10 w-10 place-items-center rounded-full text-sm font-black text-white" style={{ background: PLUM }}>
-                {client.full_name?.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#FADAE4] hover:bg-[#F8F6FE]">
+              <div className="grid h-10 w-10 place-items-center rounded-full text-sm font-black text-white" style={{ background: "var(--cc-text)" }}>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{client.full_name}</p>
                 <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                  {client.plan_management_type} ·{" "}
+                  {client.plan_management_type} �{" "}
                   {client.last_seen
                     ? translateParams("clients.lastSeenOn", { date: safeDate(client.last_seen) })
                     : translate("clients.notSeenYet")}
@@ -186,14 +187,14 @@ function SessionListCard({ title, sessions }: { title: string; sessions: Dashboa
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-2">
         {sessions.length === 0 && <p className="text-xs font-medium" style={{ color: MUTED }}>No records need attention.</p>}
         {sessions.map((session) => (
-          <div key={session.id} className="rounded-lg border p-2.5" style={{ borderColor: "#EEEAFB" }}>
+          <div key={session.id} className="rounded-lg border p-2.5" style={{ borderColor: "#EDE3FC" }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold" style={{ color: TEXT }}>
                   {session.participant_name || "Participant"}
                 </p>
                 <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>
-                  {safeDate(session.session_date)} · {(session.session_type || "session").replace("_", " ")}
+                  {safeDate(session.session_date)} � {(session.session_type || "session").replace("_", " ")}
                 </p>
               </div>
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(session.compliance_status)}`}>
@@ -234,7 +235,7 @@ function statusLabel(session: DashboardSession) {
   return "Upcoming";
 }
 
-// ── Shared empty state ────────────────────────────────────────────────────────
+// -- Shared empty state --------------------------------------------------------
 function TabEmptyState({
   icon: Icon,
   message,
@@ -253,7 +254,7 @@ function TabEmptyState({
   );
 }
 
-// ── Tab: Team Compliance ──────────────────────────────────────────────────────
+// -- Tab: Team Compliance ------------------------------------------------------
 function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   const breakdown = data.team_compliance_breakdown ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
   const score     = Math.max(0, Math.min(100, data.team_compliance_score || 0));
@@ -269,13 +270,13 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
 
-      {/* LEFT — score ring + breakdown bars */}
+      {/* LEFT � score ring + breakdown bars */}
       <div className="space-y-4">
         {/* Ring + numbers */}
         <div className="flex items-center gap-5">
           <div
             className="relative shrink-0 grid h-20 w-20 place-items-center rounded-full"
-            style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #EEF2FF 0deg)` }}
+            style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #F2EBFD 0deg)` }}
           >
             <div className="grid h-13 w-13 place-items-center rounded-full bg-white" style={{ width: 52, height: 52 }}>
               <div className="text-center">
@@ -300,7 +301,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
                   color: getStatusColor(status),
                 }}
               >
-                {status} · {score}/100
+                {status} � {score}/100
               </span>
             </div>
           </div>
@@ -337,7 +338,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
         </Link>
       </div>
 
-      {/* RIGHT — workers needing attention (fills the formerly empty half) */}
+      {/* RIGHT � workers needing attention (fills the formerly empty half) */}
       <div>
         <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
           Workers needing attention
@@ -352,10 +353,10 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
           <div className="divide-y" style={{ borderColor: BORDER }}>
             {data.workers_needing_attention.slice(0, 7).map((worker) => (
               <Link key={worker.id} href="/team">
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div
                     className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-black text-white"
-                    style={{ background: PLUM }}
+                    style={{ background: "var(--cc-text)" }}
                   >
                     {initials(worker.full_name)}
                   </div>
@@ -370,7 +371,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
             {data.workers_needing_attention.length > 7 && (
               <Link href="/compliance">
                 <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
-                  View all {data.workers_needing_attention.length} workers →
+                  View all {data.workers_needing_attention.length} workers ?
                 </p>
               </Link>
             )}
@@ -381,7 +382,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   );
 }
 
-// ── Tab: Flagged Sessions ─────────────────────────────────────────────────────
+// -- Tab: Flagged Sessions -----------------------------------------------------
 function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
   if (sessions.length === 0) {
     return <TabEmptyState icon={CheckCircle2} message="All sessions reviewed" sub="No sessions are currently flagged for coordinator review." />;
@@ -395,7 +396,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT — divide-y row list */}
+      {/* LEFT � divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {sessions.slice(0, 7).map((s) => {
@@ -404,15 +405,15 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
             const scoreColor = cs == null ? MUTED      : cs >= 85 ? "#059669"                : cs >= 60 ? "#D97706"                  : "#DC2626";
             return (
               <Link key={s.id} href="/session-review">
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black text-white" style={{ background: PLUM }}>
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
                     {initials(s.participant_name)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {safeDate(s.session_date)} · {(s.session_type || "session").replace(/_/g, " ")}
-                      {s.review_note ? ` · "${s.review_note.slice(0, 30)}…"` : ""}
+                      {safeDate(s.session_date)} � {(s.session_type || "session").replace(/_/g, " ")}
+                      {s.review_note ? ` � "${s.review_note.slice(0, 30)}�"` : ""}
                     </p>
                   </div>
                   {cs != null && (
@@ -429,13 +430,13 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
         {sessions.length > 7 && (
           <Link href="/session-review">
             <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
-              View all {sessions.length} flagged sessions →
+              View all {sessions.length} flagged sessions ?
             </p>
           </Link>
         )}
       </div>
 
-      {/* RIGHT — summary panel */}
+      {/* RIGHT � summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Overview</p>
         <div className="grid grid-cols-2 gap-2">
@@ -469,7 +470,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
   );
 }
 
-// ── Tab: Incidents ────────────────────────────────────────────────────────────
+// -- Tab: Incidents ------------------------------------------------------------
 function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, unknown>> }) {
   if (incidents.length === 0) {
     return <TabEmptyState icon={CheckCircle2} message="No pending incidents" sub="All incidents have been resolved or no new reports filed." />;
@@ -480,7 +481,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT — divide-y row list */}
+      {/* LEFT � divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {incidents.slice(0, 7).map((inc, idx) => {
@@ -492,14 +493,14 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
             const open        = status === "open" || status === "pending";
             return (
               <Link key={id || idx} href={id ? `/incidents/${id}` : "/incidents"}>
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.10)" }}>
                     <AlertTriangle size={13} style={{ color: DS.STATUS.warning }} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{title}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {participant ? `${participant} · ` : ""}{safeDate(dateVal)}
+                      {participant ? `${participant} � ` : ""}{safeDate(dateVal)}
                     </p>
                   </div>
                   <span
@@ -520,13 +521,13 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
         {incidents.length > 7 && (
           <Link href="/incidents">
             <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
-              View all {incidents.length} incidents →
+              View all {incidents.length} incidents ?
             </p>
           </Link>
         )}
       </div>
 
-      {/* RIGHT — summary panel */}
+      {/* RIGHT � summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Status breakdown</p>
         <div className="grid grid-cols-2 gap-2">
@@ -555,7 +556,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
   );
 }
 
-// ── Tab: Credentials ──────────────────────────────────────────────────────────
+// -- Tab: Credentials ----------------------------------------------------------
 function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
   if (alerts.length === 0) {
     return <TabEmptyState icon={CheckCircle2} message="All credentials up to date" sub="No team credentials are expiring within 30 days." />;
@@ -573,7 +574,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT — divide-y row list */}
+      {/* LEFT � divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {alerts.slice(0, 7).map((alert, idx) => {
@@ -585,14 +586,14 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
             const alertColor = expired ? DS.STATUS.critical       : DS.STATUS.warning;
             return (
               <Link key={alert.credential_id ?? idx} href="/credentials">
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: alertBg }}>
                     <BadgeCheck size={13} style={{ color: alertColor }} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{alert.full_name || "Team member"}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {alert.credential_type || alert.title || "Credential"} · Expires {safeDate(alert.expiry_date)}
+                      {alert.credential_type || alert.title || "Credential"} � Expires {safeDate(alert.expiry_date)}
                     </p>
                   </div>
                   {daysLeft !== null && (
@@ -612,13 +613,13 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
         {alerts.length > 7 && (
           <Link href="/credentials">
             <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
-              View all {alerts.length} expiring credentials →
+              View all {alerts.length} expiring credentials ?
             </p>
           </Link>
         )}
       </div>
 
-      {/* RIGHT — summary panel */}
+      {/* RIGHT � summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiry breakdown</p>
         <div className="grid grid-cols-3 gap-2">
@@ -628,7 +629,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
           </div>
           <div className="rounded-xl p-3 text-center" style={{ background: urgentCount > 0 ? "rgba(245,158,11,0.06)" : DS.BACKGROUND.section }}>
             <p className="text-xl font-black" style={{ color: urgentCount > 0 ? "#D97706" : MUTED }}>{urgentCount}</p>
-            <p className="text-[9px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>≤ 14 days</p>
+            <p className="text-[9px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>= 14 days</p>
           </div>
           <div className="rounded-xl p-3 text-center" style={{ background: DS.BACKGROUND.section }}>
             <p className="text-xl font-black" style={{ color: MUTED }}>{upcomingCount}</p>
@@ -655,7 +656,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
   );
 }
 
-// ── Tab: Training ─────────────────────────────────────────────────────────────
+// -- Tab: Training -------------------------------------------------------------
 function TrainingTabContent({
   count,
   alerts,
@@ -689,7 +690,7 @@ function TrainingTabContent({
           <p className="text-xs font-medium" style={{ color: MUTED }}>Manage training records and certifications in the Toolkit</p>
         </div>
         <Link href="/toolkit">
-          <span className="text-xs font-black px-3 py-1.5 rounded-lg text-white transition hover:opacity-90" style={{ background: PLUM }}>
+          <span className="text-xs font-black px-3 py-1.5 rounded-lg text-white transition hover:opacity-90" style={{ background: "var(--cc-cta)" }}>
             Open Toolkit
           </span>
         </Link>
@@ -707,7 +708,7 @@ function TrainingTabContent({
             return (
               <Link key={alert.credential_id ?? idx} href="/toolkit">
                 <div
-                  className="flex items-center gap-3 p-3 rounded-xl border transition cursor-pointer hover:bg-[#F8F8FE]"
+                  className="flex items-center gap-3 p-3 rounded-xl border transition cursor-pointer hover:bg-[#F4EDE6]"
                   style={{ borderColor: BORDER }}
                 >
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.08)" }}>
@@ -743,7 +744,7 @@ function TrainingTabContent({
   );
 }
 
-// ── Main Action Hub ───────────────────────────────────────────────────────────
+// -- Main Action Hub -----------------------------------------------------------
 type ActionTabId = "compliance" | "flagged" | "incidents" | "credentials" | "training";
 
 function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
@@ -780,7 +781,7 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
 
   return (
     <section className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
-      {/* Tab bar — scrollable on mobile */}
+      {/* Tab bar � scrollable on mobile */}
       <div className="flex border-b overflow-x-auto" style={{ borderColor: BORDER }}>
         {tabs.map(({ id, label, icon: Icon, count, level }) => {
           const active = activeTab === id;
@@ -795,7 +796,7 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
               style={{
                 borderBottomColor: active ? PLUM : "transparent",
                 color: active ? PLUM : alert ? fg : MUTED,
-                background: active ? "#F8F8FE" : "transparent",
+                background: active ? "#F4EDE6" : "transparent",
               }}
             >
               <Icon size={13} strokeWidth={2.5} />
@@ -805,7 +806,7 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
                 <span
                   className="min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
                   style={{
-                    background: level === "critical" ? DS.STATUS.critical : level === "warning" ? DS.STATUS.warning : PLUM,
+                    background: level === "critical" ? DS.STATUS.critical : level === "warning" ? DS.STATUS.warning : "var(--cc-text)",
                   }}
                 >
                   {count}
@@ -844,8 +845,8 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
           </p>
         )}
         {sessions.slice(0, 8).map((session) => (
-          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
+          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EDE3FC" }}>
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: "var(--cc-text)" }}>
               {initials(session.participant_name)}
             </div>
             <div className="min-w-0 flex-1">
@@ -892,7 +893,7 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.max(8, Math.round((issue.count / max) * 100))}%`,
-                  background: index === issues.length - 1 ? DS.STATUS.warning : PLUM,
+                  background: index === issues.length - 1 ? DS.STATUS.warning : "var(--cc-text)",
                 }}
               />
             </div>
@@ -951,13 +952,13 @@ function WorkerDashboardView({
 
   return (
     <div className="space-y-5 pb-6">
-      {/* Greeting header — consistent with My Shifts page */}
+      {/* Greeting header � consistent with My Shifts page */}
       <header className="flex items-start justify-between gap-3 pt-1">
         <div>
           <p className="hidden">
             Support Worker
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("dashboard.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
@@ -977,7 +978,7 @@ function WorkerDashboardView({
         </div>
       </header>
 
-      {/* Key stats — 2-col on mobile, 4-col on sm+ */}
+      {/* Key stats � 2-col on mobile, 4-col on sm+ */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <WorkerStatCard label={translate("dashboard.sessionsToday")} value={data.sessions_today} />
         <WorkerStatCard
@@ -1059,12 +1060,12 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
   const workersNeedingSupport = data.workers_needing_support ?? data.workers_needing_attention.length;
   const score = Math.max(0, Math.min(100, data.team_compliance_score || 0));
 
-  const metrics = [
-    { label: "Participants",    value: teamParticipants,        color: PLUM },
-    { label: "Sessions / week", value: sessionsThisWeek,        color: PLUM },
-    { label: "Compliance",      value: `${Math.round(score)}%`, color: score >= 85 ? DS.STATUS.success : score >= 60 ? DS.STATUS.warning : DS.STATUS.critical },
-    { label: "Incidents",       value: incidentsThisMonth,      color: incidentsThisMonth > 0 ? DS.STATUS.warning : PLUM },
-    { label: "Need support",    value: workersNeedingSupport,   color: workersNeedingSupport > 0 ? DS.STATUS.critical : PLUM },
+  const metrics: Array<{ label: string; value: string | number; tone: StatTone }> = [
+    { label: "Participants",    value: teamParticipants,        tone: "neutral" },
+    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral" },
+    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger" },
+    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success" },
+    { label: "Need support",    value: workersNeedingSupport,   tone: workersNeedingSupport > 0 ? "danger" : "success" },
   ];
 
   return (
@@ -1073,44 +1074,30 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>Dashboard</h1>
           <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
             {format(new Date(), "EEEE, d MMMM yyyy")}
           </p>
         </div>
         <Link href="/team">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white transition hover:opacity-90 shrink-0"
-            style={{ background: PLUM }}
-          >
+          <Button variant="navy" className="rounded-full shrink-0">
             <Users size={15} strokeWidth={2.5} />
             View Team
-          </button>
+          </Button>
         </Link>
       </div>
 
-      {/* Metrics strip — single panel with internal dividers, no individual cards */}
-      <div className="flex rounded-xl border overflow-hidden overflow-x-auto" style={{ borderColor: BORDER }}>
+      {/* Metrics strip � single panel with internal dividers, no individual cards */}
+      <StatCardGroup>
         {metrics.map((m, i) => (
-          <div
-            key={i}
-            className="flex-1 min-w-[110px] px-5 py-4"
-            style={{
-              borderRight: i < metrics.length - 1 ? `1px solid ${BORDER}` : undefined,
-              background: "var(--cc-surface)",
-            }}
-          >
-            <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>{m.label}</p>
-            <p className="mt-2 text-2xl font-black" style={{ color: m.color }}>{m.value}</p>
-          </div>
+          <StatCard key={i} label={m.label} value={m.value} tone={m.tone} />
         ))}
-      </div>
+      </StatCardGroup>
 
       {/* Plan meetings pending AI review */}
       <PlanMeetingsPendingBanner />
 
-      {/* Action hub — tabbed inline panel */}
+      {/* Action hub � tabbed inline panel */}
       <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
         <CoordinatorActionHub data={data} />
         <CoordinatorSessionsCard sessions={data.todays_sessions} />
@@ -1127,7 +1114,7 @@ function AlliedFallbackDashboard() {
     <div className="space-y-5 pb-8">
       <div>
         <p className="hidden" style={{ color: CORAL }}>Allied Health Professional</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>Dashboard</h1>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/patients"><DashboardStatCard label="Caseload" value="Open" caption="View allocated participants" icon={Users} /></Link>
