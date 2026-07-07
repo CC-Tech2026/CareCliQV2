@@ -88,6 +88,7 @@ const ROUTE_LABEL_KEYS: [string, string][] = [
   ["/coordinator/live", "nav.liveMonitoring"],
   ["/session-new", "nav.newShift"],
   ["/session/", "nav.shiftDetail"],
+  ["/sessions/", "nav.shiftDetail"],
   ["/sessions", "nav.sessions"],
   ["/audit-pack", "nav.auditPack"],
   ["/incident-new", "nav.newIncident"],

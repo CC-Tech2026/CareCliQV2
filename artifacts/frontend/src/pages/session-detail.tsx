@@ -379,7 +379,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Stage 6: AI note improvement — per-rule suggestions + full rewrite
+  // Stage 6: AI note improvement ï¿½ per-rule suggestions + full rewrite
   const improveNoteMutation = useMutation({
     mutationFn: async () => {
       const failed = rulesResult?.failed_rules ?? [];
@@ -417,7 +417,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     onError: () => toast({ title: translate("sessions.detail.toast.complianceFailed"), variant: "destructive" }),
   });
 
-  // Save notes — with blocking modal if critical issues
+  // Save notes ï¿½ with blocking modal if critical issues
   const doSaveNotes = () => {
     if (!sessionId) return;
     updateSession.mutate({ sessionId, data: { notes } }, {
@@ -431,7 +431,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   };
 
   const handleSaveNotes = () => {
-    // Stage 3: RP gate — must acknowledge before saving if RP detected
+    // Stage 3: RP gate ï¿½ must acknowledge before saving if RP detected
     if (liveRpFlags.length > 0 && !rpAcknowledged) {
       setShowRpAcknowledge(true);
     } else if (criticalLiveIssues.length > 0) {
@@ -659,7 +659,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Review flag banner — visible for workers when session is flagged */}
+      {/* Review flag banner ï¿½ visible for workers when session is flagged */}
       {(session as unknown as { review_flag?: boolean; review_note?: string; review_requested_by?: string }).review_flag && (
         <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
           <Flag className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
@@ -708,12 +708,6 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Top bar control utilities */}
         <div className="flex gap-2 flex-wrap items-center">
-          <Link href={participantId ? `/patients?id=${participantId}&tab=sessions` : "/patients"}>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              {translate("sessions.detail.viewParticipant")}
-            </Button>
-          </Link>
           {isCoordinator && !(session as unknown as { review_flag?: boolean }).review_flag && (
             <Button
               variant="outline"
@@ -776,7 +770,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left column — notes + transcription + structural outputs */}
+        {/* Left column ï¿½ notes + transcription + structural outputs */}
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "var(--cc-card-shadow)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "var(--cc-card-divider)" }}>
@@ -961,7 +955,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-muted)" }}>Key Observations</p>
                     <ul className="space-y-1">
                       {aiInsights.key_observations.map((obs: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-coral)" }}>•</span>{obs}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-coral)" }}>ï¿½</span>{obs}</li>
                       ))}
                     </ul>
                   </div>
@@ -1044,7 +1038,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           })()}
         </div>
 
-        {/* Right column — compliance score breakdowns + linked targets + metadata tools */}
+        {/* Right column ï¿½ compliance score breakdowns + linked targets + metadata tools */}
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
@@ -1087,7 +1081,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               {rulesResult && (
                 <div className="pt-2 space-y-3">
 
-                  {/* Block tier — Must Fix */}
+                  {/* Block tier ï¿½ Must Fix */}
                   {blockFailures.length > 0 && (
                     <div className="rounded-xl border border-red-200 bg-red-50/70 overflow-hidden">
                       <div className="px-3 py-2 bg-red-100/60 border-b border-red-200 flex items-center gap-1.5">
@@ -1109,7 +1103,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
 
-                  {/* Warn tier — Acknowledge to Proceed */}
+                  {/* Warn tier ï¿½ Acknowledge to Proceed */}
                   {warnFailures.length > 0 && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50/50 overflow-hidden">
                       <div className="px-3 py-2 bg-amber-100/60 border-b border-amber-200 flex items-center gap-1.5">
@@ -1152,7 +1146,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
 
-                  {/* Info tier — Suggestions */}
+                  {/* Info tier ï¿½ Suggestions */}
                   {infoFailures.length > 0 && (
                     <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden">
                       <div className="px-3 py-2 bg-blue-50/60 border-b border-blue-100 flex items-center gap-1.5">
@@ -1228,7 +1222,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                 </div>
               )}
 
-              {/* Stage 6: AI Note Improvement — per-rule suggestions + full rewrite */}
+              {/* Stage 6: AI Note Improvement ï¿½ per-rule suggestions + full rewrite */}
               {rulesResult?.failed_rules?.length > 0 && (
                 <div className="pt-2">
                   {!improveNoteMutation.data ? (
@@ -1240,7 +1234,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       disabled={improveNoteMutation.isPending}
                     >
                       {improveNoteMutation.isPending
-                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating improved note…</>
+                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating improved noteï¿½</>
                         : <><Sparkles className="h-3.5 w-3.5 text-purple-500" /> Improve Note with AI</>}
                     </Button>
                   ) : (

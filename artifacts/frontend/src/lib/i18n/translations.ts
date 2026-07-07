@@ -2492,7 +2492,7 @@ export const en: Dict = {
   "nav.creds": "Creds",
   "nav.messages": "Messages",
   "nav.newShift": "New Shift",
-  "nav.shiftDetail": "Shift",
+  "nav.shiftDetail": "Session Detail",
   "nav.newIncident": "New Incident",
   "nav.incidentDetail": "Incident",
   "nav.newParticipant": "New Participant",

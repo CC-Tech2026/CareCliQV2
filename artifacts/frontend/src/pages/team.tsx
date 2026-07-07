@@ -16,6 +16,7 @@ import {
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
+import { IndexTemplate, IndexHeader } from "@/components/layout/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,9 +25,7 @@ import {
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-
 const PLUM  = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
@@ -147,33 +146,32 @@ export default function Team() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <IndexTemplate>
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="hidden" style={{ color: CORAL }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("team.title")}</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>{translateParams(workers.length === 1 ? "team.memberCount" : "team.memberCountPlural", { count: String(workers.length) })}</p>
-        </div>
-        <div className="flex gap-2">
-          {tab !== "shifts" && (
+      <IndexHeader
+        title={translate("team.title")}
+        count={workers.length}
+        primaryAction={
+          <div className="flex gap-2">
+            {tab !== "shifts" && (
+              <Button
+                variant="navy"
+                onClick={() => setTab("shifts")}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
+              >
+                <Clock size={16} /> {translate("team.assignShift")}
+              </Button>
+            )}
             <Button
               variant="navy"
-              onClick={() => setTab("shifts")}
+              onClick={() => setInviteOpen(true)}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
             >
-              <Clock size={16} /> {translate("team.assignShift")}
+              <UserPlus size={16} /> {translate("team.inviteWorker")}
             </Button>
-          )}
-          <Button
-            variant="navy"
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
-          >
-            <UserPlus size={16} /> {translate("team.inviteWorker")}
-          </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
@@ -629,7 +627,7 @@ export default function Team() {
           </div>
         </div>
       )}
-    </div>
+    </IndexTemplate>
   );
 }
 

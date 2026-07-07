@@ -1,5 +1,5 @@
 import {
-  ShieldCheck, AlertTriangle, Info, CircleCheck, Users, BarChart3,
+  ShieldCheck, AlertTriangle, Info, CircleCheck, Users, BarChart3, List, LayoutDashboard, FileEdit, Columns3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,13 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import {
+  IndexTemplate, IndexHeader, IndexFilterBar, IndexEmptyState, IndexSkeleton,
+  OverviewTemplate,
+  DetailTemplate, DetailIdentityHeader, DetailTabBar,
+  WorkflowTemplate, WorkflowStepIndicator, WorkflowFooter,
+  BoardTemplate, BoardToolbar,
+} from "@/components/layout/templates";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -173,6 +180,59 @@ export default function DesignSystem() {
             <EmptyDescription>New sessions will appear here once they're booked.</EmptyDescription>
           </EmptyHeader>
         </Empty>
+      </Section>
+
+      {/* ── Page archetypes ── */}
+      <div>
+        <h2 className="text-xl font-black tracking-tight mb-1" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+          Page archetypes
+        </h2>
+        <p className="text-sm mb-6" style={{ color: MUTED }}>
+          Every page uses exactly one of these five templates. No page invents its own structure.
+        </p>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { icon: <LayoutDashboard size={18} />, name: "1 — Overview", desc: "Dashboard, hub landing. Greeting + KPI strip + action feed + today rail.", pages: "dashboard.tsx, hub/HubPage.tsx" },
+            { icon: <List size={18} />, name: "2 — Index", desc: "List pages. Page header + filter bar + table/card grid.", pages: "team, patients, sessions, incidents…" },
+            { icon: <BarChart3 size={18} />, name: "3 — Detail", desc: "Single-record pages. Identity header + tab bar + content + rail.", pages: "session-detail, incident-detail…" },
+            { icon: <FileEdit size={18} />, name: "4 — Workflow", desc: "Create/edit flows. Focus mode, centred column, sticky footer.", pages: "session-new, incident-new, participant-new…" },
+            { icon: <Columns3 size={18} />, name: "5 — Board", desc: "Dense operational surfaces. Full-width, sticky toolbar, internal scroll.", pages: "coordinator-rostering, coordinator-live…" },
+          ].map((a) => (
+            <div key={a.name} className="rounded-xl border p-4 space-y-2" style={{ borderColor: BORDER }}>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--cc-soft)", color: "var(--cc-plum)" }}>
+                  {a.icon}
+                </div>
+                <span className="text-[13px] font-black" style={{ color: TEXT }}>{a.name}</span>
+              </div>
+              <p className="text-[12px] leading-relaxed" style={{ color: MUTED }}>{a.desc}</p>
+              <p className="text-[10px] font-mono" style={{ color: "var(--cc-plum)" }}>{a.pages}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Section title="Archetype 2 — Index skeleton & empty state" note="Built into every IndexTemplate usage — no per-page implementation needed.">
+        <div className="space-y-4">
+          <p className="text-[11px] font-bold uppercase" style={{ color: MUTED }}>Loading skeleton</p>
+          <IndexSkeleton rows={3} />
+          <p className="text-[11px] font-bold uppercase mt-4" style={{ color: MUTED }}>Empty state</p>
+          <IndexEmptyState
+            icon={<Users size={18} style={{ color: "var(--cc-muted)" }} />}
+            title="No team members yet"
+            description="Invite your first support worker to get started."
+            action={<Button variant="navy" size="sm">Invite worker</Button>}
+          />
+        </div>
+      </Section>
+
+      <Section title="Archetype 2 — Index header" note="Poppins title, count in muted text, single right-aligned primary action.">
+        <IndexHeader
+          title="Team"
+          count={12}
+          primaryAction={<Button variant="navy">Invite worker</Button>}
+        />
       </Section>
     </div>
   );
