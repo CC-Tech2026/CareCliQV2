@@ -56,6 +56,7 @@ backend/secrets/*.json
 submit-activity.sh
 docs/CareScribe_Docs/*
 .venv/*
-.backend/__pycache__/*
-.backend/app/__pycache__/*
+backend/__pycache__/*
+backend/app/__pycache__/*
+**/__pycache__/*
 .pnpm-store/*
