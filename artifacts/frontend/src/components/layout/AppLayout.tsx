@@ -55,65 +55,39 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
   support_coordinator: [
     { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
     {
-      group: "People & Care",
       items: [
-        { href: "/team",               label: "Team",         icon: Users        },
-        { href: "/patients",           label: "Participants", icon: UserRound    },
+        { href: "/patients",              label: "Participants",       icon: UserRound    },
+        { href: "/team",                  label: "Team",               icon: Users        },
+        { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
+        { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
+        { href: "/billing",               label: "Invoices",           icon: CreditCard   },
+        { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
     },
     {
-      group: "Quality & Safety",
+      group: "Settings & Help",
       items: [
-        { href: "/compliance", label: "Compliance", icon: ShieldCheck   },
-      ],
-    },
-    {
-      group: "Operations",
-      items: [
-        { href: "/coordinator/rostering",          label: "Rostering",          icon: CalendarDays },
-        // { href: "/coordinator/travel",             label: "Travel Expenses",    icon: Car          },
-        { href: "/coordinator/live",               label: "Live Monitoring",    icon: Radio        },
-        { href: "/coordinator/monitor",            label: "Long Shift Monitor", icon: Activity     },
-        { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
-        { href: "/billing",                        label: "Invoices",           icon: CreditCard   },
-      ],
-    },
-    {
-      group: "Resources",
-      items: [
-        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
-        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
+        { href: "/settings",    label: "Settings",   icon: Settings      },
+        { href: "/toolkit",     label: "Toolkit",    icon: Wrench        },
+        { href: "/worker/help", label: "Help",       icon: HelpCircle    },
       ],
     },
   ],
   support_worker: [
     { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
     {
-      group: "My Work",
       items: [
-        { href: "/my-shifts",         label: "My Shifts",         icon: Clock         },
-        // { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
-        { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
-        { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
-        // { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
+        { href: "/my-shifts",     label: "My Shifts",  icon: Clock     },
+        { href: "/my-clients",    label: "My Clients", icon: UserRound },
+        { href: "/worker/profile",label: "Me",         icon: UserRound },
       ],
     },
-    // {
-    //   group: "Development",
-    //   items: [
-    //     { href: "/worker/travel",       label: "Travel Expenses", icon: Car         },
-    //     { href: "/worker/performance",  label: "Performance",     icon: BarChart2   },
-    //     { href: "/worker/training",     label: "Training",        icon: GraduationCap },
-    //   ],
-    // },
     {
-      group: "Safety & Resources",
+      group: "Resources",
       items: [
-        { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
-        { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
-        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
-        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
-        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
+        { href: "/incidents",      label: "Report Incident", icon: AlertTriangle },
+        { href: "/toolkit",        label: "Toolkit",         icon: Wrench        },
+        { href: "/worker/help",    label: "Help",            icon: HelpCircle    },
       ],
     },
   ],
@@ -174,16 +148,16 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
 // ── Topbar quick-nav tabs (shown when sidebar is collapsed) ───────────────────
 const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
-    { href: "/team",                  label: "Team",        icon: Users           },
-    { href: "/patients",              label: "Participants", icon: UserRound      },
-    { href: "/compliance",            label: "Compliance",  icon: ShieldCheck     },
-    { href: "/coordinator/rostering", label: "Rostering",   icon: CalendarDays    },
+    { href: "/patients",              label: "Participants",       icon: UserRound    },
+    { href: "/team",                  label: "Team",               icon: Users        },
+    { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
+    { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
   ],
   support_worker: [
-    { href: "/dashboard",    label: "Dashboard",  icon: LayoutDashboard },
-    { href: "/my-shifts",    label: "My Shifts",  icon: Clock           },
-    { href: "/my-clients",   label: "My Clients", icon: UserRound       },
-    { href: "/my-compliance",label: "Compliance", icon: ShieldCheck     },
+    { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
+    { href: "/my-shifts",     label: "My Shifts",  icon: Clock           },
+    { href: "/my-clients",    label: "My Clients", icon: UserRound       },
+    { href: "/worker/profile",label: "Me",         icon: UserRound       },
   ],
   allied_health: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -200,18 +174,17 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
 const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
-    { href: "/dashboard",  label: "Home",      icon: LayoutDashboard },
-    { href: "/team",       label: "Team",      icon: Users           },
-    { href: "/patients",   label: "People",    icon: UserRound       },
-    { href: "/compliance", label: "Compliance",icon: ShieldCheck     },
-    { href: "/billing",    label: "Invoices",  icon: CreditCard      },
+    { href: "/dashboard",             label: "Home",       icon: LayoutDashboard },
+    { href: "/patients",              label: "Participants", icon: UserRound      },
+    { href: "/coordinator/rostering", label: "Schedule",   icon: CalendarDays    },
+    { href: "/compliance",            label: "Quality",    icon: ShieldCheck     },
+    { href: "/billing",               label: "Invoices",   icon: CreditCard      },
   ],
   support_worker: [
-    { href: "/dashboard",    label: "Home",      icon: LayoutDashboard },
-    { href: "/my-shifts",    label: "Shifts",    icon: Clock           },
-    { href: "/my-clients",   label: "Clients",   icon: UserRound       },
-    // { href: "/tasks",        label: "Tasks",     icon: ClipboardList   },
-    { href: "/my-compliance",label: "Compliance",icon: ShieldCheck     },
+    { href: "/dashboard",     label: "Home",    icon: LayoutDashboard },
+    { href: "/my-shifts",     label: "Shifts",  icon: Clock           },
+    { href: "/my-clients",    label: "Clients", icon: UserRound       },
+    { href: "/worker/profile",label: "Me",      icon: UserRound       },
   ],
   allied_health: [
     { href: "/dashboard",   label: "Home",     icon: LayoutDashboard },
@@ -230,9 +203,21 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
 };
 
 function isActive(location: string, href: string) {
-  // /patients also matches the legacy /participants route — kept as an explicit
-  // alias since it doesn't fit the plain prefix check below.
+  // Legacy route alias: /patients matches /participants
   if (href === "/patients" && location.startsWith("/participants")) return true;
+  // Schedule: all coordinator scheduling sub-routes roll up to /coordinator/rostering
+  if (href === "/coordinator/rostering" &&
+    (location.startsWith("/coordinator/live") ||
+     location.startsWith("/coordinator/monitor") ||
+     location.startsWith("/coordinator/shift-verification") ||
+     location.startsWith("/coordinator/travel") ||
+     location.startsWith("/approvals"))) return true;
+  // Quality & Compliance: incidents and audit-pack roll up to /compliance
+  if (href === "/compliance" &&
+    (location.startsWith("/incidents") ||
+     location.startsWith("/audit-pack"))) return true;
+  // Team: credentials roll up to /team
+  if (href === "/team" && location.startsWith("/credentials")) return true;
   return location === href || location.startsWith(href + "/");
 }
 
