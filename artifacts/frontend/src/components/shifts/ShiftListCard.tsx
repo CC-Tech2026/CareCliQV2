@@ -1,25 +1,16 @@
 ﻿import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { differenceInMinutes, parseISO } from "date-fns";
 import {
   AlertTriangle,
-  ChevronDown,
   ClipboardList,
-  Clock3,
   Loader2,
   Mail,
   MapPin,
-  MessageCircle,
   Navigation,
   Phone,
-  Send,
-  ShieldCheck,
-  Siren,
   Star,
-  UserRound,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
@@ -35,8 +26,6 @@ import {
 } from "@/services/shiftService";
 import {
   shiftInitials,
-  shiftDurationMinutes,
-  formatDurationLabel,
   formatShiftTimeRange,
   CORAL,
   STATE_STYLES,
@@ -45,12 +34,7 @@ import {
   shiftNeedsRiskAck,
 } from "@/lib/shift-utils";
 
-const SERVICE_TAG_STYLES: Record<string, string> = {
-  CORE: "cc-plum-panel text-cc-plum",
-  "CAPACITY BUILDING": "cc-status-success border",
-};
-
-function ShiftListCardMobile({
+function ShiftListCardContent({
   shift,
   translate,
   stateStyle,
@@ -237,77 +221,6 @@ function ShiftListCardMobile({
 
 type Props = { shift: WorkerShift; showActions?: boolean };
 
-function formatServiceLabel(category: string | undefined, translate: (key: string) => string) {
-  const raw = (category || "CORE").toUpperCase();
-  if (raw === "CAPACITY BUILDING" || raw === "CAPACITY") return translate("shifts.listCard.serviceCapacity");
-  if (raw === "CORE") return translate("shifts.listCard.serviceCore");
-  return category || translate("shifts.listCard.serviceCore");
-}
-
-function serviceTagKey(category?: string) {
-  const raw = (category || "CORE").toUpperCase();
-  return raw === "CAPACITY" ? "CAPACITY BUILDING" : raw;
-}
-
-function formatRecordedDuration(shift: WorkerShift) {
-  if (shift.duration_minutes && shift.duration_minutes > 0) {
-    return formatDurationLabel(shift.duration_minutes);
-  }
-  if (shift.clocked_in_at && shift.clocked_out_at) {
-    try {
-      const mins = differenceInMinutes(parseISO(shift.clocked_out_at), parseISO(shift.clocked_in_at));
-      return formatDurationLabel(mins);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-function ActionPill({
-  href,
-  icon: Icon,
-  label,
-  external,
-}: {
-  href: string;
-  icon: typeof Phone;
-  label: string;
-  external?: boolean;
-}) {
-  return (
-    <a
-      href={href}
-      target={external ? "_blank" : undefined}
-      rel={external ? "noreferrer" : undefined}
-      className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 py-2.5 text-xs font-bold text-cc-text transition hover:bg-cc-soft active:bg-cc-active-bg"
-    >
-      <Icon size={14} className="shrink-0 text-cc-plum" />
-      <span>{label}</span>
-    </a>
-  );
-}
-
-function SafetyBox({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: typeof Siren;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="rounded-xl border cc-status-success px-3 py-3">
-      <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider">
-        <Icon size={12} />
-        {title}
-      </p>
-      <p className="mt-1.5 text-xs font-medium leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
 export function ShiftListCard({ shift, showActions = false }: Props) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
@@ -315,19 +228,8 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
   const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
-  const [expanded, setExpanded] = useState(false);
   const [starting, setStarting] = useState(false);
 
-  const scheduledDuration = shiftDurationMinutes(
-    shift.scheduled_start,
-    shift.scheduled_end,
-    shift.duration_minutes,
-  );
-  const scheduledLabel = formatDurationLabel(scheduledDuration);
-  const recordedLabel = formatRecordedDuration(shift);
-  const serviceTag = formatServiceLabel(shift.service_category, translate);
-  const tagStyle = SERVICE_TAG_STYLES[serviceTagKey(shift.service_category)] ?? SERVICE_TAG_STYLES.CORE;
   const isCancelled = shift.status === "cancelled";
   const isCompleted = isShiftCompletedForList(shift);
   const showDetails = showActions;
@@ -346,19 +248,11 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       : (STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled);
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
 
-  const allergiesText = shift.allergies?.trim() || translate("shifts.listCard.noAllergies");
-  const healthAlertText =
-    shift.health_alerts?.map((a) => a.title || a.detail).filter(Boolean).join(" ") ||
-    shift.health_flags?.trim() ||
-    translate("shifts.listCard.noHealthAlerts");
   const goals = shift.active_goals ?? [];
   const mapsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
     : null;
   const phone = shift.participant_phone?.trim();
-  const profileHref = shift.participant_id
-    ? `/my-clients/${shift.participant_id}`
-    : `/my-shifts/${shift.id}`;
   const notesHref = `/my-shifts/${shift.id}`;
   const notesText = shift.coordinator_notes?.trim() || shift.visit_notes?.trim() || shift.special_instructions?.trim() || shift.context?.previous_visit_notes?.trim() || null;
   const medicalAlert =
@@ -387,22 +281,6 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     });
-
-  const durationMeta = (() => {
-    if (isCompleted && scheduledLabel && recordedLabel) {
-      return translateParams("shifts.listCard.durationBoth", {
-        scheduled: scheduledLabel,
-        recorded: recordedLabel,
-      });
-    }
-    if (isCompleted && recordedLabel) {
-      return translateParams("shifts.listCard.durationRecorded", { duration: recordedLabel });
-    }
-    if (scheduledLabel) {
-      return translateParams("shifts.listCard.durationScheduled", { duration: scheduledLabel });
-    }
-    return null;
-  })();
 
   const runStartSession = async () => {
     const updated = await startShiftSession(shift.id);
@@ -545,183 +423,22 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
     </div>
   );
 
-  const mobilePrimaryActions = primaryActions;
-
-  const expandedBody = (
-    <>
-      {primaryActions}
-
-      {isCompleted && (
-        <Link href={notesHref}>
-          <button
-            type="button"
-            className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white"
-            style={{ background: CORAL }}
-          >
-            {translate("shifts.listCard.completeNotes")}
-          </button>
-        </Link>
-      )}
-
-      <div className="mb-1 mt-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cc-plum">
-          {translate("shifts.listCard.safetyRead")}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <SafetyBox icon={Siren} title={translate("shifts.listCard.allergies")} body={allergiesText} />
-        <SafetyBox icon={ShieldCheck} title={translate("shifts.listCard.healthAlerts")} body={healthAlertText} />
-      </div>
-
-      {goals.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-cc-plum">
-            {translate("shifts.listCard.activeGoals")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {goals.map((goal, i) => (
-              <span
-                key={i}
-                className="cc-plum-panel inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-cc-plum"
-              >
-                <Star size={12} className="text-amber-500" fill="currentColor" />
-                {formatActiveGoalLabel(goal)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {mapsUrl && <ActionPill href={mapsUrl} icon={Send} label={translate("shifts.listCard.openMaps")} external />}
-        {phone && <ActionPill href={`tel:${phone.replace(/\s/g, "")}`} icon={Phone} label={phone} />}
-        <Link href={profileHref}>
-          <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 py-2.5 text-xs font-bold text-cc-text transition hover:bg-cc-soft">
-            <UserRound size={14} className="text-cc-plum" />
-            {translate("shifts.listCard.fullProfile")}
-          </span>
-        </Link>
-        <Link href={`/my-shifts/${shift.id}`}>
-          <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 py-2.5 text-xs font-bold text-cc-text transition hover:bg-cc-soft">
-            <MessageCircle size={14} className="text-cc-plum" />
-            {translate("shifts.listCard.messageCoordinator")}
-          </span>
-        </Link>
-      </div>
-    </>
-  );
-
-  if (isMobile) {
-    return (
-      <ShiftListCardMobile
-        shift={shift}
-        translate={translate}
-        stateStyle={stateStyle}
-        pulse={pulse}
-        primaryActions={mobilePrimaryActions}
-        isCompleted={isCompleted}
-        showDetails={showDetails}
-        notesHref={notesHref}
-        goals={goals}
-        notesText={notesText}
-        medicalAlert={medicalAlert}
-        emergencyContact={emergencyContact}
-        caseManager={caseManager}
-        officePhone={officePhone}
-      />
-    );
-  }
-
   return (
-    <article className={cn("overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm", isCompleted && "opacity-80")}>
-      <div className="p-5">
-        <button
-          type="button"
-          className={cn("flex w-full items-start gap-3.5 text-left", !showDetails && "cursor-default")}
-          onClick={() => showDetails && setExpanded(!expanded)}
-          disabled={!showDetails}
-        >
-          <div
-            className={cn(
-              "grid size-[3.25rem] shrink-0 place-items-center rounded-full text-sm font-black text-white",
-              pulse && "animate-pulse",
-            )}
-            style={{ background: stateStyle.avatar }}
-          >
-            {shiftInitials(shift.participant_name)}
-          </div>
-
-          <div className="min-w-0 flex-1 pt-0.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[17px] font-black leading-snug text-cc-text">
-                {shift.participant_name || translate("shifts.listCard.participant")}
-              </h3>
-              <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase", tagStyle)}>
-                {serviceTag}
-              </span>
-            </div>
-
-            <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-cc-muted">
-              <Clock3 size={13} className="shrink-0" />
-              <span>{formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}</span>
-              {durationMeta && (
-                <>
-                  <span className="opacity-40">·</span>
-                  <span>{durationMeta}</span>
-                </>
-              )}
-            </p>
-
-            {shift.participant_address && (
-              <p className="mt-1 flex items-start gap-1.5 text-[13px] font-medium text-cc-muted">
-                <MapPin size={13} className="mt-0.5 shrink-0" />
-                <span className="line-clamp-1">{shift.participant_address}</span>
-              </p>
-            )}
-          </div>
-
-          <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
-            {isCancelled ? (
-              <span className="cc-status-critical rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
-                {translate("shifts.listCard.cancelled")}
-              </span>
-            ) : isCompleted ? (
-              <span className="cc-plum-panel rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-cc-plum">
-                {translate("shifts.listCard.done")}
-              </span>
-            ) : (
-              <ShiftStatusBadge visualState={shift.visual_state} />
-            )}
-            {showDetails && (
-              <ChevronDown
-                size={20}
-                className={cn("text-cc-muted transition-transform duration-200", expanded && "rotate-180")}
-              />
-            )}
-          </div>
-        </button>
-
-        {!expanded && isCompleted && (
-          <Link href={notesHref}>
-            <button
-              type="button"
-              className="mt-3 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
-              style={{ background: CORAL }}
-            >
-              {translate("shifts.listCard.completeNotes")}
-            </button>
-          </Link>
-        )}
-
-        {!expanded && showDetails && primaryActions}
-      </div>
-
-      {expanded && showDetails && (
-        <div className="border-t border-cc-border bg-cc-surface px-5 pb-5 pt-4">
-          {expandedBody}
-        </div>
-      )}
-    </article>
+    <ShiftListCardContent
+      shift={shift}
+      translate={translate}
+      stateStyle={stateStyle}
+      pulse={pulse}
+      primaryActions={primaryActions}
+      isCompleted={isCompleted}
+      showDetails={showDetails}
+      notesHref={notesHref}
+      goals={goals}
+      notesText={notesText}
+      medicalAlert={medicalAlert}
+      emergencyContact={emergencyContact}
+      caseManager={caseManager}
+      officePhone={officePhone}
+    />
   );
 }

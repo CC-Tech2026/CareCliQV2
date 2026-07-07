@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
 import { WM } from "@/lib/worker-mobile-tokens";
 import type { ComplianceEvaluation } from "@/lib/worker-compliance-engine";
@@ -62,9 +62,11 @@ export function WorkerMobileReviewScreen({
     (t) => !medTask || t.task_id !== medTask.task_id,
   );
   const missingRowRef = useRef<HTMLDivElement>(null);
+  const incompleteBannerRef = useRef<HTMLDivElement>(null);
   const [addingMed, setAddingMed] = useState(false);
   const [medDraft, setMedDraft] = useState("");
   const [highlightMissing, setHighlightMissing] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const completedChips = tasks.filter((t) => !t.marked_na && t.completed);
   const doneCount = completedChips.length;
@@ -75,7 +77,37 @@ export function WorkerMobileReviewScreen({
     setHighlightMissing(true);
     setAddingMed(true);
     window.setTimeout(() => setHighlightMissing(false), 1800);
+    window.setTimeout(() => {
+      missingRowRef.current?.querySelector<HTMLElement>("textarea, button")?.focus({ preventScroll: true });
+    }, 350);
   };
+
+  const scrollToIncompleteBanner = () => {
+    incompleteBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => {
+      incompleteBannerRef.current?.focus({ preventScroll: true });
+    }, 350);
+  };
+
+  const handleSubmitClick = () => {
+    setSubmitAttempted(true);
+    if (medMissing) {
+      scrollToMissing();
+      return;
+    }
+    if (otherIncomplete.length > 0) {
+      scrollToIncompleteBanner();
+      return;
+    }
+    onSubmit();
+  };
+
+  useEffect(() => {
+    if (!submitAttempted) return;
+    if (!medMissing && otherIncomplete.length === 0) {
+      setSubmitAttempted(false);
+    }
+  }, [submitAttempted, medMissing, otherIncomplete.length]);
 
   const taskLabel = (taskId?: string | null) =>
     tasks.find((t) => t.task_id === taskId)?.label ?? undefined;
@@ -123,8 +155,14 @@ export function WorkerMobileReviewScreen({
 
         {otherIncomplete.length > 0 && (
           <div
-            className="mx-3 mb-2 flex items-center gap-2 rounded-xl border px-3 py-2.5"
-            style={{ background: WM.warnBg, borderColor: WM.warnBorder }}
+            ref={incompleteBannerRef}
+            tabIndex={-1}
+            className="mx-3 mb-2 flex items-center gap-2 rounded-xl border px-3 py-2.5 outline-none"
+            style={{
+              background: WM.warnBg,
+              borderColor: submitAttempted ? WM.amber : WM.warnBorder,
+              boxShadow: submitAttempted ? `0 0 0 2px ${WM.amber}` : undefined,
+            }}
           >
             <AlertTriangle size={16} style={{ color: WM.warnText }} />
             <div className="flex-1">
@@ -241,8 +279,8 @@ export function WorkerMobileReviewScreen({
       <div className="shrink-0 border-t p-3" style={{ borderColor: WM.border, background: WM.surface }}>
         <button
           type="button"
-          disabled={busy || (medMissing && !hasMedicationNote(medTask, notes))}
-          onClick={onSubmit}
+          disabled={busy}
+          onClick={handleSubmitClick}
           className="flex h-[50px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white disabled:opacity-50"
           style={{ background: WM.pink }}
         >

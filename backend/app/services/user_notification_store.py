@@ -125,6 +125,17 @@ def dismiss_notification(notification_id: str, user_id: str) -> bool:
         return False
 
 
+def dismiss_notifications_by_reference(user_id: str, reference_key: str) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        get_supabase_admin().table("user_notifications").update(
+            {"dismissed_at": now, "read_at": now}
+        ).eq("user_id", user_id).eq("reference_key", reference_key).is_("dismissed_at", "null").execute()
+        return True
+    except Exception:
+        return False
+
+
 def acknowledge_notification(
     notification_id: str,
     user_id: str,

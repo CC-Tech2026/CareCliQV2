@@ -169,6 +169,18 @@ function EndShiftValidationBody({
   const hasFailRules = compliance.rules.some((r) => r.status === "fail");
   const hasWarnings = taskFlags.length > 0 || noteComplianceScore < 50 || hasFailRules;
   const firstEvidenceTask = taskFlags.find((f) => f.flag_type === "no_evidence")?.task_id;
+  const firstFlaggedTask = taskFlags[0]?.task_id;
+
+  useEffect(() => {
+    if (!firstFlaggedTask) return;
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(
+        `[data-validation-task-id="${firstFlaggedTask}"]`,
+      );
+      row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      row?.querySelector<HTMLElement>("button:not([disabled])")?.focus({ preventScroll: true });
+    });
+  }, [firstFlaggedTask, sessionNotes.length]);
 
   return (
     <>
@@ -240,6 +252,7 @@ function EndShiftValidationBody({
             {taskFlags.map((flag) => (
               <li
                 key={`${flag.task_id}-${flag.flag_type}`}
+                data-validation-task-id={flag.task_id ?? undefined}
                 className={cn(
                   "rounded-xl border px-3 py-2.5",
                   flag.flag_type === "incomplete"

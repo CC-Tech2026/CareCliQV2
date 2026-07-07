@@ -30,18 +30,22 @@ def register_push_token(
     device_id: str,
     push_token: str,
     platform: str = "web",
+    token_type: str = "expo",
 ) -> bool:
     if not push_token.strip():
         return False
     platform_norm = platform if platform in ("ios", "android", "web") else "web"
+    token_type_norm = token_type if token_type in ("expo", "fcm") else "expo"
+    record: dict[str, str] = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "push_token": push_token.strip(),
+        "platform": platform_norm,
+        "token_type": token_type_norm,
+    }
     try:
         get_supabase_admin().table("user_push_tokens").upsert(
-            {
-                "user_id": user_id,
-                "device_id": device_id,
-                "push_token": push_token.strip(),
-                "platform": platform_norm,
-            },
+            record,
             on_conflict="user_id,device_id",
         ).execute()
         return True
@@ -53,15 +57,17 @@ def register_push_token(
         return False
 
 
-def _lookup_tokens(user_id: str) -> list[str]:
+def _lookup_tokens(user_id: str, token_type: str = "expo") -> list[str]:
     try:
-        result = (
+        query = (
             get_supabase_admin()
             .table("user_push_tokens")
             .select("push_token")
             .eq("user_id", user_id)
-            .execute()
         )
+        if token_type:
+            query = query.eq("token_type", token_type)
+        result = query.execute()
         return [
             str(row["push_token"]).strip()
             for row in (result.data or [])

@@ -13,6 +13,33 @@ export interface OfflineQueueItem {
 }
 
 const QUEUE_KEY = "offline_notes_queue";
+const WORKER_QUEUE_KEY = "offline_worker_queue";
+
+export type WorkerOfflineQueueItem =
+  | {
+      type: "sync_notes";
+      id: string;
+      sessionId: string;
+      notes: import("@/lib/worker-api").SessionNoteRecord[];
+      timestamp: number;
+    }
+  | {
+      type: "update_tasks";
+      id: string;
+      shiftId: string;
+      tasks: import("@/lib/worker-api").ShiftTask[];
+      timestamp: number;
+    }
+  | {
+      type: "clock_in";
+      id: string;
+      shiftId: string;
+      method: "gps" | "qr";
+      location: { lat: number; lng: number; accuracy?: number } | null;
+      clientTimestamp: string;
+      startSession: boolean;
+      timestamp: number;
+    };
 
 export async function cacheSessions(sessions: unknown[]): Promise<void> {
   try {
@@ -87,4 +114,58 @@ export async function clearQueue(): Promise<void> {
   try {
     await AsyncStorage.removeItem(QUEUE_KEY);
   } catch {}
+}
+
+export async function enqueueWorkerUpdate(item: WorkerOfflineQueueItem): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(WORKER_QUEUE_KEY);
+    const queue: WorkerOfflineQueueItem[] = raw ? JSON.parse(raw) : [];
+    if (item.type === "clock_in") {
+      const idx = queue.findIndex((q) => q.type === "clock_in" && q.shiftId === item.shiftId);
+      if (idx >= 0) {
+        queue[idx] = item;
+      } else {
+        queue.push(item);
+      }
+    } else {
+      queue.push(item);
+    }
+    await AsyncStorage.setItem(WORKER_QUEUE_KEY, JSON.stringify(queue));
+  } catch {}
+}
+
+export async function getWorkerOfflineQueue(): Promise<WorkerOfflineQueueItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WORKER_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function removeWorkerQueueItem(id: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(WORKER_QUEUE_KEY);
+    const queue: WorkerOfflineQueueItem[] = raw ? JSON.parse(raw) : [];
+    const updated = queue.filter((q) => q.id !== id);
+    await AsyncStorage.setItem(WORKER_QUEUE_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+const SHIFTS_CACHE_KEY = "offline_worker_shifts_cache";
+
+export async function cacheWorkerShifts(shifts: unknown[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(shifts));
+  } catch {}
+}
+
+export async function getCachedWorkerShifts<T>(): Promise<T[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SHIFTS_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as T[];
+  } catch {
+    return null;
+  }
 }

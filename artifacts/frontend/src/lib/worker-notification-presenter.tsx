@@ -53,6 +53,9 @@ export function parseRealtimeNotificationRow(
 
 export function resolveNotificationPath(notification: UserNotification): string | null {
   if (notification.shift_id) {
+    if (notification.event_type === "compliance_checkin") {
+      return `/my-shifts/${notification.shift_id}?checkin=pending`;
+    }
     return `/my-shifts/${notification.shift_id}`;
   }
   if (notification.conversation_id) {

@@ -1,38 +1,49 @@
 {
   "expo": {
     "name": "CareCliQ",
-    "slug": "mobile",
+    "slug": "carecliq",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "carecliq",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D0D55"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "care.cliq2026",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos as evidence during clinical sessions",
         "NSMicrophoneUsageDescription": "Record voice notes during clinical sessions",
-        "NSPhotoLibraryUsageDescription": "Access photos to attach evidence to sessions"
+        "NSPhotoLibraryUsageDescription": "Access photos to attach evidence to sessions",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
-      "permissions": ["CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"],
+      "package": "care.cliq2026",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
       "useNextNotificationsApi": true
-    },
-    "web": {
-      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "http://localhost:8081"
         }
       ],
       "expo-font",
@@ -42,7 +53,8 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#5533CC",
-          "sounds": []
+          "sounds": [],
+          "mode": "production"
         }
       ],
       [
@@ -55,6 +67,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "40e0cf2d-8410-4394-9831-0f10c5967a9f"
+      }
+    },
+    "owner": "carecliq"
   }
 }
