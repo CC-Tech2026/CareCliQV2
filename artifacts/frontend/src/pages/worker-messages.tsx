@@ -158,6 +158,7 @@ function ThreadView({
           <button
             type="button"
             disabled={!draft.trim() || sending}
+            aria-label={translate("messages.send")}
             className="rounded-xl px-3 py-2 text-white disabled:opacity-50"
             style={{ background: "var(--cc-cta)" }}
             onClick={() => {

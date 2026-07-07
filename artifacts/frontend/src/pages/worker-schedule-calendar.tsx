@@ -530,6 +530,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigatePrev}
+            aria-label={translate("calendar.prev")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >
@@ -541,6 +542,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigateNext}
+            aria-label={translate("calendar.next")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >

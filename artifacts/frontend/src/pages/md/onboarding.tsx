@@ -328,8 +328,7 @@ function StageSheet({
       <div className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col" style={{ borderLeft: `1px solid ${BORDER}` }}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
           <h3 className="text-[15px] font-black" style={{ color: TEXT }}>Edit Stage</h3>
-          <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
-            <X size={16} style={{ color: MUTED }} />
+          <button onClick={onClose} aria-label="Close panel" className="rounded-lg p-1 hover:bg-gray-100">
           </button>
         </div>
 
@@ -339,6 +338,7 @@ function StageSheet({
               Stage Name
             </label>
             <input
+              aria-label="Stage name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
@@ -496,6 +496,7 @@ function SortableStageCard({
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={onEdit}
+          aria-label="Edit stage"
           className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100"
           style={{ color: PLUM }}
         >
@@ -503,6 +504,7 @@ function SortableStageCard({
         </button>
         <button
           onClick={onDelete}
+          aria-label="Delete stage"
           className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-red-50"
           style={{ color: CORAL }}
         >
@@ -651,7 +653,7 @@ function BuilderTab() {
           >
             {savingProgram ? <Loader2 size={13} className="animate-spin" /> : "Create"}
           </button>
-          <button onClick={() => setShowNewProgram(false)} className="rounded-lg p-2 hover:bg-gray-100">
+          <button onClick={() => setShowNewProgram(false)} aria-label="Cancel new program" className="rounded-lg p-2 hover:bg-gray-100">
             <X size={14} style={{ color: MUTED }} />
           </button>
         </div>
@@ -831,7 +833,7 @@ function ResourcesTab() {
           <div className="w-full max-w-md rounded-xl border bg-white shadow-xl" style={{ borderColor: BORDER }}>
             <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
               <h3 className="text-[14px] font-black" style={{ color: TEXT }}>Upload Resource</h3>
-              <button onClick={() => { setShowUpload(false); setSelectedFile(null); }} className="rounded-lg p-1 hover:bg-gray-100">
+              <button onClick={() => { setShowUpload(false); setSelectedFile(null); }} aria-label="Close upload dialog" className="rounded-lg p-1 hover:bg-gray-100">
                 <X size={16} style={{ color: MUTED }} />
               </button>
             </div>
@@ -844,6 +846,7 @@ function ResourcesTab() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  aria-label="Select file to upload"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -881,6 +884,7 @@ function ResourcesTab() {
                 <select
                   value={uploadCategory}
                   onChange={(e) => setUploadCategory(e.target.value)}
+                  aria-label="Resource category"
                   className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                   style={{ borderColor: BORDER }}
                 >
