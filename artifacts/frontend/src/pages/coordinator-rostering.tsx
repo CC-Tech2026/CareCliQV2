@@ -176,10 +176,10 @@ const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
 type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
-/** Returns 0=Mon � 6=Sun matching the available_days encoding in WorkerAvailability */
+/** Returns 0=Mon – 6=Sun matching the available_days encoding in WorkerAvailability */
 function ccDayIndex(date: Date): number {
-  const js = getDay(date); // 0=Sun, 1=Mon � 6=Sat
-  return js === 0 ? 6 : js - 1; // convert to 0=Mon � 6=Sun
+  const js = getDay(date); // 0=Sun, 1=Mon – 6=Sat
+  return js === 0 ? 6 : js - 1; // convert to 0=Mon – 6=Sun
 }
 
 function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
@@ -247,7 +247,7 @@ function RosterGrid({
                   <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
                     <User2 size={10} />
                     {s.participant_name?.split(" ")[0] || "Shift"}
-                    {d ? ` � ${format(d, "d MMM, h:mm a")}` : ""}
+                    {d ? ` · ${format(d, "d MMM, h:mm a")}` : ""}
                   </span>
                 );
               })}
@@ -431,7 +431,7 @@ function RosterGrid({
                                   <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "N/A"}</div>
                                   {start && (
                                     <div className="mt-0.5 font-medium opacity-80">
-                                      {format(start, "h:mm a")}{end ? `�${format(end, "h:mm a")}` : ""}
+                                      {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
                                     </div>
                                   )}
                                 </div>
@@ -529,8 +529,8 @@ function DayPanel({
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <Clock3 size={11} />
                     {start ? format(start, "h:mm a") : "N/A"}
-                    {end ? ` � ${format(end, "h:mm a")}` : ""}
-                    {durH ? ` � ${durH}h` : ""}
+                    {end ? ` – ${format(end, "h:mm a")}` : ""}
+                    {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
                 <p className="text-[14px] font-black" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
@@ -651,7 +651,7 @@ export default function CoordinatorRosteringPage() {
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
-    : `${format(weekStart, "d MMM")} � ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+    : `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
 
   return (
     <div className="space-y-5 pb-12">
@@ -848,7 +848,7 @@ export default function CoordinatorRosteringPage() {
                     {start ? (
                       <>
                         <p className="text-[12px] font-bold" style={{ color: TEXT }}>{format(start, "d MMM yyyy")}</p>
-                        <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` � ${format(end, "h:mm a")}` : ""}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}</p>
                       </>
                     ) : <span style={{ color: MUTED }}>N/A</span>}
                   </div>
@@ -887,7 +887,7 @@ export default function CoordinatorRosteringPage() {
               <ChevronLeft size={15} />
             </button>
             <span>
-              {format(weekStart, "d MMM")} � {format(addDays(weekStart, 6), "d MMM yyyy")}
+              {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
             </span>
             <button title={translate("coordinator.rostering.nextWeek")} onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"

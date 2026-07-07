@@ -59,7 +59,14 @@ import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
+import { ParticipantOverviewTab } from "@/components/participants/ParticipantOverviewTab";
+import { ParticipantPlanTab } from "@/components/participants/ParticipantPlanTab";
+import { ParticipantComplianceTab } from "@/components/participants/ParticipantComplianceTab";
+import { ParticipantPlanMeetingsTab } from "@/components/participants/ParticipantPlanMeetingsTab";
+import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
+import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
+import { safeFormat, money, statusBadge, complianceTone, normalizeGoalTitle } from "@/lib/participant-format";
 import { FormPanel } from "@/components/FormPanel";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
@@ -349,7 +356,7 @@ type PlanBudgetCategoryOption = {
   source: "pricing" | "legacy";
 };
 
-type ParticipantRecord = {
+export type ParticipantRecord = {
   id: string;
   full_name: string;
   ndis_number?: string;
@@ -387,7 +394,7 @@ type SessionRecord = {
   participant_name?: string | null;
 };
 
-type BudgetSummary = {
+export type BudgetSummary = {
   has_plan: boolean;
   plan_id?: string;
   plan_number?: string;
@@ -410,7 +417,7 @@ type BudgetSummary = {
   }>;
 };
 
-type ComplianceHistoryItem = {
+export type ComplianceHistoryItem = {
   session_id: string;
   session_date?: string | null;
   session_type?: string | null;
@@ -423,52 +430,8 @@ type ComplianceHistoryItem = {
   };
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
-  if (!dateStr) return "N/A";
-  try {
-    return format(parseISO(dateStr), fmt);
-  } catch {
-    return dateStr;
-  }
-}
-
-function money(value?: number | string | null) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
-
-function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-    inactive: "bg-slate-100 text-slate-600 border-slate-200",
-    expired: "bg-red-50 text-red-700 border-red-200",
-    review: "bg-sky-50 text-sky-700 border-sky-200",
-    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    draft: "bg-slate-100 text-slate-600 border-slate-200",
-    cancelled: "bg-red-50 text-red-700 border-red-200",
-  };
-  return map[status] ?? "bg-slate-100 text-slate-600 border-slate-200";
-}
-
-function complianceTone(score?: number | null) {
-  if (score == null) return "bg-slate-100 text-slate-600 border-slate-200";
-  if (score >= 85) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (score >= 60) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-700 border-red-200";
-}
-
-function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
-  return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
-}
+// Helpers moved to @/lib/participant-format (imported at top of file) so extracted
+// tab components (components/participants/*) can share them without importing this page.
 
 // ---------------------------------------------------------------------------
 // Add / Edit Participant Form Component
@@ -1336,12 +1299,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     }>(`/api/participants/${id}/restricted-clinical`),
     enabled: isCoordinator,
   });
-  const [restrictedDraft, setRestrictedDraft] = useState<{
-    restricted_behavioural_notes: string;
-    behaviour_support_plan: string;
-    medications: string;
-    medical_alerts: string;
-  } | null>(null);
+  const [restrictedDraft, setRestrictedDraft] = useState<RestrictedClinicalDraft | null>(null);
   useEffect(() => {
     if (restrictedQuery.data && restrictedDraft === null) {
       setRestrictedDraft({
@@ -1652,198 +1610,28 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-[#E8457A]" />
-              <h4 className="text-[13px] font-black text-[#1A1A2E]">{translate("patients.section.personalDetails")}</h4>
-            </div>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                [translate("patients.field.dateOfBirth"),     safeFormat(participant.date_of_birth)],
-                [translate("patients.field.biologicalSex"),    participant.biological_sex || translate("patients.notSet")],
-                [translate("patients.field.primaryDisability"), participant.primary_disability || translate("patients.notSet")],
-                [translate("patients.field.phone"),             participant.phone || translate("patients.notSet")],
-                [translate("patients.field.email"),             participant.email || translate("patients.notSet")],
-                [translate("patients.field.planPeriod"),       participant.plan_start_date
-                  ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
-                  : translate("patients.notSet")],
-                [translate("patients.field.planStatus"),       participant.plan_status || translate("patients.notSet")],
-                [translate("patients.field.planManagementType"), planManagementTypeLabel(participant.plan_management_type, translate)],
-                [translate("patients.field.totalBudget"),      money(totalBudget || budget?.total_funding)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] leading-none mb-1">{label}</dt>
-                  <dd className="text-[12px] font-bold text-[#1A1A2E] truncate" title={String(value)}>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+          <ParticipantOverviewTab
+            participant={participant}
+            budget={budget}
+            totalBudget={totalBudget}
+            isCoordinator={isCoordinator}
+            billingPeriodCurrent={billingPeriodCurrentQuery.data}
+            billingPeriodCurrentLoading={billingPeriodCurrentQuery.isLoading}
+            billingPeriodHistory={billingPeriodsQuery.data?.items}
+          />
         )}
 
-        {activeTab === "overview" && isCoordinator && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5 text-[#E8457A]" />
-              <h4 className="text-[13px] font-black text-[#1A1A2E]">{translate("patients.billingPeriod.title")}</h4>
-            </div>
-
-            {billingPeriodCurrentQuery.isLoading ? (
-              <Skeleton className="h-16 w-full rounded-xl" />
-            ) : (
-              <>
-                {billingPeriodCurrentQuery.data?.type_differs_from_lock && (
-                  <div
-                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900"
-                    role="status"
-                  >
-                    {billingPeriodCurrentQuery.data.message ?? translate("patients.billingPeriod.nextPeriodNote")}
-                  </div>
-                )}
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[
-                    [translate("patients.billingPeriod.currentType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.current_plan_management_type, translate)],
-                    [translate("patients.billingPeriod.lockedType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.open_period?.locked_plan_management_type, translate)],
-                    [
-                      translate("patients.billingPeriod.periodRange"),
-                      billingPeriodCurrentQuery.data?.open_period
-                        ? `${safeFormat(billingPeriodCurrentQuery.data.open_period.period_start)} – ${safeFormat(billingPeriodCurrentQuery.data.open_period.period_end)}`
-                        : translate("patients.notSet"),
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                      <dt className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] leading-none mb-1">{label}</dt>
-                      <dd className="text-[12px] font-bold text-[#1A1A2E]">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </>
-            )}
-
-            {billingPeriodsQuery.data?.items && billingPeriodsQuery.data.items.length > 0 && (
-              <div className="pt-1">
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#6A6A77] mb-2">
-                  {translate("patients.billingPeriod.history")}
-                </p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {billingPeriodsQuery.data.items.map((period: BillingPeriod) => (
-                    <div
-                      key={period.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-purple-100/60 bg-white px-3 py-2 text-[12px]"
-                    >
-                      <span className="font-semibold text-[#1A1A2E]">
-                        {safeFormat(period.period_start)} – {safeFormat(period.period_end)}
-                      </span>
-                      <span className="text-[#6A6A77]">
-                        {planManagementTypeLabel(period.locked_plan_management_type, translate)}
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${period.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                        {period.status === "open"
-                          ? translate("patients.billingPeriod.statusOpen")
-                          : translate("patients.billingPeriod.statusClosed")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* NDIS PLAN TAB */}
         {activeTab === "plan" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <DollarSign className="h-3.5 w-3.5 text-[#E8457A]" />
-              <h4 className="text-[13px] font-black text-[#1A1A2E]">{translate("patients.section.ndisFunding")}</h4>
-            </div>
-            {budgetQuery.isLoading ? (
-              <Skeleton className="h-24 w-full rounded-xl" />
-            ) : budget?.has_plan === false ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-                {translate("patients.plan.noActive")}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Plan meta */}
-                {budget?.plan_number && (
-                  <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] mb-1">{translate("patients.field.planNumber")}</p>
-                    <p className="text-[12px] font-bold text-[#1A1A2E]">{budget.plan_number}</p>
-                  </div>
-                )}
-                {/* Total / Used / Remaining — computed rollup of the category rows below once any exist */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { lbl: translate("patients.budget.total"),     val: money(totalBudget || budget?.total_funding), flagged: false },
-                    { lbl: translate("patients.budget.used"),      val: money(usedBudget), flagged: false },
-                    { lbl: translate("patients.budget.remaining"), val: money(remainingBudget), flagged: isOverspent },
-                  ].map(({ lbl, val, flagged }) => (
-                    <div
-                      key={lbl}
-                      className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-white border-purple-100/60"}`}
-                    >
-                      <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] leading-none mb-1">{lbl}</p>
-                      <p className={`text-[12px] font-black truncate ${flagged ? "text-red-700" : "text-[#1A1A2E]"}`}>{val}</p>
-                    </div>
-                  ))}
-                </div>
-                {isOverspent && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
-                    Plan is over budget, spending exceeds total allocated funding.
-                  </div>
-                )}
-                {/* Budget utilisation bar */}
-                {totalBudget > 0 && (
-                  <div className="rounded-xl border border-purple-100/60 bg-white p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-[#1A1A2E]">{translate("patients.budget.utilisation")}</span>
-                      <span className="text-[11px] font-black text-[#6A6A77]">
-                        {Math.round((usedBudget / totalBudget) * 100)}%
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-[#EDE3FC] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${isOverspent ? "bg-red-500" : "bg-gradient-to-r from-[#E8457A] to-[#8B5CF6]"}`}
-                        style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {/* Category breakdown */}
-                {hasCategoryBudgets && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6A6A77]">{translate("patients.budget.byCategory")}</p>
-                    {categoryBudgets.map((item) => (
-                      <div
-                        key={item.category || item.category_label}
-                        className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[12px] font-bold text-[#1A1A2E] truncate">{item.category_label || item.category}</span>
-                          <span className={`text-[11px] font-black shrink-0 ${item.overspent ? "text-red-700" : "text-[#6A6A77]"}`}>
-                            {item.overspent ? "Over budget" : `${item.percent_used ?? 0}%`}
-                          </span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-[#EDE3FC] overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${item.overspent ? "bg-red-500" : "bg-gradient-to-r from-[#E8457A] to-[#8B5CF6]"}`}
-                            style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
-                          />
-                        </div>
-                        <p className="mt-1.5 text-[10px] font-medium text-[#6A6A77]">
-                          {translateParams("patients.budget.categoryUsage", {
-                            used: money(item.used),
-                            remaining: money(item.remaining),
-                            allocated: money(item.allocated),
-                          })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+          <ParticipantPlanTab
+            budget={budget}
+            isLoading={budgetQuery.isLoading}
+            totalBudget={totalBudget}
+            usedBudget={usedBudget}
+            remainingBudget={remainingBudget}
+            isOverspent={isOverspent}
+            hasCategoryBudgets={hasCategoryBudgets}
+            categoryBudgets={categoryBudgets}
+          />
         )}
 
         {/* GOALS & TASKS TAB (Coordinator) */}
@@ -3061,144 +2849,30 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           </section>
         )}
         {activeTab === "compliance" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#E8457A]" />
-                <h4 className="text-[13px] font-black text-[#1A1A2E]">{translate("patients.section.complianceHistory")}</h4>
-              </div>
-              {complianceHistory.length > 0 && averageCompliance != null && (
-                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
-                  {translateParams("patients.compliance.avg", { score: String(averageCompliance) })}
-                </span>
-              )}
-            </div>
-            {complianceQuery.isLoading ? (
-              <div className="space-y-2">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
-              </div>
-            ) : complianceHistory.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <ShieldCheck className="h-8 w-8 text-[#6A6A77] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1A1A2E]">{translate("patients.compliance.empty")}</p>
-                <p className="text-[11px] text-[#6A6A77] mt-1">{translate("patients.compliance.emptyHint")}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {complianceHistory.map((item) => {
-                  const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
-                  const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
-                  return (
-                    <div
-                      key={item.session_id}
-                      onClick={() => setSessionPanelId(item.session_id)}
-                      className="cursor-pointer"
-                    >
-                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#F4EDE6] transition-colors">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-bold text-[#1A1A2E] capitalize truncate">
-                              {(item.session_type || "session").replace(/_/g, " ")}
-                            </p>
-                            <p className="text-[11px] text-[#6A6A77] mt-0.5">
-                              {translateParams("patients.compliance.sessionDate", { date: safeFormat(item.session_date) })}
-                              {auditDate ? ` · ${translateParams("patients.compliance.audited", { date: safeFormat(auditDate, "MMM d") })}` : ""}
-                            </p>
-                          </div>
-                          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
-                            {score == null ? "N/A" : `${score}%`}
-                          </span>
-                        </div>
-                        {item.latest_audit?.status && (
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#6A6A77]">
-                            {item.latest_audit.status.replace(/_/g, " ")}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+          <ParticipantComplianceTab
+            complianceHistory={complianceHistory}
+            averageCompliance={averageCompliance}
+            isLoading={complianceQuery.isLoading}
+            onSelectSession={setSessionPanelId}
+          />
         )}
 
-        {/* PLAN MEETINGS TAB — coordinator only */}
         {activeTab === "plan_meetings" && isCoordinator && (
-          <section className="space-y-3">
-            <PlanMeetingCapture participantId={id} participantName={participant.full_name} />
-          </section>
+          <ParticipantPlanMeetingsTab participantId={id} participantName={participant.full_name} />
         )}
 
-        {/* RESTRICTED CLINICAL TAB — coordinator only */}
         {activeTab === "restricted" && isCoordinator && (
-          <section className="rounded-2xl border border-orange-200/70 bg-orange-50/30 p-4 space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Lock className="h-3.5 w-3.5 text-orange-600" />
-                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
-            </div>
-            <p className="text-[12px] text-orange-700/80 leading-relaxed">
-              This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
-            </p>
-            {restrictedQuery.isLoading ? (
-              <div className="space-y-3">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {([
-                  { key: "restricted_behavioural_notes" as const, label: "Behavioural Notes (Restricted)", placeholder: "Document restricted behavioural observations and incidents…" },
-                  { key: "behaviour_support_plan"       as const, label: "Behaviour Support Plan",         placeholder: "Summarise the participant's current behaviour support plan…" },
-                  { key: "medications"                  as const, label: "Medications",                    placeholder: "Current medications, dosages, and administration notes…" },
-                  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Known allergies, contraindications, emergency protocols…" },
-                ] as const).map(({ key, label, placeholder }) => (
-                  <div key={key} className="space-y-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
-                    <textarea
-                      className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
-                      placeholder={placeholder}
-                      value={restrictedDraft?.[key] ?? ""}
-                      onChange={(e) => setRestrictedDraft((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
-                    />
-                  </div>
-                ))}
-                <Button
-                  size="sm"
-                  disabled={saveRestricted.isPending || !restrictedDraft}
-                  onClick={() => saveRestricted.mutate()}
-                  className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
-                >
-                  {saveRestricted.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {translate("patients.restricted.save")}
-                </Button>
-              </div>
-            )}
-          </section>
+          <ParticipantRestrictedTab
+            isLoading={restrictedQuery.isLoading}
+            draft={restrictedDraft}
+            onDraftChange={setRestrictedDraft}
+            onSave={() => saveRestricted.mutate()}
+            isSaving={saveRestricted.isPending}
+          />
         )}
 
-        {/* SHIFT CONTEXT TAB — coordinator only */}
         {activeTab === "shift_context" && isCoordinator && (
-          <section className="space-y-3">
-            <div className="rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-violet-700" />
-                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
-                  Coordinator Authoring
-                </span>
-              </div>
-              <p className="text-[12px] leading-relaxed text-violet-700/80">
-                This information appears in the Support Worker My Shift experience. Keep instructions concise, current, and action-oriented.
-              </p>
-            </div>
-
-            <ParticipantShiftContextEditor participantId={id} />
-          </section>
+          <ParticipantShiftContextTab participantId={id} />
         )}
 
       </div>
@@ -3212,31 +2886,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
         />
       )}
 
-      {/* ── Session detail panel — slides in over participant view ────────── */}
-      {false && sessionPanelId && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--cc-bg)]" style={{ overflowY: "auto" }}>
-          {/* Panel header — back to participant */}
-          <div
-            className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b"
-            style={{ background: "var(--cc-bg)", borderColor: "var(--cc-border)" }}
-          >
-            <button
-              type="button"
-              onClick={() => setSessionPanelId(null)}
-              className="flex items-center gap-2 text-[13px] font-bold hover:opacity-75 transition-opacity"
-              style={{ color: "var(--cc-plum)" }}
-            >
-              <ArrowLeft size={16} strokeWidth={2.5} />
-              Back to {participant?.full_name ?? "Participant"}
-            </button>
-          </div>
-
-          {/* Session detail content */}
-          <div className="flex-1 px-4 py-5 max-w-5xl mx-auto w-full">
-            <SessionDetail id={sessionPanelId} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

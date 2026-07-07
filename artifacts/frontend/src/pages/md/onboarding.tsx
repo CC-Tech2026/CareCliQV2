@@ -356,7 +356,7 @@ function StageSheet({
               rows={5}
               className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
               style={{ borderColor: BORDER }}
-              placeholder="Describe what the new starter should do in this stage�"
+              placeholder="Describe what the new starter should do in this stage…"
             />
           </div>
 
@@ -390,7 +390,7 @@ function StageSheet({
                   className="text-[11px] font-bold underline"
                   style={{ color: PLUM }}
                 >
-                  {resourcesLoading ? "Loading�" : "Load resources"}
+                  {resourcesLoading ? "Loading…" : "Load resources"}
                 </button>
               )}
             </div>
@@ -409,7 +409,7 @@ function StageSheet({
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
-                      <p className="text-[10px] font-medium uppercase" style={{ color: MUTED }}>{r.resource_type}{r.category ? ` � ${r.category}` : ""}</p>
+                      <p className="text-[10px] font-medium uppercase" style={{ color: MUTED }}>{r.resource_type}{r.category ? ` · ${r.category}` : ""}</p>
                     </div>
                   </label>
                 ))}
@@ -641,7 +641,7 @@ function BuilderTab() {
             value={newProgramName}
             onChange={(e) => setNewProgramName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") createProgram(); if (e.key === "Escape") setShowNewProgram(false); }}
-            placeholder="Program name�"
+            placeholder="Program name…"
             className="flex-1 rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
             style={{ borderColor: BORDER }}
           />
@@ -873,7 +873,7 @@ function ResourcesTab() {
                 <input
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
-                  placeholder="Resource name�"
+                  placeholder="Resource name…"
                   className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                   style={{ borderColor: BORDER }}
                 />
@@ -1117,7 +1117,7 @@ function ApprovalsTab() {
                     autoFocus
                     value={changesNote}
                     onChange={(e) => setChangesNote(e.target.value)}
-                    placeholder="Describe what needs to be changed or resubmitted�"
+                    placeholder="Describe what needs to be changed or resubmitted…"
                     rows={3}
                     className="w-full rounded-lg border px-3 py-2.5 text-[13px] resize-none outline-none focus:ring-1"
                     style={{ borderColor: BORDER }}

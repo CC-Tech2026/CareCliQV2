@@ -20,7 +20,7 @@ const CORAL  = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const INPUT_BG = "var(--auth-input-bg)";
 
-// Solid brand colors � no gradients.
+// Solid brand colors — no gradients.
 const LOGO_PURPLE = "#7C3AED";
 
 // -- 6-box OTP input -----------------------------------------------------------
@@ -273,10 +273,10 @@ export default function Login() {
             style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
           >
             <p className="text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
-              �{t("auth.login.marketing.testimonialQuote")}�
+              “{t("auth.login.marketing.testimonialQuote")}”
             </p>
             <p className="mt-2 text-[11px] font-bold" style={{ color: LOGO_PURPLE }}>
-              {t("auth.login.marketing.testimonialName")} � {t("auth.login.marketing.testimonialRole")}
+              {t("auth.login.marketing.testimonialName")} · {t("auth.login.marketing.testimonialRole")}
             </p>
           </div>
 
@@ -305,7 +305,7 @@ export default function Login() {
         className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10 bg-[var(--auth-form-bg)]"
         style={{ borderRight: "1px solid var(--cc-border)", animation: "panelIn 0.38s ease-out" }}
       >
-        {/* Logo � desktop only */}
+        {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
           <CareCliQLogo size={120} />
         </div>
@@ -455,7 +455,7 @@ export default function Login() {
                     id="login-password"
                     value={password}
                     onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(null); }}
-                    placeholder="��������"
+                    placeholder="••••••••••••••"
                     disabled={busy}
                     autoComplete="current-password"
                     required
@@ -579,7 +579,7 @@ export default function Login() {
                     {t("auth.login.marketing.testimonialName")}
                   </p>
                   <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
-                    {t("auth.login.marketing.testimonialRole")} � {t("auth.login.marketing.testimonialOrg")}
+                    {t("auth.login.marketing.testimonialRole")} · {t("auth.login.marketing.testimonialOrg")}
                   </p>
                 </div>
               </div>

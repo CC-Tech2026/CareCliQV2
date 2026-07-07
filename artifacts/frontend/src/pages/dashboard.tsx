@@ -159,7 +159,7 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{client.full_name}</p>
                 <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                  {client.plan_management_type} �{" "}
+                  {client.plan_management_type} ·{" "}
                   {client.last_seen
                     ? translateParams("clients.lastSeenOn", { date: safeDate(client.last_seen) })
                     : translate("clients.notSeenYet")}
@@ -196,7 +196,7 @@ function SessionListCard({ title, sessions }: { title: string; sessions: Dashboa
                   {session.participant_name || "Participant"}
                 </p>
                 <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>
-                  {safeDate(session.session_date)} � {(session.session_type || "session").replace("_", " ")}
+                  {safeDate(session.session_date)} · {(session.session_type || "session").replace("_", " ")}
                 </p>
               </div>
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(session.compliance_status)}`}>
@@ -272,7 +272,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
 
-      {/* LEFT � score ring + breakdown bars */}
+      {/* LEFT — score ring + breakdown bars */}
       <div className="space-y-4">
         {/* Ring + numbers */}
         <div className="flex items-center gap-5">
@@ -303,7 +303,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
                   color: getStatusColor(status),
                 }}
               >
-                {status} � {score}/100
+                {status} · {score}/100
               </span>
             </div>
           </div>
@@ -340,7 +340,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
         </Link>
       </div>
 
-      {/* RIGHT � workers needing attention (fills the formerly empty half) */}
+      {/* RIGHT — workers needing attention (fills the formerly empty half) */}
       <div>
         <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
           Workers needing attention
@@ -398,7 +398,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT � divide-y row list */}
+      {/* LEFT — divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {sessions.slice(0, 7).map((s) => {
@@ -414,8 +414,8 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {safeDate(s.session_date)} � {(s.session_type || "session").replace(/_/g, " ")}
-                      {s.review_note ? ` � "${s.review_note.slice(0, 30)}�"` : ""}
+                      {safeDate(s.session_date)} · {(s.session_type || "session").replace(/_/g, " ")}
+                      {s.review_note ? ` — "${s.review_note.slice(0, 30)}…"` : ""}
                     </p>
                   </div>
                   {cs != null && (
@@ -438,7 +438,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
         )}
       </div>
 
-      {/* RIGHT � summary panel */}
+      {/* RIGHT — summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Overview</p>
         <div className="grid grid-cols-2 gap-2">
@@ -483,7 +483,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT � divide-y row list */}
+      {/* LEFT — divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {incidents.slice(0, 7).map((inc, idx) => {
@@ -502,7 +502,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{title}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {participant ? `${participant} � ` : ""}{safeDate(dateVal)}
+                      {participant ? `${participant} · ` : ""}{safeDate(dateVal)}
                     </p>
                   </div>
                   <span
@@ -529,7 +529,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
         )}
       </div>
 
-      {/* RIGHT � summary panel */}
+      {/* RIGHT — summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Status breakdown</p>
         <div className="grid grid-cols-2 gap-2">
@@ -576,7 +576,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
-      {/* LEFT � divide-y row list */}
+      {/* LEFT — divide-y row list */}
       <div>
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {alerts.slice(0, 7).map((alert, idx) => {
@@ -595,7 +595,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black" style={{ color: TEXT }}>{alert.full_name || "Team member"}</p>
                     <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                      {alert.credential_type || alert.title || "Credential"} � Expires {safeDate(alert.expiry_date)}
+                      {alert.credential_type || alert.title || "Credential"} · Expires {safeDate(alert.expiry_date)}
                     </p>
                   </div>
                   {daysLeft !== null && (
@@ -621,7 +621,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
         )}
       </div>
 
-      {/* RIGHT � summary panel */}
+      {/* RIGHT — summary panel */}
       <div className="space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiry breakdown</p>
         <div className="grid grid-cols-3 gap-2">
@@ -783,7 +783,7 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
 
   return (
     <section className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
-      {/* Tab bar � scrollable on mobile */}
+      {/* Tab bar — scrollable on mobile */}
       <div className="flex border-b overflow-x-auto" style={{ borderColor: BORDER }}>
         {tabs.map(({ id, label, icon: Icon, count, level }) => {
           const active = activeTab === id;
@@ -954,7 +954,7 @@ function WorkerDashboardView({
 
   return (
     <div className="space-y-5 pb-6">
-      {/* Greeting header � consistent with My Shifts page */}
+      {/* Greeting header — consistent with My Shifts page */}
       <header className="flex items-start justify-between gap-3 pt-1">
         <div>
           <p className="hidden">
@@ -980,7 +980,7 @@ function WorkerDashboardView({
         </div>
       </header>
 
-      {/* Key stats � 2-col on mobile, 4-col on sm+ */}
+      {/* Key stats — 2-col on mobile, 4-col on sm+ */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <WorkerStatCard label={translate("dashboard.sessionsToday")} value={data.sessions_today} />
         <WorkerStatCard

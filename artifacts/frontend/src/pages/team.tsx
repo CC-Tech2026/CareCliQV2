@@ -213,7 +213,7 @@ export default function Team() {
             {!stats.isLoading && workers.length > 0 && (
               <div className="grid lg:grid-cols-[1fr_220px] gap-5 items-start">
 
-                {/* LEFT � worker table */}
+                {/* LEFT — worker table */}
                 <div className="rounded-xl border overflow-x-auto" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
                   <table className="w-full">
                     <thead>
@@ -235,7 +235,7 @@ export default function Team() {
                             <td className="px-5 py-3.5">
                               <p className="font-bold text-sm" style={{ color: TEXT }}>{w.full_name}</p>
                               {summary.workerAlerts.length > 0 && (
-                                <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: CORAL }}>
+                                <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "var(--cc-status-danger)" }}>
                                   <AlertTriangle size={11} />
                                   {summary.expired > 0 ? translateParams("team.expired", { count: String(summary.expired) }) : translateParams("team.expiring", { count: String(summary.expiring) })}
                                 </p>
@@ -281,7 +281,7 @@ export default function Team() {
                   </table>
                 </div>
 
-                {/* RIGHT � team stat sidebar */}
+                {/* RIGHT — team stat sidebar */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{translate("team.snapshot")}</p>
 

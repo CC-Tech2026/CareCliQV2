@@ -72,7 +72,7 @@ import {
 } from "@/services/securityService";
 
 // ---------------------------------------------------------------------------
-// ABN validation � 11 digits only (optional field)
+// ABN validation — 11 digits only (optional field)
 // ---------------------------------------------------------------------------
 function isValidABNFormat(abn: string): boolean {
   const digits = abn.replace(/\s/g, "");
@@ -221,7 +221,7 @@ interface PendingInvite {
 }
 
 // -----------------------------------------------------------------------------
-// CARECLIQV2-241 � Notification Preferences section
+// CARECLIQV2-241 — Notification Preferences section
 // -----------------------------------------------------------------------------
 
 const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
@@ -452,7 +452,7 @@ function NotificationsSection() {
           disabled={saving}
           onClick={save}
         >
-          {saving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving�</> : "Save Preferences"}
+          {saving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving…</> : "Save Preferences"}
         </Button>
       </div>
     </Section>
@@ -460,7 +460,7 @@ function NotificationsSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Security Section � available to all roles
+// Security Section — available to all roles
 // -----------------------------------------------------------------------------
 
 function SecuritySection() {
@@ -829,7 +829,7 @@ function SecuritySection() {
                 <div>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>{entry.device_name}</p>
                   <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                    {entry.location_label} � {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
+                    {entry.location_label} · {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
                   </p>
                 </div>
                 {entry.is_suspicious ? (
@@ -921,7 +921,7 @@ export default function Settings() {
       if (membersRes.ok) setMembers(await membersRes.json());
       if (invitesRes.ok) setInvites(await invitesRes.json());
     } catch {
-      // silently skip � team data is supplementary
+      // silently skip — team data is supplementary
     } finally {
       setLoadingTeam(false);
     }
@@ -1142,7 +1142,7 @@ export default function Settings() {
         },
       });
     } catch {
-      // server sync failed � signature already cleared locally
+      // server sync failed — signature already cleared locally
     }
     toast({ title: translate("settings.toast.signatureRemoved"), description: translate("settings.toast.signatureRemovedDesc") });
   }, [clearCanvas, saveToServer, serverSettings, toast]);
@@ -1299,7 +1299,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* -- Mobile nav (outside flex row � stacks vertically on mobile) ------ */}
+      {/* -- Mobile nav (outside flex row — stacks vertically on mobile) ------ */}
       <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
         {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -1735,7 +1735,7 @@ export default function Settings() {
                     <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed"
                       style={{ color: "#7A6A8A", background: "rgba(246,244,251,0.8)", borderColor: "rgba(232,213,232,0.7)" }}>
                       <Info className="h-3.5 w-3.5 shrink-0" />
-                      <span>No custom types saved. The built-in defaults (physiotherapy, OT, therapy, rehab�) are used.</span>
+                      <span>No custom types saved. The built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
                     </div>
                   )}
 
@@ -1747,7 +1747,7 @@ export default function Settings() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") { e.preventDefault(); handleAddSessionType(); }
                       }}
-                      placeholder="e.g. hydrotherapy, support coordination�"
+                      placeholder="e.g. hydrotherapy, support coordination…"
                       className="rounded-lg text-sm flex-1"
                     />
                     <Button
@@ -1828,7 +1828,7 @@ export default function Settings() {
             <PanelCard label={translate("settings.team.activeMembers")}>
               {loadingTeam ? (
                 <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading members�
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
                 </div>
               ) : members.length === 0 ? (
                 <p className="text-[13px] py-4 text-center" style={{ color: "#7A6A8A" }}>
@@ -1856,7 +1856,7 @@ export default function Settings() {
                           <p className="text-[11px] truncate" style={{ color: "var(--cc-muted)" }}>{m.email}</p>
                         </div>
 
-                        {/* Role selector � prevent changing own role */}
+                        {/* Role selector — prevent changing own role */}
                         {m.user_id !== user?.id ? (
                           <select
                             title="User role"
@@ -1883,7 +1883,7 @@ export default function Settings() {
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                         </span>
 
-                        {/* Remove � prevent removing self */}
+                        {/* Remove — prevent removing self */}
                         {m.user_id !== user?.id && (
                           <button
                             onClick={() => handleRemoveMember(m.id, m.full_name)}

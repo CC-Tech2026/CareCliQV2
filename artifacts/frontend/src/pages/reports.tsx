@@ -70,7 +70,7 @@ function ComplianceBadge({ score }: { score?: number | null }) {
   const labelKey = score >= 85 ? "reports.status.compliant" : score >= 60 ? "reports.status.atRisk" : "reports.status.nonCompliant";
   return (
     <span className="inline-flex items-center text-[11px] font-bold px-2.5 h-5 rounded-full"
-      style={{ background: scoreBg(score), color: scoreColor(score) }}>{translate(labelKey)} � {Math.round(score)}%</span>
+      style={{ background: scoreBg(score), color: scoreColor(score) }}>{translate(labelKey)} · {Math.round(score)}%</span>
   );
 }
 
@@ -312,7 +312,7 @@ function HubSection() {
                           {s.participant_name ?? translate("reports.unknownParticipant")}
                         </p>
                         <p className="text-[11px]" style={{ color: T3 }}>
-                          {format(parseISO(s.session_date), "MMM d")} � {(s.session_type ?? "session").replace(/_/g, " ")}
+                          {format(parseISO(s.session_date), "MMM d")} · {(s.session_type ?? "session").replace(/_/g, " ")}
                         </p>
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
@@ -366,7 +366,7 @@ function HubSection() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
-                      <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min</p>
+                      <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
                     <ChevronRight size={14} className="shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" style={{ color: T3 }} />
@@ -436,7 +436,7 @@ function SessionReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min
+                        {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min
                       </p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
@@ -502,7 +502,7 @@ function IncidentReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{inc.title ?? "Incident Report"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {inc.participant_name ?? "N/A"} � {format(parseISO(inc.incident_date ?? inc.created_at), "MMM d, yyyy")}
+                        {inc.participant_name ?? "N/A"} · {format(parseISO(inc.incident_date ?? inc.created_at), "MMM d, yyyy")}
                       </p>
                     </div>
                     <SeverityBadge sev={inc.severity ?? "medium"} />
@@ -593,7 +593,7 @@ function ParticipantNotesSection() {
                             <ComplianceBadge score={s.compliance_score} />
                           </div>
                           <p className="text-[13px] font-semibold" style={{ color: T1 }}>
-                            {(s.session_type ?? "session").replace(/_/g, " ")} � {s.duration_minutes ?? "N/A"} min
+                            {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min
                           </p>
                           {legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 line-clamp-2" style={{ color: T2 }}>
@@ -727,7 +727,7 @@ function ComplianceReportsSection() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
-                            {format(parseISO(s.session_date), "MMM d, yyyy")} � {(s.session_type ?? "session").replace(/_/g, " ")}
+                            {format(parseISO(s.session_date), "MMM d, yyyy")} · {(s.session_type ?? "session").replace(/_/g, " ")}
                           </p>
                         </div>
                         <ComplianceBadge score={s.compliance_score} />
@@ -1177,7 +1177,7 @@ export default function Reports() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Vertical sidebar nav � desktop */}
+          {/* Vertical sidebar nav — desktop */}
           <aside className="hidden lg:block w-56 shrink-0">
             <nav className="bg-white rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD }}>
               {TABS.map(t => {
@@ -1197,7 +1197,7 @@ export default function Reports() {
             </nav>
           </aside>
 
-          {/* Horizontal tabs � mobile */}
+          {/* Horizontal tabs — mobile */}
           <div className="lg:hidden overflow-x-auto pb-1 -mx-4 px-4">
             <div className="flex gap-2 min-w-max">
               {TABS.map(t => {
