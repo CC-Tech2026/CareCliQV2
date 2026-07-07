@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import SessionDetail from "@/pages/session-detail";
 import {
   getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
   getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
@@ -47,6 +48,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  ArrowLeft,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -1203,6 +1205,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   // UI state — collapsible header + inline shift detail
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+  // Session detail panel — opens full session detail in-context instead of navigating away
+  const [sessionPanelId, setSessionPanelId] = useState<string | null>(null);
 
   // Assign Shift — coordinator only
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -2827,7 +2831,24 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center justify-between">
+            {sessionPanelId ? (
+              /* ── In-context session detail ───────────────────────────── */
+              <>
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setSessionPanelId(null)}
+                    className="flex items-center gap-1.5 text-[12px] font-bold hover:opacity-75 transition-opacity"
+                    style={{ color: "var(--cc-plum)" }}
+                  >
+                    <ArrowLeft size={14} strokeWidth={2.5} />
+                    Back to shift history
+                  </button>
+                </div>
+                <SessionDetail id={sessionPanelId} />
+              </>
+            ) : (
+            <div className="space-y-3"><div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-[#E8457A]" />
                 <h4 className="text-[13px] font-black text-[#1A1A2E]">Shift History</h4>
@@ -2910,13 +2931,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <a
-                        href={`/sessions/${selectedSession.id}?from=participant`}
+                      <button
+                        type="button"
+                        onClick={() => setSessionPanelId(selectedSession.id)}
                         className="flex items-center gap-1 text-[11px] font-bold hover:underline"
                         style={{ color: "var(--cc-plum)" }}
                       >
                         <ExternalLink size={11} /> Full details
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSelectedSession(null)}
@@ -3034,10 +3056,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 ))}
               </div>
             )}
+            </div>
+            )}
           </section>
         )}
-
-        {/* COMPLIANCE TAB */}
         {activeTab === "compliance" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center justify-between">
@@ -3067,8 +3089,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
                   const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
                   return (
-                    <Link key={item.session_id} href={`/sessions/${item.session_id}?from=participant`}>
-                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#F4EDE6] transition-colors cursor-pointer">
+                    <div
+                      key={item.session_id}
+                      onClick={() => setSessionPanelId(item.session_id)}
+                      className="cursor-pointer"
+                    >
+                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#F4EDE6] transition-colors">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <p className="text-[13px] font-bold text-[#1A1A2E] capitalize truncate">
@@ -3089,7 +3115,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                           </p>
                         )}
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -3184,6 +3210,32 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           workers={workersQuery.data ?? []}
           initialParticipantId={id}
         />
+      )}
+
+      {/* ── Session detail panel — slides in over participant view ────────── */}
+      {false && sessionPanelId && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--cc-bg)]" style={{ overflowY: "auto" }}>
+          {/* Panel header — back to participant */}
+          <div
+            className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b"
+            style={{ background: "var(--cc-bg)", borderColor: "var(--cc-border)" }}
+          >
+            <button
+              type="button"
+              onClick={() => setSessionPanelId(null)}
+              className="flex items-center gap-2 text-[13px] font-bold hover:opacity-75 transition-opacity"
+              style={{ color: "var(--cc-plum)" }}
+            >
+              <ArrowLeft size={16} strokeWidth={2.5} />
+              Back to {participant?.full_name ?? "Participant"}
+            </button>
+          </div>
+
+          {/* Session detail content */}
+          <div className="flex-1 px-4 py-5 max-w-5xl mx-auto w-full">
+            <SessionDetail id={sessionPanelId} />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -101,9 +101,10 @@ export function AutoBreadcrumb() {
   const params = new URLSearchParams(search ?? "");
   const fromParticipant = params.get("from") === "participant";
 
-  // Special case: came from a specific participant's shift history —
-  // use history.back() to return to the exact participant + tab state.
+  // Special case: came from a specific participant's shift history.
+  // Use history.back() so the exact participant + tab state is restored.
   if (fromParticipant) {
+    const participantName = params.get("name") ?? "";
     const currentLabel = pageLabelForPath(location, translate);
     return (
       <nav
@@ -124,7 +125,7 @@ export function AutoBreadcrumb() {
           style={{ color: "var(--cc-muted)" }}
         >
           <ArrowLeft size={11} strokeWidth={2} />
-          {translate("nav.participants")}
+          {participantName || translate("nav.participants")}
         </button>
         <ChevronRight size={12} strokeWidth={2} style={{ color: "var(--cc-border)" }} />
         <span className="font-semibold" style={{ color: "var(--cc-text)" }} aria-current="page">
