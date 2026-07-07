@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WM } from "@/lib/worker-mobile-tokens";
 import type { ShiftTask } from "@/services/shiftService";
+import { mobileShiftTaskDomId } from "@/lib/shift-end-focus";
 
 type Props = {
   tasks: ShiftTask[];
@@ -31,6 +32,7 @@ export function WorkerMobileTaskList({
         return (
           <div
             key={task.task_id}
+            id={mobileShiftTaskDomId(task.task_id)}
             className={cn(
               "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors",
               focused && "relative",

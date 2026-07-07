@@ -2003,6 +2003,28 @@ def clock_in_shift(
         session=session,
         metadata={"method": method},
     )
+    if session:
+        from datetime import datetime, timezone
+        from .random_checkin_service import ensure_random_checkin_schedule
+
+        raw_clock_in = updated.get("clocked_in_at")
+        clock_in_dt = None
+        if raw_clock_in:
+            try:
+                clock_in_dt = datetime.fromisoformat(str(raw_clock_in).replace("Z", "+00:00"))
+                if clock_in_dt.tzinfo is None:
+                    clock_in_dt = clock_in_dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                clock_in_dt = None
+        if clock_in_dt:
+            ensure_random_checkin_schedule(
+                session_id=str(session.get("id")),
+                shift_id=shift_id,
+                worker_id=worker_id,
+                organization_id=organization_id,
+                shift=updated,
+                clock_in=clock_in_dt,
+            )
     return _shift_card_payload(updated, session)
 
 

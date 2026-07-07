@@ -209,8 +209,13 @@ class TestRequiredCheckins(unittest.TestCase):
     def test_5_hour_shift(self):
         self.assertEqual(_required_checkins(5.0, 5 * 3600), 3)
 
-    def test_6_hour_shift_includes_3_hour_blocks(self):
-        self.assertEqual(_required_checkins(6.0, 6 * 3600), 4)
+    def test_6_hour_shift_uses_random_when_session_unknown(self):
+        self.assertEqual(_required_checkins(6.0, 6 * 3600), 2)
+
+    def test_6_hour_shift_with_scheduled_rows(self):
+        with patch("backend.app.services.random_checkin_service._list_scheduled_checkins") as mock_sched:
+            mock_sched.return_value = [{"status": "pending"}, {"status": "pending"}, {"status": "pending"}]
+            self.assertEqual(_required_checkins(6.0, 6 * 3600, "sess-1"), 3)
 
     def test_gap_frozen_during_break(self):
         now = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc)

@@ -30,6 +30,7 @@ class PushTokenBody(BaseModel):
     device_id: str = Field(min_length=8, max_length=128)
     push_token: str = Field(min_length=1)
     platform: str = "web"
+    token_type: str = "expo"
 
 
 class AckBody(BaseModel):
@@ -62,6 +63,7 @@ async def register_worker_push_token(
         body.device_id,
         body.push_token,
         body.platform,
+        body.token_type,
     )
     return {"registered": ok}
 

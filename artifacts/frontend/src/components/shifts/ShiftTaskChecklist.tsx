@@ -44,6 +44,7 @@ import {
   taskUpdateCount,
   TEXT,
 } from "@/lib/shift-utils";
+import { shiftTaskDomId } from "@/lib/shift-end-focus";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
 import type { NoteComplianceFlag } from "@/lib/worker-compliance-engine";
@@ -158,7 +159,14 @@ export function ShiftTaskChecklist({
   const hydratedRef = useRef(false);
 
   useEffect(() => {
-    if (focusTaskId) setExpandedNote(focusTaskId);
+    if (!focusTaskId) return;
+    setExpandedNote(focusTaskId);
+    requestAnimationFrame(() => {
+      document.getElementById(shiftTaskDomId(focusTaskId))?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
   }, [focusTaskId]);
 
   useEffect(() => {
@@ -654,6 +662,7 @@ function SessionTaskGroup({
           return (
             <div
               key={task.task_id}
+              id={shiftTaskDomId(task.task_id)}
               className={cn(
                 "overflow-hidden rounded-xl border-2 p-3",
               )}
@@ -716,6 +725,7 @@ function SessionTaskGroup({
         return (
           <div
             key={task.task_id}
+            id={shiftTaskDomId(task.task_id)}
             className={cn(
               "overflow-hidden rounded-xl border-2 transition-colors",
               panelOpen && "shadow-sm",
