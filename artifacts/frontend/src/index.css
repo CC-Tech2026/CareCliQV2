@@ -217,7 +217,7 @@
   --cc-border:     #E8E8EA;   /* Charcoal Navy @ 10% over white */
   /* ── Surfaces ── */
   --cc-bg:         #FCFBF0;   /* Warm Off-White — page canvas */
-  --cc-surface:    #FCFBF0;   /* Ivory — cards/panels lift off the page via shadow, not colour */
+  --cc-surface:    #F2EFDE;   /* Ivory — cards/panels lift off the page via shadow, not colour */
   --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg */
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
@@ -252,7 +252,7 @@
   --cc-plum-border: rgba(232, 69, 122, 0.12);
   --cc-coral-soft: rgba(124, 58, 237, 0.08);
   --cc-coral-ring: rgba(124, 58, 237, 0.20);
-  --cc-cta: #E8457A; /* CTA in light mode — near-black so buttons stay visible on light canvas */
+  --cc-cta: var(--cc-plum); /* CTA in light mode — near-black so buttons stay visible on light canvas */
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;

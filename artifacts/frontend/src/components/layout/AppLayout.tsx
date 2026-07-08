@@ -31,6 +31,7 @@ import {
 } from "@/lib/i18n/nav-labels";
 
 // ── Design tokens (CSS vars — dark mode ready) ────────────────────────────────
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const MUTED  = "var(--cc-muted)";
 const TEXT   = "var(--cc-text)";
@@ -417,7 +418,7 @@ function SidebarContents({
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
               style={{
-                background: alertCount > 0 ? "var(--cc-coral)" : "var(--cc-status-success)",
+                background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
                 borderColor: "var(--cc-bg)",
               }}
               title={alertCount > 0
@@ -438,7 +439,7 @@ function SidebarContents({
               <div
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
                 style={{
-                  background: alertCount > 0 ? "var(--cc-coral)" : "var(--cc-status-success)",
+                  background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
                   borderColor: "var(--cc-bg)",
                 }}
                 title={alertCount > 0
@@ -717,24 +718,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2 px-4 shrink-0">
               {/* Search */}
               <GlobalSearch sections={navSections} translate={translate} />
-
-              {/* Compliance alert button — pulses when actions are pending */}
-              {alertCount > 0 && (
-                <Link href={topbarAlertHref}>
-                  <button
-                    type="button"
-                    aria-label={translateParams("layout.compliance.needAttention", { count: String(alertCount) })}
-                    className="relative flex items-center gap-1.5 px-3 h-8 rounded-full text-[12px] font-bold transition-all hover:opacity-90 whitespace-nowrap"
-                    style={{ background: "var(--cc-alert-bg)", color: CORAL, border: "1px solid var(--cc-coral-ring)" }}
-                  >
-                    <AlertTriangle size={13} strokeWidth={2.5} />
-                    <span className="font-black">{alertCount}</span>
-                    <span className="hidden xl:inline">
-                      {alertCount !== 1 ? translate("layout.compliance.actions") : translate("layout.compliance.action")}
-                    </span>
-                  </button>
-                </Link>
-              )}
 
               {/* Notification bell */}
               <div

@@ -1,26 +1,39 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
+import jsPDF from "jspdf";
 import {
   getComplianceCentreOverview,
   getComplianceCentreStaff,
   getComplianceCentreParticipants,
   getComplianceCentreIncidents,
   sendBulkReminders,
+  getCoordinatorAiDetectedPatterns,
+  dismissCoordinatorPattern,
+  type ComplianceCentreOverview,
   type ComplianceStaffRow,
   type ComplianceParticipantRow,
+  type AiDetectedPattern,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { downloadBlob } from "@/lib/download-file";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useReAuth } from "@/hooks/useReAuth";
 import { AuditPackPanel } from "@/pages/audit-pack";
+import { FormPanel } from "@/components/FormPanel";
+import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditTrailEntry } from "@/services/incidentService";
 import { Card } from "@/components/ui/card";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Download, AlertTriangle, ShieldAlert, ShieldCheck, Users, HeartHandshake,
   ListChecks, FileX, Search, BarChart3, Flag,
   FileCheck2, Info, ArrowRight, Eye, FilePlus, FileText, List,
   ArrowDownCircle, CircleCheck, LayoutDashboard, Loader2, Inbox,
+  MoreVertical, RefreshCw, Printer, Share2, ExternalLink, Clock, Sparkles,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -127,6 +140,142 @@ function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" 
   );
 }
 
+// ── Actions menu (⋮) ─────────────────────────────────────────────────────────
+/**
+ * "Export" generates a simple one-page summary PDF from the KPIs already
+ * loaded for the header (score, session bands, open incidents, common issues)
+ * — not a per-tab detailed report. If a richer export (e.g. full staff/
+ * participant table dumps, one PDF per tab) is wanted, that's a follow-up,
+ * not guessed at here.
+ */
+function exportComplianceSummaryPDF(overview: ComplianceCentreOverview | undefined) {
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margin = 18;
+  let y = margin;
+
+  pdf.setFontSize(16);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor("#1A1A2E");
+  pdf.text("CareCliQ Compliance Summary", margin, y);
+  y += 7;
+
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor("#6A6A77");
+  pdf.text(`Generated ${new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}`, margin, y);
+  y += 10;
+
+  if (!overview) {
+    pdf.setTextColor("#1A1A2E");
+    pdf.text("No compliance data was loaded yet — open the Overview tab first.", margin, y);
+    pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+    return;
+  }
+
+  const rows: [string, string][] = [
+    ["Overall score", `${Math.round(overview.kpis.overall_score)}%`],
+    ["Compliant sessions", String(overview.kpis.compliant_sessions)],
+    ["At-risk sessions", String(overview.kpis.at_risk_sessions)],
+    ["Open incidents", String(overview.kpis.open_incidents)],
+  ];
+  pdf.setFontSize(11);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor("#1A1A2E");
+  pdf.text("Overview KPIs", margin, y);
+  y += 6;
+  pdf.setFontSize(10);
+  pdf.setFont("helvetica", "normal");
+  rows.forEach(([label, value]) => {
+    pdf.setTextColor("#6A6A77");
+    pdf.text(label, margin, y);
+    pdf.setTextColor("#1A1A2E");
+    pdf.setFont("helvetica", "bold");
+    pdf.text(value, margin + 60, y);
+    pdf.setFont("helvetica", "normal");
+    y += 6;
+  });
+  y += 4;
+
+  if (overview.common_issues.length > 0) {
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor("#1A1A2E");
+    pdf.text("Most common issues", margin, y);
+    y += 6;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    overview.common_issues.forEach((issue) => {
+      pdf.setTextColor("#1A1A2E");
+      pdf.text(`${issue.label} — ${issue.count} session(s), ${issue.pct}%`, margin, y);
+      y += 6;
+    });
+  }
+
+  pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function ComplianceActionsMenu({ overview }: { overview: ComplianceCentreOverview | undefined }) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["compliance-centre"] });
+      toast({ title: translate("compliance.centre.actions.refreshed") });
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: translate("compliance.centre.actions.linkCopied") });
+    } catch {
+      toast({ variant: "destructive", title: translate("compliance.centre.actions.linkCopyFailed") });
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={translate("compliance.centre.actions.menuLabel")}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
+          style={{ color: TEXT }}
+        >
+          <MoreVertical size={18} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[200px]">
+        <DropdownMenuItem onClick={() => exportComplianceSummaryPDF(overview)}>
+          <Download size={16} /> {translate("compliance.centre.actions.export")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleRefresh} disabled={refreshing}>
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> {translate("compliance.centre.actions.refresh")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => window.print()}>
+          <Printer size={16} /> {translate("compliance.centre.actions.print")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare}>
+          <Share2 size={16} /> {translate("compliance.centre.actions.share")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/compliance?tab=audit_pack" className="flex items-center gap-2">
+            <ExternalLink size={16} /> {translate("compliance.centre.actions.goToAuditPack")}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
 type SubTab = "overview" | "staff" | "participants" | "incidents" | "audit_pack";
 const SUB_TABS: SubTab[] = ["overview", "staff", "participants", "incidents", "audit_pack"];
@@ -179,6 +328,7 @@ export default function Compliance() {
           <h1 className="mt-1 text-[26px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
           <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
         </div>
+        <div className="flex items-start gap-2 shrink-0">
         {(overallScore != null || urgentCount > 0) && (
           <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border-0 shadow-sm px-5 py-3">
             {urgentCount > 0 && (
@@ -216,22 +366,47 @@ export default function Compliance() {
             )}
           </Card>
         )}
+          <ComplianceActionsMenu overview={headerOverview} />
+        </div>
       </div>
 
-      <div className="inline-flex w-fit max-w-full gap-1 rounded-2xl p-1.5 overflow-x-auto scrollbar-none" style={{ background: SOFT }}>
+      <div
+        role="tablist"
+        className="flex w-full max-w-full gap-5 overflow-x-auto scrollbar-none border-b"
+        style={{ borderColor: BORDER }}
+      >
         {SUB_TABS.map((tab) => {
-          const Icon = TAB_ICONS[tab];
           const active = activeTab === tab;
+          const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
           return (
             <button
               key={tab}
               type="button"
+              role="tab"
+              aria-selected={active ? "true" : "false"}
               onClick={() => setActiveTab(tab)}
-              className="flex shrink-0 items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all whitespace-nowrap"
-              style={active ? { background: "var(--cc-cta)", color: "#fff", boxShadow: "0 2px 6px rgba(124,58,237,0.25)" } : { background: "transparent", color: MUTED }}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                e.preventDefault();
+                const idx = SUB_TABS.indexOf(tab);
+                const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
+                setActiveTab(SUB_TABS[next]);
+              }}
+              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
             >
-              <Icon size={14} />
               {tabLabels[tab]}
+              {badge > 0 && (
+                <span
+                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                  style={{ background: CRITICAL }}
+                >
+                  {badge}
+                </span>
+              )}
+              {active && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
+              )}
             </button>
           );
         })}
@@ -261,10 +436,10 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
-        <KpiCard label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
-        <KpiCard label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
+        <KpiCard flat label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
       </KpiGrid>
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
@@ -426,7 +601,69 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
           </button>
         </Card>
       </div>
+
+      <AiPatternsSection />
     </div>
+  );
+}
+
+function AiPatternsSection() {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["coordinator-ai-patterns"], queryFn: getCoordinatorAiDetectedPatterns });
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+
+  async function handleDismiss(id: string) {
+    setDismissingId(id);
+    try {
+      await dismissCoordinatorPattern(id);
+      await queryClient.invalidateQueries({ queryKey: ["coordinator-ai-patterns"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.overview.aiPatternDismissFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setDismissingId(null);
+    }
+  }
+
+  const patterns = data?.patterns ?? [];
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: "var(--cc-plum-soft)" }}>
+          <Sparkles size={14} style={{ color: PLUM }} />
+        </span>
+        <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.aiPatternsTitle")}</p>
+      </div>
+      <p className="text-[11px] mb-3" style={{ color: MUTED }}>{translate("compliance.centre.overview.aiPatternsSubtitle")}</p>
+      {isLoading ? (
+        <LoadingBlock label={translate("common.loading")} />
+      ) : patterns.length === 0 ? (
+        <p className="text-[12px] py-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.aiPatternsEmpty")}</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {patterns.map((p: AiDetectedPattern) => {
+            const sevColor = p.severity === "high" ? CRITICAL : p.severity === "low" ? PLUM : WARNING;
+            return (
+              <div key={p.id} className="rounded-xl p-3.5 border-l-4" style={{ background: SOFT, borderColor: sevColor }}>
+                <p className="text-[12px] font-bold mb-1" style={{ color: TEXT }}>{p.title}</p>
+                <p className="text-[11px] mb-2.5" style={{ color: MUTED }}>{p.message}</p>
+                <button
+                  type="button"
+                  disabled={dismissingId === p.id}
+                  onClick={() => handleDismiss(p.id)}
+                  className="text-[11px] font-bold px-3 py-1 rounded-full disabled:opacity-50 bg-white"
+                  style={{ color: MUTED, border: `1px solid ${BORDER}` }}
+                >
+                  {dismissingId === p.id ? translate("compliance.centre.overview.aiPatternDismissing") : translate("compliance.centre.overview.aiPatternDismiss")}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -486,10 +723,10 @@ function StaffPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
-        <KpiCard label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
-        <KpiCard label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
+        <KpiCard flat label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -518,18 +755,18 @@ function StaffPanel() {
         <div className="overflow-x-auto">
           <table className="table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
             <thead>
-              <tr style={{ background: SOFT }}>
-                <th className="w-48 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colWorker")}</th>
+              <tr style={{ background: TEXT }}>
+                <th className="w-48 px-4 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colWorker")}</th>
                 {Object.entries(credLabels).map(([key, label]) => (
-                  <th key={key} className="w-[84px] px-1.5 py-3 text-center text-[9px] font-bold uppercase tracking-wide leading-tight" style={{ color: MUTED }}>{label}</th>
+                  <th key={key} className="w-[84px] px-1.5 h-11 text-center text-[9px] font-bold uppercase tracking-wide leading-tight text-white">{label}</th>
                 ))}
-                <th className="w-[76px] px-2 py-3 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colAvgScore")}</th>
-                <th className="w-24 px-2 py-3 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colStatus")}</th>
+                <th className="w-[76px] px-2 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colAvgScore")}</th>
+                <th className="w-24 px-2 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colStatus")}</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((w) => (
-                <tr key={w.user_id} className="hover:bg-[var(--cc-soft)] transition-colors">
+              {filtered.map((w, idx) => (
+                <tr key={w.user_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-2.5 min-w-0">
                       <Avatar name={w.full_name} size={26} />
@@ -638,10 +875,10 @@ function ParticipantsPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
-        <KpiCard label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
-        <KpiCard label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
-        <KpiCard label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
+        <KpiCard flat label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
+        <KpiCard flat label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
+        <KpiCard flat label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -669,7 +906,7 @@ function ParticipantsPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr style={{ background: SOFT }}>
+              <tr style={{ background: TEXT }}>
                 {[
                   translate("compliance.centre.participants.colParticipant"),
                   translate("compliance.centre.participants.colPlanStatus"),
@@ -680,13 +917,13 @@ function ParticipantsPanel() {
                   translate("compliance.centre.participants.colWorker"),
                   translate("compliance.centre.participants.colStatus"),
                 ].map((h) => (
-                  <th key={h} className="px-3 py-3 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{h}</th>
+                  <th key={h} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((p) => (
-                <tr key={p.participant_id} className="hover:bg-[var(--cc-soft)] transition-colors">
+              {filtered.map((p, idx) => (
+                <tr key={p.participant_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
                   <td className="px-3 py-3 whitespace-nowrap">
                     <span className="flex items-center gap-2.5">
                       <Avatar name={p.full_name} size={26} />
@@ -759,10 +996,204 @@ function ParticipantsPanel() {
   );
 }
 
+// ── Incident status control ──────────────────────────────────────────────────
+const INCIDENT_STATUSES = ["reported", "under_investigation", "resolved", "closed"] as const;
+
+function incidentStatusLabel(translate: (key: string) => string, status: string) {
+  const map: Record<string, string> = {
+    reported: translate("compliance.centre.incidents.statusReported"),
+    under_investigation: translate("compliance.centre.incidents.statusUnderInvestigation"),
+    resolved: translate("compliance.centre.incidents.statusResolved"),
+    closed: translate("compliance.centre.incidents.statusClosed"),
+  };
+  return map[status] ?? status.replace(/_/g, " ");
+}
+
+/** Turns a raw audit action_type ("incident.created") into readable text ("Incident created"). No per-value i18n key exists for these since they're arbitrary system strings. */
+function formatAuditAction(actionType: string) {
+  const label = actionType.split(".").pop() ?? actionType;
+  const spaced = label.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+interface IncidentDetail {
+  id: string;
+  title?: string;
+  description?: string;
+  incident_type?: string;
+  severity?: string;
+  status?: string;
+  incident_date?: string;
+  reference_number?: string;
+  ndis_reportable?: boolean;
+  ndis_reported_at?: string | null;
+  participant_name?: string;
+}
+
+function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onClose: () => void }) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { requireReAuth, modal: reauthModal } = useReAuth();
+  const [busy, setBusy] = useState(false);
+
+  const { data: incident, isLoading } = useQuery({
+    queryKey: ["incident-detail", incidentId],
+    queryFn: () => getIncident<IncidentDetail>(incidentId),
+  });
+  const { data: trail, isLoading: trailLoading } = useQuery({
+    queryKey: ["incident-audit-trail", incidentId],
+    queryFn: () => getIncidentAuditTrail(incidentId),
+  });
+
+  async function refetchAll() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["incident-detail", incidentId] }),
+      queryClient.invalidateQueries({ queryKey: ["incident-audit-trail", incidentId] }),
+      queryClient.invalidateQueries({ queryKey: ["compliance-centre", "incidents"] }),
+    ]);
+  }
+
+  async function handleStatusChange(status: string) {
+    if (status === incident?.status || busy) return;
+    setBusy(true);
+    try {
+      await requireReAuth(() => updateIncident(incidentId, { status }));
+      await refetchAll();
+      toast({ title: translate("compliance.centre.incidents.statusUpdated") });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.incidents.statusUpdateFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleFileNdisReport() {
+    setBusy(true);
+    try {
+      await requireReAuth(() => updateIncident(incidentId, { ndis_reported_at: new Date().toISOString() }));
+      await refetchAll();
+      toast({ title: translate("compliance.centre.incidents.ndisReportFiled") });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.incidents.ndisReportFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {reauthModal}
+      <FormPanel
+        isOpen
+        onClose={onClose}
+        showLogo={false}
+        title={incident?.reference_number ? `${translate("compliance.centre.incidents.drawerTitlePrefix")} ${incident.reference_number}` : translate("compliance.centre.incidents.drawerTitlePrefix")}
+        subtitle={incident?.participant_name}
+      >
+        {isLoading ? (
+          <LoadingBlock label={translate("common.loading")} />
+        ) : !incident ? (
+          <EmptyState label={translate("compliance.centre.incidents.noIncidents")} />
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: MUTED }}>{translate("compliance.centre.incidents.colDescription")}</p>
+              <p className="text-[13px]" style={{ color: TEXT }}>{incident.description || "—"}</p>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>{translate("compliance.centre.incidents.colStatus")}</p>
+              <div className="flex flex-wrap gap-2">
+                {INCIDENT_STATUSES.map((s) => {
+                  const active = incident.status === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleStatusChange(s)}
+                      className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors disabled:opacity-50"
+                      style={active ? { background: PLUM, color: "#fff" } : { background: SOFT, color: MUTED }}
+                    >
+                      {incidentStatusLabel(translate, s)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {incident.ndis_reportable && (
+              <Card className="rounded-2xl border-0 p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+                  <ShieldAlert size={16} style={{ color: CRITICAL }} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold mb-0.5" style={{ color: CRITICAL }}>{translate("compliance.centre.incidents.ndisReportableBannerTitle")}</p>
+                  {incident.ndis_reported_at ? (
+                    <p className="text-[12px]" style={{ color: TEXT }}>
+                      {translate("compliance.centre.incidents.ndisReportedOn")} {new Date(incident.ndis_reported_at).toLocaleString()}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[12px] mb-2" style={{ color: TEXT }}>{translate("compliance.centre.incidents.ndisReportableBannerBody")}</p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={handleFileNdisReport}
+                        className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full text-[12px] font-bold text-white disabled:opacity-50"
+                        style={{ background: CRITICAL }}
+                      >
+                        <FileCheck2 size={13} /> {translate("compliance.centre.incidents.fileNdisReport")}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>{translate("compliance.centre.incidents.auditTrailTitle")}</p>
+              {trailLoading ? (
+                <LoadingBlock label={translate("common.loading")} />
+              ) : !trail || trail.length === 0 ? (
+                <p className="text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.incidents.auditTrailEmpty")}</p>
+              ) : (
+                <ul className="space-y-3">
+                  {trail.map((entry: IncidentAuditTrailEntry) => (
+                    <li key={entry.id} className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
+                        <Clock size={12} style={{ color: PLUM }} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold" style={{ color: TEXT }}>{formatAuditAction(entry.action_type)}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>
+                          {entry.actor_name} · {new Date(entry.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <Link href={`/incident/${incidentId}`}>
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-bold cursor-pointer" style={{ color: PLUM }}>
+                <ExternalLink size={13} /> {translate("compliance.centre.incidents.viewReport")}
+              </span>
+            </Link>
+          </div>
+        )}
+      </FormPanel>
+    </>
+  );
+}
+
 // ── Incidents ─────────────────────────────────────────────────────────────────
 function IncidentsPanel() {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "incidents"], queryFn: getComplianceCentreIncidents });
+  const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -797,16 +1228,16 @@ function IncidentsPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
-        <KpiCard label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
-        <KpiCard label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
       </KpiGrid>
 
       <Card className="rounded-2xl border-0 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr style={{ background: SOFT }}>
+              <tr style={{ background: TEXT }}>
                 {[
                   translate("compliance.centre.incidents.colDate"),
                   translate("compliance.centre.incidents.colWorker"),
@@ -815,14 +1246,15 @@ function IncidentsPanel() {
                   translate("compliance.centre.incidents.colDescription"),
                   translate("compliance.centre.incidents.colStatus"),
                   translate("compliance.centre.incidents.colAction"),
-                ].map((h) => (
-                  <th key={h} className="px-3 py-3 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{h}</th>
+                  "",
+                ].map((h, i) => (
+                  <th key={h || `h${i}`} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {(data?.incidents ?? []).map((inc) => (
-                <tr key={inc.id} className="hover:bg-[var(--cc-soft)] transition-colors">
+              {(data?.incidents ?? []).map((inc, idx) => (
+                <tr key={inc.id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
                   <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{String(inc.incident_date).slice(0, 10)}</td>
                   <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.worker_name}</td>
                   <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.participant_name}</td>
@@ -837,15 +1269,47 @@ function IncidentsPanel() {
                     <StatusBadge label={inc.status.replace(/_/g, " ")} tone={inc.status === "closed" ? "gn" : inc.status === "under_investigation" ? "am" : "rd"} />
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{actionFor(inc)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={translate("compliance.centre.actions.menuLabel")}
+                          className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
+                          style={{ color: MUTED }}
+                        >
+                          <MoreVertical size={15} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
+                          <Eye size={15} /> {translate("compliance.centre.incidents.kebabReviewStatus")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
+                          <Clock size={15} /> {translate("compliance.centre.incidents.kebabAuditTrail")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href={`/incident/${inc.id}`} className="flex items-center gap-2">
+                            <ExternalLink size={15} /> {translate("compliance.centre.incidents.kebabOpenReport")}
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
                 </tr>
               ))}
               {(data?.incidents.length ?? 0) === 0 && (
-                <tr><td colSpan={7}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
+                <tr><td colSpan={8}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
+
+      {openIncidentId && (
+        <IncidentDetailDrawer incidentId={openIncidentId} onClose={() => setOpenIncidentId(null)} />
+      )}
     </div>
   );
 }

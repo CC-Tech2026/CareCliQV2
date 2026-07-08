@@ -109,6 +109,8 @@ export interface KpiCardProps {
   sub?: React.ReactNode
   tone?: StatTone
   className?: string
+  /** Simpler label+number tile with no icon badge — used where the reference design calls for a flatter look (e.g. Compliance Centre). */
+  flat?: boolean
 }
 
 /**
@@ -117,34 +119,53 @@ export interface KpiCardProps {
  * in a soft-tinted rounded badge; use KpiGrid to lay several out responsively.
  */
 const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
-  ({ className, icon, label, value, sub, tone = "neutral", ...props }, ref) => (
+  ({ className, icon, label, value, sub, tone = "neutral", flat = false, ...props }, ref) => (
     <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm p-4", className)} {...props}>
-      <div className="flex items-center gap-3">
-        {icon && (
-          <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: kpiTint(tone), color: toneColour[tone] }}
-          >
-            {React.cloneElement(icon, { size: icon.props.size ?? 19 })}
-          </span>
-        )}
+      {flat ? (
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>
             {label}
           </p>
           <p
-            className="mt-1 text-2xl leading-none font-extrabold truncate"
+            className="mt-1.5 text-[26px] leading-none font-extrabold truncate"
             style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
           >
             {value}
           </p>
           {sub && (
-            <p className="mt-1 text-[10px] font-medium truncate" style={{ color: "var(--cc-muted)" }}>
+            <p className="mt-1.5 text-[11px] font-medium truncate" style={{ color: "var(--cc-muted)" }}>
               {sub}
             </p>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          {icon && (
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: kpiTint(tone), color: toneColour[tone] }}
+            >
+              {React.cloneElement(icon, { size: icon.props.size ?? 19 })}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>
+              {label}
+            </p>
+            <p
+              className="mt-1 text-2xl leading-none font-extrabold truncate"
+              style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
+            >
+              {value}
+            </p>
+            {sub && (
+              <p className="mt-1 text-[10px] font-medium truncate" style={{ color: "var(--cc-muted)" }}>
+                {sub}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </Card>
   ),
 )

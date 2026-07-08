@@ -116,6 +116,20 @@ export function getIncidentsByParticipant<T = unknown>(participantId: string) {
   return jsonFetch<T>(`/api/incidents/participant/${participantId}`);
 }
 
+export interface IncidentAuditTrailEntry {
+  id: string;
+  action_type: string;
+  actor_name: string;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export function getIncidentAuditTrail(incidentId: string) {
+  return jsonFetch<IncidentAuditTrailEntry[]>(`/api/incidents/${incidentId}/audit-trail`);
+}
+
 export interface SimilarIncidentMatch {
   incident_id: string;
   date: string;
