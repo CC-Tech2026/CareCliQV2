@@ -288,6 +288,8 @@ export function WorkerMobileSessionScreen({
               sessionElapsed={sessionElapsed}
               breakControl={longShiftBreak}
               initialCheckinStatus={initialCheckinStatus}
+              tasks={localTasks}
+              onNotesRefresh={onNotesRefresh}
             />
           </div>
         )}

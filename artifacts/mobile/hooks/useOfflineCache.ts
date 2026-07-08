@@ -169,3 +169,38 @@ export async function getCachedWorkerShifts<T>(): Promise<T[] | null> {
     return null;
   }
 }
+
+const SHIFT_CACHE_PREFIX = "offline_worker_shift_";
+const SESSION_NOTES_CACHE_PREFIX = "offline_session_notes_";
+
+export async function cacheWorkerShift(id: string, shift: unknown): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${SHIFT_CACHE_PREFIX}${id}`, JSON.stringify(shift));
+  } catch {}
+}
+
+export async function getCachedWorkerShift<T>(id: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${SHIFT_CACHE_PREFIX}${id}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheSessionNotes(sessionId: string, notes: unknown[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${SESSION_NOTES_CACHE_PREFIX}${sessionId}`, JSON.stringify(notes));
+  } catch {}
+}
+
+export async function getCachedSessionNotes<T>(sessionId: string): Promise<T[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${SESSION_NOTES_CACHE_PREFIX}${sessionId}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as T[];
+  } catch {
+    return null;
+  }
+}

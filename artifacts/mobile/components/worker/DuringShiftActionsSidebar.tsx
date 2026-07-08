@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -8,6 +9,7 @@ import { useColors } from "@/hooks/useColors";
 const DEFAULT_OFFICE_PHONE = "1300 000 000";
 
 type Props = {
+  shiftId: string;
   officePhone?: string | null;
 };
 
@@ -19,8 +21,9 @@ type ActionItem = {
   onPress: () => void;
 };
 
-export function DuringShiftActionsSidebar({ officePhone }: Props) {
+export function DuringShiftActionsSidebar({ shiftId, officePhone }: Props) {
   const colors = useColors();
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const phone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
 
@@ -30,7 +33,7 @@ export function DuringShiftActionsSidebar({ officePhone }: Props) {
       label: "Message office",
       icon: "message-square",
       accent: colors.primary,
-      onPress: () => void Linking.openURL(`sms:${phone}`),
+      onPress: () => router.push(`/shift/${shiftId}/message-office` as never),
     },
     {
       id: "call",

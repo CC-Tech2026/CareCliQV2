@@ -131,7 +131,7 @@ export type ShiftBriefingPayload = {
   all_alerts_acknowledged: boolean;
 };
 
-export type SessionNoteType = "text" | "voice" | "photo" | "file";
+export type SessionNoteType = "text" | "voice" | "photo" | "file" | "check-in";
 
 export type SessionNoteRecord = {
   note_id: string;
@@ -371,6 +371,32 @@ export function createMyClientSession(id: string, body: CreateWorkerSessionInput
   });
 }
 
+export type ShiftOfficeMessage = {
+  id: string;
+  shift_id: string;
+  message: string;
+  priority: "normal" | "urgent" | "emergency";
+  created_at: string;
+};
+
+export function listShiftMessages(shiftId: string) {
+  return workerFetch<ShiftOfficeMessage[]>(`/api/worker/shifts/${shiftId}/messages`);
+}
+
+export function sendShiftOfficeMessage(
+  shiftId: string,
+  body: {
+    message: string;
+    priority?: "normal" | "urgent" | "emergency";
+    attachment_data?: string[];
+  },
+) {
+  return workerFetch<ShiftOfficeMessage>(`/api/worker/shifts/${shiftId}/messages`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function translateNoteToEnglish(text: string, sourceLanguage = "auto") {
   return workerFetch<{ translated?: string; detected_language?: string; status?: string }>(
     "/api/ai/translate",
@@ -443,7 +469,7 @@ export function getCheckinStatusByShift(shiftId: string) {
 
 export function submitLongShiftCheckin(
   sessionId: string,
-  body: { status: CheckinStatus; note?: string },
+  body: { status: CheckinStatus; note?: string; prompt_triggered_at?: string },
 ) {
   return workerFetch<{ id: string; status: CheckinStatus; submitted_at: string }>(
     `/api/worker/sessions/${sessionId}/checkins`,
@@ -452,6 +478,75 @@ export function submitLongShiftCheckin(
       body: JSON.stringify(body),
     },
   );
+}
+
+export async function submitLongShiftCheckInForm(
+  sessionId: string,
+  form: import("@workspace/worker-compliance").LongShiftCheckInFormData,
+) {
+  const {
+    buildLongShiftCheckinNote,
+    mapLongShiftCheckinStatus,
+  } = await import("@workspace/worker-compliance");
+
+  const status = mapLongShiftCheckinStatus(form);
+  const note = buildLongShiftCheckinNote(form);
+  const checkin = await submitLongShiftCheckin(sessionId, {
+    status,
+    note,
+    prompt_triggered_at: new Date().toISOString(),
+  });
+
+  const now = new Date().toISOString();
+  const timelineNote: SessionNoteRecord = {
+    note_id: globalThis.crypto?.randomUUID?.() ?? `checkin-${Date.now()}`,
+    session_id: sessionId,
+    content: note,
+    note_type: "check-in",
+    created_at: now,
+    auto_saved_at: now,
+    synced: true,
+  };
+  await syncSessionNotes(sessionId, [timelineNote]);
+
+  return { checkin, status, note, timelineNote };
+}
+
+export type ShiftBreak = {
+  id: string;
+  break_start_at: string;
+  break_end_at?: string | null;
+  duration_secs?: number | null;
+  is_compliant?: boolean | null;
+};
+
+export type ActiveBreakStatus = {
+  active: boolean;
+  id?: string;
+  break_start_at?: string;
+  break_number?: number;
+  elapsed_secs?: number;
+  completed_breaks?: number;
+  total_break_secs?: number;
+  max_breaks_per_shift?: number | null;
+  can_start_break?: boolean;
+  block_reason?: "break_in_progress" | "break_limit_reached" | null;
+};
+
+export function getBreakStatusByShift(shiftId: string) {
+  return workerFetch<ActiveBreakStatus>(`/api/worker/shifts/${shiftId}/breaks/status`);
+}
+
+export function startLongShiftBreak(sessionId: string) {
+  return workerFetch<ShiftBreak>(`/api/worker/sessions/${sessionId}/breaks/start`, {
+    method: "POST",
+  });
+}
+
+export function endLongShiftBreak(sessionId: string) {
+  return workerFetch<ShiftBreak>(`/api/worker/sessions/${sessionId}/breaks/end`, {
+    method: "POST",
+  });
 }
 
 export function fetchNotifications(params?: { days?: number; unread_only?: boolean }) {

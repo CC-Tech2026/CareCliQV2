@@ -26,6 +26,13 @@ import {
 import type { WorkerShift } from "@/lib/worker-api";
 import { getPrimaryTodayShiftId, sortTodayShiftsForList } from "@/lib/shift-utils";
 
+function isTodayShift(shift: WorkerShift): boolean {
+  const ref = shift.scheduled_start ?? shift.clocked_out_at ?? shift.clocked_in_at;
+  if (!ref) return false;
+  const d = new Date(ref);
+  return d.toDateString() === new Date().toDateString();
+}
+
 function ShiftSkeleton() {
   const colors = useColors();
   return (
@@ -48,18 +55,27 @@ export default function MyShiftsScreen() {
   const [cachedShifts, setCachedShifts] = useState<WorkerShift[] | null>(null);
 
   const { data, isLoading, error, refetch, isRefetching } = useWorkerShifts("today");
+  const completedQuery = useWorkerShifts("completed");
+
+  const onlineShifts = useMemo(() => {
+    if (!data?.shifts) return undefined;
+    const completedToday = (completedQuery.data?.shifts ?? []).filter(isTodayShift);
+    const byId = new Map<string, WorkerShift>();
+    for (const s of [...data.shifts, ...completedToday]) byId.set(s.id, s);
+    return Array.from(byId.values());
+  }, [data?.shifts, completedQuery.data?.shifts]);
 
   useEffect(() => {
-    if (data?.shifts && data.shifts.length > 0) {
-      cacheWorkerShifts(data.shifts);
+    if (onlineShifts && onlineShifts.length > 0) {
+      cacheWorkerShifts(onlineShifts);
     } else if (!isOnline) {
       getCachedWorkerShifts<WorkerShift>().then((cached) => {
         if (cached) setCachedShifts(cached);
       });
     }
-  }, [data?.shifts, isOnline]);
+  }, [onlineShifts, isOnline]);
 
-  const activeShifts = data?.shifts ?? (isOnline ? undefined : cachedShifts ?? undefined);
+  const activeShifts = onlineShifts ?? (isOnline ? undefined : cachedShifts ?? undefined);
 
   const { sortedShifts, primaryShiftId } = useMemo(() => {
     const list = activeShifts ?? [];
@@ -71,6 +87,7 @@ export default function MyShiftsScreen() {
 
   const handleRefresh = () => {
     void refetch();
+    void completedQuery.refetch();
     void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
   };
 

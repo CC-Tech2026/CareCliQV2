@@ -1,5 +1,17 @@
 import { detectRestrictivePracticeHit } from "./rp-detector";
 
+export {
+  MOOD_OPTIONS,
+  buildLongShiftCheckinNote,
+  isCheckinSessionNote,
+  mapLongShiftCheckinStatus,
+  moodEmoji,
+  moodLabel,
+  type LongShiftCheckInFormData,
+  type LongShiftCheckinStatus,
+  type ParticipantMood,
+} from "./long-shift-checkin";
+
 export type ComplianceRuleStatus = "pass" | "warn" | "fail" | "info";
 
 export type ComplianceRuleResult = {

@@ -187,7 +187,7 @@ export function WorkerMobileSubmitSuccess({
           <button
             type="button"
             onClick={onBack}
-            className="mt-8 flex h-[50px] w-full max-w-sm items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white"
+            className="mt-8 flex h-[50px] w-full max-w-sm items-center justify-center gap-2 rounded-xl text-[15px] font-semibold dark:text-white text-black"
             style={{ background: WM.purple }}
           >
             <Home size={18} />

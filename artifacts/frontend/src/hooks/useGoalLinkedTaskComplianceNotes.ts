@@ -3,6 +3,7 @@ import { listSessionEvidence } from "@/lib/task-evidence-storage";
 import type { ComplianceNote } from "@/lib/worker-compliance-engine";
 import { listSessionNotes, type SessionNoteRecord } from "@/services/sessionNotesService";
 import type { ShiftTask } from "@/services/shiftService";
+import { SESSION_NOTES_UPDATED_EVENT } from "@/lib/merge-session-evidence";
 
 export function contextNoteComplianceId(taskId: string) {
   return `ctx-${taskId}`;
@@ -50,7 +51,11 @@ export function useGoalLinkedTaskComplianceNotes(
   useEffect(() => {
     const onUpdate = () => void refresh();
     window.addEventListener("task-evidence-updated", onUpdate);
-    return () => window.removeEventListener("task-evidence-updated", onUpdate);
+    window.addEventListener(SESSION_NOTES_UPDATED_EVENT, onUpdate);
+    return () => {
+      window.removeEventListener("task-evidence-updated", onUpdate);
+      window.removeEventListener(SESSION_NOTES_UPDATED_EVENT, onUpdate);
+    };
   }, [refresh]);
 
   const notes: ComplianceNote[] = useMemo(() => {

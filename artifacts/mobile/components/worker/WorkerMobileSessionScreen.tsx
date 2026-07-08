@@ -10,6 +10,7 @@ import {
 
 import { ClockedInBanner } from "@/components/worker/ClockedInBanner";
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
+import { LongShiftEngagementPanel } from "@/components/worker/LongShiftEngagementPanel";
 import { WorkerMobileComposer } from "@/components/worker/WorkerMobileComposer";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
@@ -17,11 +18,17 @@ import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip
 import { WorkerMobileTaskList } from "@/components/worker/WorkerMobileTaskList";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
-import type { SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
+import type {
+  CheckinWindowStatus,
+  SessionNoteRecord,
+  ShiftHealthAlert,
+  ShiftTask,
+} from "@/lib/worker-api";
 import { updateShiftTasks } from "@/lib/worker-api";
 import {
   hasStrongTaskEvidence,
   MIN_EVIDENCE_NOTE_CHARS,
+  SESSION_NOTE_MAX,
 } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
@@ -40,6 +47,8 @@ type Props = {
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
   disabled?: boolean;
   sessionElapsed?: string;
+  checkinStatus?: CheckinWindowStatus;
+  onCheckin?: () => void;
 };
 
 function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]): boolean {
@@ -53,6 +62,14 @@ function sessionNoteTextsForTask(sessionNotes: SessionNoteRecord[], taskId: stri
   return sessionNotes
     .filter((n) => n.task_id === taskId && n.content?.trim())
     .map((n) => n.content!.trim());
+}
+
+function attachSessionNotesToTask(task: ShiftTask, sessionNotes: SessionNoteRecord[]): ShiftTask {
+  const texts = sessionNoteTextsForTask(sessionNotes, task.task_id);
+  if (!texts.length) return task;
+  if ((task.note?.trim().length ?? 0) >= MIN_EVIDENCE_NOTE_CHARS) return task;
+  const merged = texts.join("\n\n").slice(0, SESSION_NOTE_MAX);
+  return { ...task, note: merged, has_text_notes: true };
 }
 
 function taskHasMobileDocumentation(task: ShiftTask, sessionNotes: SessionNoteRecord[]): boolean {
@@ -82,6 +99,8 @@ export function WorkerMobileSessionScreen({
   onOpenIncidentReport,
   disabled,
   sessionElapsed,
+  checkinStatus,
+  onCheckin,
 }: Props) {
   const colors = useColors();
   const { isOnline, queueWorkerUpdate } = useOffline();
@@ -151,10 +170,12 @@ export function WorkerMobileSessionScreen({
     const now = new Date().toISOString();
     const next = localTasks.map((t) => {
       if (t.task_id !== taskId) return t;
+      const willComplete = !t.completed;
+      const withEvidence = willComplete ? attachSessionNotesToTask(t, localSessionNotes) : t;
       return {
-        ...t,
-        completed: !t.completed,
-        completed_at: !t.completed ? now : null,
+        ...withEvidence,
+        completed: willComplete,
+        completed_at: willComplete ? now : null,
         checked_at: now,
       };
     });
@@ -171,9 +192,11 @@ export function WorkerMobileSessionScreen({
       if (task && !task.completed && taskHasMobileDocumentation(task, mergedNotes)) {
         Haptics.selectionAsync();
         const now = new Date().toISOString();
-        const next = localTasks.map((t) =>
-          t.task_id === taskId ? { ...t, completed: true, completed_at: now, checked_at: now } : t,
-        );
+        const next = localTasks.map((t) => {
+          if (t.task_id !== taskId) return t;
+          const withEvidence = attachSessionNotesToTask(t, mergedNotes);
+          return { ...withEvidence, completed: true, completed_at: now, checked_at: now };
+        });
         await persist(next);
       }
     }
@@ -192,6 +215,15 @@ export function WorkerMobileSessionScreen({
       >
         <WorkerMobileRiskStrip alerts={healthAlerts} />
         <ClockedInBanner clockedInAt={clockedInAt} participantName={participantName} />
+
+        <LongShiftEngagementPanel
+          shiftId={shiftId}
+          sessionId={sessionId}
+          checkinStatus={checkinStatus}
+          sessionElapsed={sessionElapsed}
+          onCheckin={onCheckin}
+          disabled={disabled || busy}
+        />
 
         <View style={[styles.taskCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <View style={[styles.taskHeader, { borderBottomColor: colors.border }]}>

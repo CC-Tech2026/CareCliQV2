@@ -109,3 +109,46 @@ export async function logoutApi(): Promise<void> {
     /* noop */
   }
 }
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await workerFetch<void>("/api/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email: email.trim() }),
+  });
+}
+
+export type RegisterPayload = {
+  email: string;
+  password: string;
+  full_name: string;
+  account_type: string;
+};
+
+export async function registerAccount(payload: RegisterPayload): Promise<void> {
+  await workerFetch<void>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type OnboardingPayload = {
+  account_type: string;
+  organization_name?: string;
+  provider_type?: string;
+  registration_status?: string;
+  team_size?: string;
+  participant_volume?: string;
+  contact_number?: string;
+};
+
+export async function completeOnboarding(
+  payload: OnboardingPayload,
+): Promise<{ access_token?: string; org_created?: boolean }> {
+  return workerFetch<{ access_token?: string; org_created?: boolean }>(
+    "/api/auth/complete-onboarding",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}

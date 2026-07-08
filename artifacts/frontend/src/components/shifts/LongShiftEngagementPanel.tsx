@@ -3,16 +3,18 @@ import { Activity, Coffee, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
+import { LongShiftCheckInForm } from "@/components/shifts/LongShiftCheckInForm";
 import {
   formatCheckinWaitLabel,
   useLongShiftCheckin,
 } from "@/hooks/useLongShiftCheckin";
 import type { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
 import {
-  submitLongShiftCheckin,
-  type CheckinStatus,
+  submitLongShiftCheckInForm,
   type CheckinWindowStatus,
 } from "@/services/longShiftService";
+import type { ShiftTask } from "@/services/shiftService";
+import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 
 const PLUM = "var(--cc-plum)";
 const MUTED = "var(--cc-muted)";
@@ -27,6 +29,8 @@ type Props = {
   sessionElapsed?: string;
   breakControl: BreakControl;
   initialCheckinStatus?: CheckinWindowStatus | null;
+  tasks?: ShiftTask[];
+  onNotesRefresh?: () => void;
 };
 
 export function LongShiftEngagementPanel({
@@ -36,6 +40,8 @@ export function LongShiftEngagementPanel({
   sessionElapsed,
   breakControl,
   initialCheckinStatus,
+  tasks = [],
+  onNotesRefresh,
 }: Props) {
   const { toast } = useToast();
   const {
@@ -57,7 +63,6 @@ export function LongShiftEngagementPanel({
   });
 
   const [checkinOpen, setCheckinOpen] = useState(false);
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [elapsedMinutes, setElapsedMinutes] = useState(0);
 
@@ -86,8 +91,8 @@ export function LongShiftEngagementPanel({
 
   if (elapsedMinutes < 240) return null;
 
-  const submitCheckin = async (status: CheckinStatus) => {
-    const isEmergency = status !== "GOING_WELL";
+  const submitCheckin = async (form: LongShiftCheckInFormData) => {
+    const isEmergency = form.hasIncident;
     if (!isEmergency && !canSubmitRoutine) {
       toast({
         variant: "destructive",
@@ -99,16 +104,20 @@ export function LongShiftEngagementPanel({
 
     setBusy(true);
     try {
-      await submitLongShiftCheckin(sessionId, {
-        status,
-        note: note.trim() || undefined,
+      const result = await submitLongShiftCheckInForm(sessionId, form, {
         prompt_triggered_at: new Date().toISOString(),
       });
       toast({ title: "Check-in recorded" });
       setCheckinOpen(false);
-      setNote("");
       markSubmitted();
       await refreshCheckin();
+      onNotesRefresh?.();
+      if (result.status === "INCIDENT_REPORTED") {
+        toast({
+          title: "Incident noted",
+          description: "Please complete an incident report in your shift notes.",
+        });
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Check-in failed";
       toast({ variant: "destructive", title: msg });
@@ -201,7 +210,7 @@ export function LongShiftEngagementPanel({
           className="gap-1.5 rounded-full text-xs font-bold"
           disabled={actionBusy || !canOpenCheckin}
           title={checkinButtonTitle}
-          onClick={() => setCheckinOpen((v) => !v)}
+          onClick={() => setCheckinOpen(true)}
         >
           <MessageCircle size={14} />
           {checkinOverdue && canSubmitRoutine ? "Check in (due)" : "Check in"}
@@ -246,60 +255,14 @@ export function LongShiftEngagementPanel({
           {" · "}Billing clock paused until you end break.
         </p>
       )}
-      {checkinOpen && (
-        <div className="mt-3 space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
-          {!canSubmitRoutine && (
-            <p className="text-[11px] font-medium text-amber-700">
-              Routine check-in unavailable
-              {checkinControl.cooldownRemainingSecs > 0
-                ? `, wait ${formatCheckinWaitLabel(checkinControl.cooldownRemainingSecs)}`
-                : checkinControl.nextDueSecs > 0
-                  ? `, due in ${formatCheckinWaitLabel(checkinControl.nextDueSecs)}`
-                  : ""}
-              . Needs attention and incident reports are always available.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["GOING_WELL", "Going well"],
-                ["NEEDS_ATTENTION", "Needs attention"],
-                ["INCIDENT_REPORTED", "Report incident"],
-              ] as const
-            ).map(([status, label]) => {
-              const isRoutine = status === "GOING_WELL";
-              const disabled = actionBusy || (isRoutine && !canSubmitRoutine);
-              return (
-                <Button
-                  key={status}
-                  type="button"
-                  size="sm"
-                  variant={status === "INCIDENT_REPORTED" ? "destructive" : "outline"}
-                  className="rounded-full text-xs"
-                  disabled={disabled}
-                  title={
-                    isRoutine && !canSubmitRoutine
-                      ? statusHint ?? "Not due yet"
-                      : undefined
-                  }
-                  onClick={() => void submitCheckin(status)}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-          </div>
-          <textarea
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{ borderColor: BORDER }}
-            placeholder="Optional note (max 500 chars)"
-            maxLength={500}
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </div>
-      )}
+
+      <LongShiftCheckInForm
+        open={checkinOpen}
+        onClose={() => setCheckinOpen(false)}
+        onSubmit={(data) => void submitCheckin(data)}
+        busy={actionBusy}
+        tasks={tasks}
+      />
     </section>
   );
 }

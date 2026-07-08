@@ -39,13 +39,15 @@ def _shift_duration_minutes(shift: dict[str, Any]) -> int:
 def _shift_summary(shift: dict[str, Any]) -> dict[str, Any]:
     start = shift.get("scheduled_start")
     start_dt = _parse_iso_datetime(start)
-    date_label = start_dt.date().isoformat() if start_dt else None
+    start_local = start_dt.astimezone(APP_TIMEZONE) if start_dt else None
+    date_label = start_local.date().isoformat() if start_local else None
     time_label = None
-    if start_dt:
-        time_label = start_dt.strftime("%H:%M")
+    if start_local:
+        time_label = start_local.strftime("%H:%M")
     end_dt = _parse_iso_datetime(shift.get("scheduled_end"))
-    if start_dt and end_dt:
-        time_label = f"{start_dt.strftime('%H:%M')} – {end_dt.strftime('%H:%M')}"
+    end_local = end_dt.astimezone(APP_TIMEZONE) if end_dt else None
+    if start_local and end_local:
+        time_label = f"{start_local.strftime('%H:%M')} – {end_local.strftime('%H:%M')}"
 
     return {
         "id": shift.get("id"),
@@ -228,7 +230,9 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
         light=True,
     ) if completed_today_rows else []
 
-    today_summaries = [_shift_summary(shift) for shift in today_shifts_raw]
+    today_summaries = [
+        _shift_summary(shift) for shift in today_shifts_raw + completed_shifts_raw
+    ]
     today_summaries.sort(key=lambda item: item.get("scheduled_start") or "")
 
     next_shift_raw = _pick_next_shift(today_shifts_raw, upcoming_shifts_raw)

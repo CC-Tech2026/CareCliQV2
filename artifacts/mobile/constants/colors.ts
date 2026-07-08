@@ -1,7 +1,7 @@
 const colors = {
   light: {
     text: "#0D0D55",
-    tint: "#5271FF",
+    tint: "#E8457A",
 
     background: "#F7F7FA",
     foreground: "#0D0D55",
@@ -9,7 +9,7 @@ const colors = {
     card: "#FFFFFF",
     cardForeground: "#0D0D55",
 
-    primary: "#5271FF",
+    primary: "#E8457A",
     primaryForeground: "#FFFFFF",
 
     secondary: "#EDF6C0",
@@ -44,6 +44,11 @@ const colors = {
     composerPink: "#D4537E",
     composerPurple: "#7F77DD",
 
+    dangerBg: "#FCEBEB",
+    dangerBorder: "#F7C1C1",
+    dangerText: "#791F1F",
+    dangerIcon: "#A32D2D",
+
     navy: "#0D0D55",
     pink: "#FA879F",
     lime: "#D9F103",
@@ -52,7 +57,7 @@ const colors = {
 
   dark: {
     text: "#F9FAFB",
-    tint: "#818CF8",
+    tint: "#F472B6",
 
     background: "#111827",
     foreground: "#F9FAFB",
@@ -60,7 +65,7 @@ const colors = {
     card: "#1F2937",
     cardForeground: "#F9FAFB",
 
-    primary: "#818CF8",
+    primary: "#F472B6",
     primaryForeground: "#111827",
 
     secondary: "#1E1B4B",
@@ -94,6 +99,11 @@ const colors = {
     clockInIcon: "#4ADE80",
     composerPink: "#F472B6",
     composerPurple: "#A5B4FC",
+
+    dangerBg: "rgba(248,113,113,0.12)",
+    dangerBorder: "rgba(248,113,113,0.35)",
+    dangerText: "#FCA5A5",
+    dangerIcon: "#F87171",
 
     navy: "#818CF8",
     pink: "#F472B6",

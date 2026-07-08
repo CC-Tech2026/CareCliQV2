@@ -53,6 +53,7 @@ export function WorkerMobileReviewScreen({
   notes,
   compliance,
   busy,
+  onSaveNote,
   onAddMissingNote,
   onSubmit,
   onViewComplianceReport,
@@ -94,6 +95,12 @@ export function WorkerMobileReviewScreen({
     setMedDraft("");
     setAddingMed(false);
   };
+
+  const taskLabel = (taskId?: string | null) =>
+    tasks.find((t) => t.task_id === taskId)?.label ?? undefined;
+
+  const goalTitle = (taskId?: string | null) =>
+    tasks.find((t) => t.task_id === taskId)?.goal_title ?? undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -166,7 +173,11 @@ export function WorkerMobileReviewScreen({
               <WorkerMobileNoteBubble
                 key={note.note_id}
                 note={note}
+                taskLabel={taskLabel(note.task_id)}
+                goalTitle={goalTitle(note.task_id)}
                 flag={flag}
+                editable
+                onSave={onSaveNote}
                 onIncidentReport={flag?.severity === "fail" ? onOpenIncidentReport : undefined}
               />
             );
@@ -183,7 +194,7 @@ export function WorkerMobileReviewScreen({
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>Continue to Sign-off</Text>
+            <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>Submit notes</Text>
           )}
         </Pressable>
       </View>

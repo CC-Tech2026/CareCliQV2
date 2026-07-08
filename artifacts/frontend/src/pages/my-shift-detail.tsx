@@ -30,14 +30,14 @@ import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
 import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
-import { CheckInPromptModal } from "@/components/shifts/CheckInPromptModal";
+import { LongShiftCheckInForm } from "@/components/shifts/LongShiftCheckInForm";
 import { useLongShiftCheckin } from "@/hooks/useLongShiftCheckin";
 import {
   markSessionHeartbeat,
   markSessionOffline,
-  submitLongShiftCheckin,
-  type CheckinStatus,
+  submitLongShiftCheckInForm,
 } from "@/services/longShiftService";
+import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
@@ -1480,16 +1480,24 @@ function ShiftWorkflow({
     };
   }, [checklistSessionId, isSessionActive]);
 
-  const handlePromptCheckin = async (status: CheckinStatus) => {
+  const handlePromptCheckin = async (form: LongShiftCheckInFormData) => {
     if (!checklistSessionId || checkinBusy) return;
     setCheckinBusy(true);
     try {
-      await submitLongShiftCheckin(checklistSessionId, {
-        status,
+      const result = await submitLongShiftCheckInForm(checklistSessionId, form, {
         prompt_triggered_at: new Date().toISOString(),
       });
       setCheckinPromptOpen(false);
       await longShiftCheckin.refresh();
+      if (result.status === "INCIDENT_REPORTED") {
+        toast({
+          title: "Incident noted",
+          description: "Please complete an incident report in your shift notes.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Check-in recorded" });
+      }
     } catch (err) {
       toast({
         title: "Check-in failed",
@@ -1853,14 +1861,15 @@ function ShiftWorkflow({
               sessionElapsed={elapsed}
               breakControl={longShiftBreak}
               initialCheckinStatus={shift.checkin_status}
+              tasks={activeTasks}
             />
           )}
-          <CheckInPromptModal
+          <LongShiftCheckInForm
             open={checkinPromptOpen}
             onClose={() => setCheckinPromptOpen(false)}
-            onSubmit={(status) => void handlePromptCheckin(status)}
+            onSubmit={(data) => void handlePromptCheckin(data)}
             busy={checkinBusy}
-            gapMinutes={longShiftCheckin.checkinOverdue ? 90 : undefined}
+            tasks={activeTasks}
           />
           <Button
             type="button"

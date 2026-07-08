@@ -1,4 +1,11 @@
 import { jsonFetch } from "@/services/http";
+import {
+  buildLongShiftCheckinNote,
+  mapLongShiftCheckinStatus,
+  type LongShiftCheckInFormData,
+} from "@workspace/worker-compliance";
+import { syncSessionNotes, type SessionNoteRecord } from "@/services/sessionNotesService";
+import { notifySessionNotesUpdated } from "@/lib/merge-session-evidence";
 
 export type CheckinStatus = "GOING_WELL" | "NEEDS_ATTENTION" | "INCIDENT_REPORTED";
 
@@ -83,6 +90,36 @@ export function submitLongShiftCheckin(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export async function submitLongShiftCheckInForm(
+  sessionId: string,
+  form: LongShiftCheckInFormData,
+  options?: { prompt_triggered_at?: string; gap_at_prompt_secs?: number },
+) {
+  const status = mapLongShiftCheckinStatus(form);
+  const note = buildLongShiftCheckinNote(form);
+  const checkin = await submitLongShiftCheckin(sessionId, {
+    status,
+    note,
+    prompt_triggered_at: options?.prompt_triggered_at ?? new Date().toISOString(),
+    gap_at_prompt_secs: options?.gap_at_prompt_secs,
+  });
+
+  const now = new Date().toISOString();
+  const timelineNote: SessionNoteRecord = {
+    note_id: crypto.randomUUID(),
+    session_id: sessionId,
+    content: note,
+    note_type: "check-in",
+    created_at: now,
+    auto_saved_at: now,
+    synced: true,
+  };
+  await syncSessionNotes(sessionId, [timelineNote]);
+  notifySessionNotesUpdated();
+
+  return { checkin, status, note, timelineNote };
 }
 
 export function startLongShiftBreak(sessionId: string) {
