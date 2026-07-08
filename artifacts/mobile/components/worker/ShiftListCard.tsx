@@ -48,7 +48,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
   const isCompleted = isShiftCompletedForList(shift);
   const needsRiskAck = shiftNeedsRiskAck(shift);
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
-  const showDetails = showActions;
+  const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
 
   const avatarColor = isCancelled
@@ -179,7 +179,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
       ]}
       testID={`shift-card-${shift.id}`}
     >
-      <Pressable onPress={() => navigateToShift()} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+      <View>
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: avatarColor }, pulse && styles.avatarPulse]}>
             <Text style={[styles.avatarText, { fontFamily: "Inter_700Bold" }]}>
@@ -327,7 +327,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
             </Text>
           </View>
         )}
-      </Pressable>
+      </View>
 
       {showActions && !isCancelled && !isCompleted && (
         <View style={styles.actions}>

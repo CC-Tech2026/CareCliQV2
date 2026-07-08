@@ -95,6 +95,22 @@ def _session_duration_secs(session: dict, shift: Optional[dict] = None) -> int:
     return mins * 60
 
 
+def _planned_shift_duration_secs(shift: Optional[dict], session: dict) -> int:
+    """Scheduled shift length (not elapsed time), used to decide random check-ins."""
+    if shift:
+        start = _parse_dt(shift.get("scheduled_start"))
+        end = _parse_dt(shift.get("scheduled_end"))
+        if start and end and end > start:
+            return max(0, int((end - start).total_seconds()))
+        mins = int(shift.get("duration_minutes") or 0)
+        if mins > 0:
+            return mins * 60
+    mins = int(session.get("duration_minutes") or 0)
+    if mins > 0:
+        return mins * 60
+    return _session_duration_secs(session, shift)
+
+
 def _required_checkins(shift_hours: float, duration_secs: int, session_id: Optional[str] = None) -> int:
     """Check-in count required for compliance evaluation."""
     from .random_checkin_service import required_random_checkins, uses_random_checkins
@@ -493,14 +509,15 @@ def get_checkin_status(
         _list_scheduled_checkins,
     )
 
-    if uses_random_checkins(duration_secs):
-        scheduled = _list_scheduled_checkins(session_id)
+    planned_secs = _planned_shift_duration_secs(shift, session)
+    scheduled = _list_scheduled_checkins(session_id)
+    if scheduled or uses_random_checkins(planned_secs):
         return evaluate_random_checkin_window(
             now=now,
             scheduled_checkins=scheduled,
             on_break=on_break,
             last_checkin_at=last_checkin_at,
-            duration_secs=duration_secs,
+            duration_secs=max(planned_secs, duration_secs),
             checkin_count=checkin_count,
         )
 
@@ -570,7 +587,8 @@ def submit_checkin(
     from .random_checkin_service import _list_scheduled_checkins, uses_random_checkins
 
     prompted = _parse_dt(prompt_triggered_at)
-    if not prompted and uses_random_checkins(_session_duration_secs(session, shift)):
+    planned_secs = _planned_shift_duration_secs(shift, session)
+    if not prompted and (uses_random_checkins(planned_secs) or _list_scheduled_checkins(session_id)):
         scheduled = _list_scheduled_checkins(session_id)
         active = next((row for row in scheduled if row.get("status") == "prompted"), None)
         if active:

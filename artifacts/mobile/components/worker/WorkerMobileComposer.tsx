@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable,
   StyleSheet,
@@ -47,6 +49,56 @@ async function toEnglishNote(text: string, language: string): Promise<string> {
   return trimmed;
 }
 
+function formatDuration(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function RecordingWave({ color }: { color: string }) {
+  const bars = useRef(
+    Array.from({ length: 14 }, () => new Animated.Value(0.3)),
+  ).current;
+
+  useEffect(() => {
+    const animations = bars.map((bar, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bar, {
+            toValue: 1,
+            duration: 300 + (i % 5) * 90,
+            useNativeDriver: false,
+          }),
+          Animated.timing(bar, {
+            toValue: 0.3,
+            duration: 300 + (i % 5) * 90,
+            useNativeDriver: false,
+          }),
+        ]),
+      ),
+    );
+    animations.forEach((a) => a.start());
+    return () => animations.forEach((a) => a.stop());
+  }, [bars]);
+
+  return (
+    <View style={styles.waveRow}>
+      {bars.map((bar, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.waveBar,
+            {
+              backgroundColor: color,
+              transform: [{ scaleY: bar }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 type Props = {
   sessionId?: string | null;
   taskId?: string | null;
@@ -69,6 +121,10 @@ export function WorkerMobileComposer({
   const [submitting, setSubmitting] = useState(false);
   const [language, setLanguage] = useState<string>("auto");
   const [langOpen, setLangOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const disabledInput = disabled || !taskId;
   const placeholder = taskId
@@ -136,6 +192,68 @@ export function WorkerMobileComposer({
     await saveNote(english, "text");
   };
 
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startRecording = async () => {
+    if (disabledInput || recording) return;
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) return;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      recordingRef.current = rec;
+      setRecordSecs(0);
+      setRecording(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+    } catch {
+      setRecording(false);
+    }
+  };
+
+  const teardownRecording = async () => {
+    stopTimer();
+    const rec = recordingRef.current;
+    recordingRef.current = null;
+    setRecording(false);
+    if (!rec) return null;
+    try {
+      await rec.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      return rec.getURI();
+    } catch {
+      return null;
+    }
+  };
+
+  const cancelRecording = async () => {
+    await teardownRecording();
+    setRecordSecs(0);
+    Haptics.selectionAsync();
+  };
+
+  const stopAndSaveRecording = async () => {
+    const secs = recordSecs;
+    const uri = await teardownRecording();
+    setRecordSecs(0);
+    if (!uri || secs < 1) return;
+    await saveNote(`[Voice note · ${formatDuration(secs)}]`, "voice", "voice-note.m4a");
+  };
+
+  useEffect(() => {
+    return () => {
+      stopTimer();
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+    };
+  }, []);
+
   const handleAttach = async () => {
     if (disabledInput) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -190,34 +308,61 @@ export function WorkerMobileComposer({
       </View>
 
       <View style={styles.inputRow}>
-        <View style={[styles.inputBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
-          <TextInput
-            value={value}
-            onChangeText={setValue}
-            placeholder={placeholder}
-            placeholderTextColor={colors.mutedForeground}
-            maxLength={SESSION_NOTE_MAX}
-            editable={!disabledInput && !submitting}
-            style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-          />
-          <Pressable onPress={handleAttach} disabled={disabledInput} style={styles.iconBtn}>
-            <Feather name="paperclip" size={17} color={colors.mutedForeground} />
-          </Pressable>
-          <Pressable onPress={handleCamera} disabled={disabledInput} style={styles.iconBtn}>
-            <Feather name="camera" size={17} color={colors.mutedForeground} />
-          </Pressable>
-        </View>
+        {recording ? (
+          <View style={[styles.recordingBox, { borderColor: colors.composerPink + "66", backgroundColor: colors.composerPink + "18" }]}>
+            <RecordingWave color={colors.composerPink} />
+            <Text style={[styles.recordingText, { color: colors.composerPink, fontFamily: "Inter_600SemiBold" }]}>
+              Recording… {formatDuration(recordSecs)}
+            </Text>
+            <Pressable onPress={cancelRecording} hitSlop={8} style={styles.cancelBtn}>
+              <Text style={[styles.cancelText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={[styles.inputBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
+            <TextInput
+              value={value}
+              onChangeText={setValue}
+              placeholder={placeholder}
+              placeholderTextColor={colors.mutedForeground}
+              maxLength={SESSION_NOTE_MAX}
+              editable={!disabledInput && !submitting}
+              style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+            />
+            <Pressable onPress={handleAttach} disabled={disabledInput} style={styles.iconBtn}>
+              <Feather name="paperclip" size={17} color={colors.mutedForeground} />
+            </Pressable>
+            <Pressable onPress={handleCamera} disabled={disabledInput} style={styles.iconBtn}>
+              <Feather name="camera" size={17} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+        )}
 
         <Pressable
-          onPress={handleSend}
-          disabled={disabledInput || submitting || !hasText}
+          onPress={() => {
+            if (recording) return stopAndSaveRecording();
+            if (hasText) return handleSend();
+            return startRecording();
+          }}
+          disabled={disabledInput || submitting}
           style={[
             styles.roundBtn,
-            { backgroundColor: hasText ? colors.composerPurple : colors.composerPink, opacity: disabledInput ? 0.5 : 1 },
+            {
+              backgroundColor: recording
+                ? colors.destructive
+                : hasText
+                  ? colors.composerPurple
+                  : colors.composerPink,
+              opacity: disabledInput ? 0.5 : 1,
+            },
           ]}
         >
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : recording ? (
+            <Feather name="send" size={20} color="#FFFFFF" />
           ) : hasText ? (
             <Feather name="arrow-up" size={22} color="#FFFFFF" />
           ) : (
@@ -229,9 +374,11 @@ export function WorkerMobileComposer({
       <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
         {!taskId
           ? "Select a task above to start noting."
-          : showTranslateBadge
-            ? "Type your note and tap send — it will be saved in English."
-            : "Type your note and tap send."}
+          : recording
+            ? "Recording… tap send to save, or cancel."
+            : showTranslateBadge
+              ? "Hold mic to record · tap to send when typing."
+              : "Hold mic to record · tap to send when typing."}
       </Text>
 
       <Modal visible={langOpen} transparent animationType="fade" onRequestClose={() => setLangOpen(false)}>
@@ -334,6 +481,38 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     paddingVertical: 8,
+  },
+  recordingBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+  },
+  waveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    height: 22,
+  },
+  waveBar: {
+    width: 3,
+    height: 20,
+    borderRadius: 2,
+  },
+  recordingText: {
+    fontSize: 13,
+  },
+  cancelBtn: {
+    marginLeft: "auto",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  cancelText: {
+    fontSize: 13,
   },
   iconBtn: {
     width: 32,

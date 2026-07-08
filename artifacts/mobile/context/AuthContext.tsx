@@ -26,8 +26,9 @@ type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string) => Promise<LoginResult>;
+  login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
   completeMfa: (challengeToken: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
+  updateSession: (accessToken: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -82,8 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string) => {
-    const result = await loginWithPassword(identifier, password);
+  const login = useCallback(async (identifier: string, password: string, rememberDevice = true) => {
+    const result = await loginWithPassword(identifier, password, rememberDevice);
     if (result.status === "authenticated") {
       await persistMobileAuthSession(result.accessToken, JSON.stringify(result.user));
       setUser(result.user);
@@ -105,6 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const updateSession = useCallback(async (accessToken: string, authUser: AuthUser) => {
+    await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
+    setUser(authUser);
+  }, []);
+
   const logout = useCallback(async () => {
     await logoutApi();
     await clearMobileAuthSession();
@@ -118,9 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(user),
       login,
       completeMfa,
+      updateSession,
       logout,
     }),
-    [user, isLoading, login, completeMfa, logout],
+    [user, isLoading, login, completeMfa, updateSession, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

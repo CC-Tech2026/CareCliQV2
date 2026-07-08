@@ -3,6 +3,9 @@ import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/lib/worker-api"
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
 export const SESSION_NOTE_MAX = 500;
 
+export const APP_TIMEZONE =
+  process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
+
 export const STATE_AVATAR_COLORS: Record<ShiftVisualState, string> = {
   scheduled: "#5271FF",
   clocked_in: "#FB923C",
@@ -33,7 +36,12 @@ function pad2(n: number): string {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", hour12: true });
+    return d.toLocaleTimeString("en-AU", {
+      timeZone: APP_TIMEZONE,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
   } catch {
     return iso;
   }

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ShiftSignatureForm } from "@/components/worker/ShiftSignatureForm";
 import { useColors } from "@/hooks/useColors";
+import { useT } from "@/context/PreferencesContext";
 
 type Props = {
   shiftId: string;
@@ -31,6 +32,7 @@ export function WorkerMobileSignatureScreen({
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [blocked, setBlocked] = useState(false);
 
   return (
@@ -54,7 +56,7 @@ export function WorkerMobileSignatureScreen({
         </Pressable>
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            Shift Sign-off
+            {t("shift.signature.title")}
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
             {participantName}
@@ -70,10 +72,10 @@ export function WorkerMobileSignatureScreen({
         <View style={styles.overlay}>
           <ActivityIndicator color={colors.accent} size="large" />
           <Text style={[styles.overlayTitle, { color: "#FFFFFF", fontFamily: "Inter_700Bold" }]}>
-            Completing shift…
+            {t("shift.signature.completing")}
           </Text>
           <Text style={[styles.overlayDesc, { color: "#CCCCCC", fontFamily: "Inter_400Regular" }]}>
-            Please wait while your shift is submitted.
+            {t("shift.signature.completingDesc")}
           </Text>
         </View>
       </Modal>

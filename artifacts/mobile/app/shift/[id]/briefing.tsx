@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ export default function ShiftBriefingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { id: shiftId } = useLocalSearchParams<{ id: string }>();
   const scrollRef = useRef<ScrollView>(null);
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
@@ -65,6 +67,7 @@ export default function ShiftBriefingScreen() {
 
     try {
       await completeShiftBriefing(shiftId!, true);
+      await queryClient.invalidateQueries({ queryKey: ["worker", "shift", shiftId] });
       router.replace(`/shift/${shiftId}` as never);
     } catch (err) {
       Alert.alert("Failed", err instanceof Error ? err.message : "Could not complete briefing.");

@@ -12,6 +12,7 @@ import {
 import Svg, { Path } from "react-native-svg";
 
 import { useColors } from "@/hooks/useColors";
+import { useT } from "@/context/PreferencesContext";
 import { submitShiftSignature } from "@/lib/worker-api";
 
 type Props = {
@@ -22,14 +23,52 @@ type Props = {
 
 type Point = { x: number; y: number };
 
+const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function base64FromString(input: string): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < input.length; i++) {
+    let c = input.charCodeAt(i);
+    if (c < 0x80) {
+      bytes.push(c);
+    } else if (c < 0x800) {
+      bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    } else if (c < 0xd800 || c >= 0xe000) {
+      bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    } else {
+      i++;
+      const c2 = input.charCodeAt(i);
+      const cp = 0x10000 + (((c & 0x3ff) << 10) | (c2 & 0x3ff));
+      bytes.push(
+        0xf0 | (cp >> 18),
+        0x80 | ((cp >> 12) & 0x3f),
+        0x80 | ((cp >> 6) & 0x3f),
+        0x80 | (cp & 0x3f),
+      );
+    }
+  }
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += B64_CHARS[b0 >> 2];
+    out += B64_CHARS[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? B64_CHARS[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+    out += i + 2 < bytes.length ? B64_CHARS[b2 & 63] : "=";
+  }
+  return out;
+}
+
 const CHECKBOXES = [
-  { key: "tasks" as const, label: "I confirm all tasks are accurately documented" },
-  { key: "safety" as const, label: "I followed all safety protocols" },
-  { key: "incidents" as const, label: "I have reported all incidents" },
+  { key: "tasks" as const, labelKey: "shift.signature.confirmTasks" as const },
+  { key: "safety" as const, labelKey: "shift.signature.confirmSafety" as const },
+  { key: "incidents" as const, labelKey: "shift.signature.confirmIncidents" as const },
 ];
 
 export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
   const colors = useColors();
+  const t = useT();
   const [checks, setChecks] = useState({ tasks: false, safety: false, incidents: false });
   const [submitting, setSubmitting] = useState(false);
   const [paths, setPaths] = useState<string[]>([]);
@@ -81,8 +120,7 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
 
   const buildPngDataUrl = () => {
     const svg = buildSvg();
-    const encoded = encodeURIComponent(svg);
-    return `data:image/svg+xml,${encoded}`;
+    return `data:image/svg+xml;base64,${base64FromString(svg)}`;
   };
 
   const handleConfirm = async () => {
@@ -120,11 +158,15 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
 
   return (
     <View style={styles.wrap}>
-      {CHECKBOXES.map(({ key, label }) => (
+      <Text style={[styles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("shift.signature.desc")}
+      </Text>
+
+      {CHECKBOXES.map(({ key, labelKey }) => (
         <Pressable
           key={key}
           onPress={() => toggleCheck(key)}
-          style={styles.checkRow}
+          style={[styles.checkRow, { borderColor: colors.border, backgroundColor: colors.card }]}
           disabled={isWaiting}
         >
           <View
@@ -136,19 +178,19 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
               },
             ]}
           >
-            {checks[key] && <Feather name="check" size={14} color="#FFFFFF" />}
+            {checks[key] && <Feather name="check" size={14} color={colors.primaryForeground} />}
           </View>
-          <Text style={[styles.checkLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-            {label}
+          <Text style={[styles.checkLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            {t(labelKey)}
           </Text>
         </Pressable>
       ))}
 
-      <Text style={[styles.canvasLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        SIGNATURE
+      <Text style={[styles.canvasLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
+        {t("shift.signature.yourSignature").toUpperCase()}
       </Text>
       <View
-        style={[styles.canvas, { borderColor: colors.border, backgroundColor: colors.background }]}
+        style={[styles.canvas, { borderColor: colors.blue, backgroundColor: colors.background }]}
         onLayout={(e) => {
           canvasSize.current = {
             width: e.nativeEvent.layout.width,
@@ -164,14 +206,22 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
         </Svg>
         {!hasStroke && (
           <Text style={[styles.canvasHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Sign here
+            {t("shift.signature.signHere")}
           </Text>
         )}
       </View>
 
-      <Pressable onPress={handleClear} disabled={!hasStroke || isWaiting}>
-        <Text style={[styles.clearBtn, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-          Clear signature
+      <Pressable
+        onPress={handleClear}
+        disabled={!hasStroke || isWaiting}
+        style={[
+          styles.clearBtn,
+          { borderColor: colors.border, opacity: !hasStroke || isWaiting ? 0.5 : 1 },
+        ]}
+      >
+        <Feather name="rotate-ccw" size={13} color={colors.foreground} />
+        <Text style={[styles.clearText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          {t("shift.signature.clear")}
         </Text>
       </Pressable>
 
@@ -184,9 +234,16 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
         ]}
       >
         {isWaiting ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={colors.primaryForeground} />
         ) : (
-          <Text style={[styles.confirmText, { fontFamily: "Inter_700Bold" }]}>Sign & Submit Shift</Text>
+          <Text
+            style={[
+              styles.confirmText,
+              { color: canSign ? colors.primaryForeground : colors.mutedForeground, fontFamily: "Inter_700Bold" },
+            ]}
+          >
+            {t("shift.signature.confirm")}
+          </Text>
         )}
       </Pressable>
     </View>
@@ -194,8 +251,17 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 14, padding: 16 },
-  checkRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  wrap: { gap: 12, padding: 16 },
+  desc: { fontSize: 13, lineHeight: 19 },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
   checkbox: {
     width: 22,
     height: 22,
@@ -206,17 +272,28 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   checkLabel: { flex: 1, fontSize: 14, lineHeight: 20 },
-  canvasLabel: { fontSize: 11, letterSpacing: 0.8 },
+  canvasLabel: { fontSize: 10, letterSpacing: 1, marginTop: 4 },
   canvas: {
     height: 160,
     borderRadius: 12,
     borderWidth: 1.5,
+    borderStyle: "dashed",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
   canvasHint: { fontSize: 14, position: "absolute" },
-  clearBtn: { fontSize: 13, textAlign: "center" },
+  clearBtn: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    height: 34,
+  },
+  clearText: { fontSize: 13 },
   confirmBtn: {
     height: 52,
     borderRadius: 14,
@@ -224,5 +301,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  confirmText: { color: "#FFFFFF", fontSize: 16 },
+  confirmText: { fontSize: 16 },
 });

@@ -1,6 +1,7 @@
 import { Camera, Mic, Paperclip, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord, SessionNoteType } from "@/services/sessionNotesService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -8,6 +9,7 @@ const ATTACHMENT_RE = /^\[Attachment(?:\s+selected)?:\s*([^\]]+)\]$/i;
 
 export function inferNoteType(note: SessionNoteRecord): SessionNoteType {
   if (note.note_type) return note.note_type;
+  if (isCheckinSessionNote(note)) return "check-in";
   if (ATTACHMENT_RE.test(note.content.trim())) {
     if (/selected/i.test(note.content)) return "file";
     const name = note.file_name || note.content;

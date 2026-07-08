@@ -232,7 +232,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
 
   const isCancelled = shift.status === "cancelled";
   const isCompleted = isShiftCompletedForList(shift);
-  const showDetails = showActions;
+  const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
   const clockInButtonLabel = starting
     ? translate("shifts.listCard.starting")

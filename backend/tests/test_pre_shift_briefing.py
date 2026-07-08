@@ -44,6 +44,7 @@ def test_is_briefing_complete_when_versions_match(mock_ack, mock_patient, _mock_
     assert briefing_service.is_briefing_complete_for_shift(shift, "worker-1") is True
 
 
+@patch("backend.app.services.briefing_service.BRIEFING_GATE_ENABLED", True)
 @patch("backend.app.services.briefing_service._briefing_ack_lookup_available", return_value=True)
 @patch("backend.app.services.briefing_service._briefing_schema_available", return_value=True)
 @patch("backend.app.services.briefing_service.is_briefing_complete_for_shift", return_value=False)

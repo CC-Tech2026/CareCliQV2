@@ -1,5 +1,3 @@
-import { Feather } from "@expo/vector-icons";
-import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -11,19 +9,18 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { CheckInPromptModal } from "@/components/worker/CheckInPromptModal";
+import { LongShiftCheckInForm } from "@/components/worker/LongShiftCheckInForm";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerMobileShiftView } from "@/components/worker/WorkerMobileShiftView";
 import { useShiftCheckinStatus } from "@/hooks/worker/useShiftCheckin";
 import { useSessionNotes } from "@/hooks/worker/useSessionNotes";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { useColors } from "@/hooks/useColors";
-import {
-  recordShiftViewed,
-  submitLongShiftCheckin,
-  type CheckinStatus,
-} from "@/lib/worker-api";
+import { recordShiftViewed, submitLongShiftCheckInForm } from "@/lib/worker-api";
+import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 
 export default function ShiftDetailScreen() {
   const colors = useColors();
@@ -67,18 +64,19 @@ export default function ShiftDetailScreen() {
   };
 
   const handleComplete = () => {
-    router.replace("/(tabs)" as never);
+    router.replace("/(tabs)/shifts" as never);
   };
 
   const handleCheckinSubmit = useCallback(
-    async (status: CheckinStatus) => {
+    async (form: LongShiftCheckInFormData) => {
       if (!sessionId) return;
       setCheckinBusy(true);
       try {
-        await submitLongShiftCheckin(sessionId, { status });
+        const result = await submitLongShiftCheckInForm(sessionId, form);
         setCheckinOpen(false);
         void refetchCheckin();
-        if (status === "INCIDENT_REPORTED") {
+        void refetchNotes();
+        if (result.status === "INCIDENT_REPORTED") {
           Alert.alert("Incident noted", "Please document the incident in your shift notes.");
         }
       } catch (err) {
@@ -87,7 +85,7 @@ export default function ShiftDetailScreen() {
         setCheckinBusy(false);
       }
     },
-    [sessionId, refetchCheckin],
+    [sessionId, refetchCheckin, refetchNotes],
   );
 
   if (isLoading) {
@@ -114,9 +112,7 @@ export default function ShiftDetailScreen() {
     );
   }
 
-  const gapMinutes = checkinStatus?.checkin_gap_secs
-    ? Math.round(checkinStatus.checkin_gap_secs / 60)
-    : undefined;
+  const activeTasks = (shift.tasks ?? []).filter((t) => !t.marked_na);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -130,14 +126,15 @@ export default function ShiftDetailScreen() {
         onBack={() => router.back()}
         canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin)}
         onCheckin={() => setCheckinOpen(true)}
+        checkinStatus={checkinStatus}
       />
 
-      <CheckInPromptModal
+      <LongShiftCheckInForm
         visible={checkinOpen && Boolean(sessionId)}
         onClose={() => setCheckinOpen(false)}
         onSubmit={handleCheckinSubmit}
         busy={checkinBusy}
-        gapMinutes={gapMinutes}
+        tasks={activeTasks}
       />
     </View>
   );

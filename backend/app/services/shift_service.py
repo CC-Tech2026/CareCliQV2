@@ -2973,7 +2973,9 @@ def _coerce_client_note_id(raw: str | None) -> str | None:
 def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
     category = str(row.get("category") or "")
     note_type = "text"
-    if category.endswith("_voice"):
+    if category == "session_checkin":
+        note_type = "check-in"
+    elif category.endswith("_voice"):
         note_type = "voice"
     elif category.endswith("_photo"):
         note_type = "photo"
@@ -3105,6 +3107,8 @@ def sync_session_notes(
         note_type = str(item.get("note_type") or "text").strip().lower()
         if task_id:
             category = "task_context"
+        elif note_type in ("check-in", "checkin"):
+            category = "session_checkin"
         elif note_type == "voice":
             category = "session_progress_voice"
         elif note_type == "photo":

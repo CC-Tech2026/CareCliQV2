@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { Link } from "wouter";
+import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import { WM } from "@/lib/worker-mobile-tokens";
 import type { NoteComplianceFlag } from "@/lib/worker-compliance-engine";
 import type { SessionNoteRecord } from "@/services/sessionNotesService";
@@ -32,6 +33,7 @@ export function WorkerMobileNoteBubble({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content);
   const type = inferNoteType(note);
+  const isCheckin = isCheckinSessionNote(note);
   const ts = noteTimestamp(note);
   const wc = wordCount(note.content);
   const isFlagged = Boolean(flag);
@@ -56,8 +58,8 @@ export function WorkerMobileNoteBubble({
       style={{
         borderLeftWidth: isFlagged ? 3 : 0.5,
         borderLeftColor: isFail ? WM.red : isResolved ? WM.amber : isFlagged ? WM.amber : WM.border,
-        borderColor: isFail ? WM.alertBorder : isResolved ? WM.warnBorder : WM.border,
-        background: isFail ? WM.alertBg : isResolved ? WM.warnBg : WM.surface,
+        borderColor: isCheckin ? WM.clockedInBorder : isFail ? WM.alertBorder : isResolved ? WM.warnBorder : WM.border,
+        background: isCheckin ? WM.clockedInBg : isFail ? WM.alertBg : isResolved ? WM.warnBg : WM.surface,
       }}
     >
       {categoryLabel && (
@@ -150,7 +152,7 @@ export function WorkerMobileNoteBubble({
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-medium" style={{ color: WM.muted }}>
-              {ts} · {type === "voice" ? `voice (${languageLabel(note)})` : type} · {wc} words
+              {ts} · {isCheckin ? "check-in" : type === "voice" ? `voice (${languageLabel(note)})` : type} · {wc} words
               {isFlagged ? " · ✗ flagged" : ""}
             </span>
             {editable && (

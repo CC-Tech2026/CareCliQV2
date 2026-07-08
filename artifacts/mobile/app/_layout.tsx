@@ -49,10 +49,11 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isLoading) return;
-    const onLogin = segments[0] === "login";
-    if (!isAuthenticated && !onLogin) {
+    const authRoute = segments[0];
+    const onAuthScreen = authRoute === "login" || authRoute === "forgot-password" || authRoute === "signup";
+    if (!isAuthenticated && !onAuthScreen) {
       router.replace("/login" as never);
-    } else if (isAuthenticated && onLogin) {
+    } else if (isAuthenticated && onAuthScreen) {
       router.replace("/(tabs)" as never);
     }
   }, [isAuthenticated, isLoading, segments, router]);
@@ -60,6 +61,8 @@ function RootLayoutNav() {
   return (
     <Stack>
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="signup" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="shift/[id]/index"
@@ -67,6 +70,10 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="shift/[id]/briefing"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="shift/[id]/message-office"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen

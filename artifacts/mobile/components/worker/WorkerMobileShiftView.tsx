@@ -34,6 +34,7 @@ import {
   endShift,
   startShiftSession,
   syncSessionNotes,
+  type CheckinWindowStatus,
   type SessionNoteRecord,
   type ShiftTask,
   type ShiftVisualState,
@@ -42,6 +43,7 @@ import {
 import {
   formatElapsedTimer,
   formatMobileShiftDuration,
+  formatShiftTimeRange,
   hasIncompleteMandatoryTasks,
   newClientNoteId,
   resolveActiveShiftTasks,
@@ -56,7 +58,26 @@ import {
   markNotesIncidentFiled,
 } from "@/lib/session-incident-reports";
 
-export type WorkerMobilePhase = "scheduled" | "session" | "review" | "signature" | "submitted" | "completed";
+export type WorkerMobilePhase =
+  | "scheduled"
+  | "session"
+  | "review"
+  | "compliance"
+  | "signature"
+  | "submitted"
+  | "completed";
+
+function formatSubmittedAt(iso: string | null): string {
+  if (!iso) return "just now";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "just now";
+  const time = d
+    .toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+    .toLowerCase();
+  return d.toDateString() === new Date().toDateString()
+    ? `${time} today`
+    : d.toLocaleDateString("en-AU");
+}
 
 type Props = {
   shift: WorkerShift;
@@ -66,6 +87,7 @@ type Props = {
   onBack?: () => void;
   canCheckin?: boolean;
   onCheckin?: () => void;
+  checkinStatus?: CheckinWindowStatus;
 };
 
 export function WorkerMobileShiftView({
@@ -76,6 +98,7 @@ export function WorkerMobileShiftView({
   onBack,
   canCheckin,
   onCheckin,
+  checkinStatus,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -87,7 +110,6 @@ export function WorkerMobileShiftView({
   const [tasks, setTasks] = useState<ShiftTask[]>(() => shift.tasks ?? []);
   const [localNotes, setLocalNotes] = useState(sessionNotes);
   const [busy, setBusy] = useState<string | null>(null);
-  const [complianceOpen, setComplianceOpen] = useState(false);
   const [nowTick, setNowTick] = useState(0);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [validation, setValidation] = useState<{ title: string; message: string } | null>(null);
@@ -118,7 +140,9 @@ export function WorkerMobileShiftView({
       setPhase((current) => (current === "submitted" ? "submitted" : "completed"));
     } else if (shift.visual_state === "clocked_in" || shift.visual_state === "session_active") {
       setPhase((current) =>
-        current === "review" || current === "signature" || current === "submitted" ? current : "session",
+        current === "review" || current === "compliance" || current === "signature" || current === "submitted"
+          ? current
+          : "session",
       );
     }
   }, [shift.visual_state]);
@@ -300,14 +324,18 @@ export function WorkerMobileShiftView({
   };
 
   const handleSubmitReview = () => {
+    setPhase("compliance");
+  };
+
+  const handleContinueFromCompliance = () => {
     const redFlags = compliance.rules?.filter((rule) => rule.status === "fail") ?? [];
     if (redFlags.length > 0) {
       showAlert(
         "Unresolved compliance flags",
         "You can still submit, but your coordinator will be notified. Submit anyway?",
         [
-          { text: "Cancel", style: "cancel" },
-          { text: "Submit anyway", style: "destructive", onPress: () => setPhase("signature") },
+          { text: "Revise notes", style: "cancel", onPress: () => setPhase("review") },
+          { text: "Continue", style: "destructive", onPress: () => setPhase("signature") },
         ],
       );
       return;
@@ -321,7 +349,6 @@ export function WorkerMobileShiftView({
       await endShift(shift.id);
       setSubmittedAt(new Date().toISOString());
       setPhase("submitted");
-      onShiftComplete();
       onRefresh();
     } catch (err) {
       Alert.alert("End shift failed", err instanceof Error ? err.message : "Please try again.");
@@ -330,12 +357,33 @@ export function WorkerMobileShiftView({
     }
   };
 
+  const summaryTasks = activeTasks.filter((t) => !t.marked_na);
+  const summaryTasksDone = summaryTasks.filter((t) => t.completed).length;
+
   if (phase === "submitted") {
     return (
       <WorkerMobileSubmitSuccess
         participantName={participantName}
         duration={formatMobileShiftDuration(shift, elapsed)}
+        tasksCompleted={summaryTasksDone}
+        tasksTotal={summaryTasks.length}
+        score={compliance.score}
+        submittedAt={formatSubmittedAt(submittedAt)}
         onDone={onShiftComplete}
+      />
+    );
+  }
+
+  if (phase === "completed") {
+    return (
+      <WorkerMobileSubmitSuccess
+        participantName={participantName}
+        duration={formatMobileShiftDuration(shift, elapsed)}
+        tasksCompleted={summaryTasksDone}
+        tasksTotal={summaryTasks.length}
+        score={compliance.score}
+        submittedAt={formatSubmittedAt(submittedAt ?? shift.clocked_out_at ?? null)}
+        onDone={onBack ?? onShiftComplete}
       />
     );
   }
@@ -347,7 +395,19 @@ export function WorkerMobileShiftView({
         participantName={participantName}
         busy={Boolean(busy)}
         onSigned={handleSigned}
-        onBack={() => setPhase("review")}
+        onBack={() => setPhase("compliance")}
+      />
+    );
+  }
+
+  if (phase === "compliance") {
+    return (
+      <WorkerMobileComplianceReport
+        compliance={compliance}
+        onClose={() => setPhase("review")}
+        onContinue={handleContinueFromCompliance}
+        onReviseNotes={() => setPhase("review")}
+        onOpenIncidentReport={() => openIncidentReport()}
       />
     );
   }
@@ -372,15 +432,9 @@ export function WorkerMobileShiftView({
           onSaveNote={handleSaveNote}
           onAddMissingNote={handleAddMissingNote}
           onSubmit={handleSubmitReview}
-          onViewComplianceReport={() => setComplianceOpen(true)}
+          onViewComplianceReport={() => setPhase("compliance")}
           onOpenIncidentReport={openIncidentReport}
         />
-        <Modal visible={complianceOpen} animationType="slide" presentationStyle="pageSheet">
-          <WorkerMobileComplianceReport
-            compliance={compliance}
-            onClose={() => setComplianceOpen(false)}
-          />
-        </Modal>
         <Modal
           visible={incidentDraft !== null}
           animationType="slide"
@@ -401,7 +455,7 @@ export function WorkerMobileShiftView({
             />
           )}
         </Modal>
-        <DuringShiftActionsSidebar officePhone={shift.office_contact_number} />
+        <DuringShiftActionsSidebar shiftId={shift.id} officePhone={shift.office_contact_number} />
       </View>
     );
   }
@@ -447,6 +501,8 @@ export function WorkerMobileShiftView({
           onOpenIncidentReport={openIncidentReport}
           disabled={Boolean(busy)}
           sessionElapsed={elapsed}
+          checkinStatus={checkinStatus}
+          onCheckin={onCheckin}
         />
         <Modal
           visible={incidentDraft !== null}
@@ -468,7 +524,7 @@ export function WorkerMobileShiftView({
             />
           )}
         </Modal>
-        <DuringShiftActionsSidebar officePhone={shift.office_contact_number} />
+        <DuringShiftActionsSidebar shiftId={shift.id} officePhone={shift.office_contact_number} />
       </View>
     );
   }
@@ -491,7 +547,7 @@ export function WorkerMobileShiftView({
         </Text>
         <Text style={[styles.scheduledTime, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
           {shift.scheduled_start
-            ? new Date(shift.scheduled_start).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+            ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)
             : "Time TBC"}
         </Text>
 
