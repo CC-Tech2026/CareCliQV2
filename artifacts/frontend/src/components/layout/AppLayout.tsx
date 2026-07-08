@@ -15,6 +15,7 @@ import { NotificationBannerStack } from "@/components/worker/NotificationBannerS
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 import { AutoBreadcrumb } from "@/components/layout/AutoBreadcrumb";
+import { RightRail } from "@/components/layout/RightRail";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -208,22 +209,22 @@ function GlobalSearch({ sections, translate }: { sections: NavSection[]; transla
   return (
     <div className="relative">
       <div
-        className="flex items-center gap-2 h-8 px-3 rounded-full transition-all duration-200"
+        className="flex items-center gap-2 h-9 px-3.5 rounded-full transition-all duration-200"
         style={{
           border: `1px solid ${focused ? "var(--cc-coral)" : "var(--cc-border)"}`,
-          background: focused ? "var(--cc-bg)" : "color-mix(in srgb, var(--cc-soft) 70%, transparent)",
-          boxShadow: focused ? "0 0 0 3px var(--cc-coral-soft)" : "none",
-          width: focused ? 200 : 160,
+          background: "#fff",
+          boxShadow: focused ? "0 0 0 3px var(--cc-coral-soft)" : "0 1px 2px rgba(0,0,0,0.03)",
+          width: focused ? 320 : 260,
         }}
       >
-        <Search size={12} strokeWidth={2.5} style={{ color: MUTED, flexShrink: 0 }} />
+        <Search size={13} strokeWidth={2.5} style={{ color: focused ? CORAL : MUTED, flexShrink: 0, transition: "color 150ms" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => { setFocused(false); setQuery(""); }, 160)}
           placeholder={translate("common.quickJump")}
-          className="flex-1 bg-transparent text-[12px] outline-none min-w-0"
+          className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
           style={{ color: TEXT }}
         />
         {focused && (
@@ -263,12 +264,14 @@ function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
+  isDark, toggleTheme,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; displayName: string; displayRole: string; initials: string;
   onNav?: () => void; onLogout: () => void;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
+  isDark: boolean; toggleTheme: () => void;
 }) {
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
@@ -277,24 +280,26 @@ function SidebarContents({
 
   return (
     <div className="flex flex-col h-full select-none overflow-hidden">
-      {/* Logo row */}
-      <div
-        className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
-        style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-coral)" }}
-      >
-        <Link
-          href="/dashboard"
-          onClick={onNav}
-          aria-label={translate("layout.aria.goToDashboard")}
-          title={translate("nav.home")}
-          className={cn(
-            "flex items-center rounded-xl transition-all hover:bg-[var(--cc-soft)] active:opacity-75",
-            compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
-          )}
+      {/* Logo row — only for the mobile drawer; desktop gets its logo from the unified topbar's own logo zone */}
+      {isDrawer && (
+        <div
+          className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
+          style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-coral)" }}
         >
-          {compact ? <CareCliQLogoSm /> : <CareCliQLogo compact={false} />}
-        </Link>
-      </div>
+          <Link
+            href="/dashboard"
+            onClick={onNav}
+            aria-label={translate("layout.aria.goToDashboard")}
+            title={translate("nav.home")}
+            className={cn(
+              "flex items-center rounded-xl transition-all hover:bg-[var(--cc-soft)] active:opacity-75",
+              compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
+            )}
+          >
+            {compact ? <CareCliQLogoSm /> : <CareCliQLogo compact={false} />}
+          </Link>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-4", compact ? "px-2" : "px-2")}>
@@ -315,7 +320,6 @@ function SidebarContents({
                 const Icon = item.icon;
                 const label = navLabelForHref(item.href, item.label, translate);
                 const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
-                const isIncident   = item.href === "/incidents";
                 const hasAlert     = alertCount > 0 && isCompliance;
                 return (
                   <Link
@@ -327,29 +331,23 @@ function SidebarContents({
                   >
                     <div
                       className={cn(
-                        "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
-                        compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                        "flex items-center h-11 text-[13px] transition-all cursor-pointer bg-transparent",
+                        compact ? "w-10 justify-center rounded-xl mx-auto" : "gap-3 pl-2 pr-3 rounded-r-xl",
+                        !active && "hover:bg-[color-mix(in_srgb,var(--cc-coral)_8%,transparent)]",
                       )}
                       style={{
-                        background: active
-                          ? CORAL
-                          : isIncident && !compact
-                            ? "var(--cc-coral-soft)"
-                            : "transparent",
-                        color: active ? "#fff" : isIncident ? CORAL : MUTED,
-                        fontWeight: active ? 700 : isIncident ? 600 : 500,
+                        borderLeft: !compact ? `4px solid ${active ? "var(--cc-coral)" : "transparent"}` : undefined,
+                        background: active ? "color-mix(in srgb, var(--cc-coral) 12%, transparent)" : undefined,
+                        color: TEXT,
+                        fontWeight: active ? 700 : 500,
                       }}
                     >
-                      <Icon
-                        size={18}
-                        strokeWidth={active ? 2.5 : isIncident ? 2.5 : 2}
-                        style={{ color: active ? "#fff" : isIncident ? CORAL : MUTED }}
-                      />
+                      <Icon size={18} strokeWidth={active ? 2.5 : 2} style={{ color: TEXT }} />
                       {!compact && <span className="flex-1 truncate">{label}</span>}
                       {!compact && hasAlert && (
                         <span
                           className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center"
-                          style={{ background: active ? "rgba(255,255,255,0.25)" : CORAL, color: "#fff" }}
+                          style={{ background: "var(--cc-coral)", color: "#fff" }}
                         >
                           {alertCount}
                         </span>
@@ -367,20 +365,38 @@ function SidebarContents({
           <Link href="/settings" onClick={onNav} title={compact ? translate("common.settings") : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
             <div
               className={cn(
-                "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
-                compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                "flex items-center h-11 text-[13px] transition-all cursor-pointer bg-transparent",
+                compact ? "w-10 justify-center rounded-xl mx-auto" : "gap-3 pl-2 pr-3 rounded-r-xl",
+                !isActive(location, "/settings") && "hover:bg-[color-mix(in_srgb,var(--cc-coral)_8%,transparent)]",
               )}
               style={{
-                background: isActive(location, "/settings") ? CORAL : "transparent",
-                color: isActive(location, "/settings") ? "#fff" : MUTED,
+                borderLeft: !compact ? `4px solid ${isActive(location, "/settings") ? "var(--cc-coral)" : "transparent"}` : undefined,
+                background: isActive(location, "/settings") ? "color-mix(in srgb, var(--cc-coral) 12%, transparent)" : undefined,
+                color: TEXT,
                 fontWeight: isActive(location, "/settings") ? 700 : 500,
               }}
             >
-              <Settings size={18} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
-                style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
+              <Settings size={18} strokeWidth={isActive(location, "/settings") ? 2.5 : 2} style={{ color: TEXT }} />
               {!compact && <span>{translate("common.settings")}</span>}
             </div>
           </Link>
+
+          {/* Theme toggle — footer utility item, same treatment as Settings */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={compact ? (isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")) : undefined}
+            aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
+            className={cn(
+              "flex items-center h-11 w-full text-[13px] transition-all cursor-pointer bg-transparent",
+              compact ? "w-10 justify-center rounded-xl mx-auto" : "gap-3 pl-2 pr-3 rounded-r-xl",
+              "hover:bg-[color-mix(in_srgb,var(--cc-coral)_8%,transparent)]",
+            )}
+            style={{ color: TEXT, fontWeight: 500 }}
+          >
+            {isDark ? <Sun size={18} strokeWidth={2} style={{ color: TEXT }} /> : <Moon size={18} strokeWidth={2} style={{ color: TEXT }} />}
+            {!compact && <span>{isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}</span>}
+          </button>
         </div>
       </nav>
 
@@ -464,7 +480,7 @@ function SidebarContents({
 }
 
 // ── App layout ────────────────────────────────────────────────────────────────
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, rightRail }: { children: React.ReactNode; rightRail?: React.ReactNode }) {
   const [location] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -517,18 +533,142 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sharedProps = {
     location, collapsed, alertCount, displayName, displayRole, initials,
-    onLogout: logout, translate, translateParams,
+    onLogout: logout, translate, translateParams, isDark, toggleTheme,
   };
 
   // Short role label for pill
   const rolePill = displayRole.split(" ").slice(0, 2).join(" ");
 
   return (
-    <div className="flex w-full overflow-hidden h-dvh" style={{ color: TEXT, background: "var(--cc-bg)" }}>
+    <div className="flex flex-col w-full overflow-hidden h-dvh" style={{ color: TEXT, background: "var(--cc-bg)" }}>
+      {/* ── Unified desktop top bar — logo zone (matches sidebar width) + role/breadcrumb + search/quicknav + bell/profile, all one continuous strip ── */}
+      <header
+        className="hidden md:flex h-14 shrink-0 items-stretch select-none"
+        style={{
+          borderBottom: `1px solid ${BORDER}`,
+          borderTop: "3px solid var(--cc-coral)",
+          background: "var(--cc-bg)",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.04)",
+        }}
+      >
+        {/* Logo zone — same width + transition as the sidebar directly beneath it */}
+        <div
+          className="flex items-center shrink-0 transition-all duration-300 ease-in-out"
+          style={{
+            width: isExpanded ? 220 : 64,
+            borderRight: `1px solid ${BORDER}`,
+            background: "var(--cc-soft)",
+            justifyContent: isExpanded ? "flex-start" : "center",
+            paddingLeft: isExpanded ? 12 : 0,
+            paddingRight: isExpanded ? 12 : 0,
+          }}
+        >
+          <Link
+            href="/dashboard"
+            aria-label={translate("layout.aria.goToDashboard")}
+            title={translate("nav.home")}
+            className={cn(
+              "flex items-center rounded-xl transition-all hover:bg-white/50 active:opacity-75",
+              isExpanded ? "h-10 px-2 gap-2 w-full" : "h-10 w-10 justify-center",
+            )}
+          >
+            {isExpanded ? <CareCliQLogo compact={false} /> : <CareCliQLogoSm />}
+          </Link>
+        </div>
+
+        {/* ── Role badge + breadcrumb ── */}
+        <div className="flex items-center gap-3 px-4 shrink min-w-0 max-w-[440px]" style={{ borderRight: `1px solid ${BORDER}` }}>
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.1em] select-none shrink-0"
+            style={{ background: "var(--cc-coral-soft)", color: CORAL }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CORAL }} />
+            {rolePill}
+          </div>
+          <div className="min-w-0 overflow-hidden [&_nav]:mb-0 [&_nav]:flex-nowrap">
+            <AutoBreadcrumb />
+          </div>
+        </div>
+
+        {/* ── Center zone: quick-nav pills (sidebar collapsed) or search (sidebar expanded) ── */}
+        <div className="flex items-center flex-1 px-3 min-w-0">
+          {collapsed ? (
+            <div className="flex items-center gap-0.5 overflow-x-hidden scrollbar-none">
+              {topbarQuicknav.map((item) => {
+                const active = isActive(location, item.href);
+                const Icon = item.icon;
+                const label = navLabelForHref(item.href, item.label, translate);
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
+                      style={{
+                        background: active ? CORAL : "transparent",
+                        color: active ? "#fff" : MUTED,
+                        fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      <Icon size={13} strokeWidth={active ? 2.5 : 2} style={{ color: active ? "#fff" : MUTED }} />
+                      <span>{label}</span>
+                      {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
+                        <span
+                          className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center text-white"
+                          style={{ background: CORAL }}
+                        >
+                          {alertCount}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+              <div className="w-px h-4 mx-1 shrink-0" style={{ background: BORDER }} />
+              <Link href="/settings">
+                <div
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
+                  style={{
+                    background: isActive(location, "/settings") ? CORAL : "transparent",
+                    color: isActive(location, "/settings") ? "#fff" : MUTED,
+                    fontWeight: isActive(location, "/settings") ? 700 : 500,
+                  }}
+                >
+                  <Settings size={13} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
+                    style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
+                  <span>{translate("common.settings")}</span>
+                </div>
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center flex-1">
+              <GlobalSearch sections={navSections} translate={translate} />
+            </div>
+          )}
+        </div>
+
+        {/* ── Right zone: notifications + profile ── */}
+        <div className="flex items-center gap-1 px-4 shrink-0" style={{ borderLeft: `1px solid ${BORDER}` }}>
+          {!isWorker
+            ? <NotificationBell onClick={() => setNotifOpen(true)} />
+            : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
+          }
+
+          {/* Profile */}
+          <ProfileDropdown
+            displayName={displayName}
+            displayRole={displayRole}
+            initials={initials}
+            userRole={userRole}
+            onLogout={logout}
+          />
+        </div>
+      </header>
+
+      {/* ── Row: sidebar | main content | right rail ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
-        style={{ width: isExpanded ? 220 : 64, borderRight: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
+        style={{ width: isExpanded ? 220 : 64, borderRight: `1px solid ${BORDER}`, background: "var(--cc-soft)" }}
         onMouseEnter={() => collapsed && setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
       >
@@ -547,7 +687,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             width: 14,
             height: 44,
             borderRadius: 7,
-            background: "var(--cc-bg)",
+            background: "var(--cc-soft)",
             border: `1px solid ${BORDER}`,
             boxShadow: "0 1px 6px rgba(0,0,0,0.07)",
             color: MUTED,
@@ -633,126 +773,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
           )}
 
-          {/* ── Desktop topbar ─────────────────────────────────────────────── */}
-          <header
-            className="hidden md:flex h-14 items-center shrink-0 select-none"
-            style={{
-              borderBottom: `1px solid ${BORDER}`,
-              borderTop: "3px solid var(--cc-coral)",
-              background: "var(--cc-bg)",
-            }}
-          >
-            {/* ── Left zone — role pill ── */}
-            <div className="flex items-center px-4 shrink-0">
-              <div
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] select-none"
-                style={{ background: CORAL, color: "#fff" }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 shrink-0" />
-                {rolePill}
-              </div>
-            </div>
-
-            {/* ── Center zone: pill tabs (collapsed) or page label (expanded) ── */}
-            {collapsed ? (
-              <div className="flex items-center flex-1 gap-0.5 overflow-x-hidden scrollbar-none px-1">
-                {topbarQuicknav.map((item) => {
-                  const active = isActive(location, item.href);
-                  const Icon = item.icon;
-                  const label = navLabelForHref(item.href, item.label, translate);
-                  return (
-                    <Link key={item.href} href={item.href}>
-                      <div
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
-                        style={{
-                          background: active ? CORAL : "transparent",
-                          color: active ? "#fff" : MUTED,
-                          fontWeight: active ? 700 : 500,
-                        }}
-                      >
-                        <Icon size={13} strokeWidth={active ? 2.5 : 2} style={{ color: active ? "#fff" : MUTED }} />
-                        <span>{label}</span>
-                        {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
-                          <span
-                            className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                            style={{ background: CORAL }}
-                          >
-                            {alertCount}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-                <div className="w-px h-4 mx-1 shrink-0" style={{ background: BORDER }} />
-                <Link href="/settings">
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
-                    style={{
-                      background: isActive(location, "/settings") ? CORAL : "transparent",
-                      color: isActive(location, "/settings") ? "#fff" : MUTED,
-                      fontWeight: isActive(location, "/settings") ? 700 : 500,
-                    }}
-                  >
-                    <Settings size={13} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
-                      style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
-                    <span>{translate("common.settings")}</span>
-                  </div>
-                </Link>
-              </div>
-            ) : (
-              /* Expanded: page title */
-              <div className="flex items-center flex-1 px-3">
-                {pageLabel && (
-                  <p
-                    className="text-[15px] font-black tracking-tight"
-                    style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
-                  >
-                    {pageLabel}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* ── Right zone: search + actions ── */}
-            <div className="flex items-center gap-2 px-4 shrink-0">
-              {/* Search */}
-              <GlobalSearch sections={navSections} translate={translate} />
-
-              {/* Notification bell */}
-              <div
-                className="relative h-8 w-8 rounded-xl border flex items-center justify-center"
-                style={{ borderColor: BORDER }}
-              >
-                {!isWorker
-                  ? <NotificationBell onClick={() => setNotifOpen(true)} />
-                  : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
-                }
-              </div>
-
-              {/* Theme toggle */}
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
-                aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
-                className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
-              </button>
-
-              {/* Profile */}
-              <ProfileDropdown
-                displayName={displayName}
-                displayRole={displayRole}
-                initials={initials}
-                userRole={userRole}
-                onLogout={logout}
-              />
-            </div>
-          </header>
-
           {isWorker && <NotificationRealtimeBridge />}
           {isWorker && <NotificationBannerStack />}
 
@@ -765,7 +785,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 : "px-4 py-4 safe-scroll-bottom",
             )}
           >
-            <AutoBreadcrumb />
+            <div className="md:hidden">
+              <AutoBreadcrumb />
+            </div>
             {children}
           </main>
 
@@ -783,6 +805,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </>
           )}
         </div>
+      </div>
+
+      {rightRail && <RightRail>{rightRail}</RightRail>}
       </div>
 
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}

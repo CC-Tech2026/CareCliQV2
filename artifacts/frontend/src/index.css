@@ -212,9 +212,9 @@
   --cc-sky:        #0369A1;   /* sky-700     — informational states              */
   --cc-sky-tint:   #F0F9FF;
   /* ── Neutrals ── */
-  --cc-text:       #1A1A2E;   /* Charcoal Navy */
+  --cc-text:       #2D2D3D;   /* Dark Navy (APPLAYOUT_REDESIGN_REFERENCE.md) */
   --cc-muted:      #6A6A77;   /* Charcoal Navy @ 65% over white */
-  --cc-border:     #E8E8EA;   /* Charcoal Navy @ 10% over white */
+  --cc-border:     #E0DDD0;   /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md) */
   /* ── Surfaces ── */
   --cc-bg:         #FCFBF0;   /* Warm Off-White — page canvas */
   --cc-surface:    #F2EFDE;   /* Ivory — cards/panels lift off the page via shadow, not colour */
@@ -225,19 +225,19 @@
   /* ── Alert pill ── */
   --cc-alert-bg:   #F5EFFE;
   /* ── Status badges ── */
-  --cc-status-success:      #166534;
+  --cc-status-success:      #10B981;
   --cc-status-success-bg:   #ECFDF5;
-  --cc-status-warning:      #B45309;
+  --cc-status-warning:      #F59E0B;
   --cc-status-warning-bg:   #FFFBEB;
   --cc-status-critical:     #7C3AED;
   --cc-status-critical-bg:  #F5EFFE;
-  --cc-status-info:         #0369A1;
+  --cc-status-info:         #3B82F6;
   --cc-status-info-bg:      #F0F9FF;
   /* Compliance/safety danger severity — deliberately real red, NOT brand pink/purple (see
      DESIGN_BRIEF.md: "pink = brand/action, red = danger, users must never confuse the two").
      Distinct from --cc-status-critical, which is the brand's destructive-ACTION colour
      (delete buttons etc). Pending founding-team sign-off, functional-only, never decorative. */
-  --cc-status-danger:       #DC2626;
+  --cc-status-danger:       #EF4444;
   --cc-status-danger-bg:    #FEF2F2;
   /* ── Shadow language (pink-tinted, for modals/overlays only — no card shadows) ── */
   --cc-shadow-sm:  0 2px 8px rgba(232,69,122,0.06), 0 1px 3px rgba(232,69,122,0.04);
@@ -648,17 +648,17 @@
   /* Page surface — ivory, matches --cc-bg so modals/toasts/dropdowns (which read
      this token directly) don't stand out white against the app's ivory canvas */
   --background: 60 100% 97%;
-  --foreground: 240 28% 14%;   /* Charcoal Navy text */
+  --foreground: 240 15% 21%;   /* Dark Navy text (APPLAYOUT_REDESIGN_REFERENCE.md #2D2D3D) */
 
   /* Borders & inputs */
-  --border: 240 10% 89%;
-  --input: 240 10% 89%;
+  --border: 49 21% 85%;        /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md #E0DDD0) */
+  --input: 49 21% 85%;
   --ring: 340 78% 59%;         /* CareCliQ Pink ring */
 
   /* Cards — ivory, matching the page canvas; lift comes from shadow-sm, not colour */
   --card: 60 100% 97%;
-  --card-foreground: 240 28% 14%;
-  --card-border: 240 10% 90%;
+  --card-foreground: 240 15% 21%;
+  --card-border: 49 21% 85%;
 
   /* ── Pink sidebar (#FA879F) ── */
   --sidebar: 348 92% 75%;
@@ -672,8 +672,8 @@
 
   /* Popovers */
   --popover: 60 100% 97%;
-  --popover-foreground: 240 28% 14%;
-  --popover-border: 240 10% 89%;
+  --popover-foreground: 240 15% 21%;
+  --popover-border: 49 21% 85%;
 
   /* Primary — CareCliQ Pink #E8457A (dominant brand colour) */
   --primary: 340 78% 59%;
