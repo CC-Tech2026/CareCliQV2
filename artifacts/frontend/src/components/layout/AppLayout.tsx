@@ -31,7 +31,6 @@ import {
 } from "@/lib/i18n/nav-labels";
 
 // ── Design tokens (CSS vars — dark mode ready) ────────────────────────────────
-const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const MUTED  = "var(--cc-muted)";
 const TEXT   = "var(--cc-text)";
@@ -210,9 +209,9 @@ function GlobalSearch({ sections, translate }: { sections: NavSection[]; transla
       <div
         className="flex items-center gap-2 h-8 px-3 rounded-full transition-all duration-200"
         style={{
-          border: `1px solid ${focused ? "var(--cc-plum)" : "var(--cc-border)"}`,
+          border: `1px solid ${focused ? "var(--cc-coral)" : "var(--cc-border)"}`,
           background: focused ? "var(--cc-bg)" : "color-mix(in srgb, var(--cc-soft) 70%, transparent)",
-          boxShadow: focused ? "0 0 0 3px var(--cc-plum-soft)" : "none",
+          boxShadow: focused ? "0 0 0 3px var(--cc-coral-soft)" : "none",
           width: focused ? 200 : 160,
         }}
       >
@@ -280,7 +279,7 @@ function SidebarContents({
       {/* Logo row */}
       <div
         className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
-        style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-plum)" }}
+        style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-coral)" }}
       >
         <Link
           href="/dashboard"
@@ -332,7 +331,7 @@ function SidebarContents({
                       )}
                       style={{
                         background: active
-                          ? PLUM
+                          ? CORAL
                           : isIncident && !compact
                             ? "var(--cc-coral-soft)"
                             : "transparent",
@@ -371,7 +370,7 @@ function SidebarContents({
                 compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
               )}
               style={{
-                background: isActive(location, "/settings") ? PLUM : "transparent",
+                background: isActive(location, "/settings") ? CORAL : "transparent",
                 color: isActive(location, "/settings") ? "#fff" : MUTED,
                 fontWeight: isActive(location, "/settings") ? 700 : 500,
               }}
@@ -409,7 +408,7 @@ function SidebarContents({
           <div className="relative mx-auto w-fit">
             <div
               className="h-10 w-10 rounded-full flex items-center justify-center text-[12px] font-black"
-              style={{ background: PLUM, color: "#fff" }}
+              style={{ background: CORAL, color: "#fff" }}
               title={displayName}
             >
               {initials}
@@ -432,7 +431,7 @@ function SidebarContents({
             <div className="relative shrink-0">
               <div
                 className="h-9 w-9 rounded-full flex items-center justify-center text-[12px] font-black"
-                style={{ background: PLUM, color: "#fff" }}
+                style={{ background: CORAL, color: "#fff" }}
               >
                 {initials}
               </div>
@@ -553,8 +552,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             color: MUTED,
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cc-plum)";
-            (e.currentTarget as HTMLButtonElement).style.color = "var(--cc-plum)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cc-coral)";
+            (e.currentTarget as HTMLButtonElement).style.color = "var(--cc-coral)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER;
@@ -638,7 +637,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             className="hidden md:flex h-14 items-center shrink-0 select-none"
             style={{
               borderBottom: `1px solid ${BORDER}`,
-              borderTop: "3px solid var(--cc-plum)",
+              borderTop: "3px solid var(--cc-coral)",
               background: "var(--cc-bg)",
             }}
           >
@@ -646,7 +645,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center px-4 shrink-0">
               <div
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] select-none"
-                style={{ background: PLUM, color: "#fff" }}
+                style={{ background: CORAL, color: "#fff" }}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 shrink-0" />
                 {rolePill}
@@ -665,7 +664,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <div
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
                         style={{
-                          background: active ? PLUM : "transparent",
+                          background: active ? CORAL : "transparent",
                           color: active ? "#fff" : MUTED,
                           fontWeight: active ? 700 : 500,
                         }}
@@ -689,7 +688,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <div
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
                     style={{
-                      background: isActive(location, "/settings") ? PLUM : "transparent",
+                      background: isActive(location, "/settings") ? CORAL : "transparent",
                       color: isActive(location, "/settings") ? "#fff" : MUTED,
                       fontWeight: isActive(location, "/settings") ? 700 : 500,
                     }}
@@ -819,7 +818,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className="flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-2 relative transition-colors min-h-[60px]"
-              style={{ color: active ? PLUM : MUTED }}
+              style={{ color: active ? CORAL : MUTED }}
             >
               {/* Active indicator — top pill */}
               <div
@@ -827,7 +826,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 style={{
                   width: active ? 32 : 0,
                   height: 3,
-                  background: PLUM,
+                  background: CORAL,
                   opacity: active ? 1 : 0,
                 }}
               />

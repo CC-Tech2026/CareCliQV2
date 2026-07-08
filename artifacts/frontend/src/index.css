@@ -204,7 +204,7 @@
 :root {
   /* ── Core brand (CareCliQ 4-colour system) ── */
   --cc-plum:       #E8457A;   /* CareCliQ Pink   — primary actions, active states (dominant) */
-  --cc-coral:      #7C3AED;   /* CareCliQ Purple — incidents, destructive, alerts (sparing accent) */
+  --cc-coral:      #6E79C2;   /* CareCliQ Purple — incidents, destructive, alerts (sparing accent) */
   --cc-green:      #166534;   /* forest green — compliance success, health +ve   */
   /* ── Extended status ── */
   --cc-amber:      #B45309;   /* amber-700   — warnings, shift-related actions   */
@@ -216,12 +216,12 @@
   --cc-muted:      #6A6A77;   /* Charcoal Navy @ 65% over white */
   --cc-border:     #E8E8EA;   /* Charcoal Navy @ 10% over white */
   /* ── Surfaces ── */
-  --cc-bg:         #FDF6EE;   /* Warm Off-White — page canvas */
-  --cc-surface:    #FFFFFF;   /* cards/panels stay white for lift off the page */
+  --cc-bg:         #FCFBF0;   /* Warm Off-White — page canvas */
+  --cc-surface:    #FCFBF0;   /* Ivory — cards/panels lift off the page via shadow, not colour */
   --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg */
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
-  --cc-active-bg:  #FDECF2;
+  --cc-active-bg:  #FCFBF0;
   /* ── Alert pill ── */
   --cc-alert-bg:   #F5EFFE;
   /* ── Status badges ── */
@@ -252,7 +252,7 @@
   --cc-plum-border: rgba(232, 69, 122, 0.12);
   --cc-coral-soft: rgba(124, 58, 237, 0.08);
   --cc-coral-ring: rgba(124, 58, 237, 0.20);
-  --cc-cta: #7C3AED; /* CTA in light mode — near-black so buttons stay visible on light canvas */
+  --cc-cta: #E8457A; /* CTA in light mode — near-black so buttons stay visible on light canvas */
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
@@ -301,7 +301,7 @@
   --auth-headline: #1A1A2E;
   --auth-marketing-muted: #6A6A77;
   --auth-marketing-body: #33334A;
-  --auth-accent: #7C3AED;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
+  --auth-accent: #6E79C2;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
   --auth-input-border: #E8E8EA;
   --auth-input-bg: #F4EDE6;
   --auth-card-bg: rgba(255, 255, 255, 0.7);
@@ -645,8 +645,9 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Page surface — clean white */
-  --background: 0 0% 100%;
+  /* Page surface — ivory, matches --cc-bg so modals/toasts/dropdowns (which read
+     this token directly) don't stand out white against the app's ivory canvas */
+  --background: 60 100% 97%;
   --foreground: 240 28% 14%;   /* Charcoal Navy text */
 
   /* Borders & inputs */
@@ -654,8 +655,8 @@
   --input: 240 10% 89%;
   --ring: 340 78% 59%;         /* CareCliQ Pink ring */
 
-  /* Cards — crisp white */
-  --card: 0 0% 100%;
+  /* Cards — ivory, matching the page canvas; lift comes from shadow-sm, not colour */
+  --card: 60 100% 97%;
   --card-foreground: 240 28% 14%;
   --card-border: 240 10% 90%;
 
@@ -670,7 +671,7 @@
   --sidebar-ring: 229 100% 66%;
 
   /* Popovers */
-  --popover: 0 0% 100%;
+  --popover: 60 100% 97%;
   --popover-foreground: 240 28% 14%;
   --popover-border: 240 10% 89%;
 
