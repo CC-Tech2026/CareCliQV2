@@ -216,11 +216,11 @@ export default function WorkerPrivacy() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border border-red-200 bg-red-50/40 p-6 shadow-sm">
+      <section className="rounded-[1.5rem] border border-red-300 dark:border-red-700 p-6 shadow-sm">
         <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-red-800">
           <Trash2 className="h-5 w-5" /> {translate("privacy.requestDeletion")}
         </h2>
-        <p className="mb-4 text-sm text-red-700">
+        <p className="mb-4 text-sm dark:text-red-700 text-red-700">
           {translateParams("privacy.deleteHint", { phrase: deletePhrase })}
         </p>
         <div className="space-y-3">

@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,33 +34,42 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
   const insets = useSafeAreaInsets();
   const [mood, setMood] = useState<ParticipantMood | null>(null);
   const [hasIncident, setHasIncident] = useState<boolean | null>(null);
+  const [incidentDescription, setIncidentDescription] = useState("");
 
-  const taskRows = useMemo(
-    () => tasks.filter((t) => !t.marked_na).map((t) => ({ id: t.task_id, label: t.label, done: Boolean(t.completed) })),
-    [tasks],
-  );
-
-  const canSubmit = mood !== null && hasIncident !== null && !busy;
+  const incidentDescriptionReady =
+    hasIncident === false || (hasIncident === true && incidentDescription.trim().length >= 10);
+  const canSubmit = mood !== null && hasIncident !== null && incidentDescriptionReady && !busy;
 
   const handleClose = () => {
     if (busy) return;
     setMood(null);
     setHasIncident(null);
+    setIncidentDescription("");
     onClose();
   };
 
   const handleSubmit = () => {
     if (!canSubmit || mood === null || hasIncident === null) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ mood, hasIncident });
+    onSubmit({
+      mood,
+      hasIncident,
+      incidentDescription: hasIncident ? incidentDescription.trim() : undefined,
+    });
     setMood(null);
     setHasIncident(null);
+    setIncidentDescription("");
   };
 
   const selectMood = (id: ParticipantMood) => {
     Haptics.selectionAsync();
     setMood(id);
   };
+
+  const taskRows = useMemo(
+    () => tasks.filter((t) => !t.marked_na).map((t) => ({ id: t.task_id, label: t.label, done: Boolean(t.completed) })),
+    [tasks],
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
@@ -152,6 +162,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                   onPress={() => {
                     Haptics.selectionAsync();
                     setHasIncident(false);
+                    setIncidentDescription("");
                   }}
                   disabled={busy}
                   style={[
@@ -187,6 +198,27 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                   </Text>
                 </Pressable>
               </View>
+
+              {hasIncident === true ? (
+                <TextInput
+                  style={[
+                    styles.incidentInput,
+                    {
+                      color: colors.foreground,
+                      borderColor: colors.destructive,
+                      backgroundColor: colors.dangerBg,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                  multiline
+                  placeholder="Describe what happened — be specific about time, location, and nature of the incident..."
+                  placeholderTextColor={colors.mutedForeground}
+                  value={incidentDescription}
+                  onChangeText={setIncidentDescription}
+                  textAlignVertical="top"
+                  editable={!busy}
+                />
+              ) : null}
             </View>
 
             <View style={[styles.auditBox, { borderColor: colors.border, backgroundColor: colors.soft }]}>
@@ -277,6 +309,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   incidentText: { fontSize: 13 },
+  incidentInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 110,
+  },
   auditBox: {
     borderWidth: 1,
     borderRadius: 12,

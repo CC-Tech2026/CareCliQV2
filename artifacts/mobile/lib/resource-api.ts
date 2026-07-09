@@ -1,3 +1,5 @@
+import { getMobileApiBaseUrl } from "@/lib/api-base-url";
+import { readMobileAuthToken } from "@/lib/session";
 import { workerFetch } from "@/lib/worker-fetch";
 
 export type Credential = {
@@ -6,9 +8,20 @@ export type Credential = {
   title: string;
   issuer?: string | null;
   credential_number?: string | null;
+  issue_date?: string | null;
   expiry_date?: string | null;
   file_url?: string | null;
   status: string;
+};
+
+export type CredentialPayload = {
+  credential_type: string;
+  title: string;
+  credential_number?: string | null;
+  issuer?: string | null;
+  issue_date?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
 };
 
 export type ToolkitItem = {
@@ -46,6 +59,42 @@ export type IncidentSummary = {
   status: string;
   incident_date: string;
   participant_name?: string;
+  ndis_pending?: boolean;
+  overdue?: boolean;
+};
+
+export type IncidentDetail = {
+  id: string;
+  title: string;
+  description: string;
+  incident_type: string;
+  severity: string;
+  status: string;
+  incident_date: string;
+  reported_date: string;
+  resolved_date?: string | null;
+  location?: string | null;
+  witnesses?: string | null;
+  ndis_reportable: boolean;
+  ndis_reported_at?: string | null;
+  ndis_pending: boolean;
+  overdue: boolean;
+  practice_standard?: string | null;
+  participant_id?: string | null;
+  participant_name?: string | null;
+  participant_ndis?: string | null;
+  participant_impact?: string | null;
+  worker_actions?: string | null;
+  investigation_notes?: string | null;
+  corrective_actions?: string | null;
+};
+
+export type IncidentStats = {
+  total: number;
+  open: number;
+  ndis_pending: number;
+  overdue: number;
+  critical: number;
 };
 
 export type IncidentPhotoItem = {
@@ -97,6 +146,50 @@ export function listMyCredentials() {
   return workerFetch<Credential[]>("/api/credentials/me");
 }
 
+export function createCredential(payload: CredentialPayload) {
+  return workerFetch<Credential>("/api/credentials/me", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadCredentialFile(
+  credentialId: string,
+  file: { uri: string; name: string; type: string },
+): Promise<Credential> {
+  const base = getMobileApiBaseUrl();
+  if (!base) {
+    throw new Error("API URL not configured");
+  }
+
+  const token = await readMobileAuthToken();
+  const formData = new FormData();
+  formData.append("file", {
+    uri: file.uri,
+    name: file.name,
+    type: file.type,
+  } as unknown as Blob);
+
+  const response = await fetch(`${base}/api/credentials/me/${credentialId}/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Could not upload credential file.";
+    try {
+      const body = (await response.json()) as { detail?: string };
+      message = body.detail ?? message;
+    } catch {
+      /* use default */
+    }
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<Credential>;
+}
+
 export function getMyToolkit() {
   return workerFetch<ToolkitResponse>("/api/toolkit/me");
 }
@@ -117,6 +210,21 @@ export function requestToolkitRestock(itemId: string, quantity: number) {
 
 export function listIncidents() {
   return workerFetch<IncidentSummary[]>("/api/incidents");
+}
+
+export function getIncident(id: string) {
+  return workerFetch<IncidentDetail>(`/api/incidents/${id}`);
+}
+
+export function updateIncident(id: string, updates: Record<string, unknown>) {
+  return workerFetch<IncidentDetail>(`/api/incidents/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
+
+export function getIncidentStats() {
+  return workerFetch<IncidentStats>("/api/incidents/stats");
 }
 
 export function createWorkerIncident<T = { id: string; reference_number?: string }>(

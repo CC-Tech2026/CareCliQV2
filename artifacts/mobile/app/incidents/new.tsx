@@ -3,9 +3,11 @@ import React from "react";
 
 import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
 import { WorkerIncidentReportForm } from "@/components/worker/WorkerIncidentReportForm";
+import { useT } from "@/context/PreferencesContext";
 
 export default function NewIncidentScreen() {
   const router = useRouter();
+  const t = useT();
 
   const handleDone = () => {
     if (router.canGoBack()) router.back();
@@ -13,11 +15,7 @@ export default function NewIncidentScreen() {
   };
 
   return (
-    <WorkerStackScreen
-      headerTitle="New incident"
-      pageTitle="New incident report"
-      subtitle="Report a safety hazard or participant incident"
-    >
+    <WorkerStackScreen headerTitle={t("incidents.log")} cardsOnBackground showBack>
       <WorkerIncidentReportForm onSubmitted={handleDone} onCancel={handleDone} />
     </WorkerStackScreen>
   );

@@ -30,7 +30,14 @@ export function shiftInitials(name?: string): string {
 }
 
 function pad2(n: number): string {
-  return String(n).padStart(2, "0");
+  if (!Number.isFinite(n)) return "00";
+  return String(Math.floor(n)).padStart(2, "0");
+}
+
+export function parseIsoMs(iso?: string | null): number | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function formatTime(iso: string): string {
@@ -64,11 +71,10 @@ export function shiftDurationMinutes(
   fallback?: number,
 ): number | null {
   if (start && end) {
-    try {
-      const diff = new Date(end).getTime() - new Date(start).getTime();
-      return Math.round(diff / 60_000);
-    } catch {
-      /* fall through */
+    const startMs = parseIsoMs(start);
+    const endMs = parseIsoMs(end);
+    if (startMs !== null && endMs !== null) {
+      return Math.max(0, Math.round((endMs - startMs) / 60_000));
     }
   }
   return fallback ?? null;
@@ -84,17 +90,16 @@ export function formatDurationLabel(minutes?: number | null): string | null {
 }
 
 export function formatElapsedTimer(fromIso?: string | null, now = Date.now()): string {
-  if (!fromIso) return "00:00:00";
-  try {
-    const start = new Date(fromIso).getTime();
-    const secs = Math.max(0, Math.floor((now - start) / 1000));
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    return [h, m, s].map(pad2).join(":");
-  } catch {
-    return "00:00:00";
-  }
+  const start = parseIsoMs(fromIso);
+  if (start === null) return "00:00:00";
+
+  const secs = Math.max(0, Math.floor((now - start) / 1000));
+  if (!Number.isFinite(secs)) return "00:00:00";
+
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return [h, m, s].map(pad2).join(":");
 }
 
 export function timerAnchorIso(
@@ -102,11 +107,14 @@ export function timerAnchorIso(
   sessionStartedAt?: string | null,
   clockedInAt?: string | null,
 ): string | null {
-  if (visualState === "session_active" && sessionStartedAt) return sessionStartedAt;
+  const session = parseIsoMs(sessionStartedAt) !== null ? sessionStartedAt! : null;
+  const clocked = parseIsoMs(clockedInAt) !== null ? clockedInAt! : null;
+
+  if (visualState === "session_active" && session) return session;
   if (visualState === "clocked_in" || visualState === "session_active") {
-    return clockedInAt ?? null;
+    return clocked ?? session ?? null;
   }
-  return null;
+  return clocked ?? session ?? null;
 }
 
 export function avatarShouldPulse(visualState: ShiftVisualState): boolean {
@@ -195,6 +203,15 @@ export function sortTodayShiftsForList(shifts: WorkerShift[], now = new Date()):
     const ta = a.scheduled_start ? new Date(a.scheduled_start).getTime() : 0;
     const tb = b.scheduled_start ? new Date(b.scheduled_start).getTime() : 0;
     return ta - tb;
+  });
+}
+
+export function formatTodayHeading(now = new Date()): string {
+  return now.toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 

@@ -13,21 +13,17 @@ import { useColors } from "@/hooks/useColors";
 function NativeTabLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
-        <Label>Home</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="shifts">
         <Icon sf={{ default: "clock", selected: "clock.fill" }} />
         <Label>My Shifts</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="participants">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>My Clients</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="compliance">
         <Icon sf={{ default: "shield", selected: "shield.fill" }} />
-        <Label>My Compliance</Label>
+        <Label>Compliance</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>My Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -43,6 +39,7 @@ function ClassicTabLayout() {
 
   return (
     <Tabs
+      initialRouteName="shifts"
       tabBar={(props) => <WorkerMobileTabBar {...props} />}
       screenOptions={{
         headerShown: false,
@@ -75,8 +72,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => <Feather name="grid" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -87,17 +83,23 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="participants"
+        name="compliance"
         options={{
-          title: "My Clients",
+          title: "Compliance",
+          tabBarIcon: ({ color }) => <Feather name="shield" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "My Profile",
           tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="compliance"
+        name="participants"
         options={{
-          title: "My Compliance",
-          tabBarIcon: ({ color }) => <Feather name="shield" size={22} color={color} />,
+          href: null,
         }}
       />
     </Tabs>

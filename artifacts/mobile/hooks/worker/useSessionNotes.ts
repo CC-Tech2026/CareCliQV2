@@ -19,6 +19,5 @@ export function useSessionNotes(sessionId: string | undefined) {
     },
     enabled: Boolean(sessionId),
     staleTime: 10_000,
-    refetchInterval: 20_000,
   });
 }

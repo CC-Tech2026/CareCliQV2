@@ -19,6 +19,5 @@ export function useWorkerShift(shiftId: string | undefined) {
     },
     enabled: Boolean(shiftId),
     staleTime: 15_000,
-    refetchInterval: 30_000,
   });
 }

@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,9 +15,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { OfflineBanner } from "@/components/OfflineBanner";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { showAlert } from "@/lib/alert";
@@ -37,10 +38,10 @@ const PRIORITY_OPTIONS: { value: Priority; label: string; dot: string }[] = [
 
 export default function ShiftMessageOfficeScreen() {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: shift } = useWorkerShift(id);
+  const isDark = colors.scheme === "dark";
 
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState<Priority>("normal");
@@ -51,6 +52,9 @@ export default function ShiftMessageOfficeScreen() {
 
   const priorityMeta = PRIORITY_OPTIONS.find((o) => o.value === priority) ?? PRIORITY_OPTIONS[0];
   const canSend = message.trim().length > 0 && !sending;
+  const pageSubtitle = shift?.participant_name
+    ? `${shift.participant_name} · ${t("shifts.messageOffice.subtitle")}`
+    : t("shifts.messageOffice.subtitle");
 
   const loadHistory = useCallback(async () => {
     if (!id) return;
@@ -103,30 +107,23 @@ export default function ShiftMessageOfficeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <OfflineBanner />
-      <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} style={[styles.iconBtn, { borderColor: colors.border }]}>
-          <Feather name="arrow-left" size={17} color={colors.foreground} />
-        </Pressable>
-        <View style={[styles.headerIcon, { backgroundColor: colors.composerPurple }]}>
-          <Feather name="message-square" size={17} color="#FFFFFF" />
-        </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            Message office
-          </Text>
-          {shift?.participant_name ? (
-            <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
-              {shift.participant_name}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <WorkerStackScreen
+      headerTitle=""
+      pageTitle={t("shifts.messageOffice.pageTitle")}
+      subtitle={pageSubtitle}
+      cardsOnBackground
+      showBack
+      minimalHeader
+    >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View
+            style={[
+              styles.card,
+              elevatedCardShadow(isDark),
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               Compose message
             </Text>
@@ -157,7 +154,15 @@ export default function ShiftMessageOfficeScreen() {
               placeholder="Write your message to the office..."
               placeholderTextColor={colors.mutedForeground}
               multiline
-              style={[styles.textarea, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              style={[
+                styles.textarea,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
             />
 
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -177,7 +182,10 @@ export default function ShiftMessageOfficeScreen() {
                   </View>
                 ))}
                 {photos.length < 2 && (
-                  <Pressable onPress={handleAddPhoto} style={[styles.addPhotoBtn, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                  <Pressable
+                    onPress={handleAddPhoto}
+                    style={[styles.addPhotoBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  >
                     <Feather name="camera" size={15} color={colors.composerPurple} />
                     <Text style={[styles.addPhotoText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                       Add photo
@@ -201,14 +209,23 @@ export default function ShiftMessageOfficeScreen() {
           </View>
 
           {history.length > 0 && (
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.card,
+                elevatedCardShadow(isDark),
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 0 }]}>
                 OFFICE MESSAGES
               </Text>
               {history.map((msg) => {
                 const meta = PRIORITY_OPTIONS.find((o) => o.value === msg.priority) ?? PRIORITY_OPTIONS[0];
                 return (
-                  <View key={msg.id} style={[styles.historyItem, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <View
+                    key={msg.id}
+                    style={[styles.historyItem, { borderColor: colors.border, backgroundColor: colors.background }]}
+                  >
                     <View style={styles.historyMeta}>
                       <View style={[styles.dot, { backgroundColor: meta.dot }]} />
                       <Text style={[styles.historyPriority, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
@@ -245,7 +262,15 @@ export default function ShiftMessageOfficeScreen() {
                   style={[styles.modalOption, active && { backgroundColor: colors.activeBg }]}
                 >
                   <View style={[styles.dot, { backgroundColor: opt.dot }]} />
-                  <Text style={[styles.modalOptionText, { color: active ? colors.primary : colors.foreground, fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      {
+                        color: active ? colors.primary : colors.foreground,
+                        fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
+                      },
+                    ]}
+                  >
                     {opt.label}
                   </Text>
                   {active ? <Feather name="check" size={16} color={colors.primary} style={{ marginLeft: "auto" }} /> : null}
@@ -255,39 +280,13 @@ export default function ShiftMessageOfficeScreen() {
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </WorkerStackScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerText: { flex: 1 },
-  headerTitle: { fontSize: 18 },
-  headerSub: { fontSize: 13, marginTop: 1 },
-  scroll: { padding: 16, gap: 16 },
+  flex: { flex: 1 },
+  scroll: { padding: 16, gap: 16, paddingBottom: 24 },
   card: {
     borderRadius: 16,
     borderWidth: 1,

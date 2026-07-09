@@ -137,7 +137,7 @@ export default function LoginScreen() {
         setTrustDevice(true);
         return;
       }
-      router.replace("/(tabs)" as never);
+      router.replace("/(tabs)/shifts" as never);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
       setPasswordError(msg);
@@ -159,7 +159,7 @@ export default function LoginScreen() {
 
     try {
       await completeMfa(mfaChallenge, mfaCode.trim(), trustDevice);
-      router.replace("/(tabs)" as never);
+      router.replace("/(tabs)/shifts" as never);
     } catch (err) {
       setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {

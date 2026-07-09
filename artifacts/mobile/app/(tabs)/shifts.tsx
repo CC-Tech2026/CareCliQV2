@@ -24,7 +24,11 @@ import {
   getCachedWorkerShifts,
 } from "@/hooks/useOfflineCache";
 import type { WorkerShift } from "@/lib/worker-api";
-import { getPrimaryTodayShiftId, sortTodayShiftsForList } from "@/lib/shift-utils";
+import {
+  formatTodayHeading,
+  getPrimaryTodayShiftId,
+  sortTodayShiftsForList,
+} from "@/lib/shift-utils";
 
 function isTodayShift(shift: WorkerShift): boolean {
   const ref = shift.scheduled_start ?? shift.clocked_out_at ?? shift.clocked_in_at;
@@ -97,7 +101,7 @@ export default function MyShiftsScreen() {
       <WorkerMobileHeader title={t("nav.shifts")} />
       <WorkerPageSubheader
         title={t("shifts.title")}
-        subtitle={isOnline ? t("shifts.filter.today") : "Offline — cached data unavailable"}
+        subtitle={isOnline ? formatTodayHeading() : "Offline — cached data unavailable"}
       />
 
       {isLoading && !cachedShifts ? (

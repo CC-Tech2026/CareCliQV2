@@ -9,7 +9,7 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { TranslationKey } from "@/lib/i18n/translations";
 
-export type WorkerTabId = "index" | "shifts" | "participants" | "compliance";
+export type WorkerTabId = "shifts" | "profile" | "compliance";
 
 type TabConfig = {
   id: WorkerTabId;
@@ -19,9 +19,8 @@ type TabConfig = {
 };
 
 export const WORKER_TABS: TabConfig[] = [
-  { id: "index", labelKey: "nav.home", icon: "grid", href: "/(tabs)" },
   { id: "shifts", labelKey: "nav.shifts", icon: "clock", href: "/(tabs)/shifts" },
-  { id: "participants", labelKey: "nav.clients", icon: "user", href: "/(tabs)/participants" },
+  { id: "profile", labelKey: "nav.profile", icon: "user", href: "/(tabs)/profile" },
   { id: "compliance", labelKey: "nav.compliance", icon: "shield", href: "/(tabs)/compliance" },
 ];
 
@@ -106,7 +105,7 @@ export function WorkerBottomNav() {
 }
 
 export function WorkerMobileTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const activeTab = (state.routes[state.index]?.name ?? "index") as WorkerTabId;
+  const activeTab = (state.routes[state.index]?.name ?? "shifts") as WorkerTabId;
 
   return (
     <WorkerBottomNavBar

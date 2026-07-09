@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -12,21 +11,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { WorkerMobileSidebar } from "@/components/worker/WorkerMobileSidebar";
+import { WorkerProfileDropdown } from "@/components/worker/WorkerProfileDropdown";
+import { useWorkerNotifications } from "@/hooks/worker/useWorkerNotifications";
 import { useColors } from "@/hooks/useColors";
 
 type Props = {
   title: string;
+  showBack?: boolean;
+  /** Back button only — hides center title and right-side actions. */
+  minimal?: boolean;
 };
 
-export function WorkerMobileHeader({ title }: Props) {
+export function WorkerMobileHeader({ title, showBack, minimal }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const { data: alerts = [] } = useGetUnreadAlerts();
-  const alertCount = alerts.length;
+  const { data: unreadNotifications = [] } = useWorkerNotifications(true);
+  const notificationCount = unreadNotifications.length;
 
   const topPad = Platform.OS === "web" ? 12 : insets.top;
 
@@ -42,49 +45,69 @@ export function WorkerMobileHeader({ title }: Props) {
           },
         ]}
       >
-        <Pressable onPress={() => router.push("/(tabs)" as never)} style={styles.logoBtn}>
-          <Image
-            source={require("@/assets/images/logo.png")}
-            style={styles.logo}
-            contentFit="contain"
-            accessibilityLabel="CareCliQ"
-          />
-        </Pressable>
-
-        <Text
-          style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-
-        <View style={styles.actions}>
-          {alertCount > 0 ? (
-            <Pressable
-              onPress={() => router.push("/(tabs)/compliance" as never)}
-              style={[styles.alertBtn, { backgroundColor: colors.alertBg }]}
-              accessibilityLabel={`${alertCount} compliance alerts`}
-            >
-              <Feather name="alert-triangle" size={15} color={colors.accent} />
-              <View style={[styles.alertBadge, { backgroundColor: colors.accent }]}>
-                <Text style={[styles.alertBadgeText, { fontFamily: "Inter_700Bold" }]}>
-                  {alertCount > 9 ? "9+" : alertCount}
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-
+        {showBack ? (
           <Pressable
-            onPress={() => setDrawerOpen(true)}
-            style={styles.menuBtn}
-            accessibilityLabel="Open navigation menu"
+            onPress={() => router.back()}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
           >
-            <Feather name="menu" size={20} color={colors.foreground} />
+            <Feather name="chevron-left" size={24} color={colors.foreground} />
           </Pressable>
-        </View>
+        ) : (
+          <Pressable onPress={() => router.replace("/(tabs)/shifts" as never)} style={styles.logoBtn}>
+            <Image
+              source={require("@/assets/images/logo.png")}
+              style={styles.logo}
+              contentFit="contain"
+              accessibilityLabel="CareCliQ"
+            />
+          </Pressable>
+        )}
+
+        {minimal ? null : (
+          <>
+            <Text
+              style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+
+            <View style={styles.actions}>
+              {title !== "Notifications" && title !== "Your data & privacy" ? (
+                <Pressable
+                  onPress={() => router.push("/worker/notifications" as never)}
+                  style={styles.notifBtn}
+                  accessibilityLabel={
+                    notificationCount > 0
+                      ? `${notificationCount} unread notifications`
+                      : "Notifications"
+                  }
+                >
+                  <Feather name="bell" size={18} color={colors.foreground} />
+                  {notificationCount > 0 ? (
+                    <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={[styles.notifBadgeText, { fontFamily: "Inter_700Bold" }]}>
+                        {notificationCount > 9 ? "9+" : notificationCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              ) : null}
+
+              <Pressable
+                onPress={() => setMenuOpen(true)}
+                style={styles.menuBtn}
+                accessibilityLabel="Open profile menu"
+              >
+                <Feather name="menu" size={20} color={colors.foreground} />
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
 
-      <WorkerMobileSidebar visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {!minimal ? <WorkerProfileDropdown visible={menuOpen} onClose={() => setMenuOpen(false)} /> : null}
     </>
   );
 }
@@ -95,33 +118,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
   logoBtn: { width: 72, height: 32 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -6,
+  },
   logo: { width: 72, height: 32 },
-  title: { flex: 1, fontSize: 13, textAlign: "center" },
+  title: { flex: 1, fontSize: 16, textAlign: "center", letterSpacing: -0.2 },
   actions: { flexDirection: "row", alignItems: "center", gap: 4 },
-  alertBtn: {
-    width: 32,
-    height: 32,
+  notifBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  alertBadge: {
+  notifBadge: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    minWidth: 14,
-    height: 14,
-    borderRadius: 7,
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
   },
-  alertBadgeText: { color: "#FFFFFF", fontSize: 9 },
+  notifBadgeText: { color: "#FFFFFF", fontSize: 9, lineHeight: 11 },
   menuBtn: {
     width: 36,
     height: 36,

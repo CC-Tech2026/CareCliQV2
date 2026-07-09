@@ -20,6 +20,7 @@ import { useSessionNotes } from "@/hooks/worker/useSessionNotes";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { useColors } from "@/hooks/useColors";
 import { recordShiftViewed, submitLongShiftCheckInForm } from "@/lib/worker-api";
+import { isShiftCompletedForList } from "@/lib/shift-utils";
 import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 
 export default function ShiftDetailScreen() {
@@ -29,12 +30,12 @@ export default function ShiftDetailScreen() {
   const queryClient = useQueryClient();
   const { id, checkin } = useLocalSearchParams<{ id: string; checkin?: string }>();
 
-  const { data: shift, isLoading, error, refetch } = useWorkerShift(id);
+  const { data: shift, isLoading, error } = useWorkerShift(id);
   const sessionId = shift?.session_id ?? undefined;
   const isSessionActive = shift?.visual_state === "session_active" || shift?.visual_state === "clocked_in";
 
-  const { data: sessionNotes = [], refetch: refetchNotes } = useSessionNotes(sessionId);
-  const { data: checkinStatus, refetch: refetchCheckin } = useShiftCheckinStatus(
+  const { data: sessionNotes = [] } = useSessionNotes(sessionId);
+  const { data: checkinStatus, isFetched: checkinFetched } = useShiftCheckinStatus(
     id,
     isSessionActive,
   );
@@ -47,21 +48,55 @@ export default function ShiftDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (checkin === "pending") {
-      setCheckinOpen(true);
+    if (!shift) return;
+
+    const completed = isShiftCompletedForList(shift);
+    const active = isSessionActive;
+
+    if (completed || !active) {
+      setCheckinOpen(false);
+      if (checkin === "pending") {
+        router.replace(`/shift/${id}` as never);
+      }
       return;
     }
+
+    if (checkin === "pending") {
+      if (!checkinFetched) return;
+      if (checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue) {
+        setCheckinOpen(true);
+      }
+      router.replace(`/shift/${id}` as never);
+      return;
+    }
+
     if (checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue) {
       setCheckinOpen(true);
     }
-  }, [checkin, checkinStatus?.can_submit_checkin, checkinStatus?.checkin_overdue]);
+  }, [
+    shift,
+    checkin,
+    id,
+    isSessionActive,
+    checkinFetched,
+    checkinStatus?.can_submit_checkin,
+    checkinStatus?.checkin_overdue,
+    router,
+  ]);
 
-  const handleRefresh = () => {
-    void refetch();
-    void refetchNotes();
-    void refetchCheckin();
+  const invalidateShiftQueries = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["worker", "shift", id] });
-  };
+  }, [queryClient, id]);
+
+  const invalidateNotesQuery = useCallback(() => {
+    if (!sessionId) return;
+    void queryClient.invalidateQueries({ queryKey: ["worker", "session", sessionId, "notes"] });
+  }, [queryClient, sessionId]);
+
+  const handleRefresh = useCallback(() => {
+    invalidateShiftQueries();
+    invalidateNotesQuery();
+  }, [invalidateShiftQueries, invalidateNotesQuery]);
 
   const handleComplete = () => {
     router.replace("/(tabs)/shifts" as never);
@@ -74,8 +109,8 @@ export default function ShiftDetailScreen() {
       try {
         const result = await submitLongShiftCheckInForm(sessionId, form);
         setCheckinOpen(false);
-        void refetchCheckin();
-        void refetchNotes();
+        invalidateShiftQueries();
+        invalidateNotesQuery();
         if (result.status === "INCIDENT_REPORTED") {
           Alert.alert("Incident noted", "Please document the incident in your shift notes.");
         }
@@ -85,7 +120,7 @@ export default function ShiftDetailScreen() {
         setCheckinBusy(false);
       }
     },
-    [sessionId, refetchCheckin, refetchNotes],
+    [sessionId, invalidateShiftQueries, invalidateNotesQuery],
   );
 
   if (isLoading) {
@@ -113,6 +148,9 @@ export default function ShiftDetailScreen() {
   }
 
   const activeTasks = (shift.tasks ?? []).filter((t) => !t.marked_na);
+  const shiftCompleted = isShiftCompletedForList(shift);
+  const canShowCheckinModal =
+    checkinOpen && Boolean(sessionId) && isSessionActive && !shiftCompleted;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -122,6 +160,7 @@ export default function ShiftDetailScreen() {
         shift={shift}
         sessionNotes={sessionNotes}
         onRefresh={handleRefresh}
+        onNotesRefresh={invalidateNotesQuery}
         onShiftComplete={handleComplete}
         onBack={() => router.back()}
         canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin)}
@@ -130,7 +169,7 @@ export default function ShiftDetailScreen() {
       />
 
       <LongShiftCheckInForm
-        visible={checkinOpen && Boolean(sessionId)}
+        visible={canShowCheckinModal}
         onClose={() => setCheckinOpen(false)}
         onSubmit={handleCheckinSubmit}
         busy={checkinBusy}

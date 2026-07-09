@@ -1,11 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Platform,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -14,111 +13,104 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { NotificationListItem } from "@/components/worker/notifications/NotificationListItem";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import {
   useDismissNotification,
-  useWorkerNotifications,
+  useWorkerNotificationsInfinite,
 } from "@/hooks/worker/useWorkerNotifications";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { UserNotification } from "@/lib/worker-api";
 
+type ListRow =
+  | { type: "header"; id: string; date: string }
+  | { type: "item"; id: string; item: UserNotification };
+
 function groupByDate(notifications: UserNotification[]): Array<{ date: string; items: UserNotification[] }> {
   const groups: Record<string, UserNotification[]> = {};
-  for (const n of notifications) {
-    const key = new Date(n.created_at).toLocaleDateString("en-AU", {
+  for (const notification of notifications) {
+    const key = new Date(notification.created_at).toLocaleDateString("en-AU", {
       weekday: "long",
       day: "numeric",
       month: "long",
     });
     if (!groups[key]) groups[key] = [];
-    groups[key].push(n);
+    groups[key].push(notification);
   }
   return Object.entries(groups).map(([date, items]) => ({ date, items }));
-}
-
-function NotificationRow({
-  item,
-  onDismiss,
-  onPress,
-}: {
-  item: UserNotification;
-  onDismiss: (id: string) => void;
-  onPress: () => void;
-}) {
-  const colors = useColors();
-  const unread = !item.read_at && !item.dismissed_at;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.row,
-        {
-          backgroundColor: colors.card,
-          borderColor: unread ? colors.primary : colors.border,
-          borderLeftWidth: unread ? 4 : 1,
-        },
-      ]}
-    >
-      <View style={styles.rowContent}>
-        <Text style={[styles.rowTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          {item.title}
-        </Text>
-        <Text style={[styles.rowBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {item.body}
-        </Text>
-        <Text style={[styles.rowTime, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          {new Date(item.created_at).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
-        </Text>
-      </View>
-      {!item.dismissed_at && (
-        <Pressable onPress={() => onDismiss(item.id)} hitSlop={8}>
-          <Text style={[styles.dismiss, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-            Dismiss
-          </Text>
-        </Pressable>
-      )}
-    </Pressable>
-  );
 }
 
 export default function WorkerNotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data = [], isLoading, refetch, isRefetching } = useWorkerNotifications();
+  const t = useT();
   const dismiss = useDismissNotification();
+  const loadingMoreRef = useRef(false);
+  const isDark = colors.scheme === "dark";
 
-  const grouped = useMemo(() => groupByDate(data), [data]);
-  const flatData = useMemo(
-    () =>
-      grouped.flatMap((g) => [
-        { type: "header" as const, id: g.date, date: g.date },
-        ...g.items.map((item) => ({ type: "item" as const, id: item.id, item })),
-      ]),
-    [grouped],
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useWorkerNotificationsInfinite();
+
+  const notifications = useMemo(
+    () => data?.pages.flatMap((page) => page.notifications) ?? [],
+    [data?.pages],
   );
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const flatData = useMemo<ListRow[]>(
+    () =>
+      groupByDate(notifications).flatMap((group) => [
+        { type: "header" as const, id: `header-${group.date}`, date: group.date },
+        ...group.items.map((item) => ({ type: "item" as const, id: item.id, item })),
+      ]),
+    [notifications],
+  );
 
-  const handlePress = (item: UserNotification) => {
-    if (item.shift_id) {
-      const query = item.event_type === "compliance_checkin" ? "?checkin=pending" : "";
-      router.push(`/shift/${item.shift_id}${query}` as never);
-    }
+  const handlePress = useCallback(
+    (item: UserNotification) => {
+      if (item.shift_id) {
+        const query = item.event_type === "compliance_checkin" ? "?checkin=pending" : "";
+        router.push(`/shift/${item.shift_id}${query}` as never);
+      }
+    },
+    [router],
+  );
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    void fetchNextPage().finally(() => {
+      loadingMoreRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const renderFooter = () => {
+    if (!isFetchingNextPage) return <View style={styles.listFooter} />;
+    return (
+      <View style={styles.listFooter}>
+        <ActivityIndicator color={colors.primary} size="small" />
+      </View>
+    );
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
+      <WorkerMobileHeader title={t("nav.notifications")} showBack />
 
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} style={[styles.backBtn, { borderColor: colors.border }]}>
-          <Feather name="arrow-left" size={18} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          Notifications
+      <View style={[styles.subheader, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("notifications.subtitle")}
         </Text>
-        <View style={styles.backBtn} />
       </View>
 
       {isLoading ? (
@@ -129,20 +121,31 @@ export default function WorkerNotificationsScreen() {
         <FlatList
           data={flatData}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[
+            styles.list,
+            flatData.length === 0 && styles.listEmpty,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
+            <RefreshControl refreshing={isRefetching && !isFetchingNextPage} onRefresh={refetch} tintColor={colors.primary} />
           }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.35}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === "android"}
+          ListFooterComponent={renderFooter}
           renderItem={({ item }) => {
             if (item.type === "header") {
               return (
-                <Text style={[styles.dateHeader, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.dateHeader, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
                   {item.date}
                 </Text>
               );
             }
             return (
-              <NotificationRow
+              <NotificationListItem
                 item={item.item}
                 onDismiss={(id) => dismiss.mutate(id)}
                 onPress={() => handlePress(item.item)}
@@ -150,10 +153,21 @@ export default function WorkerNotificationsScreen() {
             );
           }}
           ListEmptyComponent={
-            <View style={styles.center}>
-              <Feather name="bell" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                No notifications
+            <View
+              style={[
+                styles.emptyCard,
+                elevatedCardShadow(isDark),
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View style={[styles.emptyIcon, { backgroundColor: colors.soft }]}>
+                <Feather name="bell" size={24} color={colors.mutedForeground} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {t("notifications.empty")}
+              </Text>
+              <Text style={[styles.emptyHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {t("notifications.emptyHint")}
               </Text>
             </View>
           }
@@ -165,38 +179,45 @@ export default function WorkerNotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
+  subheader: {
+    paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
+  subtitle: { fontSize: 12, lineHeight: 17 },
+  list: { paddingHorizontal: 16, paddingTop: 16 },
+  listEmpty: { flexGrow: 1, justifyContent: "center" },
+  dateHeader: {
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  listFooter: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  emptyCard: {
     borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 36,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
     justifyContent: "center",
+    marginBottom: 4,
   },
-  headerTitle: { flex: 1, fontSize: 18, textAlign: "center" },
-  list: { padding: 16, gap: 10 },
-  dateHeader: { fontSize: 12, letterSpacing: 0.5, marginTop: 8, marginBottom: 6 },
-  row: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: "row",
-    gap: 12,
-  },
-  rowContent: { flex: 1, gap: 4 },
-  rowTitle: { fontSize: 14 },
-  rowBody: { fontSize: 13, lineHeight: 18 },
-  rowTime: { fontSize: 11, marginTop: 4 },
-  dismiss: { fontSize: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
-  empty: { fontSize: 15 },
+  emptyTitle: { fontSize: 16, textAlign: "center" },
+  emptyHint: { fontSize: 13, lineHeight: 19, textAlign: "center" },
 });

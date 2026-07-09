@@ -29,7 +29,6 @@ import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
-  acknowledgeShiftRisks,
   clockInShift,
   endShift,
   startShiftSession,
@@ -46,9 +45,8 @@ import {
   formatShiftTimeRange,
   hasIncompleteMandatoryTasks,
   newClientNoteId,
+  parseIsoMs,
   resolveActiveShiftTasks,
-  shiftHasRiskAlerts,
-  shiftNeedsRiskAck,
   timerAnchorIso,
 } from "@/lib/shift-utils";
 import { evaluateWorkerCompliance } from "@workspace/worker-compliance";
@@ -83,6 +81,7 @@ type Props = {
   shift: WorkerShift;
   sessionNotes: SessionNoteRecord[];
   onRefresh: () => void;
+  onNotesRefresh?: () => void;
   onShiftComplete: () => void;
   onBack?: () => void;
   canCheckin?: boolean;
@@ -94,6 +93,7 @@ export function WorkerMobileShiftView({
   shift,
   sessionNotes,
   onRefresh,
+  onNotesRefresh,
   onShiftComplete,
   onBack,
   canCheckin,
@@ -154,10 +154,19 @@ export function WorkerMobileShiftView({
   const visualState = shift.visual_state;
   const anchor = timerAnchorIso(visualState, shift.session_started_at, shift.clocked_in_at);
   void nowTick;
-  const elapsed = formatElapsedTimer(anchor);
-  const needsRiskAck = shiftNeedsRiskAck(shift);
-  const hasAlerts = shiftHasRiskAlerts(shift);
+  const elapsed = useMemo(() => {
+    const now = Date.now();
+    const live = formatElapsedTimer(anchor, now);
+    if (live !== "00:00:00") return live;
 
+    if (shift.clocked_in_at) {
+      const endMs = shift.clocked_out_at ? parseIsoMs(shift.clocked_out_at) ?? now : now;
+      const fromClockIn = formatElapsedTimer(shift.clocked_in_at, endMs);
+      if (fromClockIn !== "00:00:00") return fromClockIn;
+    }
+
+    return "00:00:00";
+  }, [anchor, nowTick, shift.clocked_in_at, shift.clocked_out_at]);
   const complianceNotes = useMemo(
     () =>
       localNotes.map((n) => ({
@@ -266,18 +275,6 @@ export function WorkerMobileShiftView({
     }
   }, [shift.id, onRefresh, isOnline, queueWorkerUpdate]);
 
-  const handleAckRisks = useCallback(async () => {
-    setBusy("ack");
-    try {
-      await acknowledgeShiftRisks(shift.id);
-      onRefresh();
-    } catch (err) {
-      Alert.alert("Failed", err instanceof Error ? err.message : "Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  }, [shift.id, onRefresh]);
-
   const handleAttemptEnd = useCallback(() => {
     if (busy) return;
     const active = resolveActiveShiftTasks(shift.tasks, tasks);
@@ -292,6 +289,8 @@ export function WorkerMobileShiftView({
     setPhase("review");
   }, [busy, shift.tasks, tasks]);
 
+  const refreshNotes = onNotesRefresh ?? onRefresh;
+
   const handleSaveNote = async (noteId: string, content: string) => {
     if (!sessionId) return;
     const updated = localNotes.map((n) =>
@@ -303,7 +302,7 @@ export function WorkerMobileShiftView({
     } catch {
       /* optimistic */
     }
-    onRefresh();
+    refreshNotes();
   };
 
   const handleAddMissingNote = async (taskId: string, content: string) => {
@@ -320,7 +319,7 @@ export function WorkerMobileShiftView({
     const updated = [...localNotes, note];
     setLocalNotes(updated);
     await syncSessionNotes(sessionId, updated);
-    onRefresh();
+    refreshNotes();
   };
 
   const handleSubmitReview = () => {
@@ -497,7 +496,7 @@ export function WorkerMobileShiftView({
           onTasksChange={setTasks}
           sessionNotes={localNotes}
           compliance={compliance}
-          onNotesRefresh={onRefresh}
+          onNotesRefresh={refreshNotes}
           onOpenIncidentReport={openIncidentReport}
           disabled={Boolean(busy)}
           sessionElapsed={elapsed}
@@ -566,29 +565,10 @@ export function WorkerMobileShiftView({
           </Pressable>
         )}
 
-        {hasAlerts && needsRiskAck && (
-          <View style={[styles.riskBox, { backgroundColor: "#FCEBEB", borderColor: "#EF4444" }]}>
-            <Feather name="alert-octagon" size={16} color="#A32D2D" />
-            <Text style={[styles.riskText, { color: "#7F1D1D", fontFamily: "Inter_500Medium" }]}>
-              Review and acknowledge participant risk alerts before clocking in.
-            </Text>
-            <Pressable
-              onPress={handleAckRisks}
-              disabled={Boolean(busy)}
-              style={[styles.ackBtn, { backgroundColor: "#EF4444" }]}
-            >
-              <Text style={[styles.ackBtnText, { fontFamily: "Inter_700Bold" }]}>Acknowledge Risks</Text>
-            </Pressable>
-          </View>
-        )}
-
         <Pressable
           onPress={handleClockIn}
-          disabled={Boolean(busy) || needsRiskAck}
-          style={[
-            styles.clockInBtn,
-            { backgroundColor: needsRiskAck ? colors.muted : colors.primary },
-          ]}
+          disabled={Boolean(busy)}
+          style={[styles.clockInBtn, { backgroundColor: colors.primary }]}
         >
           {busy === "clock-in" ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -637,20 +617,6 @@ const styles = StyleSheet.create({
   scheduledTime: { fontSize: 15 },
   mapLink: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   address: { fontSize: 13, flex: 1 },
-  riskBox: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 10,
-  },
-  riskText: { fontSize: 13, lineHeight: 18 },
-  ackBtn: {
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ackBtnText: { color: "#FFFFFF", fontSize: 14 },
   clockInBtn: {
     height: 52,
     borderRadius: 14,

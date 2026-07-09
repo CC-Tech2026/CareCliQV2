@@ -5,6 +5,7 @@ export type LongShiftCheckinStatus = "GOING_WELL" | "NEEDS_ATTENTION" | "INCIDEN
 export type LongShiftCheckInFormData = {
   mood: ParticipantMood;
   hasIncident: boolean;
+  incidentDescription?: string;
 };
 
 export const MOOD_OPTIONS: ReadonlyArray<{
@@ -41,8 +42,11 @@ export function mapLongShiftCheckinStatus(data: LongShiftCheckInFormData): LongS
 export function buildLongShiftCheckinNote(data: LongShiftCheckInFormData): string {
   const label = moodLabel(data.mood);
   const emoji = moodEmoji(data.mood);
+  const description = data.incidentDescription?.trim();
   const incidentLine = data.hasIncident
-    ? "Incident reported — please complete an incident report."
+    ? description
+      ? `Incident reported: ${description}`
+      : "Incident reported — please complete an incident report."
     : "No incidents to report.";
   return `90-minute check-in completed. Participant mood: ${label} ${emoji} ${incidentLine}`;
 }
