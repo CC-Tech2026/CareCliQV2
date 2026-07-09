@@ -16,7 +16,7 @@ import { CORAL } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const FIELD_SELECT =
-  "flex h-9 w-full rounded-md border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
+  "flex h-9 w-full rounded-md border border-cc-border bg-card px-3 py-2 text-sm text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
 const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?: string }> = {
   verbal: {
@@ -250,7 +250,7 @@ export function WorkerIncidentReportForm({
         type="datetime-local"
         value={incidentTime}
         onChange={(e) => setIncidentTime(e.target.value)}
-        className="bg-cc-surface"
+        className="bg-card"
       />
 
       <div>
@@ -258,7 +258,7 @@ export function WorkerIncidentReportForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder={translate("shift.incident.describePlaceholder")}
-          className="min-h-[100px] bg-cc-surface"
+          className="min-h-[100px] bg-card"
           spellCheck
         />
         <p
@@ -274,11 +274,11 @@ export function WorkerIncidentReportForm({
         value={workerActions}
         onChange={(e) => setWorkerActions(e.target.value)}
         placeholder={translate("shift.incident.actionsPlaceholder")}
-        className="min-h-[60px] bg-cc-surface"
+        className="min-h-[60px] bg-card"
         spellCheck
       />
 
-      <fieldset className="space-y-2 rounded-lg border bg-cc-surface p-3">
+      <fieldset className="space-y-2 rounded-lg border bg-card p-3">
         <legend className="px-1 text-xs font-bold">{translate("shift.incident.participantPresent")}</legend>
         <div className="flex gap-4 text-sm font-semibold">
           {(["yes", "no"] as const).map((value) => (
@@ -327,7 +327,7 @@ export function WorkerIncidentReportForm({
         {photos.length < 3 && (
           <button
             type="button"
-            className="grid h-16 w-16 place-items-center rounded-lg border border-dashed bg-cc-surface"
+            className="grid h-16 w-16 place-items-center rounded-lg border border-dashed bg-card"
             onClick={() => photoInputRef.current?.click()}
           >
             <Camera size={18} />

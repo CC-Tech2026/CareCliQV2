@@ -1621,7 +1621,7 @@ function ShiftWorkflow({
       <section
         id="shift-task-checklist"
         data-tutorial="shift-task-checklist"
-        className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm"
+        className="overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm"
       >
         {sessionFocus ? (
           <div className="flex w-full items-center justify-between bg-cc-soft px-4 py-3.5">
@@ -1636,7 +1636,7 @@ function ShiftWorkflow({
                 "rounded-full border px-2.5 py-1 text-[10px] font-black",
                 feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-cc-border bg-cc-surface text-cc-plum",
+                  : "border-cc-border bg-card text-cc-plum",
               )}
             >
               {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
@@ -1660,7 +1660,7 @@ function ShiftWorkflow({
                   "rounded-full border px-2.5 py-1 text-[10px] font-black",
                   feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-cc-border bg-cc-surface text-cc-plum",
+                    : "border-cc-border bg-card text-cc-plum",
                 )}
               >
                 {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
@@ -1693,7 +1693,7 @@ function ShiftWorkflow({
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border-2 bg-cc-surface shadow-sm transition-[border-color] duration-300 ease-in-out"
+        className="overflow-hidden rounded-2xl border-2 bg-card shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
         data-tutorial="shift-header"
       >

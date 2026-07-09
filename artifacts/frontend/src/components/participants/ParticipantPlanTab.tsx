@@ -87,11 +87,18 @@ export function ParticipantPlanTab({
               </div>
             </div>
           )}
-          {/* Category breakdown */}
-          {hasCategoryBudgets && (
+          {/* Category breakdown — core supports only */}
+          {hasCategoryBudgets && (() => {
+            const coreItems = categoryBudgets.filter(
+              (item) =>
+                item.category?.toLowerCase().startsWith("core") ||
+                item.category_label?.toLowerCase().includes("core"),
+            );
+            if (coreItems.length === 0) return null;
+            return (
             <div className="space-y-2">
               <p className="text-[10px] font-black uppercase tracking-wider text-[#6A6A77]">{translate("patients.budget.byCategory")}</p>
-              {categoryBudgets.map((item) => (
+              {coreItems.map((item) => (
                 <div
                   key={item.category || item.category_label}
                   className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
@@ -118,7 +125,8 @@ export function ParticipantPlanTab({
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </section>

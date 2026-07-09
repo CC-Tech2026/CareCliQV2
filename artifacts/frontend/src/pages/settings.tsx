@@ -37,7 +37,9 @@ import {
   Pencil,
   QrCode,
   AlertTriangle,
+  Accessibility as AccessibilityIcon,
 } from "lucide-react";
+import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { formatDistanceToNow } from "date-fns";
 import QRCode from "react-qr-code";
 import { PasswordInput } from "@/components/PasswordInput";
@@ -82,13 +84,14 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
   { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
+  { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
 ];
@@ -1290,7 +1293,7 @@ export default function Settings() {
           <Settings2 className="h-5 w-5" style={{ color: "#E8457A" }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("settings.title")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
           <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-muted)" }}>
             {translate("settings.subtitle")}
           </p>
@@ -1809,6 +1812,11 @@ export default function Settings() {
               </>
             )}
           </Section>
+        )}
+
+        {/* -- Accessibility section ------------------------------------------- */}
+        {activeSection === "accessibility" && (
+          <AccessibilityPanel showHeader={false} />
         )}
 
         {/* -- Notifications section (coordinator only) ----------------------- */}

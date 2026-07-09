@@ -325,12 +325,12 @@ export default function Compliance() {
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("compliance.page.eyebrow")}
           </p>
-          <h1 className="mt-1 text-[26px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
+          <h1 className="mt-1 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
           <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
         </div>
         <div className="flex items-start gap-2 shrink-0">
         {(overallScore != null || urgentCount > 0) && (
-          <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border-0 shadow-sm px-5 py-3">
+          <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border border-[var(--cc-border)] shadow-sm px-5 py-3">
             {urgentCount > 0 && (
               <div className="flex items-center gap-1.5">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(220,38,38,0.1)" }}>
@@ -436,14 +436,14 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
-        <KpiCard flat label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
-        <KpiCard flat label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard flat label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
       </KpiGrid>
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
-        <Card className="rounded-2xl border-0 shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
             <AlertTriangle size={17} style={{ color: CRITICAL }} />
           </span>
@@ -472,7 +472,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="rounded-2xl border-0 shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.bandsTitle")}</p>
           <p className="text-[11px] mb-4" style={{ color: MUTED }}>{translate("compliance.centre.overview.bandsSubtitle")}</p>
           <div className="flex items-center gap-5">
@@ -506,7 +506,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
           </div>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <ListChecks size={14} style={{ color: MUTED }} />
@@ -539,7 +539,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="rounded-2xl border-0 shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <Users size={14} style={{ color: MUTED }} />
@@ -570,7 +570,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
           </button>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <HeartHandshake size={14} style={{ color: MUTED }} />
@@ -629,7 +629,7 @@ function AiPatternsSection() {
   const patterns = data?.patterns ?? [];
 
   return (
-    <Card className="rounded-2xl border-0 shadow-sm p-5">
+    <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
       <div className="flex items-center gap-2 mb-1">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: "var(--cc-plum-soft)" }}>
           <Sparkles size={14} style={{ color: PLUM }} />
@@ -723,10 +723,10 @@ function StaffPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
-        <KpiCard flat label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
-        <KpiCard flat label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard flat label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -751,9 +751,9 @@ function StaffPanel() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border-0 shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
+          <table className="w-full table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
             <thead>
               <tr style={{ background: TEXT }}>
                 <th className="w-48 px-4 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colWorker")}</th>
@@ -813,7 +813,7 @@ function StaffPanel() {
       </Card>
 
       {expiringSoon && (
-        <Card className="rounded-2xl border-0 shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(217,119,6,0.06)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(217,119,6,0.06)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(217,119,6,0.12)" }}>
             <Info size={16} style={{ color: WARNING }} />
           </span>
@@ -875,10 +875,10 @@ function ParticipantsPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
-        <KpiCard flat label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
-        <KpiCard flat label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
-        <KpiCard flat label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -902,7 +902,7 @@ function ParticipantsPanel() {
         </button>
       </div>
 
-      <Card className="rounded-2xl border-0 shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
@@ -975,7 +975,7 @@ function ParticipantsPanel() {
       </Card>
 
       {unsignedExample && (
-        <Card className="rounded-2xl border-0 shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
             <ShieldAlert size={16} style={{ color: CRITICAL }} />
           </span>
@@ -1124,7 +1124,7 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
             </div>
 
             {incident.ndis_reportable && (
-              <Card className="rounded-2xl border-0 p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+              <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
                   <ShieldAlert size={16} style={{ color: CRITICAL }} />
                 </span>
@@ -1228,12 +1228,12 @@ function IncidentsPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
-        <KpiCard flat label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
-        <KpiCard flat label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
       </KpiGrid>
 
-      <Card className="rounded-2xl border-0 shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>

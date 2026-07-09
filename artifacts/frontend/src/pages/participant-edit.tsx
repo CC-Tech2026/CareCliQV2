@@ -22,7 +22,7 @@ import { useMutation } from "@tanstack/react-query";
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM        = "#E8457A";
 const CORAL       = "#F1738A";
-const T1          = "#1C1626";
+const T1          = "var(--cc-text)";
 const T2          = "#374151";
 const T3          = "#7A6A8A";
 const BORDER      = "rgba(232,213,232,0.5)";

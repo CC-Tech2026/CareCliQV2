@@ -29,7 +29,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 // -- Design tokens -------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
-const T1     = "#1C1626";
+const T1     = "var(--cc-text)";
 const T2     = "#374151";
 const T3     = "#7A6A8A";
 const BORDER = "var(--cc-border)";
@@ -276,7 +276,7 @@ export default function SessionNew() {
             </div>
           </FormCard>
 
-          {/* -- Goals — only after participant selected -- */}
+          {/* -- Goals ï¿½ only after participant selected -- */}
           {selectedParticipantId && (
             <div
               className="bg-white rounded-2xl overflow-hidden"

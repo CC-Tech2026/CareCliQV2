@@ -89,13 +89,13 @@ export default function ProfileCompletion() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <p className="hidden" style={{ color: CORAL }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("profileCompletion.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("profileCompletion.title")}
         </h1>
-        <p className="mt-2 text-sm text-[#6A6A77]">{translate("profileCompletion.subtitle")}</p>
+        <p className="mt-1 text-sm text-[#6A6A77]">{translate("profileCompletion.subtitle")}</p>
       </div>
       <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
         <div className="mb-6 rounded-2xl bg-[#F4EDE6] p-4">

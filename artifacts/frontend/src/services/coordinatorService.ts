@@ -757,6 +757,7 @@ export type LiveShift = {
   worker_id?: string;
   worker_name?: string;
   worker_email?: string;
+  worker_phone?: string | null;
   participant_id?: string;
   participant_name?: string;
   shift_type?: string;

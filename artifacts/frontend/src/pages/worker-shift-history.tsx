@@ -202,7 +202,7 @@ function ShiftTrendChart({
 }) {
   const { translate } = useAccessibility();
   return (
-    <section className="rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4">
         <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("shiftHistory.trend")}</h2>
         <p className="text-xs font-medium" style={{ color: MUTED }}>
@@ -302,14 +302,14 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
 
   if (isLoading || !data) {
     return (
-      <div className="rounded-2xl border bg-cc-surface p-6 text-sm font-bold" style={{ borderColor: BORDER, color: MUTED }}>
+      <div className="rounded-2xl border bg-card p-6 text-sm font-bold" style={{ borderColor: BORDER, color: MUTED }}>
         Loading shift details…
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-cc-surface p-5 shadow-md" style={{ borderColor: BORDER }}>
+    <div className="space-y-4 rounded-2xl border bg-card p-5 shadow-md" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wider" style={{ color: CORAL }}>
@@ -421,7 +421,7 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
       <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
         <DialogContent
           overlayClassName="bg-[#1E1640]/35"
-          className="max-w-3xl gap-3 border bg-cc-surface p-4 sm:p-5"
+          className="max-w-3xl gap-3 border bg-card p-4 sm:p-5"
           style={{ borderColor: BORDER }}
         >
           <DialogTitle className="text-center text-sm font-black" style={{ color: TEXT }}>
@@ -519,7 +519,7 @@ function HistoryRow({
       type="button"
       onClick={onToggle}
       className={cn(
-        "flex w-full items-center gap-3 rounded-2xl border bg-cc-surface p-4 text-left shadow-sm transition hover:shadow-md",
+        "flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:shadow-md",
         expanded && "ring-2 ring-[#EDEAFF]",
       )}
       style={{ borderColor: BORDER }}
@@ -608,7 +608,7 @@ export default function WorkerShiftHistoryPage() {
         onPointClick={(id) => setExpandedId(id)}
       />
 
-      <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <FileText size={18} style={{ color: PLUM }} />

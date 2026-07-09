@@ -72,7 +72,7 @@ function ShiftListCardContent({
   return (
     <article
       className={cn(
-        "w-full overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm",
+        "w-full overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm",
         isCancelled && "opacity-75",
         isCompleted && "opacity-80",
       )}
@@ -152,7 +152,7 @@ function ShiftListCardContent({
               {emergencyContact.phone && (
                 <a
                   href={`tel:${emergencyContact.phone.replace(/\s/g, "")}`}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cc-border bg-cc-surface px-2.5 py-1.5 text-[11px] font-bold text-cc-plum hover:bg-cc-soft"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cc-border bg-card px-2.5 py-1.5 text-[11px] font-bold text-cc-plum hover:bg-cc-soft"
                 >
                   <Phone size={12} />
                   {translate("shifts.listCard.call")}
@@ -364,7 +364,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
           href={mapsUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-cc-surface px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
         >
           <Navigation size={14} className="shrink-0" />
           <span className="truncate">{translate("shifts.listCard.directions")}</span>
@@ -372,7 +372,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       ) : (
         <button
           type="button"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-cc-surface px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
           onClick={() =>
             toast({
               title: translate("shifts.listCard.directions"),
@@ -388,7 +388,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       {phone ? (
         <a
           href={`tel:${phone.replace(/\s/g, "")}`}
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-cc-surface px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
         >
           <Phone size={14} className="shrink-0" />
           <span className="truncate">{translate("shifts.listCard.call")}</span>
@@ -396,7 +396,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       ) : (
         <button
           type="button"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-cc-surface px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
           onClick={() =>
             toast({
               title: translate("shifts.listCard.call"),

@@ -14,7 +14,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // -- Design tokens -------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
-const T1     = "#1C1626";
+const T1     = "var(--cc-text)";
 const T2     = "#374151";
 const T3     = "#7A6A8A";
 const BORDER = "var(--cc-border)";

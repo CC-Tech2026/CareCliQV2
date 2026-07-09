@@ -43,7 +43,7 @@ export function LongShiftActivitySummary({ sessionId, refreshKey = 0 }: Props) {
 
   return (
     <section
-      className="rounded-2xl border bg-cc-surface p-4"
+      className="rounded-2xl border bg-card p-4"
       style={{ borderColor: BORDER }}
     >
       <div className="mb-2 flex items-center gap-2">

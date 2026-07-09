@@ -114,7 +114,7 @@ export function DuringShiftAccordion({
 
   return (
     <section
-      className={cn("rounded-2xl border bg-cc-surface shadow-sm", panelExpanded ? "overflow-visible" : "overflow-hidden")}
+      className={cn("rounded-2xl border bg-card shadow-sm", panelExpanded ? "overflow-visible" : "overflow-hidden")}
       style={{ borderColor: BORDER }}
     >
       <button
@@ -177,7 +177,7 @@ export function DuringShiftAccordion({
               <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">{translate("shift.during.thisShift")}</p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
-                  <li key={item.id} className="rounded-lg bg-cc-surface px-2 py-1.5">
+                  <li key={item.id} className="rounded-lg bg-card px-2 py-1.5">
                     <span className="font-bold">{item.reference_number || item.title || item.incident_type}</span>
                     {item.incident_date && (
                       <span className="ml-1 text-muted-foreground">

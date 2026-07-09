@@ -473,12 +473,15 @@ export default function Credentials() {
         <BulkRemindersPanel onClose={() => setShowBulkReminders(false)} />
       )}
       <div>
-        <p className="hidden" style={{ color: CORAL }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : "Support Worker"}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {isCoordinator ? "Team Credential Wallet" : translate("credentials.title")}
         </h1>
+        <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+          {isCoordinator ? "Manage NDIS screening, WWCC and training records for your team" : "Your NDIS screening, WWCC and training records"}
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4">

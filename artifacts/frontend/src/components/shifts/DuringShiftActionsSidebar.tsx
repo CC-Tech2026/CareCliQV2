@@ -121,7 +121,7 @@ export function DuringShiftActionsSidebar({
       <div
         className={cn(
           "flex w-full flex-col overflow-hidden rounded-l-xl border-l border-cc-border/50",
-          "bg-cc-surface/55 shadow-[var(--cc-shadow-sm)] backdrop-blur-[3px]",
+          "bg-card/55 shadow-[var(--cc-shadow-sm)] backdrop-blur-[3px]",
         )}
       >
         {expanded && (

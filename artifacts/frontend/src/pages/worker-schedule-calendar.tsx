@@ -147,7 +147,7 @@ function WorkerMonthGrid({
   }, [shifts]);
 
   return (
-    <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-card overflow-hidden" style={{ borderColor: BORDER }}>
       <div
         className="grid grid-cols-7"
         style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}
@@ -249,7 +249,7 @@ function WorkerDayPanel({
   const off = timeOffOnDay(timeOff, day);
 
   return (
-    <div className="flex flex-col rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
+    <div className="flex flex-col rounded-2xl border bg-card" style={{ borderColor: BORDER }}>
       <div
         className="flex items-center justify-between px-4 py-3.5"
         style={{ borderBottom: `1px solid ${BORDER}` }}
@@ -510,7 +510,7 @@ export default function WorkerScheduleCalendar() {
       </header>
 
       <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-cc-surface px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3"
         style={{ borderColor: BORDER }}
       >
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
@@ -622,7 +622,7 @@ export default function WorkerScheduleCalendar() {
             return (
               <div
                 key={day.toISOString()}
-                className="rounded-2xl border bg-cc-surface p-3"
+                className="rounded-2xl border bg-card p-3"
                 style={{ borderColor: BORDER }}
               >
                 <p className="mb-2 text-xs font-black uppercase" style={{ color: isToday(day) ? PLUM : MUTED }}>
@@ -669,14 +669,14 @@ export default function WorkerScheduleCalendar() {
       )}
 
       {isLoading && viewMode === "month" && (
-        <div className="rounded-2xl border bg-cc-surface p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-card p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
           <CalendarDays className="mx-auto mb-2 opacity-40" />
           {translate("calendar.loading")}
         </div>
       )}
 
       <div
-        className="flex flex-wrap gap-4 rounded-xl border bg-cc-surface px-4 py-3 text-[11px] font-bold"
+        className="flex flex-wrap gap-4 rounded-xl border bg-card px-4 py-3 text-[11px] font-bold"
         style={{ borderColor: BORDER }}
       >
         <LegendItem label={translate("calendar.legend.confirmed")} swatch={{ background: PLUM }} />

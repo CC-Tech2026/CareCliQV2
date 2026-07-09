@@ -133,7 +133,7 @@ export default function WorkerPrivacy() {
         </p>
       </div>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-cc-text">
           <Shield className="h-5 w-5 text-cc-plum" /> {translate("privacy.dataHeld")}
         </h2>
@@ -150,7 +150,7 @@ export default function WorkerPrivacy() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-2 text-lg font-bold text-cc-text">{translate("privacy.downloadData")}</h2>
         <p className="mb-4 text-sm text-cc-muted">
           {translate("privacy.downloadHint")}
@@ -167,7 +167,7 @@ export default function WorkerPrivacy() {
         </Button>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-2 text-lg font-bold text-cc-text">{translate("privacy.policy")}</h2>
         <p className="text-sm leading-relaxed text-cc-text">
           {overview?.privacy_policy.summary_text}
@@ -202,7 +202,7 @@ export default function WorkerPrivacy() {
         )}
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-cc-text">{translate("privacy.analyticsOptOut")}</h2>

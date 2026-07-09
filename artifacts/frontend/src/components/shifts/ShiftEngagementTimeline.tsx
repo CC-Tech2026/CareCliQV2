@@ -69,7 +69,7 @@ export function ShiftEngagementTimeline({ sessionId, title = "Shift activity", c
   }
 
   return (
-    <section className={compact ? "" : "rounded-2xl border bg-cc-surface p-4"} style={compact ? undefined : { borderColor: BORDER }}>
+    <section className={compact ? "" : "rounded-2xl border bg-card p-4"} style={compact ? undefined : { borderColor: BORDER }}>
       {!compact && (
         <div className="mb-3 flex items-center gap-2">
           <Activity size={16} style={{ color: PLUM }} />

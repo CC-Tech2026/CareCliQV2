@@ -245,13 +245,13 @@ export default function IncidentDetail({ id }: { id: string }) {
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{incident.title}</h1>
+              <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{incident.title}</h1>
               {incident.participant_name && (
                 <p className="text-[13px] mt-1 flex items-center gap-1.5" style={{ color: "var(--cc-text)" }}>
                   <User size={13} />
                   {incident.participant_name}
                   {incident.participant_ndis && (
-                    <span style={{ color: "#7A6A8A" }}>· NDIS {incident.participant_ndis}</span>
+                    <span style={{ color: "#7A6A8A" }}>ï¿½ NDIS {incident.participant_ndis}</span>
                   )}
                 </p>
               )}
@@ -397,7 +397,7 @@ export default function IncidentDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Similar past incidents — CARECLIQV2-32 */}
+      {/* Similar past incidents ï¿½ CARECLIQV2-32 */}
       {(patternsLoading || showPatternsPanel) && (
         <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>

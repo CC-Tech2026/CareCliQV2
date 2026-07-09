@@ -225,7 +225,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
                 {session.participant_name || translate("common.participant")}
               </span>
               <span className="text-[11px] font-medium" style={{ color: T3 }}>
-                {safeDate(session.session_date)} · {(session.session_type || "session").replace(/_/g, " ")}
+                {safeDate(session.session_date)} ï¿½ {(session.session_type || "session").replace(/_/g, " ")}
               </span>
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -414,10 +414,10 @@ export default function SessionReview() {
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="hidden" style={{ color: CORAL }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             Quality & Safety
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate("sessions.review.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>

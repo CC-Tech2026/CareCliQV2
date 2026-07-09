@@ -293,7 +293,7 @@ export default function Billing() {
   if (!canInvoice) {
     return (
       <div className="space-y-2 py-10">
-        <h1 className="text-xl font-black text-cc-plum">{translate("billing.title")}</h1>
+        <h1 className="text-xl font-black text-cc-text">{translate("billing.title")}</h1>
         <p className="text-sm font-medium text-cc-muted">{translate("billing.restricted")}</p>
       </div>
     );
@@ -319,7 +319,7 @@ export default function Billing() {
           <p className="hidden text-cc-muted">
             {translate("billing.role.coordinator")}
           </p>
-          <h1 className="text-xl font-black tracking-tight text-cc-plum">
+          <h1 className="text-xl font-black tracking-tight text-cc-text">
             {translate("billing.title")}
           </h1>
         </div>

@@ -10,7 +10,7 @@ import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-// -- Design tokens — aligned with Dashboard ------------------------------------
+// -- Design tokens ï¿½ aligned with Dashboard ------------------------------------
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const TEXT   = "var(--cc-text)";
@@ -108,12 +108,15 @@ export default function Incidents() {
       {/* -- Page header ------------------------------------------------------- */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="hidden" style={{ color: CORAL }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             NDIS Practice Standard 2.3
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("incidents.title")}
           </h1>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+            Report and track incidents, restrictive practices and safety concerns
+          </p>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
@@ -258,10 +261,10 @@ export default function Incidents() {
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
                       {incident.participant_name || translate("incidents.noParticipant")}
-                      {" · "}
+                      {" ï¿½ "}
                       {incidentTypeLabel(incident.incident_type, translate)}
                       {incident.incident_date && (
-                        <> · {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
+                        <> ï¿½ {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
                       )}
                     </p>
                   </div>

@@ -107,7 +107,7 @@ export function ShiftSignatureForm({
         <div
           className={cn(
             "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl px-6 text-center backdrop-blur-sm",
-            isMobile ? "" : "bg-cc-surface/95",
+            isMobile ? "" : "bg-card/95",
           )}
           style={isMobile ? { background: "rgba(15, 18, 28, 0.88)" } : undefined}
           role="status"
@@ -141,7 +141,7 @@ export function ShiftSignatureForm({
             key={item.key}
             className={cn(
               "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-              !isMobile && "border-cc-border bg-cc-surface",
+              !isMobile && "border-cc-border bg-card",
             )}
             style={isMobile ? { borderColor: cardBorder, background: cardBg } : undefined}
           >

@@ -46,7 +46,7 @@ export default function WorkerPerformanceDashboardPage() {
       </header>
 
       <section
-        className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
+        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
         style={{ borderColor: BORDER }}
       >
         <div className="grid sm:grid-cols-[1fr_auto]">
@@ -80,7 +80,7 @@ export default function WorkerPerformanceDashboardPage() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#059669" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.strengths")}</h2>
@@ -104,7 +104,7 @@ export default function WorkerPerformanceDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#D97706" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.focusAreas")}</h2>
@@ -129,7 +129,7 @@ export default function WorkerPerformanceDashboardPage() {
         </section>
       </div>
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Award size={18} style={{ color: PLUM }} />
           <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.badges")}</h2>

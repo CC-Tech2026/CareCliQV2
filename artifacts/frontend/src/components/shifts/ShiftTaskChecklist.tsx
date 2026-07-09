@@ -96,7 +96,7 @@ function TaskStatusCheckbox({
           e.stopPropagation();
           onToggle();
         }}
-        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-cc-border bg-cc-surface"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-cc-border bg-card"
         aria-label={translateParams("tasks.markComplete", { label: task.label })}
       />
     );
@@ -349,7 +349,7 @@ export function ShiftTaskChecklist({
         {goalGroups.map((group) => (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface"
+            className="overflow-hidden rounded-xl border border-cc-border bg-card"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
             <div className="flex w-full items-center gap-2 bg-cc-soft px-3 py-2.5 text-left">
@@ -419,7 +419,7 @@ export function ShiftTaskChecklist({
         return (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface"
+            className="overflow-hidden rounded-xl border border-cc-border bg-card"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
             <button
@@ -480,7 +480,7 @@ export function ShiftTaskChecklist({
 function PreviewTaskRow({ task, translate }: { task: ShiftTask; translate: (key: string) => string }) {
   const required = isMandatory(task);
   return (
-    <div className="rounded-xl border border-cc-border bg-cc-surface px-3 py-2.5">
+    <div className="rounded-xl border border-cc-border bg-card px-3 py-2.5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-[#D8D0EE] bg-white" />
         <div className="min-w-0 flex-1">

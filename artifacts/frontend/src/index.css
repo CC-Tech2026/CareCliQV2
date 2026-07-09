@@ -222,6 +222,8 @@
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
   --cc-active-bg:  #FCFBF0;
+  /* ── Sidebar ── */
+  --cc-sidebar-bg: #1a1a18;   /* Deep dark navy — matches reference image */
   /* ── Alert pill ── */
   --cc-alert-bg:   #F5EFFE;
   /* ── Status badges ── */

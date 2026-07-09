@@ -181,7 +181,7 @@ export default function WorkerHelp() {
                 className="rounded-xl pl-9"
               />
             </div>
-            <div className="max-h-[420px] space-y-1 overflow-y-auto rounded-2xl border border-cc-border bg-cc-surface p-2">
+            <div className="max-h-[420px] space-y-1 overflow-y-auto rounded-2xl border border-cc-border bg-card p-2">
               {filteredFaq.map((article) => (
                 <button
                   key={article.slug}
@@ -196,7 +196,7 @@ export default function WorkerHelp() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-cc-border bg-cc-surface p-6">
+          <div className="rounded-2xl border border-cc-border bg-card p-6">
             {selectedArticle ? (
               <>
                 <h2 className="text-xl font-black" style={{ color: TEXT }}>
@@ -232,7 +232,7 @@ export default function WorkerHelp() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-cc-border bg-cc-surface p-6">
+          <div className="rounded-2xl border border-cc-border bg-card p-6">
             <h2 className="text-lg font-black" style={{ color: TEXT }}>
               {translate("help.chat.fallbackTitle")}
             </h2>
@@ -262,12 +262,12 @@ export default function WorkerHelp() {
       {!loading && tab === "issues" && (
         <div className="space-y-3">
           {issues.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-cc-border bg-cc-surface p-8 text-center text-sm" style={{ color: MUTED }}>
+            <div className="rounded-2xl border border-dashed border-cc-border bg-card p-8 text-center text-sm" style={{ color: MUTED }}>
               {translate("help.issues.empty")}
             </div>
           ) : (
             issues.map((issue) => (
-              <div key={issue.id} className="rounded-2xl border border-cc-border bg-cc-surface p-5">
+              <div key={issue.id} className="rounded-2xl border border-cc-border bg-card p-5">
                 <h3 className="font-black" style={{ color: TEXT }}>
                   {issue.title}
                 </h3>

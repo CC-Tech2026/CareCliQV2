@@ -265,7 +265,7 @@ export default function WorkerTravelExpenses() {
         </section>
       )}
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>
@@ -329,7 +329,7 @@ export default function WorkerTravelExpenses() {
         )}
       </section>
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-black" style={{ color: TEXT }}>
             {translate("travel.monthly")}

@@ -688,7 +688,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-xl font-black tracking-tight">
+            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {session.participants?.full_name || translate("sessions.detail.sessionRecord")}
             </h1>
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>

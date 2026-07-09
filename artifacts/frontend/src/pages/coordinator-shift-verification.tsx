@@ -205,7 +205,10 @@ export default function CoordinatorShiftVerification() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+          Schedule
+        </p>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           Shift Verification
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>

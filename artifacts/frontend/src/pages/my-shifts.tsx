@@ -45,7 +45,7 @@ function formatHours(mins: number): string {
 
 function ShiftSkeleton() {
   return (
-    <div className="flex animate-pulse overflow-hidden rounded-2xl border border-cc-border bg-cc-surface p-5 shadow-sm">
+    <div className="flex animate-pulse overflow-hidden rounded-2xl border-0 bg-card p-5 shadow-sm">
       <div className="size-[3.25rem] shrink-0 rounded-full bg-cc-soft" />
       <div className="ml-3.5 flex-1 space-y-2.5 pt-1">
         <div className="h-4 w-2/3 rounded-lg bg-cc-soft" />
@@ -156,15 +156,15 @@ export default function MyShifts() {
 
       {/* Key stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-cc-border bg-cc-surface px-4 py-4 text-center shadow-sm">
+        <div className="rounded-2xl border-0 bg-card px-4 py-4 text-center" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)" }}>
           <p className="text-2xl font-black text-cc-plum">{counts?.today ?? 0}</p>
           <p className="mt-1 text-xs font-semibold leading-tight text-cc-muted">{translate("shifts.shiftsToday")}</p>
         </div>
-        <div className="rounded-2xl border border-cc-border bg-cc-surface px-4 py-4 text-center shadow-sm">
+        <div className="rounded-2xl border-0 bg-card px-4 py-4 text-center" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)" }}>
           <p className="text-2xl font-black text-cc-plum">{counts?.completed ?? 0}</p>
           <p className="mt-1 text-xs font-semibold leading-tight text-cc-muted">{translate("shifts.completedToday")}</p>
         </div>
-        <div className="rounded-2xl border border-cc-border bg-cc-surface px-4 py-4 text-center shadow-sm">
+        <div className="rounded-2xl border-0 bg-card px-4 py-4 text-center" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)" }}>
           <p className="text-2xl font-black text-cc-plum">{hoursScheduled}</p>
           <p className="mt-1 text-xs font-semibold leading-tight text-cc-muted">{translate("shifts.hrsScheduled")}</p>
         </div>
@@ -181,7 +181,7 @@ export default function MyShifts() {
               type="button"
               onClick={() => setActiveFilter(id)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold transition ${
-                active ? "bg-cc-surface text-cc-text shadow-sm" : "text-cc-muted hover:text-cc-text"
+                active ? "bg-card text-cc-text shadow-sm" : "text-cc-muted hover:text-cc-text"
               }`}
             >
               {translate(labelKey)}
@@ -211,7 +211,7 @@ export default function MyShifts() {
       )}
 
       {!listQuery.isLoading && sortedShifts.length === 0 && (
-        <section className="rounded-2xl border border-cc-border bg-cc-surface px-6 py-14 text-center shadow-sm">
+        <section className="rounded-2xl border-0 bg-card px-6 py-14 text-center shadow-sm">
           <div className="cc-plum-panel mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
             <CalendarDays size={28} className="text-cc-plum" />
           </div>

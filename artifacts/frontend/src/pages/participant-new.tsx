@@ -111,7 +111,7 @@ export default function ParticipantNew() {
           <UserPlus size={18} style={{ color: PLUM }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("patients.addTitle")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("patients.addTitle")}</h1>
           <p className="text-[13px]" style={{ color: T2 }}>{translate("patients.addSubtitle")}</p>
         </div>
       </div>

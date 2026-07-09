@@ -86,7 +86,7 @@ function ShiftCard({ shift }: { shift: LiveLongShift }) {
   );
 }
 
-export default function CoordinatorMonitorPage() {
+export default function CoordinatorMonitorPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [live, setLive] = useState<Awaited<ReturnType<typeof getMonitorLive>> | null>(null);
 
   const heatmap = useOrgQuery(["coordinator", "engagement-summary"], {
@@ -117,17 +117,19 @@ export default function CoordinatorMonitorPage() {
 
   return (
     <div className="space-y-6 pb-10">
+      {!embedded && (
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-          Check 16
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+          Schedule
         </p>
-        <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: "var(--cc-text)" }}>
+        <h1 className="mt-1 flex items-center gap-2 text-xl font-black" style={{ color: "var(--cc-text)" }}>
           <Radio size={22} /> Long shift monitor
         </h1>
         <p className="mt-1 text-sm" style={{ color: MUTED }}>
-          Live engagement for shifts ≥ 4 hours. Refreshes every 30 seconds.
+          Live engagement for shifts ≥ 4 hours (NDIS Check 16). Refreshes every 30 seconds.
         </p>
       </div>
+      )}
 
       {summary && (
         <KpiGrid className="sm:grid-cols-4">

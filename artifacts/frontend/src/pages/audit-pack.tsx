@@ -136,8 +136,9 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
       <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
         {!embedded && (
           <div>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("auditPack.title")}</h1>
-            <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>{translate("auditPack.eyebrow")}</p>
+            <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("auditPack.title")}</h1>
+            <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
           </div>
         )}
         <Button

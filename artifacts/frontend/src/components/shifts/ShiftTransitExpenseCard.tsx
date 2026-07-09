@@ -87,7 +87,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
 
   return (
     <section
-      className="rounded-2xl border bg-cc-surface p-4 shadow-sm"
+      className="rounded-2xl border bg-card p-4 shadow-sm"
       style={{ borderColor: BORDER }}
       data-tutorial="shift-travel-transit"
     >
@@ -119,7 +119,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
                 id={`transit-type-${shiftId}`}
                 value={transitType}
                 onChange={(e) => setTransitType(e.target.value)}
-                className="mt-1 flex min-h-[44px] w-full rounded-xl border bg-cc-surface px-3 text-sm font-semibold text-cc-text"
+                className="mt-1 flex min-h-[44px] w-full rounded-xl border bg-card px-3 text-sm font-semibold text-cc-text"
                 style={{ borderColor: BORDER }}
               >
                 {TRANSIT_TYPE_KEYS.map((t) => (

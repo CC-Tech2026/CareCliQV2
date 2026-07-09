@@ -42,6 +42,7 @@ import {
   X,
   CalendarClock,
   MessageSquare,
+  Mic,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -1132,7 +1133,7 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "plan_meetings" | "shift_context" | "restricted";
+type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile";
 
 function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
@@ -1323,6 +1324,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     },
     onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
+  const [careProfileSection, setCareProfileSection] = useState<"context" | "clinical">("context");
+  const [planGoalsSection, setPlanGoalsSection] = useState<"plan" | "goals">("plan");
   const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
 
   // Form state for creating / editing goals & tasks
@@ -1467,16 +1470,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     .toUpperCase();
 
   const TABS = [
-    { id: "overview"    as const, label: translate("patients.tab.overview"),    shortLabel: "Overview",  icon: UserCircle   },
-    { id: "plan"        as const, label: translate("patients.tab.plan"),        shortLabel: "Plan",      icon: DollarSign   },
-    ...(isCoordinator
-      ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", shortLabel: "Goals", icon: ClipboardList }]
-      : [{ id: "goals" as const, label: translate("patients.tab.goals"), shortLabel: "Goals", icon: Target }]),
-    { id: "sessions"    as const, label: "Shift History", shortLabel: "Shifts",    icon: CalendarDays },
-    { id: "compliance"  as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
-    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Plan Meetings", shortLabel: "Meetings", icon: MessageSquare }] : []),
-    ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), shortLabel: "Context", icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", shortLabel: "Clinical", icon: Lock }] : []),
+    { id: "overview"   as const, label: translate("patients.tab.overview"),   shortLabel: "Overview",  icon: UserCircle   },
+    { id: "plan_goals" as const, label: "Plan & Goals", shortLabel: "Plan", icon: DollarSign },
+    { id: "sessions"   as const, label: "Shift History",                       shortLabel: "Shifts",    icon: CalendarDays },
+    { id: "compliance" as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "care_profile"  as const, label: "Care Profile", shortLabel: "Care",     icon: ClipboardList  }] : []),
+    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Easy Capture",  shortLabel: "Meetings", icon: Mic, isNew: true }] : []),
   ];
 
   return (
@@ -1595,6 +1594,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <Icon size={14} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
+                {"isNew" in tab && tab.isNew && (
+                  <span
+                    className="rounded-full px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white"
+                    style={{ background: "var(--cc-coral)" }}
+                  >
+                    New
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1617,21 +1624,55 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           />
         )}
 
-        {activeTab === "plan" && (
-          <ParticipantPlanTab
-            budget={budget}
-            isLoading={budgetQuery.isLoading}
-            totalBudget={totalBudget}
-            usedBudget={usedBudget}
-            remainingBudget={remainingBudget}
-            isOverspent={isOverspent}
-            hasCategoryBudgets={hasCategoryBudgets}
-            categoryBudgets={categoryBudgets}
-          />
+        {activeTab === "plan_goals" && (
+          <>
+            {/* Segmented section switcher */}
+            <div className="flex rounded-xl overflow-hidden border mb-5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
+              <button type="button" onClick={() => setPlanGoalsSection("plan")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: planGoalsSection === "plan" ? "var(--cc-bg)" : "transparent",
+                  color: planGoalsSection === "plan" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: planGoalsSection === "plan" ? "var(--cc-card-shadow)" : "none",
+                  margin: planGoalsSection === "plan" ? 3 : 0,
+                  borderRadius: planGoalsSection === "plan" ? "0.6rem" : 0,
+                }}
+              >
+                <DollarSign size={14} strokeWidth={1.8} />
+                Plan &amp; Budget
+              </button>
+              <button type="button" onClick={() => setPlanGoalsSection("goals")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: planGoalsSection === "goals" ? "var(--cc-bg)" : "transparent",
+                  color: planGoalsSection === "goals" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: planGoalsSection === "goals" ? "var(--cc-card-shadow)" : "none",
+                  margin: planGoalsSection === "goals" ? 3 : 0,
+                  borderRadius: planGoalsSection === "goals" ? "0.6rem" : 0,
+                }}
+              >
+                <Target size={14} strokeWidth={1.8} />
+                Goals &amp; Tasks
+              </button>
+            </div>
+
+            {planGoalsSection === "plan" && (
+              <ParticipantPlanTab
+                budget={budget}
+                isLoading={budgetQuery.isLoading}
+                totalBudget={totalBudget}
+                usedBudget={usedBudget}
+                remainingBudget={remainingBudget}
+                isOverspent={isOverspent}
+                hasCategoryBudgets={hasCategoryBudgets}
+                categoryBudgets={categoryBudgets}
+              />
+            )}
+          </>
         )}
 
-        {/* GOALS & TASKS TAB (Coordinator) */}
-        {activeTab === "goals_tasks" && isCoordinator && (() => {
+        {/* GOALS & TASKS (inside Plan & Goals tab) */}
+        {activeTab === "plan_goals" && planGoalsSection === "goals" && isCoordinator && (() => {
           const AREA_COLORS: Record<string, { bg: string; color: string; label: string }> = {
             daily_living: { bg: "#EFF6FF", color: "#1D4ED8", label: "Daily Living" },
             community:    { bg: "#F0FDF4", color: "#15803D", label: "Community"    },
@@ -1641,52 +1682,25 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             other:        { bg: "#F3F4F6", color: "#6A6A77", label: "Other"        },
           };
 
-          type SupportCatMeta = { label: string; group: "core" | "cb" | "capital"; groupLabel: string; bg: string; color: string };
+          type SupportCatMeta = { label: string; bg: string; color: string };
           const SUPPORT_CATS: Record<string, SupportCatMeta> = {
-            core_daily_activities:   { label: "Daily Activities",          group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_transport:          { label: "Transport",                 group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_consumables:        { label: "Consumables",               group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_social_community:   { label: "Social & Community",        group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            cb_support_coordination: { label: "Support Coordination",      group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_daily_living:         { label: "Daily Living Skills",       group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_health_wellbeing:     { label: "Health & Wellbeing",        group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_social_skills:        { label: "Social & Community Skills", group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_employment:           { label: "Employment",                group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_learning:             { label: "Improved Learning",         group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            capital_assistive_tech:  { label: "Assistive Technology",      group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
-            capital_home_mods:       { label: "Home Modifications",        group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
-          };
-
-          const SUPPORT_GROUP_HEADERS: Record<"core" | "cb" | "capital", { label: string; color: string }> = {
-            core:    { label: "Core Supports",     color: "#1D4ED8" },
-            cb:      { label: "Capacity Building", color: "#15803D" },
-            capital: { label: "Capital Supports",  color: "#7E22CE" },
+            core_daily_activities: { label: "Daily Activities",   bg: "#EFF6FF", color: "#1D4ED8" },
+            core_transport:        { label: "Transport",          bg: "#EFF6FF", color: "#1D4ED8" },
+            core_consumables:      { label: "Consumables",        bg: "#EFF6FF", color: "#1D4ED8" },
+            core_social_community: { label: "Social & Community", bg: "#EFF6FF", color: "#1D4ED8" },
           };
 
           function SupportCategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-            const groups: ("core" | "cb" | "capital")[] = ["core", "cb", "capital"];
             return (
-              <div className="space-y-2">
-                {groups.map((group) => {
-                  const keys = Object.entries(SUPPORT_CATS).filter(([, m]) => m.group === group).map(([k]) => k);
-                  const hdr = SUPPORT_GROUP_HEADERS[group];
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(SUPPORT_CATS).map(([k, m]) => {
+                  const active = value === k;
                   return (
-                    <div key={group}>
-                      <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: hdr.color }}>{hdr.label}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {keys.map((k) => {
-                          const m = SUPPORT_CATS[k];
-                          const active = value === k;
-                          return (
-                            <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
-                              className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                              style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
-                              {m.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                      style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
+                      {m.label}
+                    </button>
                   );
                 })}
               </div>
@@ -1972,44 +1986,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           const taskFormContent = (
             <div className="space-y-5">
-              {/* PURPOSE SELECTION - FIRST FIELD */}
-              <div className="space-y-2">
-                <label className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">What is this task for?</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setTaskPurpose("goal")}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
-                      taskPurpose === "goal" 
-                        ? "border-purple-400 bg-purple-50 text-purple-700" 
-                        : "border-gray-200 bg-white text-[#6A6A77] hover:border-purple-300"
-                    }`}>
-                    <Target size={14} /> Supports a goal
-                  </button>
-                  <button type="button" onClick={() => { setTaskPurpose("core"); setLinkedGoalId(null); }}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
-                      taskPurpose === "core" 
-                        ? "border-blue-400 bg-blue-50 text-blue-700" 
-                        : "border-gray-200 bg-white text-[#6A6A77] hover:border-blue-300"
-                    }`}>
-                    <Heart size={14} /> Core support
-                  </button>
-                </div>
-                {taskPurpose === "core" && (
-                  <p className="text-[11px] text-[#6A6A77]">Routine support like personal care, medication, or domestic assistance, not tied to a specific goal milestone. Most tasks are this.</p>
-                )}
-              </div>
-
-              {/* GOAL SELECTOR - CONDITIONAL */}
-              {taskPurpose === "goal" && (
-                <div className="space-y-1.5">
-                  <label htmlFor="task-linked-goal" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Linked goal *</label>
-                  <select id="task-linked-goal" title="Link task to goal" value={linkedGoalId ?? ""}
-                    onChange={(e) => setLinkedGoalId(e.target.value || null)}
-                    className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
-                    <option value="">Select a goal…</option>
-                    {activeGoals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
-              )}
 
               {/* AI TASK ASSISTANT */}
               <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
@@ -2022,7 +1998,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <span className="text-[12px] font-bold text-violet-900">AI Task Assistant</span>
                       {taskAiSuggestions && !taskAiLoading && (
                         <span className="ml-1.5 text-[10px] text-violet-500 font-medium">
-                          {linkedGoalId ? 'grounded in linked goal' : `based on ${participant.full_name.split(' ')[0]}'s history`}
+                          based on {participant.full_name.split(' ')[0]}'s history
                         </span>
                       )}
                     </div>
@@ -2099,11 +2075,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   </div>
                 )}
 
-                {!taskAiLoading && !taskAiSuggestions && (
+                  {!taskAiLoading && !taskAiSuggestions && (
                   <p className="text-[11px] text-violet-500/80 text-center py-0.5">
-                    {taskPurpose === 'goal' && linkedGoalId
-                      ? 'Get task ideas grounded in the linked goal'
-                      : 'Get AI-powered task name and instruction suggestions'}
+                    Get AI-powered task name and instruction suggestions
                   </p>
                 )}
               </div>
@@ -2305,7 +2279,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   onClick={() => createTaskMut.mutate({
                     name: taskTitle.trim(),
                     description: taskInstructions || null,
-                    goal_id: taskPurpose === "goal" ? linkedGoalId : null,
+                    goal_id: null,
                     is_mandatory: isMandatory,
                     shift_type: taskShiftType,
                     category: taskCategory,
@@ -2636,18 +2610,55 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           <ParticipantPlanMeetingsTab participantId={id} participantName={participant.full_name} />
         )}
 
-        {activeTab === "restricted" && isCoordinator && (
-          <ParticipantRestrictedTab
-            isLoading={restrictedQuery.isLoading}
-            draft={restrictedDraft}
-            onDraftChange={setRestrictedDraft}
-            onSave={() => saveRestricted.mutate()}
-            isSaving={saveRestricted.isPending}
-          />
-        )}
+        {activeTab === "care_profile" && isCoordinator && (
+          <div className="space-y-0">
+            {/* Segmented section switcher */}
+            <div className="flex rounded-xl overflow-hidden border mb-6" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
+              <button
+                type="button"
+                onClick={() => setCareProfileSection("context")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: careProfileSection === "context" ? "var(--cc-bg)" : "transparent",
+                  color: careProfileSection === "context" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: careProfileSection === "context" ? "var(--cc-card-shadow)" : "none",
+                  margin: careProfileSection === "context" ? 3 : 0,
+                  borderRadius: careProfileSection === "context" ? "0.6rem" : 0,
+                }}
+              >
+                <Users size={14} strokeWidth={1.8} />
+                Worker Shift Context
+              </button>
+              <button
+                type="button"
+                onClick={() => setCareProfileSection("clinical")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: careProfileSection === "clinical" ? "var(--cc-bg)" : "transparent",
+                  color: careProfileSection === "clinical" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: careProfileSection === "clinical" ? "var(--cc-card-shadow)" : "none",
+                  margin: careProfileSection === "clinical" ? 3 : 0,
+                  borderRadius: careProfileSection === "clinical" ? "0.6rem" : 0,
+                }}
+              >
+                <Lock size={14} strokeWidth={1.8} />
+                Clinical Records
+              </button>
+            </div>
 
-        {activeTab === "shift_context" && isCoordinator && (
-          <ParticipantShiftContextTab participantId={id} />
+            {careProfileSection === "context" && (
+              <ParticipantShiftContextTab participantId={id} />
+            )}
+            {careProfileSection === "clinical" && (
+              <ParticipantRestrictedTab
+                isLoading={restrictedQuery.isLoading}
+                draft={restrictedDraft}
+                onDraftChange={setRestrictedDraft}
+                onSave={() => saveRestricted.mutate()}
+                isSaving={saveRestricted.isPending}
+              />
+            )}
+          </div>
         )}
 
       </div>

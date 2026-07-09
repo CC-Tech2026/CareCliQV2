@@ -178,7 +178,7 @@ export default function Approvals() {
         {/* Left - Mobile/Approvals Panel */}
         <div className="w-full lg:w-[420px] lg:border-r" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <div className="sticky top-0 z-10 border-b px-6 py-4" style={{ borderColor: BORDER }}>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {translate("approvals.title")}
             </h1>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>

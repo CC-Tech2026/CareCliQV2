@@ -762,7 +762,7 @@ export function ShiftTaskEvidencePanel({
               {records.map((record) => (
                 <div
                   key={record.evidence_id}
-                  className="rounded-lg border border-cc-border bg-cc-surface/90 px-3 py-2 text-xs font-semibold"
+                  className="rounded-lg border border-cc-border bg-card/90 px-3 py-2 text-xs font-semibold"
                   style={{ color: TEXT }}
                 >
                   {record.type === "photo" && (
@@ -863,7 +863,7 @@ export function ShiftTaskEvidencePanel({
               value={inputLanguage}
               onChange={(e) => setInputLanguage(e.target.value)}
               disabled={disabled}
-              className="h-8 min-w-[7rem] appearance-none rounded-full border border-cc-border bg-cc-surface py-0 pl-3 pr-8 text-[12px] font-semibold text-cc-text"
+              className="h-8 min-w-[7rem] appearance-none rounded-full border border-cc-border bg-card py-0 pl-3 pr-8 text-[12px] font-semibold text-cc-text"
               aria-label={translate("shift.session.inputLanguage")}
             >
               {INPUT_LANGUAGE_OPTIONS.map((item) => (
@@ -882,7 +882,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || photos.length >= MAX_PHOTOS}
             onClick={() => void startCamera()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-card text-[#8B75D9]"
             aria-label={translate("shift.evidence.addPhoto")}
           >
             <Camera size={14} />
@@ -891,7 +891,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || uploadingFile || photos.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-card text-[#8B75D9]"
             aria-label={translate("shift.evidence.attachImage")}
           >
             <Paperclip size={14} />
@@ -910,7 +910,7 @@ export function ShiftTaskEvidencePanel({
             disabled={disabled}
             maxLength={NOTE_MAX}
             placeholder={translate("shift.evidence.progressPlaceholder")}
-            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
+            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-card px-4 text-sm text-cc-text"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}

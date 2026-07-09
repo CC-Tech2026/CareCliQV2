@@ -30,10 +30,10 @@ export default function Tasks() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <p className="hidden" style={{ color: CORAL }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("common.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("tasks.page.title")}
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>

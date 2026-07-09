@@ -1042,8 +1042,8 @@ export function PlanMeetingCapture({ participantId, participantName }: PlanMeeti
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <MessageSquare size={14} style={{ color: PLUM }} />
-            <p className="font-black text-[13px]" style={{ color: TEXT }}>Plan Meetings</p>
+            <Mic size={14} style={{ color: PLUM }} />
+            <p className="font-black text-[13px]" style={{ color: TEXT }}>Record Your Meetings with Easy Capture</p>
           </div>
           {meetings.length > 0 && (
             <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>

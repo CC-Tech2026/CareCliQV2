@@ -338,7 +338,7 @@ function MessageBubble({
         <div className="flex items-center gap-1.5 bg-white border border-[#E8E8EA] rounded-full px-3 py-1 shadow-sm">
           <AIcon className="h-2.5 w-2.5 text-[#E8457A] shrink-0" />
           <span className="text-[10px] text-[#1A1A2E] font-semibold">{msg.activityType || msg.content}</span>
-          <span className="text-[9px] text-[#6A6A77]">• {format(msg.timestamp, "HH:mm")}</span>
+          <span className="text-[9px] text-[#6A6A77]">ï¿½ {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -350,13 +350,13 @@ function MessageBubble({
         <div className="flex items-center gap-1.5 bg-[#FDF0F4] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
           <Target className="h-2.5 w-2.5 text-[#7C3AED] shrink-0" />
           <span className="text-[10px] text-[#1A1A2E] font-semibold">{msg.content}</span>
-          <span className="text-[9px] text-[#6A6A77]">• {format(msg.timestamp, "HH:mm")}</span>
+          <span className="text-[9px] text-[#6A6A77]">ï¿½ {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
   }
 
-  // Worker messages: text, voice, image, file — right aligned
+  // Worker messages: text, voice, image, file ï¿½ right aligned
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
@@ -367,7 +367,7 @@ function MessageBubble({
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
                 <div className="flex items-center gap-1 text-white/60 text-[9px]">
                   <Camera className="h-2.5 w-2.5" />
-                  <span>Photo evidence • {format(msg.timestamp, "HH:mm")}</span>
+                  <span>Photo evidence ï¿½ {format(msg.timestamp, "HH:mm")}</span>
                 </div>
               </div>
             </div>
@@ -399,7 +399,7 @@ function MessageBubble({
                   {msg.isTranslating && (
                     <div className="flex items-center gap-1 text-[#6A6A77]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                      <span className="text-[9px]">Translating…</span>
+                      <span className="text-[9px]">Translatingï¿½</span>
                     </div>
                   )}
                 </div>
@@ -1539,7 +1539,7 @@ export default function SessionLive() {
           </button>
 
           <div className="min-w-0 flex-1 px-1">
-            <h1 className="text-[#1A1A2E] font-black text-base tracking-tight leading-tight truncate">
+            <h1 className="text-cc-text font-black text-base tracking-tight leading-tight truncate">
               {participantName}
             </h1>
             <p className="text-[#6A6A77] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
@@ -1681,7 +1681,7 @@ export default function SessionLive() {
                   GOAL_STATUS_CONFIG[goal.status].cls,
                 )}
               >
-                {goal.name.length > 22 ? goal.name.slice(0, 22) + "…" : goal.name}
+                {goal.name.length > 22 ? goal.name.slice(0, 22) + "ï¿½" : goal.name}
               </button>
             ))}
             <button
@@ -2194,7 +2194,7 @@ export default function SessionLive() {
                 <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5" style={{ color: "#7A6A8A" }}>
                   <FileText className="h-3.5 w-3.5" /> Clinical Record
                   <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
-                    : auto-generated · editable
+                    : auto-generated ï¿½ editable
                   </span>
                 </label>
                 <SmartTextarea
@@ -2204,7 +2204,7 @@ export default function SessionLive() {
                     setEditableNotes(v);
                   }}
                   rows={6}
-                  placeholder="Combined clinical record…"
+                  placeholder="Combined clinical recordï¿½"
                   className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
                   style={{ background: "var(--cc-bg)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                 />
@@ -2291,7 +2291,7 @@ export default function SessionLive() {
                       style={{ color: previewDeltaSummaries.length > 0 ? "#047857" : "#B45309" }}
                     >
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Generating progress summary…
+                      Generating progress summaryï¿½
                     </div>
                   ) : previewDeltaSummaries.length > 0 ? (
                     <ul className="space-y-2">
@@ -2338,7 +2338,7 @@ export default function SessionLive() {
                     <Shield className="h-4 w-4" />
                   )}
                   {isSaving
-                    ? "Saving…"
+                    ? "Savingï¿½"
                     : liveCompliance.blocking
                       ? "Fix Issues to Approve"
                       : "Approve & Save"}
@@ -2410,7 +2410,7 @@ export default function SessionLive() {
                 ) : (
                   <Shield className="h-4 w-4" />
                 )}
-                {isSaving ? "Saving…" : "Confirm & Save"}
+                {isSaving ? "Savingï¿½" : "Confirm & Save"}
               </Button>
             </div>
           </div>

@@ -69,7 +69,7 @@ export default function MyShiftMessageOffice() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-cc-bg">
       <header
-        className="shrink-0 border-b border-cc-border bg-cc-surface"
+        className="shrink-0 border-b border-cc-border bg-card"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-3 px-4 pb-4">

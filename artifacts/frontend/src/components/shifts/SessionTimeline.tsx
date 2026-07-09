@@ -168,7 +168,7 @@ export function SessionTimeline({
         "overflow-hidden",
         embedded
           ? "mt-4 border-t border-cc-border pt-1"
-          : "rounded-2xl border bg-cc-surface shadow-sm",
+          : "rounded-2xl border bg-card shadow-sm",
       )}
       style={embedded ? undefined : { borderColor: BORDER }}
     >

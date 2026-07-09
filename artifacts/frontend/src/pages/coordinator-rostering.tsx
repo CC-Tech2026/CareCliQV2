@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
@@ -8,6 +9,7 @@ import {
   CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
   CheckCircle2, XCircle, MinusCircle, UserCheck, Activity,
+  Search, RefreshCw,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -30,7 +32,16 @@ import { DndScheduleView }        from "@/components/coordinator/DndScheduleView
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { appLocalDateKey } from "@/lib/datetime";
+import CoordinatorLivePage from "./coordinator-live";
+import CoordinatorMonitorPage from "./coordinator-monitor";
+
+type ScheduleTab = "roster" | "live";
+const SCHEDULE_TABS: { id: ScheduleTab; label: string }[] = [
+  { id: "roster", label: "Roster"         },
+  { id: "live",   label: "Live Monitor" },
+];
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -556,6 +567,11 @@ function DayPanel({
 
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
+  const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const liveOrgId = currentUser?.organizationId ?? "__no_org__";
+  const [liveSearch, setLiveSearch] = useState("");
+  const [pageTab,      setPageTab]      = useState<ScheduleTab>("roster");
   const [viewMode,     setViewMode]     = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -648,9 +664,11 @@ export default function CoordinatorRosteringPage() {
     <div className="space-y-5 pb-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Plan shifts, review worker availability and manage the roster</p>
         </div>
+        {pageTab === "roster" ? (
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setBulkOpen(true)}
@@ -668,8 +686,58 @@ export default function CoordinatorRosteringPage() {
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
           </Button>
         </div>
+        ) : pageTab === "live" ? (
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: MUTED }} />
+            <input
+              value={liveSearch}
+              onChange={(e) => setLiveSearch(e.target.value)}
+              placeholder="Search worker or participant…"
+              className="h-9 pl-8 pr-3 rounded-xl border text-[13px] outline-none w-56 focus:w-72 transition-all"
+              style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl gap-1.5 h-9"
+            style={{ borderColor: BORDER }}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["live-shifts", liveOrgId] })}
+          >
+            <RefreshCw size={13} /> Refresh
+          </Button>
+        </div>
+        ) : null}
       </div>
 
+      {/* Page-level tabs: Roster | Live | Monitor */}
+      <div role="tablist" className="flex gap-5 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
+        {SCHEDULE_TABS.map((tab) => {
+          const active = pageTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active ? "true" : "false"}
+              onClick={() => setPageTab(tab.id)}
+              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
+            >
+              {tab.label}
+              {active && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
+
+      {pageTab === "roster" && (
+      <>
       {/* Inline stat strip instead of 4 identical cards */}
       <KpiGrid className="sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays />} />
@@ -935,6 +1003,8 @@ export default function CoordinatorRosteringPage() {
         participants={participantList}
         workers={workers}
       />
+      </>
+      )}
     </div>
   );
 }

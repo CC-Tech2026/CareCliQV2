@@ -29,7 +29,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
 
       <dl className="grid gap-3 sm:grid-cols-2">
         {elapsed && (
-          <div className="rounded-xl bg-cc-surface p-3">
+          <div className="rounded-xl bg-card p-3">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
               {translate("shift.completion.timeOnSite")}
             </dt>
@@ -40,7 +40,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
         )}
         {summary && (
           <>
-            <div className="rounded-xl bg-cc-surface p-3">
+            <div className="rounded-xl bg-card p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 {translate("shift.completion.tasksCompleted")}
               </dt>
@@ -56,7 +56,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
                 )}
               </dd>
             </div>
-            <div className="rounded-xl bg-cc-surface p-3">
+            <div className="rounded-xl bg-card p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 {translate("shift.completion.progressNotes")}
               </dt>
@@ -70,7 +70,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
           </>
         )}
         {shift.risks_acknowledged_at && (
-          <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
+          <div className="rounded-xl bg-card p-3 sm:col-span-2">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
               {translate("shift.completion.safetyAck")}
             </dt>
@@ -81,7 +81,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
           </div>
         )}
         {(shift.shift_signature as ShiftSignature | undefined) && (
-          <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
+          <div className="rounded-xl bg-card p-3 sm:col-span-2">
             <dt className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
               <PenLine size={12} /> {translate("shift.completion.digitalSignature")}
             </dt>
@@ -90,7 +90,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
                 <img
                   src={(shift.shift_signature as ShiftSignature).signature_png_url}
                   alt={translate("shift.completion.signatureAlt")}
-                  className="mb-2 max-h-16 rounded border border-slate-200 bg-cc-surface p-1"
+                  className="mb-2 max-h-16 rounded border border-slate-200 bg-card p-1"
                 />
               )}
               <p className="text-sm font-bold" style={{ color: TEXT }}>

@@ -55,7 +55,7 @@ export function LongShiftCheckInForm({ open, onClose, onSubmit, busy, tasks = []
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto rounded-2xl p-0">
-        <div className="sticky top-0 z-10 border-b bg-cc-surface px-5 pb-3 pt-5" style={{ borderColor: BORDER }}>
+        <div className="sticky top-0 z-10 border-b bg-card px-5 pb-3 pt-5" style={{ borderColor: BORDER }}>
           <DialogHeader className="space-y-1 text-left">
             <div className="flex items-start justify-between gap-3">
               <div>

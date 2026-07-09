@@ -147,7 +147,7 @@ export function ShiftOfficeMessagePanel({
             {messagePhotoPreviews.length < 2 && (
               <button
                 type="button"
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-semibold text-cc-text transition-colors hover:border-cc-plum hover:text-cc-plum"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-cc-border bg-card px-3 text-sm font-semibold text-cc-text transition-colors hover:border-cc-plum hover:text-cc-plum"
                 onClick={() => messagePhotoInputRef.current?.click()}
               >
                 <Camera size={15} className="text-cc-plum" />
@@ -189,7 +189,7 @@ export function ShiftOfficeMessagePanel({
           </p>
           <ul className="max-h-40 space-y-2 overflow-y-auto">
             {messageHistory.map((msg) => (
-              <li key={msg.id} className="rounded-lg border border-cc-border/60 bg-cc-surface px-3 py-2.5">
+              <li key={msg.id} className="rounded-lg border border-cc-border/60 bg-card px-3 py-2.5">
                 <div className="flex items-center gap-2 text-[11px] font-semibold text-cc-muted">
                   <span
                     className={cn(

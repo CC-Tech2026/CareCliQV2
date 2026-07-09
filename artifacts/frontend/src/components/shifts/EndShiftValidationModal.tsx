@@ -34,7 +34,7 @@ type Props = {
 };
 
 const NA_FIELD_SELECT =
-  "flex h-8 min-w-0 flex-1 rounded-md border border-cc-border bg-cc-surface px-2 text-xs text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
+  "flex h-8 min-w-0 flex-1 rounded-md border border-cc-border bg-card px-2 text-xs text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
 const NA_REASON_KEYS: Record<NaReason, string> = {
   not_needed: "validation.naReason.notNeeded",
@@ -66,7 +66,7 @@ function StatRow({
         "flex items-center justify-between rounded-xl border px-3 py-2 text-sm",
         tone === "warn" && "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
         tone === "ok" && "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
-        !tone && "border-cc-border bg-cc-surface",
+        !tone && "border-cc-border bg-card",
       )}
     >
       <span className="font-semibold" style={{ color: TEXT }}>
@@ -413,7 +413,7 @@ export function EndShiftValidationModal({
           if (!tutorialDemo) onOpenChange(false);
         }}
       />
-      <div className="relative z-10 grid max-h-[90vh] w-full max-w-md gap-4 overflow-y-auto rounded-lg border border-cc-border bg-cc-surface p-6 text-cc-text shadow-lg">
+      <div className="relative z-10 grid max-h-[90vh] w-full max-w-md gap-4 overflow-y-auto rounded-lg border border-cc-border bg-card p-6 text-cc-text shadow-lg">
         {!tutorialDemo && (
           <button
             type="button"
