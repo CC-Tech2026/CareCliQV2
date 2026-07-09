@@ -1,0 +1,73 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- CareCliQ Bot — "Quill" v2: lively animated companion -->
+  <!-- Tokens: ivory #F7F4EE, purple #6E79C2, purpleDark #575F9E, purpleLight #A9B1E0, pink #E8457A, navy #2D2D3D -->
+  <defs>
+    <linearGradient id="orb" x1="0.25" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#A9B1E0"/>
+      <stop offset="0.55" stop-color="#6E79C2"/>
+      <stop offset="1" stop-color="#575F9E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="0" y="0" width="512" height="512" rx="120" fill="#F7F4EE"/>
+
+  <!-- Shadow (breathes with the float) -->
+  <ellipse cx="256" cy="428" rx="104" ry="16" fill="#A9B1E0" opacity="0.5">
+    <animate attributeName="rx" values="104;88;104" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+    <animate attributeName="opacity" values="0.5;0.32;0.5" dur="2.6s" repeatCount="indefinite"/>
+  </ellipse>
+
+  <!-- Bot (floats) -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0 6; 0 -12; 0 6" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+    <g>
+    <animateTransform attributeName="transform" type="rotate" values="-2.5 256 260; 2.5 256 260; -2.5 256 260" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+
+    <!-- Body -->
+    <path d="M 256 122
+             C 346 122 406 184 406 266
+             C 406 346 342 398 256 398
+             C 170 398 106 346 106 266
+             C 106 184 166 122 256 122 Z" fill="url(#orb)"/>
+
+    <!-- Highlight -->
+    <path d="M 172 174 C 198 148 232 136 264 138 C 226 150 198 168 180 194 C 172 188 170 180 172 174 Z" fill="#FFFFFF" opacity="0.5"/>
+
+    <!-- Blush -->
+    <circle cx="180" cy="298" r="15" fill="#FFFFFF" opacity="0.35"/>
+    <circle cx="332" cy="298" r="15" fill="#FFFFFF" opacity="0.35"/>
+
+    <!-- Eyes (blink) -->
+    <g>
+      <ellipse cx="216" cy="252" rx="16" ry="18" fill="#2D2D3D">
+        <animate attributeName="ry" values="18;18;2;18;18" keyTimes="0;0.9;0.94;0.98;1" dur="3.8s" repeatCount="indefinite"/>
+      </ellipse>
+      <ellipse cx="296" cy="252" rx="16" ry="18" fill="#2D2D3D">
+        <animate attributeName="ry" values="18;18;2;18;18" keyTimes="0;0.9;0.94;0.98;1" dur="3.8s" repeatCount="indefinite"/>
+      </ellipse>
+      <circle cx="221" cy="246" r="5" fill="#FFFFFF"/>
+      <circle cx="301" cy="246" r="5" fill="#FFFFFF"/>
+    </g>
+
+    <!-- Open happy smile -->
+    <path d="M 222 288 Q 256 332 290 288 Q 256 306 222 288 Z" fill="#2D2D3D"/>
+    </g>
+  </g>
+
+  <!-- The "cliq" — pink spark (twinkles) -->
+  <g>
+    <animateTransform attributeName="transform" type="rotate" values="-8 384 122; 10 384 122; -8 384 122" dur="2s" repeatCount="indefinite"/>
+    <path d="M 384 80 C 389 108 400 119 428 124 C 400 129 389 140 384 168 C 379 140 368 129 340 124 C 368 119 379 108 384 80 Z" fill="#E8457A">
+      <animate attributeName="opacity" values="1;0.65;1" dur="2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- Mini sparkles -->
+  <path d="M 116 142 C 118 155 123 160 136 162 C 123 164 118 169 116 182 C 114 169 109 164 96 162 C 109 160 114 155 116 142 Z" fill="#A9B1E0">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="1.8s" repeatCount="indefinite"/>
+  </path>
+  <path d="M 152 96 C 153 104 156 107 164 108 C 156 109 153 112 152 120 C 151 112 148 109 140 108 C 148 107 151 104 152 96 Z" fill="#A9B1E0">
+    <animate attributeName="opacity" values="1;0.35;1" dur="1.4s" repeatCount="indefinite"/>
+  </path>
+</svg>
