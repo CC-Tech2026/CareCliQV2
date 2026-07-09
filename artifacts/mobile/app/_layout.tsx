@@ -18,6 +18,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { OfflineProvider } from "@/context/OfflineContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
+import { ToastProvider } from "@/context/ToastContext";
 import { useExpoPushRegistration, usePushNotificationNavigation } from "@/hooks/useExpoPush";
 import { readMobileAuthToken } from "@/lib/session";
 import { getMobileApiBaseUrl } from "@/lib/api-base-url";
@@ -54,7 +55,7 @@ function RootLayoutNav() {
     if (!isAuthenticated && !onAuthScreen) {
       router.replace("/login" as never);
     } else if (isAuthenticated && onAuthScreen) {
-      router.replace("/(tabs)" as never);
+      router.replace("/(tabs)/shifts" as never);
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
@@ -85,6 +86,18 @@ function RootLayoutNav() {
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
+        name="worker/security"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/privacy"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/credentials/add"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
         name="session/[id]"
         options={{ headerShown: false, animation: "slide_from_bottom" }}
       />
@@ -98,6 +111,10 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="incidents/index"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="incidents/new"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
@@ -119,6 +136,10 @@ function RootLayoutNav() {
       <Stack.Screen
         name="incidents/[id]"
         options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="incidents/participant/[id]"
+        options={{ headerShown: false, animation: "slide_from_bottom" }}
       />
     </Stack>
   );
@@ -145,15 +166,17 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <PreferencesProvider>
-            <AuthProvider>
-              <OfflineProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </OfflineProvider>
-            </AuthProvider>
+            <ToastProvider>
+              <AuthProvider>
+                <OfflineProvider>
+                  <GestureHandlerRootView style={{ flex: 1 }}>
+                    <KeyboardProvider>
+                      <RootLayoutNav />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </OfflineProvider>
+              </AuthProvider>
+            </ToastProvider>
           </PreferencesProvider>
         </QueryClientProvider>
       </ErrorBoundary>

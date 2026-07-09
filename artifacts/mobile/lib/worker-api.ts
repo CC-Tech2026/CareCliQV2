@@ -228,19 +228,24 @@ export type WorkerNdisPlan = {
   plan: Record<string, unknown>;
 };
 
+export type WorkerComplianceSession = {
+  id: string;
+  session_date?: string;
+  session_type?: string;
+  compliance_score?: number | null;
+  compliance_status?: string;
+};
+
 export type WorkerCompliance = {
   average_score: number;
   status: "compliant" | "at_risk" | "non_compliant";
   total_sessions: number;
   reviewed_sessions: number;
   at_risk: number;
-  sessions?: Array<{
-    id: string;
-    session_date?: string;
-    session_type?: string;
-    compliance_score?: number | null;
-    compliance_status?: string;
-  }>;
+  compliant_sessions?: number;
+  sessions?: WorkerComplianceSession[];
+  sessions_total?: number;
+  latest_session?: WorkerComplianceSession | null;
 };
 
 export type ShiftSignature = {
@@ -417,8 +422,12 @@ export function clinicalRewriteText(text: string, sourceLanguage = "auto") {
   );
 }
 
-export function getMyCompliance() {
-  return workerFetch<WorkerCompliance>("/api/worker/my-compliance");
+export function getMyCompliance(params?: { sessionsLimit?: number; sessionsOffset?: number }) {
+  const q = new URLSearchParams();
+  if (params?.sessionsLimit != null) q.set("sessions_limit", String(params.sessionsLimit));
+  if (params?.sessionsOffset != null) q.set("sessions_offset", String(params.sessionsOffset));
+  const query = q.toString();
+  return workerFetch<WorkerCompliance>(`/api/worker/my-compliance${query ? `?${query}` : ""}`);
 }
 
 export type CheckinStatus = "GOING_WELL" | "NEEDS_ATTENTION" | "INCIDENT_REPORTED";
@@ -433,6 +442,8 @@ export type CheckinWindowStatus = {
   checkins_completed?: number;
   checkins_required?: number;
   last_checkin_at?: string | null;
+  uses_random_schedule?: boolean;
+  checkin_response_window_secs?: number;
 };
 
 export type UserNotification = {
@@ -549,10 +560,17 @@ export function endLongShiftBreak(sessionId: string) {
   });
 }
 
-export function fetchNotifications(params?: { days?: number; unread_only?: boolean }) {
+export function fetchNotifications(params?: {
+  days?: number;
+  unread_only?: boolean;
+  limit?: number;
+  offset?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.days) q.set("days", String(params.days));
   if (params?.unread_only) q.set("unread_only", "true");
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
   return workerFetch<{ notifications: UserNotification[]; count: number }>(
     `/api/worker/notifications?${q}`,
   );

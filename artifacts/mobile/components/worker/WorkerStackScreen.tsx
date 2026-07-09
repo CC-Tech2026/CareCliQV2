@@ -10,9 +10,12 @@ import { useColors } from "@/hooks/useColors";
 
 type Props = {
   headerTitle: string;
-  pageTitle: string;
+  pageTitle?: string;
   subtitle?: string;
   showSignOut?: boolean;
+  showBack?: boolean;
+  /** Back button only in the top bar — no center title or right actions. */
+  minimalHeader?: boolean;
   /** When true, the content area uses the app background (for white cards on a subtle base). */
   cardsOnBackground?: boolean;
   children: React.ReactNode;
@@ -23,6 +26,8 @@ export function WorkerStackScreen({
   pageTitle,
   subtitle,
   showSignOut,
+  showBack = true,
+  minimalHeader,
   cardsOnBackground,
   children,
 }: Props) {
@@ -34,8 +39,10 @@ export function WorkerStackScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={headerTitle} />
-      <WorkerPageSubheader title={pageTitle} subtitle={subtitle} showSignOut={showSignOut} />
+      <WorkerMobileHeader title={headerTitle} showBack={showBack} minimal={minimalHeader} />
+      {pageTitle ? (
+        <WorkerPageSubheader title={pageTitle} subtitle={subtitle} showSignOut={showSignOut} />
+      ) : null}
       <View style={[styles.body, { backgroundColor: bodyBackground, paddingBottom: navPad }]}>{children}</View>
       <View style={styles.bottomNav}>
         <WorkerBottomNav />

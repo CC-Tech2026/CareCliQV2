@@ -10,6 +10,12 @@ import React, {
 import { useColorScheme } from "react-native";
 
 import {
+  getAccessibilityPreferences,
+  saveAccessibilityPreferences,
+} from "@/lib/accessibility-api";
+import {
+  CCQ_DYSLEXIA_FONT_KEY,
+  CCQ_HIGH_CONTRAST_KEY,
   CCQ_LANGUAGE_KEY,
   CCQ_TEXT_SCALE_KEY,
   CCQ_THEME_MODE_KEY,
@@ -20,6 +26,7 @@ import {
   type AppLanguage,
   type TranslationKey,
 } from "@/lib/i18n/translations";
+import { getMobileDeviceId, readMobileAuthToken } from "@/lib/session";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type TextScale = "small" | "default" | "large";
@@ -40,6 +47,10 @@ type PreferencesContextValue = {
   textScale: TextScale;
   textScaleValue: number;
   setTextScale: (scale: TextScale) => void;
+  highContrast: boolean;
+  setHighContrast: (enabled: boolean) => void;
+  dyslexiaFont: boolean;
+  setDyslexiaFont: (enabled: boolean) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isReady: boolean;
 };
@@ -56,28 +67,86 @@ function isTextScale(value: string | null): value is TextScale {
   return value === "small" || value === "default" || value === "large";
 }
 
+function parseBool(value: string | null): boolean {
+  return value === "true";
+}
+
+function mapApiLanguage(value: string | null | undefined): AppLanguage | null {
+  if (!value) return null;
+  if (value === "zh-Hans") return "zh";
+  if (VALID_LANGUAGES.has(value as AppLanguage)) return value as AppLanguage;
+  return null;
+}
+
+function mapApiFontSize(value: string | undefined): TextScale | null {
+  if (value === "small" || value === "default" || value === "large") return value;
+  if (value === "xl") return "large";
+  return null;
+}
+
+async function persistAccessibility(
+  prefs: Partial<{
+    font_size: TextScale;
+    theme_mode: ThemeMode;
+    high_contrast: boolean;
+    dyslexia_font: boolean;
+  }>,
+) {
+  try {
+    const token = await readMobileAuthToken();
+    if (!token) return;
+    const deviceId = await getMobileDeviceId();
+    await saveAccessibilityPreferences(deviceId, prefs);
+  } catch {
+    /* sync best-effort */
+  }
+}
+
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const deviceScheme = useColorScheme();
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [textScale, setTextScaleState] = useState<TextScale>("default");
+  const [highContrast, setHighContrastState] = useState(false);
+  const [dyslexiaFont, setDyslexiaFontState] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [storedTheme, storedLang, storedScale] = await AsyncStorage.multiGet([
-          CCQ_THEME_MODE_KEY,
-          CCQ_LANGUAGE_KEY,
-          CCQ_TEXT_SCALE_KEY,
-        ]);
+        const [storedTheme, storedLang, storedScale, storedContrast, storedDyslexia] =
+          await AsyncStorage.multiGet([
+            CCQ_THEME_MODE_KEY,
+            CCQ_LANGUAGE_KEY,
+            CCQ_TEXT_SCALE_KEY,
+            CCQ_HIGH_CONTRAST_KEY,
+            CCQ_DYSLEXIA_FONT_KEY,
+          ]);
         if (!active) return;
         if (isThemeMode(storedTheme[1])) setThemeModeState(storedTheme[1]);
         if (storedLang[1] && VALID_LANGUAGES.has(storedLang[1] as AppLanguage)) {
           setLanguageState(storedLang[1] as AppLanguage);
         }
         if (isTextScale(storedScale[1])) setTextScaleState(storedScale[1]);
+        setHighContrastState(parseBool(storedContrast[1]));
+        setDyslexiaFontState(parseBool(storedDyslexia[1]));
+
+        const token = await readMobileAuthToken();
+        if (!token) return;
+        const deviceId = await getMobileDeviceId();
+        const remote = await getAccessibilityPreferences(deviceId);
+        if (!active || !remote.preferences) return;
+
+        const prefs = remote.preferences;
+        if (isThemeMode(prefs.theme_mode)) setThemeModeState(prefs.theme_mode);
+        const fontSize = mapApiFontSize(prefs.font_size);
+        if (fontSize) setTextScaleState(fontSize);
+        setHighContrastState(Boolean(prefs.high_contrast));
+        setDyslexiaFontState(Boolean(prefs.dyslexia_font));
+
+        const apiLang = mapApiLanguage(remote.preferred_language);
+        if (apiLang) setLanguageState(apiLang);
       } catch {
         /* use defaults */
       } finally {
@@ -92,6 +161,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     void AsyncStorage.setItem(CCQ_THEME_MODE_KEY, mode);
+    void persistAccessibility({ theme_mode: mode });
   }, []);
 
   const setLanguage = useCallback((next: AppLanguage) => {
@@ -102,6 +172,19 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const setTextScale = useCallback((scale: TextScale) => {
     setTextScaleState(scale);
     void AsyncStorage.setItem(CCQ_TEXT_SCALE_KEY, scale);
+    void persistAccessibility({ font_size: scale });
+  }, []);
+
+  const setHighContrast = useCallback((enabled: boolean) => {
+    setHighContrastState(enabled);
+    void AsyncStorage.setItem(CCQ_HIGH_CONTRAST_KEY, String(enabled));
+    void persistAccessibility({ high_contrast: enabled });
+  }, []);
+
+  const setDyslexiaFont = useCallback((enabled: boolean) => {
+    setDyslexiaFontState(enabled);
+    void AsyncStorage.setItem(CCQ_DYSLEXIA_FONT_KEY, String(enabled));
+    void persistAccessibility({ dyslexia_font: enabled });
   }, []);
 
   const resolvedScheme: ResolvedScheme =
@@ -123,10 +206,28 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       textScale,
       textScaleValue: TEXT_SCALE_VALUES[textScale],
       setTextScale,
+      highContrast,
+      setHighContrast,
+      dyslexiaFont,
+      setDyslexiaFont,
       t,
       isReady,
     }),
-    [themeMode, resolvedScheme, setThemeMode, language, setLanguage, textScale, setTextScale, t, isReady],
+    [
+      themeMode,
+      resolvedScheme,
+      setThemeMode,
+      language,
+      setLanguage,
+      textScale,
+      setTextScale,
+      highContrast,
+      setHighContrast,
+      dyslexiaFont,
+      setDyslexiaFont,
+      t,
+      isReady,
+    ],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

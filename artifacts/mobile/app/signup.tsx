@@ -194,7 +194,7 @@ export default function SignupScreen() {
       router.replace("/login" as never);
       return;
     }
-    router.replace("/(tabs)" as never);
+    router.replace("/(tabs)/shifts" as never);
   };
 
   return (

@@ -79,8 +79,11 @@ def list_user_notifications(
     unread_only: bool = False,
     banners_only: bool = False,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     since = (datetime.now(timezone.utc) - timedelta(days=max(1, days))).isoformat()
+    page_size = max(1, limit)
+    range_end = offset + page_size - 1
     try:
         query = (
             get_supabase_admin()
@@ -89,7 +92,7 @@ def list_user_notifications(
             .eq("user_id", user_id)
             .gte("created_at", since)
             .order("created_at", desc=True)
-            .limit(limit)
+            .range(offset, range_end)
         )
         if unread_only:
             query = query.is_("read_at", "null").is_("dismissed_at", "null")

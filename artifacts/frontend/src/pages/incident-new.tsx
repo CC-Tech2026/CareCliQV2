@@ -13,12 +13,7 @@ import { createIncident } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // -- Design tokens -------------------------------------------------------------
-const PLUM   = "var(--cc-plum)";
-const T1     = "var(--cc-text)";
-const T2     = "#374151";
-const T3     = "#7A6A8A";
 const BORDER = "var(--cc-border)";
-const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const INCIDENT_TYPES = [
   { value: "injury", labelKey: "incidents.type.injury" },
@@ -44,9 +39,9 @@ const NDIS_REPORTABLE_TYPES = new Set(["abuse_neglect", "restrictive_practice"])
 
 function FormCard({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-cc-surface rounded-2xl overflow-hidden ${className ?? ""}`} style={{ boxShadow: CARD_SHADOW }}>
-      <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-        <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{title}</p>
+    <div className={`cc-surface-card ${className ?? ""}`}>
+      <div className="cc-card-header">
+        <p className="text-[11px] font-semibold uppercase tracking-widest cc-card-muted">{title}</p>
       </div>
       <div className="p-6">{children}</div>
     </div>
@@ -55,7 +50,7 @@ function FormCard({ title, children, className }: { title: string; children: Rea
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: T2 }}>
+    <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">
       {children}
     </Label>
   );
@@ -123,35 +118,35 @@ export default function IncidentNew() {
       <div className="flex items-center gap-2 text-[13px]">
         <button
           onClick={() => navigate("/incidents")}
-          className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
-          style={{ color: T3 }}
+          className="flex items-center gap-1.5 text-cc-muted transition-opacity hover:opacity-70"
         >
           <ArrowLeft size={14} /> {translate("incidents.new.breadcrumbParent")}
         </button>
-        <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
-        <span className="font-medium" style={{ color: T1 }}>{translate("incidents.new.breadcrumb")}</span>
+        <span className="text-cc-muted/60">/</span>
+        <span className="font-medium text-cc-text">{translate("incidents.new.breadcrumb")}</span>
       </div>
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ background: "rgba(234,88,12,0.10)" }}>
+        <div className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 bg-orange-50">
           <AlertTriangle size={18} className="text-orange-600" />
         </div>
         <div>
-          <h1 className="text-[22px] font-bold" style={{ color: T1 }}>{translate("incidents.new.log")}</h1>
-          <p className="text-[13px]" style={{ color: T2 }}>{translate("incidents.new.standard")}</p>
+          <h1 className="text-[22px] font-bold text-cc-text">{translate("incidents.new.log")}</h1>
+          <p className="text-[13px] text-cc-muted">{translate("incidents.new.standard")}</p>
         </div>
       </div>
 
       {/* NDIS reportable banner */}
       {ndisReportable && (
-        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 border border-red-200"
-          style={{ background: "rgba(254,242,242,0.8)" }}>
-          <Siren size={16} className="text-red-600 shrink-0 mt-0.5" />
+        <div
+          className="flex items-start gap-3 rounded-2xl px-4 py-3.5 border"
+          style={{ background: "var(--cc-status-danger-bg)", borderColor: "color-mix(in srgb, var(--cc-status-danger) 25%, transparent)" }}
+        >
+          <Siren size={16} className="shrink-0 mt-0.5" style={{ color: "var(--cc-status-danger)" }} />
           <div>
-            <p className="text-[13px] font-bold text-red-800">{translate("incidents.new.ndisReportable")}</p>
-            <p className="text-[12px] text-red-700 mt-0.5">
+            <p className="text-[13px] font-bold" style={{ color: "var(--cc-status-danger)" }}>{translate("incidents.new.ndisReportable")}</p>
+            <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-status-danger)" }}>
               {translate("incidents.new.ndisReportableBody")}
               {form.severity === "critical" && ` ${translate("incidents.new.ndisCritical24h")}`}
             </p>
@@ -291,8 +286,7 @@ export default function IncidentNew() {
           <button
             type="button"
             onClick={() => navigate("/incidents")}
-            className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB]"
-            style={{ borderColor: BORDER, color: T2 }}
+            className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border border-cc-border text-cc-text transition-colors hover:bg-cc-soft"
           >
             {translate("common.cancel")}
           </button>

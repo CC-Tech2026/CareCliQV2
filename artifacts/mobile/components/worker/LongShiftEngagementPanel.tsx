@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useShiftBreakStatus } from "@/hooks/worker/useShiftCheckin";
 import { useColors } from "@/hooks/useColors";
+import { showAlert } from "@/lib/alert";
 import { endLongShiftBreak, startLongShiftBreak, type CheckinWindowStatus } from "@/lib/worker-api";
 
 type Props = {
@@ -35,7 +36,7 @@ export function LongShiftEngagementPanel({
 }: Props) {
   const colors = useColors();
   const queryClient = useQueryClient();
-  const { data: breakStatus } = useShiftBreakStatus(shiftId);
+  const { data: breakStatus } = useShiftBreakStatus(shiftId, Boolean(sessionId));
 
   const [breakElapsed, setBreakElapsed] = useState("00:00:00");
 
@@ -43,14 +44,19 @@ export function LongShiftEngagementPanel({
 
   const onBreak = Boolean(breakStatus?.active);
   const breakStartAt = breakStatus?.break_start_at;
-  const canStartBreak = breakStatus?.can_start_break ?? true;
-  const breakLimitReached = breakStatus?.block_reason === "break_limit_reached";
   const completedBreaks = breakStatus?.completed_breaks ?? 0;
+  const maxBreaks = breakStatus?.max_breaks_per_shift ?? 1;
+  const breakLimitReached =
+    breakStatus?.block_reason === "break_limit_reached"
+    || (maxBreaks !== null && completedBreaks >= maxBreaks && !onBreak);
+  const canStartBreak =
+    breakStatus?.can_start_break ?? (!onBreak && completedBreaks === 0);
 
   const checkinsCompleted = checkinStatus?.checkins_completed ?? 0;
   const checkinsRequired = checkinStatus?.checkins_required ?? 0;
   const checkinOverdue = Boolean(checkinStatus?.checkin_overdue);
   const canSubmitCheckin = Boolean(checkinStatus?.can_submit_checkin);
+  const usesRandomSchedule = Boolean(checkinStatus?.uses_random_schedule);
   const isLongShift = checkinStatus?.applicable ?? checkinsRequired > 0;
 
   useEffect(() => {
@@ -85,14 +91,31 @@ export function LongShiftEngagementPanel({
         invalidate();
         return;
       }
-      Alert.alert("Break action failed", msg);
+      showAlert("Break action failed", msg);
     },
   });
+
+  const handleBreakPress = () => {
+    if (onBreak) {
+      breakMutation.mutate();
+      return;
+    }
+
+    showAlert(
+      "Log break?",
+      "Billing will pause while you are away from the participant. Are you sure you want to log a break?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Log break", onPress: () => breakMutation.mutate() },
+      ],
+    );
+  };
 
   if (!isLongShift) return null;
 
   const actionBusy = disabled || breakMutation.isPending;
-  const checkinDisabled = actionBusy || onBreak || (!canSubmitCheckin && !checkinOverdue);
+  const checkinDueNow = canSubmitCheckin && !onBreak;
+  const checkinDisabled = actionBusy || onBreak || !canSubmitCheckin;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -126,7 +149,7 @@ export function LongShiftEngagementPanel({
           <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>
             {checkinsCompleted} of {checkinsRequired}
           </Text>
-          {checkinOverdue && !onBreak ? "  ·  due now" : ""}
+          {checkinOverdue && !onBreak && !canSubmitCheckin ? "  ·  awaiting prompt" : ""}
         </Text>
       )}
 
@@ -136,7 +159,7 @@ export function LongShiftEngagementPanel({
           disabled={checkinDisabled}
           style={[
             styles.btn,
-            checkinOverdue && !onBreak
+            checkinDueNow
               ? { backgroundColor: colors.primary, borderColor: colors.primary }
               : { backgroundColor: "transparent", borderColor: colors.border },
             { opacity: checkinDisabled ? 0.5 : 1 },
@@ -145,30 +168,30 @@ export function LongShiftEngagementPanel({
           <Feather
             name="message-circle"
             size={14}
-            color={checkinOverdue && !onBreak ? colors.primaryForeground : colors.foreground}
+            color={checkinDueNow ? colors.primaryForeground : colors.foreground}
           />
           <Text
             style={[
               styles.btnText,
               {
-                color: checkinOverdue && !onBreak ? colors.primaryForeground : colors.foreground,
+                color: checkinDueNow ? colors.primaryForeground : colors.foreground,
                 fontFamily: "Inter_700Bold",
               },
             ]}
           >
-            {checkinOverdue && !onBreak ? "Check in (due)" : "Check in"}
+            {checkinDueNow ? "Check in (due)" : "Check in"}
           </Text>
         </Pressable>
 
         <Pressable
-          onPress={() => breakMutation.mutate()}
-          disabled={actionBusy || (!onBreak && (!canStartBreak || breakLimitReached))}
+          onPress={handleBreakPress}
+          disabled={actionBusy || (!onBreak && breakLimitReached)}
           style={[
             styles.btn,
             onBreak
               ? { backgroundColor: colors.primary, borderColor: colors.primary }
               : { backgroundColor: "transparent", borderColor: colors.border },
-            { opacity: actionBusy || (!onBreak && (!canStartBreak || breakLimitReached)) ? 0.5 : 1 },
+            { opacity: actionBusy || (!onBreak && breakLimitReached) ? 0.5 : 1 },
           ]}
         >
           {breakMutation.isPending ? (
@@ -199,7 +222,19 @@ export function LongShiftEngagementPanel({
       {breakLimitReached && !onBreak && (
         <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
           One break per shift is already recorded
-          {completedBreaks > 0 ? ` (${completedBreaks} of 1 used)` : ""}.
+          {completedBreaks > 0 ? ` (${completedBreaks} of ${maxBreaks ?? 1} used)` : ""}.
+        </Text>
+      )}
+
+      {!onBreak && !breakLimitReached && !canStartBreak && breakStatus?.block_reason === "break_in_progress" && (
+        <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          A break is already in progress. Tap End break when you return.
+        </Text>
+      )}
+
+      {usesRandomSchedule && !onBreak && !canSubmitCheckin && checkinStatus?.block_reason === "not_due_yet" && (
+        <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          You will get a push notification when it is time to check in. Keep notifications enabled for CareCliQ.
         </Text>
       )}
 

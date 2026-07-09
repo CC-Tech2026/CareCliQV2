@@ -28,6 +28,8 @@ async function ensureNotificationChannels(): Promise<void> {
     name: "Safety alerts",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 500, 250, 500],
+    sound: "default",
+    enableVibrate: true,
   });
 }
 

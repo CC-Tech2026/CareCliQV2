@@ -7,8 +7,8 @@ export function useShiftCheckinStatus(shiftId: string | undefined, enabled = tru
     queryKey: ["worker", "shift", shiftId, "checkin-status"],
     queryFn: () => getCheckinStatusByShift(shiftId!),
     enabled: Boolean(shiftId) && enabled,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -17,7 +17,7 @@ export function useShiftBreakStatus(shiftId: string | undefined, enabled = true)
     queryKey: ["worker", "shift", shiftId, "break-status"],
     queryFn: () => getBreakStatusByShift(shiftId!),
     enabled: Boolean(shiftId) && enabled,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }

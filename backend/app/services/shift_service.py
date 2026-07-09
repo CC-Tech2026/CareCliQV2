@@ -479,14 +479,26 @@ def build_structured_health_alerts(
                     instructions=patient_allergies,
                     severity="critical",
                 ))
-        for trigger in _normalise_risk_text_list(patient.get("risk_triggers")):
-            add(_make_risk_alert(
-                _infer_risk_type(trigger),
-                title="Risk trigger",
-                description=trigger,
-                instructions=trigger,
-                severity="important",
-            ))
+        triggers = _normalise_risk_text_list(patient.get("risk_triggers"))
+        if triggers:
+            if len(triggers) == 1:
+                trigger = triggers[0]
+                add(_make_risk_alert(
+                    _infer_risk_type(trigger),
+                    title="Risk trigger",
+                    description=trigger,
+                    instructions=trigger,
+                    severity="important",
+                ))
+            else:
+                body = "\n".join(f"• {trigger}" for trigger in triggers)
+                add(_make_risk_alert(
+                    "other",
+                    title="Risk triggers",
+                    description=body,
+                    instructions=body,
+                    severity="important",
+                ))
         plan_text = str(patient.get("risk_management_plan") or "").strip()
         if plan_text:
             add(_make_risk_alert(
@@ -500,13 +512,73 @@ def build_structured_health_alerts(
     return alerts
 
 
+def _parse_postgres_text_array(value: str) -> list[str]:
+    inner = value.strip()
+    if not inner.startswith("{") or not inner.endswith("}"):
+        return []
+    content = inner[1:-1]
+    if not content.strip():
+        return []
+
+    items: list[str] = []
+    current: list[str] = []
+    in_quotes = False
+    i = 0
+    while i < len(content):
+        ch = content[i]
+        if in_quotes:
+            if ch == '"':
+                if i + 1 < len(content) and content[i + 1] == '"':
+                    current.append('"')
+                    i += 2
+                    continue
+                in_quotes = False
+                i += 1
+                continue
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_quotes = True
+            i += 1
+            continue
+        if ch == ",":
+            item = "".join(current).strip()
+            if item:
+                items.append(item)
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+
+    item = "".join(current).strip()
+    if item:
+        items.append(item)
+    return items
+
+
 def _normalise_risk_text_list(raw: Any) -> list[str]:
     if not raw:
         return []
     if isinstance(raw, list):
         return [str(item).strip() for item in raw if str(item).strip()]
     if isinstance(raw, str):
-        return [line.strip() for line in raw.splitlines() if line.strip()]
+        text = raw.strip()
+        if not text:
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return _normalise_risk_text_list(parsed)
+            except json.JSONDecodeError:
+                pass
+        if text.startswith("{") and text.endswith("}"):
+            parsed = _parse_postgres_text_array(text)
+            if parsed:
+                return parsed
+        return [line.strip() for line in text.splitlines() if line.strip()]
     return []
 
 
@@ -547,11 +619,6 @@ def build_participant_risks(
 
 
 def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_id: str) -> None:
-    if shift.get("risks_acknowledged_at"):
-        pass
-    elif build_participant_risks(shift, organization_id):
-        raise ValueError("Acknowledge risks before continuing.")
-
     participant_id = str(shift.get("participant_id") or "")
     worker_id = str(shift.get("worker_id") or "")
     if participant_id and worker_id:

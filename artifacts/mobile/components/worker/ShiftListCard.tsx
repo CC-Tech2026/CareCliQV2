@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { ShiftStatusBadge } from "@/components/worker/ShiftStatusBadge";
+import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
 import { useT } from "@/context/PreferencesContext";
 import { showAlert } from "@/lib/alert";
 import { useColors } from "@/hooks/useColors";
@@ -28,7 +29,6 @@ import {
   formatShiftTimeRange,
   isShiftCompletedForList,
   shiftInitials,
-  shiftNeedsRiskAck,
   STATE_AVATAR_COLORS,
 } from "@/lib/shift-utils";
 
@@ -46,7 +46,6 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
   const isCancelled = shift.status === "cancelled";
   const isCompleted = isShiftCompletedForList(shift);
-  const needsRiskAck = shiftNeedsRiskAck(shift);
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
   const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
@@ -67,19 +66,19 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
     shift.visit_notes?.trim() ||
     shift.special_instructions?.trim() ||
     null;
-  const medicalAlert =
-    shift.health_alerts?.map((a) => a.title || a.detail).filter(Boolean).join(" · ") ||
+  const healthAlerts = shift.health_alerts ?? [];
+  const medicalFallback =
     shift.health_flags?.trim() ||
     shift.allergies?.trim() ||
     null;
+  const hasMedicalInfo = healthAlerts.length > 0 || Boolean(medicalFallback);
   const emergencyContact = emergencyContactDisplay(shift.profile?.emergency_contact);
   const caseManager = shift.profile?.case_manager;
   const coordinatorLine = [caseManager?.phone, caseManager?.email].filter(Boolean).join(" · ");
   const officePhone = shift.office_contact_number?.trim() || null;
 
-  const navigateToShift = (focus?: "safety") => {
-    const query = focus === "safety" ? "?focus=safety" : "";
-    router.push(`/shift/${shift.id}${query}` as never);
+  const navigateToShift = () => {
+    router.push(`/shift/${shift.id}` as never);
   };
 
   const runStartSession = async () => {
@@ -108,12 +107,6 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
     if (isSessionLive) {
       navigateToShift();
-      return;
-    }
-
-    if (needsRiskAck) {
-      showAlert(t("shifts.listCard.safetyFirst"), t("shifts.listCard.safetyFirstDesc"));
-      navigateToShift("safety");
       return;
     }
 
@@ -292,7 +285,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
                 </Text>
               </View>
               <Pressable
-                onPress={() => router.push("/worker/messages" as never)}
+                onPress={() => router.push(`/shift/${shift.id}/message-office` as never)}
                 style={styles.detailInlineBtn}
               >
                 <Feather name="mail" size={12} color={colors.accent} />
@@ -314,18 +307,14 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
           </View>
         )}
 
-        {showDetails && medicalAlert && (
-          <View style={[styles.alertCard, { backgroundColor: colors.alertBg, borderColor: colors.destructive }]}>
-            <View style={styles.detailInline}>
-              <Feather name="alert-triangle" size={13} color={colors.destructive} />
-              <Text style={[styles.alertTitle, { color: colors.destructive, fontFamily: "Inter_700Bold" }]}>
-                {t("shifts.listCard.medicalAlert")}
-              </Text>
-            </View>
-            <Text style={[styles.alertText, { color: colors.destructive, fontFamily: "Inter_500Medium" }]}>
-              {medicalAlert}
-            </Text>
-          </View>
+        {showDetails && hasMedicalInfo && (
+          <WorkerMobileRiskStrip
+            alerts={healthAlerts}
+            fallbackSummary={medicalFallback}
+            alwaysExpandable
+            embedded
+            headerTitle={t("shifts.listCard.medicalAlert")}
+          />
         )}
       </View>
 
@@ -496,16 +485,6 @@ const styles = StyleSheet.create({
   },
   detailCallText: { fontSize: 11 },
   notesText: { fontSize: 12, lineHeight: 18 },
-  alertCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
-    marginTop: 10,
-  },
-  alertTitle: { fontSize: 11 },
-  alertText: { fontSize: 12, lineHeight: 17 },
   actions: {
     flexDirection: "row",
     alignItems: "center",

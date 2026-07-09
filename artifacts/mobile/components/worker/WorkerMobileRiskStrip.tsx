@@ -3,10 +3,15 @@ import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { formatHealthAlertBody, formatHealthAlertText, healthAlertShortLabel } from "@/lib/health-alert-utils";
 import type { ShiftHealthAlert } from "@/lib/worker-api";
 
 type Props = {
   alerts: ShiftHealthAlert[];
+  alwaysExpandable?: boolean;
+  embedded?: boolean;
+  fallbackSummary?: string | null;
+  headerTitle?: string;
 };
 
 const RISK_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
@@ -20,12 +25,7 @@ const RISK_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 };
 
 function shortLabel(alert: ShiftHealthAlert): string {
-  const title = alert.title?.trim();
-  if (title) return title;
-  const desc = (alert.description ?? alert.instructions ?? "").trim();
-  if (!desc) return "Safety alert";
-  const firstLine = desc.split(/\n/)[0]?.trim() ?? desc;
-  return firstLine.length > 72 ? `${firstLine.slice(0, 69)}…` : firstLine;
+  return healthAlertShortLabel(alert);
 }
 
 function hasLongDetails(alerts: ShiftHealthAlert[]): boolean {
@@ -35,30 +35,132 @@ function hasLongDetails(alerts: ShiftHealthAlert[]): boolean {
   });
 }
 
-export function WorkerMobileRiskStrip({ alerts }: Props) {
+function AlertDetailRows({
+  alerts,
+  fallbackSummary,
+}: {
+  alerts: ShiftHealthAlert[];
+  fallbackSummary?: string | null;
+}) {
+  const colors = useColors();
+
+  if (alerts.length > 0) {
+    return (
+      <>
+        {alerts.map((alert, i) => {
+          const iconName = RISK_ICONS[(alert.type ?? "other") as string] ?? "shield";
+          const { lines, isList } = formatHealthAlertBody(alert);
+          return (
+            <View
+              key={`${alert.title}-${i}`}
+              style={[styles.row, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}
+            >
+              <View style={[styles.rowIcon, { backgroundColor: colors.dangerIcon + "22" }]}>
+                <Feather name={iconName} size={16} color={colors.dangerIcon} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowTitle, { color: colors.dangerText, fontFamily: "Inter_700Bold" }]}>
+                  {alert.title}
+                </Text>
+                {lines.length > 0 &&
+                  (isList ? (
+                    <View style={styles.listBody}>
+                      {lines.map((line, lineIndex) => (
+                        <Text
+                          key={`${line}-${lineIndex}`}
+                          style={[styles.listItem, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}
+                        >
+                          {"• "}
+                          {line}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text
+                      style={[styles.rowBody, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}
+                    >
+                      {lines[0]}
+                    </Text>
+                  ))}
+              </View>
+            </View>
+          );
+        })}
+      </>
+    );
+  }
+
+  if (!fallbackSummary?.trim()) return null;
+
+  const { lines, isList } = formatHealthAlertText(fallbackSummary);
+
+  return (
+    <View style={[styles.row, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.dangerIcon + "22" }]}>
+        <Feather name="alert-triangle" size={16} color={colors.dangerIcon} />
+      </View>
+      <View style={styles.rowText}>
+        {isList ? (
+          <View style={styles.listBody}>
+            {lines.map((line, lineIndex) => (
+              <Text
+                key={`${line}-${lineIndex}`}
+                style={[styles.listItem, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}
+              >
+                {"• "}
+                {line}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          <Text style={[styles.rowBody, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            {lines[0]}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export function WorkerMobileRiskStrip({
+  alerts,
+  alwaysExpandable = false,
+  embedded = false,
+  fallbackSummary,
+  headerTitle,
+}: Props) {
   const colors = useColors();
   const [open, setOpen] = useState(false);
 
-  if (!alerts.length) return null;
-
-  const summary = alerts.map(shortLabel).filter(Boolean).join(" · ");
+  const structuredSummary = alerts.map(shortLabel).filter(Boolean).join(" · ");
+  const summary = structuredSummary || fallbackSummary?.trim() || "";
   if (!summary) return null;
 
-  const expandable = hasLongDetails(alerts);
+  const expandable = alwaysExpandable || hasLongDetails(alerts) || Boolean(fallbackSummary?.trim() && !alerts.length);
+  const showTitle = Boolean(headerTitle?.trim());
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, embedded && styles.wrapEmbedded]}>
       <Pressable
         onPress={expandable ? () => setOpen((v) => !v) : undefined}
         style={[styles.card, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
       >
         <Feather name="alert-triangle" size={14} color={colors.dangerIcon} style={styles.headIcon} />
-        <Text
-          style={[styles.summary, { color: colors.dangerText, fontFamily: "Inter_500Medium" }]}
-          numberOfLines={2}
-        >
-          {summary}
-        </Text>
+        <View style={styles.headText}>
+          {showTitle ? (
+            <Text style={[styles.headerTitle, { color: colors.dangerText, fontFamily: "Inter_700Bold" }]}>
+              {headerTitle}
+            </Text>
+          ) : null}
+          {!alwaysExpandable || !showTitle ? (
+            <Text
+              style={[styles.summary, { color: colors.dangerText, fontFamily: "Inter_500Medium" }]}
+              numberOfLines={2}
+            >
+              {summary}
+            </Text>
+          ) : null}
+        </View>
         {expandable && (
           <Feather
             name={open ? "chevron-up" : "chevron-down"}
@@ -75,32 +177,7 @@ export function WorkerMobileRiskStrip({ alerts }: Props) {
           contentContainerStyle={styles.detailContent}
           nestedScrollEnabled
         >
-          {alerts.map((alert, i) => {
-            const iconName = RISK_ICONS[(alert.type ?? "other") as string] ?? "shield";
-            const body = (alert.instructions || alert.description || "").trim();
-            return (
-              <View
-                key={`${alert.title}-${i}`}
-                style={[styles.row, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}
-              >
-                <View style={[styles.rowIcon, { backgroundColor: colors.dangerIcon + "22" }]}>
-                  <Feather name={iconName} size={16} color={colors.dangerIcon} />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.rowTitle, { color: colors.dangerText, fontFamily: "Inter_700Bold" }]}>
-                    {alert.title}
-                  </Text>
-                  {!!body && (
-                    <Text
-                      style={[styles.rowBody, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}
-                    >
-                      {body}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+          <AlertDetailRows alerts={alerts} fallbackSummary={fallbackSummary} />
         </ScrollView>
       )}
     </View>
@@ -111,6 +188,10 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: 12,
     marginTop: 8,
+  },
+  wrapEmbedded: {
+    paddingHorizontal: 0,
+    marginTop: 10,
   },
   card: {
     flexDirection: "row",
@@ -124,8 +205,14 @@ const styles = StyleSheet.create({
   headIcon: {
     marginTop: 1,
   },
-  summary: {
+  headText: {
     flex: 1,
+    gap: 2,
+  },
+  headerTitle: {
+    fontSize: 11,
+  },
+  summary: {
     fontSize: 12,
     lineHeight: 16,
   },
@@ -165,6 +252,14 @@ const styles = StyleSheet.create({
   },
   rowBody: {
     marginTop: 3,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  listBody: {
+    marginTop: 3,
+    gap: 2,
+  },
+  listItem: {
     fontSize: 11,
     lineHeight: 15,
   },

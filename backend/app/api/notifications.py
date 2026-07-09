@@ -74,6 +74,7 @@ async def list_notifications(
     unread_only: bool = Query(default=False),
     banners_only: bool = Query(default=False),
     limit: int = Query(default=100, le=200),
+    offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
     _require_worker(current_user)
@@ -84,6 +85,7 @@ async def list_notifications(
         unread_only=unread_only,
         banners_only=banners_only,
         limit=limit,
+        offset=offset,
     )
     return {"notifications": items, "count": len(items)}
 

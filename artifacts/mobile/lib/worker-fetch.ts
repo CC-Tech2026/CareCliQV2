@@ -1,6 +1,16 @@
 import { getMobileApiBaseUrl } from "@/lib/api-base-url";
 import { readMobileAuthToken } from "@/lib/session";
 
+let lastSuccessfulWorkerFetchAt = 0;
+
+export function getLastSuccessfulWorkerFetchAt(): number {
+  return lastSuccessfulWorkerFetchAt;
+}
+
+export function touchSuccessfulWorkerFetch(): void {
+  lastSuccessfulWorkerFetchAt = Date.now();
+}
+
 export class WorkerApiError extends Error {
   constructor(
     message: string,
@@ -50,8 +60,11 @@ export async function workerFetch<T>(
   }
 
   if (response.status === 204) {
+    touchSuccessfulWorkerFetch();
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  const data = (await response.json()) as T;
+  touchSuccessfulWorkerFetch();
+  return data;
 }
