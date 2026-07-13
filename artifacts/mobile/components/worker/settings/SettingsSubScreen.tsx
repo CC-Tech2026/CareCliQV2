@@ -11,21 +11,31 @@ type Props = {
   title: string;
   children: React.ReactNode;
   showBack?: boolean;
+  showBottomNav?: boolean;
 };
 
-export function SettingsSubScreen({ title, children, showBack = true }: Props) {
+export function SettingsSubScreen({
+  title,
+  children,
+  showBack = true,
+  showBottomNav = true,
+}: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const bottomInset = workerBottomNavHeight(insets.bottom, Platform.OS === "web");
+  const bottomInset = showBottomNav
+    ? workerBottomNavHeight(insets.bottom, Platform.OS === "web")
+    : insets.bottom + 24;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <WorkerMobileHeader title={title} showBack={showBack} />
       <View style={[styles.body, { paddingBottom: bottomInset }]}>{children}</View>
-      <View style={styles.bottomNav}>
-        <WorkerBottomNav />
-      </View>
+      {showBottomNav ? (
+        <View style={styles.bottomNav}>
+          <WorkerBottomNav />
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {

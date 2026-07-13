@@ -21,6 +21,27 @@ export class WorkerApiError extends Error {
   }
 }
 
+function formatApiErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return null;
+      })
+      .filter((part): part is string => Boolean(part?.trim()));
+    if (parts.length) return parts.join(". ");
+  }
+  if (detail && typeof detail === "object" && "msg" in detail) {
+    const msg = String((detail as { msg: unknown }).msg ?? "").trim();
+    if (msg) return msg;
+  }
+  return fallback;
+}
+
 export async function workerFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -39,7 +60,7 @@ export async function workerFetch<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  if (init.body && !headers["Content-Type"]) {
+  if (init.body && !headers["Content-Type"] && !(init.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -51,8 +72,8 @@ export async function workerFetch<T>(
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
-      const body = (await response.json()) as { detail?: string; message?: string };
-      message = body.detail ?? body.message ?? message;
+      const body = (await response.json()) as { detail?: unknown; message?: string };
+      message = formatApiErrorDetail(body.detail, body.message ?? message);
     } catch {
       /* use default */
     }

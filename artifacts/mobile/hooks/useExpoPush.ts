@@ -1,4 +1,4 @@
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { useEffect, useRef } from "react";
@@ -7,17 +7,44 @@ import { useRouter } from "expo-router";
 import { registerExpoPushToken, registerFcmPushToken } from "@/lib/push-registration";
 import { getMobileDeviceId, readMobileAuthToken } from "@/lib/session";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+type NotificationsModule = typeof import("expo-notifications");
 
-async function ensureNotificationChannels(): Promise<void> {
+let notificationsModule: NotificationsModule | null | undefined;
+
+/** Expo Go (SDK 53+) throws on importing expo-notifications for Android push. */
+function isExpoGo(): boolean {
+  return (
+    Constants.appOwnership === "expo" ||
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (Constants as any).executionEnvironment === "storeClient"
+  );
+}
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  if (notificationsModule !== undefined) return notificationsModule;
+  if (isExpoGo()) {
+    notificationsModule = null;
+    return null;
+  }
+  try {
+    notificationsModule = await import("expo-notifications");
+    notificationsModule.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    return notificationsModule;
+  } catch {
+    notificationsModule = null;
+    return null;
+  }
+}
+
+async function ensureNotificationChannels(Notifications: NotificationsModule): Promise<void> {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync("default", {
     name: "CareCliQ",
@@ -33,7 +60,7 @@ async function ensureNotificationChannels(): Promise<void> {
   });
 }
 
-async function requestPushPermission(): Promise<boolean> {
+async function requestPushPermission(Notifications: NotificationsModule): Promise<boolean> {
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === "granted") return true;
   const { status } = await Notifications.requestPermissionsAsync();
@@ -41,7 +68,7 @@ async function requestPushPermission(): Promise<boolean> {
 }
 
 /** Native FCM/APNs device token — used by backend firebase-admin on EAS builds. */
-async function resolveNativeFcmToken(): Promise<string | null> {
+async function resolveNativeFcmToken(Notifications: NotificationsModule): Promise<string | null> {
   if (!Device.isDevice) return null;
   try {
     const deviceToken = await Notifications.getDevicePushTokenAsync();
@@ -73,26 +100,30 @@ function navigateFromNotificationData(
 
 /**
  * Registers FCM (Android/iOS) push tokens with the backend.
- * Requires an EAS development/production build with google-services.json (Android).
+ * No-ops in Expo Go (push requires a development/EAS build on SDK 53+).
  */
 export function useExpoPushRegistration() {
   const fcmRegisteredRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let responseSub: { remove: () => void } | null = null;
 
     async function sync() {
       if (!Device.isDevice) return;
+      const Notifications = await loadNotifications();
+      if (!Notifications || cancelled) return;
+
       const authToken = await readMobileAuthToken();
       if (!authToken || cancelled) return;
 
-      const granted = await requestPushPermission();
+      const granted = await requestPushPermission(Notifications);
       if (!granted || cancelled) return;
 
-      await ensureNotificationChannels();
+      await ensureNotificationChannels(Notifications);
 
       const deviceId = await getMobileDeviceId();
-      const fcmToken = await resolveNativeFcmToken();
+      const fcmToken = await resolveNativeFcmToken(Notifications);
       if (fcmToken && !cancelled && fcmRegisteredRef.current !== fcmToken) {
         const ok = await registerFcmPushToken(authToken, deviceId, fcmToken);
         if (ok && !cancelled) {
@@ -101,12 +132,10 @@ export function useExpoPushRegistration() {
         }
       }
 
-      // Expo Go / dev fallback only when native FCM token is unavailable
       try {
-        const Constants = await import("expo-constants");
         const projectId =
-          Constants.default.expoConfig?.extra?.eas?.projectId ??
-          (Constants.default.easConfig as { projectId?: string } | undefined)?.projectId;
+          Constants.expoConfig?.extra?.eas?.projectId ??
+          (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
         if (!projectId) return;
         const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
         if (expoToken.data && !cancelled) {
@@ -117,14 +146,18 @@ export function useExpoPushRegistration() {
       }
     }
 
-    void sync();
-    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+    void (async () => {
+      const Notifications = await loadNotifications();
+      if (!Notifications || cancelled) return;
+      responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+        void sync();
+      });
       void sync();
-    });
+    })();
 
     return () => {
       cancelled = true;
-      responseSub.remove();
+      responseSub?.remove();
     };
   }, []);
 }
@@ -134,11 +167,21 @@ export function usePushNotificationNavigation() {
   const router = useRouter();
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      navigateFromNotificationData(router, data);
-    });
+    let cancelled = false;
+    let sub: { remove: () => void } | null = null;
 
-    return () => sub.remove();
+    void (async () => {
+      const Notifications = await loadNotifications();
+      if (!Notifications || cancelled) return;
+      sub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<string, unknown>;
+        navigateFromNotificationData(router, data);
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
   }, [router]);
 }

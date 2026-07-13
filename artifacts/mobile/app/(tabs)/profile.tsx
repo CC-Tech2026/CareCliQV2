@@ -1,7 +1,7 @@
+import { Redirect } from "expo-router";
 import React from "react";
 
-import { WorkerProfileScreen } from "@/components/worker/profile/WorkerProfileScreen";
-
+/** Profile hub lives at Settings (avatar → Profile). */
 export default function ProfileTabScreen() {
-  return <WorkerProfileScreen initialTab="availability" bottomInset={100} />;
+  return <Redirect href={"/(tabs)/settings" as never} />;
 }

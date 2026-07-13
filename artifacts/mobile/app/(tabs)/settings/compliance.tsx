@@ -8,7 +8,7 @@ export default function SettingsComplianceScreen() {
   const t = useT();
 
   return (
-    <SettingsSubScreen title={t("settings.nav.compliance")}>
+    <SettingsSubScreen showBottomNav={false} title={t("settings.nav.compliance")}>
       <SettingsCompliancePanel />
     </SettingsSubScreen>
   );

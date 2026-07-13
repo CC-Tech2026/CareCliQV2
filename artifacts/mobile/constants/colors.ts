@@ -1,97 +1,104 @@
 const colors = {
   light: {
-    text: "#0D0D55",
+    text: "#2D2D3D",
     tint: "#E8457A",
 
-    background: "#F7F7FA",
-    foreground: "#0D0D55",
+    background: "#FFFEF0",
+    foreground: "#2D2D3D",
 
     card: "#FFFFFF",
-    cardForeground: "#0D0D55",
+    cardForeground: "#2D2D3D",
 
-    primary: "#E8457A",
+    primary: "#4B3F91",
     primaryForeground: "#FFFFFF",
 
-    secondary: "#EDF6C0",
-    secondaryForeground: "#2B3700",
+    secondary: "#EEECF7",
+    secondaryForeground: "#4B3F91",
 
-    muted: "#EEEEF2",
-    mutedForeground: "#6B6B8A",
+    muted: "#EEECF7",
+    mutedForeground: "#6B6B7A",
 
-    accent: "#FA879F",
-    accentForeground: "#1C0716",
+    accent: "#E8457A",
+    accentForeground: "#FFFFFF",
 
-    destructive: "#EF4444",
+    destructive: "#C23B3B",
     destructiveForeground: "#FFFFFF",
 
-    success: "#D9F103",
-    successForeground: "#0D0D55",
+    success: "#2E7D5B",
+    successForeground: "#FFFFFF",
 
-    warning: "#FB923C",
+    warning: "#B97A1A",
     warningForeground: "#FFFFFF",
 
-    border: "#DDDDE8",
-    input: "#DDDDE8",
+    border: "#E4E1F0",
+    input: "#D9D6E8",
 
-    soft: "#F1F0FB",
-    activeBg: "#ECEEFF",
-    alertBg: "rgba(190,24,93,0.08)",
+    soft: "#EEECF7",
+    activeBg: "#EEECF7",
+    alertBg: "rgba(232,69,122,0.08)",
 
-    clockInBg: "#EAF3DE",
-    clockInBorder: "#C0DD97",
-    clockInText: "#27500A",
-    clockInIcon: "#3B6D11",
-    composerPink: "#D4537E",
-    composerPurple: "#7F77DD",
+    clockInBg: "#E3F0EA",
+    clockInBorder: "#B7D6C8",
+    clockInText: "#2E7D5B",
+    clockInIcon: "#2E7D5B",
+    composerPink: "#E8457A",
+    composerPurple: "#4B3F91",
 
-    dangerBg: "#FCEBEB",
-    dangerBorder: "#F7C1C1",
+    dangerBg: "#FBEEEE",
+    dangerBorder: "#F0C4C4",
     dangerText: "#791F1F",
-    dangerIcon: "#A32D2D",
+    dangerIcon: "#C23B3B",
 
-    navy: "#0D0D55",
-    pink: "#FA879F",
-    lime: "#D9F103",
-    blue: "#5271FF",
+    navy: "#2D2D3D",
+    pink: "#E8457A",
+    lime: "#2E7D5B",
+    blue: "#4B3F91",
+
+    heroCard: "#2D2D3D",
+    heroMuted: "#B9B6C9",
+    progressTrack: "#4A4960",
+    statusDocumentedBg: "#E3F0EA",
+    statusProgressBg: "#F7EEDD",
+    statusUpcomingBg: "#EEECF7",
   },
 
   dark: {
-    text: "#F9FAFB",
+    text: "#F5F4FA",
     tint: "#F472B6",
 
-    background: "#111827",
-    foreground: "#F9FAFB",
+    background: "#16151F",
+    foreground: "#F5F4FA",
 
-    card: "#1F2937",
-    cardForeground: "#F9FAFB",
+    card: "#1F1E2A",
+    cardForeground: "#F5F4FA",
 
-    primary: "#F472B6",
-    primaryForeground: "#111827",
+    primary: "#8B7FD4",
+    primaryForeground: "#16151F",
 
-    secondary: "#1E1B4B",
-    secondaryForeground: "#C7D2FE",
+    secondary: "#2A2840",
+    secondaryForeground: "#D4CFF5",
 
-    muted: "#374151",
-    mutedForeground: "#9CA3AF",
+    muted: "#2A2840",
+    mutedForeground: "#A8A6B8",
 
     accent: "#F472B6",
-    accentForeground: "#FFFFFF",
+    accentForeground: "#16151F",
 
     destructive: "#F87171",
-    destructiveForeground: "#111827",
+    destructiveForeground: "#16151F",
 
-    success: "#34D399",
-    successForeground: "#111827",
+    success: "#4ADE80",
+    successForeground: "#16151F",
 
-    warning: "#FCD34D",
-    warningForeground: "#111827",
+    warning: "#FBBF24",
+    warningForeground: "#16151F",
 
-    border: "#374151",
-    input: "#374151",
+    border: "#343246",
+    input: "#343246",
 
-    soft: "#374151",
-    activeBg: "#1E1B4B",
-    alertBg: "rgba(190,24,93,0.2)",
+    soft: "#2A2840",
+    activeBg: "#2A2840",
+    alertBg: "rgba(244,114,182,0.16)",
 
     clockInBg: "rgba(74,222,128,0.12)",
     clockInBorder: "rgba(74,222,128,0.35)",
@@ -105,10 +112,17 @@ const colors = {
     dangerText: "#FCA5A5",
     dangerIcon: "#F87171",
 
-    navy: "#818CF8",
+    navy: "#A5B4FC",
     pink: "#F472B6",
-    lime: "#34D399",
-    blue: "#818CF8",
+    lime: "#4ADE80",
+    blue: "#A5B4FC",
+
+    heroCard: "#1A1824",
+    heroMuted: "#9A97AD",
+    progressTrack: "#3A3850",
+    statusDocumentedBg: "rgba(46,125,91,0.22)",
+    statusProgressBg: "rgba(185,122,26,0.22)",
+    statusUpcomingBg: "rgba(75,63,145,0.28)",
   },
 
   radius: 12,

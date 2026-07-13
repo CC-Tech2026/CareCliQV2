@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useRef, useState } from "react";
 import {

@@ -7,18 +7,43 @@ export const APP_TIMEZONE =
   process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
 
 export const STATE_AVATAR_COLORS: Record<ShiftVisualState, string> = {
-  scheduled: "#5271FF",
-  clocked_in: "#FB923C",
-  session_active: "#22C55E",
-  completed: "#9CA3AF",
+  scheduled: "#4B3F91",
+  clocked_in: "#B97A1A",
+  session_active: "#B97A1A",
+  completed: "#2E7D5B",
 };
 
 export const STATE_LABELS: Record<ShiftVisualState, string> = {
-  scheduled: "Scheduled",
-  clocked_in: "Clocked In",
-  session_active: "Active",
-  completed: "Completed",
+  scheduled: "Upcoming",
+  clocked_in: "In progress",
+  session_active: "In progress",
+  completed: "Documented",
 };
+
+export function greetingForHour(now = new Date()): "morning" | "afternoon" | "evening" {
+  const h = now.getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
+
+export function shortLocationLabel(address?: string | null): string | null {
+  if (!address?.trim()) return null;
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return parts[parts.length - 2] ?? parts[0] ?? null;
+  return parts[0] ?? null;
+}
+
+export function formatHomeDateLabel(now = new Date()): string {
+  return now.toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 export function shiftInitials(name?: string): string {
   return (name || "Client")

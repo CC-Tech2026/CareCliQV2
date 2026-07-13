@@ -16,10 +16,15 @@ import {
 import {
   CCQ_DYSLEXIA_FONT_KEY,
   CCQ_HIGH_CONTRAST_KEY,
+  CCQ_HAPTIC_KEY,
   CCQ_LANGUAGE_KEY,
+  CCQ_REDUCE_MOTION_KEY,
   CCQ_TEXT_SCALE_KEY,
   CCQ_THEME_MODE_KEY,
 } from "@/lib/storage-keys";
+import { setHapticsEnabled } from "@/lib/haptics";
+import { setReduceMotionEnabled } from "@/lib/motion";
+import { setRuntimeTextScale, TextScaleSubscriber } from "@/lib/text-scale-patch";
 import {
   LANGUAGES,
   translate as translateWith,
@@ -51,6 +56,10 @@ type PreferencesContextValue = {
   setHighContrast: (enabled: boolean) => void;
   dyslexiaFont: boolean;
   setDyslexiaFont: (enabled: boolean) => void;
+  reduceMotion: boolean;
+  setReduceMotion: (enabled: boolean) => void;
+  hapticFeedback: boolean;
+  setHapticFeedback: (enabled: boolean) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isReady: boolean;
 };
@@ -109,20 +118,31 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const [textScale, setTextScaleState] = useState<TextScale>("default");
   const [highContrast, setHighContrastState] = useState(false);
   const [dyslexiaFont, setDyslexiaFontState] = useState(false);
+  const [reduceMotion, setReduceMotionState] = useState(false);
+  const [hapticFeedback, setHapticFeedbackState] = useState(true);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [storedTheme, storedLang, storedScale, storedContrast, storedDyslexia] =
-          await AsyncStorage.multiGet([
-            CCQ_THEME_MODE_KEY,
-            CCQ_LANGUAGE_KEY,
-            CCQ_TEXT_SCALE_KEY,
-            CCQ_HIGH_CONTRAST_KEY,
-            CCQ_DYSLEXIA_FONT_KEY,
-          ]);
+        const [
+          storedTheme,
+          storedLang,
+          storedScale,
+          storedContrast,
+          storedDyslexia,
+          storedMotion,
+          storedHaptic,
+        ] = await AsyncStorage.multiGet([
+          CCQ_THEME_MODE_KEY,
+          CCQ_LANGUAGE_KEY,
+          CCQ_TEXT_SCALE_KEY,
+          CCQ_HIGH_CONTRAST_KEY,
+          CCQ_DYSLEXIA_FONT_KEY,
+          CCQ_REDUCE_MOTION_KEY,
+          CCQ_HAPTIC_KEY,
+        ]);
         if (!active) return;
         if (isThemeMode(storedTheme[1])) setThemeModeState(storedTheme[1]);
         if (storedLang[1] && VALID_LANGUAGES.has(storedLang[1] as AppLanguage)) {
@@ -131,6 +151,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
         if (isTextScale(storedScale[1])) setTextScaleState(storedScale[1]);
         setHighContrastState(parseBool(storedContrast[1]));
         setDyslexiaFontState(parseBool(storedDyslexia[1]));
+        const motionOn = parseBool(storedMotion[1]);
+        const hapticOn = storedHaptic[1] === null ? true : parseBool(storedHaptic[1]);
+        setReduceMotionState(motionOn);
+        setHapticFeedbackState(hapticOn);
+        setReduceMotionEnabled(motionOn);
+        setHapticsEnabled(hapticOn && !motionOn);
 
         const token = await readMobileAuthToken();
         if (!token) return;
@@ -157,6 +183,10 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setRuntimeTextScale(TEXT_SCALE_VALUES[textScale]);
+  }, [textScale]);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
@@ -187,6 +217,25 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     void persistAccessibility({ dyslexia_font: enabled });
   }, []);
 
+  const setReduceMotion = useCallback((enabled: boolean) => {
+    setReduceMotionState(enabled);
+    setReduceMotionEnabled(enabled);
+    void AsyncStorage.setItem(CCQ_REDUCE_MOTION_KEY, String(enabled));
+    setHapticFeedbackState((prev) => {
+      setHapticsEnabled(prev && !enabled);
+      return prev;
+    });
+  }, []);
+
+  const setHapticFeedback = useCallback((enabled: boolean) => {
+    setHapticFeedbackState(enabled);
+    void AsyncStorage.setItem(CCQ_HAPTIC_KEY, String(enabled));
+    setReduceMotionState((motion) => {
+      setHapticsEnabled(enabled && !motion);
+      return motion;
+    });
+  }, []);
+
   const resolvedScheme: ResolvedScheme =
     themeMode === "system" ? (deviceScheme === "dark" ? "dark" : "light") : themeMode;
 
@@ -210,6 +259,10 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       setHighContrast,
       dyslexiaFont,
       setDyslexiaFont,
+      reduceMotion,
+      setReduceMotion,
+      hapticFeedback,
+      setHapticFeedback,
       t,
       isReady,
     }),
@@ -225,12 +278,21 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       setHighContrast,
       dyslexiaFont,
       setDyslexiaFont,
+      reduceMotion,
+      setReduceMotion,
+      hapticFeedback,
+      setHapticFeedback,
       t,
       isReady,
     ],
   );
 
-  return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
+  return (
+    <PreferencesContext.Provider value={value}>
+      <TextScaleSubscriber />
+      {children}
+    </PreferencesContext.Provider>
+  );
 }
 
 export function usePreferences(): PreferencesContextValue {

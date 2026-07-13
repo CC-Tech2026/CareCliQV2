@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -9,7 +8,7 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { TranslationKey } from "@/lib/i18n/translations";
 
-export type WorkerTabId = "shifts" | "profile" | "compliance";
+export type WorkerTabId = "index" | "shifts" | "compliance";
 
 type TabConfig = {
   id: WorkerTabId;
@@ -18,14 +17,33 @@ type TabConfig = {
   href: string;
 };
 
+type TabBarRoute = { key: string; name: string };
+
+export type WorkerMobileTabBarProps = {
+  state: {
+    index: number;
+    routes: TabBarRoute[];
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  descriptors?: any;
+  navigation: {
+    emit: (event: {
+      type: string;
+      target: string;
+      canPreventDefault: boolean;
+    }) => { defaultPrevented: boolean };
+    navigate: (name: string) => void;
+  };
+};
+
 export const WORKER_TABS: TabConfig[] = [
-  { id: "shifts", labelKey: "nav.shifts", icon: "clock", href: "/(tabs)/shifts" },
-  { id: "profile", labelKey: "nav.profile", icon: "user", href: "/(tabs)/profile" },
+  { id: "index", labelKey: "nav.home", icon: "home", href: "/(tabs)" },
+  { id: "shifts", labelKey: "nav.shifts", icon: "calendar", href: "/(tabs)/shifts" },
   { id: "compliance", labelKey: "nav.compliance", icon: "shield", href: "/(tabs)/compliance" },
 ];
 
 export function workerBottomNavHeight(insetsBottom: number, isWeb: boolean): number {
-  return (isWeb ? 84 : 60 + insetsBottom) + 8;
+  return (isWeb ? 96 : 72 + insetsBottom) + 20;
 }
 
 type BarProps = {
@@ -43,9 +61,9 @@ export function WorkerBottomNavBar({ activeTab, onTabPress }: BarProps) {
       style={[
         styles.bar,
         {
-          backgroundColor: colors.background,
+          backgroundColor: colors.card,
           borderTopColor: colors.border,
-          paddingBottom: Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 10),
         },
       ]}
     >
@@ -61,27 +79,17 @@ export function WorkerBottomNavBar({ activeTab, onTabPress }: BarProps) {
             onPress={() => onTabPress(tab.href)}
             style={styles.tab}
           >
-            {active ? (
-              <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />
-            ) : null}
-            <View
-              style={[
-                styles.iconPill,
-                active ? { backgroundColor: colors.activeBg, width: 52 } : { width: 36 },
-              ]}
-            >
-              <Feather
-                name={tab.icon}
-                size={20}
-                color={active ? colors.primary : colors.mutedForeground}
-              />
-            </View>
+            <Feather
+              name={tab.icon}
+              size={22}
+              color={active ? colors.primary : colors.mutedForeground}
+            />
             <Text
               style={[
                 styles.label,
                 {
                   color: active ? colors.primary : colors.mutedForeground,
-                  fontFamily: active ? "Inter_700Bold" : "Inter_500Medium",
+                  fontFamily: "Inter_500Medium",
                 },
               ]}
             >
@@ -104,8 +112,13 @@ export function WorkerBottomNav() {
   );
 }
 
-export function WorkerMobileTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const activeTab = (state.routes[state.index]?.name ?? "shifts") as WorkerTabId;
+export function WorkerMobileTabBar({ state, navigation }: WorkerMobileTabBarProps) {
+  const routeName = state.routes[state.index]?.name ?? "index";
+  const activeTab = (
+    routeName === "index" || routeName === "shifts" || routeName === "compliance"
+      ? routeName
+      : null
+  ) as WorkerTabId | null;
 
   return (
     <WorkerBottomNavBar
@@ -131,30 +144,17 @@ export function WorkerMobileTabBar({ state, descriptors, navigation }: BottomTab
 const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
+    alignItems: "flex-end",
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
+    paddingTop: 6,
+    paddingHorizontal: 4,
   },
   tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    minHeight: 60,
-    position: "relative",
+    gap: 2,
+    minHeight: 52,
   },
-  activeIndicator: {
-    position: "absolute",
-    top: 0,
-    width: 32,
-    height: 3,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-  },
-  iconPill: {
-    height: 32,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  label: { fontSize: 10.5, lineHeight: 12 },
+  label: { fontSize: 10, lineHeight: 12 },
 });
