@@ -20,12 +20,9 @@ import { useColors } from "@/hooks/useColors";
 import {
   formatIncidentDate,
   formatIncidentDateTime,
-  formatIncidentRelativeTime,
   incidentSeverityLabelKey,
   incidentStatusLabelKey,
   incidentTypeLabelKey,
-  severityMeta,
-  statusMeta,
 } from "@/lib/incident-utils";
 import { getIncident, updateIncident } from "@/lib/resource-api";
 
@@ -38,39 +35,6 @@ function SectionLabel({ children }: { children: string }) {
     <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
       {children}
     </Text>
-  );
-}
-
-function MetaField({
-  icon,
-  label,
-  value,
-  subValue,
-}: {
-  icon?: keyof typeof Feather.glyphMap;
-  label: string;
-  value: string;
-  subValue?: string;
-}) {
-  const colors = useColors();
-
-  return (
-    <View style={styles.metaField}>
-      <View style={styles.metaLabelRow}>
-        {icon ? <Feather name={icon} size={11} color={colors.mutedForeground} /> : null}
-        <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          {label}
-        </Text>
-      </View>
-      <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-        {value}
-      </Text>
-      {subValue ? (
-        <Text style={[styles.metaSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {subValue}
-        </Text>
-      ) : null}
-    </View>
   );
 }
 
@@ -203,7 +167,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
         <Text style={[styles.errorTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           {t("incidents.detail.notFound")}
         </Text>
-        <Pressable onPress={() => router.push("/incidents" as never)}>
+        <Pressable onPress={() => router.push("/(tabs)/compliance?segment=incidents" as never)}>
           <Text style={[styles.backLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
             {t("incidents.detail.backToIncidents")}
           </Text>
@@ -212,11 +176,21 @@ export function IncidentDetailPanel({ incidentId }: Props) {
     );
   }
 
-  const sev = severityMeta(incident.severity);
-  const st = statusMeta(incident.status);
   const canInvestigate = incident.status === "reported";
   const canResolve = incident.status === "under_investigation";
   const canClose = incident.status === "resolved";
+  const statusLabel =
+    incident.status === "under_investigation"
+      ? t("incidents.status.underReview")
+      : t(incidentStatusLabelKey(incident.status));
+  const statusTone =
+    incident.status === "closed" || incident.status === "resolved"
+      ? { color: colors.mutedForeground, bg: colors.soft }
+      : incident.status === "under_investigation"
+        ? { color: colors.warning, bg: colors.statusProgressBg }
+        : { color: colors.primary, bg: colors.activeBg };
+  const displayName = incident.participant_name || incident.title;
+  const typeSeverity = `${t(incidentTypeLabelKey(incident.incident_type))} · ${t(incidentSeverityLabelKey(incident.severity))}`;
 
   const handleStatusChange = (status: string) => {
     updateMutation.mutate({ status });
@@ -270,83 +244,76 @@ export function IncidentDetailPanel({ incidentId }: Props) {
         </View>
       ) : null}
 
-      <DetailCard isDark={isDark}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleCopy}>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {incident.title}
-            </Text>
-            {incident.participant_name ? (
-              <View style={styles.participantRow}>
-                <Feather name="user" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.participantText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {incident.participant_name}
-                  {incident.participant_ndis ? ` · NDIS ${incident.participant_ndis}` : ""}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.badgeCol}>
-            <View style={[styles.badge, { backgroundColor: sev.bg, borderColor: sev.border }]}>
-              <Text style={[styles.badgeText, { color: sev.color, fontFamily: "Inter_700Bold" }]}>
-                {t(incidentSeverityLabelKey(incident.severity))}
-              </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: st.bg, borderColor: st.border }]}>
-              <Text style={[styles.badgeText, { color: st.color, fontFamily: "Inter_700Bold" }]}>
-                {t(incidentStatusLabelKey(incident.status))}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.metaGrid}>
-          <MetaField
-            icon="calendar"
-            label={t("incidents.detail.incidentDate")}
-            value={incident.incident_date ? formatIncidentDate(incident.incident_date) : emDash}
-            subValue={formatIncidentRelativeTime(incident.incident_date)}
-          />
-          <MetaField
-            label={t("incidents.detail.type")}
-            value={t(incidentTypeLabelKey(incident.incident_type))}
-          />
-          {incident.location ? (
-            <MetaField icon="map-pin" label={t("incidents.detail.location")} value={incident.location} />
-          ) : null}
-          {incident.witnesses ? (
-            <MetaField icon="users" label={t("incidents.detail.witnesses")} value={incident.witnesses} />
-          ) : null}
-          {incident.practice_standard ? (
-            <View style={styles.metaFieldWide}>
-              <MetaField
-                label={t("incidents.detail.ndisPracticeStandard")}
-                value={incident.practice_standard}
-              />
-            </View>
-          ) : null}
-          {incident.ndis_reported_at ? (
-            <View style={styles.metaFieldWide}>
-              <MetaField
-                label={t("incidents.detail.ndisQscNotified")}
-                value={formatIncidentDateTime(incident.ndis_reported_at)}
-              />
-            </View>
-          ) : null}
-          {incident.resolved_date ? (
-            <MetaField
-              label={t("incidents.detail.resolved")}
-              value={formatIncidentDate(incident.resolved_date)}
-            />
-          ) : null}
-        </View>
-
-        <View style={[styles.divider, { borderTopColor: colors.border }]}>
-          <SectionLabel>{t("incidents.detail.whatHappened")}</SectionLabel>
-          <Text style={[styles.bodyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-            {incident.description}
+      <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.heroTitleRow}>
+          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]} numberOfLines={2}>
+            {displayName}
           </Text>
+          <View style={[styles.statusChip, { backgroundColor: statusTone.bg }]}>
+            <Text style={[styles.statusChipText, { color: statusTone.color, fontFamily: "Inter_600SemiBold" }]}>
+              {statusLabel}
+            </Text>
+          </View>
         </View>
+
+        {incident.participant_ndis ? (
+          <Text style={[styles.ndisLine, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            NDIS {incident.participant_ndis}
+          </Text>
+        ) : null}
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaCol}>
+            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              {t("incidents.detail.incidentDate")}
+            </Text>
+            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {incident.incident_date ? formatIncidentDate(incident.incident_date) : emDash}
+            </Text>
+          </View>
+          <View style={styles.metaCol}>
+            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              {t("incidents.detail.typeSeverity")}
+            </Text>
+            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {typeSeverity}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaCol}>
+            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              {t("incidents.detail.location")}
+            </Text>
+            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {incident.location || emDash}
+            </Text>
+          </View>
+          <View style={styles.metaCol}>
+            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              {t("incidents.detail.witnesses")}
+            </Text>
+            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {incident.witnesses || emDash}
+            </Text>
+          </View>
+        </View>
+
+        {incident.practice_standard ? (
+          <View style={[styles.standardBanner, { backgroundColor: colors.soft }]}>
+            <Text style={[styles.standardText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+              {incident.practice_standard}
+            </Text>
+          </View>
+        ) : null}
+
+        <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          {t("incidents.detail.whatHappened")}
+        </Text>
+        <Text style={[styles.bodyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+          {incident.description}
+        </Text>
 
         {incident.participant_impact ? (
           <View style={styles.section}>
@@ -398,7 +365,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
             {isUpdating ? <ActivityIndicator color={colors.mutedForeground} size="small" /> : null}
           </View>
         ) : null}
-      </DetailCard>
+      </View>
 
       <DetailCard
         isDark={isDark}
@@ -546,6 +513,33 @@ const styles = StyleSheet.create({
   errorTitle: { fontSize: 16, textAlign: "center" },
   backLink: { fontSize: 14 },
   scroll: { padding: 16, gap: 12 },
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  heroTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  heroTitle: { flex: 1, fontSize: 17 },
+  statusChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusChipText: { fontSize: 10 },
+  ndisLine: { fontSize: 11, marginTop: -4 },
+  metaRow: { flexDirection: "row", gap: 12 },
+  metaCol: { flex: 1, gap: 3 },
+  standardBanner: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  standardText: { fontSize: 11.5 },
   alertBanner: {
     borderWidth: 1,
     borderRadius: 14,
@@ -608,8 +602,8 @@ const styles = StyleSheet.create({
   metaField: { width: "47%", gap: 4 },
   metaFieldWide: { width: "100%" },
   metaLabelRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaLabel: { fontSize: 11 },
-  metaValue: { fontSize: 13 },
+  metaLabel: { fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase" },
+  metaValue: { fontSize: 12.5 },
   metaSub: { fontSize: 11 },
   divider: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -623,7 +617,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: "#9CA3AF",
   },
-  bodyText: { fontSize: 14, lineHeight: 21 },
+  bodyText: { fontSize: 12, lineHeight: 18.5 },
   workflowRow: {
     flexDirection: "row",
     flexWrap: "wrap",

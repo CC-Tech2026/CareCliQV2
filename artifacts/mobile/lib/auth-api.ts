@@ -7,6 +7,7 @@ export type AuthUser = {
   full_name?: string;
   role?: string;
   organizationId?: string;
+  profile_photo_url?: string | null;
 };
 
 export type LoginResult =
@@ -24,6 +25,10 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
       : raw.organizationId
         ? String(raw.organizationId)
         : undefined,
+    profile_photo_url:
+      raw.profile_photo_url != null && String(raw.profile_photo_url).trim()
+        ? String(raw.profile_photo_url)
+        : null,
   };
 }
 
@@ -114,6 +119,17 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await workerFetch<void>("/api/auth/password-reset/request", {
     method: "POST",
     body: JSON.stringify({ email: email.trim() }),
+  });
+}
+
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<{ message: string }> {
+  return workerFetch<{ message: string }>("/api/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

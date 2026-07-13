@@ -1,7 +1,6 @@
-import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +20,13 @@ import { OtpInput } from "@/components/auth/OtpInput";
 import { getAuthColors } from "@/constants/auth-colors";
 import { useAuth } from "@/context/AuthContext";
 import { usePreferences } from "@/context/PreferencesContext";
+import * as Haptics from "@/lib/haptics";
+import {
+  authenticateWithBiometrics,
+  getBiometricLabel,
+  isBiometricHardwareAvailable,
+  readBiometricCredentials,
+} from "@/lib/biometric-auth";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 
 function AuthField({
@@ -114,10 +120,30 @@ export default function LoginScreen() {
   const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [trustDevice, setTrustDevice] = useState(true);
+  const [pendingCreds, setPendingCreds] = useState<{ identifier: string; password: string } | null>(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
 
   const mfaStep = Boolean(mfaChallenge);
   const identifierOk = !validateLoginIdentifier(identifier) && identifier.trim().length > 0;
   const mfaComplete = mfaCode.length === 6;
+
+  const refreshBiometric = useCallback(async () => {
+    const [available, label] = await Promise.all([
+      isBiometricHardwareAvailable(),
+      getBiometricLabel(),
+    ]);
+    setBiometricAvailable(available);
+    setBiometricLabel(label);
+  }, []);
+
+  useEffect(() => {
+    void refreshBiometric();
+  }, [refreshBiometric]);
+
+  const finishAuthenticated = () => {
+    router.replace("/(tabs)" as never);
+  };
 
   const handleSignIn = async () => {
     const idErr = validateLoginIdentifier(identifier);
@@ -127,21 +153,61 @@ export default function LoginScreen() {
     if (idErr || pwdErr) return;
 
     setBusy(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const result = await login(identifier.trim(), password, rememberDevice);
       if (result.status === "mfa_required") {
+        setPendingCreds({ identifier: identifier.trim(), password });
         setMfaChallenge(result.challengeToken);
         setMfaCode("");
         setTrustDevice(true);
         return;
       }
-      router.replace("/(tabs)/shifts" as never);
+      finishAuthenticated();
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
       setPasswordError(msg);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setBusy(true);
+    setPasswordError(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const ok = await authenticateWithBiometrics(
+        t("auth.login.biometricPrompt", { method: biometricLabel }),
+      );
+      if (!ok) {
+        setPasswordError(t("auth.login.biometricCancelled"));
+        setBusy(false);
+        return;
+      }
+      const creds = await readBiometricCredentials();
+      if (!creds) {
+        setPasswordError(t("auth.login.biometricMissingCreds"));
+        setBusy(false);
+        return;
+      }
+      const result = await login(creds.identifier, creds.password, true);
+      if (result.status === "mfa_required") {
+        setPendingCreds(creds);
+        setIdentifier(creds.identifier);
+        setMfaChallenge(result.challengeToken);
+        setMfaCode("");
+        setTrustDevice(true);
+        return;
+      }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      finishAuthenticated();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
+      setPasswordError(msg);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setBusy(false);
     }
@@ -158,8 +224,8 @@ export default function LoginScreen() {
     setMfaCodeError(null);
 
     try {
-      await completeMfa(mfaChallenge, mfaCode.trim(), trustDevice);
-      router.replace("/(tabs)/shifts" as never);
+      await completeMfa(mfaChallenge, mfaCode.trim(), trustDevice, pendingCreds ?? undefined);
+      finishAuthenticated();
     } catch (err) {
       setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {
@@ -381,6 +447,26 @@ export default function LoginScreen() {
                   )}
                 </Pressable>
 
+                {biometricAvailable ? (
+                  <Pressable
+                    onPress={() => void handleBiometricLogin()}
+                    disabled={busy}
+                    style={[
+                      styles.biometricBtn,
+                      {
+                        borderColor: auth.inputBorder,
+                        backgroundColor: auth.inputBg,
+                        opacity: busy ? 0.55 : 1,
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="fingerprint" size={22} color={auth.plum} />
+                    <Text style={[styles.biometricText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                      {t("auth.login.useBiometric", { method: biometricLabel })}
+                    </Text>
+                  </Pressable>
+                ) : null}
+
                 <Pressable onPress={() => router.push("/signup" as never)}>
                   <Text style={[styles.signupLine, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
                     {t("auth.login.noAccount")}{" "}
@@ -525,6 +611,18 @@ const styles = StyleSheet.create({
   submitText: {
     color: "#FFFFFF",
     fontSize: 15,
+  },
+  biometricBtn: {
+    height: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  biometricText: {
+    fontSize: 14,
   },
   signupLine: {
     textAlign: "center",

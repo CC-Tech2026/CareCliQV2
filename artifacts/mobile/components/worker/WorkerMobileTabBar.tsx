@@ -5,4 +5,4 @@ export {
   WORKER_TABS,
   workerBottomNavHeight,
 } from "./WorkerBottomNav";
-export type { WorkerTabId } from "./WorkerBottomNav";
+export type { WorkerTabId, WorkerMobileTabBarProps } from "./WorkerBottomNav";

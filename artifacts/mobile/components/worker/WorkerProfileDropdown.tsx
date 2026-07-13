@@ -14,6 +14,7 @@ import { ProfileThemeToggle } from "@/components/worker/ProfileThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { resolveWorkerDisplayName } from "@/lib/display-name";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { shiftInitials } from "@/lib/shift-utils";
 
@@ -27,7 +28,7 @@ type MenuItem = {
 const MENU_ITEMS: MenuItem[] = [
   { labelKey: "nav.profile", icon: "user", href: "/(tabs)/profile" },
   { labelKey: "nav.privacy", icon: "shield", href: "/worker/privacy" },
-  { labelKey: "nav.settings", icon: "settings", href: "/settings" },
+  { labelKey: "nav.settings", icon: "settings", href: "/(tabs)/settings" },
   { labelKey: "nav.security", icon: "lock", href: "/worker/security" },
   { labelKey: "nav.accessibility", icon: "sliders", href: "/accessibility" },
   { labelKey: "nav.incidents", icon: "alert-triangle", href: "/incidents" },
@@ -58,7 +59,10 @@ export function WorkerProfileDropdown({ visible, onClose }: Props) {
   const t = useT();
   const { user, logout } = useAuth();
 
-  const displayName = user?.full_name ?? "Worker";
+  const displayName = resolveWorkerDisplayName({
+    authFullName: user?.full_name,
+    fallback: user?.email?.split("@")[0] || "Worker",
+  });
   const displayRole = formatRole(user?.role);
   const initials = shiftInitials(displayName);
 

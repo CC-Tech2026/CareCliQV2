@@ -15,6 +15,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AppSplash } from "@/components/auth/AppSplash";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { OfflineProvider } from "@/context/OfflineContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
@@ -51,16 +52,24 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
     const authRoute = segments[0];
-    const onAuthScreen = authRoute === "login" || authRoute === "forgot-password" || authRoute === "signup";
-    if (!isAuthenticated && !onAuthScreen) {
-      router.replace("/login" as never);
-    } else if (isAuthenticated && onAuthScreen) {
-      router.replace("/(tabs)/shifts" as never);
+    const onPreAuthScreen =
+      authRoute === "splash" ||
+      authRoute === "onboarding" ||
+      authRoute === "login" ||
+      authRoute === "forgot-password" ||
+      authRoute === "signup";
+
+    if (!isAuthenticated && !onPreAuthScreen) {
+      router.replace("/splash" as never);
+    } else if (isAuthenticated && onPreAuthScreen) {
+      router.replace("/(tabs)" as never);
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
   return (
     <Stack>
+      <Stack.Screen name="splash" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
@@ -90,7 +99,23 @@ function RootLayoutNav() {
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
+        name="worker/sessions"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
         name="worker/privacy"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/privacy-policy"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/data-permissions"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/consent"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
@@ -107,6 +132,10 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="worker/availability"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/profile-photo"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
@@ -130,10 +159,6 @@ function RootLayoutNav() {
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
-        name="settings"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
         name="incidents/[id]"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
@@ -152,14 +177,18 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const [showSplash, setShowSplash] = React.useState(true);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
+    if (!fontsLoaded && !fontError) return;
+    void SplashScreen.hideAsync();
+    const timer = setTimeout(() => setShowSplash(false), 400);
+    return () => clearTimeout(timer);
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || showSplash) {
+    return <AppSplash />;
+  }
 
   return (
     <SafeAreaProvider>

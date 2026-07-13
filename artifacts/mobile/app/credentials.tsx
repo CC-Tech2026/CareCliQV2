@@ -1,7 +1,15 @@
 import React from "react";
 
-import { WorkerProfileScreen } from "@/components/worker/profile/WorkerProfileScreen";
+import { ProfileCredentialsPanel } from "@/components/worker/profile/ProfileCredentialsPanel";
+import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
+import { useT } from "@/context/PreferencesContext";
 
 export default function CredentialsScreen() {
-  return <WorkerProfileScreen initialTab="credentials" bottomInset={24} />;
+  const t = useT();
+
+  return (
+    <WorkerStackScreen headerTitle={t("nav.credentials")} cardsOnBackground showBack>
+      <ProfileCredentialsPanel bottomInset={24} />
+    </WorkerStackScreen>
+  );
 }

@@ -8,7 +8,7 @@ export default function SettingsProviderScreen() {
   const t = useT();
 
   return (
-    <SettingsSubScreen title={t("settings.nav.provider")}>
+    <SettingsSubScreen showBottomNav={false} title={t("settings.nav.provider")}>
       <SettingsProviderPanel />
     </SettingsSubScreen>
   );

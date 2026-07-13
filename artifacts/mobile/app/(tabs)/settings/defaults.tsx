@@ -8,7 +8,7 @@ export default function SettingsDefaultsScreen() {
   const t = useT();
 
   return (
-    <SettingsSubScreen title={t("settings.nav.defaults")}>
+    <SettingsSubScreen showBottomNav={false} title={t("settings.nav.defaults")}>
       <SettingsDefaultsPanel />
     </SettingsSubScreen>
   );

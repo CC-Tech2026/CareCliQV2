@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -29,7 +29,6 @@ import {
   formatShiftTimeRange,
   isShiftCompletedForList,
   shiftInitials,
-  STATE_AVATAR_COLORS,
 } from "@/lib/shift-utils";
 
 type Props = {
@@ -52,9 +51,8 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
   const avatarColor = isCancelled
     ? colors.destructive
-    : isCompleted
-      ? colors.mutedForeground
-      : STATE_AVATAR_COLORS[shift.visual_state] ?? colors.primary;
+    : colors.soft;
+  const avatarTextColor = isCancelled ? "#FFFFFF" : colors.primary;
 
   const mapsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
@@ -175,7 +173,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
       <View>
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: avatarColor }, pulse && styles.avatarPulse]}>
-            <Text style={[styles.avatarText, { fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.avatarText, { color: avatarTextColor, fontFamily: "Inter_600SemiBold" }]}>
               {shiftInitials(shift.participant_name)}
             </Text>
           </View>
@@ -192,12 +190,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
               >
                 {shift.participant_name ?? t("shifts.listCard.participant")}
               </Text>
-              {!isCancelled && !isCompleted && <ShiftStatusBadge visualState={shift.visual_state} />}
-              {isCompleted && (
-                <Text style={[styles.doneBadge, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  {t("shifts.listCard.done").toUpperCase()}
-                </Text>
-              )}
+              {!isCancelled && <ShiftStatusBadge visualState={isCompleted ? "completed" : shift.visual_state} />}
             </View>
 
             <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
@@ -379,19 +372,19 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
     gap: 12,
   },
   row: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -399,12 +392,11 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   avatarText: {
-    color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
   },
   content: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   titleRow: {
     flexDirection: "row",
@@ -413,7 +405,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   name: {
-    fontSize: 16,
+    fontSize: 13,
     flex: 1,
   },
   strikethrough: {
@@ -424,7 +416,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   time: {
-    fontSize: 13,
+    fontSize: 11,
   },
   addressRow: {
     flexDirection: "row",

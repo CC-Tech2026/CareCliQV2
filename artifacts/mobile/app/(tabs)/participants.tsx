@@ -111,7 +111,7 @@ export default function MyClientsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.clients")} />
+      <WorkerMobileHeader title={t("nav.clients")} showBack />
       <WorkerPageSubheader
         title={t("clients.title")}
         subtitle={t("clients.assignedCompliant", { assigned: data.length, compliant: compliantCount })}

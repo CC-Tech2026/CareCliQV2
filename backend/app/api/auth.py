@@ -1076,10 +1076,12 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     onboarding_complete = profile.get("onboarding_complete")
     if onboarding_complete is None:
         onboarding_complete = True
+    full_name = (profile.get("full_name") or "").strip() or None
     return {
         "user": {
             "id": user_id,
             "email": current_user.get("email"),
+            "full_name": full_name,
             "role": profile.get("role") or current_user.get("role", "support_worker"),
             "account_type": current_user.get("account_type")
             or profile.get("account_type")

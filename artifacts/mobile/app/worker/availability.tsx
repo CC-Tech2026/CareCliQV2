@@ -1,7 +1,15 @@
 import React from "react";
 
-import { WorkerProfileScreen } from "@/components/worker/profile/WorkerProfileScreen";
+import { ProfileAvailabilityPanel } from "@/components/worker/profile/ProfileAvailabilityPanel";
+import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
+import { useT } from "@/context/PreferencesContext";
 
 export default function WorkerAvailabilityScreen() {
-  return <WorkerProfileScreen initialTab="availability" bottomInset={24} />;
+  const t = useT();
+
+  return (
+    <WorkerStackScreen headerTitle={t("nav.availability")} cardsOnBackground showBack>
+      <ProfileAvailabilityPanel bottomInset={24} footerBottom={0} />
+    </WorkerStackScreen>
+  );
 }

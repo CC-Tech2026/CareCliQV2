@@ -7,7 +7,7 @@ import {
   useUpdateSession,
   useSaveSessionWithAI,
 } from "@workspace/api-client-react";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";

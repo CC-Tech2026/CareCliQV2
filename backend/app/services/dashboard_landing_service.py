@@ -11,6 +11,38 @@ from . import session_service, shift_service
 from .supabase_client import get_supabase_admin
 
 
+def _worker_profile_name(worker_id: str, current_user: dict[str, Any]) -> tuple[str, str]:
+    """Resolve display full_name / first_name from users table, then JWT/email."""
+    full_name = ""
+    if worker_id:
+        try:
+            resp = (
+                get_supabase_admin()
+                .table("users")
+                .select("full_name, email")
+                .eq("id", worker_id)
+                .maybe_single()
+                .execute()
+            )
+            row = resp.data or {}
+            full_name = str(row.get("full_name") or "").strip()
+            if not full_name:
+                email = str(row.get("email") or current_user.get("email") or "").strip()
+                if email and "@" in email:
+                    local = email.split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
+                    full_name = " ".join(part.capitalize() for part in local.split() if part)
+        except Exception:
+            full_name = ""
+    if not full_name:
+        candidate = str(current_user.get("full_name") or "").strip()
+        if candidate and "@" not in candidate:
+            full_name = candidate
+    if not full_name:
+        full_name = "Support Worker"
+    first_name = full_name.split(" ", 1)[0] if full_name else "there"
+    return full_name, first_name
+
+
 def _parse_iso_datetime(value: Any) -> Optional[datetime]:
     if not value:
         return None
@@ -197,8 +229,7 @@ def _shift_action_items(shifts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[str, Any]:
     worker_id = get_user_id(current_user) or ""
     org_id = get_user_organization_id(current_user) or ""
-    full_name = current_user.get("full_name") or current_user.get("email") or "Support Worker"
-    first_name = str(full_name).split(" ")[0] if full_name else "there"
+    full_name, first_name = _worker_profile_name(worker_id, current_user)
 
     today_iso = app_today()
     all_rows = shift_service._fetch_worker_shift_rows(worker_id, org_id)
