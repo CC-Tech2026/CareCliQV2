@@ -53,7 +53,7 @@ export function WorkerStackScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  body: { flex: 1 },
+  body: { flex: 1, paddingTop: 16 },
   bottomNav: {
     position: "absolute",
     left: 0,

@@ -2935,13 +2935,13 @@ async def get_coordinator_notifications(
     unread_only: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get alerts/notifications for the coordinator's organization."""
+    """Get alerts/notifications for the coordinator's current organisation only."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     try:
         q = (
             supabase.table("alerts")
-            .select("id, alert_type, message, severity, is_read, session_id, patient_id, created_at")
+            .select("id, alert_type, message, severity, is_read, session_id, patient_id, created_at, organization_id, recipient_user_id")
             .eq("organization_id", org_id)
             .order("created_at", desc=True)
             .limit(limit)

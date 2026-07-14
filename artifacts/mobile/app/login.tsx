@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,7 +24,7 @@ import { usePreferences } from "@/context/PreferencesContext";
 import * as Haptics from "@/lib/haptics";
 import {
   authenticateWithBiometrics,
-  getBiometricLabel,
+  canUseBiometricLogin,
   isBiometricHardwareAvailable,
   readBiometricCredentials,
 } from "@/lib/biometric-auth";
@@ -121,20 +122,20 @@ export default function LoginScreen() {
   const [mfaCode, setMfaCode] = useState("");
   const [trustDevice, setTrustDevice] = useState(true);
   const [pendingCreds, setPendingCreds] = useState<{ identifier: string; password: string } | null>(null);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
+  const [biometricReady, setBiometricReady] = useState(false);
+  const [biometricHardware, setBiometricHardware] = useState(false);
 
   const mfaStep = Boolean(mfaChallenge);
   const identifierOk = !validateLoginIdentifier(identifier) && identifier.trim().length > 0;
   const mfaComplete = mfaCode.length === 6;
 
   const refreshBiometric = useCallback(async () => {
-    const [available, label] = await Promise.all([
+    const [ready, hardware] = await Promise.all([
+      canUseBiometricLogin(),
       isBiometricHardwareAvailable(),
-      getBiometricLabel(),
     ]);
-    setBiometricAvailable(available);
-    setBiometricLabel(label);
+    setBiometricReady(ready);
+    setBiometricHardware(hardware);
   }, []);
 
   useEffect(() => {
@@ -174,13 +175,34 @@ export default function LoginScreen() {
     }
   };
 
-  const handleBiometricLogin = async () => {
+  const handleBiometricLogin = async (preferred: "face" | "fingerprint" = "fingerprint") => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const method =
+      preferred === "face"
+        ? t("settings.biometric.face")
+        : t("settings.biometric.fingerprint");
+
+    if (!biometricHardware) {
+      Alert.alert(
+        t("auth.login.biometricUnavailableTitle"),
+        t("auth.login.biometricUnavailableMessage"),
+      );
+      return;
+    }
+
+    if (!biometricReady) {
+      Alert.alert(
+        t("auth.login.biometricSetupTitle", { method }),
+        t("auth.login.biometricSetupMessage", { method }),
+      );
+      return;
+    }
+
     setBusy(true);
     setPasswordError(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const ok = await authenticateWithBiometrics(
-        t("auth.login.biometricPrompt", { method: biometricLabel }),
+        t("auth.login.biometricPrompt", { method }),
       );
       if (!ok) {
         setPasswordError(t("auth.login.biometricCancelled"));
@@ -447,9 +469,26 @@ export default function LoginScreen() {
                   )}
                 </Pressable>
 
-                {biometricAvailable ? (
+                <View style={styles.biometricStack}>
                   <Pressable
-                    onPress={() => void handleBiometricLogin()}
+                    onPress={() => void handleBiometricLogin("face")}
+                    disabled={busy}
+                    style={[
+                      styles.biometricBtn,
+                      {
+                        borderColor: auth.inputBorder,
+                        backgroundColor: auth.inputBg,
+                        opacity: busy ? 0.55 : 1,
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="face-recognition" size={22} color={auth.plum} />
+                    <Text style={[styles.biometricText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                      {t("auth.login.useBiometric", { method: t("settings.biometric.face") })}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void handleBiometricLogin("fingerprint")}
                     disabled={busy}
                     style={[
                       styles.biometricBtn,
@@ -462,10 +501,10 @@ export default function LoginScreen() {
                   >
                     <MaterialCommunityIcons name="fingerprint" size={22} color={auth.plum} />
                     <Text style={[styles.biometricText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                      {t("auth.login.useBiometric", { method: biometricLabel })}
+                      {t("auth.login.useBiometric", { method: t("settings.biometric.fingerprint") })}
                     </Text>
                   </Pressable>
-                ) : null}
+                </View>
 
                 <Pressable onPress={() => router.push("/signup" as never)}>
                   <Text style={[styles.signupLine, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
@@ -496,10 +535,12 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   formPanel: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    marginBottom: 16,
     minHeight: 420,
+    overflow: "hidden",
   },
   dragHandleWrap: {
     alignItems: "center",
@@ -620,6 +661,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  biometricStack: {
+    gap: 10,
+    marginTop: 4,
   },
   biometricText: {
     fontSize: 14,

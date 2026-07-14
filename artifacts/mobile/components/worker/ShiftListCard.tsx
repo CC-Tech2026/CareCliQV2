@@ -25,19 +25,24 @@ import {
 import {
   avatarShouldPulse,
   emergencyContactDisplay,
+  findInProgressShift,
   formatActiveGoalLabel,
   formatShiftTimeRange,
+  isBlockedByInProgressShift,
   isShiftCompletedForList,
   shiftInitials,
 } from "@/lib/shift-utils";
+import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 
 type Props = {
   shift: WorkerShift;
   showActions?: boolean;
   onRefresh?: () => void;
+  /** Other shifts on the same list — used to block opening Upcoming while one is In progress. */
+  siblingShifts?: WorkerShift[];
 };
 
-export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) {
+export function ShiftListCard({ shift, showActions = false, onRefresh, siblingShifts = [] }: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
@@ -48,6 +53,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
   const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
+  const inProgressShift = findInProgressShift(siblingShifts.length ? siblingShifts : [shift]);
 
   const avatarColor = isCancelled
     ? colors.destructive
@@ -75,7 +81,15 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
   const coordinatorLine = [caseManager?.phone, caseManager?.email].filter(Boolean).join(" · ");
   const officePhone = shift.office_contact_number?.trim() || null;
 
+  const showBlockedAlert = () => {
+    showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+  };
+
   const navigateToShift = () => {
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedAlert();
+      return;
+    }
     router.push(`/shift/${shift.id}` as never);
   };
 
@@ -102,6 +116,11 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
   const handleClockIn = async () => {
     if (starting) return;
+
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedAlert();
+      return;
+    }
 
     if (isSessionLive) {
       navigateToShift();
@@ -170,7 +189,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
       ]}
       testID={`shift-card-${shift.id}`}
     >
-      <View>
+      <Pressable onPress={navigateToShift}>
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: avatarColor }, pulse && styles.avatarPulse]}>
             <Text style={[styles.avatarText, { color: avatarTextColor, fontFamily: "Inter_600SemiBold" }]}>
@@ -217,6 +236,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
             </View>
           </View>
         </View>
+      </Pressable>
 
         {showDetails && goals.length > 0 && (
           <View style={styles.goalRow}>
@@ -309,7 +329,6 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
             headerTitle={t("shifts.listCard.medicalAlert")}
           />
         )}
-      </View>
 
       {showActions && !isCancelled && !isCompleted && (
         <View style={styles.actions}>

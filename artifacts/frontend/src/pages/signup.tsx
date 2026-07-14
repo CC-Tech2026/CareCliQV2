@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from "react";
+﻿import { useState, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { CCQ_TOKEN_KEY } from "@/lib/storage-keys";
@@ -6,6 +6,7 @@ import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
+import { persistAuthSession, getRememberDevicePreference } from "@/lib/auth-session";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   EyeOff,
   CheckCircle2,
   Quote,
+  AlertTriangle,
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 
@@ -84,6 +86,7 @@ interface FormData {
   sp_team_size: string;
   sp_participant_volume: string;
   sp_contact_number: string;
+  sp_address: string;
 }
 
 const EMPTY: FormData = {
@@ -99,6 +102,7 @@ const EMPTY: FormData = {
   sp_team_size: "",
   sp_participant_volume: "",
   sp_contact_number: "",
+  sp_address: "",
 };
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -233,16 +237,69 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+interface InviteInfo {
+  email: string;
+  role: string;
+  organization_id?: string;
+  organization_name: string | null;
+  expires_at: string;
+}
+
 export default function Signup() {
   const { login, updateUser, updateToken } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate: t, translateParams } = useAccessibility();
 
+  const inviteToken = new URLSearchParams(window.location.search).get("token") ?? "";
+  const isInviteMode = Boolean(inviteToken);
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
+  const [invite, setInvite] = useState<InviteInfo | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(isInviteMode);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const orgNameLocked = isInviteMode && Boolean(invite?.organization_name);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    setInviteLoading(true);
+    setInviteError(null);
+    fetch(`/api/invitations/validate/${encodeURIComponent(inviteToken)}`)
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          const detail = body.detail;
+          throw new Error(
+            typeof detail === "string" ? detail : t("auth.invite.invalidOrExpired"),
+          );
+        }
+        return r.json() as Promise<InviteInfo>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setInvite(data);
+        setForm((prev) => ({
+          ...prev,
+          email: data.email || "",
+          sp_organisation_name: data.organization_name || prev.sp_organisation_name,
+          account_type: data.role === "support_worker" ? "independent_worker" : "small_provider",
+        }));
+        setInviteLoading(false);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        setInviteError(e.message || t("auth.invite.invalidOrExpired"));
+        setInviteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken, t]);
 
   const updateField = useCallback((f: keyof FormData, v: string) => {
     setForm((p) => ({
@@ -263,13 +320,92 @@ export default function Signup() {
   }
 
   function step2Valid() {
-    return form.sp_organisation_name.trim() !== "";
+    return (
+      form.sp_organisation_name.trim() !== "" &&
+      form.sp_provider_type.trim() !== "" &&
+      form.sp_registration_status.trim() !== "" &&
+      form.sp_team_size.trim() !== "" &&
+      form.sp_participant_volume.trim() !== "" &&
+      form.sp_contact_number.trim() !== "" &&
+      form.sp_address.trim() !== ""
+    );
+  }
+
+  async function handleInviteSubmit() {
+    if (!inviteToken || !step2Valid() || busy) return;
+    setBusy(true);
+    try {
+      const res = await apiFetch(`/api/invitations/accept/${encodeURIComponent(inviteToken)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: form.full_name.trim(),
+          password: form.password,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = err.detail;
+        throw new Error(
+          typeof detail === "string" ? detail : t("auth.invite.toast.acceptFailed"),
+        );
+      }
+      const data = await res.json();
+
+      if (data.access_token) {
+        const rememberDevice = getRememberDevicePreference();
+        const userData = {
+          id: data.user.id,
+          email: data.user.email,
+          full_name: data.user.full_name,
+          role: data.user.role,
+          account_type: data.user.account_type,
+          organization_id: data.user.organization_id,
+          organizationId: data.user.organization_id,
+          onboarding_complete: true,
+        };
+        persistAuthSession(data.access_token, JSON.stringify(userData), rememberDevice);
+        await updateToken(data.access_token);
+
+        try {
+          await apiFetch("/api/auth/complete-onboarding", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${data.access_token}`,
+            },
+            body: JSON.stringify(buildPayload(form)),
+          });
+          updateUser({ onboarding_complete: true });
+        } catch {
+          updateUser({ onboarding_complete: true });
+        }
+      }
+
+      setStep(3);
+      toast({ title: t("auth.invite.toast.welcome"), description: t("auth.invite.toast.activated") });
+      const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/hub";
+      setTimeout(() => navigate(destination), 1500);
+    } catch (err) {
+      toast({
+        title: t("auth.signup.error.failed"),
+        description: err instanceof Error ? err.message : t("auth.signup.error.tryAgain"),
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault();
 
     if (!step2Valid() || busy) return;
+
+    if (isInviteMode) {
+      await handleInviteSubmit();
+      return;
+    }
 
     setBusy(true);
 
@@ -294,12 +430,12 @@ export default function Signup() {
         throw new Error(errBody.detail || t("auth.signup.error.registrationFailed"));
       }
 
-      let token: string | null = null;
+      let authToken: string | null = null;
 
       try {
         const result = await login(form.email, form.password);
         if (result.status === "authenticated") {
-          token = localStorage.getItem(CCQ_TOKEN_KEY);
+          authToken = localStorage.getItem(CCQ_TOKEN_KEY);
         }
       } catch (err) {
         setEmailVerify(true);
@@ -307,7 +443,7 @@ export default function Signup() {
         return;
       }
 
-      if (token) {
+      if (authToken) {
         try {
           const onboardingRes = await apiFetch(
             "/api/auth/complete-onboarding",
@@ -315,7 +451,7 @@ export default function Signup() {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${authToken}`,
               },
               body: JSON.stringify(buildPayload(form)),
             },
@@ -364,6 +500,35 @@ export default function Signup() {
     !!form.confirm_password && form.password !== form.confirm_password;
 
   const short = !!form.password && form.password.length < 8;
+
+  if (inviteLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--auth-shell-bg)]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin" style={{ color: PLUM }} size={32} />
+          <p className="text-sm" style={{ color: "var(--cc-muted)" }}>{t("auth.invite.validating")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (inviteError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--auth-shell-bg)] px-4">
+        <div
+          className="w-full max-w-md rounded-3xl p-8 text-center space-y-4 border bg-[var(--auth-form-bg)]"
+          style={{ borderColor: "var(--auth-card-border)" }}
+        >
+          <AlertTriangle size={40} className="mx-auto" style={{ color: CORAL }} />
+          <h2 className="text-xl font-bold" style={{ color: "var(--cc-text)" }}>{t("auth.invite.errorTitle")}</h2>
+          <p className="text-sm" style={{ color: "var(--cc-muted)" }}>{inviteError}</p>
+          <a href="/login" className="text-sm font-medium underline underline-offset-2" style={{ color: PLUM }}>
+            {t("auth.invite.goToSignIn")}
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -533,11 +698,13 @@ export default function Signup() {
                     className="text-[22px] font-black"
                     style={{ color: PLUM }}
                   >
-                    {t("auth.signup.title")}
+                    {isInviteMode ? t("auth.invite.title") : t("auth.signup.title")}
                   </h2>
 
                   <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
-                    {t("auth.signup.subtitle")}
+                    {isInviteMode && invite?.organization_name
+                      ? translateParams("auth.invite.orgInvited", { org: invite.organization_name })
+                      : t("auth.signup.subtitle")}
                   </p>
                 </div>
 
@@ -560,10 +727,19 @@ export default function Signup() {
                     name="email"
                     type="email"
                     value={form.email}
-                    onChange={(v) => updateField("email", v)}
+                    onChange={(v) => {
+                      if (isInviteMode) return;
+                      updateField("email", v);
+                    }}
                     placeholder={t("auth.signup.emailPlaceholder")}
                     autoComplete="email"
+                    disabled={isInviteMode}
                   />
+                  {isInviteMode ? (
+                    <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                      {t("auth.signup.org.lockedFromInvite")}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
@@ -643,15 +819,22 @@ export default function Signup() {
             {/* STEP 2 */}
             {step === 2 && (
               <form onSubmit={handleSubmit} className="space-y-4 step-content">
+                <div>
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.setupOrganisation")}
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {t("auth.signup.org.requiredHint")}
+                  </p>
+                </div>
 
-                {form.account_type === "small_provider" && (
-                  <SmallProviderFields
-                    form={form}
-                    updateField={updateField}
-                    disabled={busy}
-                    t={t}
-                  />
-                )}
+                <SmallProviderFields
+                  form={form}
+                  updateField={updateField}
+                  disabled={busy}
+                  orgNameLocked={orgNameLocked}
+                  t={t}
+                />
 
                 <div className="flex gap-3 pt-3">
                   <button
@@ -765,26 +948,42 @@ export default function Signup() {
 
 // ── Payload Builder ───────────────────────────────────────────────────────────
 function buildPayload(form: FormData) {
-  const base: Record<string, unknown> = {
-    account_type: form.account_type,
+  const accountType = form.account_type || "small_provider";
+  return {
+    account_type: accountType,
+    organization_name: form.sp_organisation_name,
+    provider_type: form.sp_provider_type || undefined,
+    registration_status: form.sp_registration_status || undefined,
+    team_size: form.sp_team_size || undefined,
+    participant_volume: form.sp_participant_volume || undefined,
+    contact_number: form.sp_contact_number || undefined,
+    address: form.sp_address || undefined,
+    org_address: form.sp_address || undefined,
+    onboarding_data: {
+      provider_type: form.sp_provider_type,
+      registration_status: form.sp_registration_status,
+      team_size: form.sp_team_size,
+      participant_volume: form.sp_participant_volume,
+      contact_number: form.sp_contact_number,
+      address: form.sp_address,
+    },
   };
-
-  if (form.account_type === "small_provider") {
-    base.organization_name = form.sp_organisation_name;
-    if (form.sp_provider_type) base.provider_type = form.sp_provider_type;
-    if (form.sp_registration_status)
-      base.registration_status = form.sp_registration_status;
-    if (form.sp_team_size) base.team_size = form.sp_team_size;
-    if (form.sp_participant_volume)
-      base.participant_volume = form.sp_participant_volume;
-    if (form.sp_contact_number) base.contact_number = form.sp_contact_number;
-  }
-
-  return base;
 }
 
 // ── Small Provider ────────────────────────────────────────────────────────────
-function SmallProviderFields({ form, updateField, disabled, t }: { form: FormData; updateField: (f: keyof FormData, v: string) => void; disabled?: boolean; t: (key: string) => string }) {
+function SmallProviderFields({
+  form,
+  updateField,
+  disabled,
+  orgNameLocked,
+  t,
+}: {
+  form: FormData;
+  updateField: (f: keyof FormData, v: string) => void;
+  disabled?: boolean;
+  orgNameLocked?: boolean;
+  t: (key: string) => string;
+}) {
   return (
     <>
       <div>
@@ -793,10 +992,18 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
         <StyledInput
           name="sp_organisation_name"
           value={form.sp_organisation_name}
-          onChange={(v) => updateField("sp_organisation_name", v)}
+          onChange={(v) => {
+            if (orgNameLocked) return;
+            updateField("sp_organisation_name", v);
+          }}
           placeholder={t("auth.signup.placeholder.organisation")}
-          disabled={disabled}
+          disabled={disabled || orgNameLocked}
         />
+        {orgNameLocked ? (
+          <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+            {t("auth.signup.org.lockedFromInvite")}
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -808,7 +1015,7 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
           onChange={(v) => updateField("sp_provider_type", v)}
           placeholder={t("auth.signup.placeholder.selectType")}
           disabled={disabled}
-          required={false}
+          required
           options={[
             { value: "registered_ndis", label: t("auth.signup.providerType.registeredNdis") },
             { value: "unregistered", label: t("auth.signup.providerType.unregistered") },
@@ -827,7 +1034,7 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
           onChange={(v) => updateField("sp_registration_status", v)}
           placeholder={t("auth.signup.placeholder.selectStatus")}
           disabled={disabled}
-          required={false}
+          required
           options={[
             { value: "registered", label: t("auth.signup.regStatus.registered") },
             { value: "unregistered", label: t("auth.signup.status.unregistered") },
@@ -845,7 +1052,7 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
           onChange={(v) => updateField("sp_team_size", v)}
           placeholder={t("auth.signup.placeholder.selectSize")}
           disabled={disabled}
-          required={false}
+          required
           options={[
             { value: "1_5", label: t("auth.signup.teamSize.1_5") },
             { value: "5_20", label: t("auth.signup.teamSize.5_20") },
@@ -863,7 +1070,7 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
           onChange={(v) => updateField("sp_participant_volume", v)}
           placeholder={t("auth.signup.placeholder.participantCount")}
           disabled={disabled}
-          required={false}
+          required
           options={[
             { value: "1_10", label: t("auth.signup.participantVolume.1_10") },
             { value: "10_50", label: t("auth.signup.participantVolume.10_50") },
@@ -881,7 +1088,18 @@ function SmallProviderFields({ form, updateField, disabled, t }: { form: FormDat
           onChange={(v) => updateField("sp_contact_number", v)}
           placeholder={t("auth.signup.placeholder.contact")}
           disabled={disabled}
-          required={false}
+        />
+      </div>
+
+      <div>
+        <Label>{t("auth.signup.field.address")}</Label>
+
+        <StyledInput
+          name="sp_address"
+          value={form.sp_address}
+          onChange={(v) => updateField("sp_address", v)}
+          placeholder={t("auth.signup.placeholder.address")}
+          disabled={disabled}
         />
       </div>
     </>

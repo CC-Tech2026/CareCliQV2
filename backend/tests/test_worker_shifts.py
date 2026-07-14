@@ -79,6 +79,8 @@ def test_matches_filter_upcoming():
         ("cancelled", {"status": "in_progress"}, False),
         ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00"}, True),
         ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00", "status": "cancelled"}, False),
+        ("past", {"status": "completed"}, True),
+        ("past", {"status": "scheduled"}, False),
         ("all", {"status": "scheduled"}, True),
         ("all", {}, True),
     ],

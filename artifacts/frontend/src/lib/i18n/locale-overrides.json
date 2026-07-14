@@ -25,6 +25,7 @@
     "shifts.title": "Ca làm việc",
     "shifts.filter.today": "Hôm nay",
     "shifts.filter.upcoming": "Sắp tới",
+    "shifts.filter.past": "Trước đó",
     "shifts.filter.completed": "Đã hoàn thành",
     "shifts.filter.cancelled": "Đã hủy",
     "shifts.empty": "Không có ca trong mục này",
@@ -3113,7 +3114,11 @@
     "md.onboarding.tab.builder": "Người xây dựng",
     "md.onboarding.tab.resources": "Tài nguyên",
     "md.onboarding.tab.approvals": "Phê duyệt",
-    "md.onboarding.loadFailed": "Không thể tải dữ liệu giới thiệu"
+    "md.onboarding.loadFailed": "Không thể tải dữ liệu giới thiệu",
+    "auth.signup.org.lockedFromInvite": "Do lời mời đặt — không thể thay đổi.",
+    "auth.signup.org.requiredHint": "Điền tất cả các trường bên dưới để hoàn tất thiết lập.",
+    "auth.signup.field.address": "Địa chỉ",
+    "auth.signup.placeholder.address": "Đường, suburb, bang, mã bưu điện"
   },
   "ar": {
     "nav.dashboard": "لوحة التحكم",
@@ -3141,6 +3146,7 @@
     "shifts.title": "نوباتي",
     "shifts.filter.today": "اليوم",
     "shifts.filter.upcoming": "القادمة",
+    "shifts.filter.past": "السابقة",
     "shifts.filter.completed": "المكتملة",
     "shifts.filter.cancelled": "الملغاة",
     "shifts.empty": "لا توجد نوبات في هذا العرض",
@@ -6229,7 +6235,11 @@
     "md.onboarding.tab.builder": "منشئ",
     "md.onboarding.tab.resources": "موارد",
     "md.onboarding.tab.approvals": "الموافقات",
-    "md.onboarding.loadFailed": "تعذر تحميل بيانات الإعداد"
+    "md.onboarding.loadFailed": "تعذر تحميل بيانات الإعداد",
+    "auth.signup.org.lockedFromInvite": "محدد من الدعوة — لا يمكن تغييره.",
+    "auth.signup.org.requiredHint": "املأ كل الحقول أدناه لإنهاء الإعداد.",
+    "auth.signup.field.address": "العنوان",
+    "auth.signup.placeholder.address": "الشارع، الضاحية، الولاية، الرمز البريدي"
   },
   "zh-Hans": {
     "nav.dashboard": "仪表板",
@@ -6257,6 +6267,7 @@
     "shifts.title": "我的班次",
     "shifts.filter.today": "今天",
     "shifts.filter.upcoming": "即将到来",
+    "shifts.filter.past": "过去",
     "shifts.filter.completed": "已完成",
     "shifts.filter.cancelled": "已取消",
     "shifts.empty": "此视图暂无班次",
@@ -9345,6 +9356,10 @@
     "md.onboarding.tab.builder": "建设者",
     "md.onboarding.tab.resources": "资源",
     "md.onboarding.tab.approvals": "批准",
-    "md.onboarding.loadFailed": "无法加载入职数据"
+    "md.onboarding.loadFailed": "无法加载入职数据",
+    "auth.signup.org.lockedFromInvite": "由邀请指定 — 无法更改。",
+    "auth.signup.org.requiredHint": "请填写下方所有字段以完成设置。",
+    "auth.signup.field.address": "地址",
+    "auth.signup.placeholder.address": "街道、郊区、州、邮编"
   }
 }

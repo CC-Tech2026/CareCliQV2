@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 6 },
-  list: { paddingTop: 0 },
+  list: { paddingTop: 16 },
   row: {
     flexDirection: "row",
     alignItems: "center",

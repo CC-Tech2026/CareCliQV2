@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -17,7 +18,7 @@ import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { useOffline } from "@/context/OfflineContext";
 import { useT } from "@/context/PreferencesContext";
-import { useWorkerShifts } from "@/hooks/worker/useWorkerShifts";
+import { useWorkerShiftsInfinite } from "@/hooks/worker/useWorkerShifts";
 import { useColors } from "@/hooks/useColors";
 import {
   cacheWorkerShifts,
@@ -26,6 +27,7 @@ import {
 import type { WorkerShift } from "@/lib/worker-api";
 import {
   getPrimaryTodayShiftId,
+  isShiftCompletedForList,
   sortTodayShiftsForList,
 } from "@/lib/shift-utils";
 
@@ -60,24 +62,56 @@ export default function MyShiftsScreen() {
   const { isOnline } = useOffline();
   const [cachedShifts, setCachedShifts] = useState<WorkerShift[] | null>(null);
   const [segment, setSegment] = useState<ShiftSeg>("today");
+  const loadingMoreRef = useRef(false);
 
-  const todayQuery = useWorkerShifts("today");
-  const upcomingQuery = useWorkerShifts("upcoming");
-  const pastQuery = useWorkerShifts("past");
+  const todayQuery = useWorkerShiftsInfinite("today");
+  const upcomingQuery = useWorkerShiftsInfinite("upcoming");
+  const pastQuery = useWorkerShiftsInfinite("past");
 
   const activeQuery =
     segment === "today" ? todayQuery : segment === "upcoming" ? upcomingQuery : pastQuery;
 
+  const todayShifts = useMemo(
+    () => todayQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
+    [todayQuery.data?.pages],
+  );
+  const upcomingShifts = useMemo(
+    () => upcomingQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
+    [upcomingQuery.data?.pages],
+  );
+  const pastShifts = useMemo(
+    () => pastQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
+    [pastQuery.data?.pages],
+  );
+
   const onlineShifts = useMemo(() => {
     if (segment === "today") {
-      if (!todayQuery.data?.shifts) return undefined;
-      const completedToday = (pastQuery.data?.shifts ?? []).filter(isTodayShift);
-      const byId = new Map<string, WorkerShift>();
-      for (const s of [...todayQuery.data.shifts, ...completedToday]) byId.set(s.id, s);
-      return Array.from(byId.values());
+      if (!todayQuery.data?.pages) return undefined;
+      // Completed/documented shifts belong in Past only.
+      return todayShifts.filter((s) => !isShiftCompletedForList(s));
     }
-    return activeQuery.data?.shifts;
-  }, [segment, todayQuery.data?.shifts, pastQuery.data?.shifts, activeQuery.data?.shifts]);
+    if (segment === "upcoming") {
+      if (!upcomingQuery.data?.pages) return undefined;
+      return upcomingShifts;
+    }
+    if (!pastQuery.data?.pages) return undefined;
+    const completedToday = todayShifts.filter((s) => isTodayShift(s) && isShiftCompletedForList(s));
+    const byId = new Map<string, WorkerShift>();
+    for (const s of [...completedToday, ...pastShifts]) byId.set(s.id, s);
+    return Array.from(byId.values()).sort((a, b) => {
+      const aRef = a.scheduled_start ?? a.clocked_out_at ?? a.clocked_in_at ?? "";
+      const bRef = b.scheduled_start ?? b.clocked_out_at ?? b.clocked_in_at ?? "";
+      return bRef.localeCompare(aRef);
+    });
+  }, [
+    segment,
+    todayQuery.data?.pages,
+    upcomingQuery.data?.pages,
+    pastQuery.data?.pages,
+    todayShifts,
+    upcomingShifts,
+    pastShifts,
+  ]);
 
   useEffect(() => {
     if (segment === "today" && onlineShifts && onlineShifts.length > 0) {
@@ -105,12 +139,21 @@ export default function MyShiftsScreen() {
     };
   }, [activeShifts, segment]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     void todayQuery.refetch();
     void upcomingQuery.refetch();
     void pastQuery.refetch();
     void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
-  };
+  }, [todayQuery, upcomingQuery, pastQuery, queryClient]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMoreRef.current) return;
+    if (!activeQuery.hasNextPage || activeQuery.isFetchingNextPage) return;
+    loadingMoreRef.current = true;
+    void activeQuery.fetchNextPage().finally(() => {
+      loadingMoreRef.current = false;
+    });
+  }, [activeQuery]);
 
   const listHeader = (
     <View style={styles.listHeader}>
@@ -158,6 +201,17 @@ export default function MyShiftsScreen() {
     </View>
   );
 
+  const listFooter = (
+    <View style={styles.footer}>
+      {activeQuery.isFetchingNextPage ? (
+        <ActivityIndicator color={colors.primary} style={styles.footerSpinner} />
+      ) : null}
+      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("shifts.tapHint")}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
@@ -183,10 +237,12 @@ export default function MyShiftsScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={listHeader}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
           refreshControl={
             isOnline ? (
               <RefreshControl
-                refreshing={activeQuery.isRefetching}
+                refreshing={activeQuery.isRefetching && !activeQuery.isFetchingNextPage}
                 onRefresh={handleRefresh}
                 tintColor={colors.primary}
               />
@@ -195,6 +251,7 @@ export default function MyShiftsScreen() {
           renderItem={({ item }) => (
             <ShiftListCard
               shift={item}
+              siblingShifts={sortedShifts}
               showActions={segment === "today" && item.id === primaryShiftId}
               onRefresh={handleRefresh}
             />
@@ -212,11 +269,7 @@ export default function MyShiftsScreen() {
               </Text>
             </View>
           }
-          ListFooterComponent={
-            <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("shifts.tapHint")}
-            </Text>
-          }
+          ListFooterComponent={listFooter}
         />
       )}
     </View>
@@ -271,5 +324,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 17 },
   emptySub: { fontSize: 14, textAlign: "center" },
   errorText: { fontSize: 14, textAlign: "center", padding: 24 },
+  footer: { paddingTop: 4, paddingBottom: 8 },
+  footerSpinner: { marginVertical: 8 },
   hint: { fontSize: 11, marginTop: 4, marginBottom: 8 },
 });

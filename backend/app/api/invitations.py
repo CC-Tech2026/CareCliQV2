@@ -52,9 +52,36 @@ class InviteAcceptRequest(BaseModel):
     password: str
 
 
+class InviteRequestBody(BaseModel):
+    full_name: str
+    email: str
+    organization_id: str | None = None
+    organization_name: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _generate_short_code(supabase) -> str:
+    """Return a unique 6-digit join code for pending invites."""
+    for _ in range(20):
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        try:
+            existing = (
+                supabase.table("invitations")
+                .select("id")
+                .eq("short_code", code)
+                .is_("accepted_at", "null")
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                return code
+        except Exception:
+            return code
+    return secrets.token_hex(3)[:6].upper()
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -121,12 +148,14 @@ async def create_invite(
             # Expired — delete and re-issue
             supabase.table("invitations").delete().eq("id", ex["id"]).execute()
 
+        short_code = _generate_short_code(supabase)
         result = supabase.table("invitations").insert({
             "organization_id": org_id,
             "invited_by": current_user.get("sub"),
             "email": email,
             "role": body.role,
             "token": token,
+            "short_code": short_code,
             "expires_at": expires_at,
         }).execute()
 
@@ -140,13 +169,16 @@ async def create_invite(
         try:
             org_res = (
                 supabase.table("organizations")
-                .select("organization_name")
-                .eq("id", org_id)
-                .maybe_single()
+                .select("organization_name, name")
+                .eq("organization_id", org_id)
+                .limit(1)
                 .execute()
             )
-            if org_res and org_res.data:
-                organization_name = org_res.data.get("organization_name")
+            if org_res.data:
+                organization_name = (
+                    org_res.data[0].get("organization_name")
+                    or org_res.data[0].get("name")
+                )
         except Exception as org_error:
             logger.debug("Could not load organization name for invite email: %s", org_error)
 
@@ -156,6 +188,7 @@ async def create_invite(
             invite_url=full_invite_url,
             organization_name=organization_name,
             role=body.role,
+            short_code=short_code,
         )
         logger.info(
             "Invite created: org=%s email=%s role=%s by=%s email_status=%s",
@@ -170,6 +203,7 @@ async def create_invite(
             "email": invite["email"],
             "role": invite["role"],
             "token": token,
+            "short_code": short_code,
             "expires_at": invite["expires_at"],
             "invite_url": invite_url,
             "email_delivery": email_delivery,
@@ -225,6 +259,303 @@ async def revoke_invite(invite_id: str, request: Request, current_user: dict = D
         raise HTTPException(status_code=500, detail="Failed to revoke invitation")
 
 
+@router.get("/organizations")
+async def list_joinable_organizations():
+    """Public — org picker for mobile invite-request flow."""
+    try:
+        supabase = get_supabase_admin()
+        result = (
+            supabase.table("organizations")
+            .select("organization_id, organization_name, name")
+            .order("organization_name")
+            .limit(200)
+            .execute()
+        )
+        rows = result.data or []
+        out = []
+        for r in rows:
+            oid = r.get("organization_id")
+            if not oid:
+                continue
+            label = (
+                str(r.get("organization_name") or "").strip()
+                or str(r.get("name") or "").strip()
+                or "Organisation"
+            )
+            out.append({"id": str(oid), "organization_name": label})
+        out.sort(key=lambda x: x["organization_name"].lower())
+        return out
+    except Exception as e:
+        logger.error("list_joinable_organizations error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to load organisations")
+
+
+@router.post("/request-invite", status_code=201)
+async def request_invite(body: InviteRequestBody):
+    """Public — prospective worker asks coordinators to send a staff invite."""
+    full_name = (body.full_name or "").strip()
+    email = (body.email or "").strip().lower()
+    org_id = (body.organization_id or "").strip() or None
+    org_name_query = (body.organization_name or "").strip() or None
+
+    if len(full_name) < 2:
+        raise HTTPException(status_code=400, detail="Enter your full name")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    if not org_id and not org_name_query:
+        raise HTTPException(
+            status_code=400,
+            detail="Select your organisation so we can notify the right coordinators",
+        )
+
+    try:
+        supabase = get_supabase_admin()
+        org_row = None
+        if org_id:
+            org_res = (
+                supabase.table("organizations")
+                .select("organization_id, organization_name, name")
+                .eq("organization_id", org_id)
+                .limit(1)
+                .execute()
+            )
+            org_row = (org_res.data or [None])[0]
+        if not org_row and org_name_query:
+            org_res = (
+                supabase.table("organizations")
+                .select("organization_id, organization_name, name")
+                .ilike("organization_name", f"%{org_name_query}%")
+                .limit(5)
+                .execute()
+            )
+            rows = org_res.data or []
+            if not rows:
+                org_res = (
+                    supabase.table("organizations")
+                    .select("organization_id, organization_name, name")
+                    .ilike("name", f"%{org_name_query}%")
+                    .limit(5)
+                    .execute()
+                )
+                rows = org_res.data or []
+            if len(rows) == 1:
+                org_row = rows[0]
+            elif len(rows) > 1:
+                exact = next(
+                    (
+                        r
+                        for r in rows
+                        if str(r.get("organization_name") or r.get("name") or "").lower()
+                        == org_name_query.lower()
+                    ),
+                    None,
+                )
+                org_row = exact or rows[0]
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Organisation not found. Check the name or ask your coordinator for the exact organisation name.",
+                )
+        if not org_row:
+            raise HTTPException(status_code=404, detail="Organisation not found")
+
+        organization_id = str(org_row.get("organization_id") or org_row.get("id") or "")
+        organization_name = (
+            str(org_row.get("organization_name") or org_row.get("name") or "").strip()
+            or "your organisation"
+        )
+        if not organization_id:
+            raise HTTPException(status_code=404, detail="Organisation not found")
+
+        # Only notify coordinators whose home organisation matches the request.
+        # Do not use cross-org organization_members rows (demo seed often dual-links people).
+        users_res = (
+            supabase.table("users")
+            .select("id, role, organization_id")
+            .eq("organization_id", organization_id)
+            .in_("role", ["support_coordinator", "managing_director", "admin"])
+            .execute()
+        )
+        coordinator_ids = [
+            str(u["id"])
+            for u in (users_res.data or [])
+            if u.get("id") and str(u.get("organization_id") or "") == organization_id
+        ]
+        # De-dupe while preserving order
+        coordinator_ids = list(dict.fromkeys(coordinator_ids))
+
+        if not coordinator_ids:
+            raise HTTPException(
+                status_code=404,
+                detail="No coordinator found for that organisation. Contact your provider directly.",
+            )
+
+        # One request per email + name + org (anti-spam)
+        try:
+            existing = (
+                supabase.table("staff_invite_requests")
+                .select("id")
+                .eq("organization_id", organization_id)
+                .eq("requester_email_norm", email)
+                .eq("requester_full_name_norm", full_name.lower())
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "You’ve already requested an invite for this organisation with this name and email. "
+                        "Please wait for your coordinator to send you the invite code."
+                    ),
+                )
+            supabase.table("staff_invite_requests").insert(
+                {
+                    "organization_id": organization_id,
+                    "requester_email": email,
+                    "requester_full_name": full_name,
+                }
+            ).execute()
+        except HTTPException:
+            raise
+        except Exception as dedupe_exc:
+            err = str(dedupe_exc).lower()
+            if "duplicate" in err or "23505" in err or "unique" in err:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "You’ve already requested an invite for this organisation with this name and email. "
+                        "Please wait for your coordinator to send you the invite code."
+                    ),
+                ) from dedupe_exc
+            logger.warning("staff_invite_requests check failed: %s", dedupe_exc)
+
+        from ..services.notification_service import notify_worker
+        from ..services.fcm_service import send_fcm_to_user
+
+        title = "Staff invite requested"
+        body_text = (
+            f"{full_name} ({email}) is asking to join {organization_name}. "
+            f"Please send them a staff invitation from Team settings."
+        )
+        reference_key = f"invite_request:{organization_id}:{email}:{full_name.lower()}"
+        notified = 0
+        for coordinator_id in coordinator_ids:
+            try:
+                result = await notify_worker(
+                    user_id=coordinator_id,
+                    org_id=organization_id,
+                    event="invite_request",
+                    title=title,
+                    message=body_text,
+                    reference_key=reference_key,
+                    severity="medium",
+                    action_url="/team",
+                    banner_style="orange",
+                    payload={
+                        "requester_full_name": full_name,
+                        "requester_email": email,
+                        "organization_id": organization_id,
+                        "organization_name": organization_name,
+                    },
+                    push_priority="high",
+                )
+                if result.get("in_app"):
+                    notified += 1
+            except Exception as notify_exc:
+                logger.warning(
+                    "invite-request notify failed for %s: %s",
+                    coordinator_id[:8],
+                    notify_exc,
+                )
+            try:
+                await send_fcm_to_user(
+                    coordinator_id,
+                    title=title,
+                    body=body_text,
+                    data={
+                        "type": "invite_request",
+                        "action_url": "/team",
+                        "requester_email": email,
+                    },
+                    android_channel_id="safety-alerts",
+                )
+            except Exception as push_exc:
+                logger.debug("invite-request fcm failed for %s: %s", coordinator_id[:8], push_exc)
+
+        return {
+            "ok": True,
+            "organization_name": organization_name,
+            "coordinators_notified": notified or len(coordinator_ids),
+            "message": (
+                f"Your request was sent to coordinators at {organization_name}. "
+                "They'll email you an invite code once approved."
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("request_invite error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to submit invite request")
+
+
+@router.get("/lookup/{code}")
+async def lookup_invite_code(code: str):
+    """Public — resolve a 6-digit mobile join code to invite preview + token."""
+    normalized = (code or "").strip()
+    if len(normalized) != 6 or not normalized.isalnum():
+        raise HTTPException(status_code=400, detail="Enter the 6-character invite code")
+
+    try:
+        supabase = get_supabase_admin()
+        result = (
+            supabase.table("invitations")
+            .select("id, email, role, token, expires_at, accepted_at, organization_id, short_code")
+            .eq("short_code", normalized)
+            .is_("accepted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Invite code not found")
+
+        invite = result.data[0]
+        if _parse_iso(invite["expires_at"]) < _now_utc():
+            raise HTTPException(status_code=410, detail="This invitation has expired")
+
+        org_name = None
+        try:
+            org_res = (
+                supabase.table("organizations")
+                .select("organization_name, name")
+                .eq("organization_id", invite["organization_id"])
+                .limit(1)
+                .execute()
+            )
+            if org_res.data:
+                org_name = (
+                    org_res.data[0].get("organization_name")
+                    or org_res.data[0].get("name")
+                )
+        except Exception:
+            pass
+
+        return {
+            "email": invite["email"],
+            "role": invite["role"],
+            "token": invite["token"],
+            "organization_id": invite["organization_id"],
+            "organization_name": org_name,
+            "expires_at": invite["expires_at"],
+            "short_code": invite.get("short_code"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("lookup_invite_code error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to look up invite code")
+
+
 @router.get("/validate/{token}")
 async def validate_invite(token: str):
     """Public endpoint — validate an invite token and return preview info."""
@@ -252,12 +583,16 @@ async def validate_invite(token: str):
         try:
             org_res = (
                 supabase.table("organizations")
-                .select("organization_name")
-                .eq("id", invite["organization_id"])
+                .select("organization_name, name")
+                .eq("organization_id", invite["organization_id"])
+                .limit(1)
                 .execute()
             )
             if org_res.data:
-                org_name = org_res.data[0].get("organization_name")
+                org_name = (
+                    org_res.data[0].get("organization_name")
+                    or org_res.data[0].get("name")
+                )
         except Exception:
             pass
 

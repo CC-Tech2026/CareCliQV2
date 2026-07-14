@@ -1,10 +1,16 @@
 import { Feather } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from "expo-audio";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -99,6 +105,140 @@ function RecordingWave({ color }: { color: string }) {
   );
 }
 
+type VoiceRecordingControls = {
+  save: () => Promise<void>;
+  cancel: () => Promise<void>;
+};
+
+/**
+ * Owns useAudioRecorder only while mounted so the native shared object
+ * is never accessed after expo-audio releases it (common crash on Android).
+ */
+function ActiveVoiceRecording({
+  color,
+  mutedColor,
+  controlsRef,
+  onEnded,
+  onSave,
+}: {
+  color: string;
+  mutedColor: string;
+  controlsRef: React.MutableRefObject<VoiceRecordingControls | null>;
+  onEnded: () => void;
+  onSave: (secs: number, uri: string | null) => void | Promise<void>;
+}) {
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const recordSecsRef = useRef(0);
+  const finishedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const finish = async (save: boolean) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    stopTimer();
+    let uri: string | null = null;
+    try {
+      await audioRecorder.stop();
+      uri = audioRecorder.uri ?? null;
+    } catch {
+      /* already released / already stopped */
+    }
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    } catch {
+      /* ignore */
+    }
+    const secs = recordSecsRef.current;
+    if (save) await onSave(secs, uri);
+    else onEnded();
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await AudioModule.requestRecordingPermissionsAsync();
+        if (!perm.granted || cancelled) {
+          onEnded();
+          return;
+        }
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        if (cancelled) return;
+        await audioRecorder.prepareToRecordAsync();
+        if (cancelled || finishedRef.current) return;
+        audioRecorder.record();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        timerRef.current = setInterval(() => {
+          setRecordSecs((s) => {
+            const next = s + 1;
+            recordSecsRef.current = next;
+            return next;
+          });
+        }, 1000);
+      } catch {
+        if (!cancelled) onEnded();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopTimer();
+      if (!finishedRef.current) {
+        finishedRef.current = true;
+        try {
+          audioRecorder.stop();
+        } catch {
+          /* released on unmount */
+        }
+        void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      }
+    };
+    // Recorder is tied to this component's mount lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    controlsRef.current = {
+      save: () => finish(true),
+      cancel: async () => {
+        await finish(false);
+        Haptics.selectionAsync();
+      },
+    };
+    return () => {
+      controlsRef.current = null;
+    };
+  });
+
+  return (
+    <View style={[styles.recordingBox, { borderColor: color + "66", backgroundColor: color + "18" }]}>
+      <RecordingWave color={color} />
+      <Text style={[styles.recordingText, { color, fontFamily: "Inter_600SemiBold" }]}>
+        Recording… {formatDuration(recordSecs)}
+      </Text>
+      <Pressable
+        onPress={() => {
+          void controlsRef.current?.cancel();
+        }}
+        hitSlop={8}
+        style={styles.cancelBtn}
+      >
+        <Text style={[styles.cancelText, { color: mutedColor, fontFamily: "Inter_600SemiBold" }]}>
+          Cancel
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 type Props = {
   sessionId?: string | null;
   taskId?: string | null;
@@ -122,9 +262,7 @@ export function WorkerMobileComposer({
   const [language, setLanguage] = useState<string>("auto");
   const [langOpen, setLangOpen] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [recordSecs, setRecordSecs] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
 
   const disabledInput = disabled || !taskId;
   const placeholder = taskId
@@ -192,90 +330,76 @@ export function WorkerMobileComposer({
     await saveNote(english, "text");
   };
 
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
   const startRecording = async () => {
     if (disabledInput || recording) return;
-    try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) return;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-      recordingRef.current = rec;
-      setRecordSecs(0);
-      setRecording(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
-    } catch {
-      setRecording(false);
-    }
+    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+    if (!perm?.granted) return;
+    setRecording(true);
   };
 
-  const teardownRecording = async () => {
-    stopTimer();
-    const rec = recordingRef.current;
-    recordingRef.current = null;
+  const handleVoiceEnded = () => setRecording(false);
+
+  const handleVoiceSave = async (secs: number, uri: string | null) => {
     setRecording(false);
-    if (!rec) return null;
-    try {
-      await rec.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      return rec.getURI();
-    } catch {
-      return null;
-    }
-  };
-
-  const cancelRecording = async () => {
-    await teardownRecording();
-    setRecordSecs(0);
-    Haptics.selectionAsync();
-  };
-
-  const stopAndSaveRecording = async () => {
-    const secs = recordSecs;
-    const uri = await teardownRecording();
-    setRecordSecs(0);
     if (!uri || secs < 1) return;
     await saveNote(`[Voice note · ${formatDuration(secs)}]`, "voice", "voice-note.m4a");
   };
 
-  useEffect(() => {
-    return () => {
-      stopTimer();
-      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
-    };
-  }, []);
-
   const handleAttach = async () => {
-    if (disabledInput) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      quality: 0.7,
-    });
-    const asset = result.canceled ? null : result.assets[0];
-    if (asset) {
-      const name = asset.fileName ?? "attachment";
-      await saveNote(`[Attachment: ${name}]`, "file", name);
+    if (disabled || submitting) return;
+    if (!taskId) {
+      Alert.alert("Select a task", "Select a task above before attaching a file.");
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.7,
+      });
+      const asset = result.canceled ? null : result.assets[0];
+      if (asset) {
+        const name = asset.fileName ?? "attachment";
+        await saveNote(`[Attachment: ${name}]`, "file", name);
+      }
+    } catch (err) {
+      Alert.alert(
+        "Attachment failed",
+        err instanceof Error ? err.message : "Could not open the photo library.",
+      );
     }
   };
 
   const handleCamera = async () => {
-    if (disabledInput) return;
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    const asset = result.canceled ? null : result.assets[0];
-    if (asset) {
-      const name = asset.fileName ?? "photo";
-      await saveNote(`[Attachment: ${name}]`, "photo", name);
+    if (disabled || submitting) return;
+    if (!taskId) {
+      Alert.alert("Select a task", "Select a task above before taking a photo note.");
+      return;
+    }
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Camera permission needed",
+          "Allow CareCliQ to use the camera so you can attach photo evidence to session notes.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+        allowsEditing: false,
+        exif: false,
+      });
+      const asset = result.canceled ? null : result.assets[0];
+      if (asset) {
+        const name = asset.fileName ?? "photo.jpg";
+        await saveNote(`[Attachment: ${name}]`, "photo", name);
+      }
+    } catch (err) {
+      Alert.alert(
+        "Camera failed",
+        err instanceof Error ? err.message : "Could not open the camera.",
+      );
     }
   };
 
@@ -309,17 +433,13 @@ export function WorkerMobileComposer({
 
       <View style={styles.inputRow}>
         {recording ? (
-          <View style={[styles.recordingBox, { borderColor: colors.composerPink + "66", backgroundColor: colors.composerPink + "18" }]}>
-            <RecordingWave color={colors.composerPink} />
-            <Text style={[styles.recordingText, { color: colors.composerPink, fontFamily: "Inter_600SemiBold" }]}>
-              Recording… {formatDuration(recordSecs)}
-            </Text>
-            <Pressable onPress={cancelRecording} hitSlop={8} style={styles.cancelBtn}>
-              <Text style={[styles.cancelText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-                Cancel
-              </Text>
-            </Pressable>
-          </View>
+          <ActiveVoiceRecording
+            color={colors.composerPink}
+            mutedColor={colors.mutedForeground}
+            controlsRef={voiceControlsRef}
+            onEnded={handleVoiceEnded}
+            onSave={handleVoiceSave}
+          />
         ) : (
           <View style={[styles.inputBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
             <TextInput
@@ -331,10 +451,10 @@ export function WorkerMobileComposer({
               editable={!disabledInput && !submitting}
               style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
             />
-            <Pressable onPress={handleAttach} disabled={disabledInput} style={styles.iconBtn}>
+            <Pressable onPress={handleAttach} disabled={disabled || submitting} style={styles.iconBtn}>
               <Feather name="paperclip" size={17} color={colors.mutedForeground} />
             </Pressable>
-            <Pressable onPress={handleCamera} disabled={disabledInput} style={styles.iconBtn}>
+            <Pressable onPress={handleCamera} disabled={disabled || submitting} style={styles.iconBtn}>
               <Feather name="camera" size={17} color={colors.mutedForeground} />
             </Pressable>
           </View>
@@ -342,7 +462,10 @@ export function WorkerMobileComposer({
 
         <Pressable
           onPress={() => {
-            if (recording) return stopAndSaveRecording();
+            if (recording) {
+              void voiceControlsRef.current?.save();
+              return;
+            }
             if (hasText) return handleSend();
             return startRecording();
           }}

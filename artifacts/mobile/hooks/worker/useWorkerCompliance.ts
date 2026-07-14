@@ -8,7 +8,8 @@ export function useWorkerCompliance() {
   return useQuery({
     queryKey: ["worker", "my-compliance", "overview"],
     queryFn: () => getMyCompliance({ sessionsLimit: 0 }),
-    staleTime: 120_000,
+    staleTime: 30_000,
+    refetchOnFocus: true,
   });
 }
 
@@ -31,6 +32,7 @@ export function useWorkerComplianceSessionsInfinite() {
       if (offset + loaded >= total) return undefined;
       return offset + COMPLIANCE_SESSIONS_PAGE_SIZE;
     },
-    staleTime: 120_000,
+    staleTime: 30_000,
+    refetchOnFocus: true,
   });
 }

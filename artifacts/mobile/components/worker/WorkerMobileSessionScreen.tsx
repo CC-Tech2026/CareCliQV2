@@ -19,6 +19,7 @@ import { WorkerMobileTaskList } from "@/components/worker/WorkerMobileTaskList";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import type {
+  ActiveBreakStatus,
   CheckinWindowStatus,
   SessionNoteRecord,
   ShiftHealthAlert,
@@ -48,6 +49,7 @@ type Props = {
   disabled?: boolean;
   sessionElapsed?: string;
   checkinStatus?: CheckinWindowStatus;
+  breakStatus?: ActiveBreakStatus;
   onCheckin?: () => void;
 };
 
@@ -100,6 +102,7 @@ export function WorkerMobileSessionScreen({
   disabled,
   sessionElapsed,
   checkinStatus,
+  breakStatus,
   onCheckin,
 }: Props) {
   const colors = useColors();
@@ -220,6 +223,7 @@ export function WorkerMobileSessionScreen({
           shiftId={shiftId}
           sessionId={sessionId}
           checkinStatus={checkinStatus}
+          breakStatus={breakStatus}
           sessionElapsed={sessionElapsed}
           onCheckin={onCheckin}
           disabled={disabled || busy}

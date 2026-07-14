@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   Bell, X, CheckCheck, AlertTriangle, Calendar, CheckCircle2,
-  MessageSquare, Clock, Search, Filter,
+  MessageSquare, Clock, Search, Filter, UserPlus,
 } from "lucide-react";
 import {
   getCoordinatorNotifications, markNotificationRead, markAllNotificationsRead,
@@ -45,6 +45,7 @@ const ALERT_META: Record<string, { icon: React.ReactNode; color: string; bg: str
   shift_assigned:     { icon: <Calendar size={14} />,      color: PLUM,     bg: SOFT,      severity: "low" },
   feedback_received:  { icon: <MessageSquare size={14} />, color: "#059669", bg: "#ECFDF5", severity: "low" },
   session_completed:  { icon: <CheckCircle2 size={14} />,  color: "#059669", bg: "#ECFDF5", severity: "low" },
+  invite_request:     { icon: <UserPlus size={14} />,      color: PLUM,     bg: SOFT,      severity: "medium" },
 };
 
 function alertMeta(alertType?: string) {

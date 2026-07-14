@@ -1,15 +1,25 @@
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import {
+  FlatList,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type ViewToken,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "@/lib/haptics";
-import { CCQ_ONBOARDING_DONE_KEY } from "@/lib/storage-keys";
 import type { TranslationKey } from "@/lib/i18n/translations";
+import { CCQ_ONBOARDING_DONE_KEY } from "@/lib/storage-keys";
 
 const SLIDES: {
   icon: keyof typeof Feather.glyphMap;
@@ -38,9 +48,11 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
+  const { width } = useWindowDimensions();
+  const listRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const [index, setIndex] = useState(0);
+  const [pagerHeight, setPagerHeight] = useState(0);
   const last = index === SLIDES.length - 1;
-  const slide = SLIDES[index];
 
   const finish = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -48,13 +60,39 @@ export default function OnboardingScreen() {
     router.replace("/login" as never);
   };
 
+  const goTo = useCallback(
+    (nextIndex: number) => {
+      const clamped = Math.max(0, Math.min(nextIndex, SLIDES.length - 1));
+      listRef.current?.scrollToIndex({ index: clamped, animated: true });
+      setIndex(clamped);
+    },
+    [],
+  );
+
   const next = () => {
     void Haptics.selectionAsync();
     if (last) {
       void finish();
       return;
     }
-    setIndex((i) => i + 1);
+    goTo(index + 1);
+  };
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const first = viewableItems[0];
+    if (first?.index != null) {
+      setIndex(first.index);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (nextIndex !== index && nextIndex >= 0 && nextIndex < SLIDES.length) {
+      void Haptics.selectionAsync();
+      setIndex(nextIndex);
+    }
   };
 
   return (
@@ -68,7 +106,7 @@ export default function OnboardingScreen() {
         },
       ]}
     >
-      <View style={styles.topRow}>
+      <View style={[styles.topRow, { paddingHorizontal: 18 }]}>
         {last ? (
           <View style={styles.skipPlaceholder} />
         ) : (
@@ -80,41 +118,66 @@ export default function OnboardingScreen() {
         )}
       </View>
 
-      <View style={styles.body}>
-        <View style={[styles.iconCircle, { backgroundColor: colors.soft }]}>
-          <Feather name={slide.icon} size={56} color={colors.primary} />
-        </View>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          {t(slide.titleKey)}
-        </Text>
-        <Text style={[styles.copy, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {t(slide.bodyKey)}
-        </Text>
-      </View>
-
-      <View style={styles.dots}>
-        {SLIDES.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.dot,
-              {
-                backgroundColor: i === index ? colors.pink : colors.soft,
-              },
-            ]}
-          />
-        ))}
-      </View>
-
-      <Pressable
-        onPress={next}
-        style={[styles.cta, { backgroundColor: colors.primary }]}
-        accessibilityRole="button"
+      <View
+        style={styles.pager}
+        onLayout={(e) => setPagerHeight(e.nativeEvent.layout.height)}
       >
-        <Text style={[styles.ctaText, { fontFamily: "Inter_600SemiBold" }]}>
-          {last ? t("onboarding.getStarted") : t("onboarding.next")}
-        </Text>
-      </Pressable>
+        {pagerHeight > 0 ? (
+          <FlatList
+            ref={listRef}
+            data={SLIDES}
+            keyExtractor={(item) => item.titleKey}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            bounces
+            onMomentumScrollEnd={onScrollEnd}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+            style={{ flex: 1 }}
+            renderItem={({ item }) => (
+              <View style={[styles.slide, { width, height: pagerHeight }]}>
+                <View style={[styles.iconCircle, { backgroundColor: colors.soft }]}>
+                  <Feather name={item.icon} size={56} color={colors.primary} />
+                </View>
+                <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  {t(item.titleKey)}
+                </Text>
+                <Text style={[styles.copy, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {t(item.bodyKey)}
+                </Text>
+              </View>
+            )}
+          />
+        ) : null}
+      </View>
+
+      <View style={[styles.footer, { paddingHorizontal: 18 }]}>
+        <View style={styles.dots}>
+          {SLIDES.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: i === index ? colors.pink : colors.soft,
+                },
+              ]}
+            />
+          ))}
+        </View>
+
+        <Pressable
+          onPress={next}
+          style={[styles.cta, { backgroundColor: colors.primary }]}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.ctaText, { fontFamily: "Inter_600SemiBold" }]}>
+            {last ? t("onboarding.getStarted") : t("onboarding.next")}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -122,7 +185,6 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    paddingHorizontal: 18,
   },
   topRow: {
     alignItems: "flex-end",
@@ -134,12 +196,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 4,
   },
-  body: {
+  pager: {
     flex: 1,
+  },
+  slide: {
     alignItems: "center",
     justifyContent: "center",
     gap: 18,
-    paddingHorizontal: 8,
+    paddingHorizontal: 26,
   },
   iconCircle: {
     width: 150,
@@ -158,6 +222,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
     maxWidth: 260,
+  },
+  footer: {
+    marginTop: 8,
   },
   dots: {
     flexDirection: "row",

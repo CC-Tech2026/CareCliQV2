@@ -33,6 +33,7 @@ import {
   endShift,
   startShiftSession,
   syncSessionNotes,
+  type ActiveBreakStatus,
   type CheckinWindowStatus,
   type SessionNoteRecord,
   type ShiftTask,
@@ -87,6 +88,7 @@ type Props = {
   canCheckin?: boolean;
   onCheckin?: () => void;
   checkinStatus?: CheckinWindowStatus;
+  breakStatus?: ActiveBreakStatus;
 };
 
 export function WorkerMobileShiftView({
@@ -99,6 +101,7 @@ export function WorkerMobileShiftView({
   canCheckin,
   onCheckin,
   checkinStatus,
+  breakStatus,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -500,7 +503,8 @@ export function WorkerMobileShiftView({
           onOpenIncidentReport={openIncidentReport}
           disabled={Boolean(busy)}
           sessionElapsed={elapsed}
-          checkinStatus={checkinStatus}
+          checkinStatus={checkinStatus ?? shift.checkin_status}
+          breakStatus={breakStatus ?? shift.break_status}
           onCheckin={onCheckin}
         />
         <Modal

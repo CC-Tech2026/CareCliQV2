@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Platform,
   StyleSheet,
   Text as RNText,
   TextInput as RNTextInput,
@@ -8,12 +9,19 @@ import {
 } from "react-native";
 
 /**
- * App text scale (small / default / large).
+ * App text scale + optional dyslexia-friendly font.
  * Does not reassign react-native.Text / TextInput (getter-only in RN 0.81).
  * Patches forwardRef.render on the shared Text/TextInput component objects.
  */
 let scale = 1;
+let dyslexia = false;
 const listeners = new Set<() => void>();
+
+const DYSLEXIA_FONT = Platform.select({
+  ios: "Chalkboard SE",
+  android: "sans-serif",
+  default: "Comic Sans MS",
+});
 
 export function setRuntimeTextScale(next: number) {
   if (Math.abs(scale - next) < 0.001) return;
@@ -21,35 +29,48 @@ export function setRuntimeTextScale(next: number) {
   listeners.forEach((fn) => fn());
 }
 
+export function setRuntimeDyslexiaFont(enabled: boolean) {
+  if (dyslexia === enabled) return;
+  dyslexia = enabled;
+  listeners.forEach((fn) => fn());
+}
+
 export function getRuntimeTextScale() {
   return scale;
 }
 
-function useRuntimeScale() {
-  const [value, setValue] = React.useState(scale);
+export function getRuntimeDyslexiaFont() {
+  return dyslexia;
+}
+
+function useRuntimeAccessibility() {
+  const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
-    const onChange = () => setValue(scale);
+    const onChange = () => setTick((n) => n + 1);
     listeners.add(onChange);
     return () => {
       listeners.delete(onChange);
     };
   }, []);
-  return value;
+  return tick;
 }
 
-function scaleStyle(style: StyleProp<TextStyle>, s: number): StyleProp<TextStyle> {
-  if (s === 1) return style;
+function scaleStyle(style: StyleProp<TextStyle>, s: number, useDyslexia: boolean): StyleProp<TextStyle> {
+  if (s === 1 && !useDyslexia) return style;
   const flat = StyleSheet.flatten(style);
-  if (!flat || typeof flat.fontSize !== "number") return style;
-  return [
-    style,
-    {
-      fontSize: Math.round(flat.fontSize * s * 10) / 10,
-      ...(typeof flat.lineHeight === "number"
-        ? { lineHeight: Math.round(flat.lineHeight * s * 10) / 10 }
-        : null),
-    },
-  ];
+  const next: TextStyle = {};
+  if (s !== 1 && flat && typeof flat.fontSize === "number") {
+    next.fontSize = Math.round(flat.fontSize * s * 10) / 10;
+    if (typeof flat.lineHeight === "number") {
+      next.lineHeight = Math.round(flat.lineHeight * s * 10) / 10;
+    }
+  }
+  if (useDyslexia) {
+    next.fontFamily = DYSLEXIA_FONT;
+    next.letterSpacing = 0.4;
+  }
+  if (Object.keys(next).length === 0) return style;
+  return [style, next];
 }
 
 type PossiblyForwardRef = {
@@ -66,8 +87,11 @@ function patchForwardRefRender(Component: PossiblyForwardRef) {
     props: { style?: StyleProp<TextStyle> },
     ref: unknown,
   ) {
-    const s = getRuntimeTextScale();
-    return originalRender.call(this, { ...props, style: scaleStyle(props?.style, s) }, ref);
+    return originalRender.call(
+      this,
+      { ...props, style: scaleStyle(props?.style, getRuntimeTextScale(), getRuntimeDyslexiaFont()) },
+      ref,
+    );
   };
   Component.__ccqTextScalePatched = true;
 }
@@ -79,8 +103,8 @@ try {
   /* ignore — preference still persists */
 }
 
-/** Keeps subscribers in sync when scale changes from PreferencesProvider. */
+/** Keeps a subscriber mounted so preference changes can notify listeners. */
 export function TextScaleSubscriber() {
-  useRuntimeScale();
+  useRuntimeAccessibility();
   return null;
 }

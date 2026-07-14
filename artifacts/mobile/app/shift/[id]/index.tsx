@@ -15,7 +15,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LongShiftCheckInForm } from "@/components/worker/LongShiftCheckInForm";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerMobileShiftView } from "@/components/worker/WorkerMobileShiftView";
-import { useShiftCheckinStatus } from "@/hooks/worker/useShiftCheckin";
 import { useSessionNotes } from "@/hooks/worker/useSessionNotes";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { useColors } from "@/hooks/useColors";
@@ -33,12 +32,9 @@ export default function ShiftDetailScreen() {
   const { data: shift, isLoading, error } = useWorkerShift(id);
   const sessionId = shift?.session_id ?? undefined;
   const isSessionActive = shift?.visual_state === "session_active" || shift?.visual_state === "clocked_in";
+  const checkinStatus = shift?.checkin_status;
 
   const { data: sessionNotes = [] } = useSessionNotes(sessionId);
-  const { data: checkinStatus, isFetched: checkinFetched } = useShiftCheckinStatus(
-    id,
-    isSessionActive,
-  );
 
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinBusy, setCheckinBusy] = useState(false);
@@ -62,7 +58,6 @@ export default function ShiftDetailScreen() {
     }
 
     if (checkin === "pending") {
-      if (!checkinFetched) return;
       if (checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue) {
         setCheckinOpen(true);
       }
@@ -78,7 +73,6 @@ export default function ShiftDetailScreen() {
     checkin,
     id,
     isSessionActive,
-    checkinFetched,
     checkinStatus?.can_submit_checkin,
     checkinStatus?.checkin_overdue,
     router,
@@ -99,6 +93,9 @@ export default function ShiftDetailScreen() {
   }, [invalidateShiftQueries, invalidateNotesQuery]);
 
   const handleComplete = () => {
+    void queryClient.invalidateQueries({ queryKey: ["worker", "my-compliance"] });
+    void queryClient.invalidateQueries({ queryKey: ["worker", "compliance-detail"] });
+    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
     router.replace("/(tabs)/shifts" as never);
   };
 
@@ -166,6 +163,7 @@ export default function ShiftDetailScreen() {
         canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin)}
         onCheckin={() => setCheckinOpen(true)}
         checkinStatus={checkinStatus}
+        breakStatus={shift.break_status}
       />
 
       <LongShiftCheckInForm
