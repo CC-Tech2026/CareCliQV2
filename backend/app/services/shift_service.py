@@ -1362,7 +1362,12 @@ def _matches_filter(shift: dict, filter_name: str, today: date) -> bool:
     if filter_name == "upcoming":
         return shift_day > today and status not in {"completed", "cancelled"}
     if filter_name == "past":
-        return shift_day < today and status != "cancelled"
+        # Older shifts + completed today (so Past includes today's finished work).
+        if status == "cancelled":
+            return False
+        if shift_day < today:
+            return True
+        return shift_day == today and status == "completed"
     return True
 
 
@@ -1411,7 +1416,9 @@ def _apply_shift_list_query(query: Any, filter_name: str, today: date) -> Any:
             .not_.in_("status", ["completed", "cancelled"])
         )
     if filter_name == "past":
-        return query.lt("scheduled_start", day_start_iso).neq("status", "cancelled")
+        # Include everything before tomorrow except cancelled; Python filter keeps
+        # prior days + completed-today only.
+        return query.lt("scheduled_start", next_day_iso).neq("status", "cancelled")
     return query
 
 
@@ -1597,8 +1604,11 @@ def list_shifts_for_worker(
     worker_id: str,
     organization_id: str,
     filter_name: str = "today",
-) -> list[dict[str, Any]]:
-    """Return shift cards for a worker, filtered by date bucket."""
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Return shift cards for a worker, filtered by date bucket (optional pagination)."""
     bucket = _normalize_shift_filter(filter_name)
     today = app_today()
     rows = _fetch_worker_shift_rows(
@@ -1607,8 +1617,38 @@ def list_shifts_for_worker(
         filter_name=None if bucket == "all" else bucket,
     )
     filtered = filter_shift_rows(rows, bucket, today)
+    if bucket == "past":
+        filtered = sorted(
+            filtered,
+            key=lambda row: str(row.get("scheduled_start") or ""),
+            reverse=True,
+        )
+    elif bucket in {"today", "upcoming", "all"}:
+        filtered = sorted(
+            filtered,
+            key=lambda row: str(row.get("scheduled_start") or ""),
+        )
+
+    total = len(filtered)
+    safe_offset = max(0, int(offset or 0))
+    if limit is None:
+        page_rows = filtered[safe_offset:]
+        page_limit = total - safe_offset if total > safe_offset else 0
+    else:
+        page_limit = max(1, min(int(limit), 100))
+        page_rows = filtered[safe_offset : safe_offset + page_limit]
+
     light = bucket == "completed"
-    return build_worker_shift_cards(filtered, organization_id, worker_id, light=light)
+    shifts = build_worker_shift_cards(page_rows, organization_id, worker_id, light=light)
+    loaded = len(shifts)
+    return {
+        "shifts": shifts,
+        "filter": bucket,
+        "total": total,
+        "offset": safe_offset,
+        "limit": page_limit if limit is not None else loaded,
+        "has_more": safe_offset + loaded < total,
+    }
 
 
 def get_shift_detail_for_worker(
@@ -2684,24 +2724,35 @@ def end_shift(
     now = _now_iso()
     session_id = shift.get("session_id")
     if session_id:
+        session_update: dict[str, Any] = {
+            "status": "completed",
+            "updated_at": now,
+            "end_validation": validation,
+            "compliance_score": validation.get("compliance_score"),
+        }
         try:
-            session_update: dict[str, Any] = {
-                "status": "completed",
-                "updated_at": now,
-                "end_validation": validation,
-            }
             get_supabase_admin().table("sessions").update(session_update).eq("id", str(session_id)).execute()
         except Exception as exc:
             if not _is_missing_schema_error(exc):
                 raise
-            try:
-                get_supabase_admin().table("sessions").update({
+            # Narrow column set for older schemas (score still used by my-compliance fallback).
+            for fallback in (
+                {
                     "status": "completed",
                     "updated_at": now,
-                }).eq("id", str(session_id)).execute()
-            except Exception as inner_exc:
-                if not _is_missing_schema_error(inner_exc):
-                    raise
+                    "compliance_score": validation.get("compliance_score"),
+                },
+                {
+                    "status": "completed",
+                    "updated_at": now,
+                },
+            ):
+                try:
+                    get_supabase_admin().table("sessions").update(fallback).eq("id", str(session_id)).execute()
+                    break
+                except Exception as inner_exc:
+                    if not _is_missing_schema_error(inner_exc):
+                        raise
 
     update_payload = {
         "status": "completed",

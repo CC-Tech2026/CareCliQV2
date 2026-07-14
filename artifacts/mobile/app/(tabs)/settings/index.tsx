@@ -5,11 +5,13 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,9 +26,10 @@ import { useColors } from "@/hooks/useColors";
 import {
   disableBiometricUnlock,
   enableBiometricUnlock,
-  getBiometricLabel,
-  isBiometricHardwareAvailable,
+  getAvailableBiometricKinds,
   isBiometricUnlockEnabled,
+  labelForBiometricKind,
+  type BiometricKind,
 } from "@/lib/biometric-auth";
 import * as Haptics from "@/lib/haptics";
 import { listMyCredentials } from "@/lib/resource-api";
@@ -139,6 +142,8 @@ export default function SettingsTabScreen() {
   const {
     highContrast,
     setHighContrast,
+    dyslexiaFont,
+    setDyslexiaFont,
     reduceMotion,
     setReduceMotion,
     hapticFeedback,
@@ -149,8 +154,11 @@ export default function SettingsTabScreen() {
   } = usePreferences();
 
   const [biometric, setBiometric] = useState(false);
-  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [availableKinds, setAvailableKinds] = useState<BiometricKind[]>([]);
+  const [confirmKind, setConfirmKind] = useState<BiometricKind | null>(null);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const landing = useWorkerLandingDashboard();
   const { data: profile } = useQuery({
@@ -168,14 +176,12 @@ export default function SettingsTabScreen() {
   );
 
   const refreshBiometric = useCallback(async () => {
-    const [enabled, available, label] = await Promise.all([
+    const [enabled, kinds] = await Promise.all([
       isBiometricUnlockEnabled(),
-      isBiometricHardwareAvailable(),
-      getBiometricLabel(),
+      getAvailableBiometricKinds(),
     ]);
     setBiometric(enabled);
-    setBiometricAvailable(available);
-    setBiometricLabel(label);
+    setAvailableKinds(kinds);
   }, []);
 
   useEffect(() => {
@@ -207,23 +213,57 @@ export default function SettingsTabScreen() {
         : language === "zh"
           ? "简体中文"
           : "العربية";
+  const loginIdentifier = user?.email?.trim() || "";
 
-  const handleBiometricToggle = async (next: boolean) => {
-    if (next) {
-      if (!biometricAvailable) {
-        showAlert(t("settings.row.biometric"), t("settings.biometric.unavailable"));
-        return;
-      }
-      const result = await enableBiometricUnlock();
+  const openEnableConfirm = (kind: BiometricKind) => {
+    if (!availableKinds.includes(kind)) {
+      showAlert(labelForBiometricKind(kind), t("settings.biometric.unavailable"));
+      return;
+    }
+    setConfirmKind(kind);
+    setConfirmPassword("");
+    setConfirmError(null);
+  };
+
+  const handleConfirmEnable = async () => {
+    if (!confirmKind) return;
+    if (!confirmPassword.trim()) {
+      setConfirmError(t("settings.biometric.passwordRequired"));
+      return;
+    }
+    if (!loginIdentifier) {
+      setConfirmError(t("settings.biometric.passwordRequired"));
+      return;
+    }
+    setConfirmBusy(true);
+    setConfirmError(null);
+    try {
+      const method = labelForBiometricKind(confirmKind);
+      const result = await enableBiometricUnlock({
+        identifier: loginIdentifier,
+        password: confirmPassword,
+        promptMessage: t("settings.biometric.confirmCta", { method }),
+      });
       if (!result.ok) {
         if (result.reason === "unavailable") {
-          showAlert(t("settings.row.biometric"), t("settings.biometric.unavailable"));
+          showAlert(method, t("settings.biometric.unavailable"));
         }
+        setConfirmBusy(false);
         return;
       }
       setBiometric(true);
+      setConfirmKind(null);
+      setConfirmPassword("");
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(t("settings.biometric.enabledHint"), "success");
+      showToast(t("settings.biometric.enabledHint", { method }), "success");
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
+  const handleBiometricToggle = async (kind: BiometricKind, next: boolean) => {
+    if (next) {
+      openEnableConfirm(kind);
       return;
     }
     await disableBiometricUnlock();
@@ -320,6 +360,21 @@ export default function SettingsTabScreen() {
             onPress={() => router.push("/(tabs)/settings/account" as never)}
           />
           <SettingsRow
+            icon="home"
+            label={t("settings.nav.provider")}
+            onPress={() => router.push("/(tabs)/settings/provider" as never)}
+          />
+          <SettingsRow
+            icon="sliders"
+            label={t("settings.nav.defaults")}
+            onPress={() => router.push("/(tabs)/settings/defaults" as never)}
+          />
+          <SettingsRow
+            icon="shield"
+            label={t("settings.nav.compliance")}
+            onPress={() => router.push("/(tabs)/settings/compliance" as never)}
+          />
+          <SettingsRow
             icon="bell"
             label={t("nav.notifications")}
             onPress={() => router.push("/worker/notifications" as never)}
@@ -333,16 +388,38 @@ export default function SettingsTabScreen() {
             label={t("settings.row.changePassword")}
             onPress={() => router.push("/(tabs)/settings/change-password" as never)}
           />
-          <SettingsRow
-            icon="smartphone"
-            label={biometricLabel}
-            trailing={
-              <SettingsToggle
-                value={biometric}
-                onValueChange={(v) => void handleBiometricToggle(v)}
-              />
-            }
-          />
+          {(availableKinds.includes("face") || availableKinds.length === 0) && (
+            <SettingsRow
+              icon="user"
+              label={
+                availableKinds.includes("face")
+                  ? labelForBiometricKind("face")
+                  : t("settings.biometric.face")
+              }
+              trailing={
+                <SettingsToggle
+                  value={biometric && availableKinds.includes("face")}
+                  onValueChange={(v) => void handleBiometricToggle("face", v)}
+                />
+              }
+            />
+          )}
+          {(availableKinds.includes("fingerprint") || availableKinds.length === 0) && (
+            <SettingsRow
+              icon="smartphone"
+              label={
+                availableKinds.includes("fingerprint")
+                  ? labelForBiometricKind("fingerprint")
+                  : t("settings.biometric.fingerprint")
+              }
+              trailing={
+                <SettingsToggle
+                  value={biometric && availableKinds.includes("fingerprint")}
+                  onValueChange={(v) => void handleBiometricToggle("fingerprint", v)}
+                />
+              }
+            />
+          )}
           <SettingsRow
             icon="monitor"
             label={t("security.activeSessions")}
@@ -392,6 +469,11 @@ export default function SettingsTabScreen() {
             icon="sun"
             label={t("accessibility.highContrast")}
             trailing={<SettingsToggle value={highContrast} onValueChange={setHighContrast} />}
+          />
+          <SettingsRow
+            icon="book-open"
+            label={t("accessibility.dyslexia")}
+            trailing={<SettingsToggle value={dyslexiaFont} onValueChange={setDyslexiaFont} />}
           />
           <SettingsRow
             icon="activity"
@@ -487,13 +569,74 @@ export default function SettingsTabScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+
+      <Modal
+        visible={confirmKind !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmKind(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setConfirmKind(null)}>
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              {t("settings.biometric.confirmTitle")}
+            </Text>
+            <Text style={[styles.modalHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("settings.biometric.confirmHint", {
+                method: confirmKind ? labelForBiometricKind(confirmKind) : t("settings.row.biometric"),
+              })}
+            </Text>
+            <TextInput
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!confirmBusy}
+              placeholder="Password"
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                styles.modalInput,
+                {
+                  color: colors.foreground,
+                  borderColor: confirmError ? colors.destructive : colors.border,
+                  backgroundColor: colors.background,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            />
+            {confirmError ? (
+              <Text style={[styles.modalError, { color: colors.destructive, fontFamily: "Inter_500Medium" }]}>
+                {confirmError}
+              </Text>
+            ) : null}
+            <Pressable
+              onPress={() => void handleConfirmEnable()}
+              disabled={confirmBusy}
+              style={[
+                styles.modalCta,
+                { backgroundColor: colors.primary, opacity: confirmBusy ? 0.7 : 1 },
+              ]}
+            >
+              <Text style={[styles.modalCtaText, { fontFamily: "Inter_600SemiBold" }]}>
+                {t("settings.biometric.confirmCta", {
+                  method: confirmKind ? labelForBiometricKind(confirmKind) : t("settings.row.biometric"),
+                })}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16 },
   profileHero: {
     alignItems: "center",
     gap: 8,
@@ -598,4 +741,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   signOutText: { fontSize: 13 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+    gap: 10,
+  },
+  modalTitle: { fontSize: 17 },
+  modalHint: { fontSize: 13, lineHeight: 18 },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  modalError: { fontSize: 12 },
+  modalCta: {
+    marginTop: 6,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  modalCtaText: { color: "#FFFFFF", fontSize: 14 },
 });

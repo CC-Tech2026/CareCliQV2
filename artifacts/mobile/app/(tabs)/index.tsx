@@ -23,23 +23,41 @@ import { useColors } from "@/hooks/useColors";
 import type { DashboardShiftSummary } from "@/lib/dashboard-api";
 import type { ShiftVisualState } from "@/lib/worker-api";
 import {
+  findInProgressShift,
   formatHomeDateLabel,
   greetingForHour,
+  isBlockedByInProgressShift,
   shiftInitials,
   shortLocationLabel,
 } from "@/lib/shift-utils";
+import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 import { resolveWorkerDisplayName } from "@/lib/display-name";
 
-function HomeShiftCard({ shift }: { shift: DashboardShiftSummary }) {
+function HomeShiftCard({
+  shift,
+  inProgressShift,
+}: {
+  shift: DashboardShiftSummary;
+  inProgressShift: DashboardShiftSummary | null;
+}) {
   const colors = useColors();
   const router = useRouter();
+  const t = useT();
   const location = shortLocationLabel(shift.participant_address);
   const meta = [shift.time_label, location].filter(Boolean).join(" · ");
   const visualState = (shift.visual_state || "scheduled") as ShiftVisualState;
 
+  const openShift = () => {
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+      return;
+    }
+    router.push(`/shift/${shift.id}` as never);
+  };
+
   return (
     <Pressable
-      onPress={() => router.push(`/shift/${shift.id}` as never)}
+      onPress={openShift}
       style={[styles.shiftCard, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
       <View style={[styles.shiftAvatar, { backgroundColor: colors.soft }]}>
@@ -96,11 +114,11 @@ export default function HomeScreen() {
   }, [total, done]);
 
   const continueShiftId = useMemo(() => {
-    const active = shifts.find(
-      (s) => s.visual_state === "session_active" || s.visual_state === "clocked_in",
-    );
+    const active = findInProgressShift(shifts);
     return active?.id ?? shifts.find((s) => s.visual_state === "scheduled")?.id ?? shifts[0]?.id ?? null;
   }, [shifts]);
+
+  const inProgressShift = useMemo(() => findInProgressShift(shifts), [shifts]);
 
   const handleRefresh = () => {
     void landing.refetch();
@@ -203,7 +221,9 @@ export default function HomeScreen() {
               {t("dashboard.noShiftsToday")}
             </Text>
           ) : (
-            shifts.map((shift) => <HomeShiftCard key={shift.id} shift={shift} />)
+            shifts.map((shift) => (
+              <HomeShiftCard key={shift.id} shift={shift} inProgressShift={inProgressShift} />
+            ))
           )}
         </ScrollView>
       )}
@@ -214,8 +234,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  greeting: { fontSize: 21, marginTop: 4, marginBottom: 2 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  greeting: { fontSize: 21, marginTop: 0, marginBottom: 2 },
   subtitle: { fontSize: 12, marginBottom: 12 },
   hero: {
     borderRadius: 14,

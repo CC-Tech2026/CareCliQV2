@@ -43,9 +43,9 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
-  useExpoPushRegistration();
-  usePushNotificationNavigation();
   const { isAuthenticated, isLoading } = useAuth();
+  useExpoPushRegistration(isAuthenticated);
+  usePushNotificationNavigation();
   const segments = useSegments();
   const router = useRouter();
 

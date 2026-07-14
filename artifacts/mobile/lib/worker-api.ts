@@ -94,6 +94,9 @@ export type WorkerShift = {
     mandatory_completed: number;
     mandatory_total: number;
   };
+  /** Embedded on shift detail — do not fetch separately for offline. */
+  checkin_status?: CheckinWindowStatus;
+  break_status?: ActiveBreakStatus;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -101,6 +104,10 @@ export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "pa
 export type WorkerShiftsResponse = {
   shifts: WorkerShift[];
   filter: ShiftFilter;
+  total?: number;
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
 };
 
 export type ShiftBriefingAlert = {
@@ -265,8 +272,14 @@ export type ClockInRequest = {
   client_timestamp?: string;
 };
 
-export function getWorkerShifts(filter: ShiftFilter = "today") {
-  return workerFetch<WorkerShiftsResponse>(`/api/worker/shifts?filter=${filter}`);
+export function getWorkerShifts(
+  filter: ShiftFilter = "today",
+  options?: { limit?: number; offset?: number },
+) {
+  const params = new URLSearchParams({ filter });
+  if (typeof options?.limit === "number") params.set("limit", String(options.limit));
+  if (typeof options?.offset === "number") params.set("offset", String(options.offset));
+  return workerFetch<WorkerShiftsResponse>(`/api/worker/shifts?${params.toString()}`);
 }
 
 export function getWorkerShift(id: string) {

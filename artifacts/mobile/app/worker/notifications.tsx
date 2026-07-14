@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
+    paddingTop: 16,
   },
   subtitle: { fontSize: 12, lineHeight: 17 },
   list: { paddingHorizontal: 16, paddingTop: 16 },

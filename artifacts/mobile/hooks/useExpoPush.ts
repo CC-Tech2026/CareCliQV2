@@ -1,5 +1,4 @@
 import Constants from "expo-constants";
-import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
@@ -67,9 +66,8 @@ async function requestPushPermission(Notifications: NotificationsModule): Promis
   return status === "granted";
 }
 
-/** Native FCM/APNs device token — used by backend firebase-admin on EAS builds. */
+/** Native FCM/APNs device token — used by backend firebase-admin (works on emulator + device). */
 async function resolveNativeFcmToken(Notifications: NotificationsModule): Promise<string | null> {
-  if (!Device.isDevice) return null;
   try {
     const deviceToken = await Notifications.getDevicePushTokenAsync();
     const token = deviceToken?.data;
@@ -99,28 +97,36 @@ function navigateFromNotificationData(
 }
 
 /**
- * Registers FCM (Android/iOS) push tokens with the backend.
+ * Requests notification permission on app open, then registers FCM/Expo tokens
+ * once the worker is authenticated. Cannot auto-grant (OS requires user tap).
  * No-ops in Expo Go (push requires a development/EAS build on SDK 53+).
  */
-export function useExpoPushRegistration() {
+export function useExpoPushRegistration(isAuthenticated: boolean) {
   const fcmRegisteredRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let responseSub: { remove: () => void } | null = null;
 
+    async function ensurePermissionAndChannels(
+      Notifications: NotificationsModule,
+    ): Promise<boolean> {
+      const granted = await requestPushPermission(Notifications);
+      if (!granted || cancelled) return false;
+      await ensureNotificationChannels(Notifications);
+      return true;
+    }
+
     async function sync() {
-      if (!Device.isDevice) return;
       const Notifications = await loadNotifications();
       if (!Notifications || cancelled) return;
 
-      const authToken = await readMobileAuthToken();
-      if (!authToken || cancelled) return;
-
-      const granted = await requestPushPermission(Notifications);
+      // Prompt as soon as CareCliQ opens (before / without login).
+      const granted = await ensurePermissionAndChannels(Notifications);
       if (!granted || cancelled) return;
 
-      await ensureNotificationChannels(Notifications);
+      const authToken = await readMobileAuthToken();
+      if (!authToken || cancelled) return;
 
       const deviceId = await getMobileDeviceId();
       const fcmToken = await resolveNativeFcmToken(Notifications);
@@ -159,7 +165,7 @@ export function useExpoPushRegistration() {
       cancelled = true;
       responseSub?.remove();
     };
-  }, []);
+  }, [isAuthenticated]);
 }
 
 /** Deep-link when user taps a push notification (background → foreground). */

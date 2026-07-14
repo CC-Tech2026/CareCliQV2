@@ -8,7 +8,8 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { DashboardShiftSummary } from "@/lib/dashboard-api";
 import type { ShiftVisualState } from "@/lib/worker-api";
-import { shiftInitials } from "@/lib/shift-utils";
+import { shiftInitials, findInProgressShift, isBlockedByInProgressShift } from "@/lib/shift-utils";
+import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 
 type Props = {
   shifts: DashboardShiftSummary[];
@@ -18,6 +19,15 @@ export function DashboardShiftsWidget({ shifts }: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
+  const inProgressShift = findInProgressShift(shifts);
+
+  const openShift = (shift: DashboardShiftSummary) => {
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+      return;
+    }
+    router.push(`/shift/${shift.id}` as never);
+  };
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -44,7 +54,7 @@ export function DashboardShiftsWidget({ shifts }: Props) {
           {shifts.map((shift, index) => (
             <Pressable
               key={shift.id}
-              onPress={() => router.push(`/shift/${shift.id}` as never)}
+              onPress={() => openShift(shift)}
               style={[
                 styles.row,
                 index < shifts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },

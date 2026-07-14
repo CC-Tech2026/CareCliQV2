@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useColorScheme } from "react-native";
@@ -24,7 +25,11 @@ import {
 } from "@/lib/storage-keys";
 import { setHapticsEnabled } from "@/lib/haptics";
 import { setReduceMotionEnabled } from "@/lib/motion";
-import { setRuntimeTextScale, TextScaleSubscriber } from "@/lib/text-scale-patch";
+import {
+  setRuntimeDyslexiaFont,
+  setRuntimeTextScale,
+  TextScaleSubscriber,
+} from "@/lib/text-scale-patch";
 import {
   LANGUAGES,
   translate as translateWith,
@@ -36,6 +41,9 @@ import { getMobileDeviceId, readMobileAuthToken } from "@/lib/session";
 export type ThemeMode = "system" | "light" | "dark";
 export type TextScale = "small" | "default" | "large";
 export type ResolvedScheme = "light" | "dark";
+
+/** Match frontend theme debounce — avoid API spam while toggling prefs. */
+const ACCESSIBILITY_PERSIST_DEBOUNCE_MS = 5000;
 
 const TEXT_SCALE_VALUES: Record<TextScale, number> = {
   small: 0.9,
@@ -93,23 +101,12 @@ function mapApiFontSize(value: string | undefined): TextScale | null {
   return null;
 }
 
-async function persistAccessibility(
-  prefs: Partial<{
-    font_size: TextScale;
-    theme_mode: ThemeMode;
-    high_contrast: boolean;
-    dyslexia_font: boolean;
-  }>,
-) {
-  try {
-    const token = await readMobileAuthToken();
-    if (!token) return;
-    const deviceId = await getMobileDeviceId();
-    await saveAccessibilityPreferences(deviceId, prefs);
-  } catch {
-    /* sync best-effort */
-  }
-}
+type AccessibilityPatch = Partial<{
+  font_size: TextScale;
+  theme_mode: ThemeMode;
+  high_contrast: boolean;
+  dyslexia_font: boolean;
+}>;
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const deviceScheme = useColorScheme();
@@ -121,6 +118,45 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const [reduceMotion, setReduceMotionState] = useState(false);
   const [hapticFeedback, setHapticFeedbackState] = useState(true);
   const [isReady, setIsReady] = useState(false);
+
+  const pendingPatchRef = useRef<AccessibilityPatch>({});
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushAccessibilityPersist = useCallback(async () => {
+    const patch = pendingPatchRef.current;
+    pendingPatchRef.current = {};
+    if (Object.keys(patch).length === 0) return;
+    try {
+      const token = await readMobileAuthToken();
+      if (!token) return;
+      const deviceId = await getMobileDeviceId();
+      await saveAccessibilityPreferences(deviceId, patch);
+    } catch {
+      /* sync best-effort */
+    }
+  }, []);
+
+  const scheduleAccessibilityPersist = useCallback(
+    (patch: AccessibilityPatch) => {
+      pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => {
+        persistTimerRef.current = null;
+        void flushAccessibilityPersist();
+      }, ACCESSIBILITY_PERSIST_DEBOUNCE_MS);
+    },
+    [flushAccessibilityPersist],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      void flushAccessibilityPersist();
+    };
+  }, [flushAccessibilityPersist]);
 
   useEffect(() => {
     let active = true;
@@ -188,34 +224,51 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     setRuntimeTextScale(TEXT_SCALE_VALUES[textScale]);
   }, [textScale]);
 
-  const setThemeMode = useCallback((mode: ThemeMode) => {
-    setThemeModeState(mode);
-    void AsyncStorage.setItem(CCQ_THEME_MODE_KEY, mode);
-    void persistAccessibility({ theme_mode: mode });
-  }, []);
+  useEffect(() => {
+    setRuntimeDyslexiaFont(dyslexiaFont);
+  }, [dyslexiaFont]);
+
+  const setThemeMode = useCallback(
+    (mode: ThemeMode) => {
+      setThemeModeState(mode);
+      void AsyncStorage.setItem(CCQ_THEME_MODE_KEY, mode);
+      scheduleAccessibilityPersist({ theme_mode: mode });
+    },
+    [scheduleAccessibilityPersist],
+  );
 
   const setLanguage = useCallback((next: AppLanguage) => {
     setLanguageState(next);
     void AsyncStorage.setItem(CCQ_LANGUAGE_KEY, next);
   }, []);
 
-  const setTextScale = useCallback((scale: TextScale) => {
-    setTextScaleState(scale);
-    void AsyncStorage.setItem(CCQ_TEXT_SCALE_KEY, scale);
-    void persistAccessibility({ font_size: scale });
-  }, []);
+  const setTextScale = useCallback(
+    (scale: TextScale) => {
+      setTextScaleState(scale);
+      void AsyncStorage.setItem(CCQ_TEXT_SCALE_KEY, scale);
+      // Local-first like theme: UI updates immediately, backend sync is debounced.
+      scheduleAccessibilityPersist({ font_size: scale });
+    },
+    [scheduleAccessibilityPersist],
+  );
 
-  const setHighContrast = useCallback((enabled: boolean) => {
-    setHighContrastState(enabled);
-    void AsyncStorage.setItem(CCQ_HIGH_CONTRAST_KEY, String(enabled));
-    void persistAccessibility({ high_contrast: enabled });
-  }, []);
+  const setHighContrast = useCallback(
+    (enabled: boolean) => {
+      setHighContrastState(enabled);
+      void AsyncStorage.setItem(CCQ_HIGH_CONTRAST_KEY, String(enabled));
+      scheduleAccessibilityPersist({ high_contrast: enabled });
+    },
+    [scheduleAccessibilityPersist],
+  );
 
-  const setDyslexiaFont = useCallback((enabled: boolean) => {
-    setDyslexiaFontState(enabled);
-    void AsyncStorage.setItem(CCQ_DYSLEXIA_FONT_KEY, String(enabled));
-    void persistAccessibility({ dyslexia_font: enabled });
-  }, []);
+  const setDyslexiaFont = useCallback(
+    (enabled: boolean) => {
+      setDyslexiaFontState(enabled);
+      void AsyncStorage.setItem(CCQ_DYSLEXIA_FONT_KEY, String(enabled));
+      scheduleAccessibilityPersist({ dyslexia_font: enabled });
+    },
+    [scheduleAccessibilityPersist],
+  );
 
   const setReduceMotion = useCallback((enabled: boolean) => {
     setReduceMotionState(enabled);

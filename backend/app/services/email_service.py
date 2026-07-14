@@ -93,6 +93,7 @@ def queue_invitation_email(
     invite_url: str,
     organization_name: str | None,
     role: str,
+    short_code: str | None = None,
 ) -> dict[str, str]:
     return queue_email_job(
         label=f"invitation:{to_email}",
@@ -101,6 +102,7 @@ def queue_invitation_email(
             invite_url=invite_url,
             organization_name=organization_name,
             role=role,
+            short_code=short_code,
         ),
     )
 
@@ -111,6 +113,7 @@ def _send_invitation_email_safe(
     invite_url: str,
     organization_name: str | None,
     role: str,
+    short_code: str | None = None,
 ) -> None:
     try:
         send_invitation_email(
@@ -118,6 +121,7 @@ def _send_invitation_email_safe(
             invite_url=invite_url,
             organization_name=organization_name,
             role=role,
+            short_code=short_code,
         )
     except Exception as exc:
         logger.error("Invitation email failed for %s: %s", to_email, exc)
@@ -129,19 +133,27 @@ def send_invitation_email(
     invite_url: str,
     organization_name: str | None,
     role: str,
+    short_code: str | None = None,
 ) -> None:
     role_label = ROLE_LABELS.get(role, role.replace("_", " ").title())
     org_label = organization_name or "CareCliQ"
     subject = f"You're invited to {org_label} on CareCliQ"
+    code_line = (
+        f"\nYour mobile join code is: {short_code}\n"
+        if short_code
+        else ""
+    )
     text_body = (
         f"You have been invited to join {org_label} as {role_label}.\n\n"
-        f"Accept your invitation here:\n{invite_url}\n\n"
+        f"Accept your invitation here:\n{invite_url}\n"
+        f"{code_line}\n"
         "This secure invitation link expires in 7 days."
     )
     html_body = _build_invitation_html(
         invite_url=invite_url,
         organization_name=org_label,
         role_label=role_label,
+        short_code=short_code,
     )
     send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
 
@@ -388,10 +400,24 @@ def send_worker_notification_email(
     send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
 
 
-def _build_invitation_html(*, invite_url: str, organization_name: str, role_label: str) -> str:
+def _build_invitation_html(
+    *,
+    invite_url: str,
+    organization_name: str,
+    role_label: str,
+    short_code: str | None = None,
+) -> str:
     safe_org = escape(organization_name)
     safe_role = escape(role_label)
     safe_url = escape(invite_url, quote=True)
+    code_block = ""
+    if short_code:
+        safe_code = escape(short_code)
+        code_block = f"""
+        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
+          Mobile join code: <strong style="letter-spacing:0.12em;">{safe_code}</strong>
+        </p>
+        """
     return f"""\
 <!doctype html>
 <html>
@@ -405,6 +431,7 @@ def _build_invitation_html(*, invite_url: str, organization_name: str, role_labe
         <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
           Use the secure link below to activate your account and set your password.
         </p>
+        {code_block}
         <a href="{safe_url}" style="display:inline-block;background:#F03060;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
           Accept invitation
         </a>

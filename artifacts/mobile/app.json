@@ -9,9 +9,9 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/carecliq-wordmark.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": false,
@@ -21,6 +21,7 @@
         "NSCameraUsageDescription": "Take photos as evidence during clinical sessions",
         "NSMicrophoneUsageDescription": "Record voice notes during clinical sessions",
         "NSPhotoLibraryUsageDescription": "Access photos to attach evidence to sessions",
+        "NSFaceIDUsageDescription": "Unlock CareCliQ and sign in with Face ID.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -29,13 +30,22 @@
     "android": {
       "package": "care.cliq2026",
       "googleServicesFile": "./google-services.json",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#000000"
+      },
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "useNextNotificationsApi": true
     },
@@ -48,6 +58,13 @@
       ],
       "expo-font",
       "expo-web-browser",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow CareCliQ to use Face ID to unlock the app and sign you in."
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -58,9 +75,17 @@
         }
       ],
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Allow CareCliQ to access your microphone to record voice notes during sessions."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow CareCliQ to use the camera to attach photo evidence to session notes.",
+          "photosPermission": "Allow CareCliQ to access your photos to attach evidence to session notes.",
+          "microphonePermission": "Allow CareCliQ to record video with sound for session evidence."
         }
       ]
     ],

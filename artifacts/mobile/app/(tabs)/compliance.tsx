@@ -51,8 +51,9 @@ function trendBarColor(value: number, colors: ReturnType<typeof useColors>): str
 
 function trendLabel(value: string, index: number, total: number, t: ReturnType<typeof useT>): string {
   if (index === total - 1) return t("compliance.today");
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(5);
+  // Parse as local noon so date-only ISO strings don't shift a day in western timezones.
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value.slice(8).replace(/^0/, "") || value.slice(5);
   return date.toLocaleDateString("en-AU", { day: "numeric" });
 }
 
@@ -71,7 +72,7 @@ export default function ComplianceTabScreen() {
   }, [params.segment]);
 
   const { data: overview, isLoading, error, refetch, isRefetching } = useWorkerCompliance();
-  const { data: detail, isLoading: detailLoading } = useWorkerComplianceDetail(7);
+  const { data: detail, isLoading: detailLoading, refetch: detailRefetch } = useWorkerComplianceDetail(7);
   const {
     data: sessionsData,
     isLoading: sessionsLoading,
@@ -103,7 +104,8 @@ export default function ComplianceTabScreen() {
   const handleRefresh = useCallback(() => {
     void refetch();
     void refetchSessions();
-  }, [refetch, refetchSessions]);
+    void detailRefetch();
+  }, [refetch, refetchSessions, detailRefetch]);
 
   const handleLoadMore = useCallback(() => {
     if (!hasNextPage || isFetchingNextPage || loadingMoreRef.current) return;
@@ -173,8 +175,9 @@ export default function ComplianceTabScreen() {
           </Text>
           <View style={styles.trendWrap}>
             {trend.map((point, index) => {
+              const hasScore = point.avg_score != null;
               const value = point.avg_score ?? 0;
-              const height = Math.max(6, value * 0.56);
+              const height = hasScore ? Math.max(6, value * 0.56) : 6;
               return (
                 <View key={`${point.date}-${index}`} style={styles.trendCol}>
                   <View
@@ -182,8 +185,10 @@ export default function ComplianceTabScreen() {
                       styles.trendBar,
                       {
                         height,
-                        backgroundColor: trendBarColor(value, colors),
-                        opacity: 0.85,
+                        backgroundColor: hasScore
+                          ? trendBarColor(value, colors)
+                          : colors.border,
+                        opacity: hasScore ? 0.85 : 0.45,
                       },
                     ]}
                   />
@@ -308,7 +313,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   error: { fontSize: 14, padding: 24, textAlign: "center" },
-  segmentWrap: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  segmentWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   segmentTrack: {
     flexDirection: "row",
     borderRadius: 999,

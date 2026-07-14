@@ -79,12 +79,29 @@ function formatTime(iso: string): string {
   }
 }
 
+export function formatShiftDate(iso?: string): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-AU", {
+      timeZone: APP_TIMEZONE,
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function formatShiftTimeRange(start?: string, end?: string): string {
   if (!start) return "Time not set";
   try {
+    const date = formatShiftDate(start);
     const s = formatTime(start);
     const e = end ? formatTime(end) : null;
-    return e ? `${s} – ${e}` : s;
+    const time = e ? `${s} – ${e}` : s;
+    return date ? `${date} · ${time}` : time;
   } catch {
     return start;
   }
@@ -210,6 +227,35 @@ export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]): boolean {
 
 export function incompleteMandatoryTasks(tasks: ShiftTask[]): ShiftTask[] {
   return tasks.filter((t) => !t.marked_na && t.mandatory && !t.completed);
+}
+
+export function isShiftInProgress(shift: {
+  visual_state?: string | null;
+  status?: string | null;
+}): boolean {
+  const state = shift.visual_state ?? "";
+  if (state === "session_active" || state === "clocked_in") return true;
+  return (shift.status ?? "").toLowerCase() === "in_progress";
+}
+
+export function findInProgressShift<T extends { id: string; visual_state?: string | null; status?: string | null }>(
+  shifts: T[],
+): T | null {
+  return shifts.find((s) => isShiftInProgress(s)) ?? null;
+}
+
+/**
+ * True when opening `target` should be blocked because another shift is still in progress.
+ * The in-progress shift itself (and completed/cancelled) can always be opened.
+ */
+export function isBlockedByInProgressShift<
+  T extends { id: string; visual_state?: string | null; status?: string | null },
+>(target: T, inProgress: T | null): boolean {
+  if (!inProgress || inProgress.id === target.id) return false;
+  if (isShiftCompletedForList(target as WorkerShift)) return false;
+  if ((target.status ?? "").toLowerCase() === "cancelled") return false;
+  if (isShiftInProgress(target)) return false;
+  return true;
 }
 
 export function sortTodayShiftsForList(shifts: WorkerShift[], now = new Date()): WorkerShift[] {

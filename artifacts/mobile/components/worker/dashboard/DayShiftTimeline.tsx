@@ -8,7 +8,8 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { DashboardShiftSummary } from "@/lib/dashboard-api";
 import type { ShiftVisualState } from "@/lib/worker-api";
-import { shiftInitials } from "@/lib/shift-utils";
+import { shiftInitials, findInProgressShift, isBlockedByInProgressShift } from "@/lib/shift-utils";
+import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 
 type Props = {
   shifts: DashboardShiftSummary[];
@@ -25,11 +26,20 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
+  const inProgressShift = useMemo(() => findInProgressShift(shifts), [shifts]);
 
   const ordered = useMemo(
     () => [...shifts].sort((a, b) => parseStart(a.scheduled_start) - parseStart(b.scheduled_start)),
     [shifts],
   );
+
+  const openShift = (shift: DashboardShiftSummary) => {
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+      return;
+    }
+    router.push(`/shift/${shift.id}` as never);
+  };
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -51,7 +61,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
             return (
               <Pressable
                 key={shift.id}
-                onPress={() => router.push(`/shift/${shift.id}` as never)}
+                onPress={() => openShift(shift)}
                 style={[
                   styles.row,
                   {

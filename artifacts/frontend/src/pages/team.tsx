@@ -25,6 +25,7 @@ import {
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useReAuth } from "@/hooks/useReAuth";
 const PLUM  = "var(--cc-plum)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -60,6 +61,7 @@ export default function Team() {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { requireReAuth, modal: reauthModal } = useReAuth();
 
   const [tab, setTab] = useState<Tab>("overview");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -118,16 +120,38 @@ export default function Team() {
     if (!inviteEmail.trim()) return;
     setInviteSending(true);
     try {
-      await jsonFetch("/api/invitations/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      const result = await requireReAuth(() =>
+        jsonFetch<{
+          email: string;
+          short_code?: string;
+          email_delivery?: { status?: string };
+        }>("/api/invitations/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+        }),
+      );
+      if (!result) return;
+      const codeHint = result.short_code
+        ? ` Mobile code: ${result.short_code}.`
+        : "";
+      toast({
+        title: translate("team.toast.inviteSent"),
+        description:
+          translateParams("team.toast.inviteSentDesc", {
+            email: inviteEmail,
+            role: translate(INVITE_ROLE_KEYS[inviteRole] ?? inviteRole),
+          }) + codeHint,
       });
-      toast({ title: translate("team.toast.inviteSent"), description: translateParams("team.toast.inviteSentDesc", { email: inviteEmail, role: translate(INVITE_ROLE_KEYS[inviteRole] ?? inviteRole) }) });
       setInviteOpen(false);
       setInviteEmail("");
-    } catch {
-      toast({ title: translate("team.toast.inviteFailed"), description: translate("team.toast.inviteFailedDesc"), variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast({
+        title: translate("team.toast.inviteFailed"),
+        description: msg || translate("team.toast.inviteFailedDesc"),
+        variant: "destructive",
+      });
     } finally {
       setInviteSending(false);
     }
@@ -625,6 +649,7 @@ export default function Team() {
           </div>
         </div>
       )}
+      {reauthModal}
     </IndexTemplate>
   );
 }
