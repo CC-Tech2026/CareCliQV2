@@ -1,12 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import type { CheckinWindowStatus } from "@/lib/worker-api";
 
 const CHECKIN_NOTIF_PREFIX = "compliance-checkin-";
 const CHANNEL_ID = "safety-alerts";
 const FIRED_IDS_KEY = "ccq_checkin_local_fired_ids";
+const EXACT_ALARM_PROMPTED_KEY = "ccq_exact_alarm_prompted";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -53,6 +54,84 @@ async function markFired(scheduledCheckinId: string): Promise<void> {
   const ids = await readFiredIds();
   ids.add(scheduledCheckinId);
   await writeFiredIds(ids);
+}
+
+async function ensureAndroidChannel(Notifications: NotificationsModule): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    name: "Safety alerts",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 500, 250, 500],
+    sound: "default",
+    enableVibrate: true,
+    bypassDnd: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+/**
+ * Android 12+ needs Alarms & reminders enabled or DATE triggers fall back to
+ * inexact alarms that can miss a 5-minute compliance window while backgrounded.
+ */
+async function ensureAndroidExactAlarmAccess(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    const already = await AsyncStorage.getItem(EXACT_ALARM_PROMPTED_KEY);
+    if (already) return;
+    const pkg = Constants.expoConfig?.android?.package ?? "care.cliq2026";
+    try {
+      await Linking.sendIntent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM", [
+        { key: "android.provider.extra.APP_PACKAGE", value: pkg },
+      ]);
+    } catch {
+      try {
+        await Linking.openURL(`package:${pkg}`);
+      } catch {
+        await Linking.openSettings();
+      }
+    }
+    await AsyncStorage.setItem(EXACT_ALARM_PROMPTED_KEY, "1");
+  } catch {
+    /* settings UI optional — still attempt inexact schedule */
+  }
+}
+
+async function ensureNotificationPermission(
+  Notifications: NotificationsModule,
+): Promise<boolean> {
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  if (existing === "granted") return true;
+  const { status } = await Notifications.requestPermissionsAsync();
+  return status === "granted";
+}
+
+function notificationContent(
+  Notifications: NotificationsModule,
+  params: {
+    shiftId: string;
+    sessionId?: string | null;
+    scheduledCheckinId: string;
+  },
+) {
+  return {
+    title: "Compliance Check-in Required",
+    body: "Please complete your compliance check-in within 5 minutes.",
+    sound: true as const,
+    priority: Notifications.AndroidNotificationPriority.MAX,
+    ...(Platform.OS === "android"
+      ? {
+          channelId: CHANNEL_ID,
+          sticky: true,
+        }
+      : {}),
+    data: {
+      type: "compliance_checkin",
+      shift_id: params.shiftId,
+      session_id: params.sessionId ?? "",
+      scheduled_checkin_id: params.scheduledCheckinId,
+      action_url: `/my-shifts/${params.shiftId}`,
+    },
+  };
 }
 
 /** Cancel + dismiss a check-in notification after the worker opens or completes it. */
@@ -118,15 +197,11 @@ export async function syncLocalCheckinNotifications(params: {
     return;
   }
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: "Safety alerts",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 500, 250, 500],
-      sound: "default",
-      enableVibrate: true,
-    });
-  }
+  const granted = await ensureNotificationPermission(Notifications);
+  if (!granted) return;
+
+  await ensureAndroidChannel(Notifications);
+  await ensureAndroidExactAlarmAccess();
 
   const now = Date.now();
   const existingIds = new Set(
@@ -142,33 +217,45 @@ export async function syncLocalCheckinNotifications(params: {
     const when = new Date(item.scheduled_at).getTime();
     if (Number.isNaN(when)) continue;
 
-    // Never re-schedule past-due alarms — that re-notified workers after they opened the first one.
-    if (when <= now) continue;
-
     const id = notifId(item.id);
-    if (existingIds.has(id)) continue;
-
-    await Notifications.scheduleNotificationAsync({
-      identifier: id,
-      content: {
-        title: "Compliance Check-in Required",
-        body: "Please complete your compliance check-in within 5 minutes.",
-        sound: true,
-        ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
-        data: {
-          type: "compliance_checkin",
-          shift_id: shiftId,
-          session_id: sessionId ?? "",
-          scheduled_checkin_id: item.id,
-          action_url: `/my-shifts/${shiftId}`,
-        },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(when),
-        channelId: CHANNEL_ID,
-      },
+    const content = notificationContent(Notifications, {
+      shiftId,
+      sessionId,
+      scheduledCheckinId: item.id,
     });
+
+    // Still in the future — schedule an exact wake-up alarm.
+    if (when > now) {
+      if (existingIds.has(id)) continue;
+      await Notifications.scheduleNotificationAsync({
+        identifier: id,
+        content,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(when),
+          channelId: CHANNEL_ID,
+        },
+      });
+      continue;
+    }
+
+    // Already due / prompted — FCM often misses Android background; fire a local
+    // tray notification once so the worker still sees it when the app is backgrounded.
+    if (item.status === "prompted" || item.status === "pending") {
+      if (existingIds.has(id)) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch {
+          /* ignore */
+        }
+      }
+      await Notifications.scheduleNotificationAsync({
+        identifier: id,
+        content,
+        trigger: null,
+      });
+      await markFired(item.id);
+    }
   }
 }
 

@@ -49,6 +49,7 @@ async function ensureNotificationChannels(Notifications: NotificationsModule): P
     name: "CareCliQ",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
   await Notifications.setNotificationChannelAsync("safety-alerts", {
     name: "Safety alerts",
@@ -56,6 +57,8 @@ async function ensureNotificationChannels(Notifications: NotificationsModule): P
     vibrationPattern: [0, 500, 250, 500],
     sound: "default",
     enableVibrate: true,
+    bypassDnd: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 }
 

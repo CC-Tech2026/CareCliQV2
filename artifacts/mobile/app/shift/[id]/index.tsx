@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Pressable,
   StyleSheet,
   Text,
@@ -59,14 +60,23 @@ export default function ShiftDetailScreen() {
   }, [id]);
 
   // Schedule device-local check-in alarms (works offline after schedule is known).
+  // Re-sync when backgrounding so overdue/prompted check-ins still hit the tray
+  // if FCM was missed.
   useEffect(() => {
     if (!id || !shift) return;
-    void syncLocalCheckinNotifications({
-      shiftId: id,
-      sessionId,
-      checkinStatus,
-      shiftActive: isSessionActive && !isShiftCompletedForList(shift),
+    const run = () => {
+      void syncLocalCheckinNotifications({
+        shiftId: id,
+        sessionId,
+        checkinStatus,
+        shiftActive: isSessionActive && !isShiftCompletedForList(shift),
+      });
+    };
+    run();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "background" || state === "inactive") run();
     });
+    return () => sub.remove();
   }, [id, sessionId, isSessionActive, checkinStatus, shift]);
 
   useEffect(() => {
