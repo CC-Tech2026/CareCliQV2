@@ -1030,9 +1030,9 @@ async def confirm_password_reset(body: PasswordResetConfirmRequest):
     token = body.access_token.strip()
     token_hash = body.token_hash.strip()
     password = body.password
-    if len(password) < 8:
+    if len(password) < 10:
         raise HTTPException(
-            status_code=422, detail="Password must be at least 8 characters."
+            status_code=422, detail="Password must be at least 10 characters."
         )
     if not token and token_hash:
         verify_result = _supabase_auth_request(

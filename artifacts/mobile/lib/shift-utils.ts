@@ -1,3 +1,4 @@
+import { Brand } from "@/constants/brand";
 import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/lib/worker-api";
 
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
@@ -7,10 +8,10 @@ export const APP_TIMEZONE =
   process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
 
 export const STATE_AVATAR_COLORS: Record<ShiftVisualState, string> = {
-  scheduled: "#4B3F91",
-  clocked_in: "#B97A1A",
-  session_active: "#B97A1A",
-  completed: "#2E7D5B",
+  scheduled: Brand.purple,
+  clocked_in: Brand.warning,
+  session_active: Brand.warning,
+  completed: Brand.success,
 };
 
 export const STATE_LABELS: Record<ShiftVisualState, string> = {

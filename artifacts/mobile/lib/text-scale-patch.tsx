@@ -1,17 +1,10 @@
 import React from "react";
-import {
-  Platform,
-  StyleSheet,
-  Text as RNText,
-  TextInput as RNTextInput,
-  type StyleProp,
-  type TextStyle,
-} from "react-native";
+import { Platform, type StyleProp, type TextStyle } from "react-native";
 
 /**
  * App text scale + optional dyslexia-friendly font.
- * Does not reassign react-native.Text / TextInput (getter-only in RN 0.81).
- * Patches forwardRef.render on the shared Text/TextInput component objects.
+ * Applied by Metro-wrapped Text / TextInput (metro.config.js).
+ * RN 0.81 Text is a plain function component — forwardRef.render patching no longer works.
  */
 let scale = 1;
 let dyslexia = false;
@@ -43,8 +36,9 @@ export function getRuntimeDyslexiaFont() {
   return dyslexia;
 }
 
-function useRuntimeAccessibility() {
-  const [tick, setTick] = React.useState(0);
+/** Subscribe so Text / TextInput re-render when preferences change. */
+export function useRuntimeAccessibility() {
+  const [, setTick] = React.useState(0);
   React.useEffect(() => {
     const onChange = () => setTick((n) => n + 1);
     listeners.add(onChange);
@@ -52,58 +46,49 @@ function useRuntimeAccessibility() {
       listeners.delete(onChange);
     };
   }, []);
-  return tick;
 }
 
-function scaleStyle(style: StyleProp<TextStyle>, s: number, useDyslexia: boolean): StyleProp<TextStyle> {
+function flattenTextStyle(style: StyleProp<TextStyle> | undefined): TextStyle | undefined {
+  if (style == null || typeof style === "boolean") return undefined;
+  if (Array.isArray(style)) {
+    const out: TextStyle = {};
+    for (const item of style) {
+      const flat = flattenTextStyle(item as StyleProp<TextStyle>);
+      if (flat) Object.assign(out, flat);
+    }
+    return out;
+  }
+  return style as TextStyle;
+}
+
+export function scaleTextStyle(
+  style: StyleProp<TextStyle> | undefined,
+  s: number,
+  useDyslexia: boolean,
+): StyleProp<TextStyle> {
   if (s === 1 && !useDyslexia) return style;
-  const flat = StyleSheet.flatten(style);
+
+  const flat = flattenTextStyle(style);
   const next: TextStyle = {};
-  if (s !== 1 && flat && typeof flat.fontSize === "number") {
-    next.fontSize = Math.round(flat.fontSize * s * 10) / 10;
-    if (typeof flat.lineHeight === "number") {
+
+  if (s !== 1) {
+    const baseSize = typeof flat?.fontSize === "number" ? flat.fontSize : 14;
+    next.fontSize = Math.round(baseSize * s * 10) / 10;
+    if (typeof flat?.lineHeight === "number") {
       next.lineHeight = Math.round(flat.lineHeight * s * 10) / 10;
     }
   }
+
   if (useDyslexia) {
     next.fontFamily = DYSLEXIA_FONT;
     next.letterSpacing = 0.4;
   }
+
   if (Object.keys(next).length === 0) return style;
-  return [style, next];
+  return style != null ? [style, next] : next;
 }
 
-type PossiblyForwardRef = {
-  render?: (props: { style?: StyleProp<TextStyle> }, ref: unknown) => unknown;
-  __ccqTextScalePatched?: boolean;
-};
-
-function patchForwardRefRender(Component: PossiblyForwardRef) {
-  if (!Component || typeof Component.render !== "function" || Component.__ccqTextScalePatched) {
-    return;
-  }
-  const originalRender = Component.render;
-  Component.render = function patchedRender(
-    props: { style?: StyleProp<TextStyle> },
-    ref: unknown,
-  ) {
-    return originalRender.call(
-      this,
-      { ...props, style: scaleStyle(props?.style, getRuntimeTextScale(), getRuntimeDyslexiaFont()) },
-      ref,
-    );
-  };
-  Component.__ccqTextScalePatched = true;
-}
-
-try {
-  patchForwardRefRender(RNText as PossiblyForwardRef);
-  patchForwardRefRender(RNTextInput as PossiblyForwardRef);
-} catch {
-  /* ignore — preference still persists */
-}
-
-/** Keeps a subscriber mounted so preference changes can notify listeners. */
+/** Kept for PreferencesProvider — each ScaledText also subscribes. */
 export function TextScaleSubscriber() {
   useRuntimeAccessibility();
   return null;

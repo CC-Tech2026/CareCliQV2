@@ -4,6 +4,12 @@ import { getMobileApiBaseUrl } from "@/lib/api-base-url";
 import { readMobileAuthToken } from "@/lib/session";
 import { workerFetch } from "@/lib/worker-fetch";
 
+export type WorkerEmergencyContact = {
+  name?: string | null;
+  phone?: string | null;
+  relationship?: string | null;
+};
+
 export type WorkerProfile = {
   id: string;
   email: string;
@@ -11,6 +17,8 @@ export type WorkerProfile = {
   role: string;
   organization_id?: string | null;
   phone?: string | null;
+  address?: string | null;
+  emergency_contact?: WorkerEmergencyContact | string | null;
   business_name?: string | null;
   profile_photo_url?: string | null;
   employee_id?: string | null;
@@ -19,6 +27,17 @@ export type WorkerProfile = {
 
 export function getWorkerProfile() {
   return workerFetch<WorkerProfile>("/api/users/me");
+}
+
+export function updateWorkerProfile(payload: {
+  phone?: string | null;
+  address?: string | null;
+  emergency_contact?: WorkerEmergencyContact | null;
+}): Promise<WorkerProfile> {
+  return workerFetch<WorkerProfile>("/api/users/me", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type ProfilePhotoUploadResult = {

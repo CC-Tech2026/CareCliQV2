@@ -19,8 +19,8 @@ _COMMON_PASSWORDS = {
 
 
 def validate_password_policy(password: str) -> str | None:
-    if len(password) < 8:
-        return "Password must be at least 8 characters."
+    if len(password) < 10:
+        return "Password must be at least 10 characters."
     if not re.search(r"[A-Z]", password):
         return "Password must include at least one uppercase letter."
     if not re.search(r"\d", password):
@@ -35,7 +35,7 @@ def password_strength_score(password: str) -> int:
     if not password:
         return 0
     score = 0
-    if len(password) >= 8:
+    if len(password) >= 10:
         score += 1
     if len(password) >= 12:
         score += 1

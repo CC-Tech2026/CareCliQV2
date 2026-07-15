@@ -55,7 +55,7 @@ const CHANNELS: NotificationChannel[] = ["push", "email", "sms"];
 const CONTACT_METHODS: PreferredContactMethod[] = ["phone_call", "sms", "in_app_message"];
 
 const PASSWORD_POLICY_KEYS: Record<string, string> = {
-  "Password must be at least 8 characters.": "profile.passwordPolicy.tooShort",
+  "Password must be at least 10 characters.": "profile.passwordPolicy.tooShort",
   "Password must include at least one uppercase letter.": "profile.passwordPolicy.uppercase",
   "Password must include at least one number.": "profile.passwordPolicy.number",
   "This password is too common. Choose a stronger password.": "profile.passwordPolicy.common",

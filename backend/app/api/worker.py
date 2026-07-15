@@ -275,17 +275,20 @@ def _session_compliance_score(session: dict) -> float | None:
 def _session_calendar_date(session: dict) -> str:
     """Care-day for compliance trend/history.
 
-    Prefer session_date so past bars stay put. Only remaping yesterday→today
-    overnight completions onto Today (finished today, started yesterday).
+    Prefer APP_TIMEZONE local day of start_time so Score Trend / Session History
+    match Shifts → Past (scheduled_start local). session_date alone can be a day
+    early when stored from a UTC timestamptz cast. Overnight completions finished
+    today still map onto Today.
     """
     today = app_today()
-    session_day = _date_part(session.get("session_date"))
-    care: date | None = None
-    if session_day:
-        try:
-            care = date.fromisoformat(session_day)
-        except ValueError:
-            care = None
+    care: date | None = shift_local_date(session.get("start_time"))
+    if care is None:
+        session_day = _date_part(session.get("session_date"))
+        if session_day:
+            try:
+                care = date.fromisoformat(session_day)
+            except ValueError:
+                care = None
 
     if str(session.get("status") or "").lower() == "completed":
         completed_local: date | None = None
@@ -299,7 +302,7 @@ def _session_calendar_date(session: dict) -> str:
 
     if care is not None:
         return care.isoformat()
-    local = shift_local_date(session.get("start_time") or session.get("created_at"))
+    local = shift_local_date(session.get("created_at"))
     return local.isoformat() if local else ""
 
 
@@ -548,7 +551,7 @@ async def my_compliance(
     current_user: dict = Depends(get_current_user),
 ):
     _require_worker(current_user)
-    sessions = await session_service.get_all_sessions(500, current_user)
+    sessions = await session_service.get_worker_own_sessions(current_user, limit=500)
     sessions = sorted(
         sessions,
         key=lambda s: (
@@ -590,7 +593,7 @@ async def worker_compliance_detail(
 ):
     """Real-time compliance score, 12-rule breakdown, red flags, and daily trend."""
     _require_worker(current_user)
-    sessions = await session_service.get_all_sessions(500, current_user)
+    sessions = await session_service.get_worker_own_sessions(current_user, limit=500)
     scored = [s for s in sessions if _session_compliance_score(s) is not None]
     scores = [float(v) for v in (_session_compliance_score(s) for s in scored) if v is not None]
     average = round(sum(scores) / len(scores), 1) if scores else 0

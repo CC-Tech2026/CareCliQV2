@@ -762,7 +762,7 @@ BEGIN
         random_checkins_scheduled
     ) VALUES (
         s1, p1, v_org_id, v_worker_id, v_worker_id, v_worker_id,
-        t_session_start, t_session_start, 'daily_living', 540, 'draft',
+        (t_session_start AT TIME ZONE 'Australia/Adelaide')::date, t_session_start, 'daily_living', 540, 'draft',
         'Harper engaged well during morning personal care and meal preparation. Community outing planned after break.',
         'Harper engaged well during morning personal care and meal preparation. Community outing planned after break.',
         'not_required',
@@ -771,7 +771,8 @@ BEGIN
         900, 21600, 84,
         true
     ) ON CONFLICT (id) DO UPDATE SET
-        start_time = EXCLUDED.start_time, status = EXCLUDED.status, tasks = EXCLUDED.tasks,
+        start_time = EXCLUDED.start_time, session_date = EXCLUDED.session_date,
+        status = EXCLUDED.status, tasks = EXCLUDED.tasks,
         is_long_shift = true, last_activity_at = EXCLUDED.last_activity_at,
         checkin_count = EXCLUDED.checkin_count, engagement_score = EXCLUDED.engagement_score,
         duration_minutes = EXCLUDED.duration_minutes,
@@ -993,7 +994,7 @@ BEGIN
         activities_performed, outcomes, participant_response, progress_toward_goals
     ) VALUES (
         s5, p5, v_org_id, v_worker_id, v_worker_id, v_worker_id,
-        t_done_today_s, t_done_today_s, 'daily_living', 150, 'completed',
+        (t_done_today_s AT TIME ZONE 'Australia/Adelaide')::date, t_done_today_s, 'daily_living', 150, 'completed',
         'Isla completed morning hygiene and breakfast meal prep with one verbal prompt. Mood positive. Nitrile gloves used throughout personal care. No incidents.',
         'Isla completed morning hygiene and breakfast meal prep with one verbal prompt. Mood positive. Nitrile gloves used throughout personal care. No incidents.',
         'Isla completed morning hygiene and breakfast meal prep with one verbal prompt. Mood positive. Nitrile gloves used throughout personal care. No incidents.',
@@ -1007,6 +1008,7 @@ BEGIN
         'Measurable progress toward morning hygiene independence'
     ) ON CONFLICT (id) DO UPDATE SET
         status = 'completed', compliance_score = 92, compliance_status = 'compliant',
+        session_date = EXCLUDED.session_date, start_time = EXCLUDED.start_time,
         tasks = EXCLUDED.tasks, end_validation = EXCLUDED.end_validation, updated_at = now();
 
     INSERT INTO public.shifts (
@@ -1084,7 +1086,7 @@ BEGIN
         break_duration_secs, billable_duration_secs, engagement_score
     ) VALUES (
         s6, p6, v_org_id, v_worker_id, v_worker_id, v_worker_id,
-        t_past1_s, t_past1_s, 'community_access', 360, 'completed',
+        (t_past1_s AT TIME ZONE 'Australia/Adelaide')::date, t_past1_s, 'community_access', 360, 'completed',
         'Noah completed a 6-hour community access shift with structured check-ins and one compliant break. Meal prep first, then Torrens walk. Incident-free.',
         'Noah completed a 6-hour community access shift with structured check-ins and one compliant break. Meal prep first, then Torrens walk. Incident-free.',
         'Noah completed a 6-hour community access shift with structured check-ins and one compliant break. Meal prep first, then Torrens walk. Incident-free.',
@@ -1101,6 +1103,7 @@ BEGIN
         1200, 20400, 86
     ) ON CONFLICT (id) DO UPDATE SET
         status = 'completed', compliance_score = 91, compliance_status = 'compliant',
+        session_date = EXCLUDED.session_date, start_time = EXCLUDED.start_time,
         tasks = EXCLUDED.tasks, is_long_shift = true,
         checkin_count = EXCLUDED.checkin_count, engagement_score = EXCLUDED.engagement_score,
         duration_minutes = EXCLUDED.duration_minutes, updated_at = now();
@@ -1222,7 +1225,7 @@ BEGIN
         break_duration_secs, billable_duration_secs, engagement_score
     ) VALUES (
         s7, p7, v_org_id, v_worker_id, v_worker_id, v_worker_id,
-        t_past2_s, t_past2_s, 'daily_living', 390, 'completed',
+        (t_past2_s AT TIME ZONE 'Australia/Adelaide')::date, t_past2_s, 'daily_living', 390, 'completed',
         'Ava completed a 6.5-hour long shift: whiteboard personal care, domestic checklist, then community garden volunteering. Medication confirmed. One compliant break. No seizure activity. Incident-free.',
         'Ava completed a 6.5-hour long shift: whiteboard personal care, domestic checklist, then community garden volunteering. Medication confirmed. One compliant break. No seizure activity. Incident-free.',
         'Ava completed a 6.5-hour long shift: whiteboard personal care, domestic checklist, then community garden volunteering. Medication confirmed. One compliant break. No seizure activity. Incident-free.',
@@ -1239,6 +1242,7 @@ BEGIN
         1200, 22200, 82
     ) ON CONFLICT (id) DO UPDATE SET
         status = 'completed', compliance_score = 90, compliance_status = 'compliant',
+        session_date = EXCLUDED.session_date, start_time = EXCLUDED.start_time,
         tasks = EXCLUDED.tasks, is_long_shift = true,
         checkin_count = EXCLUDED.checkin_count, engagement_score = EXCLUDED.engagement_score,
         duration_minutes = EXCLUDED.duration_minutes, updated_at = now();

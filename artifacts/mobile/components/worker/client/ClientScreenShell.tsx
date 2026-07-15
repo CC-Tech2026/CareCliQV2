@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerBottomNav, workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
 import { useColors } from "@/hooks/useColors";
+import { goBackOrHome } from "@/lib/go-back";
 
 type Props = {
   title: string;
@@ -26,7 +27,7 @@ export function ClientScreenShell({ title, subtitle, backHref, children }: Props
       router.replace(backHref as never);
       return;
     }
-    router.back();
+    goBackOrHome(router);
   }
 
   return (

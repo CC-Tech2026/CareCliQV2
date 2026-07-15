@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/useColors";
 type Props = {
   score: number;
   size?: number;
+  empty?: boolean;
 };
 
 function ringStroke(score: number, colors: ReturnType<typeof useColors>): string {
@@ -15,14 +16,14 @@ function ringStroke(score: number, colors: ReturnType<typeof useColors>): string
   return colors.destructive;
 }
 
-export function ComplianceScoreRing({ score, size = 52 }: Props) {
+export function ComplianceScoreRing({ score, size = 52, empty = false }: Props) {
   const colors = useColors();
   const value = Math.max(0, Math.min(100, Math.round(score)));
-  const stroke = ringStroke(value, colors);
+  const stroke = empty ? colors.soft : ringStroke(value, colors);
   const strokeWidth = 5;
   const radius = (size - strokeWidth) / 2 - 1;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - value / 100);
+  const offset = empty ? circumference : circumference * (1 - value / 100);
 
   return (
     <View style={{ width: size, height: size }}>
@@ -51,7 +52,7 @@ export function ComplianceScoreRing({ score, size = 52 }: Props) {
       <View style={StyleSheet.absoluteFillObject}>
         <View style={styles.center}>
           <Text style={[styles.score, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            {value || "—"}
+            {empty ? "—" : value || "—"}
           </Text>
         </View>
       </View>

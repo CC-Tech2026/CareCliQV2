@@ -58,7 +58,7 @@ export function OtpInput({ value, onChange, disabled, error, auth }: Props) {
               styles.box,
               {
                 backgroundColor: auth.inputBg,
-                borderColor: error ? auth.coral : filled ? auth.plum : auth.inputBorder,
+                borderColor: error ? auth.error : filled ? auth.plum : auth.inputBorder,
                 color: auth.text,
               },
             ]}

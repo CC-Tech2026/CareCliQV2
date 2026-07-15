@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -494,12 +493,12 @@ export default function SettingsTabScreen() {
           <SettingsRow
             icon="help-circle"
             label={t("settings.row.help")}
-            onPress={() => router.push("/toolkit" as never)}
+            onPress={() => router.push("/worker/help" as never)}
           />
           <SettingsRow
             icon="mail"
             label={t("settings.row.contact")}
-            onPress={() => void Linking.openURL("mailto:support@carecliq.com.au")}
+            onPress={() => router.push("/worker/contact" as never)}
           />
           <SettingsRow
             icon="info"

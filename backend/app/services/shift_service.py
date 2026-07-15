@@ -2457,7 +2457,7 @@ def start_shift_session(
 
     payload = _prepare_session_payload({
         "participant_id": str(participant_id),
-        "session_date": date.today(),
+        "session_date": app_today(),
         "duration_minutes": duration,
         "session_type": "support_work",
         "status": "draft",

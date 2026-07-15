@@ -60,3 +60,4 @@ backend/__pycache__/*
 backend/app/__pycache__/*
 **/__pycache__/*
 .pnpm-store/*
+artifacts/mobile/build-1784104731243.apk

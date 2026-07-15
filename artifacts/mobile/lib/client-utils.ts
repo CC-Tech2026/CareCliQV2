@@ -4,7 +4,14 @@ import { shiftInitials } from "@/lib/shift-utils";
 export function safeClientDate(value?: string | null): string {
   if (!value) return "Not recorded";
   try {
-    return new Date(value).toLocaleDateString("en-AU", {
+    // Date-only ISO (YYYY-MM-DD) must not be parsed as UTC midnight — that shifts
+    // the calendar day backward in western timezones vs Compliance/Shifts local day.
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    const date = dateOnly
+      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 12, 0, 0)
+      : new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("en-AU", {
       day: "numeric",
       month: "short",
       year: "numeric",

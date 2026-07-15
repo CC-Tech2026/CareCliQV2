@@ -1,9 +1,10 @@
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -27,13 +28,11 @@ import { usePreferences } from "@/context/PreferencesContext";
 import {
   acceptInvite,
   completeOnboarding,
-  listJoinableOrganizations,
   lookupInviteCode,
   registerAccount,
-  requestStaffInvite,
   type InviteLookup,
 } from "@/lib/auth-api";
-
+import { uploadProfilePhoto } from "@/lib/user-api";
 type FormData = {
   full_name: string;
   email: string;
@@ -62,10 +61,36 @@ const EMPTY: FormData = {
   sp_address: "",
 };
 
-function AuthLabel({ children, auth }: { children: string; auth: ReturnType<typeof getAuthColors> }) {
+function ReviewRow({
+  label,
+  value,
+  auth,
+}: {
+  label: string;
+  value: string;
+  auth: ReturnType<typeof getAuthColors>;
+}) {
+  return (
+    <View style={styles.reviewRow}>
+      <Text style={[styles.reviewLabel, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>{label}</Text>
+      <Text style={[styles.reviewValue, { color: auth.text, fontFamily: "Inter_700Bold" }]}>{value}</Text>
+    </View>
+  );
+}
+
+function AuthLabel({
+  children,
+  auth,
+  required,
+}: {
+  children: string;
+  auth: ReturnType<typeof getAuthColors>;
+  required?: boolean;
+}) {
   return (
     <Text style={[styles.label, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
       {children.toUpperCase()}
+      {required ? <Text style={{ color: "#EF4444" }}> *</Text> : null}
     </Text>
   );
 }
@@ -93,7 +118,7 @@ function AuthInput({
   onTogglePassword?: () => void;
   auth: ReturnType<typeof getAuthColors>;
   error?: boolean;
-  keyboardType?: "default" | "email-address";
+  keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "words";
   editable?: boolean;
 }) {
@@ -103,7 +128,7 @@ function AuthInput({
         styles.inputRow,
         {
           backgroundColor: auth.inputBg,
-          borderColor: error ? "#EF4444" : auth.inputBorder,
+          borderColor: error ? auth.error : auth.inputBorder,
           opacity: editable ? 1 : 0.7,
         },
       ]}
@@ -168,12 +193,12 @@ function LegacyOrgSignupForm({
 
   const stepLabels = [t("auth.signup.step.details"), t("auth.signup.step.organisation")];
   const mismatch = Boolean(form.confirm_password) && form.password !== form.confirm_password;
-  const short = Boolean(form.password) && form.password.length < 8;
+  const short = Boolean(form.password) && form.password.length < 10;
 
   const step1Valid =
     form.full_name.trim() !== "" &&
     form.email.trim() !== "" &&
-    form.password.length >= 8 &&
+    form.password.length >= 10 &&
     form.password === form.confirm_password;
 
   const step2Valid =
@@ -328,7 +353,7 @@ function LegacyOrgSignupForm({
               {form.confirm_password ? (
                 <Text
                   style={{
-                    color: mismatch ? "#EF4444" : auth.valid,
+                    color: mismatch ? auth.error : auth.valid,
                     fontFamily: "Inter_700Bold",
                     fontSize: 11,
                   }}
@@ -483,7 +508,7 @@ function LegacyOrgSignupForm({
           </View>
 
           {error ? (
-            <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+            <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
           ) : null}
 
           <View style={styles.actions}>
@@ -514,7 +539,7 @@ function LegacyOrgSignupForm({
 
       {step === 3 ? (
         <View style={styles.successWrap}>
-          <Feather name="check-circle" size={70} color={auth.coral} />
+          <Feather name="check-circle" size={70} color={auth.valid} />
           <Text style={[styles.successTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
             {emailVerify ? t("auth.signup.checkEmail") : t("auth.signup.allSet")}
           </Text>
@@ -552,109 +577,53 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [providerType, setProviderType] = useState("");
-  const [registrationStatus, setRegistrationStatus] = useState("");
-  const [teamSize, setTeamSize] = useState("");
-  const [participantVolume, setParticipantVolume] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
-  const [askName, setAskName] = useState("");
-  const [askEmail, setAskEmail] = useState("");
-  const [askOrgId, setAskOrgId] = useState("");
-  const [askBusy, setAskBusy] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
-  const [orgOptions, setOrgOptions] = useState<{ value: string; label: string }[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const orgs = await listJoinableOrganizations();
-        if (cancelled) return;
-        setOrgOptions(
-          orgs.map((o) => ({
-            value: o.id,
-            label: o.organization_name,
-          })),
-        );
-      } catch {
-        if (!cancelled) setOrgOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const mismatch = Boolean(confirmPassword) && password !== confirmPassword;
-  const short = Boolean(password) && password.length < 8;
+  const short = Boolean(password) && password.length < 10;
   const yourDetailsValid =
-    fullName.trim().length > 0 && password.length >= 8 && password === confirmPassword && Boolean(invite);
-  const orgDetailsValid =
-    Boolean(invite) &&
-    providerType.trim() !== "" &&
-    registrationStatus.trim() !== "" &&
-    teamSize.trim() !== "" &&
-    participantVolume.trim() !== "" &&
-    contactNumber.trim() !== "" &&
-    address.trim() !== "";
+    fullName.trim().length > 0 && password.length >= 10 && password === confirmPassword && Boolean(invite);
+  const profileValid = address.trim().length > 0;
 
-  const openAskCoordinator = () => {
-    setAskError(null);
-    setAskName(fullName);
-    setAskEmail(invite?.email ?? "");
-    setAskOrgId(invite?.organization_id ?? "");
-    setAskOpen(true);
-  };
-
-  const submitAskCoordinator = async () => {
-    const name = askName.trim();
-    const email = askEmail.trim();
-    const orgId = invite?.organization_id || askOrgId;
-    if (name.length < 2) {
-      setAskError(t("auth.signup.join.askNameRequired"));
-      return;
-    }
-    if (!email.includes("@")) {
-      setAskError(t("auth.signup.join.askEmailRequired"));
-      return;
-    }
-    if (!orgId) {
-      setAskError(t("auth.signup.join.askOrgRequired"));
-      return;
-    }
-
-    setAskBusy(true);
-    setAskError(null);
-    try {
-      const selectedLabel = orgOptions.find((o) => o.value === orgId)?.label;
-      const result = await requestStaffInvite({
-        full_name: name,
-        email,
-        organization_id: orgId,
-        ...(selectedLabel ? { organization_name: selectedLabel } : {}),
-      });
-      setAskOpen(false);
-      Alert.alert(
-        t("auth.signup.join.askSentTitle"),
-        result.message || t("auth.signup.join.askSentMessage", {
-          org: result.organization_name || selectedLabel || t("auth.signup.join.yourOrganisation"),
-        }),
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("auth.signup.error.tryAgain");
-      if (/already requested/i.test(msg)) {
-        setAskError(t("auth.signup.join.askAlreadyRequested"));
+  const pickProfilePhoto = useCallback(
+    async (fromCamera: boolean) => {
+      if (fromCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          setError(t("profile.photo.permissionCamera"));
+          return;
+        }
       } else {
-        setAskError(msg);
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          setError(t("profile.photo.permissionLibrary"));
+          return;
+        }
       }
-    } finally {
-      setAskBusy(false);
-    }
-  };
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            quality: 0.85,
+            allowsEditing: true,
+            aspect: [1, 1],
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.85,
+            allowsEditing: true,
+            aspect: [1, 1],
+          });
+      if (result.canceled || !result.assets[0]?.uri) return;
+      setProfilePhotoUri(result.assets[0].uri);
+      setError(null);
+    },
+    [t],
+  );
 
   const handleLookupCode = async () => {
     if (inviteCode.length !== 6 || busy) return;
@@ -672,8 +641,8 @@ export default function SignupScreen() {
     }
   };
 
-  const handleAcceptInvite = async () => {
-    if (!invite || !yourDetailsValid || !orgDetailsValid || busy) return;
+  const handleCompleteSetup = async () => {
+    if (!invite || !yourDetailsValid || !profileValid || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -682,22 +651,29 @@ export default function SignupScreen() {
         password,
       });
       await updateSession(result.accessToken, result.user);
+      if (profilePhotoUri) {
+        try {
+          await uploadProfilePhoto({
+            uri: profilePhotoUri,
+            name: "avatar.jpg",
+            type: "image/jpeg",
+          });
+        } catch {
+          /* photo is optional best-effort */
+        }
+      }
       try {
         await completeOnboarding({
           account_type: invite.role === "support_worker" ? "independent_worker" : "small_provider",
           organization_name: invite.organization_name || undefined,
-          provider_type: providerType,
-          registration_status: registrationStatus,
-          team_size: teamSize,
-          participant_volume: participantVolume,
-          contact_number: contactNumber.trim(),
+          contact_number: contactNumber.trim() || undefined,
           address: address.trim(),
           org_address: address.trim(),
         });
       } catch {
         /* profile extras are best-effort after join */
       }
-      setJoinStep(4);
+      setJoinStep(5);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.signup.error.tryAgain"));
     } finally {
@@ -774,7 +750,7 @@ export default function SignupScreen() {
                   ) : null}
 
                   {error ? (
-                    <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+                    <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
                   ) : null}
 
                   <Pressable
@@ -800,7 +776,7 @@ export default function SignupScreen() {
                   <Text style={[styles.askLine, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
                     {t("auth.signup.join.noInvite")}{" "}
                     <Text
-                      onPress={openAskCoordinator}
+                      onPress={() => setAskOpen(true)}
                       style={{ color: auth.plum, fontFamily: "Inter_700Bold" }}
                     >
                       {t("auth.signup.join.askCoordinator")}
@@ -821,7 +797,9 @@ export default function SignupScreen() {
                   </View>
 
                   <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.email")}</AuthLabel>
+                    <AuthLabel auth={auth} required>
+                      {t("auth.signup.email")}
+                    </AuthLabel>
                     <AuthInput value={invite.email} onChangeText={() => undefined} auth={auth} editable={false} />
                     <Text style={{ color: auth.muted, fontFamily: "Inter_400Regular", fontSize: 12 }}>
                       {t("auth.signup.org.lockedFromInvite")}
@@ -829,7 +807,9 @@ export default function SignupScreen() {
                   </View>
 
                   <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.fullName")}</AuthLabel>
+                    <AuthLabel auth={auth} required>
+                      {t("auth.signup.fullName")}
+                    </AuthLabel>
                     <AuthInput
                       value={fullName}
                       onChangeText={setFullName}
@@ -840,7 +820,9 @@ export default function SignupScreen() {
                   </View>
 
                   <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.password")}</AuthLabel>
+                    <AuthLabel auth={auth} required>
+                      {t("auth.signup.password")}
+                    </AuthLabel>
                     <AuthInput
                       value={password}
                       onChangeText={setPassword}
@@ -857,11 +839,13 @@ export default function SignupScreen() {
 
                   <View style={styles.field}>
                     <View style={styles.confirmHeader}>
-                      <AuthLabel auth={auth}>{t("auth.signup.confirmPassword")}</AuthLabel>
+                      <AuthLabel auth={auth} required>
+                        {t("auth.signup.confirmPassword")}
+                      </AuthLabel>
                       {confirmPassword ? (
                         <Text
                           style={{
-                            color: mismatch ? "#EF4444" : auth.valid,
+                            color: mismatch ? auth.error : auth.valid,
                             fontFamily: "Inter_700Bold",
                             fontSize: 11,
                           }}
@@ -881,7 +865,7 @@ export default function SignupScreen() {
                   </View>
 
                   {error ? (
-                    <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+                    <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
                   ) : null}
 
                   <View style={styles.actions}>
@@ -920,92 +904,60 @@ export default function SignupScreen() {
                 <View style={styles.stack}>
                   <View>
                     <Text style={[styles.cardTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                      {t("auth.signup.join.orgTitle")}
+                      {t("auth.signup.join.profileTitle")}
                     </Text>
                     <Text style={[styles.cardSubtitle, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
-                      {t("auth.signup.join.orgSubtitle", { step: joinStep })}
-                    </Text>
-                    <Text style={[styles.cardSubtitle, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
-                      {t("auth.signup.org.requiredHint")}
+                      {t("auth.signup.join.profileSubtitle", { step: joinStep })}
                     </Text>
                   </View>
 
                   <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.organisationName")}</AuthLabel>
-                    <AuthInput
-                      value={invite.organization_name || t("auth.signup.join.yourOrganisation")}
-                      onChangeText={() => undefined}
-                      auth={auth}
-                      editable={false}
-                    />
-                    <Text style={{ color: auth.muted, fontFamily: "Inter_400Regular", fontSize: 12 }}>
-                      {t("auth.signup.org.lockedFromInvite")}
-                    </Text>
-                  </View>
-
-                  <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.providerType")}</AuthLabel>
-                    <AuthSelect
-                      value={providerType}
-                      onChange={setProviderType}
-                      placeholder={t("auth.signup.placeholder.selectType")}
-                      disabled={busy}
-                      auth={auth}
-                      options={[
-                        { value: "registered_ndis", label: t("auth.signup.providerType.registeredNdis") },
-                        { value: "unregistered", label: t("auth.signup.providerType.unregistered") },
-                        { value: "plan_management", label: t("auth.signup.providerType.planManagement") },
-                        { value: "support_coord", label: t("auth.signup.providerType.supportCoord") },
-                      ]}
-                    />
-                  </View>
-
-                  <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.registrationStatus")}</AuthLabel>
-                    <AuthSelect
-                      value={registrationStatus}
-                      onChange={setRegistrationStatus}
-                      placeholder={t("auth.signup.placeholder.selectStatus")}
-                      disabled={busy}
-                      auth={auth}
-                      options={[
-                        { value: "registered", label: t("auth.signup.regStatus.registered") },
-                        { value: "unregistered", label: t("auth.signup.status.unregistered") },
-                        { value: "in_progress", label: t("auth.signup.regStatus.inProgress") },
-                      ]}
-                    />
-                  </View>
-
-                  <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.teamSize")}</AuthLabel>
-                    <AuthSelect
-                      value={teamSize}
-                      onChange={setTeamSize}
-                      placeholder={t("auth.signup.placeholder.selectSize")}
-                      disabled={busy}
-                      auth={auth}
-                      options={[
-                        { value: "1_5", label: t("auth.signup.teamSize.1_5") },
-                        { value: "5_20", label: t("auth.signup.teamSize.5_20") },
-                        { value: "20_plus", label: t("auth.signup.teamSize.20_plus") },
-                      ]}
-                    />
-                  </View>
-
-                  <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.participantVolume")}</AuthLabel>
-                    <AuthSelect
-                      value={participantVolume}
-                      onChange={setParticipantVolume}
-                      placeholder={t("auth.signup.placeholder.participantCount")}
-                      disabled={busy}
-                      auth={auth}
-                      options={[
-                        { value: "1_10", label: t("auth.signup.participantVolume.1_10") },
-                        { value: "10_50", label: t("auth.signup.participantVolume.10_50") },
-                        { value: "50_plus", label: t("auth.signup.participantVolume.50_plus") },
-                      ]}
-                    />
+                    <AuthLabel auth={auth}>{t("auth.signup.join.profilePhoto")}</AuthLabel>
+                    <View style={styles.photoRow}>
+                      <View
+                        style={[
+                          styles.photoAvatar,
+                          { backgroundColor: `${auth.plum}18`, borderColor: auth.inputBorder },
+                        ]}
+                      >
+                        {profilePhotoUri ? (
+                          <Image source={{ uri: profilePhotoUri }} style={styles.photoAvatarImg} />
+                        ) : (
+                          <Feather name="user" size={28} color={auth.plum} />
+                        )}
+                      </View>
+                      <View style={styles.photoActions}>
+                        <Pressable
+                          onPress={() => void pickProfilePhoto(true)}
+                          style={[styles.photoBtn, { borderColor: auth.inputBorder }]}
+                        >
+                          <Feather name="camera" size={14} color={auth.plum} />
+                          <Text style={[styles.photoBtnText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                            {t("auth.signup.join.photoCamera")}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => void pickProfilePhoto(false)}
+                          style={[styles.photoBtn, { borderColor: auth.inputBorder }]}
+                        >
+                          <Feather name="image" size={14} color={auth.plum} />
+                          <Text style={[styles.photoBtnText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                            {t("auth.signup.join.photoUpload")}
+                          </Text>
+                        </Pressable>
+                        {profilePhotoUri ? (
+                          <Pressable onPress={() => setProfilePhotoUri(null)}>
+                            <Text style={{ color: auth.muted, fontFamily: "Inter_500Medium", fontSize: 12 }}>
+                              {t("auth.signup.join.photoRemove")}
+                            </Text>
+                          </Pressable>
+                        ) : (
+                          <Text style={{ color: auth.muted, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+                            {t("auth.signup.join.photoOptional")}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
                   </View>
 
                   <View style={styles.field}>
@@ -1017,10 +969,15 @@ export default function SignupScreen() {
                       auth={auth}
                       keyboardType="phone-pad"
                     />
+                    <Text style={{ color: auth.muted, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+                      {t("auth.signup.join.optionalHint")}
+                    </Text>
                   </View>
 
                   <View style={styles.field}>
-                    <AuthLabel auth={auth}>{t("auth.signup.field.address")}</AuthLabel>
+                    <AuthLabel auth={auth} required>
+                      {t("auth.signup.field.address")}
+                    </AuthLabel>
                     <AuthInput
                       value={address}
                       onChangeText={setAddress}
@@ -1030,7 +987,7 @@ export default function SignupScreen() {
                   </View>
 
                   {error ? (
-                    <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+                    <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
                   ) : null}
 
                   <View style={styles.actions}>
@@ -1046,12 +1003,86 @@ export default function SignupScreen() {
                       </Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => void handleAcceptInvite()}
-                      disabled={!orgDetailsValid || busy}
+                      onPress={() => {
+                        if (!profileValid) return;
+                        setError(null);
+                        setJoinStep(4);
+                      }}
+                      disabled={!profileValid}
                       style={[
                         styles.primaryBtn,
-                        { backgroundColor: auth.plum, opacity: !orgDetailsValid || busy ? 0.4 : 1 },
+                        { backgroundColor: auth.plum, opacity: !profileValid ? 0.4 : 1 },
                       ]}
+                    >
+                      <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
+                        {t("auth.signup.continue")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+
+              {joinStep === 4 && invite ? (
+                <View style={styles.stack}>
+                  <View>
+                    <Text style={[styles.cardTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                      {t("auth.signup.join.reviewTitle")}
+                    </Text>
+                    <Text style={[styles.cardSubtitle, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
+                      {t("auth.signup.join.reviewSubtitle", { step: joinStep })}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.reviewCard, { backgroundColor: `${auth.plum}10`, borderColor: auth.cardBorder }]}>
+                    <View style={styles.reviewPhotoWrap}>
+                      <View
+                        style={[
+                          styles.photoAvatar,
+                          { backgroundColor: `${auth.plum}18`, borderColor: auth.inputBorder },
+                        ]}
+                      >
+                        {profilePhotoUri ? (
+                          <Image source={{ uri: profilePhotoUri }} style={styles.photoAvatarImg} />
+                        ) : (
+                          <Feather name="user" size={28} color={auth.plum} />
+                        )}
+                      </View>
+                    </View>
+                    <ReviewRow
+                      label={t("auth.signup.join.reviewOrg")}
+                      value={invite.organization_name || t("auth.signup.join.yourOrganisation")}
+                      auth={auth}
+                    />
+                    <ReviewRow label={t("auth.signup.fullName")} value={fullName.trim()} auth={auth} />
+                    <ReviewRow label={t("auth.signup.email")} value={invite.email} auth={auth} />
+                    <ReviewRow
+                      label={t("auth.signup.field.contactNumber")}
+                      value={contactNumber.trim() || t("auth.signup.join.notProvided")}
+                      auth={auth}
+                    />
+                    <ReviewRow label={t("auth.signup.field.address")} value={address.trim()} auth={auth} />
+                  </View>
+
+                  {error ? (
+                    <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+                  ) : null}
+
+                  <View style={styles.actions}>
+                    <Pressable
+                      onPress={() => {
+                        setJoinStep(3);
+                        setError(null);
+                      }}
+                      style={[styles.secondaryBtn, { borderColor: auth.inputBorder }]}
+                    >
+                      <Text style={[styles.secondaryBtnText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                        {t("auth.signup.back")}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void handleCompleteSetup()}
+                      disabled={busy}
+                      style={[styles.primaryBtn, { backgroundColor: auth.plum, opacity: busy ? 0.4 : 1 }]}
                     >
                       {busy ? (
                         <ActivityIndicator color="#FFFFFF" />
@@ -1065,9 +1096,9 @@ export default function SignupScreen() {
                 </View>
               ) : null}
 
-              {joinStep === 4 ? (
+              {joinStep === 5 ? (
                 <View style={styles.successWrap}>
-                  <Feather name="check-circle" size={70} color={auth.coral} />
+                  <Feather name="check-circle" size={70} color={auth.valid} />
                   <Text style={[styles.successTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
                     {t("auth.signup.join.welcomeTitle")}
                   </Text>
@@ -1089,7 +1120,7 @@ export default function SignupScreen() {
             </View>
           )}
 
-          {joinStep < 4 || mode === "legacy" ? (
+          {joinStep < 5 || mode === "legacy" ? (
             <View style={styles.footerLinks}>
               {mode === "join" ? (
                 <Pressable onPress={() => setMode("legacy")}>
@@ -1102,7 +1133,7 @@ export default function SignupScreen() {
                 {t("auth.signup.hasAccount")}{" "}
                 <Text
                   onPress={() => router.replace("/login" as never)}
-                  style={{ color: auth.coral, fontFamily: "Inter_700Bold" }}
+                  style={{ color: auth.plum, fontFamily: "Inter_700Bold" }}
                 >
                   {t("auth.signup.signIn")}
                 </Text>
@@ -1113,95 +1144,68 @@ export default function SignupScreen() {
       </ScrollView>
 
       <Modal visible={askOpen} transparent animationType="fade" onRequestClose={() => setAskOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => !askBusy && setAskOpen(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAskOpen(false)}>
+          <Pressable
+            style={[styles.askCard, { backgroundColor: auth.formBg, borderColor: auth.cardBorder }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.cardTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+              {t("auth.signup.join.askTitle")}
+            </Text>
+            <Text style={[styles.cardSubtitle, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
+              {t("auth.signup.join.askIntro")}
+            </Text>
+
+            <View style={styles.askSteps}>
+              {(
+                [
+                  "auth.signup.join.askStep1",
+                  "auth.signup.join.askStep2",
+                  "auth.signup.join.askStep3",
+                  "auth.signup.join.askStep4",
+                ] as const
+              ).map((key, index) => (
+                <View key={key} style={styles.askStepRow}>
+                  <View style={[styles.askStepNum, { backgroundColor: `${auth.plum}18` }]}>
+                    <Text style={{ color: auth.plum, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[styles.askStepText, { color: auth.text, fontFamily: "Inter_400Regular" }]}
+                  >
+                    {t(key)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
             <Pressable
-              style={[styles.askCard, { backgroundColor: auth.formBg, borderColor: auth.cardBorder }]}
-              onPress={(e) => e.stopPropagation()}
+              onPress={() => setAskOpen(false)}
+              style={({ pressed, hovered }) => [
+                styles.askGotItBtn,
+                {
+                  borderColor: auth.plum,
+                  backgroundColor: pressed || hovered ? auth.plum : "transparent",
+                  marginTop: 8,
+                },
+              ]}
             >
-              <Text style={[styles.cardTitle, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                {t("auth.signup.join.askTitle")}
-              </Text>
-              <Text style={[styles.cardSubtitle, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
-                {t("auth.signup.join.askFormHint")}
-              </Text>
-
-              <View style={styles.field}>
-                <AuthLabel auth={auth}>{t("auth.signup.fullName")}</AuthLabel>
-                <AuthInput
-                  value={askName}
-                  onChangeText={setAskName}
-                  placeholder={t("auth.signup.namePlaceholder")}
-                  auth={auth}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <View style={styles.field}>
-                <AuthLabel auth={auth}>{t("auth.signup.email")}</AuthLabel>
-                <AuthInput
-                  value={askEmail}
-                  onChangeText={setAskEmail}
-                  placeholder={t("auth.signup.emailPlaceholder")}
-                  auth={auth}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-
-              {!invite?.organization_id ? (
-                <View style={styles.field}>
-                  <AuthLabel auth={auth}>{t("auth.signup.field.organisationName")}</AuthLabel>
-                  <AuthSelect
-                    value={askOrgId}
-                    onChange={setAskOrgId}
-                    options={orgOptions}
-                    placeholder={t("auth.signup.join.askOrgPlaceholder")}
-                    disabled={askBusy || orgOptions.length === 0}
-                    auth={auth}
-                  />
-                </View>
-              ) : (
-                <View style={[styles.orgBanner, { backgroundColor: `${auth.plum}14` }]}>
-                  <Text style={[styles.orgBannerText, { color: auth.plum, fontFamily: "Inter_500Medium" }]}>
-                    {t("auth.signup.join.joining")}{" "}
-                    <Text style={{ fontFamily: "Inter_700Bold" }}>
-                      {invite.organization_name || t("auth.signup.join.yourOrganisation")}
-                    </Text>
-                  </Text>
-                </View>
+              {({ pressed, hovered }) => (
+                <Text
+                  style={[
+                    styles.askGotItBtnText,
+                    {
+                      fontFamily: "Inter_700Bold",
+                      color: pressed || hovered ? "#FFFFFF" : auth.plum,
+                    },
+                  ]}
+                >
+                  {t("auth.signup.join.askGotIt")}
+                </Text>
               )}
-
-              {askError ? (
-                <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{askError}</Text>
-              ) : null}
-
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => setAskOpen(false)}
-                  disabled={askBusy}
-                  style={[styles.secondaryBtn, { borderColor: auth.inputBorder }]}
-                >
-                  <Text style={[styles.secondaryBtnText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                    {t("common.cancel")}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void submitAskCoordinator()}
-                  disabled={askBusy}
-                  style={[styles.primaryBtn, { backgroundColor: auth.plum, opacity: askBusy ? 0.6 : 1 }]}
-                >
-                  {askBusy ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
-                      {t("auth.signup.join.askSubmit")}
-                    </Text>
-                  )}
-                </Pressable>
-              </View>
             </Pressable>
-          </KeyboardAvoidingView>
+          </Pressable>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
@@ -1300,6 +1304,59 @@ const styles = StyleSheet.create({
   successBtn: { width: "100%", marginTop: 12 },
   signInLine: { textAlign: "center", fontSize: 13 },
   askLine: { textAlign: "center", fontSize: 13 },
+  askSteps: { gap: 12, marginTop: 4 },
+  askStepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  askStepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  askStepText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  photoRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  photoAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  photoAvatarImg: { width: 72, height: 72 },
+  photoActions: { flex: 1, gap: 8 },
+  photoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  photoBtnText: { fontSize: 13 },
+  reviewCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  reviewPhotoWrap: { alignItems: "center", marginBottom: 4 },
+  reviewRow: { gap: 2 },
+  reviewLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
+  reviewValue: { fontSize: 14 },
+  askGotItBtn: {
+    alignSelf: "stretch",
+    width: "100%",
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  askGotItBtnText: { fontSize: 15 },
   orgBanner: {
     borderRadius: 12,
     paddingHorizontal: 14,

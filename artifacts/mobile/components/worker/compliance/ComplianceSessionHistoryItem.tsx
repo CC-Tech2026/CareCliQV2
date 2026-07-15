@@ -21,11 +21,12 @@ type Props = {
 export function ComplianceSessionHistoryItem({ session }: Props) {
   const colors = useColors();
   const t = useT();
-  const score = Math.round(session.compliance_score ?? 0);
+  const hasScore = session.compliance_score != null && Number.isFinite(Number(session.compliance_score));
+  const score = hasScore ? Math.round(Number(session.compliance_score)) : 0;
 
   return (
     <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
-      <ComplianceScoreRing score={score} size={48} />
+      <ComplianceScoreRing score={score} size={48} empty={!hasScore} />
       <View style={styles.body}>
         <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
           {sessionTitle(session, t)}

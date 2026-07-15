@@ -9,7 +9,7 @@ export default function ToolkitScreen() {
 
   return (
     <WorkerStackScreen headerTitle={t("nav.toolkit")} cardsOnBackground showBack>
-      <ProfileToolkitPanel bottomInset={24} />
+      <ProfileToolkitPanel bottomInset={24} showSectionHeader />
     </WorkerStackScreen>
   );
 }
