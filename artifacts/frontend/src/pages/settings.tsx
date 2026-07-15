@@ -54,7 +54,6 @@ import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
 } from "@workspace/api-client-react";
-import { AvatarPicker, AvatarDisplay } from "@/components/AvatarPicker";
 import {
   disableMfa,
   getLoginHistory,
@@ -871,9 +870,6 @@ export default function Settings() {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // -- Avatar state -----------------------------------------------------------
-  const [avatarId, setAvatarId] = useState<string | null>(null);
-
   // -- Practitioner Details state ---------------------------------------------
   const [practName, setPractName] = useState("");
   const [practCredentials, setPractCredentials] = useState("");
@@ -1003,7 +999,6 @@ export default function Settings() {
 
     if (serverSettings.name) setPractName(serverSettings.name);
     if (serverSettings.credentials) setPractCredentials(serverSettings.credentials);
-    if (serverSettings.avatarId) setAvatarId(serverSettings.avatarId);
 
     const provider = serverSettings.provider as { businessName?: string | null; abn?: string | null } | null;
     if (provider?.businessName) setBusinessName(provider.businessName);
@@ -1163,16 +1158,6 @@ export default function Settings() {
     const reader = new FileReader();
     reader.onloadend = () => { setUploadPreview(reader.result as string); };
     reader.readAsDataURL(file);
-  };
-
-  // -- Avatar auto-save -------------------------------------------------------
-  const handleAvatarChange = async (newId: string | null) => {
-    setAvatarId(newId);
-    try {
-      await saveToServer({ data: { avatarId: newId ?? null } });
-    } catch {
-      toast({ title: translate("settings.toast.avatarSaveFailed"), variant: "destructive" });
-    }
   };
 
   // -- Section save handlers --------------------------------------------------
@@ -1510,37 +1495,6 @@ export default function Settings() {
                       {translate("settings.practitioner.save")}
                     </Button>
                   </div>
-                </div>
-              )}
-            </PanelCard>
-
-            {/* Avatar picker card */}
-            <PanelCard label={translate("settings.avatar.label")}>
-              {isLoadingSettings ? (
-                <LoadingRow />
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <AvatarDisplay
-                      avatarId={avatarId}
-                      sizePx={56}
-                      fallback={
-                        <div className="h-14 w-14 rounded-full flex items-center justify-center border-2 border-dashed"
-                          style={{ background: "rgba(55,48,163,0.06)", borderColor: "rgba(55,48,163,0.2)", color: "rgba(55,48,163,0.3)" }}>
-                          <User className="h-6 w-6" />
-                        </div>
-                      }
-                    />
-                    <div>
-                      <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>
-                        {avatarId ? translate("settings.avatar.selected") : translate("settings.avatar.none")}
-                      </p>
-                      <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
-                        Choose a character below. It appears in your sidebar instead of your initials. Saves automatically.
-                      </p>
-                    </div>
-                  </div>
-                  <AvatarPicker value={avatarId} onChange={handleAvatarChange} />
                 </div>
               )}
             </PanelCard>

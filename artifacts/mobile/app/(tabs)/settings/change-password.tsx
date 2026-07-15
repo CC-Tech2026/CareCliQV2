@@ -38,7 +38,7 @@ export default function ChangePasswordScreen() {
       setError(t("settings.changePassword.errorRequired"));
       return;
     }
-    if (newPassword.length < 8) {
+    if (newPassword.length < 10) {
       setError(t("settings.changePassword.errorTooShort"));
       return;
     }

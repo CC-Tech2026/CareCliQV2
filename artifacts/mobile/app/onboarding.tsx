@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ButtonHeight, Radius, Spacing } from "@/constants/layout";
+import { Typography } from "@/constants/typography";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "@/lib/haptics";
@@ -141,10 +143,10 @@ export default function OnboardingScreen() {
                 <View style={[styles.iconCircle, { backgroundColor: colors.soft }]}>
                   <Feather name={item.icon} size={56} color={colors.primary} />
                 </View>
-                <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.title, { color: colors.foreground, ...Typography.display }]}>
                   {t(item.titleKey)}
                 </Text>
-                <Text style={[styles.copy, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.copy, { color: colors.mutedForeground, ...Typography.body }]}>
                   {t(item.bodyKey)}
                 </Text>
               </View>
@@ -161,7 +163,7 @@ export default function OnboardingScreen() {
               style={[
                 styles.dot,
                 {
-                  backgroundColor: i === index ? colors.pink : colors.soft,
+                  backgroundColor: i === index ? colors.accent : colors.soft,
                 },
               ]}
             />
@@ -170,10 +172,10 @@ export default function OnboardingScreen() {
 
         <Pressable
           onPress={next}
-          style={[styles.cta, { backgroundColor: colors.primary }]}
+          style={[styles.cta, { backgroundColor: colors.primary, height: ButtonHeight.primary }]}
           accessibilityRole="button"
         >
-          <Text style={[styles.ctaText, { fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.ctaText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
             {last ? t("onboarding.getStarted") : t("onboarding.next")}
           </Text>
         </Pressable>
@@ -213,24 +215,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: {
-    fontSize: 23,
-    lineHeight: 28,
     textAlign: "center",
   },
   copy: {
-    fontSize: 13,
-    lineHeight: 20,
     textAlign: "center",
     maxWidth: 260,
   },
   footer: {
-    marginTop: 8,
+    marginTop: Spacing[8],
   },
   dots: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 7,
-    marginBottom: 16,
+    marginBottom: Spacing[16],
   },
   dot: {
     width: 8,
@@ -238,13 +236,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   cta: {
-    height: 46,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignItems: "center",
     justifyContent: "center",
   },
   ctaText: {
-    color: "#FFFFFF",
     fontSize: 14,
   },
 });

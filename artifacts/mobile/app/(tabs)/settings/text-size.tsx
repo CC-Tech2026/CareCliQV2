@@ -2,7 +2,10 @@ import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SettingsPanelCard } from "@/components/worker/settings/settings-ui";
+import {
+  SettingsPanelCard,
+  SettingsSection,
+} from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
 import { usePreferences, type TextScale } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -26,60 +29,66 @@ export default function TextSizeSettingsScreen() {
   return (
     <SettingsSubScreen showBottomNav={false} title={t("accessibility.fontSize")}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <SettingsPanelCard label={t("accessibility.textSize")}>
-          <View style={styles.list}>
-            {TEXT_SIZE_OPTIONS.map((option) => {
-              const active = textScale === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => {
-                    setTextScale(option.id);
-                    void Haptics.selectionAsync();
-                  }}
-                  style={[
-                    styles.option,
-                    {
-                      borderColor: active ? colors.primary : colors.border,
-                      backgroundColor: active ? colors.activeBg : colors.background,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: active ? colors.primary : colors.foreground,
-                      fontFamily: "Inter_700Bold",
-                      fontSize: option.preview,
+        <SettingsSection
+          title={t("accessibility.fontSize")}
+          description={t("settings.textSize.subtitle")}
+          icon="type"
+        >
+          <SettingsPanelCard label={t("accessibility.textSize")}>
+            <View style={styles.list}>
+              {TEXT_SIZE_OPTIONS.map((option) => {
+                const active = textScale === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => {
+                      setTextScale(option.id);
+                      void Haptics.selectionAsync();
                     }}
-                  >
-                    Aa
-                  </Text>
-                  <Text
                     style={[
-                      styles.optionLabel,
+                      styles.option,
                       {
-                        color: active ? colors.primary : colors.mutedForeground,
-                        fontFamily: active ? "Inter_700Bold" : "Inter_500Medium",
+                        borderColor: active ? colors.primary : colors.border,
+                        backgroundColor: active ? colors.activeBg : colors.background,
                       },
                     ]}
                   >
-                    {t(option.labelKey)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </SettingsPanelCard>
+                    <Text
+                      style={{
+                        color: active ? colors.primary : colors.foreground,
+                        fontFamily: "Inter_700Bold",
+                        fontSize: option.preview,
+                      }}
+                    >
+                      Aa
+                    </Text>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        {
+                          color: active ? colors.primary : colors.mutedForeground,
+                          fontFamily: active ? "Inter_700Bold" : "Inter_500Medium",
+                        },
+                      ]}
+                    >
+                      {t(option.labelKey)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SettingsPanelCard>
+        </SettingsSection>
       </ScrollView>
     </SettingsSubScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
+  scroll: { paddingHorizontal: 16, paddingTop: 4 },
   list: { gap: 10 },
   option: {
     width: "100%",

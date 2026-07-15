@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { SettingsSection } from "@/components/worker/settings/settings-ui";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -28,9 +29,10 @@ function isLow(item: ToolkitItem): boolean {
 
 type Props = {
   bottomInset?: number;
+  showSectionHeader?: boolean;
 };
 
-export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
+export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = false }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const t = useT();
@@ -90,6 +92,13 @@ export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
+      {showSectionHeader ? (
+        <SettingsSection
+          title={t("toolkit.title")}
+          description={t("toolkit.subtitle")}
+          icon="briefcase"
+        />
+      ) : null}
       <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
         {t("profile.toolkit.inventoryHint")}
       </Text>

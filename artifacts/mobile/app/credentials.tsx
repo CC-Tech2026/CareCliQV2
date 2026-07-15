@@ -9,7 +9,7 @@ export default function CredentialsScreen() {
 
   return (
     <WorkerStackScreen headerTitle={t("nav.credentials")} cardsOnBackground showBack>
-      <ProfileCredentialsPanel bottomInset={24} />
+      <ProfileCredentialsPanel bottomInset={24} showSectionHeader />
     </WorkerStackScreen>
   );
 }

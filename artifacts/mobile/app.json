@@ -11,8 +11,9 @@
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#4B3F91"
     },
+
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "care.cliq2026",
@@ -33,27 +34,51 @@
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#4B3F91"
+      },
+      "splash": {
+        "image": "./assets/images/logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#4B3F91"
       },
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
       ],
       "useNextNotificationsApi": true
     },
     "plugins": [
+      "./plugins/withCleartextTraffic",
       [
         "expo-router",
         {
           "origin": "http://localhost:8081"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#4B3F91",
+          "android": {
+            "backgroundColor": "#4B3F91",
+            "image": "./assets/images/logo.png",
+            "imageWidth": 180
+          }
         }
       ],
       "expo-font",

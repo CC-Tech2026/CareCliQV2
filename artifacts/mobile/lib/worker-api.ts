@@ -445,6 +445,13 @@ export function getMyCompliance(params?: { sessionsLimit?: number; sessionsOffse
 
 export type CheckinStatus = "GOING_WELL" | "NEEDS_ATTENTION" | "INCIDENT_REPORTED";
 
+export type UpcomingCheckin = {
+  id: string;
+  sequence_number?: number;
+  scheduled_at: string;
+  status?: string;
+};
+
 export type CheckinWindowStatus = {
   applicable?: boolean;
   can_submit_checkin?: boolean;
@@ -457,6 +464,8 @@ export type CheckinWindowStatus = {
   last_checkin_at?: string | null;
   uses_random_schedule?: boolean;
   checkin_response_window_secs?: number;
+  /** Pending/prompted check-ins — used to schedule offline-capable local notifications. */
+  upcoming_checkins?: UpcomingCheckin[];
 };
 
 export type UserNotification = {

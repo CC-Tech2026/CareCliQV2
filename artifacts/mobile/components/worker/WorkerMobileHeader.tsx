@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useWorkerNotifications } from "@/hooks/worker/useWorkerNotifications";
 import { useColors } from "@/hooks/useColors";
 import { resolveWorkerDisplayName } from "@/lib/display-name";
+import { goBackOrHome } from "@/lib/go-back";
 import { shiftInitials } from "@/lib/shift-utils";
 
 type Props = {
@@ -56,7 +57,7 @@ export function WorkerMobileHeader({ title, showBack, minimal }: Props) {
       >
         {showBack ? (
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrHome(router)}
             style={styles.sideBtn}
             accessibilityLabel="Go back"
           >

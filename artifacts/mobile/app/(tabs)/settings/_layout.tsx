@@ -8,6 +8,10 @@ export default function SettingsTabLayout() {
     <Stack screenOptions={{ headerShown: false, animation }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="account" />
+      <Stack.Screen name="signature" />
+      <Stack.Screen name="practitioner" />
+      <Stack.Screen name="contact" />
+      <Stack.Screen name="emergency-contact" />
       <Stack.Screen name="provider" />
       <Stack.Screen name="defaults" />
       <Stack.Screen name="compliance" />

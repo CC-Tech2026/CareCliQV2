@@ -61,7 +61,7 @@ function AuthField({
         ) : null}
       </View>
       {error ? (
-        <Text style={[styles.fieldError, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>
+        <Text style={[styles.fieldError, { color: auth.error, fontFamily: "Inter_500Medium" }]}>
           {error}
         </Text>
       ) : null}
@@ -331,7 +331,7 @@ export default function LoginScreen() {
                     auth={auth}
                   />
                   {mfaCodeError ? (
-                    <Text style={[styles.fieldError, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>
+                    <Text style={[styles.fieldError, { color: auth.error, fontFamily: "Inter_500Medium" }]}>
                       {mfaCodeError}
                     </Text>
                   ) : null}
@@ -392,7 +392,7 @@ export default function LoginScreen() {
                       styles.input,
                       {
                         backgroundColor: auth.inputBg,
-                        borderColor: identifierError ? auth.coral : identifierOk ? auth.valid : auth.inputBorder,
+                        borderColor: identifierError ? auth.error : identifierOk ? auth.valid : auth.inputBorder,
                         color: auth.text,
                         fontFamily: "Inter_500Medium",
                         paddingRight: identifierOk && !identifierError ? 36 : 16,
@@ -417,7 +417,7 @@ export default function LoginScreen() {
                       styles.passwordRow,
                       {
                         backgroundColor: auth.inputBg,
-                        borderColor: passwordError ? auth.coral : auth.inputBorder,
+                        borderColor: passwordError ? auth.error : auth.inputBorder,
                       },
                     ]}
                   >
@@ -509,7 +509,7 @@ export default function LoginScreen() {
                 <Pressable onPress={() => router.push("/signup" as never)}>
                   <Text style={[styles.signupLine, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
                     {t("auth.login.noAccount")}{" "}
-                    <Text style={{ color: auth.coral, fontFamily: "Inter_700Bold" }}>
+                    <Text style={{ color: auth.plum, fontFamily: "Inter_700Bold" }}>
                       {t("auth.login.createAccount")}
                     </Text>
                   </Text>

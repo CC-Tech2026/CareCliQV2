@@ -64,10 +64,17 @@ export async function workerFetch<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers,
-  });
+  const url = `${base}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers,
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Network request failed";
+    throw new WorkerApiError(`${reason} → ${url}`, 0);
+  }
 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;

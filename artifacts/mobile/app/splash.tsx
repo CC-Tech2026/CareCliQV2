@@ -1,16 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, StyleSheet, View } from "react-native";
 
 import { AppSplash } from "@/components/auth/AppSplash";
 import { CCQ_ONBOARDING_DONE_KEY } from "@/lib/storage-keys";
 
-const AUTO_ADVANCE_MS = 1500;
+const MARK_MOTION_MS = 350;
+const MAX_SPLASH_MS = 1500;
 
 export default function SplashScreen() {
   const router = useRouter();
   const advancedRef = useRef(false);
+  const startedAt = useRef(Date.now());
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
 
   const advance = useCallback(async () => {
     if (advancedRef.current) return;
@@ -24,34 +39,34 @@ export default function SplashScreen() {
   }, [router]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    const run = async () => {
+      const minHold = reduceMotion ? 0 : MARK_MOTION_MS;
+      const elapsed = Date.now() - startedAt.current;
+      const wait = Math.max(0, minHold - elapsed);
+      await new Promise((r) => setTimeout(r, wait));
+      if (cancelled || advancedRef.current) return;
       void advance();
-    }, AUTO_ADVANCE_MS);
-    return () => clearTimeout(timer);
-  }, [advance]);
+    };
+    void run();
+
+    const safety = setTimeout(() => {
+      void advance();
+    }, MAX_SPLASH_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, [advance, reduceMotion]);
 
   return (
-    <Pressable style={styles.fill} onPress={() => void advance()} accessibilityRole="button">
+    <View style={styles.fill}>
       <AppSplash />
-      <View style={styles.hintWrap} pointerEvents="none">
-        <Text style={styles.hint}>Tap to continue</Text>
-      </View>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  hintWrap: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 28,
-    alignItems: "center",
-  },
-  hint: {
-    fontSize: 11,
-    color: "#9A98A8",
-    fontWeight: "500",
-  },
 });

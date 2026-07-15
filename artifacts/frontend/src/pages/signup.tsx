@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from "react";
+﻿import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { CCQ_TOKEN_KEY } from "@/lib/storage-keys";
@@ -8,7 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import { persistAuthSession, getRememberDevicePreference } from "@/lib/auth-session";
 import {
-  ArrowLeft,
   ArrowRight,
   Loader2,
   Eye,
@@ -16,8 +15,12 @@ import {
   CheckCircle2,
   Quote,
   AlertTriangle,
+  Camera,
+  Upload,
+  User,
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { uploadProfilePhoto } from "@/services/userService";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const PLUM = "var(--cc-plum)";
@@ -32,7 +35,7 @@ const LOGO_PURPLE = "#7C3AED";
 function PasswordStrengthBar({ password, t }: { password: string; t: (key: string) => string }) {
   const getScore = (pwd: string): number => {
     let score = 0;
-    if (pwd.length >= 8) score++;
+    if (pwd.length >= 10) score++;
     if (pwd.length >= 12) score++;
     if (/[a-z]/.test(pwd)) score++;
     if (/[A-Z]/.test(pwd)) score++;
@@ -64,9 +67,14 @@ function PasswordStrengthBar({ password, t }: { password: string; t: (key: strin
         ))}
       </div>
       {password && (
-        <p className="text-[11px] font-medium" style={{ color: colors[Math.max(score - 1, 0)] }}>
-          {labels[Math.max(score - 1, 0)]}
-        </p>
+        <>
+          <p className="text-[11px] font-medium" style={{ color: colors[Math.max(score - 1, 0)] }}>
+            {labels[Math.max(score - 1, 0)]}
+          </p>
+          <p className="text-[11px] leading-snug" style={{ color: "var(--cc-muted)" }}>
+            {t("auth.signup.passwordHint")}
+          </p>
+        </>
       )}
     </div>
   );
@@ -225,13 +233,14 @@ function StyledSelect({
   );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
+function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
     <p
       className="text-[11px] font-bold uppercase tracking-wider mb-1.5"
       style={{ color: PLUM }}
     >
       {children}
+      {required ? <span style={{ color: "#EF4444" }}> *</span> : null}
     </p>
   );
 }
@@ -240,6 +249,7 @@ function Label({ children }: { children: React.ReactNode }) {
 interface InviteInfo {
   email: string;
   role: string;
+  token: string;
   organization_id?: string;
   organization_name: string | null;
   expires_at: string;
@@ -251,25 +261,31 @@ export default function Signup() {
   const { toast } = useToast();
   const { translate: t, translateParams } = useAccessibility();
 
-  const inviteToken = new URLSearchParams(window.location.search).get("token") ?? "";
-  const isInviteMode = Boolean(inviteToken);
-
+  const urlInviteToken = new URLSearchParams(window.location.search).get("token") ?? "";
+  const [mode, setMode] = useState<"join" | "create">(urlInviteToken ? "join" : "join");
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
   const [invite, setInvite] = useState<InviteInfo | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(isInviteMode);
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(Boolean(urlInviteToken));
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const orgNameLocked = isInviteMode && Boolean(invite?.organization_name);
+  const orgNameLocked = mode === "create" && Boolean(invite?.organization_name);
+  const isJoin = mode === "join";
 
   useEffect(() => {
-    if (!inviteToken) return;
+    if (!urlInviteToken) return;
     let cancelled = false;
     setInviteLoading(true);
     setInviteError(null);
-    fetch(`/api/invitations/validate/${encodeURIComponent(inviteToken)}`)
+    fetch(`/api/invitations/validate/${encodeURIComponent(urlInviteToken)}`)
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
@@ -278,17 +294,26 @@ export default function Signup() {
             typeof detail === "string" ? detail : t("auth.invite.invalidOrExpired"),
           );
         }
-        return r.json() as Promise<InviteInfo>;
+        return r.json() as Promise<Omit<InviteInfo, "token"> & { token?: string }>;
       })
       .then((data) => {
         if (cancelled) return;
-        setInvite(data);
+        setInvite({
+          email: data.email,
+          role: data.role,
+          token: urlInviteToken,
+          organization_id: data.organization_id,
+          organization_name: data.organization_name,
+          expires_at: data.expires_at,
+        });
         setForm((prev) => ({
           ...prev,
           email: data.email || "",
           sp_organisation_name: data.organization_name || prev.sp_organisation_name,
           account_type: data.role === "support_worker" ? "independent_worker" : "small_provider",
         }));
+        setMode("join");
+        setStep(2);
         setInviteLoading(false);
       })
       .catch((e: Error) => {
@@ -299,7 +324,7 @@ export default function Signup() {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken, t]);
+  }, [urlInviteToken, t]);
 
   const updateField = useCallback((f: keyof FormData, v: string) => {
     setForm((p) => ({
@@ -308,15 +333,30 @@ export default function Signup() {
     }));
   }, []);
 
-  const STEP_LABELS = [t("auth.signup.step.details"), t("auth.signup.step.organisation")];
+  const JOIN_STEP_LABELS = [
+    t("auth.signup.step.inviteCode"),
+    t("auth.signup.step.account"),
+    t("auth.signup.step.profile"),
+    t("auth.signup.step.review"),
+  ];
+  const CREATE_STEP_LABELS = [t("auth.signup.step.details"), t("auth.signup.step.organisation")];
+  const STEP_LABELS = isJoin ? JOIN_STEP_LABELS : CREATE_STEP_LABELS;
 
-  function step1Valid() {
+  function accountDetailsValid() {
     return (
       form.full_name.trim() !== "" &&
       form.email.trim() !== "" &&
-      form.password.length >= 8 &&
+      form.password.length >= 10 &&
       form.password === form.confirm_password
     );
+  }
+
+  function step1Valid() {
+    return accountDetailsValid();
+  }
+
+  function profileValid() {
+    return form.sp_address.trim() !== "";
   }
 
   function step2Valid() {
@@ -331,11 +371,155 @@ export default function Signup() {
     );
   }
 
-  async function handleInviteSubmit() {
-    if (!inviteToken || !step2Valid() || busy) return;
+  async function handleLookupInviteCode() {
+    const code = inviteCode.trim().toUpperCase();
+    if (code.length !== 6 || busy) return;
+    setBusy(true);
+    setInviteError(null);
+    try {
+      const res = await apiFetch(`/api/invitations/lookup/${encodeURIComponent(code)}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body.detail === "string" ? body.detail : t("auth.signup.join.invalidCode"),
+        );
+      }
+      const data = (await res.json()) as InviteInfo;
+      setInvite({
+        email: data.email,
+        role: data.role,
+        token: data.token,
+        organization_id: data.organization_id,
+        organization_name: data.organization_name,
+        expires_at: data.expires_at,
+      });
+      setForm((prev) => ({
+        ...prev,
+        email: data.email || "",
+        sp_organisation_name: data.organization_name || prev.sp_organisation_name,
+        account_type: data.role === "support_worker" ? "independent_worker" : "small_provider",
+      }));
+      setStep(2);
+    } catch (err) {
+      setInvite(null);
+      toast({
+        title: t("auth.signup.error.failed"),
+        description: err instanceof Error ? err.message : t("auth.signup.join.invalidCode"),
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onPhotoSelected(file?: File | null) {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast({
+        title: t("profile.photo.unsupported"),
+        description: t("profile.photo.uploadJpgPngWebp"),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: t("profile.photo.tooLarge"),
+        description: t("profile.photo.maxSize"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setProfilePhotoFile(file);
+    setProfilePhotoPreview(URL.createObjectURL(file));
+  }
+
+  async function handleJoinComplete() {
+    if (!invite?.token || !accountDetailsValid() || !profileValid() || busy) return;
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/invitations/accept/${encodeURIComponent(inviteToken)}`, {
+      const res = await apiFetch(`/api/invitations/accept/${encodeURIComponent(invite.token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: form.full_name.trim(),
+          password: form.password,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = err.detail;
+        throw new Error(
+          typeof detail === "string" ? detail : t("auth.invite.toast.acceptFailed"),
+        );
+      }
+      const data = await res.json();
+
+      if (data.access_token) {
+        const rememberDevice = getRememberDevicePreference();
+        const userData = {
+          id: data.user.id,
+          email: data.user.email,
+          full_name: data.user.full_name,
+          role: data.user.role,
+          account_type: data.user.account_type,
+          organization_id: data.user.organization_id,
+          organizationId: data.user.organization_id,
+          onboarding_complete: true,
+        };
+        persistAuthSession(data.access_token, JSON.stringify(userData), rememberDevice);
+        await updateToken(data.access_token);
+
+        if (profilePhotoFile) {
+          try {
+            const profile = await uploadProfilePhoto(profilePhotoFile);
+            updateUser({ profile_photo_url: profile.profile_photo_url || null });
+          } catch {
+            /* optional */
+          }
+        }
+
+        try {
+          await apiFetch("/api/auth/complete-onboarding", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${data.access_token}`,
+            },
+            body: JSON.stringify({
+              account_type: form.account_type || "independent_worker",
+              organization_name: invite.organization_name || form.sp_organisation_name,
+              contact_number: form.sp_contact_number || undefined,
+              address: form.sp_address || undefined,
+              org_address: form.sp_address || undefined,
+            }),
+          });
+          updateUser({ onboarding_complete: true });
+        } catch {
+          updateUser({ onboarding_complete: true });
+        }
+      }
+
+      setStep(5);
+      toast({ title: t("auth.invite.toast.welcome"), description: t("auth.invite.toast.activated") });
+      const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/hub";
+      setTimeout(() => navigate(destination), 1500);
+    } catch (err) {
+      toast({
+        title: t("auth.signup.error.failed"),
+        description: err instanceof Error ? err.message : t("auth.signup.error.tryAgain"),
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleInviteSubmit() {
+    if (!invite?.token || !step2Valid() || busy) return;
+    setBusy(true);
+    try {
+      const res = await apiFetch(`/api/invitations/accept/${encodeURIComponent(invite.token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -402,7 +586,7 @@ export default function Signup() {
 
     if (!step2Valid() || busy) return;
 
-    if (isInviteMode) {
+    if (invite?.token && mode === "create") {
       await handleInviteSubmit();
       return;
     }
@@ -457,8 +641,6 @@ export default function Signup() {
             },
           );
 
-          // complete-onboarding now returns a fresh JWT that already includes
-          // organization_id — use it directly so no second login is needed.
           if (onboardingRes.ok) {
             const onboardingData = await onboardingRes.json().catch(() => ({}));
             if (onboardingData.access_token) {
@@ -499,7 +681,7 @@ export default function Signup() {
   const mismatch =
     !!form.confirm_password && form.password !== form.confirm_password;
 
-  const short = !!form.password && form.password.length < 8;
+  const short = !!form.password && form.password.length < 10;
 
   if (inviteLoading) {
     return (
@@ -512,7 +694,7 @@ export default function Signup() {
     );
   }
 
-  if (inviteError) {
+  if (inviteError && urlInviteToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--auth-shell-bg)] px-4">
         <div
@@ -529,6 +711,9 @@ export default function Signup() {
       </div>
     );
   }
+
+  const progressStep = isJoin ? Math.min(step, 4) : Math.min(step, 2);
+  const showFooter = isJoin ? step < 5 : step < 3;
 
   return (
     <div
@@ -660,18 +845,17 @@ export default function Signup() {
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
-              <div key={l} className="flex-1 flex flex-col items-center gap-1">
+              <div key={`${l}-${i}`} className="flex-1 flex flex-col items-center gap-1">
                 <div
                   className="h-1 w-full rounded-full"
                   style={{
-                    background: i + 1 <= step ? PLUM : "var(--cc-border)",
+                    background: i + 1 <= progressStep ? PLUM : "var(--cc-border)",
                   }}
                 />
-
                 <span
                   className="text-[9px] font-bold uppercase"
                   style={{
-                    color: i + 1 <= step ? PLUM : "var(--cc-muted)",
+                    color: i + 1 <= progressStep ? PLUM : "var(--cc-muted)",
                   }}
                 >
                   {l.split(" ")[0]}
@@ -680,37 +864,93 @@ export default function Signup() {
             ))}
           </div>
 
-          <div className="w-full min-h-0 pointer-events-auto rounded-[2rem] px-5 py-6 sm:p-8 shadow-[var(--cc-shadow-md)] border overflow-y-auto bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
-            {/* STEP 1 */}
-            {step === 1 && (
+          <div className="w-full min-h-0 pointer-events-auto rounded-[2rem] px-5 py-6 sm:p-8 shadow-[var(--cc-shadow-md)] border overflow-y-auto bg-[var(--auth-form-bg)] max-h-[calc(100vh-8rem)]" style={{ borderColor: "var(--auth-card-border)" }}>
+            {isJoin && step === 1 && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-
-                  if (step1Valid()) {
-                    setStep(2);
-                  }
+                  void handleLookupInviteCode();
                 }}
                 className="space-y-4 step-content"
               >
                 <div>
-                  <h2
-                    className="text-[22px] font-black"
-                    style={{ color: PLUM }}
-                  >
-                    {isInviteMode ? t("auth.invite.title") : t("auth.signup.title")}
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.join.title")}
                   </h2>
-
                   <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
-                    {isInviteMode && invite?.organization_name
-                      ? translateParams("auth.invite.orgInvited", { org: invite.organization_name })
-                      : t("auth.signup.subtitle")}
+                    {translateParams("auth.signup.join.subtitle", { step: "1" })}
                   </p>
                 </div>
 
                 <div>
-                  <Label>{t("auth.signup.fullName")}</Label>
+                  <Label required>{t("auth.signup.join.title")}</Label>
+                  <StyledInput
+                    name="invite_code"
+                    value={inviteCode}
+                    onChange={(v) => setInviteCode(v.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase())}
+                    placeholder={t("auth.signup.join.codePlaceholder")}
+                    autoComplete="one-time-code"
+                  />
+                </div>
 
+                {invite?.organization_name ? (
+                  <div className="rounded-xl px-4 py-3 text-sm font-medium" style={{ background: "color-mix(in srgb, var(--cc-plum) 10%, transparent)", color: PLUM }}>
+                    {t("auth.signup.join.joining")}{" "}
+                    <span className="font-black">{invite.organization_name}</span>
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={inviteCode.length !== 6 || busy}
+                  className="w-full h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                  style={{ background: PLUM }}
+                >
+                  {busy ? <Loader2 className="animate-spin" size={18} /> : null}
+                  {t("auth.signup.continue")}
+                </button>
+
+                <p className="text-center text-[13px]" style={{ color: "var(--cc-muted)" }}>
+                  {t("auth.signup.join.noInvite")}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setAskOpen(true)}
+                    className="font-bold transition-opacity hover:opacity-80"
+                    style={{ color: PLUM }}
+                  >
+                    {t("auth.signup.join.askCoordinator")}
+                  </button>
+                </p>
+              </form>
+            )}
+
+            {isJoin && step === 2 && invite && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (accountDetailsValid()) setStep(3);
+                }}
+                className="space-y-4 step-content"
+              >
+                <div>
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.join.createTitle")}
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {translateParams("auth.signup.join.createSubtitle", { step: "2" })}
+                  </p>
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.email")}</Label>
+                  <StyledInput name="email" type="email" value={form.email} onChange={() => undefined} disabled />
+                  <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {t("auth.signup.org.lockedFromInvite")}
+                  </p>
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.fullName")}</Label>
                   <StyledInput
                     name="full_name"
                     value={form.full_name}
@@ -721,29 +961,7 @@ export default function Signup() {
                 </div>
 
                 <div>
-                  <Label>{t("auth.signup.email")}</Label>
-
-                  <StyledInput
-                    name="email"
-                    type="email"
-                    value={form.email}
-                    onChange={(v) => {
-                      if (isInviteMode) return;
-                      updateField("email", v);
-                    }}
-                    placeholder={t("auth.signup.emailPlaceholder")}
-                    autoComplete="email"
-                    disabled={isInviteMode}
-                  />
-                  {isInviteMode ? (
-                    <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                      {t("auth.signup.org.lockedFromInvite")}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <Label>{t("auth.signup.password")}</Label>
+                  <Label required>{t("auth.signup.password")}</Label>
                   <StyledInput
                     name="password"
                     type="password"
@@ -755,28 +973,356 @@ export default function Signup() {
                     showPasswordLabel={t("auth.signup.showPassword")}
                     hidePasswordLabel={t("auth.signup.hidePassword")}
                   />
-                  {form.password && (
+                  {form.password ? (
                     <div className="mt-2.5">
                       <PasswordStrengthBar password={form.password} t={t} />
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Label>{t("auth.signup.confirmPassword")}</Label>
-                    {form.confirm_password && (
-                      <span
-                        className="text-[11px] font-bold"
-                        style={{
-                          color: mismatch ? "#EF4444" : "#22C55E",
-                        }}
-                      >
+                    <Label required>{t("auth.signup.confirmPassword")}</Label>
+                    {form.confirm_password ? (
+                      <span className="text-[11px] font-bold" style={{ color: mismatch ? "#EF4444" : "#22C55E" }}>
                         {mismatch ? t("auth.signup.passwordMismatch") : t("auth.signup.passwordMatch")}
                       </span>
-                    )}
+                    ) : null}
                   </div>
+                  <StyledInput
+                    name="confirm_password"
+                    type="password"
+                    value={form.confirm_password}
+                    onChange={(v) => updateField("confirm_password", v)}
+                    placeholder={t("auth.signup.confirmPlaceholder")}
+                    error={mismatch}
+                    showPasswordLabel={t("auth.signup.showPassword")}
+                    hidePasswordLabel={t("auth.signup.hidePassword")}
+                  />
+                </div>
 
+                <div className="flex gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="h-11 px-5 rounded-xl border font-black"
+                    style={{ borderColor: BORDER, color: PLUM }}
+                  >
+                    {t("auth.signup.back")}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!accountDetailsValid()}
+                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    style={{ background: PLUM }}
+                  >
+                    {t("auth.signup.continue")}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {isJoin && step === 3 && invite && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (profileValid()) setStep(4);
+                }}
+                className="space-y-4 step-content"
+              >
+                <div>
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.join.profileTitle")}
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {translateParams("auth.signup.join.profileSubtitle", { step: "3" })}
+                  </p>
+                </div>
+
+                <div>
+                  <Label>{t("auth.signup.join.profilePhoto")}</Label>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-[72px] h-[72px] rounded-full border flex items-center justify-center overflow-hidden shrink-0"
+                      style={{ borderColor: BORDER, background: "color-mix(in srgb, var(--cc-plum) 12%, transparent)" }}
+                    >
+                      {profilePhotoPreview ? (
+                        <img src={profilePhotoPreview} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={28} style={{ color: PLUM }} />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 flex-1">
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        className="hidden"
+                        onChange={(e) => onPhotoSelected(e.target.files?.[0])}
+                      />
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => onPhotoSelected(e.target.files?.[0])}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="h-9 px-3 rounded-xl border text-[13px] font-bold flex items-center gap-2"
+                        style={{ borderColor: BORDER, color: PLUM }}
+                      >
+                        <Camera size={14} /> {t("auth.signup.join.photoCamera")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        className="h-9 px-3 rounded-xl border text-[13px] font-bold flex items-center gap-2"
+                        style={{ borderColor: BORDER, color: PLUM }}
+                      >
+                        <Upload size={14} /> {t("auth.signup.join.photoUpload")}
+                      </button>
+                      {profilePhotoPreview ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfilePhotoFile(null);
+                            setProfilePhotoPreview(null);
+                          }}
+                          className="text-[12px] text-left"
+                          style={{ color: "var(--cc-muted)" }}
+                        >
+                          {t("auth.signup.join.photoRemove")}
+                        </button>
+                      ) : (
+                        <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                          {t("auth.signup.join.photoOptional")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>{t("auth.signup.field.contactNumber")}</Label>
+                  <StyledInput
+                    name="sp_contact_number"
+                    value={form.sp_contact_number}
+                    onChange={(v) => updateField("sp_contact_number", v)}
+                    placeholder={t("auth.signup.placeholder.contact")}
+                    required={false}
+                  />
+                  <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {t("auth.signup.join.optionalHint")}
+                  </p>
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.field.address")}</Label>
+                  <StyledInput
+                    name="sp_address"
+                    value={form.sp_address}
+                    onChange={(v) => updateField("sp_address", v)}
+                    placeholder={t("auth.signup.placeholder.address")}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="h-11 px-5 rounded-xl border font-black"
+                    style={{ borderColor: BORDER, color: PLUM }}
+                  >
+                    {t("auth.signup.back")}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!profileValid()}
+                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    style={{ background: PLUM }}
+                  >
+                    {t("auth.signup.continue")}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {isJoin && step === 4 && invite && (
+              <div className="space-y-4 step-content">
+                <div>
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.join.reviewTitle")}
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {translateParams("auth.signup.join.reviewSubtitle", { step: "4" })}
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-2xl border p-4 space-y-3"
+                  style={{ borderColor: "var(--auth-card-border)", background: "color-mix(in srgb, var(--cc-plum) 8%, transparent)" }}
+                >
+                  <div className="flex justify-center">
+                    <div
+                      className="w-[72px] h-[72px] rounded-full border flex items-center justify-center overflow-hidden"
+                      style={{ borderColor: BORDER, background: "color-mix(in srgb, var(--cc-plum) 12%, transparent)" }}
+                    >
+                      {profilePhotoPreview ? (
+                        <img src={profilePhotoPreview} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={28} style={{ color: PLUM }} />
+                      )}
+                    </div>
+                  </div>
+                  {[
+                    [t("auth.signup.join.reviewOrg"), invite.organization_name || t("auth.signup.join.reviewOrg")],
+                    [t("auth.signup.fullName"), form.full_name.trim()],
+                    [t("auth.signup.email"), invite.email],
+                    [t("auth.signup.field.contactNumber"), form.sp_contact_number.trim() || t("auth.signup.join.notProvided")],
+                    [t("auth.signup.field.address"), form.sp_address.trim()],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--cc-muted)" }}>
+                        {label}
+                      </p>
+                      <p className="text-[14px] font-bold" style={{ color: "var(--cc-text)" }}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="h-11 px-5 rounded-xl border font-black"
+                    style={{ borderColor: BORDER, color: PLUM }}
+                  >
+                    {t("auth.signup.back")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleJoinComplete()}
+                    disabled={busy}
+                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                    style={{ background: PLUM }}
+                  >
+                    {busy ? (
+                      <>
+                        <Loader2 className="animate-spin" size={16} />
+                        {t("auth.signup.settingUp")}
+                      </>
+                    ) : (
+                      t("auth.signup.completeSetup")
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {((isJoin && step === 5) || (!isJoin && step === 3)) && (
+              <div className="text-center py-6 step-content">
+                <CheckCircle2 size={70} style={{ color: CORAL, margin: "0 auto" }} />
+                <h2 className="text-[24px] font-black mt-5" style={{ color: PLUM }}>
+                  {emailVerify ? t("auth.signup.checkEmail") : t("auth.signup.allSet")}
+                </h2>
+                <p className="mt-2" style={{ color: "var(--cc-muted)" }}>
+                  {emailVerify
+                    ? translateParams("auth.signup.verificationSent", { email: form.email })
+                    : t("auth.signup.accountReady")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      emailVerify
+                        ? "/login"
+                        : form.account_type === "small_provider" && !isJoin
+                          ? "/getting-started"
+                          : invite?.role === "support_worker" || form.account_type === "independent_worker"
+                            ? "/worker-onboarding"
+                            : "/hub",
+                    )
+                  }
+                  className="mt-6 w-full h-11 rounded-xl text-white font-black"
+                  style={{ background: PLUM }}
+                >
+                  {emailVerify ? t("auth.signup.goToLogin") : t("auth.signup.goToDashboard")}
+                </button>
+              </div>
+            )}
+
+            {!isJoin && step === 1 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (step1Valid()) setStep(2);
+                }}
+                className="space-y-4 step-content"
+              >
+                <div>
+                  <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
+                    {t("auth.signup.title")}
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {t("auth.signup.subtitle")}
+                  </p>
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.fullName")}</Label>
+                  <StyledInput
+                    name="full_name"
+                    value={form.full_name}
+                    onChange={(v) => updateField("full_name", v)}
+                    placeholder={t("auth.signup.namePlaceholder")}
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.email")}</Label>
+                  <StyledInput
+                    name="email"
+                    type="email"
+                    value={form.email}
+                    onChange={(v) => updateField("email", v)}
+                    placeholder={t("auth.signup.emailPlaceholder")}
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div>
+                  <Label required>{t("auth.signup.password")}</Label>
+                  <StyledInput
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={(v) => updateField("password", v)}
+                    placeholder={t("auth.signup.passwordPlaceholder")}
+                    autoComplete="new-password"
+                    error={short}
+                    showPasswordLabel={t("auth.signup.showPassword")}
+                    hidePasswordLabel={t("auth.signup.hidePassword")}
+                  />
+                  {form.password ? (
+                    <div className="mt-2.5">
+                      <PasswordStrengthBar password={form.password} t={t} />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Label required>{t("auth.signup.confirmPassword")}</Label>
+                    {form.confirm_password ? (
+                      <span className="text-[11px] font-bold" style={{ color: mismatch ? "#EF4444" : "#22C55E" }}>
+                        {mismatch ? t("auth.signup.passwordMismatch") : t("auth.signup.passwordMatch")}
+                      </span>
+                    ) : null}
+                  </div>
                   <StyledInput
                     name="confirm_password"
                     type="password"
@@ -794,21 +1340,15 @@ export default function Signup() {
                     type="button"
                     onClick={() => navigate("/login")}
                     className="h-11 px-5 rounded-xl border font-black"
-                    style={{
-                      borderColor: BORDER,
-                      color: PLUM,
-                    }}
+                    style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
                   </button>
-
                   <button
                     type="submit"
                     disabled={!step1Valid()}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
-                    style={{
-                      background: PLUM,
-                    }}
+                    style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
                   </button>
@@ -816,8 +1356,7 @@ export default function Signup() {
               </form>
             )}
 
-            {/* STEP 2 */}
-            {step === 2 && (
+            {!isJoin && step === 2 && (
               <form onSubmit={handleSubmit} className="space-y-4 step-content">
                 <div>
                   <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
@@ -841,21 +1380,15 @@ export default function Signup() {
                     type="button"
                     onClick={() => setStep(1)}
                     className="h-11 px-5 rounded-xl border font-black"
-                    style={{
-                      borderColor: BORDER,
-                      color: PLUM,
-                    }}
+                    style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
                   </button>
-
                   <button
                     type="submit"
                     disabled={!step2Valid() || busy}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
-                    style={{
-                      background: PLUM,
-                    }}
+                    style={{ background: PLUM }}
                   >
                     {busy ? (
                       <>
@@ -872,69 +1405,16 @@ export default function Signup() {
                 </div>
               </form>
             )}
-
-            {/* STEP 3 */}
-            {step === 3 && (
-              <div className="text-center py-6 step-content">
-                <CheckCircle2
-                  size={70}
-                  style={{
-                    color: CORAL,
-                    margin: "0 auto",
-                  }}
-                />
-
-                <h2
-                  className="text-[24px] font-black mt-5"
-                  style={{ color: PLUM }}
-                >
-                  {emailVerify ? t("auth.signup.checkEmail") : t("auth.signup.allSet")}
-                </h2>
-
-                <p className="mt-2" style={{ color: "var(--cc-muted)" }}>
-                  {emailVerify
-                    ? translateParams("auth.signup.verificationSent", { email: form.email })
-                    : t("auth.signup.accountReady")}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(
-                      emailVerify
-                        ? "/login"
-                        : form.account_type === "small_provider"
-                          ? "/getting-started"
-                          : "/dashboard",
-                    )
-                  }
-                  className="mt-6 w-full h-11 rounded-xl text-white font-black"
-                  style={{
-                    background: PLUM,
-                  }}
-                >
-                  {emailVerify
-                    ? t("auth.signup.goToLogin")
-                    : form.account_type === "small_provider"
-                      ? t("auth.signup.setupOrganisation")
-                      : t("auth.signup.goToDashboard")}
-                </button>
-              </div>
-            )}
           </div>
 
-          {/* Sign-in nav — visible on all steps except the success screen */}
-          {step < 3 && (
-            <p
-              className="text-center text-[13px] font-medium mt-5 pb-1"
-              style={{ color: "var(--cc-muted)" }}
-            >
+          {showFooter && (
+            <p className="text-center text-[13px] font-medium mt-5 pb-1" style={{ color: "var(--cc-muted)" }}>
               {t("auth.signup.hasAccount")}{" "}
               <button
                 type="button"
                 onClick={() => navigate("/login")}
-                className="font-black transition-all duration-200 hover:opacity-75 focus:outline-none focus-visible:underline rounded"
-                style={{ color: CORAL }}
+                className="font-bold underline underline-offset-2"
+                style={{ color: PLUM }}
               >
                 {t("auth.signup.signIn")}
               </button>
@@ -942,6 +1422,80 @@ export default function Signup() {
           )}
         </div>
       </div>
+
+      {askOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-5"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setAskOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setAskOpen(false);
+          }}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border p-6 space-y-4 bg-[var(--auth-form-bg)] shadow-[var(--cc-shadow-md)]"
+            style={{ borderColor: "var(--auth-card-border)" }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ask-coordinator-title"
+          >
+            <div>
+              <h2 id="ask-coordinator-title" className="text-[22px] font-black" style={{ color: PLUM }}>
+                {t("auth.signup.join.askTitle")}
+              </h2>
+              <p className="text-sm mt-1" style={{ color: "var(--cc-muted)" }}>
+                {t("auth.signup.join.askIntro")}
+              </p>
+            </div>
+
+            <ol className="space-y-3">
+              {(
+                [
+                  "auth.signup.join.askStep1",
+                  "auth.signup.join.askStep2",
+                  "auth.signup.join.askStep3",
+                  "auth.signup.join.askStep4",
+                ] as const
+              ).map((key, index) => (
+                <li key={key} className="flex items-start gap-3">
+                  <span
+                    className="w-6 h-6 rounded-full text-[12px] font-black flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: "color-mix(in srgb, var(--cc-plum) 14%, transparent)", color: PLUM }}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="text-[14px] leading-5" style={{ color: "var(--cc-text)" }}>
+                    {t(key)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <button
+              type="button"
+              onClick={() => setAskOpen(false)}
+              className="w-full h-12 rounded-xl border-[1.5px] font-black transition-colors hover:text-white"
+              style={{
+                borderColor: PLUM,
+                color: PLUM,
+                background: "transparent",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--cc-plum)";
+                e.currentTarget.style.color = "#FFFFFF";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "var(--cc-plum)";
+              }}
+            >
+              {t("auth.signup.join.askGotIt")}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

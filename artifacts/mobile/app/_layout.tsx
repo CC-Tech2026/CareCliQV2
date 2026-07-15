@@ -1,4 +1,8 @@
 import {
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from "@expo-google-fonts/bricolage-grotesque";
+import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -45,7 +49,7 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   useExpoPushRegistration(isAuthenticated);
-  usePushNotificationNavigation();
+  usePushNotificationNavigation(isAuthenticated, isLoading);
   const segments = useSegments();
   const router = useRouter();
 
@@ -104,6 +108,14 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="worker/privacy"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/help"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="worker/contact"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
@@ -176,13 +188,20 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
   });
+  const splashStartedAt = React.useRef(Date.now());
   const [showSplash, setShowSplash] = React.useState(true);
 
   useEffect(() => {
     if (!fontsLoaded && !fontError) return;
     void SplashScreen.hideAsync();
-    const timer = setTimeout(() => setShowSplash(false), 400);
+
+    // Hold only for the mark motion (350ms), never pad artificially past readiness.
+    const elapsed = Date.now() - splashStartedAt.current;
+    const remaining = Math.max(0, 350 - elapsed);
+    const timer = setTimeout(() => setShowSplash(false), remaining);
     return () => clearTimeout(timer);
   }, [fontsLoaded, fontError]);
 

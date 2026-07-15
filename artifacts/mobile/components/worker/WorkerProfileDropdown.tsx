@@ -27,11 +27,10 @@ type MenuItem = {
 
 const MENU_ITEMS: MenuItem[] = [
   { labelKey: "nav.profile", icon: "user", href: "/(tabs)/profile" },
-  { labelKey: "nav.privacy", icon: "shield", href: "/worker/privacy" },
   { labelKey: "nav.settings", icon: "settings", href: "/(tabs)/settings" },
   { labelKey: "nav.security", icon: "lock", href: "/worker/security" },
-  { labelKey: "nav.accessibility", icon: "sliders", href: "/accessibility" },
-  { labelKey: "nav.incidents", icon: "alert-triangle", href: "/incidents" },
+  { labelKey: "nav.privacy", icon: "shield", href: "/worker/privacy" },
+  { labelKey: "nav.help", icon: "help-circle", href: "/worker/help" },
 ];
 
 function formatRole(role?: string): string {

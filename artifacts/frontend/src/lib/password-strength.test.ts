@@ -3,9 +3,9 @@ import { passwordStrengthScore, validatePasswordPolicy } from "@/lib/password-st
 
 describe("validatePasswordPolicy", () => {
   it("enforces minimum length and complexity", () => {
-    expect(validatePasswordPolicy("short1A")).toContain("8 characters");
-    expect(validatePasswordPolicy("password1")).toContain("uppercase");
-    expect(validatePasswordPolicy("Password")).toContain("number");
+    expect(validatePasswordPolicy("short1A")).toContain("10 characters");
+    expect(validatePasswordPolicy("password12")).toContain("uppercase");
+    expect(validatePasswordPolicy("Passwordab")).toContain("number");
   });
 
   it("accepts strong passwords", () => {

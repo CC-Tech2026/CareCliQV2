@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { SettingsSection } from "@/components/worker/settings/settings-ui";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
@@ -61,9 +62,10 @@ function statusBadgeLabel(status: string, t: ReturnType<typeof useT>): string {
 
 type Props = {
   bottomInset?: number;
+  showSectionHeader?: boolean;
 };
 
-export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
+export function ProfileCredentialsPanel({ bottomInset = 24, showSectionHeader = false }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -107,6 +109,13 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
+      {showSectionHeader ? (
+        <SettingsSection
+          title={t("credentials.title")}
+          description={t("settings.credentials.subtitle")}
+          icon="award"
+        />
+      ) : null}
       <View style={styles.summaryRow}>
         <SummaryPill
           label={t("profile.credentials.summary.valid", { count: summary.valid })}
