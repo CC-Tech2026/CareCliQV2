@@ -772,15 +772,30 @@ export function ShiftTaskEvidencePanel({
                     </div>
                   )}
                   {record.type === "voice" && (
-                    <div className="flex items-center gap-2">
-                      <Mic size={14} className="text-[#8B75D9]" />
-                      <span>
-                        {translate("shift.evidence.voiceNote")}
-                        {record.duration_seconds
-                          ? ` (${formatVoiceTimer(record.duration_seconds)})`
-                          : ""}
-                      </span>
-                    </div>
+                    record.content?.startsWith("data:audio") ? (
+                      <div className="flex items-center gap-2">
+                        <Mic size={14} className="text-[#8B75D9]" />
+                        <span>
+                          {translate("shift.evidence.voiceNote")}
+                          {record.duration_seconds
+                            ? ` (${formatVoiceTimer(record.duration_seconds)})`
+                            : ""}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <p className="whitespace-pre-wrap leading-relaxed">{record.content}</p>
+                        <p className="flex items-center gap-1.5 text-[11px]" style={{ color: MUTED }}>
+                          <Mic size={12} className="text-[#8B75D9]" />
+                          <span>
+                            {translate("shift.evidence.voiceNote")}
+                            {record.duration_seconds
+                              ? ` (${formatVoiceTimer(record.duration_seconds)})`
+                              : ""}
+                          </span>
+                        </p>
+                      </div>
+                    )
                   )}
                   {record.type === "text" && (
                     <p className="whitespace-pre-wrap leading-relaxed">{record.content}</p>

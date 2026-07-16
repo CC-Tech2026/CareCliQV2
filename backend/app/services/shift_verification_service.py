@@ -98,6 +98,114 @@ def _actual_minutes(shift: dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _completion_date_for_shift(shift: dict[str, Any]) -> str:
+    for key in ("scheduled_start", "clocked_out_at", "clocked_in_at", "created_at"):
+        value = shift.get(key)
+        if not value:
+            continue
+        try:
+            return parse_shift_datetime(value).date().isoformat()
+        except Exception:
+            continue
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _upsert_task_completions_for_verified_shift(
+    supabase: Any,
+    *,
+    shift: dict[str, Any],
+    participant_id: str,
+    organization_id: str,
+    coordinator_id: str,
+    price_item_code: str,
+    billed_amount: float,
+    actual_minutes: float,
+    verified_at: str,
+) -> list[dict[str, Any]]:
+    shift_task_result = (
+        supabase.table("shift_tasks")
+        .select("task_id")
+        .eq("shift_id", str(shift.get("id")))
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    shift_task_rows = _safe_rows(shift_task_result.data)
+    task_ids = [str(row.get("task_id")) for row in shift_task_rows if row.get("task_id")]
+    if not task_ids:
+        return []
+
+    tasks_result = (
+        supabase.table("participant_tasks")
+        .select("id, participant_id")
+        .in_("id", task_ids)
+        .eq("organization_id", organization_id)
+        .eq("participant_id", participant_id)
+        .execute()
+    )
+    task_rows = _safe_rows(tasks_result.data)
+    if not task_rows:
+        return []
+
+    verified_task_ids = [str(row["id"]) for row in task_rows if row.get("id")]
+    existing_result = (
+        supabase.table("task_completions")
+        .select("id, task_id")
+        .eq("shift_id", str(shift.get("id")))
+        .in_("task_id", verified_task_ids)
+        .execute()
+    )
+    existing_rows = _safe_rows(existing_result.data)
+    existing_by_task_id = {str(row.get("task_id")): row for row in existing_rows if row.get("task_id")}
+
+    task_count = len(verified_task_ids)
+    apportioned_minutes = max(1, int(round(actual_minutes / task_count))) if task_count else int(round(actual_minutes))
+    apportioned_amount = round(billed_amount / task_count, 2) if task_count else round(billed_amount, 2)
+    completion_date = _completion_date_for_shift(shift)
+
+    payload_template = {
+        "shift_id": str(shift.get("id")),
+        "participant_id": participant_id,
+        "organization_id": organization_id,
+        "completed_by": coordinator_id,
+        "completion_date": completion_date,
+        "duration_minutes": apportioned_minutes,
+        "evidence_type": "notes",
+        "evidence_verified": True,
+        "verified_by": coordinator_id,
+        "verified_at": verified_at,
+        "status": "verified",
+        "price_item_code": price_item_code,
+        "billed_amount": apportioned_amount,
+        "updated_at": verified_at,
+    }
+
+    upserted: list[dict[str, Any]] = []
+    for task_id in verified_task_ids:
+        existing = existing_by_task_id.get(task_id)
+        if existing and existing.get("id"):
+            resp = (
+                supabase.table("task_completions")
+                .update(payload_template)
+                .eq("id", str(existing["id"]))
+                .execute()
+            )
+            rows = _safe_rows(resp.data)
+            if rows:
+                upserted.append(rows[0])
+            continue
+
+        insert_payload = {
+            **payload_template,
+            "task_id": task_id,
+            "created_at": verified_at,
+        }
+        resp = supabase.table("task_completions").insert(insert_payload).execute()
+        rows = _safe_rows(resp.data)
+        if rows:
+            upserted.append(rows[0])
+    return upserted
+
+
 def _hours_sanity_check(shift: dict[str, Any]) -> dict[str, Any]:
     scheduled = _scheduled_minutes(shift)
     actual = _actual_minutes(shift)
@@ -454,6 +562,18 @@ async def verify_shift(
             price_item_code=str(price.get("item_code") or price_item_code),
         )
 
+    task_completions = _upsert_task_completions_for_verified_shift(
+        supabase,
+        shift=shift,
+        participant_id=str(participant_id),
+        organization_id=org_id,
+        coordinator_id=coordinator_id,
+        price_item_code=str(price.get("item_code") or price_item_code),
+        billed_amount=billed_amount,
+        actual_minutes=actual_minutes,
+        verified_at=now,
+    )
+
     return {
         "verification": verification,
         "checks": checks,
@@ -461,4 +581,5 @@ async def verify_shift(
         "hourly_rate_applied": hourly_rate,
         "support_category": category,
         "new_used_amount": new_used,
+        "task_completions": task_completions,
     }

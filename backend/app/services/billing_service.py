@@ -20,6 +20,7 @@ from ..core.access import (
 from .supabase_client import get_supabase_admin
 from . import audit_service
 from . import billing_period_service
+from . import invoice_service
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
@@ -280,7 +281,53 @@ async def create_invoice(user: dict, data: dict) -> dict:
     _require_billing_role(user)
     org_id = _require_org(user)
     await _verify_invoice_scope(user, data)
-    line_items, subtotal, tax, total = _calculate_totals(data.get("line_items") or [])
+    line_items = data.get("line_items") or []
+    if data.get("generate_from_verified_tasks"):
+        participant_id = data.get("participant_id")
+        period_start = data.get("period_start")
+        period_end = data.get("period_end")
+        if not participant_id or not period_start or not period_end:
+            raise HTTPException(
+                status_code=422,
+                detail="participant_id, period_start, and period_end are required when generating from verified tasks.",
+            )
+        try:
+            preview_lines = invoice_service.get_completed_tasks_for_period(
+                get_supabase_admin(),
+                str(participant_id),
+                org_id,
+                date.fromisoformat(str(period_start)),
+                date.fromisoformat(str(period_end)),
+                status="verified",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid period_start or period_end.") from exc
+
+        if not preview_lines:
+            raise HTTPException(status_code=422, detail="No verified task completions found for the selected period.")
+
+        generated_line_items: list[dict[str, Any]] = []
+        for item in invoice_service.aggregate_line_items(preview_lines).values():
+            total_cents = _money_to_cents(item.get("total_price") or 0)
+            quantity = Decimal(str(item.get("quantity") or "0"))
+            unit_amount_cents = 0
+            if quantity > 0:
+                unit_amount_cents = int(
+                    (Decimal(total_cents) / quantity).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                )
+            generated_line_items.append({
+                "description": item.get("description") or "Verified support item",
+                "quantity": float(quantity),
+                "unit_amount_cents": unit_amount_cents,
+                "line_total_cents": total_cents,
+                "item_code": item.get("price_item_code"),
+            })
+
+        if line_items:
+            generated_line_items.extend(line_items)
+        line_items = generated_line_items
+
+    line_items, subtotal, tax, total = _calculate_totals(line_items)
     
     # Resolve NDIS prices for items with item_code
     line_items = await _resolve_ndis_prices_for_invoice(line_items, org_id)
@@ -364,6 +411,26 @@ async def create_invoice(user: dict, data: dict) -> dict:
     if not result.data:
         raise HTTPException(status_code=500, detail="Invoice could not be created.")
     created = result.data[0]
+
+    if data.get("generate_from_verified_tasks"):
+        completion_ids = [
+            row.get("id")
+            for row in invoice_service.get_completed_tasks_for_period(
+                get_supabase_admin(),
+                str(data.get("participant_id")),
+                org_id,
+                date.fromisoformat(str(data.get("period_start"))),
+                date.fromisoformat(str(data.get("period_end"))),
+                status="verified",
+            )
+            if row.get("id")
+        ]
+        if completion_ids:
+            get_supabase_admin().table("task_completions").update({
+                "invoice_id": created.get("id"),
+                "updated_at": _now_iso(),
+            }).in_("id", completion_ids).execute()
+
     await audit_service.log_action(
         action_type="invoice.created",
         entity_type="invoice",

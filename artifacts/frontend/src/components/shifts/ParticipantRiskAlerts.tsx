@@ -64,7 +64,7 @@ export function ParticipantRiskAlertCard({
         "rounded-xl border px-3 py-3",
         isCritical
           ? "border-red-300 bg-card text-red-900"
-          : "border-orange-300 bg-card text-orange-900",
+          : "border-orange-300 bg-card text-orange-500 dark:text-orange-400",
         compact && "px-2.5 py-2",
       )}
     >
@@ -151,7 +151,7 @@ export function ParticipantRiskAcknowledgementSection({
   if (acknowledged) {
     return (
       <section
-        className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4"
+        className="rounded-2xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/60 p-4"
         data-tutorial="risk-ack-complete"
       >
         <button
@@ -196,7 +196,7 @@ export function ParticipantRiskAcknowledgementSection({
         className="flex w-full items-center justify-between text-left"
         onClick={onToggle}
       >
-        <span className="flex items-center gap-2 text-sm font-black text-red-700">
+        <span className="flex items-center gap-2 text-sm font-black text-red-500 dark:text-red-400">
           <ShieldAlert size={18} /> {translate("safety.acknowledgeBeforeClockIn")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} />
@@ -208,7 +208,7 @@ export function ParticipantRiskAcknowledgementSection({
           {onViewSupportInstructions && (
             <button
               type="button"
-              className="text-xs font-bold text-red-700 underline underline-offset-2"
+              className="text-xs font-bold text-red-400 dark:text-red-600 underline underline-offset-2"
               onClick={onViewSupportInstructions}
             >
               {translate("safety.viewSupportInstructions")}

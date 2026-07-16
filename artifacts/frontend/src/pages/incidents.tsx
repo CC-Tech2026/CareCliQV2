@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle, Loader2 } from "lucide-react";
+import { Plus, Clock, Activity, ClipboardList, Siren, AlertCircle, Loader2 } from "lucide-react";
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { IncidentRegisterPanel } from "@/components/incidents/IncidentRegisterPanel";
 
-// -- Design tokens � aligned with Dashboard ------------------------------------
 const PLUM   = "var(--cc-plum)";
-const CORAL  = "var(--cc-coral)";
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
@@ -49,8 +49,7 @@ const STATUS_STYLES: Record<string, { color: string; bg: string }> = {
 };
 
 function severityLabel(value: string, translate: (key: string) => string) {
-  const key = `incidents.severity.${value}` as const;
-  return translate(key);
+  return translate(`incidents.severity.${value}`);
 }
 
 function statusLabel(value: string, translate: (key: string) => string) {
@@ -77,12 +76,12 @@ interface IncidentStats {
   total: number; open: number; ndis_pending: number; overdue: number; critical: number;
 }
 
-export default function Incidents() {
+function WorkerIncidentsList() {
   const [, navigate] = useLocation();
   const { translate, translateParams } = useAccessibility();
-  const [search,         setSearch        ] = useState("");
+  const [search, setSearch] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("all");
-  const [filterStatus,   setFilterStatus  ] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const listRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -96,7 +95,7 @@ export default function Incidents() {
 
   const filtered = useMemo(() => incidents.filter(i => {
     if (filterSeverity !== "all" && i.severity !== filterSeverity) return false;
-    if (filterStatus   !== "all" && i.status   !== filterStatus  ) return false;
+    if (filterStatus !== "all" && i.status !== filterStatus) return false;
     if (search) {
       const q = search.toLowerCase();
       return i.title.toLowerCase().includes(q) ||
@@ -106,9 +105,7 @@ export default function Incidents() {
     return true;
   }), [incidents, filterSeverity, filterStatus, search, translate]);
 
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [search, filterSeverity, filterStatus]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterSeverity, filterStatus]);
 
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
@@ -122,9 +119,7 @@ export default function Incidents() {
     const sentinel = sentinelRef.current;
     if (!root || !sentinel || !hasMore) return;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) loadMore();
-      },
+      ([entry]) => { if (entry?.isIntersecting) loadMore(); },
       { root, rootMargin: "80px" },
     );
     observer.observe(sentinel);
@@ -133,23 +128,18 @@ export default function Incidents() {
 
   return (
     <div className="space-y-6 pb-10">
-
-      {/* -- Page header ------------------------------------------------------- */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-            NDIS Practice Standard 2.3
-          </p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("incidents.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-            Report and track incidents, restrictive practices and safety concerns
+            {translate("incidents.workerSubtitle")}
           </p>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
-          className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
+          className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95"
           style={{ background: "var(--cc-cta)" }}
         >
           <Plus size={15} strokeWidth={2.5} />
@@ -157,43 +147,6 @@ export default function Incidents() {
         </button>
       </div>
 
-      {/* -- Stat cards -------------------------------------------------------- */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {([
-          { label: translate("incidents.total"), value: stats?.total ?? 0, icon: ClipboardList, valueColor: PLUM },
-          { label: translate("incidents.open"), value: stats?.open ?? 0, icon: Activity, valueColor: "#D97706" },
-          { label: translate("incidents.ndisPending"), value: stats?.ndis_pending ?? 0, icon: Siren, valueColor: "#DC2626" },
-          { label: translate("incidents.overdue"), value: stats?.overdue ?? 0, icon: Clock, valueColor: "#EA580C" },
-          { label: translate("incidents.critical"), value: stats?.critical ?? 0, icon: AlertCircle, valueColor: "#DC2626" },
-        ] as const).map(({ label, value, icon: Icon, valueColor }) => (
-          <section key={label} className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{label}</p>
-                <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: valueColor }}>{value}</p>
-              </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg shrink-0" style={{ background: SOFT, color: PLUM }}>
-                <Icon size={20} strokeWidth={2.5} />
-              </div>
-            </div>
-          </section>
-        ))}
-      </div>
-
-      {/* -- NDIS notification banner ------------------------------------------- */}
-      {(stats?.ndis_pending ?? 0) > 0 && (
-        <div
-          className="rounded-lg border px-4 py-3.5 flex items-start gap-3"
-          style={{ background: "#FFF5F5", borderColor: "#FECACA", borderLeft: "3px solid #DC2626" }}
-        >
-          <Siren size={15} className="shrink-0 mt-0.5 animate-pulse" style={{ color: "#DC2626" }} />
-          <p className="text-sm font-medium" style={{ color: "#991B1B" }}>
-            {translateParams("incidents.ndisBanner", { count: String(stats?.ndis_pending ?? 0) })}
-          </p>
-        </div>
-      )}
-
-      {/* -- Filter bar -------------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Input
@@ -228,23 +181,7 @@ export default function Incidents() {
         </Select>
       </div>
 
-      {/* -- Incident list ------------------------------------------------------ */}
       <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-
-        {/* list header */}
-        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: BORDER }}>
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>
-            {filterSeverity !== "all" || filterStatus !== "all" || search
-              ? translate("incidents.filteredResults")
-              : translate("incidents.allIncidents")}
-          </h2>
-          {filtered.length > 0 && (
-            <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: SOFT, color: PLUM }}>
-              {filtered.length} {filtered.length === 1 ? translate("incidents.record") : translate("incidents.records")}
-            </span>
-          )}
-        </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center py-16" style={{ color: MUTED }}>
             <Loader2 size={24} className="animate-spin" />
@@ -252,25 +189,9 @@ export default function Incidents() {
         ) : filtered.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <p className="text-sm font-black" style={{ color: TEXT }}>{translate("incidents.noIncidentsFound")}</p>
-            {incidents.length === 0 && (
-              <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-                {translate("incidents.noIncidentsYet")}{" "}
-                <button
-                  onClick={() => navigate("/incidents/new")}
-                  className="font-black underline underline-offset-2"
-                  style={{ color: PLUM }}
-                >
-                  {translate("incidents.logFirst")}
-                </button>
-              </p>
-            )}
           </div>
         ) : (
-          <div
-            ref={listRef}
-            className="divide-y max-h-[min(60vh,560px)] overflow-y-auto"
-            style={{ borderColor: "var(--cc-border)" }}
-          >
+          <div ref={listRef} className="divide-y max-h-[min(60vh,560px)] overflow-y-auto">
             {visible.map(incident => {
               const sevStyle = SEVERITY_STYLES[incident.severity] ?? SEVERITY_STYLES.medium;
               const stStyle = STATUS_STYLES[incident.status] ?? STATUS_STYLES.reported;
@@ -281,46 +202,17 @@ export default function Incidents() {
                   className="w-full text-left px-6 py-4 flex items-center gap-4 transition hover:bg-[#F8F6FE] group"
                   style={{ borderLeft: `3px solid ${sevStyle.leftBorder}` }}
                 >
-                  {/* Severity dot */}
-                  <div
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ background: sevStyle.dot }}
-                  />
-
-                  {/* Main text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black truncate transition group-hover:text-[#E8457A]" style={{ color: TEXT }}>
-                      {incident.title}
-                    </p>
+                    <p className="text-sm font-black truncate" style={{ color: TEXT }}>{incident.title}</p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
                       {incident.participant_name || translate("incidents.noParticipant")}
                       {" · "}
                       {incidentTypeLabel(incident.incident_type, translate)}
-                      {incident.incident_date && (
-                        <> · {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
-                      )}
                     </p>
                   </div>
-
-                  {/* Badges */}
-                  <div className="hidden sm:flex items-center gap-2 shrink-0">
-                    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${sevStyle.bg}`}>
-                      {severityLabel(incident.severity, translate)}
-                    </span>
-                    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${stStyle.bg}`}>
-                      {statusLabel(incident.status, translate)}
-                    </span>
-                    {incident.ndis_pending && (
-                      <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold bg-red-50 text-red-700 border-red-200">
-                        {translate("incidents.ndisAlert")}
-                      </span>
-                    )}
-                    {incident.overdue && (
-                      <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold bg-orange-50 text-orange-700 border-orange-200">
-                        {translate("incidents.overdue")}
-                      </span>
-                    )}
-                  </div>
+                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${stStyle.bg}`}>
+                    {statusLabel(incident.status, translate)}
+                  </span>
                 </button>
               );
             })}
@@ -329,15 +221,22 @@ export default function Incidents() {
         )}
       </section>
 
-      {/* Footer count */}
-      {!isLoading && filtered.length > 0 && filtered.length < incidents.length && (
+      {!isLoading && stats && filtered.length > 0 && (
         <p className="text-xs font-bold text-right" style={{ color: MUTED }}>
-          {translateParams("incidents.showingCount", {
-            filtered: String(filtered.length),
-            total: String(incidents.length),
-          })}
+          {translateParams("incidents.showingCount", { filtered: String(filtered.length), total: String(stats.total) })}
         </p>
       )}
     </div>
   );
+}
+
+export default function Incidents() {
+  const { user } = useAuth();
+  const isCoordinator = user?.role === "support_coordinator";
+
+  if (isCoordinator) {
+    return <IncidentRegisterPanel />;
+  }
+
+  return <WorkerIncidentsList />;
 }

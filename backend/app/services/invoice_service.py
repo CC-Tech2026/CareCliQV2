@@ -63,7 +63,6 @@ def get_completed_tasks_for_period(
         List of task completions with pricing details
     """
     try:
-        # Query task completions in period with pricing details
         resp = (
             supabase.table("task_completions")
             .select(
@@ -75,25 +74,7 @@ def get_completed_tasks_for_period(
                 evidence_type,
                 evidence_verified,
                 price_item_code,
-                billed_amount,
-                participant_tasks(
-                    id,
-                    name,
-                    shift_type,
-                    category,
-                    support_category
-                ),
-                ndis_price_items(
-                    item_code,
-                    name,
-                    price_national,
-                    price_remote,
-                    price_very_remote,
-                    day_type,
-                    time_type,
-                    support_category_name,
-                    support_intensity
-                )
+                billed_amount
                 """
             )
             .eq("participant_id", participant_id)
@@ -104,7 +85,51 @@ def get_completed_tasks_for_period(
             .order("completion_date", desc=False)
             .execute()
         )
-        return resp.data or []
+        completions = resp.data or []
+        if not completions:
+            return []
+
+        task_ids = list({str(row.get("task_id")) for row in completions if row.get("task_id")})
+        price_codes = list({str(row.get("price_item_code")) for row in completions if row.get("price_item_code")})
+
+        tasks_by_id: dict[str, dict[str, Any]] = {}
+        if task_ids:
+            task_resp = (
+                supabase.table("participant_tasks")
+                .select("id, name, shift_type, category, support_category")
+                .in_("id", task_ids)
+                .eq("organization_id", organization_id)
+                .execute()
+            )
+            tasks_by_id = {
+                str(row["id"]): row
+                for row in (task_resp.data or [])
+                if isinstance(row, dict) and row.get("id")
+            }
+
+        prices_by_code: dict[str, dict[str, Any]] = {}
+        if price_codes:
+            price_resp = (
+                supabase.table("ndis_price_items")
+                .select(
+                    "item_code, name, price_national, price_remote, price_very_remote, "
+                    "day_type, time_type, support_category_name, support_intensity"
+                )
+                .in_("item_code", price_codes)
+                .eq("organization_id", organization_id)
+                .is_("valid_to", "null")
+                .execute()
+            )
+            prices_by_code = {
+                str(row["item_code"]): row
+                for row in (price_resp.data or [])
+                if isinstance(row, dict) and row.get("item_code")
+            }
+
+        for row in completions:
+            row["participant_tasks"] = tasks_by_id.get(str(row.get("task_id")), {})
+            row["ndis_price_items"] = prices_by_code.get(str(row.get("price_item_code")), {})
+        return completions
     except Exception as e:
         logger.error(f"Failed to get completed tasks: {e}")
         raise InvoiceGenerationError(f"Task query failed: {e}")
@@ -266,14 +291,12 @@ async def create_invoice(
             supabase.table("invoice_line_items").insert(line_items_to_insert).execute()
         
         # Link invoice to task completions
-        supabase.table("task_completions").update({
-            "invoice_id": invoice_id,
-            "updated_at": datetime.now().isoformat()
-        }).eq("participant_id", participant_id).eq(
-            "completion_date", f"gte.{period_start.isoformat()}"
-        ).eq(
-            "completion_date", f"lte.{period_end.isoformat()}"
-        ).eq("status", "verified").execute()
+        completion_ids = [completion.get("id") for completion in completions if completion.get("id")]
+        if completion_ids:
+            supabase.table("task_completions").update({
+                "invoice_id": invoice_id,
+                "updated_at": datetime.now().isoformat()
+            }).in_("id", completion_ids).execute()
         
         # Fetch complete invoice
         full_invoice = supabase.table("invoices").select(

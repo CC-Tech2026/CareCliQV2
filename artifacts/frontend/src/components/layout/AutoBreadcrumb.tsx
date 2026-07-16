@@ -26,8 +26,8 @@ const PARENT_MAP: Array<{ prefix: string; parentHref: string; parentKey: string 
   { prefix: "/sessions/",              parentHref: "/patients",               parentKey: "nav.participants"      },
 
   // Quality & Compliance children
-  { prefix: "/incident-new",           parentHref: "/compliance",             parentKey: "nav.qualityCompliance" },
-  { prefix: "/incidents/",             parentHref: "/compliance",             parentKey: "nav.qualityCompliance" },
+  { prefix: "/incident-new",           parentHref: "/incidents",            parentKey: "nav.incidentManagement" },
+  { prefix: "/incidents/",             parentHref: "/incidents",            parentKey: "nav.incidentManagement" },
   { prefix: "/audit-pack",             parentHref: "/compliance",             parentKey: "nav.qualityCompliance" },
 
   // Participants children

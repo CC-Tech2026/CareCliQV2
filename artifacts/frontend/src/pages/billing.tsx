@@ -90,6 +90,9 @@ export default function Billing() {
 
   const [form, setForm] = useState({
     participant_id: "",
+    generate_from_verified_tasks: false,
+    period_start: "",
+    period_end: "",
     item_code: "", recipient_name: "", recipient_email: "",
     description: translate("billing.defaultDescription"), quantity: "1",
     unit_amount: "120", due_date: "",
@@ -236,26 +239,47 @@ export default function Billing() {
   async function createInvoice() {
     setCreatingInvoice(true);
     try {
+      const body = form.generate_from_verified_tasks
+        ? {
+            participant_id: form.participant_id || null,
+            recipient_name: form.recipient_name,
+            recipient_email: form.recipient_email || null,
+            due_date: form.due_date || null,
+            status: "draft",
+            generate_from_verified_tasks: true,
+            period_start: form.period_start,
+            period_end: form.period_end,
+            line_items: [],
+          }
+        : {
+            participant_id: form.participant_id || null,
+            recipient_name: form.recipient_name,
+            recipient_email: form.recipient_email || null,
+            due_date: form.due_date || null,
+            status: "draft",
+            line_items: [{
+              description: form.description,
+              quantity: Number(form.quantity || 1),
+              unit_amount: Number(form.unit_amount || 0),
+              item_code: isCoordinator && form.item_code?.trim() ? form.item_code : null,
+            }],
+          };
       const res = await apiFetch("/api/billing/invoices", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          participant_id: form.participant_id || null,
-          recipient_name: form.recipient_name,
-          recipient_email: form.recipient_email || null,
-          due_date: form.due_date || null,
-          status: "draft",
-          line_items: [{ 
-            description: form.description, 
-            quantity: Number(form.quantity || 1), 
-            unit_amount: Number(form.unit_amount || 0),
-            item_code: isCoordinator && form.item_code?.trim() ? form.item_code : null,
-          }],
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Could not create invoice."); }
       const inv = await res.json();
       setInvoices(prev => [inv, ...prev]);
-      setForm(prev => ({ ...prev, participant_id: "", recipient_name: "", recipient_email: "", item_code: "" }));
+      setForm(prev => ({
+        ...prev,
+        participant_id: "",
+        recipient_name: "",
+        recipient_email: "",
+        item_code: "",
+        period_start: "",
+        period_end: "",
+      }));
       setResolvedPrice(null);
       toast({ title: translate("billing.toast.draftCreated"), description: inv.invoice_number });
     } catch (err) {
@@ -308,6 +332,14 @@ export default function Billing() {
   }
 
   const liveTotal = Number(form.quantity || 0) * Number(form.unit_amount || 0) * 100;
+  const canCreateDraft = form.generate_from_verified_tasks
+    ? Boolean(
+        form.participant_id &&
+        form.recipient_name.trim() &&
+        form.period_start &&
+        form.period_end
+      )
+    : Boolean(form.recipient_name.trim() && form.description.trim());
 
   return (
     <>
@@ -456,6 +488,25 @@ export default function Billing() {
                 </Select>
               </div>
 
+              <div className="rounded-lg border border-cc-border bg-cc-soft px-3 py-3 space-y-3">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={form.generate_from_verified_tasks}
+                    onChange={(e) => setForm({
+                      ...form,
+                      generate_from_verified_tasks: e.target.checked,
+                      item_code: e.target.checked ? "" : form.item_code,
+                    })}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-cc-text">{translate("billing.generateFromVerifiedTasks")}</p>
+                    <p className="text-xs text-cc-muted">{translate("billing.generateFromVerifiedTasksHint")}</p>
+                  </div>
+                </label>
+              </div>
+
               {form.participant_id && (
                 <div className="rounded-lg border border-cc-border bg-cc-soft px-3 py-2.5 space-y-2" role="status">
                   <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-cc-muted">
@@ -505,11 +556,16 @@ export default function Billing() {
               </div>
               <div>
                 <Label className="text-xs font-bold text-cc-muted">{translate("billing.description")}</Label>
-                <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" />
+                <Input
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  className="mt-1.5 rounded-lg border-cc-border"
+                  disabled={form.generate_from_verified_tasks}
+                />
               </div>
 
               {/* NDIS Item Code Picker — Coordinator Only */}
-              {isCoordinator && (
+              {isCoordinator && !form.generate_from_verified_tasks && (
                 <div>
                   <Label className="text-xs font-bold flex items-center gap-1.5 text-cc-muted">
                     {translate("billing.ndisItemCode")} <span className="font-normal">({translate("common.optional")})</span>
@@ -539,25 +595,50 @@ export default function Billing() {
                 </div>
               )}
 
-              <div>
-                <div>
-                  <Label className="text-xs font-bold text-cc-muted">{translate("billing.quantity")}</Label>
-                  <Input type="number" min={0.1} step={0.1} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" />
+              {form.generate_from_verified_tasks ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs font-bold text-cc-muted">{translate("billing.periodStart")}</Label>
+                    <Input
+                      type="date"
+                      value={form.period_start}
+                      onChange={e => setForm({ ...form, period_start: e.target.value })}
+                      className="mt-1.5 rounded-lg border-cc-border"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold text-cc-muted">{translate("billing.periodEnd")}</Label>
+                    <Input
+                      type="date"
+                      value={form.period_end}
+                      onChange={e => setForm({ ...form, period_end: e.target.value })}
+                      className="mt-1.5 rounded-lg border-cc-border"
+                    />
+                  </div>
                 </div>
+              ) : (
                 <div>
-                  <Label className="text-xs font-bold flex items-center justify-between text-cc-muted">
-                    {translate("billing.unitAmount")} 
-                    {resolvedPrice && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{translate("billing.resolved")}</span>}
-                  </Label>
-                  <Input type="number" min={0} step={0.01} value={form.unit_amount} onChange={e => setForm({ ...form, unit_amount: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" />
+                  <div>
+                    <Label className="text-xs font-bold text-cc-muted">{translate("billing.quantity")}</Label>
+                    <Input type="number" min={0.1} step={0.1} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold flex items-center justify-between text-cc-muted">
+                      {translate("billing.unitAmount")}
+                      {resolvedPrice && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{translate("billing.resolved")}</span>}
+                    </Label>
+                    <Input type="number" min={0} step={0.01} value={form.unit_amount} onChange={e => setForm({ ...form, unit_amount: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Running total */}
-              <div className="rounded-lg px-4 py-3 flex items-center justify-between bg-cc-soft border border-cc-border">
-                <span className="text-xs font-black uppercase tracking-[0.15em] text-cc-muted">{translate("billing.invoiceTotal")}</span>
-                <span className="text-lg font-black text-cc-text">{cents(liveTotal)}</span>
-              </div>
+              {!form.generate_from_verified_tasks && (
+                <div className="rounded-lg px-4 py-3 flex items-center justify-between bg-cc-soft border border-cc-border">
+                  <span className="text-xs font-black uppercase tracking-[0.15em] text-cc-muted">{translate("billing.invoiceTotal")}</span>
+                  <span className="text-lg font-black text-cc-text">{cents(liveTotal)}</span>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs font-bold text-cc-muted">{translate("billing.dueDate")} <span className="font-medium">({translate("common.optional")})</span></Label>
@@ -566,7 +647,7 @@ export default function Billing() {
 
               <button
                 onClick={createInvoice}
-                disabled={creatingInvoice || !form.recipient_name.trim() || !form.description.trim()}
+                disabled={creatingInvoice || !canCreateDraft}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-sm font-black text-white bg-cc-plum shadow-sm transition hover:opacity-95 disabled:opacity-50"
               >
                 {creatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

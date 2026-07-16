@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X, Lightbulb, Loader2, Zap } from "lucide-react";
+import { Loader2, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { jsonFetch } from "@/services/http";
+import { createParticipantTask } from "@/services/coordinatorService";
 import type {
   TaskCategory,
   TaskPriority,
@@ -27,7 +27,6 @@ type Props = {
 
 export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: Props) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Form state
@@ -103,34 +102,43 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
   // Create task mutation
   const createTaskMutation = useMutation({
     mutationFn: async () => {
+      const frequencyPattern =
+        recurrenceType === "recurring"
+          ? recurrenceFrequency === "every_matching_shift"
+            ? `every_${primaryShiftType}_shift`
+            : recurrenceFrequency === "daily_regardless_of_shift"
+              ? "daily_all_shifts"
+              : recurrenceFrequency === "specific_weekdays"
+                ? "specific_days_of_week"
+                : null
+          : null;
+
       const payload = {
-        participant_id: participantId,
-        title,
+        goal_id: linkedGoalId || null,
+        name: title,
+        description: notes || null,
+        frequency: recurrenceType === "recurring" ? recurrenceFrequency || undefined : "one_off",
+        status: "pending" as const,
+        is_mandatory: requirementLevel === "mandatory",
+        shift_type: primaryShiftType,
         category,
         priority,
-        primary_shift_type: primaryShiftType,
-        additional_shift_types:
-          recurrenceType === "recurring" ? additionalShiftTypes : [],
-        recurrence_type: recurrenceType,
-        recurrence_frequency: recurrenceType === "recurring" ? recurrenceFrequency : null,
-        recurrence_weekdays:
-          recurrenceFrequency === "specific_weekdays" ? recurrenceWeekdays : null,
-        due_window_start: dueWindowStart || null,
-        due_window_end: dueWindowEnd || null,
-        requirement_level: requirementLevel,
         evidence_required: evidenceRequired,
-        notes: notes || null,
-        linked_goal_id: linkedGoalId || null,
+        is_recurring: recurrenceType === "recurring",
+        frequency_pattern: frequencyPattern,
+        frequency_metadata:
+          recurrenceFrequency === "specific_weekdays"
+            ? { weekdays: recurrenceWeekdays }
+            : additionalShiftTypes.length > 0
+              ? { additional_shift_types: additionalShiftTypes }
+              : null,
       };
 
-      return jsonFetch("/api/tasks/templates", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      return createParticipantTask(participantId, payload);
     },
     onSuccess: () => {
-      toast({ title: "Task created", description: "Task template created successfully." });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Task created", description: "Task created successfully." });
+      queryClient.invalidateQueries({ queryKey: ["participant-tasks", participantId] });
       handleClose();
     },
     onError: (error: any) => {

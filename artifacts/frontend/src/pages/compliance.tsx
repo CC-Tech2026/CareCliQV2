@@ -22,6 +22,7 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { AuditPackPanel } from "@/pages/audit-pack";
 import { FormPanel } from "@/components/FormPanel";
 import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditTrailEntry } from "@/services/incidentService";
+import { IncidentAccordionCard } from "@/components/incidents/IncidentAccordionCard";
 import { Card } from "@/components/ui/card";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
@@ -1193,122 +1194,86 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
 function IncidentsPanel() {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "incidents"], queryFn: getComplianceCentreIncidents });
-  const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
+
+  const triggered = useMemo(() => {
+    const rows = data?.incidents ?? [];
+    return rows.filter((inc) =>
+      /auto-detect|compliance engine/i.test(inc.description || "") ||
+      inc.incident_type === "restrictive_practice" ||
+      inc.incident_type === "medication_error",
+    );
+  }, [data?.incidents]);
+
+  const typeLabel = (type: string) => {
+    if (type === "restrictive_practice") return translate("compliance.centre.incidents.restrictivePractice");
+    if (type === "medication_error") return translate("incidents.type.medicationError");
+    return type.replace(/_/g, " ");
+  };
+
+  const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      reported: translate("compliance.centre.incidents.statusReported"),
+      under_investigation: translate("compliance.centre.incidents.statusUnderInvestigation"),
+      resolved: translate("compliance.centre.incidents.statusResolved"),
+      closed: translate("compliance.centre.incidents.statusClosed"),
+    };
+    return map[status] ?? status.replace(/_/g, " ");
+  };
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
-  function actionFor(incident: NonNullable<typeof data>["incidents"][number]) {
-    if (incident.status !== "closed" && incident.incident_type === "restrictive_practice") {
-      return (
-        <Link href={`/incident-new?participant_id=${incident.id}&type=restrictive_practice`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: CRITICAL, background: "rgba(220,38,38,0.08)" }}>
-            <FilePlus size={13} /> {translate("compliance.centre.incidents.fileReport")}
-          </span>
-        </Link>
-      );
-    }
-    if (incident.status === "closed") {
-      return (
-        <Link href={`/incident/${incident.id}`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
-            <FileText size={13} /> {translate("compliance.centre.incidents.viewReport")}
-          </span>
-        </Link>
-      );
-    }
-    return (
-      <Link href={`/incident/${incident.id}`}>
-        <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
-          <Eye size={13} /> {translate("compliance.centre.incidents.review")}
-        </span>
-      </Link>
-    );
-  }
-
   return (
     <div className="space-y-5">
+      <div className="rounded-xl border border-[#FAC775] bg-[#FAEEDA] px-4 py-3 flex gap-3">
+        <Info size={18} className="text-[#BA7517] shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-bold text-[#633806]">{translate("compliance.centre.incidents.complianceOnlyTitle")}</p>
+          <p className="text-xs text-[#854F0B] mt-1">
+            {translate("compliance.centre.incidents.complianceOnlyBody")}{" "}
+            <Link href="/incidents" className="font-bold text-[var(--cc-plum)] hover:underline inline-flex items-center gap-0.5">
+              {translate("compliance.centre.incidents.goToRegister")} <ArrowRight size={12} />
+            </Link>
+          </p>
+        </div>
+      </div>
+
       <KpiGrid>
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
       </KpiGrid>
 
-      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[13px]">
-            <thead>
-              <tr style={{ background: TEXT }}>
-                {[
-                  translate("compliance.centre.incidents.colDate"),
-                  translate("compliance.centre.incidents.colWorker"),
-                  translate("compliance.centre.incidents.colParticipant"),
-                  translate("compliance.centre.incidents.colType"),
-                  translate("compliance.centre.incidents.colDescription"),
-                  translate("compliance.centre.incidents.colStatus"),
-                  translate("compliance.centre.incidents.colAction"),
-                  "",
-                ].map((h, i) => (
-                  <th key={h || `h${i}`} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {(data?.incidents ?? []).map((inc, idx) => (
-                <tr key={inc.id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{String(inc.incident_date).slice(0, 10)}</td>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.worker_name}</td>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.participant_name}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge
-                      label={inc.incident_type === "restrictive_practice" ? translate("compliance.centre.incidents.restrictivePractice") : inc.incident_type.replace(/_/g, " ")}
-                      tone={inc.ndis_reportable ? "rd" : "am"}
-                    />
-                  </td>
-                  <td className="px-3 py-3 text-[12px] max-w-[220px] truncate" style={{ color: MUTED }} title={inc.description}>{inc.description}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge label={inc.status.replace(/_/g, " ")} tone={inc.status === "closed" ? "gn" : inc.status === "under_investigation" ? "am" : "rd"} />
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">{actionFor(inc)}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate("compliance.centre.actions.menuLabel")}
-                          className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
-                          style={{ color: MUTED }}
-                        >
-                          <MoreVertical size={15} />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
-                          <Eye size={15} /> {translate("compliance.centre.incidents.kebabReviewStatus")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
-                          <Clock size={15} /> {translate("compliance.centre.incidents.kebabAuditTrail")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href={`/incident/${inc.id}`} className="flex items-center gap-2">
-                            <ExternalLink size={15} /> {translate("compliance.centre.incidents.kebabOpenReport")}
-                          </Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-              {(data?.incidents.length ?? 0) === 0 && (
-                <tr><td colSpan={8}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
-              )}
-            </tbody>
-          </table>
+      {triggered.length === 0 ? (
+        <EmptyState label={translate("compliance.centre.incidents.noIncidents")} />
+      ) : (
+        <div className="space-y-3">
+          {triggered.map((inc) => (
+            <IncidentAccordionCard
+              key={inc.id}
+              incident={{
+                id: inc.id,
+                title: inc.description?.slice(0, 60) || inc.incident_type,
+                description: inc.description,
+                incident_type: inc.incident_type,
+                severity: inc.ndis_reportable ? "critical" : "medium",
+                status: inc.status,
+                incident_date: String(inc.incident_date),
+                participant_name: inc.participant_name,
+                worker_name: inc.worker_name,
+                ndis_reportable: inc.ndis_reportable,
+                ndis_pending: inc.ndis_reportable && inc.status !== "closed",
+                auto_detected: true,
+              }}
+              typeLabel={typeLabel(inc.incident_type)}
+              statusLabel={statusLabel(inc.status)}
+              translate={translate}
+              showFlaggedNote
+              onViewFull={(id) => { window.location.assign(`/incidents/${id}`); }}
+              onCompleteReport={(id) => { window.location.assign(`/incidents/${id}`); }}
+              onAddNote={(id) => { window.location.assign(`/incidents/${id}`); }}
+            />
+          ))}
         </div>
-      </Card>
-
-      {openIncidentId && (
-        <IncidentDetailDrawer incidentId={openIncidentId} onClose={() => setOpenIncidentId(null)} />
       )}
     </div>
   );
