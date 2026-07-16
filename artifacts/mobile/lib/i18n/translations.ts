@@ -879,6 +879,17 @@ const en = {
   "privacy.requestSubmitted": "Request submitted",
   "privacy.submitFailed": "Could not submit request",
   "privacy.loadFailed": "Could not load privacy settings",
+
+  "review.edit": "Edit",
+  "review.remove": "Remove",
+  "review.checkinNotEditable": "This check-in cannot be edited.",
+  "review.incidentNoteNotEditable": "This note cannot be edited after the incident report was completed.",
+  "review.incidentRequiredTitle": "Incident report required",
+  "review.incidentRequiredBody": "Complete all incident reports before submitting notes.",
+  "review.removeAttachmentTitle": "Remove attachment?",
+  "review.removeAttachmentBody": "This attachment will be removed and the linked task will be re-checked for documentation.",
+  "review.submitNotes": "Submit notes",
+  "review.sessionNotes": "SESSION NOTES",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1082,6 +1093,16 @@ const vi: Partial<Record<TranslationKey, string>> = {
   "auth.signup.join.notProvided": "Chưa cung cấp",
   "auth.signup.join.createTitle": "Chi tiết tài khoản",
   "auth.signup.join.title": "Mã mời",
+  "review.edit": "Sửa",
+  "review.remove": "Xóa",
+  "review.checkinNotEditable": "Check-in này không thể chỉnh sửa.",
+  "review.incidentNoteNotEditable": "Ghi chú này không thể chỉnh sửa sau khi báo cáo sự cố đã hoàn tất.",
+  "review.incidentRequiredTitle": "Cần báo cáo sự cố",
+  "review.incidentRequiredBody": "Hoàn thành tất cả báo cáo sự cố trước khi gửi ghi chú.",
+  "review.removeAttachmentTitle": "Xóa tệp đính kèm?",
+  "review.removeAttachmentBody": "Tệp đính kèm sẽ bị xóa và nhiệm vụ liên kết sẽ được kiểm tra lại về tài liệu.",
+  "review.submitNotes": "Gửi ghi chú",
+  "review.sessionNotes": "GHI CHÚ PHIÊN",
 };
 
 const zh: Partial<Record<TranslationKey, string>> = {
@@ -1280,6 +1301,16 @@ const zh: Partial<Record<TranslationKey, string>> = {
   "auth.signup.join.notProvided": "未提供",
   "auth.signup.join.createTitle": "账户详情",
   "auth.signup.join.title": "邀请码",
+  "review.edit": "编辑",
+  "review.remove": "移除",
+  "review.checkinNotEditable": "此签到记录不可编辑。",
+  "review.incidentNoteNotEditable": "事故报告完成后，此笔记不可编辑。",
+  "review.incidentRequiredTitle": "需要事故报告",
+  "review.incidentRequiredBody": "提交笔记前请完成所有事故报告。",
+  "review.removeAttachmentTitle": "移除附件？",
+  "review.removeAttachmentBody": "此附件将被移除，并重新检查关联任务的文档要求。",
+  "review.submitNotes": "提交笔记",
+  "review.sessionNotes": "本次会话笔记",
 };
 
 const ar: Partial<Record<TranslationKey, string>> = {
@@ -1478,6 +1509,16 @@ const ar: Partial<Record<TranslationKey, string>> = {
   "auth.signup.join.notProvided": "غير مُقدَّم",
   "auth.signup.join.createTitle": "تفاصيل الحساب",
   "auth.signup.join.title": "رمز الدعوة",
+  "review.edit": "تعديل",
+  "review.remove": "إزالة",
+  "review.checkinNotEditable": "لا يمكن تعديل تسجيل الحضور هذا.",
+  "review.incidentNoteNotEditable": "لا يمكن تعديل هذه الملاحظة بعد إكمال تقرير الحادث.",
+  "review.incidentRequiredTitle": "تقرير الحادث مطلوب",
+  "review.incidentRequiredBody": "أكمل جميع تقارير الحوادث قبل إرسال الملاحظات.",
+  "review.removeAttachmentTitle": "إزالة المرفق؟",
+  "review.removeAttachmentBody": "ستتم إزالة هذا المرفق وإعادة التحقق من المهمة المرتبطة للتوثيق.",
+  "review.submitNotes": "إرسال الملاحظات",
+  "review.sessionNotes": "ملاحظات الجلسة",
 };
 
 const dictionaries: Record<AppLanguage, Partial<Record<TranslationKey, string>>> = {

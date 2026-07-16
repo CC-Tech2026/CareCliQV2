@@ -3,19 +3,23 @@ import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { showAlert } from "@/lib/alert";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord } from "@/lib/worker-api";
 import type { NoteComplianceFlag } from "@workspace/worker-compliance";
-import { SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import { buildAttachmentFileName, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
 type Props = {
   note: SessionNoteRecord;
+  participantName?: string;
   taskLabel?: string;
   goalTitle?: string;
   flag?: NoteComplianceFlag;
   editable?: boolean;
   onSave?: (noteId: string, content: string) => void;
+  onRemove?: (noteId: string) => void;
   onIncidentReport?: (noteId: string, content: string) => void;
   onPress?: () => void;
 };
@@ -26,17 +30,42 @@ function wordCount(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function isAttachmentNote(note: SessionNoteRecord) {
+  if (note.note_type === "photo" || note.note_type === "file") return true;
+  return /^\[Attachment:/i.test((note.content ?? "").trim());
+}
+
+function attachmentDisplayName(
+  note: SessionNoteRecord,
+  participantName?: string,
+  taskLabel?: string,
+): string {
+  const original =
+    note.file_name ??
+    note.content?.match(/^\[Attachment:\s*(.+)\]$/i)?.[1]?.trim() ??
+    "attachment.jpg";
+  return buildAttachmentFileName({
+    participantName,
+    taskTitle: taskLabel,
+    date: note.created_at,
+    originalName: original,
+  });
+}
+
 export function WorkerMobileNoteBubble({
   note,
+  participantName,
   taskLabel,
   goalTitle,
   flag,
   editable,
   onSave,
+  onRemove,
   onIncidentReport,
   onPress,
 }: Props) {
   const colors = useColors();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [truncated, setTruncated] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -53,7 +82,17 @@ export function WorkerMobileNoteBubble({
   const categoryLabel = [taskLabel, goalTitle].filter(Boolean).join(" · ");
   const type = note.note_type ?? "text";
   const isCheckin = isCheckinSessionNote(note);
-  const wc = wordCount(note.content);
+  const isAttachment = isAttachmentNote(note);
+  const incidentReportCompleted =
+    flag?.ruleId === 9 && flag.severity === "warn" && !flag.actionLabel;
+  const canEditText = Boolean(
+    editable && !isCheckin && !isAttachment && !incidentReportCompleted && onSave,
+  );
+  const canRemoveAttachment = Boolean(editable && isAttachment && onRemove);
+  const displayContent = isAttachment
+    ? `[Attachment: ${attachmentDisplayName(note, participantName, taskLabel)}]`
+    : note.content;
+  const wc = wordCount(displayContent);
   const isFail = flag?.severity === "fail";
   const accent = isFail ? colors.destructive : colors.warning;
   const metaLine = [time, isCheckin ? "check-in" : type, `${wc} words`, flag ? "flagged" : null]
@@ -76,6 +115,17 @@ export function WorkerMobileNoteBubble({
   const handleCancel = () => {
     setDraft(note.content);
     setEditing(false);
+  };
+
+  const handleRemovePress = () => {
+    showAlert(t("review.removeAttachmentTitle"), t("review.removeAttachmentBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("review.remove"),
+        style: "destructive",
+        onPress: () => onRemove?.(note.note_id),
+      },
+    ]);
   };
 
   const bubbleContent = (
@@ -109,14 +159,14 @@ export function WorkerMobileNoteBubble({
           />
           <View style={styles.editActions}>
             <Pressable onPress={handleSave} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.saveBtnText, { fontFamily: "Inter_600SemiBold" }]}>Save</Text>
+              <Text style={[styles.saveBtnText, { fontFamily: "Inter_600SemiBold" }]}>{t("common.save")}</Text>
             </Pressable>
             <Pressable
               onPress={handleCancel}
               style={[styles.cancelEditBtn, { borderColor: colors.border }]}
             >
               <Text style={[styles.cancelEditText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-                Cancel
+                {t("common.cancel")}
               </Text>
             </Pressable>
           </View>
@@ -130,7 +180,7 @@ export function WorkerMobileNoteBubble({
               if (!editable && !truncated && e.nativeEvent.lines.length > CLAMP_LINES) setTruncated(true);
             }}
           >
-            {note.content}
+            {displayContent}
           </Text>
           {!editable && truncated ? (
             <Pressable onPress={() => setModalOpen(true)} hitSlop={6}>
@@ -139,15 +189,48 @@ export function WorkerMobileNoteBubble({
               </Text>
             </Pressable>
           ) : null}
+          {isCheckin ? (
+            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("review.checkinNotEditable")}
+            </Text>
+          ) : null}
+          {incidentReportCompleted ? (
+            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("review.incidentNoteNotEditable")}
+            </Text>
+          ) : null}
           <View style={styles.metaRow}>
-            <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+              numberOfLines={2}
+            >
               {metaLine}
             </Text>
-            {editable ? (
-              <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
+            {canEditText ? (
+              <Pressable
+                onPress={() => setEditing(true)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t("review.edit")}
+                style={styles.actionBtn}
+              >
                 <Feather name="edit-2" size={12} color={colors.primary} />
-                <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  Edit
+                <Text style={[styles.actionBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  {t("review.edit")}
+                </Text>
+              </Pressable>
+            ) : null}
+            {canRemoveAttachment ? (
+              <Pressable
+                onPress={handleRemovePress}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t("review.remove")}
+                style={styles.actionBtn}
+              >
+                <Feather name="trash-2" size={12} color={colors.destructive} />
+                <Text style={[styles.actionBtnText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+                  {t("review.remove")}
                 </Text>
               </Pressable>
             ) : null}
@@ -213,7 +296,7 @@ export function WorkerMobileNoteBubble({
             </View>
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalContent, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                {note.content}
+                {displayContent}
               </Text>
             </ScrollView>
           </View>
@@ -243,23 +326,32 @@ const styles = StyleSheet.create({
   readMore: {
     fontSize: 12,
   },
+  checkinNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
     marginTop: 2,
+    zIndex: 2,
   },
   time: {
     fontSize: 10,
     flex: 1,
+    flexShrink: 1,
   },
-  editBtn: {
+  actionBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
-  editBtnText: {
+  actionBtnText: {
     fontSize: 11,
   },
   editWrap: {

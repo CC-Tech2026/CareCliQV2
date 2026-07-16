@@ -22,6 +22,7 @@ import {
   readMobileAuthToken,
   readStoredUserJson,
 } from "@/lib/session";
+import { setWorkerUnauthorizedHandler } from "@/lib/worker-fetch";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -94,6 +95,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    setWorkerUnauthorizedHandler(() => {
+      void clearMobileAuthSession().then(() => setUser(null));
+    });
+    return () => setWorkerUnauthorizedHandler(null);
   }, []);
 
   const login = useCallback(async (identifier: string, password: string, rememberDevice = true) => {

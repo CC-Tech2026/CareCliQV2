@@ -62,11 +62,19 @@ export function ComplianceDetailCard({
   title?: string;
   compact?: boolean;
 }) {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const pct = Math.max(0, Math.min(100, score || 0));
   const ringColor = scoreRingColor(pct);
-  const passedCount = rules.filter((rule) => rule.status === "pass").length;
+  const evaluatedRules = rules.filter((rule) => rule.status !== "pending");
+  const passedCount = evaluatedRules.filter((rule) => rule.status === "pass").length;
   const displayTitle = title ?? translate("compliance.detail.score");
+  const rulesSummary =
+    evaluatedRules.length === 0
+      ? translate("compliance.detail.rulesUnavailable")
+      : translateParams("compliance.detail.rulesPassingCount", {
+          passed: String(passedCount),
+          total: String(evaluatedRules.length),
+        });
 
   function statusLabel(status: string) {
     if (status === "pass") return translate("compliance.detail.pass");
@@ -91,7 +99,7 @@ export function ComplianceDetailCard({
             <div>
               <h2 className="text-lg font-black" style={{ color: TEXT }}>{displayTitle}</h2>
               <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-                {passedCount}/{rules.length || 12} {translate("compliance.detail.rulesPassing")}
+                {rulesSummary}
               </p>
               <span
                 className="mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize"

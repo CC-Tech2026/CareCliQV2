@@ -202,6 +202,10 @@ export const en: Dict = {
   "clients.view": "View client",
   "clients.noPlanType": "No plan type",
   "clients.status.needsReview": "Needs review",
+  "clients.pagination.showing": "Showing {from}–{to} of {total}",
+  "clients.pagination.previous": "Previous page",
+  "clients.pagination.next": "Next page",
+  "clients.pagination.page": "Page {page}",
 
   // Sync page
   "sync.page.title": "Pending uploads",
@@ -1266,6 +1270,8 @@ export const en: Dict = {
   "compliance.detail.pending": "Pending",
   "compliance.detail.redFlags": "Red flags",
   "compliance.detail.rulesPassing": "rules passing",
+  "compliance.detail.rulesPassingCount": "{passed}/{total} rules passing",
+  "compliance.detail.rulesUnavailable": "Rule breakdown not available for recent sessions",
   "compliance.detail.score": "Compliance Score",
   "compliance.detail.warning": "Warning",
   "compliance.trendChart.avgScore": "Avg score",

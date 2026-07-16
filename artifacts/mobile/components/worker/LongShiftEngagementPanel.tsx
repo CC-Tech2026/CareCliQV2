@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
@@ -20,6 +21,7 @@ type Props = {
   breakStatus?: ActiveBreakStatus;
   sessionElapsed?: string;
   onCheckin?: () => void;
+  onReportIncident?: () => void;
   disabled?: boolean;
 };
 
@@ -39,9 +41,11 @@ export function LongShiftEngagementPanel({
   breakStatus,
   sessionElapsed,
   onCheckin,
+  onReportIncident,
   disabled,
 }: Props) {
   const colors = useColors();
+  const t = useT();
   const queryClient = useQueryClient();
 
   const [breakElapsed, setBreakElapsed] = useState("00:00:00");
@@ -257,6 +261,31 @@ export function LongShiftEngagementPanel({
             </>
           )}
         </Pressable>
+
+        {onReportIncident ? (
+          <Pressable
+            onPress={onReportIncident}
+            disabled={actionBusy}
+            style={[
+              styles.btn,
+              {
+                backgroundColor: "transparent",
+                borderColor: colors.destructive,
+                opacity: actionBusy ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Feather name="alert-triangle" size={14} color={colors.destructive} />
+            <Text
+              style={[
+                styles.btnText,
+                { color: colors.destructive, fontFamily: "Inter_700Bold" },
+              ]}
+            >
+              {t("compliance.reportIncident")}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {breakLimitReached && !onBreak && (

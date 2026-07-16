@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,16 +17,44 @@ import { LongShiftCheckInForm } from "@/components/worker/LongShiftCheckInForm";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerMobileShiftView } from "@/components/worker/WorkerMobileShiftView";
 import { useSessionNotes } from "@/hooks/worker/useSessionNotes";
+import { markShiftComplianceCheckinNotificationsRead } from "@/hooks/worker/useWorkerNotifications";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { useColors } from "@/hooks/useColors";
 import {
-  clearLocalCheckinNotification,
+  clearShiftComplianceCheckinNotifications,
   syncLocalCheckinNotifications,
 } from "@/lib/local-checkin-notifications";
-import { recordShiftViewed, submitLongShiftCheckInForm } from "@/lib/worker-api";
+import {
+  recordShiftViewed,
+  submitLongShiftCheckInForm,
+  type CheckinWindowStatus,
+  type SessionNoteRecord,
+  type WorkerShift,
+} from "@/lib/worker-api";
 import { goBackOrHome } from "@/lib/go-back";
 import { isShiftCompletedForList } from "@/lib/shift-utils";
 import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
+
+function applyOptimisticCheckinStatus(
+  prev: CheckinWindowStatus | undefined,
+): CheckinWindowStatus | undefined {
+  if (!prev) return prev;
+  const completed = (prev.checkins_completed ?? 0) + 1;
+  const required = prev.checkins_required ?? 0;
+  // Drop due/prompted rows so local sync cannot re-post the tray notification.
+  const upcoming = (prev.upcoming_checkins ?? []).filter(
+    (item) => item.status && !["pending", "prompted", "due"].includes(item.status),
+  );
+  return {
+    ...prev,
+    can_submit_checkin: false,
+    checkin_overdue: false,
+    checkins_completed: completed,
+    block_reason: required > 0 && completed >= required ? null : "not_due_yet",
+    last_checkin_at: new Date().toISOString(),
+    upcoming_checkins: upcoming,
+  };
+}
 
 export default function ShiftDetailScreen() {
   const colors = useColors();
@@ -43,6 +71,8 @@ export default function ShiftDetailScreen() {
   const [scheduledCheckinId] = useState(
     () => (typeof scheduled_checkin_id === "string" ? scheduled_checkin_id : undefined),
   );
+  const markedCheckinNotifsRef = useRef(false);
+  const checkinInFlightRef = useRef(false);
 
   const { data: shift, isLoading, error } = useWorkerShift(id);
   const sessionId = shift?.session_id ?? undefined;
@@ -79,12 +109,61 @@ export default function ShiftDetailScreen() {
     return () => sub.remove();
   }, [id, sessionId, isSessionActive, checkinStatus, shift]);
 
+  // Clear system-tray check-in alerts when the check-in UI is shown (push or in-app).
+  useEffect(() => {
+    if (!id) return;
+    const shouldClear =
+      fromCheckinNotif ||
+      checkinOpen ||
+      Boolean(checkinStatus?.can_submit_checkin) ||
+      Boolean(checkinStatus?.checkin_overdue);
+    if (!shouldClear) return;
+    void clearShiftComplianceCheckinNotifications({
+      shiftId: id,
+      scheduledCheckinId,
+      upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map((item) => item.id),
+    });
+  }, [
+    id,
+    fromCheckinNotif,
+    checkinOpen,
+    scheduledCheckinId,
+    checkinStatus?.can_submit_checkin,
+    checkinStatus?.checkin_overdue,
+    checkinStatus?.upcoming_checkins,
+  ]);
+
   useEffect(() => {
     if (!fromCheckinNotif) return;
     setCheckinOpen(true);
-    const upcomingId = scheduledCheckinId ?? checkinStatus?.upcoming_checkins?.[0]?.id;
-    void clearLocalCheckinNotification(upcomingId);
-  }, [fromCheckinNotif, scheduledCheckinId, checkinStatus?.upcoming_checkins]);
+  }, [fromCheckinNotif]);
+
+  // Auto-mark Long Shift check-in notifications as read when the check-in UI is shown.
+  useEffect(() => {
+    if (!id || markedCheckinNotifsRef.current) return;
+
+    const longShiftSectionVisible =
+      Boolean(checkinStatus?.applicable) || (checkinStatus?.checkins_required ?? 0) > 0;
+    const checkinUiVisible =
+      fromCheckinNotif ||
+      checkinOpen ||
+      Boolean(checkinStatus?.can_submit_checkin) ||
+      Boolean(checkinStatus?.checkin_overdue);
+
+    if (!fromCheckinNotif && !longShiftSectionVisible && !checkinUiVisible) return;
+
+    markedCheckinNotifsRef.current = true;
+    markShiftComplianceCheckinNotificationsRead(queryClient, id);
+  }, [
+    id,
+    queryClient,
+    fromCheckinNotif,
+    checkinOpen,
+    checkinStatus?.applicable,
+    checkinStatus?.checkins_required,
+    checkinStatus?.can_submit_checkin,
+    checkinStatus?.checkin_overdue,
+  ]);
 
   useEffect(() => {
     if (!shift) return;
@@ -145,31 +224,63 @@ export default function ShiftDetailScreen() {
 
   const handleCheckinSubmit = useCallback(
     async (form: LongShiftCheckInFormData) => {
-      if (!sessionId) return;
+      if (!sessionId || !id || checkinInFlightRef.current) return;
+
+      checkinInFlightRef.current = true;
       setCheckinBusy(true);
+
+      const shiftKey = ["worker", "shift", id] as const;
+      const notesKey = ["worker", "session", sessionId, "notes"] as const;
+      const previousShift = queryClient.getQueryData<WorkerShift>(shiftKey);
+      const previousNotes = queryClient.getQueryData<SessionNoteRecord[]>(notesKey);
+
+      // Optimistic: disable Check-in immediately and reflect checked-in status in UI.
+      queryClient.setQueryData<WorkerShift>(shiftKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          checkin_status: applyOptimisticCheckinStatus(prev.checkin_status),
+        };
+      });
+      setCheckinOpen(false);
+      void clearShiftComplianceCheckinNotifications({
+        shiftId: id,
+        scheduledCheckinId: scheduledCheckinId ?? checkinStatus?.upcoming_checkins?.[0]?.id,
+        upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map((item) => item.id),
+      });
+
       try {
         const result = await submitLongShiftCheckInForm(sessionId, form);
-        setCheckinOpen(false);
-        void clearLocalCheckinNotification(
-          scheduledCheckinId ?? checkinStatus?.upcoming_checkins?.[0]?.id,
-        );
-        invalidateShiftQueries();
-        invalidateNotesQuery();
+
+        queryClient.setQueryData<SessionNoteRecord[]>(notesKey, (prev) => {
+          const list = prev ?? [];
+          if (list.some((n) => n.note_id === result.timelineNote.note_id)) return list;
+          return [...list, result.timelineNote];
+        });
+
         if (result.status === "INCIDENT_REPORTED") {
           Alert.alert("Incident noted", "Please document the incident in your shift notes.");
         }
       } catch (err) {
+        if (previousShift !== undefined) {
+          queryClient.setQueryData(shiftKey, previousShift);
+        }
+        if (previousNotes !== undefined) {
+          queryClient.setQueryData(notesKey, previousNotes);
+        }
+        setCheckinOpen(true);
         Alert.alert("Check-in failed", err instanceof Error ? err.message : "Please try again.");
       } finally {
+        checkinInFlightRef.current = false;
         setCheckinBusy(false);
       }
     },
     [
       sessionId,
+      id,
+      queryClient,
       scheduledCheckinId,
       checkinStatus?.upcoming_checkins,
-      invalidateShiftQueries,
-      invalidateNotesQuery,
     ],
   );
 
@@ -217,7 +328,7 @@ export default function ShiftDetailScreen() {
           onNotesRefresh={invalidateNotesQuery}
           onShiftComplete={handleComplete}
           onBack={() => goBackOrHome(router)}
-          canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin)}
+          canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin) && !checkinBusy}
           onCheckin={() => setCheckinOpen(true)}
           checkinStatus={checkinStatus}
           breakStatus={shift.break_status}

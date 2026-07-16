@@ -15,6 +15,7 @@ import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
 import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
@@ -27,6 +28,7 @@ type Props = {
   compliance: ComplianceEvaluation;
   busy?: boolean;
   onSaveNote: (noteId: string, content: string) => void;
+  onRemoveNote: (noteId: string) => void;
   onAddMissingNote: (taskId: string, content: string) => void;
   onSubmit: () => void;
   onViewComplianceReport: () => void;
@@ -54,12 +56,14 @@ export function WorkerMobileReviewScreen({
   compliance,
   busy,
   onSaveNote,
+  onRemoveNote,
   onAddMissingNote,
   onSubmit,
   onViewComplianceReport,
   onOpenIncidentReport,
 }: Props) {
   const colors = useColors();
+  const t = useT();
   const [medDraft, setMedDraft] = useState("");
   const [addingMed, setAddingMed] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -75,13 +79,14 @@ export function WorkerMobileReviewScreen({
   const otherIncomplete = incompleteWithoutNote.filter(
     (t) => !medTask || t.task_id !== medTask.task_id,
   );
-
-  const doneCount = tasks.filter((t) => !t.marked_na && t.completed).length;
-  const totalCount = tasks.filter((t) => !t.marked_na).length;
+  const pendingIncidentReport = compliance.noteFlags.some(
+    (f) => f.ruleId === 9 && f.severity === "fail" && Boolean(f.actionLabel),
+  );
+  const submitBlocked = medMissing || otherIncomplete.length > 0 || pendingIncidentReport;
 
   const handleSubmit = () => {
     setSubmitAttempted(true);
-    if (medMissing || otherIncomplete.length > 0) {
+    if (submitBlocked) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
@@ -109,6 +114,20 @@ export function WorkerMobileReviewScreen({
       <ComplianceScoreBar score={compliance.score} onPress={onViewComplianceReport} />
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {pendingIncidentReport && (
+          <View style={[styles.alert, { backgroundColor: "#FCEBEB", borderColor: "#EF4444" }]}>
+            <Feather name="alert-octagon" size={16} color="#A32D2D" />
+            <View style={styles.alertText}>
+              <Text style={[styles.alertTitle, { fontFamily: "Inter_700Bold", color: "#A32D2D" }]}>
+                {t("review.incidentRequiredTitle")}
+              </Text>
+              <Text style={[styles.alertBody, { fontFamily: "Inter_400Regular", color: "#7F1D1D" }]}>
+                {t("review.incidentRequiredBody")}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {medMissing && (
           <View style={[styles.alert, { backgroundColor: "#FCEBEB", borderColor: "#EF4444" }]}>
             <Feather name="alert-octagon" size={16} color="#A32D2D" />
@@ -160,7 +179,7 @@ export function WorkerMobileReviewScreen({
         )}
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-          SESSION NOTES
+          {t("review.sessionNotes")}
         </Text>
         {notes.length === 0 ? (
           <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -173,11 +192,13 @@ export function WorkerMobileReviewScreen({
               <WorkerMobileNoteBubble
                 key={note.note_id}
                 note={note}
+                participantName={participantName}
                 taskLabel={taskLabel(note.task_id)}
                 goalTitle={goalTitle(note.task_id)}
                 flag={flag}
                 editable
                 onSave={onSaveNote}
+                onRemove={onRemoveNote}
                 onIncidentReport={flag?.severity === "fail" ? onOpenIncidentReport : undefined}
               />
             );
@@ -188,13 +209,19 @@ export function WorkerMobileReviewScreen({
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <Pressable
           onPress={handleSubmit}
-          disabled={busy}
-          style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: busy ? 0.7 : 1 }]}
+          disabled={busy || pendingIncidentReport}
+          style={[
+            styles.submitBtn,
+            {
+              backgroundColor: colors.primary,
+              opacity: busy || pendingIncidentReport ? 0.5 : 1,
+            },
+          ]}
         >
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>Submit notes</Text>
+            <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>{t("review.submitNotes")}</Text>
           )}
         </Pressable>
       </View>

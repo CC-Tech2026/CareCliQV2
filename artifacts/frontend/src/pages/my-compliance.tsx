@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -12,6 +12,7 @@ const CORAL = "var(--cc-coral)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
+const PAGE_SIZE = 10;
 
 function safeDate(value: string | undefined, translate: (key: string) => string) {
   if (!value) return translate("compliance.notRecorded");
@@ -30,12 +31,41 @@ function badgeClass(status?: string) {
 
 export default function MyCompliance() {
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const listRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { translate } = useAccessibility();
   const { data, isLoading, error } = useOrgQuery(["worker", "my-compliance"], { queryFn: getMyCompliance });
   const complianceDetailQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
     staleTime: 30_000,
   });
+
+  const sessions = data?.sessions || [];
+  const visible = sessions.slice(0, visibleCount);
+  const hasMore = visibleCount < sessions.length;
+
+  const loadMore = useCallback(() => {
+    setVisibleCount((n) => Math.min(n + PAGE_SIZE, sessions.length));
+  }, [sessions.length]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [sessions.length]);
+
+  useEffect(() => {
+    const root = listRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) loadMore();
+      },
+      { root, rootMargin: "80px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, visible.length]);
 
   if (isLoading || complianceDetailQuery.isLoading) {
     return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>{translate("compliance.loading")}</div>;
@@ -98,9 +128,12 @@ export default function MyCompliance() {
             {data?.status.replace("_", " ")}
           </span>
         </div>
-        <div className="space-y-3">
-          {(data?.sessions || []).map((session) => (
-            <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: "#EDE3FC" }}>
+        <div
+          ref={listRef}
+          className="max-h-[min(60vh,560px)] space-y-3 overflow-y-auto"
+        >
+          {visible.map((session) => (
+            <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: BORDER }}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-black capitalize" style={{ color: TEXT }}>{(session.session_type || "session").replace("_", " ")}</p>
@@ -112,6 +145,7 @@ export default function MyCompliance() {
               </div>
             </div>
           ))}
+          {hasMore && <div ref={sentinelRef} className="h-4" aria-hidden />}
         </div>
       </section>
     </div>

@@ -119,12 +119,7 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
     { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
   ],
-  support_worker: [
-    { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
-    { href: "/my-shifts",     label: "My Shifts",  icon: Clock           },
-    { href: "/my-clients",    label: "My Clients", icon: UserRound       },
-    { href: "/my-compliance", label: "Compliance", icon: ShieldCheck     },
-  ],
+  support_worker: [],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
     { href: "/md/executive",  label: "Executive", icon: BarChart2       },

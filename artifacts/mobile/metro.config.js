@@ -1,10 +1,67 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const http = require("http");
+const https = require("https");
 const path = require("path");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
+
+/** Dev-only: proxy browser `/api` → EXPO_PUBLIC_API_URL (avoids CORS). Native apps do not use this. */
+function getApiProxyTarget() {
+  const raw = (
+    process.env.EXPO_PUBLIC_API_URL ||
+    "https://dev-api-carescribe.onrender.com"
+  ).trim();
+  return raw.replace(/\/$/, "");
+}
+
+function proxyApiRequest(req, res, targetBase) {
+  const target = new URL(req.url || "/", `${targetBase}/`);
+  const isHttps = target.protocol === "https:";
+  const lib = isHttps ? https : http;
+  const headers = { ...req.headers, host: target.host };
+  delete headers.connection;
+
+  const proxyReq = lib.request(
+    {
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || (isHttps ? 443 : 80),
+      path: `${target.pathname}${target.search}`,
+      method: req.method,
+      headers,
+    },
+    (proxyRes) => {
+      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+      proxyRes.pipe(res);
+    },
+  );
+
+  proxyReq.on("error", (err) => {
+    console.error("[metro-api-proxy]", err.message);
+    if (!res.headersSent) {
+      res.writeHead(502, { "content-type": "text/plain" });
+    }
+    res.end(`API proxy error: ${err.message}`);
+  });
+
+  req.pipe(proxyReq);
+}
+
+config.server = {
+  ...config.server,
+  enhanceMiddleware: (middleware) => {
+    return (req, res, next) => {
+      const url = req.url || "";
+      if (url === "/api" || url.startsWith("/api/") || url.startsWith("/api?")) {
+        return proxyApiRequest(req, res, getApiProxyTarget());
+      }
+      return middleware(req, res, next);
+    };
+  },
+};
 
 config.watchFolders = [workspaceRoot];
 

@@ -25,7 +25,7 @@ import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
 import { syncSessionNotes, translateNoteToEnglish } from "@/lib/worker-api";
-import { newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
 const LANGUAGE_OPTIONS = [
   { value: "auto", label: "Auto detect" },
@@ -243,6 +243,7 @@ type Props = {
   sessionId?: string | null;
   taskId?: string | null;
   taskLabel?: string;
+  participantName?: string;
   disabled?: boolean;
   onNoteSaved?: (note: SessionNoteRecord) => void;
 };
@@ -251,6 +252,7 @@ export function WorkerMobileComposer({
   sessionId,
   taskId,
   taskLabel,
+  participantName,
   disabled,
   onNoteSaved,
 }: Props) {
@@ -358,7 +360,11 @@ export function WorkerMobileComposer({
       });
       const asset = result.canceled ? null : result.assets[0];
       if (asset) {
-        const name = asset.fileName ?? "attachment";
+        const name = buildAttachmentFileName({
+          participantName,
+          taskTitle: taskLabel,
+          originalName: asset.fileName ?? "attachment.jpg",
+        });
         await saveNote(`[Attachment: ${name}]`, "file", name);
       }
     } catch (err) {
@@ -392,7 +398,11 @@ export function WorkerMobileComposer({
       });
       const asset = result.canceled ? null : result.assets[0];
       if (asset) {
-        const name = asset.fileName ?? "photo.jpg";
+        const name = buildAttachmentFileName({
+          participantName,
+          taskTitle: taskLabel,
+          originalName: asset.fileName ?? "photo.jpg",
+        });
         await saveNote(`[Attachment: ${name}]`, "photo", name);
       }
     } catch (err) {

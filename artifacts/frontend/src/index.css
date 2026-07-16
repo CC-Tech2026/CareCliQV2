@@ -450,7 +450,9 @@
 .dark .bg-\[\#F4EDE6\],
 .dark .bg-\[\#FCFBFF\],
 .dark .bg-\[\#F0EDF8\],
-.dark .bg-\[\#F2EBFD\]     { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[\#F2EBFD\],
+.dark .bg-\[\#F8F6FE\],
+.dark .bg-\[\#FBFAFF\]     { background-color: var(--cc-soft)      !important; }
 .dark .hover\:bg-\[\#F8F6FE\]:hover,
 .dark .hover\:bg-\[\#F4EDE6\]:hover,
 .dark .hover\:bg-\[\#F2EBFD\]:hover { background-color: var(--cc-soft) !important; }
@@ -1135,6 +1137,7 @@ html.high-contrast {
   --cc-coral: #b00020;
   --cc-green: #006400;
   --cc-amber: #8b4500;
+  --cc-amber-tint: #fff8e6;
   --cc-sky: #004080;
   --cc-status-success: #006400;
   --cc-status-success-bg: #e6ffe6;
@@ -1167,6 +1170,7 @@ html.high-contrast.dark {
   --cc-coral: #ff6b9d;
   --cc-green: #66ff99;
   --cc-amber: #ffd966;
+  --cc-amber-tint: #332200;
   --cc-sky: #66ccff;
   --cc-status-success: #66ff99;
   --cc-status-success-bg: #003300;

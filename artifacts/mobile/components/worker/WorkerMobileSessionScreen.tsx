@@ -226,6 +226,9 @@ export function WorkerMobileSessionScreen({
           breakStatus={breakStatus}
           sessionElapsed={sessionElapsed}
           onCheckin={onCheckin}
+          onReportIncident={
+            onOpenIncidentReport ? () => onOpenIncidentReport() : undefined
+          }
           disabled={disabled || busy}
         />
 
@@ -266,6 +269,7 @@ export function WorkerMobileSessionScreen({
                 <WorkerMobileNoteBubble
                   key={note.note_id}
                   note={note}
+                  participantName={participantName}
                   taskLabel={task?.label}
                   goalTitle={task?.goal_title ?? undefined}
                   flag={flag}
@@ -281,6 +285,7 @@ export function WorkerMobileSessionScreen({
         sessionId={sessionId}
         taskId={activeTask?.task_id}
         taskLabel={activeTask?.label}
+        participantName={participantName}
         disabled={disabled || busy || !sessionId}
         onNoteSaved={handleNoteSaved}
       />

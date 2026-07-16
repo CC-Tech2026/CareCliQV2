@@ -43,6 +43,10 @@ const queryClient = new QueryClient({
       retry: 1,
       staleTime: 30_000,
     },
+    mutations: {
+      // Avoid uncaught mutation rejections bubbling as redbox overlays.
+      throwOnError: false,
+    },
   },
 });
 

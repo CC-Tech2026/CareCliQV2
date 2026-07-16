@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
@@ -17,6 +17,7 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
+const PAGE_SIZE = 10;
 
 const INCIDENT_TYPE_KEYS: Record<string, string> = {
   injury: "incidents.type.injury",
@@ -82,6 +83,9 @@ export default function Incidents() {
   const [search,         setSearch        ] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus,   setFilterStatus  ] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const listRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const { data: incidents = [], isLoading } = useOrgQuery<Incident[]>(["incidents"], {
     queryFn: () => listIncidents<Incident[]>(),
@@ -101,6 +105,31 @@ export default function Incidents() {
     }
     return true;
   }), [incidents, filterSeverity, filterStatus, search, translate]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, filterSeverity, filterStatus]);
+
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
+
+  const loadMore = useCallback(() => {
+    setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length));
+  }, [filtered.length]);
+
+  useEffect(() => {
+    const root = listRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) loadMore();
+      },
+      { root, rootMargin: "80px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, visible.length]);
 
   return (
     <div className="space-y-6 pb-10">
@@ -237,8 +266,12 @@ export default function Incidents() {
             )}
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: "#EDE3FC" }}>
-            {filtered.map(incident => {
+          <div
+            ref={listRef}
+            className="divide-y max-h-[min(60vh,560px)] overflow-y-auto"
+            style={{ borderColor: "var(--cc-border)" }}
+          >
+            {visible.map(incident => {
               const sevStyle = SEVERITY_STYLES[incident.severity] ?? SEVERITY_STYLES.medium;
               const stStyle = STATUS_STYLES[incident.status] ?? STATUS_STYLES.reported;
               return (
@@ -261,10 +294,10 @@ export default function Incidents() {
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
                       {incident.participant_name || translate("incidents.noParticipant")}
-                      {" � "}
+                      {" · "}
                       {incidentTypeLabel(incident.incident_type, translate)}
                       {incident.incident_date && (
-                        <> � {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
+                        <> · {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
                       )}
                     </p>
                   </div>
@@ -291,6 +324,7 @@ export default function Incidents() {
                 </button>
               );
             })}
+            {hasMore && <div ref={sentinelRef} className="h-4" aria-hidden />}
           </div>
         )}
       </section>

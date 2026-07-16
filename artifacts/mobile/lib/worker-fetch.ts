@@ -2,6 +2,7 @@ import { getMobileApiBaseUrl } from "@/lib/api-base-url";
 import { readMobileAuthToken } from "@/lib/session";
 
 let lastSuccessfulWorkerFetchAt = 0;
+let unauthorizedHandler: (() => void) | null = null;
 
 export function getLastSuccessfulWorkerFetchAt(): number {
   return lastSuccessfulWorkerFetchAt;
@@ -9,6 +10,11 @@ export function getLastSuccessfulWorkerFetchAt(): number {
 
 export function touchSuccessfulWorkerFetch(): void {
   lastSuccessfulWorkerFetchAt = Date.now();
+}
+
+/** Called once from AuthProvider so expired tokens clear the session instead of crashing. */
+export function setWorkerUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
 }
 
 export class WorkerApiError extends Error {
@@ -40,6 +46,10 @@ function formatApiErrorDetail(detail: unknown, fallback: string): string {
     if (msg) return msg;
   }
   return fallback;
+}
+
+function isAuthEndpoint(path: string): boolean {
+  return path.startsWith("/api/auth/");
 }
 
 export async function workerFetch<T>(
@@ -83,6 +93,9 @@ export async function workerFetch<T>(
       message = formatApiErrorDetail(body.detail, body.message ?? message);
     } catch {
       /* use default */
+    }
+    if (response.status === 401 && !isAuthEndpoint(path)) {
+      unauthorizedHandler?.();
     }
     throw new WorkerApiError(message, response.status);
   }

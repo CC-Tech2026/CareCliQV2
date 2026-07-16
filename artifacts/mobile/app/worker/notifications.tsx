@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef } from "react";
 import {
@@ -16,11 +17,12 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { NotificationListItem } from "@/components/worker/notifications/NotificationListItem";
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { useT } from "@/context/PreferencesContext";
 import {
+  markShiftComplianceCheckinNotificationsRead,
   useDismissNotification,
   useWorkerNotificationsInfinite,
 } from "@/hooks/worker/useWorkerNotifications";
-import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { UserNotification } from "@/lib/worker-api";
 
@@ -46,6 +48,7 @@ export default function WorkerNotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const t = useT();
   const dismiss = useDismissNotification();
   const loadingMoreRef = useRef(false);
@@ -78,11 +81,14 @@ export default function WorkerNotificationsScreen() {
   const handlePress = useCallback(
     (item: UserNotification) => {
       if (item.shift_id) {
+        if (item.event_type === "compliance_checkin") {
+          markShiftComplianceCheckinNotificationsRead(queryClient, item.shift_id);
+        }
         const query = item.event_type === "compliance_checkin" ? "?checkin=pending" : "";
         router.push(`/shift/${item.shift_id}${query}` as never);
       }
     },
-    [router],
+    [queryClient, router],
   );
 
   const handleLoadMore = useCallback(() => {

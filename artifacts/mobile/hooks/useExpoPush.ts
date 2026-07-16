@@ -96,8 +96,16 @@ function navigateFromNotificationData(
   const scheduledCheckinId = coerceString(data.scheduled_checkin_id);
 
   if (notificationType === "compliance_checkin" || scheduledCheckinId) {
-    void import("@/lib/local-checkin-notifications").then(({ clearLocalCheckinNotification }) =>
-      clearLocalCheckinNotification(scheduledCheckinId),
+    void import("@/lib/local-checkin-notifications").then(
+      ({ clearShiftComplianceCheckinNotifications, clearLocalCheckinNotification }) => {
+        if (shiftId) {
+          return clearShiftComplianceCheckinNotifications({
+            shiftId,
+            scheduledCheckinId,
+          });
+        }
+        return clearLocalCheckinNotification(scheduledCheckinId);
+      },
     );
   }
 

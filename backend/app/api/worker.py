@@ -340,7 +340,12 @@ def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
 
 
 async def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
-    """Return rules from the most recently checked scored session."""
+    """Return rules from the newest scored session that has a rule breakdown.
+
+    Sessions can have compliance_score from end_validation / task checks without
+    R1–R12 results. Walk newest-first so the UI does not show all-pending rules
+    while an average score still exists from older engine runs.
+    """
     scored = [
         s for s in sessions
         if _session_compliance_score(s) is not None
@@ -357,21 +362,25 @@ async def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | 
             or ""
         )
 
-    latest = sorted(scored, key=_sort_key, reverse=True)[0]
-    session_id = str(latest.get("id"))
-    insights = _safe_json(latest.get("ai_insights"))
-    rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
-    rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
-    if isinstance(rules, list) and rules:
-        return rules, session_id
+    for session in sorted(scored, key=_sort_key, reverse=True):
+        session_id = str(session.get("id") or "")
+        if not session_id:
+            continue
 
-    logs = await funding_service.get_compliance_audit_logs(session_id)
-    if logs:
-        all_rules = logs[0].get("all_rules")
-        if isinstance(all_rules, list) and all_rules:
-            return all_rules, session_id
+        insights = _safe_json(session.get("ai_insights"))
+        rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
+        rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
+        if isinstance(rules, list) and rules:
+            return rules, session_id
 
-    return [], session_id
+        logs = await funding_service.get_compliance_audit_logs(session_id)
+        if logs:
+            all_rules = logs[0].get("all_rules")
+            if isinstance(all_rules, list) and all_rules:
+                return all_rules, session_id
+
+    latest_id = str(sorted(scored, key=_sort_key, reverse=True)[0].get("id") or "") or None
+    return [], latest_id
 
 
 def _limited_participant(participant: dict) -> dict:

@@ -22,6 +22,16 @@ function adaptApiUrlForPlatform(url: string): string {
 
 /** API base URL for mobile → backend (Docker/local or production). */
 export function getMobileApiBaseUrl(): string {
+  // Browser CORS blocks cross-origin calls to Render/local API.
+  // In web __DEV__, same-origin so Metro can proxy /api (metro.config.js).
+  // Android/iOS keep the real EXPO_PUBLIC_API_URL — unchanged.
+  if (Platform.OS === "web" && typeof __DEV__ !== "undefined" && __DEV__) {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return window.location.origin;
+    }
+    return "";
+  }
+
   const explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (explicit) {
     return adaptApiUrlForPlatform(stripTrailingSlash(explicit));

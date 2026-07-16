@@ -347,6 +347,12 @@ export function syncSessionNotes(sessionId: string, notes: SessionNoteRecord[]) 
   );
 }
 
+export function deleteSessionNote(sessionId: string, noteId: string) {
+  return workerFetch<void>(`/api/worker/sessions/${sessionId}/notes/${noteId}`, {
+    method: "DELETE",
+  });
+}
+
 export function submitShiftSignature(
   shiftId: string,
   body: {
@@ -596,6 +602,12 @@ export function fetchNotifications(params?: {
   return workerFetch<{ notifications: UserNotification[]; count: number }>(
     `/api/worker/notifications?${q}`,
   );
+}
+
+export function markNotificationRead(id: string) {
+  return workerFetch<{ ok: boolean }>(`/api/worker/notifications/${id}/read`, {
+    method: "POST",
+  });
 }
 
 export function dismissNotification(id: string) {

@@ -327,3 +327,34 @@ export function formatMobileShiftDuration(
     ) ?? "—"
   );
 }
+
+function slugFilePart(value: string, fallback = "unknown"): string {
+  const cleaned = value
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "")
+    .slice(0, 48);
+  return cleaned || fallback;
+}
+
+function extensionFromName(originalName?: string | null, fallback = "jpg"): string {
+  const match = originalName?.trim().match(/\.([a-zA-Z0-9]+)$/);
+  return (match?.[1] ?? fallback).toLowerCase();
+}
+
+/** Builds attachment filenames as patientname_tasktitle_datetime.ext */
+export function buildAttachmentFileName(options: {
+  participantName?: string | null;
+  taskTitle?: string | null;
+  date?: Date | string | null;
+  originalName?: string | null;
+}): string {
+  const patient = slugFilePart(options.participantName ?? "", "participant");
+  const task = slugFilePart(options.taskTitle ?? "", "task");
+  const d = options.date ? new Date(options.date) : new Date();
+  const safeDate = Number.isNaN(d.getTime()) ? new Date() : d;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const datetime = `${safeDate.getFullYear()}${pad(safeDate.getMonth() + 1)}${pad(safeDate.getDate())}-${pad(safeDate.getHours())}${pad(safeDate.getMinutes())}${pad(safeDate.getSeconds())}`;
+  const ext = extensionFromName(options.originalName);
+  return `${patient}_${task}_${datetime}.${ext}`;
+}
+

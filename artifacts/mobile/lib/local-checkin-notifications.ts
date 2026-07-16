@@ -9,6 +9,9 @@ const CHANNEL_ID = "safety-alerts";
 const FIRED_IDS_KEY = "ccq_checkin_local_fired_ids";
 const EXACT_ALARM_PROMPTED_KEY = "ccq_exact_alarm_prompted";
 
+/** Sync in-memory set so clear + sync can't race via AsyncStorage. */
+const firedMemory = new Set<string>();
+
 type NotificationsModule = typeof import("expo-notifications");
 
 function isExpoGo(): boolean {
@@ -36,24 +39,40 @@ function notifId(scheduledCheckinId: string): string {
 async function readFiredIds(): Promise<Set<string>> {
   try {
     const raw = await AsyncStorage.getItem(FIRED_IDS_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        for (const v of parsed) {
+          if (typeof v === "string") firedMemory.add(v);
+        }
+      }
+    }
   } catch {
-    return new Set();
+    /* keep memory set */
   }
+  return new Set(firedMemory);
 }
 
 async function writeFiredIds(ids: Set<string>): Promise<void> {
-  const trimmed = [...ids].slice(-80);
+  for (const id of ids) firedMemory.add(id);
+  const trimmed = [...firedMemory].slice(-80);
   await AsyncStorage.setItem(FIRED_IDS_KEY, JSON.stringify(trimmed));
 }
 
 async function markFired(scheduledCheckinId: string): Promise<void> {
+  firedMemory.add(scheduledCheckinId);
   const ids = await readFiredIds();
   ids.add(scheduledCheckinId);
   await writeFiredIds(ids);
+}
+
+/** Synchronous so callers can block re-schedule before async IO finishes. */
+export function markLocalCheckinIdsFiredSync(
+  scheduledCheckinIds: Array<string | null | undefined>,
+): void {
+  for (const id of scheduledCheckinIds) {
+    if (id) firedMemory.add(id);
+  }
 }
 
 async function ensureAndroidChannel(Notifications: NotificationsModule): Promise<void> {
@@ -134,25 +153,148 @@ function notificationContent(
   };
 }
 
+function coerceDataString(data: Record<string, unknown> | undefined, key: string): string | null {
+  const value = data?.[key];
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function isComplianceCheckinPresented(item: {
+  request: { identifier: string; content: { data?: unknown; title?: string | null } };
+}): boolean {
+  const identifier = item.request.identifier ?? "";
+  if (identifier.startsWith(CHECKIN_NOTIF_PREFIX)) return true;
+  const raw = item.request.content.data;
+  const data =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : undefined;
+  const type = coerceDataString(data, "type");
+  if (type === "compliance_checkin") return true;
+  const title = item.request.content.title ?? "";
+  return title === "Compliance Check-in Required";
+}
+
+/** Dismiss every compliance check-in currently in the system tray (local + FCM). */
+export async function dismissPresentedComplianceCheckinNotifications(
+  shiftId?: string | null,
+): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
+  let presented: Awaited<ReturnType<NotificationsModule["getPresentedNotificationsAsync"]>> = [];
+  try {
+    presented = await Notifications.getPresentedNotificationsAsync();
+  } catch {
+    return;
+  }
+
+  for (const item of presented) {
+    if (!isComplianceCheckinPresented(item)) continue;
+
+    const raw = item.request.content.data;
+    const data =
+      raw && typeof raw === "object" && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : undefined;
+    const itemShiftId = coerceDataString(data, "shift_id");
+    if (shiftId && itemShiftId && itemShiftId !== shiftId) continue;
+
+    const scheduledId =
+      coerceDataString(data, "scheduled_checkin_id") ??
+      (item.request.identifier.startsWith(CHECKIN_NOTIF_PREFIX)
+        ? item.request.identifier.slice(CHECKIN_NOTIF_PREFIX.length)
+        : null);
+
+    try {
+      await Notifications.dismissNotificationAsync(item.request.identifier);
+    } catch {
+      /* already gone */
+    }
+    if (scheduledId) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(notifId(scheduledId));
+      } catch {
+        /* ignore */
+      }
+      await markFired(scheduledId);
+    }
+  }
+}
+
 /** Cancel + dismiss a check-in notification after the worker opens or completes it. */
 export async function clearLocalCheckinNotification(
   scheduledCheckinId: string | null | undefined,
+  options?: { shiftId?: string | null },
 ): Promise<void> {
-  if (!scheduledCheckinId) return;
   const Notifications = await loadNotifications();
-  if (!Notifications) return;
-  const id = notifId(scheduledCheckinId);
-  try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-  } catch {
-    /* already gone */
+  if (!Notifications) {
+    if (scheduledCheckinId) await markFired(scheduledCheckinId);
+    return;
   }
-  try {
-    await Notifications.dismissNotificationAsync(id);
-  } catch {
-    /* already gone */
+
+  if (scheduledCheckinId) {
+    const id = notifId(scheduledCheckinId);
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      /* already gone */
+    }
+    try {
+      await Notifications.dismissNotificationAsync(id);
+    } catch {
+      /* already gone */
+    }
+    await markFired(scheduledCheckinId);
   }
-  await markFired(scheduledCheckinId);
+
+  // FCM / sticky tray entries often use a different identifier — clear by content.
+  await dismissPresentedComplianceCheckinNotifications(options?.shiftId);
+}
+
+/**
+ * After check-in is opened or submitted: clear tray, cancel schedules, and mark
+ * every known upcoming id fired so sync cannot re-post the same alarm.
+ */
+export async function clearShiftComplianceCheckinNotifications(params: {
+  shiftId: string;
+  scheduledCheckinId?: string | null;
+  upcomingCheckinIds?: Array<string | null | undefined>;
+}): Promise<void> {
+  const ids = new Set<string>();
+  if (params.scheduledCheckinId) ids.add(params.scheduledCheckinId);
+  for (const id of params.upcomingCheckinIds ?? []) {
+    if (id) ids.add(id);
+  }
+
+  // Block sync re-posts immediately (before AsyncStorage / dismiss finish).
+  markLocalCheckinIdsFiredSync([...ids]);
+
+  const Notifications = await loadNotifications();
+  if (Notifications) {
+    for (const id of ids) {
+      const localId = notifId(id);
+      try {
+        await Notifications.cancelScheduledNotificationAsync(localId);
+      } catch {
+        /* already gone */
+      }
+      try {
+        await Notifications.dismissNotificationAsync(localId);
+      } catch {
+        /* already gone */
+      }
+      await markFired(id);
+    }
+  } else {
+    for (const id of ids) {
+      await markFired(id);
+    }
+  }
+
+  // Sweep tray for FCM / sticky entries that use a different identifier.
+  await dismissPresentedComplianceCheckinNotifications(params.shiftId);
 }
 
 /** Mark a check-in alarm as already delivered so sync won't recreate it. */
@@ -241,7 +383,13 @@ export async function syncLocalCheckinNotifications(params: {
 
     // Already due / prompted — FCM often misses Android background; fire a local
     // tray notification once so the worker still sees it when the app is backgrounded.
-    if (item.status === "prompted" || item.status === "pending") {
+    // Skip when the window is no longer actionable (already checked in / cooldown).
+    const stillDue =
+      Boolean(checkinStatus?.can_submit_checkin) || Boolean(checkinStatus?.checkin_overdue);
+    if (
+      stillDue &&
+      (item.status === "prompted" || item.status === "pending" || item.status === "due")
+    ) {
       if (existingIds.has(id)) {
         try {
           await Notifications.cancelScheduledNotificationAsync(id);
