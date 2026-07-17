@@ -1,4 +1,6 @@
-import { WorkerApiError, workerFetch } from "@/lib/worker-fetch";
+import { Platform } from "react-native";
+
+import { workerFetch } from "@/lib/worker-fetch";
 
 export type ShiftVisualState = "scheduled" | "clocked_in" | "session_active" | "completed";
 
@@ -364,54 +366,28 @@ export async function transcribeSessionAudio(sessionId: string, uri: string) {
             : "audio/mp4";
   const filename = `voice-note.${ext}`;
 
-  async function buildFormData(fieldName: string): Promise<FormData> {
-    const formData = new FormData();
-    // React Native FormData accepts { uri, name, type }; web needs a real Blob.
-    if (typeof window !== "undefined" && typeof fetch === "function") {
-      try {
-        const res = await fetch(uri);
-        const blob = await res.blob();
-        formData.append(fieldName, blob, filename);
-        return formData;
-      } catch {
-        /* fall through to RN-style append */
-      }
-    }
+  const formData = new FormData();
+  // Native RN FormData needs { uri, name, type }. Blob only works on web —
+  // using Blob on Android causes "Network request failed".
+  if (Platform.OS === "web") {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    formData.append("audio_file", blob, filename);
+  } else {
     formData.append(
-      fieldName,
+      "audio_file",
       {
         uri,
         name: filename,
         type: mime,
       } as unknown as Blob,
     );
-    return formData;
   }
 
-  try {
-    const formData = await buildFormData("audio_file");
-    return await workerFetch<{ transcript: string }>(
-      `/api/worker/sessions/${sessionId}/transcribe`,
-      { method: "POST", body: formData },
-    );
-  } catch (err) {
-    // Prefer the existing sessions Whisper endpoint when the worker route is
-    // missing or Whisper fails on that path.
-    if (!(err instanceof WorkerApiError)) {
-      throw err;
-    }
-  }
-
-  const fallback = await buildFormData("file");
-  const result = await workerFetch<{ transcription?: string; transcript?: string }>(
-    `/api/sessions/${sessionId}/transcribe-audio`,
-    { method: "POST", body: fallback },
+  return workerFetch<{ transcript: string }>(
+    `/api/worker/sessions/${sessionId}/transcribe`,
+    { method: "POST", body: formData },
   );
-  const transcript = String(result.transcript ?? result.transcription ?? "").trim();
-  if (!transcript) {
-    throw new WorkerApiError("Transcription failed. Please try again.", 500);
-  }
-  return { transcript };
 }
 
 export function deleteSessionNote(sessionId: string, noteId: string) {
