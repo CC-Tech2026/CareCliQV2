@@ -1261,14 +1261,10 @@ async def _generate_tasks_from_templates(
     org_id: str,
 ):
     """
-    Auto-generate task instances for a shift by finding matching active templates.
-    
-    Matches templates by:
-    - participant_id
-    - primary_shift_type or additional_shift_types
-    - recurrence rules (one_off, recurring, specific_weekdays)
-    
-    Returns count of task instances created.
+    Auto-generate participant_tasks from matching templates and link via shift_tasks.
+
+    CARECLIQV2-330/331: participant_tasks is the definition (no shift_id);
+    shift_tasks is the shift association. Returns list of created task ids.
     """
     try:
         # Get active task templates for this participant
@@ -1283,7 +1279,7 @@ async def _generate_tasks_from_templates(
         templates = templates_resp.data or []
         
         if not templates:
-            return 0
+            return []
         
         # Filter templates that match this shift type
         matching_templates = []
@@ -1295,7 +1291,7 @@ async def _generate_tasks_from_templates(
                 matching_templates.append(template)
         
         if not matching_templates:
-            return 0
+            return []
         
         # Check recurrence rules for each matching template
         tasks_to_create = []
@@ -1324,32 +1320,56 @@ async def _generate_tasks_from_templates(
                 tasks_to_create.append({
                     "participant_id": participant_id,
                     "organization_id": org_id,
-                    "shift_id": shift_id,
                     "name": template.get("name"),
                     "description": template.get("description"),
                     "goal_id": template.get("linked_goal_id"),
                     "status": "pending",
                     "is_mandatory": template.get("is_mandatory", False),
+                    "evidence_required": template.get("evidence_required") or "none",
                     "created_at": now,
                     "updated_at": now,
                 })
         
-        # Create all generated task instances
+        # Create definitions, then link via shift_tasks (normalized).
         if tasks_to_create:
             try:
                 result = supabase.table("participant_tasks").insert(tasks_to_create).execute()
-                created_count = len(result.data or [])
-                logger.info(f"Auto-generated {created_count} tasks for shift {shift_id}")
-                return created_count
+                created = result.data or []
+                created_ids = [str(row["id"]) for row in created if row.get("id")]
+                if created_ids:
+                    shift_task_records = [
+                        {
+                            "shift_id": shift_id,
+                            "task_id": task_id,
+                            "organization_id": org_id,
+                            "sort_order": idx,
+                            "completed": False,
+                        }
+                        for idx, task_id in enumerate(created_ids, start=1)
+                    ]
+                    try:
+                        supabase.table("shift_tasks").insert(shift_task_records).execute()
+                    except Exception as link_exc:
+                        logger.warning(
+                            "Failed to link auto-generated tasks for shift %s: %s",
+                            shift_id,
+                            link_exc,
+                        )
+                logger.info(
+                    "Auto-generated %s tasks for shift %s",
+                    len(created_ids),
+                    shift_id,
+                )
+                return created_ids
             except Exception as create_exc:
                 logger.warning(f"Failed to auto-generate tasks for shift {shift_id}: {create_exc}")
-                return 0
+                return []
         
-        return 0
+        return []
     
     except Exception as exc:
         logger.warning(f"Task generation failed: {exc}")
-        return 0
+        return []
 
 
 @router.post("/shifts")
@@ -1493,10 +1513,11 @@ async def assign_shift(
         
         shift = result.data[0]
         
-        # Auto-generate task instances from matching templates
+        # Auto-generate participant_tasks from matching templates (+ shift_tasks links)
+        generated_task_ids: list[str] = []
         try:
             shift_date = scheduled_start.date()
-            tasks_generated = await _generate_tasks_from_templates(
+            generated_task_ids = await _generate_tasks_from_templates(
                 supabase,
                 body.participant_id,
                 shift_id,
@@ -1504,24 +1525,42 @@ async def assign_shift(
                 shift_date,
                 org_id,
             )
-            logger.info(f"Shift {shift_id}: generated {tasks_generated} task instances from templates")
+            logger.info(
+                "Shift %s: generated %s task definitions from templates",
+                shift_id,
+                len(generated_task_ids),
+            )
         except Exception as gen_exc:
             logger.warning(f"Task auto-generation for shift {shift_id} failed: {gen_exc}")
         
-        # Save selected tasks for this shift
+        # Save coordinator-selected tasks for this shift (dedupe vs auto-generated)
+        shift_tasks_warning = None
         if body.selected_task_ids:
             try:
-                shift_task_records = [
-                    {
-                        "shift_id": shift_id,
-                        "task_id": task_id,
-                        "organization_id": org_id,
-                    }
-                    for task_id in body.selected_task_ids
-                ]
-                supabase.table("shift_tasks").insert(shift_task_records).execute()
+                selected_ids = []
+                seen = set(generated_task_ids)
+                for task_id in body.selected_task_ids:
+                    tid = str(task_id)
+                    if tid in seen:
+                        continue
+                    seen.add(tid)
+                    selected_ids.append(tid)
+                if selected_ids:
+                    base_order = len(generated_task_ids)
+                    shift_task_records = [
+                        {
+                            "shift_id": shift_id,
+                            "task_id": task_id,
+                            "organization_id": org_id,
+                            "sort_order": base_order + idx,
+                            "completed": False,
+                        }
+                        for idx, task_id in enumerate(selected_ids, start=1)
+                    ]
+                    supabase.table("shift_tasks").insert(shift_task_records).execute()
             except Exception as task_exc:
                 logger.warning(f"Failed to save shift tasks: {task_exc}")
+                shift_tasks_warning = f"Failed to save selected shift tasks: {task_exc}"
         
         # Send notification to worker about new shift
         try:
@@ -1537,7 +1576,12 @@ async def assign_shift(
             "shift_id": shift_id,
             "shift": shift,
             "credential_status": cred_status,
-            "message": "Shift assigned successfully"
+            "message": "Shift assigned successfully",
+            "tasks_linked": len(generated_task_ids) + (
+                len([t for t in (body.selected_task_ids or []) if str(t) not in set(generated_task_ids)])
+                if body.selected_task_ids else 0
+            ),
+            **({"warning": shift_tasks_warning} if shift_tasks_warning else {}),
         }
     
     except HTTPException:

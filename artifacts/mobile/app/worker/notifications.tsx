@@ -24,6 +24,7 @@ import {
   useWorkerNotificationsInfinite,
 } from "@/hooks/worker/useWorkerNotifications";
 import { useColors } from "@/hooks/useColors";
+import { goBackToHome } from "@/lib/go-back";
 import type { UserNotification } from "@/lib/worker-api";
 
 type ListRow =
@@ -111,7 +112,11 @@ export default function WorkerNotificationsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.notifications")} showBack />
+      <WorkerMobileHeader
+        title={t("nav.notifications")}
+        showBack
+        onBack={() => goBackToHome(router)}
+      />
 
       <View style={[styles.subheader, { borderBottomColor: colors.border }]}>
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>

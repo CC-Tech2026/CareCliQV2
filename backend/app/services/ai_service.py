@@ -7,9 +7,12 @@ to be NDIS-compliant, person-centred, and audit-ready.
 from openai import OpenAI
 from typing import Any
 from ..core.config import settings
+import asyncio
+import base64
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 import logging
 
@@ -1257,25 +1260,137 @@ Respond with exactly:
 
 
 # ---------------------------------------------------------------------------
-# Audio transcription
+# Audio transcription — OpenAI Whisper, then Google Cloud Speech-to-Text
 # ---------------------------------------------------------------------------
 
-async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
+_GOOGLE_SPEECH_RECOGNIZE_URL_DEFAULT = "https://speech.googleapis.com/v1/speech:recognize"
+
+_SPEECH_ENCODING_BY_EXT = {
+    ".webm": "WEBM_OPUS",
+    ".ogg": "OGG_OPUS",
+    ".opus": "OGG_OPUS",
+    ".mp3": "MP3",
+    ".flac": "FLAC",
+    ".wav": "LINEAR16",
+}
+
+
+def _google_speech_api_key() -> str:
+    """Reuse the same GCP API key as Translation unless a Speech-specific key is set."""
+    return (
+        (settings.google_cloud_speech_api_key or "").strip()
+        or settings.google_cloud_translation_api_key.strip()
+    )
+
+
+def _google_speech_recognize_url() -> str:
+    """Resolve recognize endpoint; ignore Discovery document URLs from .env mistakes."""
+    raw = (settings.google_speech_to_text_url or "").strip()
+    if not raw or "$discovery" in raw or "discovery/rest" in raw:
+        return _GOOGLE_SPEECH_RECOGNIZE_URL_DEFAULT
+    return raw.rstrip("?")
+
+
+def _speech_encoding_for_filename(filename: str) -> str | None:
+    ext = os.path.splitext(filename or "")[1].lower()
+    return _SPEECH_ENCODING_BY_EXT.get(ext)
+
+
+def _transcribe_openai_whisper_sync(audio_bytes: bytes, filename: str) -> str:
     import tempfile
-    import os as _os
-    with tempfile.NamedTemporaryFile(suffix=_os.path.splitext(filename)[1], delete=False) as f:
+
+    suffix = os.path.splitext(filename or "audio.webm")[1] or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio_bytes)
         temp_path = f.name
-
     try:
         with open(temp_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
             )
-        return transcript.text
+        return (transcript.text or "").strip()
     finally:
-        _os.unlink(temp_path)
+        os.unlink(temp_path)
+
+
+def _transcribe_google_speech_sync(audio_bytes: bytes, filename: str) -> str:
+    """Speech-to-Text v1 REST — same GCP API key style as Cloud Translation."""
+    api_key = _google_speech_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_CLOUD_TRANSLATION_API_KEY (or GOOGLE_CLOUD_SPEECH_API_KEY) not configured"
+        )
+    if not audio_bytes:
+        raise RuntimeError("Audio payload is empty")
+
+    config: dict[str, Any] = {
+        "languageCode": "en-AU",
+        "alternativeLanguageCodes": ["en-US", "fil-PH", "tl"],
+        "enableAutomaticPunctuation": True,
+        "model": "latest_long",
+    }
+    encoding = _speech_encoding_for_filename(filename)
+    if encoding:
+        config["encoding"] = encoding
+
+    payload = json.dumps(
+        {
+            "config": config,
+            "audio": {"content": base64.b64encode(audio_bytes).decode("ascii")},
+        }
+    ).encode()
+    req = urllib.request.Request(
+        f"{_google_speech_recognize_url()}?key={api_key}",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"Google Speech-to-Text HTTP {exc.code}: {detail}") from exc
+
+    chunks: list[str] = []
+    for result in data.get("results") or []:
+        alts = result.get("alternatives") or []
+        if not alts:
+            continue
+        text = (alts[0].get("transcript") or "").strip()
+        if text:
+            chunks.append(text)
+    transcript = " ".join(chunks).strip()
+    if not transcript:
+        raise RuntimeError("Google Speech-to-Text returned empty transcript")
+    return transcript
+
+
+async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
+    """Transcribe audio: OpenAI Whisper first, Google Cloud Speech-to-Text on failure."""
+    openai_error: Exception | None = None
+    try:
+        text = await asyncio.to_thread(_transcribe_openai_whisper_sync, audio_bytes, filename)
+        if text:
+            return text
+        openai_error = RuntimeError("OpenAI Whisper returned empty transcript")
+        logger.warning("%s — trying Google Speech-to-Text", openai_error)
+    except Exception as exc:
+        openai_error = exc
+        logger.warning("OpenAI Whisper transcription failed, trying Google Speech-to-Text: %s", exc)
+
+    try:
+        text = await asyncio.to_thread(_transcribe_google_speech_sync, audio_bytes, filename)
+        logger.info("Transcription succeeded via Google Cloud Speech-to-Text fallback")
+        return text
+    except Exception as google_exc:
+        logger.error("Google Speech-to-Text fallback failed: %s", google_exc)
+        if openai_error is not None:
+            raise RuntimeError(
+                f"Transcription failed (OpenAI: {openai_error}; Google: {google_exc})"
+            ) from google_exc
+        raise
 
 
 # ---------------------------------------------------------------------------

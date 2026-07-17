@@ -29,6 +29,31 @@ import {
   readBiometricCredentials,
 } from "@/lib/biometric-auth";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
+import { WorkerApiError } from "@/lib/worker-fetch";
+
+const LOGIN_NETWORK_MAX_ATTEMPTS = 3;
+
+function isNetworkLoginError(err: unknown): boolean {
+  if (err instanceof WorkerApiError && err.status === 0) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /network request failed|failed to fetch|network error|timed out|econnrefused|enotfound/i.test(msg);
+}
+
+async function withNetworkRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= LOGIN_NETWORK_MAX_ATTEMPTS; i++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      lastErr = err;
+      if (!isNetworkLoginError(err) || i >= LOGIN_NETWORK_MAX_ATTEMPTS) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400 * i));
+    }
+  }
+  throw lastErr;
+}
 
 function AuthField({
   label,
@@ -146,6 +171,21 @@ export default function LoginScreen() {
     router.replace("/(tabs)" as never);
   };
 
+  const showLoginError = (err: unknown) => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    if (isNetworkLoginError(err)) {
+      Alert.alert(
+        t("auth.login.error.signInFailed"),
+        t("auth.login.error.networkContactAdmin"),
+      );
+      setPasswordError(null);
+      return;
+    }
+    const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
+    Alert.alert(t("auth.login.error.signInFailed"), msg);
+    setPasswordError(null);
+  };
+
   const handleSignIn = async () => {
     const idErr = validateLoginIdentifier(identifier);
     const pwdErr = !password.trim() ? t("auth.login.error.passwordRequired") : null;
@@ -154,10 +194,13 @@ export default function LoginScreen() {
     if (idErr || pwdErr) return;
 
     setBusy(true);
+    setPasswordError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const result = await login(identifier.trim(), password, rememberDevice);
+      const result = await withNetworkRetry(() =>
+        login(identifier.trim(), password, rememberDevice),
+      );
       if (result.status === "mfa_required") {
         setPendingCreds({ identifier: identifier.trim(), password });
         setMfaChallenge(result.challengeToken);
@@ -167,9 +210,7 @@ export default function LoginScreen() {
       }
       finishAuthenticated();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
-      setPasswordError(msg);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showLoginError(err);
     } finally {
       setBusy(false);
     }
@@ -205,17 +246,19 @@ export default function LoginScreen() {
         t("auth.login.biometricPrompt", { method }),
       );
       if (!ok) {
-        setPasswordError(t("auth.login.biometricCancelled"));
+        Alert.alert(t("auth.login.error.signInFailed"), t("auth.login.biometricCancelled"));
         setBusy(false);
         return;
       }
       const creds = await readBiometricCredentials();
       if (!creds) {
-        setPasswordError(t("auth.login.biometricMissingCreds"));
+        Alert.alert(t("auth.login.error.signInFailed"), t("auth.login.biometricMissingCreds"));
         setBusy(false);
         return;
       }
-      const result = await login(creds.identifier, creds.password, true);
+      const result = await withNetworkRetry(() =>
+        login(creds.identifier, creds.password, true),
+      );
       if (result.status === "mfa_required") {
         setPendingCreds(creds);
         setIdentifier(creds.identifier);
@@ -227,9 +270,7 @@ export default function LoginScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       finishAuthenticated();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
-      setPasswordError(msg);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showLoginError(err);
     } finally {
       setBusy(false);
     }

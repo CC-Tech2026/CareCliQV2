@@ -22,6 +22,9 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -30,20 +33,15 @@ const PLUM  = "var(--cc-plum)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT  = "#F4EDE6";
+const SOFT  = "var(--cc-soft)";
+const SURFACE = "var(--cc-surface)";
+const CARD_SHADOW = "var(--cc-card-shadow)";
 
 function complianceColour(score: number | null | undefined): string {
   if (score == null) return MUTED;
-  if (score >= 85) return "#16A34A";
-  if (score >= 60) return "#D97706";
-  return "#DC2626";
-}
-
-function complianceBg(score: number | null | undefined): string {
-  if (score == null) return "#F5F5F5";
-  if (score >= 85) return "#DCFCE7";
-  if (score >= 60) return "#FEF3C7";
-  return "#FEE2E2";
+  if (score >= 85) return "var(--cc-status-success)";
+  if (score >= 60) return "var(--cc-status-warning)";
+  return "var(--cc-status-danger)";
 }
 
 function roleLabel(role?: string) {
@@ -237,7 +235,7 @@ export default function Team() {
               <div className="grid lg:grid-cols-[1fr_220px] gap-5 items-start">
 
                 {/* LEFT — worker table */}
-                <div className="rounded-xl border overflow-x-auto" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
+                <div className="rounded-xl border overflow-x-auto" style={{ borderColor: BORDER, background: SURFACE }}>
                   <table className="w-full">
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${BORDER}`, background: SOFT }}>
@@ -254,7 +252,10 @@ export default function Team() {
                       {workers.map((w) => {
                         const summary = getCredentialSummary(w.id);
                         return (
-                          <tr key={w.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={w.id} className="transition-colors" style={{ background: "transparent" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = SOFT; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          >
                             <td className="px-5 py-3.5">
                               <p className="font-bold text-sm" style={{ color: TEXT }}>{w.full_name}</p>
                               {summary.workerAlerts.length > 0 && (
@@ -290,8 +291,8 @@ export default function Team() {
                               <span
                                 className="text-xs font-bold px-2 py-1 rounded-full"
                                 style={{
-                                  background: w.is_active !== false ? "#DCFCE7" : "#FEE2E2",
-                                  color: w.is_active !== false ? "#16A34A" : "#DC2626",
+                                  background: w.is_active !== false ? "var(--cc-status-success-bg)" : "var(--cc-status-danger-bg)",
+                                  color: w.is_active !== false ? "var(--cc-status-success)" : "var(--cc-status-danger)",
                                 }}
                               >
                                 {w.is_active !== false ? translate("team.status.active") : translate("team.status.inactive")}
@@ -310,11 +311,11 @@ export default function Team() {
 
                   {/* Stat tiles */}
                   {[
-                    { labelKey: "team.stat.activeWorkers",   value: activeCount,       color: "#16A34A", bg: "rgba(22,163,74,0.06)"  },
-                    { labelKey: "team.stat.sessionsThisWeek", value: weekSessions,      color: TEXT,      bg: "rgba(26,26,46,0.04)"  },
+                    { labelKey: "team.stat.activeWorkers",   value: activeCount,       color: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)"  },
+                    { labelKey: "team.stat.sessionsThisWeek", value: weekSessions,      color: TEXT,      bg: SOFT  },
                     { labelKey: "team.stat.avgCompliance",   value: avgCompliance != null ? `${avgCompliance}%` : translate("common.emDash"),
                       color: avgCompliance != null ? complianceColour(avgCompliance) : MUTED,
-                      bg: "rgba(55,48,163,0.04)" },
+                      bg: SOFT },
                   ].map(({ labelKey, value, color, bg }) => (
                     <div key={labelKey} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: bg }}>
                       <span className="text-[11px] font-medium" style={{ color: MUTED }}>{translate(labelKey)}</span>
@@ -324,10 +325,10 @@ export default function Team() {
 
                   {/* Credential alert callout */}
                   {credAlertCount > 0 && (
-                    <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)" }}>
+                    <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: "var(--cc-status-warning-bg)", border: `1px solid ${BORDER}` }}>
                       <div className="flex items-center gap-1.5">
-                        <AlertTriangle size={13} style={{ color: "#D97706" }} />
-                        <p className="text-[11px] font-black" style={{ color: "#D97706" }}>
+                        <AlertTriangle size={13} style={{ color: "var(--cc-status-warning)" }} />
+                        <p className="text-[11px] font-black" style={{ color: "var(--cc-status-warning)" }}>
                           {translateParams(credAlertCount === 1 ? "team.credentialsExpiring" : "team.credentialsExpiringPlural", { count: String(credAlertCount) })}
                         </p>
                       </div>
@@ -349,7 +350,7 @@ export default function Team() {
             )}
 
             {!stats.isLoading && workers.length === 0 && (
-              <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="rounded-2xl p-10 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
                 <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
                 <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.empty.overview")}</p>
               </div>
@@ -365,15 +366,15 @@ export default function Team() {
           {workers.map((w) => (
             <div
               key={w.id}
-              className="rounded-2xl bg-white p-5"
-              style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}
+              className="rounded-2xl p-5"
+              style={{ background: SURFACE, boxShadow: CARD_SHADOW }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 {/* Identity */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-sm font-black text-white"
-                    style={{ background: "var(--cc-text)" }}
+                    className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-sm font-black"
+                    style={{ background: PLUM, color: "#fff" }}
                   >
                     {(w.full_name || "?").charAt(0).toUpperCase()}
                   </div>
@@ -452,7 +453,7 @@ export default function Team() {
           ))}
 
           {!stats.isLoading && workers.length === 0 && (
-            <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl p-10 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
               <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
               <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.empty.management")}</p>
             </div>
@@ -460,22 +461,33 @@ export default function Team() {
         </div>
       )}
 
-      {inviteOpen && (
-        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-black flex items-center gap-2" style={{ color: PLUM }}>
-              <UserPlus size={18} /> {translate("team.invite.title")}
-            </h3>
-            <Button variant="outline" size="sm" onClick={() => setInviteOpen(false)}>{translate("common.close")}</Button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open);
+          if (!open) {
+            setInviteEmail("");
+            setInviteRole("support_worker");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+              <UserPlus size={18} style={{ color: PLUM }} /> {translate("team.invite.title")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.invite.email")}</label>
               <Input
                 type="email"
                 placeholder={translate("team.invite.emailPlaceholder")}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inviteEmail.trim() && !inviteSending) handleInvite();
+                }}
               />
             </div>
             <div className="space-y-1.5">
@@ -491,7 +503,7 @@ export default function Team() {
               </Select>
             </div>
           </div>
-          <div className="flex justify-end gap-2">
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.cancel")}</Button>
             <Button
               variant="navy"
@@ -500,14 +512,14 @@ export default function Team() {
             >
               {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
             </Button>
-          </div>
-        </section>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {deactivateTarget && (
-        <section className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-3">
-          <h3 className="text-base font-black text-red-700">{translateParams("team.deactivate.title", { name: deactivateTarget.full_name })}</h3>
-          <p className="text-sm text-red-700">
+        <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>
+          <h3 className="text-base font-black" style={{ color: "var(--cc-status-danger)" }}>{translateParams("team.deactivate.title", { name: deactivateTarget.full_name })}</h3>
+          <p className="text-sm" style={{ color: "var(--cc-status-danger)" }}>
             {translate("team.deactivate.body")}
           </p>
           <div className="flex justify-end gap-2">
@@ -524,7 +536,7 @@ export default function Team() {
       )}
 
       {assignWorker && (
-        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl p-5 space-y-4" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black" style={{ color: PLUM }}>
               {translateParams("team.assign.title", { name: assignWorker.full_name })}
@@ -567,41 +579,46 @@ export default function Team() {
                 <label className="text-xs font-semibold uppercase" style={{ color: MUTED }}>{translate("team.shifts.selectWorker")}</label>
                 <p className="text-[10px] mt-1" style={{ color: MUTED }}>{translate("team.shifts.selectWorkerHint")}</p>
               </div>
-              <div className="flex-1 overflow-y-auto space-y-2 border rounded-xl p-3" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
-                {workers.map((w) => (
+              <div className="flex-1 overflow-y-auto space-y-2 border rounded-xl p-3" style={{ borderColor: BORDER, background: SURFACE }}>
+                {workers.map((w) => {
+                  const selected = selectedWorkerForShift?.id === w.id;
+                  return (
                   <button
                     key={w.id}
                     onClick={() => { setSelectedWorkerForShift(w); setShiftFormOpen(false); }}
                     className="w-full text-left rounded-lg p-3 transition-all"
                     style={{
-                      background: selectedWorkerForShift?.id === w.id ? "var(--cc-text)" : "transparent",
-                      color: selectedWorkerForShift?.id === w.id ? "#fff" : TEXT,
-                      border: `1px solid ${selectedWorkerForShift?.id === w.id ? "var(--cc-text)" : BORDER}`,
+                      background: selected ? PLUM : "transparent",
+                      color: selected ? "#fff" : TEXT,
+                      border: `1px solid ${selected ? PLUM : BORDER}`,
                     }}
                   >
                     <p className="font-semibold text-[13px]">{w.full_name}</p>
-                    <p className="text-[11px] mt-1" style={{ color: selectedWorkerForShift?.id === w.id ? "rgba(255,255,255,0.8)" : MUTED }}>
+                    <p className="text-[11px] mt-1" style={{ color: selected ? "rgba(255,255,255,0.8)" : MUTED }}>
                       {translateParams("team.sessionsCount", { count: String(w.total_sessions) })}
                     </p>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* RIGHT: Shift assignment form */}
             <div className="flex flex-col overflow-hidden">
               {selectedWorkerForShift ? (
-                <div className="rounded-2xl border p-6 space-y-4 h-full overflow-y-auto flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
+                <div className="rounded-2xl border p-6 space-y-4 h-full overflow-y-auto flex flex-col" style={{ borderColor: BORDER, background: SURFACE }}>
                   <div className="flex items-center justify-between shrink-0">
                     <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
                       {translateParams("team.shifts.assignTitle", { name: selectedWorkerForShift.full_name })}
                     </h3>
                     <button
                       onClick={() => setSelectedWorkerForShift(null)}
-                      className="p-1 rounded hover:bg-gray-200 transition"
+                      className="p-1 rounded transition"
                       style={{ color: MUTED }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = SOFT; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
-                      ?
+                      ×
                     </button>
                   </div>
 
@@ -637,9 +654,9 @@ export default function Team() {
                   )}
                 </div>
               ) : (
-                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SURFACE }}>
                   <div>
-                    <Clock size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                    <Clock size={32} style={{ color: MUTED, margin: "0 auto" }} />
                     <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("team.shifts.empty.title")}</p>
                     <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("team.shifts.empty.hint")}</p>
                   </div>
@@ -656,10 +673,10 @@ export default function Team() {
 
 function CredentialChip({ label, status }: { label: string; status: "verified" | "inactive" | "warn" | "info" }) {
   const config = {
-    verified: { bg: "#DCFCE7", color: "#16A34A", Icon: CheckCircle2 },
-    inactive: { bg: "#F3F4F6", color: "var(--cc-muted)", Icon: XCircle },
-    warn:     { bg: "#FEF3C7", color: "#D97706", Icon: AlertTriangle },
-    info:     { bg: "#F2EBFD", color: "#4F46E5", Icon: FileText },
+    verified: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)", Icon: CheckCircle2 },
+    inactive: { bg: "var(--cc-soft)", color: "var(--cc-muted)", Icon: XCircle },
+    warn:     { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)", Icon: AlertTriangle },
+    info:     { bg: "var(--cc-status-info-bg)", color: "var(--cc-status-info)", Icon: FileText },
   }[status];
   const { bg, color, Icon } = config;
   return (

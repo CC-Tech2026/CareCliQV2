@@ -28,6 +28,7 @@ import type {
 import { updateShiftTasks } from "@/lib/worker-api";
 import {
   hasStrongTaskEvidence,
+  isMandatoryTask,
   MIN_EVIDENCE_NOTE_CHARS,
   SESSION_NOTE_MAX,
 } from "@/lib/shift-utils";
@@ -121,12 +122,18 @@ export function WorkerMobileSessionScreen({
   }, [sessionNotes]);
 
   const activeTasks = useMemo(() => localTasks.filter((t) => !t.marked_na), [localTasks]);
-  const doneCount = activeTasks.filter((t) => t.completed).length;
-  const startedCount = activeTasks.filter((t) => taskStarted(t, localSessionNotes)).length;
+  const mandatoryTasks = useMemo(
+    () => activeTasks.filter((t) => isMandatoryTask(t)),
+    [activeTasks],
+  );
+  const doneMandatory = mandatoryTasks.filter((t) => t.completed).length;
+  const startedMandatory = mandatoryTasks.filter((t) => taskStarted(t, localSessionNotes)).length;
   const progressLabel =
-    doneCount > 0
-      ? `${doneCount} of ${activeTasks.length} done`
-      : `${startedCount} of ${activeTasks.length} started`;
+    mandatoryTasks.length > 0
+      ? doneMandatory > 0
+        ? `${doneMandatory} of ${mandatoryTasks.length} required done`
+        : `${startedMandatory} of ${mandatoryTasks.length} required started`
+      : `${activeTasks.filter((t) => t.completed).length} of ${activeTasks.length} done`;
 
   const activeTask = activeTasks.find((t) => t.task_id === activeTaskId);
 
@@ -160,7 +167,11 @@ export function WorkerMobileSessionScreen({
     const task = localTasks.find((t) => t.task_id === taskId);
     if (!task) return;
 
-    if (!task.completed && !taskHasMobileDocumentation(task, localSessionNotes)) {
+    if (
+      !task.completed &&
+      isMandatoryTask(task) &&
+      !taskHasMobileDocumentation(task, localSessionNotes)
+    ) {
       Alert.alert(
         "Evidence required",
         "Add a note (20+ characters) or photo/voice before marking complete.",
@@ -246,7 +257,9 @@ export function WorkerMobileSessionScreen({
             activeTaskId={activeTaskId}
             onSelectTask={setActiveTaskId}
             onToggleTask={toggleTask}
-            taskCanComplete={(t) => taskHasMobileDocumentation(t, localSessionNotes)}
+            taskCanComplete={(t) =>
+              !isMandatoryTask(t) || taskHasMobileDocumentation(t, localSessionNotes)
+            }
             disabled={disabled || busy}
           />
         </View>

@@ -82,6 +82,7 @@ export function WorkerMobileNoteBubble({
   const categoryLabel = [taskLabel, goalTitle].filter(Boolean).join(" · ");
   const type = note.note_type ?? "text";
   const isCheckin = isCheckinSessionNote(note);
+  const isVoice = type === "voice";
   const isAttachment = isAttachmentNote(note);
   const incidentReportCompleted =
     flag?.ruleId === 9 && flag.severity === "warn" && !flag.actionLabel;
@@ -95,7 +96,12 @@ export function WorkerMobileNoteBubble({
   const wc = wordCount(displayContent);
   const isFail = flag?.severity === "fail";
   const accent = isFail ? colors.destructive : colors.warning;
-  const metaLine = [time, isCheckin ? "check-in" : type, `${wc} words`, flag ? "flagged" : null]
+  const metaLine = [
+    time,
+    isCheckin ? "check-in" : isVoice ? "voice" : type,
+    `${wc} words`,
+    flag ? "flagged" : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -173,15 +179,20 @@ export function WorkerMobileNoteBubble({
         </View>
       ) : (
         <>
-          <Text
-            style={[styles.content, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-            numberOfLines={editable ? undefined : CLAMP_LINES}
-            onTextLayout={(e) => {
-              if (!editable && !truncated && e.nativeEvent.lines.length > CLAMP_LINES) setTruncated(true);
-            }}
-          >
-            {displayContent}
-          </Text>
+          <View style={styles.contentRow}>
+            {isVoice ? (
+              <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
+            ) : null}
+            <Text
+              style={[styles.content, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}
+              numberOfLines={editable ? undefined : CLAMP_LINES}
+              onTextLayout={(e) => {
+                if (!editable && !truncated && e.nativeEvent.lines.length > CLAMP_LINES) setTruncated(true);
+              }}
+            >
+              {displayContent}
+            </Text>
+          </View>
           {!editable && truncated ? (
             <Pressable onPress={() => setModalOpen(true)} hitSlop={6}>
               <Text style={[styles.readMore, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
@@ -295,9 +306,14 @@ export function WorkerMobileNoteBubble({
               </Pressable>
             </View>
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.modalContent, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                {displayContent}
-              </Text>
+              <View style={styles.contentRow}>
+                {isVoice ? (
+                  <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
+                ) : null}
+                <Text style={[styles.modalContent, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}>
+                  {displayContent}
+                </Text>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -318,6 +334,14 @@ const styles = StyleSheet.create({
   },
   category: {
     fontSize: 11,
+  },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  voiceIcon: {
+    marginTop: 3,
   },
   content: {
     fontSize: 14,

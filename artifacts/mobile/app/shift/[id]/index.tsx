@@ -31,7 +31,7 @@ import {
   type SessionNoteRecord,
   type WorkerShift,
 } from "@/lib/worker-api";
-import { goBackOrHome } from "@/lib/go-back";
+import { goBackToShifts } from "@/lib/go-back";
 import { isShiftCompletedForList } from "@/lib/shift-utils";
 import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 
@@ -298,7 +298,7 @@ export default function ShiftDetailScreen() {
         <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
           {(error as Error)?.message ?? "Shift not found"}
         </Text>
-        <Pressable onPress={() => goBackOrHome(router)} style={[styles.backLink, { borderColor: colors.border }]}>
+        <Pressable onPress={() => goBackToShifts(router)} style={[styles.backLink, { borderColor: colors.border }]}>
           <Feather name="arrow-left" size={16} color={colors.primary} />
           <Text style={[styles.backLinkText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
             Go back
@@ -327,7 +327,7 @@ export default function ShiftDetailScreen() {
           onRefresh={handleRefresh}
           onNotesRefresh={invalidateNotesQuery}
           onShiftComplete={handleComplete}
-          onBack={() => goBackOrHome(router)}
+          onBack={() => goBackToShifts(router)}
           canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin) && !checkinBusy}
           onCheckin={() => setCheckinOpen(true)}
           checkinStatus={checkinStatus}

@@ -23,6 +23,32 @@ const INPUT_BG = "var(--auth-input-bg)";
 // Solid brand colors — no gradients.
 const LOGO_PURPLE = "#7C3AED";
 
+const LOGIN_NETWORK_MAX_ATTEMPTS = 3;
+
+function isNetworkLoginError(err: unknown): boolean {
+  if (err && typeof err === "object" && "status" in err && (err as { status?: number }).status === 0) {
+    return true;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /network request failed|failed to fetch|networkerror|network error|timed out|econnrefused|enotfound/i.test(msg);
+}
+
+async function withNetworkRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= LOGIN_NETWORK_MAX_ATTEMPTS; i++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      lastErr = err;
+      if (!isNetworkLoginError(err) || i >= LOGIN_NETWORK_MAX_ATTEMPTS) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400 * i));
+    }
+  }
+  throw lastErr;
+}
+
 // -- 6-box OTP input -----------------------------------------------------------
 function OtpInput({
   value, onChange, disabled, error, ariaLabelledBy,
@@ -182,9 +208,12 @@ export default function Login() {
     if (valErr || pwdErr) return;
 
     setBusy(true);
+    setPasswordError(null);
     try {
       setRememberDevicePreference(rememberDevice);
-      const result = await login(identifier.trim(), password, rememberDevice);
+      const result = await withNetworkRetry(() =>
+        login(identifier.trim(), password, rememberDevice),
+      );
       if (result.status === "mfa_required") {
         setMfaChallengeToken(result.challengeToken);
         setMfaCode("");
@@ -194,8 +223,16 @@ export default function Login() {
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
       navigate(resolvePostLoginPath(result.user.id));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
-      toast({ title: t("auth.login.error.signInFailed"), description: msg, variant: "destructive" });
+      if (isNetworkLoginError(err)) {
+        toast({
+          title: t("auth.login.error.signInFailed"),
+          description: t("auth.login.error.networkContactAdmin"),
+          variant: "destructive",
+        });
+      } else {
+        const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
+        toast({ title: t("auth.login.error.signInFailed"), description: msg, variant: "destructive" });
+      }
     } finally {
       setBusy(false);
     }

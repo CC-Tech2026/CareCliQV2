@@ -132,6 +132,10 @@ def _upsert_task_completions_for_verified_shift(
     shift_task_rows = _safe_rows(shift_task_result.data)
     task_ids = [str(row.get("task_id")) for row in shift_task_rows if row.get("task_id")]
     if not task_ids:
+        logger.warning(
+            "shift_verification: no shift_tasks for shift %s — task_completions skipped",
+            shift.get("id"),
+        )
         return []
 
     tasks_result = (

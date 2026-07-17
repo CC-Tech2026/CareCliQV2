@@ -222,12 +222,20 @@ export function hasStrongTaskEvidence(task: ShiftTask): boolean {
   return Boolean(task.has_photo || task.has_voice);
 }
 
+/** Match web/backend: explicit mandatory, or default tasks in the first 4 slots. */
+export function isMandatoryTask(task: ShiftTask): boolean {
+  return (
+    task.mandatory === true ||
+    (task.type === "default" && task.mandatory !== false && (task.order ?? 0) <= 4)
+  );
+}
+
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]): boolean {
-  return tasks.some((t) => !t.marked_na && t.mandatory && !t.completed);
+  return tasks.some((t) => !t.marked_na && isMandatoryTask(t) && !t.completed);
 }
 
 export function incompleteMandatoryTasks(tasks: ShiftTask[]): ShiftTask[] {
-  return tasks.filter((t) => !t.marked_na && t.mandatory && !t.completed);
+  return tasks.filter((t) => !t.marked_na && isMandatoryTask(t) && !t.completed);
 }
 
 export function isShiftInProgress(shift: {

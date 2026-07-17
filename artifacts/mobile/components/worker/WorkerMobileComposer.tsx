@@ -22,9 +22,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useOffline } from "@/context/OfflineContext";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { showAlert } from "@/lib/alert";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
-import { syncSessionNotes, translateNoteToEnglish } from "@/lib/worker-api";
+import { syncSessionNotes, translateNoteToEnglish, transcribeSessionAudio } from "@/lib/worker-api";
 import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
 const LANGUAGE_OPTIONS = [
@@ -132,6 +134,10 @@ function ActiveVoiceRecording({
   const recordSecsRef = useRef(0);
   const finishedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onSaveRef = useRef(onSave);
+  const onEndedRef = useRef(onEnded);
+  onSaveRef.current = onSave;
+  onEndedRef.current = onEnded;
 
   const stopTimer = () => {
     if (timerRef.current) {
@@ -140,7 +146,8 @@ function ActiveVoiceRecording({
     }
   };
 
-  const finish = async (save: boolean) => {
+  const finishRef = useRef<(save: boolean) => Promise<void>>(async () => undefined);
+  finishRef.current = async (save: boolean) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     stopTimer();
@@ -157,8 +164,8 @@ function ActiveVoiceRecording({
       /* ignore */
     }
     const secs = recordSecsRef.current;
-    if (save) await onSave(secs, uri);
-    else onEnded();
+    if (save) await onSaveRef.current(secs, uri);
+    else onEndedRef.current();
   };
 
   useEffect(() => {
@@ -167,7 +174,7 @@ function ActiveVoiceRecording({
       try {
         const perm = await AudioModule.requestRecordingPermissionsAsync();
         if (!perm.granted || cancelled) {
-          onEnded();
+          onEndedRef.current();
           return;
         }
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -184,7 +191,7 @@ function ActiveVoiceRecording({
           });
         }, 1000);
       } catch {
-        if (!cancelled) onEnded();
+        if (!cancelled) onEndedRef.current();
       }
     })();
 
@@ -201,22 +208,21 @@ function ActiveVoiceRecording({
         void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
       }
     };
-    // Recorder is tied to this component's mount lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     controlsRef.current = {
-      save: () => finish(true),
+      save: () => finishRef.current(true),
       cancel: async () => {
-        await finish(false);
+        await finishRef.current(false);
         Haptics.selectionAsync();
       },
     };
     return () => {
       controlsRef.current = null;
     };
-  });
+  }, [controlsRef]);
 
   return (
     <View style={[styles.recordingBox, { borderColor: color + "66", backgroundColor: color + "18" }]}>
@@ -258,6 +264,7 @@ export function WorkerMobileComposer({
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const { isOnline, queueWorkerUpdate } = useOffline();
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -267,6 +274,7 @@ export function WorkerMobileComposer({
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
 
   const disabledInput = disabled || !taskId;
+  const voiceUnavailable = !isOnline;
   const placeholder = taskId
     ? taskLabel ?? "Start typing a note…"
     : "Select a task above to start noting";
@@ -334,8 +342,21 @@ export function WorkerMobileComposer({
 
   const startRecording = async () => {
     if (disabledInput || recording) return;
+    if (!isOnline) {
+      showAlert(
+        t("composer.voice.offlineTitle"),
+        t("composer.voice.offlineBody"),
+      );
+      return;
+    }
     const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
-    if (!perm?.granted) return;
+    if (!perm?.granted) {
+      showAlert(
+        "Microphone blocked",
+        "Allow microphone access, then try recording again.",
+      );
+      return;
+    }
     setRecording(true);
   };
 
@@ -343,8 +364,44 @@ export function WorkerMobileComposer({
 
   const handleVoiceSave = async (secs: number, uri: string | null) => {
     setRecording(false);
-    if (!uri || secs < 1) return;
-    await saveNote(`[Voice note · ${formatDuration(secs)}]`, "voice", "voice-note.m4a");
+    if (secs < 1) return;
+
+    if (!uri || !sessionId) {
+      showAlert(
+        "Recording failed",
+        "No audio was captured. Please try recording again.",
+      );
+      return;
+    }
+    if (!isOnline) {
+      showAlert(
+        t("composer.voice.offlineTitle"),
+        t("composer.voice.offlineBody"),
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { transcript } = await transcribeSessionAudio(sessionId, uri);
+      const trimmed = String(transcript ?? "").trim();
+      if (!trimmed) {
+        showAlert(
+          "Could not hear that",
+          "No speech was detected. Please try recording again.",
+        );
+        return;
+      }
+      const english = await toEnglishNote(trimmed, language).catch(() => trimmed);
+      await saveNote(english, "voice");
+    } catch (err) {
+      showAlert(
+        "Transcription failed",
+        err instanceof Error ? err.message : "Could not convert your voice note to text. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAttach = async () => {
@@ -480,6 +537,7 @@ export function WorkerMobileComposer({
             return startRecording();
           }}
           disabled={disabledInput || submitting}
+          accessibilityState={{ disabled: disabledInput || submitting || (!hasText && voiceUnavailable) }}
           style={[
             styles.roundBtn,
             {
@@ -488,7 +546,7 @@ export function WorkerMobileComposer({
                 : hasText
                   ? colors.composerPurple
                   : colors.composerPink,
-              opacity: disabledInput ? 0.5 : 1,
+              opacity: disabledInput || (!hasText && voiceUnavailable) ? 0.45 : 1,
             },
           ]}
         >
@@ -498,6 +556,8 @@ export function WorkerMobileComposer({
             <Feather name="send" size={20} color="#FFFFFF" />
           ) : hasText ? (
             <Feather name="arrow-up" size={22} color="#FFFFFF" />
+          ) : voiceUnavailable ? (
+            <Feather name="wifi-off" size={20} color="#FFFFFF" />
           ) : (
             <Feather name="mic" size={22} color="#FFFFFF" />
           )}
@@ -509,8 +569,8 @@ export function WorkerMobileComposer({
           ? "Select a task above to start noting."
           : recording
             ? "Recording… tap send to save, or cancel."
-            : showTranslateBadge
-              ? "Hold mic to record · tap to send when typing."
+            : voiceUnavailable && !hasText
+              ? t("composer.voice.offlineHint")
               : "Hold mic to record · tap to send when typing."}
       </Text>
 

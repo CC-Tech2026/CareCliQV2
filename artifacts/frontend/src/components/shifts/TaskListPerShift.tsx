@@ -1,20 +1,27 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2,
   AlertCircle,
-  ChevronRight,
   Loader2,
   Badge,
-  Clock,
-  Flag,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { jsonFetch } from "@/services/http";
-import { TaskCompletionModal } from "./TaskCompletionModal";
-import type { TaskInstance } from "@/types/task";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+
+type ShiftLinkedTask = {
+  id: string;
+  task_id?: string;
+  shift_id: string;
+  status: "pending" | "completed" | "missed" | "carried_over";
+  completed_at?: string | null;
+  title?: string;
+  name?: string;
+  priority?: string;
+  requirement_level?: string;
+  evidence_required?: string;
+  goal_id?: string | null;
+  goal_title?: string | null;
+};
 
 type Props = {
   shiftId: string;
@@ -22,207 +29,117 @@ type Props = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: "bg-blue-100 text-blue-800",
-  medium: "bg-yellow-100 text-yellow-800",
-  high: "bg-red-100 text-red-800",
+  low: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200",
+  medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
+  high: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
 };
 
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  pending: <AlertCircle className="h-4 w-4 text-yellow-600" />,
-  completed: <CheckCircle2 className="h-4 w-4 text-green-600" />,
-  missed: <AlertCircle className="h-4 w-4 text-red-600" />,
-  carried_over: <Clock className="h-4 w-4 text-orange-600" />,
-};
+/**
+ * Lists tasks linked to a shift via shift_tasks → participant_tasks (CARECLIQV2-331).
+ * Completion is owned by the worker checklist (/api/worker/shifts/.../tasks).
+ */
+export function TaskListPerShift({ shiftId }: Props) {
+  const { translate } = useAccessibility();
 
-export function TaskListPerShift({ shiftId, participantId }: Props) {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [completingInstanceId, setCompletingInstanceId] = useState<string | null>(null);
-  const [completionModalOpen, setCompletionModalOpen] = useState(false);
-
-  // Fetch task instances for shift
   const { data: instances = [], isLoading, error } = useQuery({
     queryKey: ["tasks", "shifts", shiftId],
     queryFn: async () => {
-      const response = await jsonFetch<TaskInstance[]>(`/api/tasks/shifts/${shiftId}/instances`);
-      // Sort: pending first, then by priority (high > medium > low), then by created_at
-      return response.sort((a: TaskInstance, b: TaskInstance) => {
+      const response = await jsonFetch<ShiftLinkedTask[]>(
+        `/api/tasks/shifts/${shiftId}/instances`
+      );
+      return [...response].sort((a, b) => {
         const statusOrder = { pending: 0, carried_over: 1, completed: 2, missed: 3 };
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
-
-        const statusDiff = (statusOrder[a.status as keyof typeof statusOrder] || 99) -
-          (statusOrder[b.status as keyof typeof statusOrder] || 99);
-        if (statusDiff !== 0) return statusDiff;
-
-        // Sort by priority (higher priority first)
-        const priorityDiff = (priorityOrder[(a as any).priority as keyof typeof priorityOrder] || 99) -
-          (priorityOrder[(b as any).priority as keyof typeof priorityOrder] || 99);
-        if (priorityDiff !== 0) return priorityDiff;
-
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        const aStatus = statusOrder[a.status] ?? 99;
+        const bStatus = statusOrder[b.status] ?? 99;
+        if (aStatus !== bStatus) return aStatus - bStatus;
+        return (a.title || a.name || "").localeCompare(b.title || b.name || "");
       });
     },
   });
 
-  const handleCompleteClick = (instanceId: string) => {
-    setCompletingInstanceId(instanceId);
-    setCompletionModalOpen(true);
-  };
-
-  const handleCompletionSuccess = () => {
-    setCompletionModalOpen(false);
-    setCompletingInstanceId(null);
-    queryClient.invalidateQueries({ queryKey: ["tasks", "shifts", shiftId] });
-    toast({ title: "Task completed", description: "Task marked as complete." });
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded bg-red-50 p-4 text-sm text-red-700">
-        Failed to load tasks for this shift.
+      <div className="rounded bg-destructive/10 p-4 text-sm text-destructive">
+        {translate("shifts.tasks.loadFailed")}
       </div>
     );
   }
 
   if (instances.length === 0) {
     return (
-      <div className="rounded bg-gray-50 p-4 text-center text-sm text-gray-500">
-        No tasks for this shift.
+      <div className="rounded bg-muted p-4 text-center text-sm text-muted-foreground">
+        {translate("shifts.tasks.empty")}
       </div>
     );
   }
 
-  // Separate pending/carried-over from completed/missed
-  const activeInstances = instances.filter(
-    (i) => i.status === "pending" || i.status === "carried_over"
-  );
-  const completedInstances = instances.filter(
-    (i) => i.status === "completed" || i.status === "missed"
-  );
+  const activeInstances = instances.filter((i) => i.status === "pending");
+  const completedInstances = instances.filter((i) => i.status === "completed");
 
   return (
     <div className="space-y-4">
-      {/* Active Tasks */}
       {activeInstances.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-gray-700">Active</h4>
+          <h4 className="mb-2 text-sm font-semibold text-foreground">
+            {translate("shifts.tasks.active")}
+          </h4>
           <div className="space-y-2">
             {activeInstances.map((instance) => (
-              <TaskInstanceRow
-                key={instance.id}
-                instance={instance}
-                onComplete={() => handleCompleteClick(instance.id)}
-              />
+              <ShiftTaskRow key={instance.id} instance={instance} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Completed/Missed Tasks */}
       {completedInstances.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-gray-500">History</h4>
+          <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
+            {translate("shifts.tasks.history")}
+          </h4>
           <div className="space-y-1 opacity-60">
             {completedInstances.map((instance) => (
-              <TaskInstanceRow
-                key={instance.id}
-                instance={instance}
-                disabled
-                onComplete={() => {}}
-              />
+              <ShiftTaskRow key={instance.id} instance={instance} />
             ))}
           </div>
         </div>
-      )}
-
-      {/* Task Completion Modal */}
-      {completingInstanceId && (
-        <TaskCompletionModal
-          isOpen={completionModalOpen}
-          onClose={() => setCompletionModalOpen(false)}
-          instanceId={completingInstanceId}
-          onSuccess={handleCompletionSuccess}
-        />
       )}
     </div>
   );
 }
 
-type TaskInstanceRowProps = {
-  instance: TaskInstance & { priority?: string; requirement_level?: string };
-  onComplete: () => void;
-  disabled?: boolean;
-};
-
-function TaskInstanceRow({ instance, onComplete, disabled = false }: TaskInstanceRowProps) {
-  // For display purposes, we'd need to fetch the template to get title, category, priority
-  // This component assumes those are attached to the instance via JOIN in the API response
-  // If not available, we fetch them separately
-  const [templateInfo, setTemplateInfo] = useState<any>(null);
-
-  useQuery({
-    queryKey: ["tasks", "templates", instance.task_template_id],
-    queryFn: async () => {
-      if (!instance.task_template_id) return null;
-      try {
-        const response = await jsonFetch(
-          `/api/tasks/templates/${instance.task_template_id}`
-        );
-        setTemplateInfo(response);
-        return response;
-      } catch {
-        return null;
-      }
-    },
-    enabled: !!instance.task_template_id && !templateInfo,
-  });
-
-  const title = templateInfo?.title || "Task";
-  const priority = templateInfo?.priority || "medium";
-  const category = templateInfo?.category || "";
-  const requirementLevel = templateInfo?.requirement_level || "mandatory";
-  const evidenceRequired = templateInfo?.evidence_required || "none";
-  const isCarriedOver = instance.carried_over_from_instance_id !== null;
-
-  const formatTime = (time: string | null) => {
-    if (!time) return null;
-    return new Date(`2000-01-01T${time}`).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const dueStart = formatTime(instance.due_window_start);
-  const dueEnd = formatTime(instance.due_window_end);
-  const dueWindow = dueStart && dueEnd ? `${dueStart} - ${dueEnd}` : null;
+function ShiftTaskRow({ instance }: { instance: ShiftLinkedTask }) {
+  const { translate } = useAccessibility();
+  const title = instance.title || instance.name || translate("shifts.tasks.untitled");
+  const priority = instance.priority || "medium";
+  const requirementLevel = instance.requirement_level || "mandatory";
+  const evidenceRequired = instance.evidence_required || "none";
+  const done = instance.status === "completed";
 
   return (
     <div
-      className={`flex items-center justify-between rounded border px-3 py-2 transition-colors ${
-        disabled
-          ? "border-gray-200 bg-gray-50"
-          : "border-gray-300 bg-white hover:bg-blue-50"
+      className={`flex items-center justify-between rounded border px-3 py-2 ${
+        done ? "border-border bg-muted/50" : "border-border bg-background"
       }`}
     >
       <div className="flex flex-1 items-center gap-3">
-        {/* Status Icon */}
-        <div>{STATUS_ICONS[instance.status] || null}</div>
-
-        {/* Task Info */}
+        <div>
+          {done ? (
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          ) : (
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+          )}
+        </div>
         <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900">{title}</span>
-
-            {/* Priority Badge */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{title}</span>
             <span
               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                 PRIORITY_COLORS[priority] || PRIORITY_COLORS.medium
@@ -230,67 +147,32 @@ function TaskInstanceRow({ instance, onComplete, disabled = false }: TaskInstanc
             >
               {priority.charAt(0).toUpperCase() + priority.slice(1)}
             </span>
-
-            {/* Requirement Level Badge */}
             <span
               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                 requirementLevel === "mandatory"
-                  ? "bg-red-100 text-red-800"
-                  : "bg-gray-100 text-gray-800"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                  : "bg-muted text-muted-foreground"
               }`}
             >
-              {requirementLevel === "mandatory" ? "Required" : "Optional"}
+              {requirementLevel === "mandatory"
+                ? translate("shifts.tasks.required")
+                : translate("shifts.tasks.optional")}
             </span>
-
-            {/* Carried Over Badge */}
-            {isCarriedOver && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-800">
-                <Clock className="h-3 w-3" />
-                From previous
-              </span>
-            )}
           </div>
-
-          {/* Secondary Info */}
-          <div className="mt-1 flex items-center gap-4 text-xs text-gray-500">
-            {category && <span>{category}</span>}
-            {dueWindow && <span>Due: {dueWindow}</span>}
+          <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            {instance.goal_title && <span>{instance.goal_title}</span>}
             {evidenceRequired !== "none" && (
               <span className="flex items-center gap-1">
                 <Badge className="h-3 w-3" />
-                Evidence: {evidenceRequired.replace("_", " ")}
+                {translate("shifts.tasks.evidence")}: {evidenceRequired.replace(/_/g, " ")}
               </span>
             )}
           </div>
         </div>
       </div>
-
-      {/* Action Button */}
-      {!disabled && instance.status === "pending" ? (
-        <Button
-          size="sm"
-          onClick={onComplete}
-          variant="outline"
-          className="ml-2 gap-2"
-        >
-          Complete
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      ) : instance.status === "carried_over" ? (
-        <Button
-          size="sm"
-          onClick={onComplete}
-          variant="outline"
-          className="ml-2 gap-2"
-        >
-          Complete
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      ) : (
-        <span className="text-xs font-medium text-gray-500">
-          {instance.status === "completed" ? "✓ Done" : "✗ Missed"}
-        </span>
-      )}
+      <span className="text-xs font-medium text-muted-foreground">
+        {done ? translate("shifts.tasks.done") : translate("shifts.tasks.pending")}
+      </span>
     </div>
   );
 }

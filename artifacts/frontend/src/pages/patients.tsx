@@ -1738,9 +1738,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <Sparkles size={12} className="text-violet-600" />
                     </div>
                     <div>
-                      <span className="text-[12px] font-bold text-violet-900">AI Goal Assistant</span>
+                      <span className="text-[12px] font-bold text-violet-800">AI Goal Assistant</span>
                       {goalAiSuggestions && !goalAiLoading && (
-                        <span className="ml-1.5 text-[10px] text-violet-500 font-medium">based on {participant.full_name.split(' ')[0]}'s history</span>
+                        <span className="ml-1.5 text-[10px] text-violet-700 font-medium">based on {participant.full_name.split(' ')[0]}'s history</span>
                       )}
                     </div>
                   </div>
@@ -1768,7 +1768,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 )}
 
                 {!goalAiLoading && !goalAiSuggestions && (
-                  <p className="text-[11px] text-violet-400">Click <strong>Suggest</strong> to get AI-generated goal names, descriptions, and success criteria based on {participant.full_name.split(' ')[0]}'s support history.</p>
+                  <p className="text-[11px] text-violet-700">Click <strong>Suggest</strong> to get AI-generated goal names, descriptions, and success criteria based on {participant.full_name.split(' ')[0]}'s support history.</p>
                 )}
 
                 {!goalAiLoading && goalAiSuggestions && (
@@ -1805,11 +1805,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               onClick={() => {
                                 const html = desc.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
                                 if (goalDescriptionRef.current) goalDescriptionRef.current.innerHTML = html;
-                                setGoalDescription(desc);
+                                setGoalDescription(html);
                                 setGoalDescriptionAiApplied(true);
                               }}
                             >
-                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{desc}</p>
+                              <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{desc}</p>
                               <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
@@ -1829,7 +1829,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
                               onClick={() => setGoalSuccessCriteria(crit)}
                             >
-                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{crit}</p>
+                              <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{crit}</p>
                               <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
@@ -1995,9 +1995,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <Sparkles size={12} className="text-violet-600" />
                     </div>
                     <div>
-                      <span className="text-[12px] font-bold text-violet-900">AI Task Assistant</span>
+                      <span className="text-[12px] font-bold text-violet-800">AI Task Assistant</span>
                       {taskAiSuggestions && !taskAiLoading && (
-                        <span className="ml-1.5 text-[10px] text-violet-500 font-medium">
+                        <span className="ml-1.5 text-[10px] text-violet-700 font-medium">
                           based on {participant.full_name.split(' ')[0]}'s history
                         </span>
                       )}
@@ -2056,7 +2056,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
                               onClick={() => { setTaskInstructions(instr); setTaskInstructionsAiApplied(true); }}
                             >
-                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{instr}</p>
+                              <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{instr}</p>
                               <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
@@ -2326,7 +2326,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <div className="space-y-4">
                   {/* Goals missing support category — coordinator review */}
               {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 space-y-2">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/80 p-4 space-y-2">
                   <p className="text-[12px] font-bold text-amber-900">
                     {goalsNeedingCategory.length} goal{goalsNeedingCategory.length !== 1 ? "s" : ""} need a support category
                   </p>
@@ -2568,7 +2568,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
               subtitle={participant.full_name}
               onClose={cancelGoalForm}
-              showLogo
+              showLogo={false}
             >
               {goalFormContent}
             </FormPanel>
@@ -2578,7 +2578,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               title="Create New Task"
               subtitle={`Setting up support for ${participant.full_name}`}
               onClose={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-              showLogo
+              showLogo={false}
             >
               {taskFormContent}
             </FormPanel>

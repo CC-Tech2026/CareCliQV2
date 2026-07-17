@@ -1,5 +1,5 @@
 import { ChevronLeft } from "lucide-react";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { FormHeader } from "./FormHeader";
 
 interface FormPanelProps {
@@ -12,12 +12,44 @@ interface FormPanelProps {
   showLogo?: boolean;
 }
 
+type FormLayout = "mobile" | "tablet" | "desktop";
+
+function useFormLayout(): FormLayout {
+  const [layout, setLayout] = useState<FormLayout>(() => {
+    if (typeof window === "undefined") return "desktop";
+    if (window.matchMedia("(min-width: 1280px)").matches) return "desktop";
+    if (window.matchMedia("(min-width: 768px)").matches) return "tablet";
+    return "mobile";
+  });
+
+  useEffect(() => {
+    const xl = window.matchMedia("(min-width: 1280px)");
+    const md = window.matchMedia("(min-width: 768px)");
+    const sync = () => {
+      if (xl.matches) setLayout("desktop");
+      else if (md.matches) setLayout("tablet");
+      else setLayout("mobile");
+    };
+    sync();
+    xl.addEventListener("change", sync);
+    md.addEventListener("change", sync);
+    return () => {
+      xl.removeEventListener("change", sync);
+      md.removeEventListener("change", sync);
+    };
+  }, []);
+
+  return layout;
+}
+
 /**
  * Smart Adaptive Form Panel with CareCliQ branding
  *
- * Desktop (xl, 1280px+): Fixed right-side panel (40% width)
+ * Desktop (xl, 1280px+): Fixed right-side panel (32% width)
  * Tablet (md-lg, 768-1279px): Slide-over drawer from right (60% width), background dims
  * Mobile (< 768px): Fullscreen form with back button and breadcrumb
+ *
+ * Only one layout mounts at a time so refs (e.g. contentEditable) stay correct.
  */
 export function FormPanel({
   isOpen,
@@ -28,13 +60,23 @@ export function FormPanel({
   showMobileBackButton = true,
   showLogo = true,
 }: FormPanelProps) {
+  const layout = useFormLayout();
+
   if (!isOpen) return null;
+
+  const header = (
+    <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
+  );
+  const body = (
+    <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4" style={{ color: "var(--cc-text)" }}>
+      {children}
+    </div>
+  );
 
   return (
     <>
-      {/* Mobile Breadcrumb Back Button (visible only on mobile) */}
-      {showMobileBackButton && (
-        <div className="md:hidden mb-3 flex items-center gap-1">
+      {showMobileBackButton && layout === "mobile" && (
+        <div className="mb-3 flex items-center gap-1">
           <button
             type="button"
             onClick={onClose}
@@ -45,54 +87,51 @@ export function FormPanel({
         </div>
       )}
 
-      {/* Desktop: Fixed Right-Side Panel (32% width, visible on xl+) — sits below the app topbar (h-14) */}
-      <div
-        className="hidden xl:block fixed right-0 top-14 w-[32%] z-40"
-        style={{ height: "calc(100dvh - 3.5rem)" }}
-      >
-        <div className="flex flex-col bg-white border-l-4 border-l-[#E5D9FF] h-full shadow-2xl">
-          <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
-          <div className="overflow-y-auto flex-1 px-4 py-4 sm:px-6 space-y-4">
-            {children}
-          </div>
-        </div>
-      </div>
-
-      {/* Tablet: Slide-over Drawer (60% width, visible on md-lg) — sits below the app topbar (h-14) */}
-      <div className="hidden md:block xl:hidden">
-        {/* Background overlay */}
+      {layout === "desktop" && (
         <div
-          className="fixed left-0 right-0 top-14 bg-black bg-opacity-40 z-40 transition-opacity backdrop-blur-sm"
-          style={{ height: "calc(100dvh - 3.5rem)" }}
-          onClick={onClose}
-        />
-        {/* Drawer panel */}
-        <div
-          className="fixed right-0 top-14 w-[60%] bg-white shadow-2xl z-50 flex flex-col border-l-4 border-l-[#E5D9FF]"
+          className="fixed right-0 top-14 w-[32%] z-40"
           style={{ height: "calc(100dvh - 3.5rem)" }}
         >
-          <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
-            {children}
+          <div
+            className="flex flex-col border-l-4 border-l-[#E5D9FF] h-full shadow-2xl"
+            style={{ background: "var(--cc-surface)" }}
+          >
+            {header}
+            {body}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Mobile: Fullscreen Form (visible on md and below) — sits below the mobile safe-area header */}
-      <div className="md:hidden">
+      {layout === "tablet" && (
+        <>
+          <div
+            className="fixed left-0 right-0 top-14 bg-black bg-opacity-40 z-40 transition-opacity backdrop-blur-sm"
+            style={{ height: "calc(100dvh - 3.5rem)" }}
+            onClick={onClose}
+          />
+          <div
+            className="fixed right-0 top-14 w-[60%] shadow-2xl z-50 flex flex-col border-l-4 border-l-[#E5D9FF]"
+            style={{ height: "calc(100dvh - 3.5rem)", background: "var(--cc-surface)" }}
+          >
+            {header}
+            {body}
+          </div>
+        </>
+      )}
+
+      {layout === "mobile" && (
         <div
-          className="fixed left-0 right-0 bg-white z-50 flex flex-col border-t-4 border-t-[#E5D9FF]"
+          className="fixed left-0 right-0 z-50 flex flex-col border-t-4 border-t-[#E5D9FF]"
           style={{
             top: "calc(4rem + env(safe-area-inset-top))",
             height: "calc(100dvh - 4rem - env(safe-area-inset-top))",
+            background: "var(--cc-surface)",
           }}
         >
-          <FormHeader title={title} subtitle={subtitle} onClose={onClose} showLogo={showLogo} />
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
-            {children}
-          </div>
+          {header}
+          {body}
         </div>
-      </div>
+      )}
     </>
   );
 }

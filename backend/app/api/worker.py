@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
@@ -15,7 +15,17 @@ from ..core.security import get_current_user
 from ..core.timezone import app_today, shift_local_date
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
+from ..services import (
+    ai_service,
+    audit_service,
+    evidence_upload_service,
+    funding_service,
+    goals_service,
+    participant_service,
+    session_service,
+    shift_service,
+    travel_expense_service,
+)
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
@@ -1189,18 +1199,7 @@ async def worker_end_shift(
         except Exception as exc:
             logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
 
-    async def _process_task_handover() -> None:
-        """Process task handover when shift ends."""
-        try:
-            from ..services.task_management_service import get_task_management_service
-            service = get_task_management_service()
-            await service.process_shift_handover(shift_id)
-            logger.info(f"Task handover processed for shift {shift_id}")
-        except Exception as exc:
-            logger.warning(f"Task handover failed for shift {shift_id}: {exc}")
-
     background_tasks.add_task(_auto_summary_and_notify)
-    background_tasks.add_task(_process_task_handover)
     return shift
 
 
@@ -1323,6 +1322,49 @@ async def worker_delete_session_note(
         after_state={"note_id": note_id},
     )
     return None
+
+
+@router.post("/sessions/{session_id}/transcribe")
+async def worker_transcribe_session_audio(
+    session_id: str,
+    audio_file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Speech-to-text for worker voice notes. Returns transcript only — does not mutate session notes."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    session_notes = shift_service.list_session_notes(session_id, worker_id, org_id)
+    if session_notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    filename = audio_file.filename or "voice-note.m4a"
+    contents = await audio_file.read()
+    if not contents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file is empty")
+    if len(contents) > 25 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Audio file too large. Maximum size is 25MB.",
+        )
+
+    try:
+        text = await ai_service.transcribe_audio(contents, filename)
+        transcript = (text or "").strip()
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not transcribe audio. Please try again with clearer speech.",
+            )
+        return {"transcript": transcript}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Worker voice note transcription failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Transcription failed. Please try again.",
+        )
 
 
 @router.post("/sessions/{session_id}/evidence")

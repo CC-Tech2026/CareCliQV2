@@ -564,6 +564,10 @@ export function ShiftTaskEvidencePanel({
 
   const startRecording = async () => {
     if (disabled || voiceRecord) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setCameraError(translate("composer.voice.offlineBody"));
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, sampleRate: 16000 },

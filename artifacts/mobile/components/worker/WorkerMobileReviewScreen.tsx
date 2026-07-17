@@ -18,6 +18,7 @@ import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
+import { isMandatoryTask } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
 type Props = {
@@ -72,6 +73,7 @@ export function WorkerMobileReviewScreen({
   const medMissing = Boolean(medTask && !hasMedicationNote(medTask, notes));
   const incompleteWithoutNote = tasks.filter(
     (t) =>
+      isMandatoryTask(t) &&
       !t.marked_na &&
       !t.completed &&
       !notes.some((n) => n.task_id === t.task_id && n.content?.trim()),
@@ -173,7 +175,7 @@ export function WorkerMobileReviewScreen({
           <View style={[styles.alert, { backgroundColor: "#FFF3E0", borderColor: colors.warning }]}>
             <Feather name="alert-triangle" size={16} color="#854F0B" />
             <Text style={[styles.alertBody, { fontFamily: "Inter_500Medium", color: "#854F0B", flex: 1 }]}>
-              {otherIncomplete.length} task(s) still need documentation.
+              {otherIncomplete.length} required task(s) still need documentation.
             </Text>
           </View>
         )}

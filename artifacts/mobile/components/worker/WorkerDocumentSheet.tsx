@@ -1,14 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useOffline } from "@/context/OfflineContext";
 import { useT } from "@/context/PreferencesContext";
-import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
-import { useWorkerShifts } from "@/hooks/worker/useWorkerShifts";
 import { useColors } from "@/hooks/useColors";
-import { getPrimaryTodayShiftId } from "@/lib/shift-utils";
+import { showAlert } from "@/lib/alert";
 
 type Props = {
   onClose: () => void;
@@ -19,26 +18,19 @@ export function WorkerDocumentSheet({ onClose }: Props) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
-  const landing = useWorkerLandingDashboard();
-  const todayShifts = useWorkerShifts("today");
+  const { isOnline } = useOffline();
 
-  const targetShiftId = useMemo(() => {
-    const fromApi = todayShifts.data?.shifts;
-    if (fromApi?.length) return getPrimaryTodayShiftId(fromApi);
-    const summary = landing.data?.today_shifts ?? [];
-    const active = summary.find(
-      (s) => s.visual_state === "session_active" || s.visual_state === "clocked_in",
-    );
-    return active?.id ?? summary.find((s) => s.visual_state === "scheduled")?.id ?? summary[0]?.id ?? null;
-  }, [todayShifts.data?.shifts, landing.data?.today_shifts]);
-
-  const openShift = () => {
+  const openShiftsList = () => {
     onClose();
-    if (targetShiftId) {
-      router.push(`/shift/${targetShiftId}` as never);
+    router.replace("/(tabs)/shifts" as never);
+  };
+
+  const openVoiceNote = () => {
+    if (!isOnline) {
+      showAlert(t("composer.voice.offlineTitle"), t("composer.voice.offlineBody"));
       return;
     }
-    router.replace("/(tabs)/shifts" as never);
+    openShiftsList();
   };
 
   const openIncident = () => {
@@ -64,25 +56,29 @@ export function WorkerDocumentSheet({ onClose }: Props) {
         </Text>
 
         <Pressable
-          onPress={openShift}
-          style={[styles.option, { backgroundColor: colors.soft }]}
+          onPress={openVoiceNote}
+          style={[
+            styles.option,
+            { backgroundColor: colors.soft, opacity: isOnline ? 1 : 0.55 },
+          ]}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !isOnline }}
         >
           <View style={[styles.optionIcon, { backgroundColor: colors.primary }]}>
-            <Feather name="mic" size={19} color={colors.primaryForeground} />
+            <Feather name={isOnline ? "mic" : "wifi-off"} size={19} color={colors.primaryForeground} />
           </View>
           <View style={styles.optionText}>
             <Text style={[styles.optionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
               {t("home.documentSheet.voiceNote")}
             </Text>
             <Text style={[styles.optionDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("home.documentSheet.voiceNoteDesc")}
+              {isOnline ? t("home.documentSheet.voiceNoteDesc") : t("composer.voice.offlineHint")}
             </Text>
           </View>
         </Pressable>
 
         <Pressable
-          onPress={openShift}
+          onPress={openShiftsList}
           style={[styles.option, { borderColor: colors.border, borderWidth: 1 }]}
           accessibilityRole="button"
         >
@@ -116,12 +112,6 @@ export function WorkerDocumentSheet({ onClose }: Props) {
             </Text>
           </View>
         </Pressable>
-
-        {!targetShiftId ? (
-          <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {t("home.documentSheet.noShiftDesc")}
-          </Text>
-        ) : null}
       </View>
     </View>
   );
@@ -165,5 +155,4 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 2 },
   optionTitle: { fontSize: 13 },
   optionDesc: { fontSize: 11 },
-  hint: { fontSize: 11, marginTop: 4, marginBottom: 4, lineHeight: 16 },
 });

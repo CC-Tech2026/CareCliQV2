@@ -22,11 +22,13 @@ import { shiftInitials } from "@/lib/shift-utils";
 type Props = {
   title: string;
   showBack?: boolean;
+  /** Override default back (goBackOrHome). */
+  onBack?: () => void;
   /** Back button only — hides center title and right-side actions. */
   minimal?: boolean;
 };
 
-export function WorkerMobileHeader({ title, showBack, minimal }: Props) {
+export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -57,7 +59,7 @@ export function WorkerMobileHeader({ title, showBack, minimal }: Props) {
       >
         {showBack ? (
           <Pressable
-            onPress={() => goBackOrHome(router)}
+            onPress={() => (onBack ? onBack() : goBackOrHome(router))}
             style={styles.sideBtn}
             accessibilityLabel="Go back"
           >

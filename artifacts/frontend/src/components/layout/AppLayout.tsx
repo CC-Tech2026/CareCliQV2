@@ -72,10 +72,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       ],
     },
     {
-      group: "Settings & Help",
+      group: "Settings",
       items: [
-        { href: "/toolkit",     label: "Toolkit",    icon: Wrench        },
-        { href: "/worker/help", label: "Help",       icon: HelpCircle    },
+        { href: "/toolkit", label: "Toolkit", icon: Wrench },
       ],
     },
   ],

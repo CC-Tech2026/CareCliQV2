@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Mic, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import { WM } from "@/lib/worker-mobile-tokens";
@@ -105,8 +105,11 @@ export function WorkerMobileNoteBubble({
       ) : (
         <>
           {type === "text" || type === "voice" ? (
-            <p className="whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: WM.text }}>
-              {note.content}
+            <p className="flex items-start gap-2 whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: WM.text }}>
+              {type === "voice" ? (
+                <Mic size={14} className="mt-0.5 shrink-0" style={{ color: WM.pink }} aria-hidden />
+              ) : null}
+              <span>{note.content}</span>
             </p>
           ) : (
             <p className="text-[14px] font-medium" style={{ color: WM.text }}>

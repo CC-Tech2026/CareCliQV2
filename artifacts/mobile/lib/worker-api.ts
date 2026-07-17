@@ -1,4 +1,4 @@
-import { workerFetch } from "@/lib/worker-fetch";
+import { WorkerApiError, workerFetch } from "@/lib/worker-fetch";
 
 export type ShiftVisualState = "scheduled" | "clocked_in" | "session_active" | "completed";
 
@@ -29,6 +29,8 @@ export type ShiftTask = {
   mandatory?: boolean;
   goal_id?: string | null;
   goal_title?: string | null;
+  /** From participant_tasks via shift_tasks (CARECLIQV2-330). */
+  evidence_required?: string | null;
   marked_na?: boolean;
   na_reason?: string | null;
 };
@@ -345,6 +347,71 @@ export function syncSessionNotes(sessionId: string, notes: SessionNoteRecord[]) 
       body: JSON.stringify({ notes }),
     },
   );
+}
+
+export async function transcribeSessionAudio(sessionId: string, uri: string) {
+  const cleanPath = uri.split("?")[0] ?? uri;
+  const ext = cleanPath.split(".").pop()?.toLowerCase() || "m4a";
+  const mime =
+    ext === "webm"
+      ? "audio/webm"
+      : ext === "wav"
+        ? "audio/wav"
+        : ext === "caf"
+          ? "audio/x-caf"
+          : ext === "mp3"
+            ? "audio/mpeg"
+            : "audio/mp4";
+  const filename = `voice-note.${ext}`;
+
+  async function buildFormData(fieldName: string): Promise<FormData> {
+    const formData = new FormData();
+    // React Native FormData accepts { uri, name, type }; web needs a real Blob.
+    if (typeof window !== "undefined" && typeof fetch === "function") {
+      try {
+        const res = await fetch(uri);
+        const blob = await res.blob();
+        formData.append(fieldName, blob, filename);
+        return formData;
+      } catch {
+        /* fall through to RN-style append */
+      }
+    }
+    formData.append(
+      fieldName,
+      {
+        uri,
+        name: filename,
+        type: mime,
+      } as unknown as Blob,
+    );
+    return formData;
+  }
+
+  try {
+    const formData = await buildFormData("audio_file");
+    return await workerFetch<{ transcript: string }>(
+      `/api/worker/sessions/${sessionId}/transcribe`,
+      { method: "POST", body: formData },
+    );
+  } catch (err) {
+    // Prefer the existing sessions Whisper endpoint when the worker route is
+    // missing or Whisper fails on that path.
+    if (!(err instanceof WorkerApiError)) {
+      throw err;
+    }
+  }
+
+  const fallback = await buildFormData("file");
+  const result = await workerFetch<{ transcription?: string; transcript?: string }>(
+    `/api/sessions/${sessionId}/transcribe-audio`,
+    { method: "POST", body: fallback },
+  );
+  const transcript = String(result.transcript ?? result.transcription ?? "").trim();
+  if (!transcript) {
+    throw new WorkerApiError("Transcription failed. Please try again.", 500);
+  }
+  return { transcript };
 }
 
 export function deleteSessionNote(sessionId: string, noteId: string) {

@@ -13,13 +13,18 @@
 -- Then reseeds 8 Adelaide locals:
 --
 --   1. Harper Lin      — TODAY long in_progress + pending random check-in (~2 min)
---   2. Miles Nguyen    — TODAY new scheduled (not started)
---   3. Freya Gibson    — INCOMING (tomorrow)
---   4. Callum Wright   — INCOMING (+2 days)
---   5. Isla Moretti    — TODAY completed + compliance/tasks + incident report
+--                        + CARECLIQV2-330 shift_tasks (t1a/t1b) for checklist test
+--   2. Miles Nguyen    — TODAY new scheduled (not started) + shift_tasks (clock-in test)
+--   3. Freya Gibson    — INCOMING (tomorrow) + shift_tasks
+--   4. Callum Wright   — INCOMING (+2 days) + shift_tasks
+--   5. Isla Moretti    — TODAY completed + compliance/tasks + incident + verified task_completions
 --   6. Noah Patel      — PAST completed LONG (6h) + compliance/tasks/check-ins + incident
 --   7. Ava Richter     — PAST completed LONG (6.5h) + compliance/tasks/check-ins + incident
---   8. Ethan Brooks    — TODAY new scheduled (afternoon slot)
+--   8. Ethan Brooks    — TODAY new scheduled (afternoon) + shift_tasks (clock-in test)
+--
+-- CARECLIQV2-330 quick test: open Miles or Ethan → clock in → checklist shows
+-- coordinator participant_tasks (not FALLBACK defaults). Harper already in_progress
+-- with linked shift_tasks + partial completion on t1a.
 --
 -- Safe to re-run: fixed UUIDs (e814…) + cleanup + ON CONFLICT upserts.
 -- =============================================================================
@@ -202,7 +207,14 @@ BEGIN
     DELETE FROM public.worker_shift_swap_request_details WHERE shift_id IN (SELECT id FROM _worker_shifts);
     UPDATE public.conversations SET shift_id = NULL WHERE shift_id IN (SELECT id FROM _worker_shifts);
     UPDATE public.incidents SET shift_id = NULL WHERE shift_id IN (SELECT id FROM _worker_shifts);
-    UPDATE public.participant_tasks SET shift_id = NULL WHERE shift_id IN (SELECT id FROM _worker_shifts);
+    -- Legacy denormalized column (not in normalized schema); skip if absent.
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'participant_tasks' AND column_name = 'shift_id'
+    ) THEN
+        UPDATE public.participant_tasks SET shift_id = NULL
+         WHERE shift_id IN (SELECT id FROM _worker_shifts);
+    END IF;
 
     -- Session children (this worker's sessions only)
     DELETE FROM public.budget_usage WHERE session_id IN (SELECT id FROM _worker_sessions);
@@ -680,7 +692,14 @@ BEGIN
         (t8b, p8, g8b, v_org_id, v_coordinator_id, 'Quiet Hutt Street café outing',
          'Avoid Rundle Mall rush; note engagement.', 'weekly', 'afternoon', 'community_access', 'medium',
          'core_social_community', 'none', false, 'pending')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, updated_at = now();
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        evidence_required = EXCLUDED.evidence_required,
+        is_mandatory = EXCLUDED.is_mandatory,
+        goal_id = EXCLUDED.goal_id,
+        status = EXCLUDED.status,
+        updated_at = now();
 
     -- Allergies + briefing alerts
     INSERT INTO public.participant_allergies (id, participant_id, organization_id, allergen, severity, notes) VALUES
@@ -710,27 +729,23 @@ BEGIN
     ON CONFLICT (id) DO UPDATE SET alert_text = EXCLUDED.alert_text, is_active = true, updated_at = now();
 
     -- Task / compliance JSON helpers
+    -- CARECLIQV2-330: JSONB mirrors use real participant_tasks UUIDs (t1a/t1b)
+    -- so dual-write + shift_tasks load stay aligned for Harper.
     v_tasks_long := jsonb_build_array(
-        jsonb_build_object('task_id','default_personal_hygiene','type','default','label','Personal Hygiene / Showering',
-            'description','Assist with bathing, grooming, oral care.','completed',true,
+        jsonb_build_object('task_id', t1a::text, 'type','participant','label','Morning personal care and meal prep',
+            'description','Use visual recipe card. Document prompting level.','completed',true,
             'completed_at', (t_session_start - interval '15 minutes')::text,
             'checked_at', (t_session_start - interval '15 minutes')::text,
             'note','Completed with verbal prompts.','order',1,'mandatory',true,
-            'goal_id', g1a::text, 'goal_title','Independent daily living on long shifts'),
-        jsonb_build_object('task_id','default_meal_prep','type','default','label','Meal Preparation',
-            'description','Prepare breakfast and lunch using visual recipe.','completed',true,
-            'completed_at', (t_session_start + interval '30 minutes')::text,
-            'checked_at', (t_session_start + interval '30 minutes')::text,
-            'note','Visual recipe followed. No nut exposure.','order',2,'mandatory',true,
-            'goal_id', g1a::text, 'goal_title','Independent daily living on long shifts'),
-        jsonb_build_object('task_id','default_community_access','type','default','label','Community Access',
-            'description','Victoria Park walk and quiet café visit.','completed',false,
-            'order',3,'mandatory',false,
-            'goal_id', g1b::text, 'goal_title','Community access confidence'),
-        jsonb_build_object('task_id','default_documentation','type','default','label','Documentation / Notes',
-            'description','Record progress notes and check-ins.','completed',false,
-            'order',4,'mandatory',true,
-            'goal_id', g1a::text, 'goal_title','Independent daily living on long shifts')
+            'evidence_required','notes',
+            'goal_id', g1a::text, 'goal_title','Independent daily living on long shifts',
+            'shift_task_id', 'e8140501-0000-4000-a000-000000000001'),
+        jsonb_build_object('task_id', t1b::text, 'type','participant','label','Torrens / Victoria Park community walk',
+            'description','Quiet park walk. Note engagement and anxiety signs.','completed',false,
+            'order',2,'mandatory',false,
+            'evidence_required','photo',
+            'goal_id', g1b::text, 'goal_title','Community access confidence',
+            'shift_task_id', 'e8140502-0000-4000-a000-000000000001')
     );
 
     v_support_long := jsonb_build_array(
@@ -742,10 +757,10 @@ BEGIN
     v_end_validation := jsonb_build_object(
         'compliance_score', 92,
         'low_compliance', false,
-        'tasks_completed', 3,
-        'tasks_total', 3,
-        'mandatory_total', 3,
-        'mandatory_with_evidence', 3,
+        'tasks_completed', 2,
+        'tasks_total', 2,
+        'mandatory_total', 2,
+        'mandatory_with_evidence', 2,
         'mandatory_without_evidence', 0,
         'force_ended', false,
         'flagged_tasks', '[]'::jsonb
@@ -831,11 +846,11 @@ BEGIN
     ) VALUES
         ('e8140a01-0000-4000-8000-000000000001', NULL, sh1, 'CLOCK_IN', t_long_in, v_worker_id, p1, '{}'::jsonb, true, 0),
         ('e8140a02-0000-4000-8000-000000000002', s1, sh1, 'NOTE_SAVED', t_session_start, v_worker_id, p1, '{"note_type":"session_start"}'::jsonb, true, 900),
-        ('e8140a03-0000-4000-8000-000000000003', s1, sh1, 'TASK_TICKED', t_session_start + interval '15 minutes', v_worker_id, p1, '{"task_id":"default_personal_hygiene"}'::jsonb, true, 900),
+        ('e8140a03-0000-4000-8000-000000000003', s1, sh1, 'TASK_TICKED', t_session_start + interval '15 minutes', v_worker_id, p1, jsonb_build_object('task_id', t1a::text), true, 900),
         ('e8140a04-0000-4000-8000-000000000004', s1, sh1, 'CHECK_IN', t_session_start + interval '90 minutes', v_worker_id, p1, '{"status":"GOING_WELL"}'::jsonb, true, 4500),
         ('e8140a05-0000-4000-8000-000000000005', s1, sh1, 'NOTE_SAVED', t_session_start + interval '2 hours', v_worker_id, p1, '{"note_type":"meal_prep"}'::jsonb, true, 1800),
         ('e8140a06-0000-4000-8000-000000000006', s1, sh1, 'CHECK_IN', t_session_start + interval '3 hours', v_worker_id, p1, '{"status":"GOING_WELL"}'::jsonb, true, 600),
-        ('e8140a07-0000-4000-8000-000000000007', s1, sh1, 'TASK_TICKED', t_session_start + interval '3 hours 30 minutes', v_worker_id, p1, '{"task_id":"default_meal_prep"}'::jsonb, true, 1800),
+        ('e8140a07-0000-4000-8000-000000000007', s1, sh1, 'TASK_TICKED', t_session_start + interval '3 hours 30 minutes', v_worker_id, p1, jsonb_build_object('task_id', t1a::text), true, 1800),
         ('e8140a08-0000-4000-8000-000000000008', s1, sh1, 'BREAK_START', t_break_start, v_worker_id, p1, '{"active":true}'::jsonb, false, 900),
         ('e8140a09-0000-4000-8000-000000000009', s1, sh1, 'BREAK_END', t_break_end, v_worker_id, p1, '{"active":false}'::jsonb, false, 900),
         ('e8140a0a-0000-4000-8000-00000000000a', s1, sh1, 'NOTE_SAVED', t_last_activity, v_worker_id, p1, '{"note_type":"progress"}'::jsonb, true, 1500);
@@ -965,24 +980,22 @@ BEGIN
 
     -- ── COMPLETED TODAY: Isla + full compliance ──────────────────────────────
     v_tasks_done := jsonb_build_array(
-        jsonb_build_object('task_id','default_personal_hygiene','type','default','label','Personal Hygiene / Showering',
+        jsonb_build_object('task_id', t5a::text, 'type','participant','label','Morning hygiene checklist',
             'description','Morning hygiene routine with pictorial checklist.','completed',true,
             'completed_at', (t_done_today_s + interval '35 minutes')::text,
             'checked_at', (t_done_today_s + interval '35 minutes')::text,
             'note','One verbal prompt on toothbrushing. Nitrile gloves used.','order',1,'mandatory',true,
-            'goal_id', g5a::text, 'goal_title','Morning hygiene independence'),
-        jsonb_build_object('task_id','default_meal_prep','type','default','label','Meal Preparation',
+            'evidence_required','notes',
+            'goal_id', g5a::text, 'goal_title','Morning hygiene independence',
+            'shift_task_id', 'e8140501-0000-4000-a000-000000000005'),
+        jsonb_build_object('task_id', t5b::text, 'type','participant','label','Breakfast meal prep',
             'description','Breakfast with visual recipe card.','completed',true,
             'completed_at', (t_done_today_s + interval '75 minutes')::text,
             'checked_at', (t_done_today_s + interval '75 minutes')::text,
             'note','Toast and scrambled eggs completed. Workspace cleaned.','order',2,'mandatory',true,
-            'goal_id', g5b::text, 'goal_title','Breakfast meal prep skills'),
-        jsonb_build_object('task_id','default_documentation','type','default','label','Documentation / Notes',
-            'description','Shift summary and goal progress notes.','completed',true,
-            'completed_at', (t_done_today_e - interval '5 minutes')::text,
-            'checked_at', (t_done_today_e - interval '5 minutes')::text,
-            'note','Compliance pack complete.','order',3,'mandatory',true,
-            'goal_id', g5a::text, 'goal_title','Morning hygiene independence')
+            'evidence_required','notes',
+            'goal_id', g5b::text, 'goal_title','Breakfast meal prep skills',
+            'shift_task_id', 'e8140502-0000-4000-a000-000000000005')
     );
 
     INSERT INTO public.sessions (
@@ -1043,11 +1056,6 @@ BEGIN
         clocked_in_at = EXCLUDED.clocked_in_at, clocked_out_at = EXCLUDED.clocked_out_at, updated_at = now();
 
     UPDATE public.sessions SET shift_id = sh5 WHERE id = s5;
-
-    INSERT INTO public.shift_tasks (id, shift_id, task_id, organization_id) VALUES
-        ('e8140501-0000-4000-a000-000000000005', sh5, t5a, v_org_id),
-        ('e8140502-0000-4000-a000-000000000005', sh5, t5b, v_org_id)
-    ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO public.budget_usage (
         id, plan_id, session_id, category, amount, hourly_rate, duration_minutes, description
@@ -1140,11 +1148,6 @@ BEGIN
         duration_minutes = EXCLUDED.duration_minutes, updated_at = now();
 
     UPDATE public.sessions SET shift_id = sh6 WHERE id = s6;
-
-    INSERT INTO public.shift_tasks (id, shift_id, task_id, organization_id) VALUES
-        ('e8140501-0000-4000-a000-000000000006', sh6, t6a, v_org_id),
-        ('e8140502-0000-4000-a000-000000000006', sh6, t6b, v_org_id)
-    ON CONFLICT (id) DO NOTHING;
 
     DELETE FROM public.shift_activity_events WHERE shift_id = sh6;
     DELETE FROM public.shift_checkins WHERE shift_id = sh6;
@@ -1280,11 +1283,6 @@ BEGIN
 
     UPDATE public.sessions SET shift_id = sh7 WHERE id = s7;
 
-    INSERT INTO public.shift_tasks (id, shift_id, task_id, organization_id) VALUES
-        ('e8140501-0000-4000-a000-000000000007', sh7, t7a, v_org_id),
-        ('e8140502-0000-4000-a000-000000000007', sh7, t7b, v_org_id)
-    ON CONFLICT (id) DO NOTHING;
-
     DELETE FROM public.shift_activity_events WHERE shift_id = sh7;
     DELETE FROM public.shift_checkins WHERE shift_id = sh7;
     DELETE FROM public.shift_breaks WHERE shift_id = sh7;
@@ -1356,6 +1354,103 @@ BEGIN
     ) ON CONFLICT (id) DO UPDATE SET
         scheduled_start = EXCLUDED.scheduled_start, scheduled_end = EXCLUDED.scheduled_end,
         status = 'scheduled', updated_at = now();
+
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- CARECLIQV2-330 / 331 / 332 — shift_tasks + verified task_completions
+    -- Links every shift to participant_tasks so worker checklist / verify / invoice
+    -- can be tested without manually assigning tasks in the UI.
+    -- ══════════════════════════════════════════════════════════════════════════
+    INSERT INTO public.shift_tasks (
+        id, shift_id, task_id, organization_id,
+        completed, completed_at, note, sort_order, marked_na, na_reason, created_at
+    ) VALUES
+        -- Harper (in_progress): t1a done, t1b open
+        ('e8140501-0000-4000-a000-000000000001', sh1, t1a, v_org_id,
+         true, t_session_start - interval '15 minutes',
+         'Completed with verbal prompts.', 1, false, NULL, t_long_in),
+        ('e8140502-0000-4000-a000-000000000001', sh1, t1b, v_org_id,
+         false, NULL, '', 2, false, NULL, t_long_in),
+        -- Miles (today scheduled AM) — clock-in checklist test
+        ('e8140501-0000-4000-a000-000000000002', sh2, t2a, v_org_id,
+         false, NULL, '', 1, false, NULL, now()),
+        ('e8140502-0000-4000-a000-000000000002', sh2, t2b, v_org_id,
+         false, NULL, '', 2, false, NULL, now()),
+        -- Freya (incoming)
+        ('e8140501-0000-4000-a000-000000000003', sh3, t3a, v_org_id,
+         false, NULL, '', 1, false, NULL, now()),
+        ('e8140502-0000-4000-a000-000000000003', sh3, t3b, v_org_id,
+         false, NULL, '', 2, false, NULL, now()),
+        -- Callum (incoming)
+        ('e8140501-0000-4000-a000-000000000004', sh4, t4a, v_org_id,
+         false, NULL, '', 1, false, NULL, now()),
+        ('e8140502-0000-4000-a000-000000000004', sh4, t4b, v_org_id,
+         false, NULL, '', 2, false, NULL, now()),
+        -- Isla (today completed)
+        ('e8140501-0000-4000-a000-000000000005', sh5, t5a, v_org_id,
+         true, t_done_today_s + interval '40 minutes',
+         'Hygiene checklist complete with verbal prompting.', 1, false, NULL, t_done_today_s),
+        ('e8140502-0000-4000-a000-000000000005', sh5, t5b, v_org_id,
+         true, t_done_today_s + interval '70 minutes',
+         'Breakfast meal prep complete.', 2, false, NULL, t_done_today_s),
+        -- Noah (past completed)
+        ('e8140501-0000-4000-a000-000000000006', sh6, t6a, v_org_id,
+         true, t_past1_s + interval '50 minutes',
+         'Scrambled eggs and toast; two verbal prompts.', 1, false, NULL, t_past1_s),
+        ('e8140502-0000-4000-a000-000000000006', sh6, t6b, v_org_id,
+         true, t_past1_s + interval '4 hours',
+         'Torrens walk completed.', 2, false, NULL, t_past1_s),
+        -- Ava (past completed)
+        ('e8140501-0000-4000-a000-000000000007', sh7, t7a, v_org_id,
+         true, t_past2_s + interval '40 minutes',
+         'Whiteboard routine complete.', 1, false, NULL, t_past2_s),
+        ('e8140502-0000-4000-a000-000000000007', sh7, t7b, v_org_id,
+         true, t_past2_s + interval '4 hours',
+         'Garden visit prep done.', 2, false, NULL, t_past2_s),
+        -- Ethan (today scheduled PM) — clock-in checklist test
+        ('e8140501-0000-4000-a000-000000000008', sh8, t8a, v_org_id,
+         false, NULL, '', 1, false, NULL, now()),
+        ('e8140502-0000-4000-a000-000000000008', sh8, t8b, v_org_id,
+         false, NULL, '', 2, false, NULL, now())
+    ON CONFLICT (id) DO UPDATE SET
+        shift_id = EXCLUDED.shift_id,
+        task_id = EXCLUDED.task_id,
+        organization_id = EXCLUDED.organization_id,
+        completed = EXCLUDED.completed,
+        completed_at = EXCLUDED.completed_at,
+        note = EXCLUDED.note,
+        sort_order = EXCLUDED.sort_order,
+        marked_na = EXCLUDED.marked_na,
+        na_reason = EXCLUDED.na_reason;
+
+    -- CARECLIQV2-332: verified completions for Isla (ready for invoice period query)
+    INSERT INTO public.task_completions (
+        id, task_id, shift_id, participant_id, organization_id,
+        completed_by, completion_date, duration_minutes,
+        evidence_type, evidence_notes, evidence_verified,
+        verified_by, verified_at, status,
+        price_item_code, billed_amount, created_at, updated_at
+    ) VALUES
+        (
+            'e8140c01-0000-4000-b000-000000000005', t5a, sh5, p5, v_org_id,
+            v_worker_id, (t_done_today_s AT TIME ZONE 'Australia/Adelaide')::date, 75,
+            'notes', 'Hygiene checklist complete with verbal prompting.', true,
+            v_coordinator_id, t_done_today_e, 'verified',
+            '01_011_0107_1_1', 84.45, t_done_today_e, t_done_today_e
+        ),
+        (
+            'e8140c02-0000-4000-b000-000000000005', t5b, sh5, p5, v_org_id,
+            v_worker_id, (t_done_today_s AT TIME ZONE 'Australia/Adelaide')::date, 75,
+            'notes', 'Breakfast meal prep complete.', true,
+            v_coordinator_id, t_done_today_e, 'verified',
+            '01_011_0107_1_1', 84.45, t_done_today_e, t_done_today_e
+        )
+    ON CONFLICT (id) DO UPDATE SET
+        status = 'verified',
+        evidence_verified = true,
+        verified_by = EXCLUDED.verified_by,
+        verified_at = EXCLUDED.verified_at,
+        billed_amount = EXCLUDED.billed_amount,
+        updated_at = now();
 
     -- ══════════════════════════════════════════════════════════════════════════
     -- INCIDENT REPORTS — completed shifts only (Isla, Noah, Ava)

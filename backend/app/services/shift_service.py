@@ -900,7 +900,14 @@ def _shift_card_payload(
         "risks_acknowledged_by": shift.get("risks_acknowledged_by"),
         "risks_acknowledged": bool(shift.get("risks_acknowledged_at")),
         "active_goals": shift.get("active_goals") or [],
-        "tasks": shift.get("tasks") or [],
+        "tasks": (
+            _load_tasks_from_shift_tasks(
+                str(shift.get("id") or ""),
+                str(shift.get("organization_id") or ""),
+            )
+            or shift.get("tasks")
+            or []
+        ),
         "session_id": shift.get("session_id"),
         "session_status": session_status,
         "session_started_at": (session or {}).get("start_time"),
@@ -1922,6 +1929,277 @@ def _load_tasks_from_templates(
         return _default_tasks_copy()
 
 
+def _load_tasks_from_shift_tasks(
+    shift_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    """Build worker checklist from normalized shift_tasks → participant_tasks.
+
+    CARECLIQV2-330: preferred source over templates / FALLBACK_SHIFT_TASKS.
+    """
+    if not shift_id or not organization_id:
+        return []
+    try:
+        supabase = get_supabase_admin()
+        link_resp = (
+            supabase.table("shift_tasks")
+            .select(
+                "id, task_id, completed, completed_at, note, sort_order, marked_na, na_reason, created_at"
+            )
+            .eq("shift_id", shift_id)
+            .eq("organization_id", organization_id)
+            .order("sort_order")
+            .execute()
+        )
+        links = link_resp.data or []
+        if not isinstance(links, list) or not links:
+            return []
+
+        task_ids = [str(row["task_id"]) for row in links if isinstance(row, dict) and row.get("task_id")]
+        if not task_ids:
+            return []
+
+        pt_resp = (
+            supabase.table("participant_tasks")
+            .select(
+                "id, name, description, is_mandatory, goal_id, evidence_required, "
+                "priority, category, status"
+            )
+            .in_("id", task_ids)
+            .eq("organization_id", organization_id)
+            .execute()
+        )
+        pt_rows = pt_resp.data or []
+        if not isinstance(pt_rows, list):
+            return []
+        pt_by_id = {
+            str(row["id"]): row
+            for row in pt_rows
+            if isinstance(row, dict) and row.get("id")
+        }
+
+        goal_ids = list({
+            str(row.get("goal_id"))
+            for row in pt_by_id.values()
+            if row.get("goal_id")
+        })
+        goals_by_id: dict[str, str] = {}
+        if goal_ids:
+            try:
+                goals_resp = (
+                    supabase.table("ndis_goals")
+                    .select("id, name, title")
+                    .in_("id", goal_ids)
+                    .execute()
+                )
+                for g in goals_resp.data or []:
+                    if not isinstance(g, dict) or not g.get("id"):
+                        continue
+                    goals_by_id[str(g["id"])] = str(
+                        g.get("name") or g.get("title") or ""
+                    )
+            except Exception as goal_exc:
+                logger.debug("goal title lookup skipped: %s", goal_exc)
+
+        tasks: list[dict[str, Any]] = []
+        for idx, link in enumerate(links, start=1):
+            task_id = str(link.get("task_id") or "")
+            pt = pt_by_id.get(task_id)
+            if not pt:
+                continue
+            goal_id = str(pt["goal_id"]) if pt.get("goal_id") else None
+            sort_order = link.get("sort_order")
+            tasks.append({
+                "task_id": task_id,
+                "type": "participant",
+                "label": pt.get("name") or "",
+                "description": pt.get("description") or "",
+                "completed": bool(link.get("completed")),
+                "completed_at": link.get("completed_at"),
+                "note": link.get("note") or "",
+                "order": int(sort_order) if sort_order is not None else idx,
+                "mandatory": bool(pt.get("is_mandatory")),
+                "goal_id": goal_id,
+                "goal_title": goals_by_id.get(goal_id) if goal_id else None,
+                "outcome_tip": None,
+                "evidence_required": pt.get("evidence_required") or "none",
+                "marked_na": bool(link.get("marked_na")),
+                "na_reason": link.get("na_reason"),
+                "shift_task_id": str(link["id"]) if link.get("id") else None,
+            })
+        return tasks
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        logger.warning("shift_tasks load failed for %s: %s", shift_id, exc)
+        return []
+
+
+def _resolve_shift_checklist_tasks(
+    shift: dict[str, Any],
+    organization_id: str,
+    *,
+    prefer_existing_jsonb: bool = True,
+) -> list[dict[str, Any]]:
+    """Resolve checklist: shift_tasks first, then JSONB, then templates/fallback."""
+    shift_id = str(shift.get("id") or "")
+    normalized = _load_tasks_from_shift_tasks(shift_id, organization_id)
+    if normalized:
+        return normalized
+
+    existing = shift.get("tasks") or []
+    if prefer_existing_jsonb and existing:
+        return list(existing)
+
+    return _load_tasks_from_templates(
+        str(shift.get("participant_id") or ""),
+        organization_id,
+        str(shift.get("shift_type") or ""),
+    )
+
+
+def _sync_shift_tasks_progress(
+    shift_id: str,
+    organization_id: str,
+    tasks: list[dict[str, Any]],
+) -> None:
+    """Dual-write checklist progress onto normalized shift_tasks rows."""
+    if not shift_id or not organization_id or not tasks:
+        return
+    try:
+        supabase = get_supabase_admin()
+        now = _now_iso()
+        for task in tasks:
+            task_id = str(task.get("task_id") or "")
+            if not task_id or task_id.startswith("fallback_"):
+                continue
+            # Legacy JSONB custom_* ids are not participant_tasks UUIDs
+            if task_id.startswith("custom_"):
+                try:
+                    uuid.UUID(task_id)
+                except ValueError:
+                    continue
+
+            payload = {
+                "completed": bool(task.get("completed")),
+                "completed_at": task.get("completed_at") if task.get("completed") else None,
+                "note": task.get("note") or "",
+                "sort_order": task.get("order"),
+                "marked_na": bool(task.get("marked_na")),
+                "na_reason": task.get("na_reason"),
+            }
+            # Prefer update by shift_task_id when present
+            shift_task_id = task.get("shift_task_id")
+            if shift_task_id:
+                supabase.table("shift_tasks").update(payload).eq(
+                    "id", str(shift_task_id)
+                ).eq("organization_id", organization_id).execute()
+                continue
+
+            existing = (
+                supabase.table("shift_tasks")
+                .select("id")
+                .eq("shift_id", shift_id)
+                .eq("task_id", task_id)
+                .eq("organization_id", organization_id)
+                .limit(1)
+                .execute()
+            )
+            rows = existing.data or []
+            if rows:
+                supabase.table("shift_tasks").update(payload).eq(
+                    "id", str(rows[0]["id"])
+                ).execute()
+            else:
+                # Only link real participant_tasks UUIDs
+                try:
+                    uuid.UUID(task_id)
+                except ValueError:
+                    continue
+                insert_payload = {
+                    "shift_id": shift_id,
+                    "task_id": task_id,
+                    "organization_id": organization_id,
+                    "created_at": now,
+                    **payload,
+                }
+                try:
+                    supabase.table("shift_tasks").insert(insert_payload).execute()
+                except Exception as insert_exc:
+                    logger.debug(
+                        "shift_tasks insert skipped for %s/%s: %s",
+                        shift_id,
+                        task_id,
+                        insert_exc,
+                    )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            logger.debug("shift_tasks progress sync skipped (schema): %s", exc)
+            return
+        logger.warning("shift_tasks progress sync failed for %s: %s", shift_id, exc)
+
+
+def _create_custom_participant_task_for_shift(
+    *,
+    shift: dict[str, Any],
+    organization_id: str,
+    worker_id: str,
+    label: str,
+    sort_order: int,
+) -> dict[str, Any]:
+    """Create participant_tasks + shift_tasks for a worker-added custom checklist item."""
+    supabase = get_supabase_admin()
+    now = _now_iso()
+    participant_id = str(shift.get("participant_id") or "")
+    shift_id = str(shift.get("id") or "")
+    pt_payload = {
+        "participant_id": participant_id,
+        "organization_id": organization_id,
+        "created_by": worker_id,
+        "name": label,
+        "description": "",
+        "status": "pending",
+        "is_mandatory": False,
+        "evidence_required": "none",
+        "created_at": now,
+        "updated_at": now,
+    }
+    pt_resp = supabase.table("participant_tasks").insert(pt_payload).execute()
+    pt_rows = pt_resp.data or []
+    if not pt_rows:
+        raise ValueError("Failed to create custom participant task.")
+    pt = pt_rows[0]
+    task_id = str(pt["id"])
+    st_payload = {
+        "shift_id": shift_id,
+        "task_id": task_id,
+        "organization_id": organization_id,
+        "completed": False,
+        "sort_order": sort_order,
+        "note": "",
+        "created_at": now,
+    }
+    st_resp = supabase.table("shift_tasks").insert(st_payload).execute()
+    st_rows = st_resp.data or []
+    shift_task_id = str(st_rows[0]["id"]) if st_rows else None
+    return {
+        "task_id": task_id,
+        "type": "custom",
+        "label": label,
+        "description": "",
+        "completed": False,
+        "completed_at": None,
+        "note": "",
+        "order": sort_order,
+        "mandatory": False,
+        "goal_id": None,
+        "goal_title": None,
+        "outcome_tip": None,
+        "evidence_required": "none",
+        "shift_task_id": shift_task_id,
+    }
+
+
 def _apply_verified_check_in(
     shift: dict[str, Any],
     organization_id: str,
@@ -2038,11 +2316,8 @@ def clock_in_shift(
         normalized_client_ts = normalize_client_timestamp(client_timestamp)
     
     now = normalized_client_ts or _now_iso()
-    tasks = shift.get("tasks") or []
-    if not tasks:
-        participant_id_str = str(shift.get("participant_id") or "")
-        shift_type_str = str(shift.get("shift_type") or "")
-        tasks = _load_tasks_from_templates(participant_id_str, organization_id, shift_type_str)
+    # CARECLIQV2-330: prefer shift_tasks → participant_tasks over templates/fallback.
+    tasks = _resolve_shift_checklist_tasks(shift, organization_id, prefer_existing_jsonb=True)
 
     update_payload: dict[str, Any] = {
         "status": "in_progress",
@@ -2164,6 +2439,8 @@ def update_shift_tasks(
             )
 
     now = _now_iso()
+    # CARECLIQV2-330: dual-write progress to normalized shift_tasks.
+    _sync_shift_tasks_progress(shift_id, organization_id, tasks)
     try:
         resp = (
             get_supabase_admin()
@@ -2222,22 +2499,31 @@ def add_custom_shift_task(
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
 
-    tasks = list(shift.get("tasks") or _load_tasks_from_templates(
-        str(shift.get("participant_id") or ""),
-        organization_id,
-        str(shift.get("shift_type") or ""),
-    ))
+    tasks = list(
+        _resolve_shift_checklist_tasks(shift, organization_id, prefer_existing_jsonb=True)
+    )
     max_order = max((int(t.get("order") or 0) for t in tasks), default=0)
-    tasks.append({
-        "task_id": f"custom_{uuid.uuid4().hex[:8]}",
-        "type": "custom",
-        "label": label,
-        "description": "",
-        "completed": False,
-        "completed_at": None,
-        "note": "",
-        "order": max_order + 1,
-    })
+    try:
+        custom_task = _create_custom_participant_task_for_shift(
+            shift=shift,
+            organization_id=organization_id,
+            worker_id=worker_id,
+            label=label,
+            sort_order=max_order + 1,
+        )
+        tasks.append(custom_task)
+    except Exception as exc:
+        logger.warning("normalized custom task create failed, JSONB-only: %s", exc)
+        tasks.append({
+            "task_id": f"custom_{uuid.uuid4().hex[:8]}",
+            "type": "custom",
+            "label": label,
+            "description": "",
+            "completed": False,
+            "completed_at": None,
+            "note": "",
+            "order": max_order + 1,
+        })
     return update_shift_tasks(shift_id, worker_id, organization_id, tasks)
 
 
@@ -3223,10 +3509,16 @@ def sync_session_notes(
         auto_saved_at = item.get("auto_saved_at") or now
         created_at = item.get("created_at") or now
         note_type = str(item.get("note_type") or "text").strip().lower()
-        if task_id:
-            category = "task_context"
-        elif note_type in ("check-in", "checkin"):
+        if note_type in ("check-in", "checkin"):
             category = "session_checkin"
+        elif task_id and note_type == "voice":
+            category = "task_context_voice"
+        elif task_id and note_type == "photo":
+            category = "task_context_photo"
+        elif task_id and note_type == "file":
+            category = "task_context_file"
+        elif task_id:
+            category = "task_context"
         elif note_type == "voice":
             category = "session_progress_voice"
         elif note_type == "photo":
