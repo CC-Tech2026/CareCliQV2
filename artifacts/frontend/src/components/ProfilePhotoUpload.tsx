@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { cropImageToCircle } from "@/lib/image-crop";
-import { uploadProfilePhoto } from "@/services/userService";
+import { deleteProfilePhoto, uploadProfilePhoto } from "@/services/userService";
 
 type Props = {
   currentUrl?: string | null;
@@ -63,6 +63,7 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
   async function removePhoto() {
     setBusy(true);
     try {
+      await deleteProfilePhoto();
       setPreview("");
       updateUser({ profile_photo_url: null });
       toast({ title: translate("profile.photo.removed") });

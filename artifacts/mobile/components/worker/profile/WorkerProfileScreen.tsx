@@ -26,7 +26,7 @@ export function WorkerProfileScreen({ initialTab = "availability", bottomInset =
   const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
 
   const { data: profile } = useQuery({
-    queryKey: ["worker", "profile"],
+    queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
   });
 
