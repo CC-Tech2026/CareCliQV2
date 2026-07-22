@@ -194,10 +194,10 @@ export default function ProfilePhotoScreen() {
 
           <Pressable
             onPress={() => void handleSave()}
-            disabled={busy || !localUri}
+            disabled={busy || !localUri || !transform}
             style={[
               styles.primaryBtn,
-              { backgroundColor: colors.primary, opacity: busy || !localUri ? 0.45 : 1 },
+              { backgroundColor: colors.primary, opacity: busy || !localUri || !transform ? 0.45 : 1 },
             ]}
           >
             {busy ? (

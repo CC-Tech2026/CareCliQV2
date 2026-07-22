@@ -120,11 +120,12 @@ export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = fals
           {items.map((item, index) => {
             const low = isLow(item);
             const category = item.category || t("toolkit.general");
+            const quantity = Number(item.quantity ?? 0);
             const meta = t("toolkit.unitsAvailable", {
               category,
-              count: `${item.quantity} ${item.unit}`,
+              count: `${quantity} ${item.unit}`,
             });
-            const canUse = item.quantity > 0;
+            const canUse = quantity > 0;
 
             return (
               <View

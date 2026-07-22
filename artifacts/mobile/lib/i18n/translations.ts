@@ -347,6 +347,7 @@ const en = {
   "credentials.uploadFailed": "Upload failed",
 
   "profile.title": "My Profile",
+  "profile.loadError": "Couldn't load your profile. Tap to retry.",
   "profile.availability.weekly": "Weekly availability",
   "profile.availability.slotsMarked": "{count} shift slots marked available this week",
   "profile.availability.slot.am": "AM (6–2)",

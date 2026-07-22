@@ -127,6 +127,9 @@ export function cropRectFromTransform(
   circleSize: number,
 ): { originX: number; originY: number; width: number; height: number } {
   const { translateX, translateY, scale, imageWidth, imageHeight } = transform;
+  if (!imageWidth || !imageHeight) {
+    return { originX: 0, originY: 0, width: circleSize, height: circleSize };
+  }
   const baseScale = Math.max(circleSize / imageWidth, circleSize / imageHeight);
   const displayScale = baseScale * scale;
   const renderW = imageWidth * displayScale;

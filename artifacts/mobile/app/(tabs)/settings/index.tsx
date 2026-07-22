@@ -265,8 +265,12 @@ export default function SettingsTabScreen() {
       openEnableConfirm(kind);
       return;
     }
-    await disableBiometricUnlock();
-    setBiometric(false);
+    try {
+      await disableBiometricUnlock();
+      setBiometric(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("settings.toast.saveFailed"), "error");
+    }
   };
 
   const handleHapticToggle = (next: boolean) => {
