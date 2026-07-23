@@ -424,13 +424,6 @@ export function getMyClientNdisPlan(id: string) {
   return workerFetch<WorkerNdisPlan>(`/api/worker/my-clients/${id}/ndis-plan`);
 }
 
-export function createMyClientNote(id: string, body: { notes: string }) {
-  return workerFetch<ClientSessionRecord>(`/api/worker/my-clients/${id}/notes`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
 export function createMyClientSession(id: string, body: CreateWorkerSessionInput = {}) {
   return workerFetch<ClientSessionRecord>(`/api/worker/my-clients/${id}/sessions`, {
     method: "POST",

@@ -42,13 +42,6 @@ export function DuringShiftActionsSidebar({ shiftId, officePhone }: Props) {
       accent: "#16A34A",
       onPress: () => void Linking.openURL(`tel:${phone}`),
     },
-    {
-      id: "emergency",
-      label: "Emergency 000",
-      icon: "phone",
-      accent: "#DC2626",
-      onPress: () => void Linking.openURL("tel:000"),
-    },
   ];
 
   if (!expanded) {
