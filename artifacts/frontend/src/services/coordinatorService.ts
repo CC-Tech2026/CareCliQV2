@@ -953,7 +953,7 @@ export type TaskTemplate = {
 };
 
 export type TaskTemplatesResponse = {
-  default_tasks: TaskTemplate[];
+  system_tasks: TaskTemplate[];
   custom_tasks: TaskTemplate[];
 };
 

@@ -3406,7 +3406,9 @@ async def delete_task_template(
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     try:
-        supabase.table("participant_task_templates").update({"is_active": False}).eq("id", template_id).eq("organization_id", org_id).execute()
+        # status is canonical (list_task_templates filters on it); is_active is synced
+        # from status via trigger, not the other way round, so it must be set here too.
+        supabase.table("participant_task_templates").update({"status": "archived", "is_active": False}).eq("id", template_id).eq("organization_id", org_id).execute()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task template delete failed: {exc}")
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import SessionDetail from "@/pages/session-detail";
@@ -9,8 +9,6 @@ import type { SessionRecord } from "@/pages/patients";
 interface ParticipantSessionsTabProps {
   sessions: SessionRecord[];
   isLoading: boolean;
-  isCoordinator: boolean;
-  onAssignShift: () => void;
   sessionPanelId: string | null;
   onSessionPanelIdChange: (id: string | null) => void;
 }
@@ -19,8 +17,6 @@ interface ParticipantSessionsTabProps {
 export function ParticipantSessionsTab({
   sessions,
   isLoading,
-  isCoordinator,
-  onAssignShift,
   sessionPanelId,
   onSessionPanelIdChange,
 }: ParticipantSessionsTabProps) {
@@ -53,12 +49,6 @@ export function ParticipantSessionsTab({
             {sessions.length}
           </span>
         </div>
-        {isCoordinator && (
-          <button type="button" onClick={onAssignShift}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
-            <CalendarClock size={13} /> Assign Shift
-          </button>
-        )}
       </div>
       {isLoading ? (
         <div className="space-y-2">
