@@ -7,6 +7,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/AuthContext";
 import {
   dismissNotification,
   fetchNotifications,
@@ -134,6 +135,7 @@ export function markShiftComplianceCheckinNotificationsRead(
 }
 
 export function useWorkerNotifications(unreadOnly = false) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...WORKER_NOTIFICATIONS_KEY, unreadOnly],
     queryFn: async () => {
@@ -141,10 +143,12 @@ export function useWorkerNotifications(unreadOnly = false) {
       return res.notifications;
     },
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 
 export function useWorkerNotificationsInfinite() {
+  const { isAuthenticated } = useAuth();
   return useInfiniteQuery({
     queryKey: [...WORKER_NOTIFICATIONS_KEY, "infinite"],
     queryFn: async ({ pageParam }) => {
@@ -162,6 +166,7 @@ export function useWorkerNotificationsInfinite() {
       return offset + NOTIFICATIONS_PAGE_SIZE;
     },
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 

@@ -1,19 +1,23 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/AuthContext";
 import { getMyCompliance } from "@/lib/worker-api";
 
 export const COMPLIANCE_SESSIONS_PAGE_SIZE = 10;
 
 export function useWorkerCompliance() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ["worker", "my-compliance", "overview"],
     queryFn: () => getMyCompliance({ sessionsLimit: 0 }),
     staleTime: 30_000,
     refetchOnFocus: true,
+    enabled: isAuthenticated,
   });
 }
 
 export function useWorkerComplianceSessionsInfinite() {
+  const { isAuthenticated } = useAuth();
   return useInfiniteQuery({
     queryKey: ["worker", "my-compliance", "sessions"],
     queryFn: async ({ pageParam }) => {
@@ -34,5 +38,6 @@ export function useWorkerComplianceSessionsInfinite() {
     },
     staleTime: 30_000,
     refetchOnFocus: true,
+    enabled: isAuthenticated,
   });
 }
