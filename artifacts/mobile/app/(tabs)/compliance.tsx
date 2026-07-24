@@ -231,7 +231,7 @@ export default function ComplianceTabScreen() {
       <WorkerMobileHeader title={t("nav.compliance")} />
 
       <View style={styles.segmentWrap}>
-        <View style={[styles.segmentTrack, { backgroundColor: colors.soft }]}>
+        <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
           {(
             [
               ["overview", t("compliance.segment.overview")],
@@ -245,14 +245,14 @@ export default function ComplianceTabScreen() {
                 onPress={() => setSegment(key)}
                 style={[
                   styles.segmentBtn,
-                  active && [{ backgroundColor: colors.card }, elevatedCardShadow(isDark)],
+                  { backgroundColor: active ? colors.primary : colors.soft },
                 ]}
               >
                 <Text
                   style={[
                     styles.segmentText,
                     {
-                      color: active ? colors.primary : colors.mutedForeground,
+                      color: active ? colors.primaryForeground : colors.mutedForeground,
                       fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
                     },
                   ]}
@@ -322,15 +322,14 @@ const styles = StyleSheet.create({
   segmentTrack: {
     flexDirection: "row",
     gap: 3,
-    padding: 3,
-    borderRadius: 14,
   },
   segmentBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 10,
-    borderRadius: 11,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   segmentText: { fontSize: 12 },
   list: { paddingHorizontal: 16, paddingTop: 4 },
