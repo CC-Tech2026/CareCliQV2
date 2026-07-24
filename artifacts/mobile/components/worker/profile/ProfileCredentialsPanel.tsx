@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
-import { SettingsSection } from "@/components/worker/settings/settings-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
@@ -62,19 +62,20 @@ function statusBadgeLabel(status: string, t: ReturnType<typeof useT>): string {
 
 type Props = {
   bottomInset?: number;
-  showSectionHeader?: boolean;
 };
 
-export function ProfileCredentialsPanel({ bottomInset = 24, showSectionHeader = false }: Props) {
+export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["credentials", "me"],
     queryFn: listMyCredentials,
+    enabled: isAuthenticated,
   });
 
   const summary = useMemo(
@@ -109,13 +110,9 @@ export function ProfileCredentialsPanel({ bottomInset = 24, showSectionHeader = 
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
-      {showSectionHeader ? (
-        <SettingsSection
-          title={t("credentials.title")}
-          description={t("settings.credentials.subtitle")}
-          icon="award"
-        />
-      ) : null}
+      <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("settings.credentials.subtitle")}
+      </Text>
       <View style={styles.summaryRow}>
         <SummaryPill
           label={t("profile.credentials.summary.valid", { count: summary.valid })}
@@ -242,6 +239,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
+  subtitle: { fontSize: 12, lineHeight: 17 },
   summaryRow: { flexDirection: "row", gap: 10 },
   summaryPill: {
     flex: 1,

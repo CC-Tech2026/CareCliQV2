@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -52,10 +53,12 @@ export function ProfileAvailabilityPanel({ bottomInset = 24, footerBottom = 0 }:
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["worker", "availability"],
     queryFn: getWorkerAvailability,
+    enabled: isAuthenticated,
   });
 
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);

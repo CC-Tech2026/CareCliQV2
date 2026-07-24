@@ -6,9 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   SettingsPanelCard,
   SettingsSaveButton,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -47,10 +47,12 @@ export default function SettingsEmergencyContactScreen() {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
+    enabled: isAuthenticated,
   });
 
   const [name, setName] = useState("");
@@ -96,12 +98,10 @@ export default function SettingsEmergencyContactScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection
-          title={t("settings.emergency.title")}
-          description={t("settings.emergency.subtitle")}
-          icon="alert-circle"
-        >
-          <SettingsPanelCard label={t("settings.emergency.section")}>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("settings.emergency.subtitle")}
+        </Text>
+        <SettingsPanelCard label={t("settings.emergency.section")}>
             <View style={styles.form}>
               <View style={styles.field}>
                 <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
@@ -171,7 +171,6 @@ export default function SettingsEmergencyContactScreen() {
               />
             </View>
           </SettingsPanelCard>
-        </SettingsSection>
       </ScrollView>
     </SettingsSubScreen>
   );
@@ -179,6 +178,7 @@ export default function SettingsEmergencyContactScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  subtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
   form: { gap: 14 },
   field: { gap: 6 },
   label: { fontSize: 12 },

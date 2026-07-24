@@ -22,12 +22,13 @@ type Props = {
 export function WorkerProfileScreen({ initialTab = "availability", bottomInset = 100 }: Props) {
   const colors = useColors();
   const t = useT();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
 
   const { data: profile, isError, refetch } = useQuery({
     queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
+    enabled: isAuthenticated,
   });
 
   return (

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -99,10 +100,12 @@ export function ComplianceIncidentsSection({ contentBottomPad = 110 }: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["incidents"],
     queryFn: listIncidents,
+    enabled: isAuthenticated,
   });
 
   const incidents = data ?? [];
