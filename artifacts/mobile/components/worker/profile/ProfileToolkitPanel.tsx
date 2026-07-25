@@ -135,11 +135,11 @@ export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
                   },
                 ]}
               >
-                <View style={[styles.iconWrap, { backgroundColor: low ? "#FEF3C7" : colors.soft }]}>
+                <View style={[styles.iconWrap, { backgroundColor: low ? colors.statusProgressBg : colors.soft }]}>
                   <Feather
                     name={low ? "alert-triangle" : "package"}
                     size={18}
-                    color={low ? "#B45309" : colors.composerPurple}
+                    color={low ? colors.warning : colors.composerPurple}
                   />
                 </View>
                 <View style={styles.copy}>
@@ -151,7 +151,7 @@ export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
                     {item.minimum_quantity ? ` · ${t("toolkit.minimum", { count: item.minimum_quantity })}` : ""}
                   </Text>
                   {low ? (
-                    <Text style={[styles.lowTag, { color: "#B45309", fontFamily: "Inter_700Bold" }]}>
+                    <Text style={[styles.lowTag, { color: colors.warning, fontFamily: "Inter_700Bold" }]}>
                       {t("toolkit.lowStock")}
                     </Text>
                   ) : null}
@@ -197,14 +197,14 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, lineHeight: 17 },
   hint: { fontSize: 13, lineHeight: 18 },
   emptyCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     padding: 24,
     alignItems: "center",
   },
   empty: { fontSize: 14, textAlign: "center" },
   card: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
   },

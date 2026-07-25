@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   banner: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 15, lineHeight: 20 },
   bannerMeta: { fontSize: 13, lineHeight: 18 },
   gridCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingTop: 14,

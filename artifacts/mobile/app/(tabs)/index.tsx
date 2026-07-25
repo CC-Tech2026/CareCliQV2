@@ -17,6 +17,7 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftStatusBadge } from "@/components/worker/ShiftStatusBadge";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
@@ -241,7 +242,7 @@ export default function HomeScreen() {
             />
           }
         >
-          <Text style={[styles.greeting, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.greeting, { color: colors.foreground, fontFamily: FontFamily.h1 }]}>
             {t("dashboard.greetingWithName", { greeting, name: displayName })}
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
