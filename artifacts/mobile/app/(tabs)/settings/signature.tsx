@@ -5,21 +5,22 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import React from "react";
-import { ScrollView, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsSignaturePad } from "@/components/worker/settings/SettingsSignaturePad";
 import {
   SettingsLoadingRow,
   SettingsPanelCard,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
+import { useColors } from "@/hooks/useColors";
 
 export default function SettingsSignatureScreen() {
   const t = useT();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -69,24 +70,21 @@ export default function SettingsSignatureScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection
-          title={t("settings.signature.label")}
-          description={t("settings.signature.subtitle")}
-          icon="edit-3"
-        >
-          <SettingsPanelCard label={t("settings.signature.section")}>
-            {isLoading ? (
-              <SettingsLoadingRow label={t("settings.loading")} />
-            ) : (
-              <SettingsSignaturePad
-                saving={saving}
-                savedSignature={serverSettings?.signature}
-                onSave={handleSaveSignature}
-                onClearSaved={handleClearSignature}
-              />
-            )}
-          </SettingsPanelCard>
-        </SettingsSection>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("settings.signature.subtitle")}
+        </Text>
+        <SettingsPanelCard label={t("settings.signature.section")}>
+          {isLoading ? (
+            <SettingsLoadingRow label={t("settings.loading")} />
+          ) : (
+            <SettingsSignaturePad
+              saving={saving}
+              savedSignature={serverSettings?.signature}
+              onSave={handleSaveSignature}
+              onClearSaved={handleClearSignature}
+            />
+          )}
+        </SettingsPanelCard>
       </ScrollView>
     </SettingsSubScreen>
   );
@@ -94,4 +92,5 @@ export default function SettingsSignatureScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  subtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
 });

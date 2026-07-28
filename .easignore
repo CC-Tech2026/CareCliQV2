@@ -1,0 +1,13 @@
+# Excluded from EAS Build uploads — irrelevant to building the mobile app,
+# and some of these files carry Windows permission/zone-identifier metadata
+# that breaks tar extraction on the remote Linux builder (see EAS build
+# c3e3fd64-fad6-4fe0-99bd-e60596581cca: "Cannot open: Permission denied").
+attached_assets/
+markdown/
+temp/
+deployment_ready/
+docs/
+performance/
+*.pdf
+artifacts/mobile/android/
+artifacts/mobile/ios/

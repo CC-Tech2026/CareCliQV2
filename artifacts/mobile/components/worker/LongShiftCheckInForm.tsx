@@ -80,6 +80,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
             { backgroundColor: colors.card, paddingBottom: insets.bottom + 12, maxHeight: "92%" },
           ]}
         >
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerText}>
               <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
@@ -260,6 +261,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: "hidden",
+    paddingTop: 10,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 4,
   },
   header: {
     flexDirection: "row",

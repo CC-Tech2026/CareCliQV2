@@ -15,6 +15,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
@@ -38,6 +39,7 @@ const PRIORITY_OPTIONS: { value: Priority; label: string; dot: string }[] = [
 
 export default function ShiftMessageOfficeScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: shift } = useWorkerShift(id);
@@ -246,38 +248,49 @@ export default function ShiftMessageOfficeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal visible={priorityOpen} transparent animationType="fade" onRequestClose={() => setPriorityOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setPriorityOpen(false)}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Priority</Text>
-            {PRIORITY_OPTIONS.map((opt) => {
-              const active = opt.value === priority;
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => {
-                    setPriority(opt.value);
-                    setPriorityOpen(false);
-                  }}
-                  style={[styles.modalOption, active && { backgroundColor: colors.activeBg }]}
-                >
-                  <View style={[styles.dot, { backgroundColor: opt.dot }]} />
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      {
-                        color: active ? colors.primary : colors.foreground,
-                        fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
-                      },
-                    ]}
+      <Modal visible={priorityOpen} transparent animationType="slide" onRequestClose={() => setPriorityOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setPriorityOpen(false)}>
+          <Pressable
+            style={[styles.sheetCard, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Priority</Text>
+              <Pressable onPress={() => setPriorityOpen(false)} hitSlop={8}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <View style={styles.sheetBody}>
+              {PRIORITY_OPTIONS.map((opt) => {
+                const active = opt.value === priority;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => {
+                      setPriority(opt.value);
+                      setPriorityOpen(false);
+                    }}
+                    style={[styles.modalOption, active && { backgroundColor: colors.activeBg }]}
                   >
-                    {opt.label}
-                  </Text>
-                  {active ? <Feather name="check" size={16} color={colors.primary} style={{ marginLeft: "auto" }} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
+                    <View style={[styles.dot, { backgroundColor: opt.dot }]} />
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        {
+                          color: active ? colors.primary : colors.foreground,
+                          fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
+                        },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                    {active ? <Feather name="check" size={16} color={colors.primary} style={{ marginLeft: "auto" }} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </WorkerStackScreen>
@@ -361,19 +374,32 @@ const styles = StyleSheet.create({
   historyPriority: { fontSize: 12 },
   historyTime: { fontSize: 11, marginLeft: "auto" },
   historyText: { fontSize: 14, lineHeight: 20, marginTop: 6 },
-  modalBackdrop: {
+  sheetBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    paddingHorizontal: 32,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
   },
-  modalCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-    gap: 2,
+  sheetCard: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 10,
   },
-  modalTitle: { fontSize: 15, paddingHorizontal: 8, paddingVertical: 8 },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    marginBottom: 6,
+  },
+  sheetTitle: { fontSize: 17 },
+  sheetBody: { paddingHorizontal: 12, paddingBottom: 8, gap: 2 },
   modalOption: {
     flexDirection: "row",
     alignItems: "center",

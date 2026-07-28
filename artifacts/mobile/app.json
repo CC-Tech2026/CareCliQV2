@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#4B3F91"
+      "backgroundColor": "#FFFEF0"
     },
 
     "ios": {
@@ -39,7 +39,7 @@
       "splash": {
         "image": "./assets/images/logo.png",
         "resizeMode": "contain",
-        "backgroundColor": "#4B3F91"
+        "backgroundColor": "#FFFEF0"
       },
       "permissions": [
         "CAMERA",
@@ -73,9 +73,9 @@
           "image": "./assets/images/logo.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#4B3F91",
+          "backgroundColor": "#FFFEF0",
           "android": {
-            "backgroundColor": "#4B3F91",
+            "backgroundColor": "#FFFEF0",
             "image": "./assets/images/logo.png",
             "imageWidth": 180
           }

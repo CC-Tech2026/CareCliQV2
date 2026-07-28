@@ -52,6 +52,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+render-dev.env
 backend/secrets/*.json
 submit-activity.sh
 docs/CareScribe_Docs/*
