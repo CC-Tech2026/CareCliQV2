@@ -179,10 +179,14 @@ def _cors_origins() -> list[str]:
     frontend = os.getenv("FRONTEND_URL", "*").strip()
     return [frontend] if frontend else ["*"]
 
+def _cors_origin_regex() -> str | None:
+    """Matches Cloudflare Pages preview subdomains, e.g. abc123.carecliq-dev.pages.dev"""
+    return os.getenv("CORS_ORIGIN_REGEX", r"https://[a-z0-9-]+\.carecliq-dev\.pages\.dev").strip() or None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
+    allow_origin_regex=_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
