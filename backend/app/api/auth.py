@@ -915,13 +915,18 @@ async def complete_onboarding(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     supabase = get_supabase_admin()
+    # Support workers still have a dedicated /worker-onboarding checklist to
+    # complete (and must not be rosterable until they finish it), so this
+    # generic step should only mark profile_completed here, not the
+    # role-specific/overall onboarding flags.
+    is_support_worker = current_user.get("role") == "support_worker"
     update_payload: dict = {
         "account_type": body.account_type,
         "onboarding_data": body.onboarding_data,
-        "onboarding_complete": True,
         "profile_completed": True,
-        "role_specific_profile_completed": True,
-        "onboarding_completed": True,
+        "onboarding_complete": not is_support_worker,
+        "role_specific_profile_completed": not is_support_worker,
+        "onboarding_completed": not is_support_worker,
     }
 
     # For small providers: create an organisation only when the user is not

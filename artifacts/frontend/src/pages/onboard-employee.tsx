@@ -559,7 +559,11 @@ function HireDetail({
                   <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
                   <p className="text-xs flex-1" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(signLink); toast({ title: "Sign link copied" }); }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(signLink)
+                        .then(() => toast({ title: "Sign link copied" }))
+                        .catch(() => toast({ title: "Could not copy link", description: "Copy it manually instead.", variant: "destructive" }));
+                    }}
                     className="rounded-lg p-1.5 hover:bg-black/5 shrink-0"
                     aria-label="Copy sign link"
                     title="Copy sign link"
