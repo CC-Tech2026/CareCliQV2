@@ -11,7 +11,7 @@ export function useWorkerCompliance() {
     queryKey: ["worker", "my-compliance", "overview"],
     queryFn: () => getMyCompliance({ sessionsLimit: 0 }),
     staleTime: 30_000,
-    refetchOnFocus: true,
+    refetchOnWindowFocus: true,
     enabled: isAuthenticated,
   });
 }
@@ -37,7 +37,7 @@ export function useWorkerComplianceSessionsInfinite() {
       return offset + COMPLIANCE_SESSIONS_PAGE_SIZE;
     },
     staleTime: 30_000,
-    refetchOnFocus: true,
+    refetchOnWindowFocus: true,
     enabled: isAuthenticated,
   });
 }

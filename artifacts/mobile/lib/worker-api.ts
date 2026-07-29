@@ -523,17 +523,24 @@ export type UserNotification = {
   created_at: string;
 };
 
+export type WorkerComplianceRuleResult = {
+  rule: string;
+  label: string;
+  status: string;
+  message?: string;
+  explanation?: string;
+  category?: string;
+  severity?: string;
+  is_blocking?: boolean;
+  enforcement_tier?: string;
+};
+
 export type WorkerComplianceDetail = {
   score: number;
   status: "compliant" | "at_risk" | "non_compliant";
   reviewed_sessions: number;
-  rules: Array<{
-    rule: string;
-    label: string;
-    status: string;
-    message?: string;
-  }>;
-  failed_rules: Array<{ label?: string; message?: string }>;
+  rules: WorkerComplianceRuleResult[];
+  failed_rules: WorkerComplianceRuleResult[];
   trend: Array<{ date: string; avg_score: number | null; session_count: number }>;
   trend_days: number;
 };
