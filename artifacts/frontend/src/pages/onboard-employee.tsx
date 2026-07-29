@@ -245,7 +245,16 @@ function HireDetail({
 
   const sendSignatureMut = useMutation({
     mutationFn: () => sendForSignature(hireId),
-    onSuccess: () => { invalidate(); toast({ title: "Sent for signature", description: "The applicant has been emailed a link to review and sign." }); },
+    onSuccess: (updated) => {
+      invalidate();
+      const delivered = updated.email_delivery?.status === "queued";
+      toast({
+        title: "Sent for signature",
+        description: delivered
+          ? "The applicant has been emailed a link to review and sign."
+          : "Sign link created — email delivery isn't configured yet, so copy the link below and send it manually.",
+      });
+    },
     onError: (e: Error) => toast({ title: "Could not send for signature", description: e.message, variant: "destructive" }),
   });
 

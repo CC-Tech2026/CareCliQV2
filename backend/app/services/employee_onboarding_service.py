@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .email_service import queue_email_job, send_email
+from .email_service import queue_onboarding_sign_email
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,23 @@ def delete_document(document_id: str) -> None:
     supabase.table("employee_onboarding_documents").delete().eq("id", document_id).execute()
 
 
+def _organization_name(organization_id: str) -> str | None:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("organizations")
+            .select("organization_name, name")
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        if resp.data:
+            return resp.data[0].get("organization_name") or resp.data[0].get("name")
+    except Exception:
+        pass
+    return None
+
+
 def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str, employer_name: str) -> dict[str, Any]:
     hire = get_hire(hire_id, organization_id)
     if hire["status"] not in {"draft"}:
@@ -231,30 +248,17 @@ def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str
     )
     updated = result.data[0] if result.data else {**hire, **update}
 
-    sign_url = f"/onboarding-sign?token={sign_token}"
-    queue_email_job(
-        label=f"onboarding-sign:{hire['email']}",
-        send=lambda: _send_sign_request_email(hire["email"], hire["full_name"], sign_url),
+    from ..core.config import settings
+    sign_url = f"{settings.frontend_base_url.rstrip('/')}/onboarding-sign?token={sign_token}"
+    email_delivery = queue_onboarding_sign_email(
+        to_email=hire["email"],
+        full_name=hire["full_name"],
+        sign_url=sign_url,
+        organization_name=_organization_name(organization_id),
+        document_titles=[d["title"] for d in docs],
     )
+    updated["email_delivery"] = email_delivery
     return updated
-
-
-def _send_sign_request_email(to_email: str, full_name: str, sign_url: str) -> None:
-    try:
-        from ..core.config import settings
-        full_url = f"{settings.frontend_base_url.rstrip('/')}{sign_url}"
-        send_email(
-            to_email=to_email,
-            subject="Your offer from CareCliQ — please review and sign",
-            text_body=(
-                f"Hi {full_name},\n\n"
-                "Your offer letter and service agreement are ready for your review and signature.\n\n"
-                f"Review and sign here:\n{full_url}\n\n"
-                "Once you've signed, you'll receive a separate invite to set up your CareCliQ login."
-            ),
-        )
-    except Exception as exc:
-        logger.error("Onboarding sign-request email failed for %s: %s", to_email, exc)
 
 
 # ── Public signing (no auth — applicant uses sign_token) ───────────────────

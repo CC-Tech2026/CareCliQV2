@@ -29,6 +29,7 @@ export type EmployeeHire = {
   invitation_id?: string | null;
   created_at: string;
   documents?: OnboardingDocument[];
+  email_delivery?: { status?: string; message?: string };
 };
 
 export function listHires() {
