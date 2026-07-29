@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CheckCircle2, FileText, Loader2, Briefcase, ClipboardCheck, PenLine, ShieldCheck } from "lucide-react";
+import { Check, FileText, Loader2, Briefcase, ClipboardCheck, ShieldCheck } from "lucide-react";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,34 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const PLUM = "var(--cc-plum)";
 const SURFACE = "var(--cc-surface)";
+const SIDEBAR_BG = "#1E1640";
+const SIDEBAR_MUTED = "#8F86B3";
 
 const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = {
   offer_letter: { label: "Offer letter", icon: Briefcase },
   service_agreement: { label: "Service agreement", icon: ClipboardCheck },
   other: { label: "Other", icon: FileText },
 };
+
+const STEPS = ["Review documents", "Sign & confirm", "All done"];
+
+function SidebarStep({ index, label, active, done }: { index: number; label: string; active: boolean; done: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
+        style={{
+          background: done ? "#22C55E" : active ? "#fff" : "transparent",
+          color: done ? "#fff" : active ? SIDEBAR_BG : SIDEBAR_MUTED,
+          border: active || done ? "none" : `1.5px solid ${SIDEBAR_MUTED}`,
+        }}
+      >
+        {done ? <Check size={13} strokeWidth={3} /> : index}
+      </div>
+      <span className="text-sm font-bold" style={{ color: active ? "#fff" : SIDEBAR_MUTED }}>{label}</span>
+    </div>
+  );
+}
 
 export default function OnboardingSignPage() {
   const params = new URLSearchParams(window.location.search);
@@ -48,18 +70,37 @@ export default function OnboardingSignPage() {
   }
 
   const hire = query.data;
-  const alreadySigned = hire.status === "signed" || signMut.isSuccess;
+  const alreadySigned = !!hire.worker_signed_at || hire.status !== "awaiting_signatures" || signMut.isSuccess;
+  const currentStep = alreadySigned ? 2 : 1;
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: "linear-gradient(180deg, var(--cc-active-bg), var(--cc-bg) 240px)" }}>
-      <div className="w-full max-w-lg space-y-4">
-        <div className="flex justify-center"><CareCliQLogo size={44} /></div>
+    <div className="min-h-screen flex" style={{ background: SURFACE }}>
+      {/* Left step sidebar */}
+      <aside className="hidden md:flex w-72 shrink-0 flex-col justify-between p-8" style={{ background: SIDEBAR_BG }}>
+        <div>
+          <div className="mb-10">
+            <CareCliQLogo size={36} />
+          </div>
+          <div className="space-y-6">
+            {STEPS.map((label, i) => (
+              <SidebarStep key={label} index={i + 1} label={label} active={i === currentStep} done={i < currentStep} />
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px]" style={{ color: SIDEBAR_MUTED }}>
+          Questions about this offer? Reply to the email you received.
+        </p>
+      </aside>
 
-        <div className="rounded-2xl border p-6 sm:p-8 space-y-6 shadow-sm" style={{ background: SURFACE, borderColor: BORDER }}>
+      {/* Right content */}
+      <main className="flex-1 flex items-center justify-center px-4 py-10 sm:py-16">
+        <div className="w-full max-w-md">
+          <div className="md:hidden flex justify-center mb-6"><CareCliQLogo size={36} /></div>
+
           {alreadySigned ? (
-            <div className="text-center space-y-3 py-6">
-              <div className="mx-auto h-16 w-16 rounded-full flex items-center justify-center" style={{ background: "var(--cc-status-success-bg)" }}>
-                <CheckCircle2 size={32} style={{ color: "var(--cc-status-success)" }} />
+            <div className="text-center space-y-3">
+              <div className="mx-auto h-14 w-14 rounded-full flex items-center justify-center" style={{ background: "var(--cc-status-success-bg)" }}>
+                <Check size={26} strokeWidth={3} style={{ color: "var(--cc-status-success)" }} />
               </div>
               <h1 className="text-xl font-black" style={{ color: TEXT }}>You're all signed, {hire.full_name.split(" ")[0]}!</h1>
               <p className="text-sm max-w-xs mx-auto" style={{ color: MUTED }}>
@@ -68,22 +109,20 @@ export default function OnboardingSignPage() {
             </div>
           ) : (
             <>
-              <div className="text-center space-y-1">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: PLUM }}>You've been offered a role</p>
-                <h1 className="text-xl font-black" style={{ color: TEXT }}>Review &amp; sign your offer</h1>
-                <p className="text-sm mt-1" style={{ color: MUTED }}>
-                  Hi {hire.full_name}, please review the document{hire.documents.length !== 1 ? "s" : ""} below before signing.
-                </p>
-              </div>
+              <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>Step {currentStep + 1} of {STEPS.length}</p>
+              <h1 className="text-2xl font-black mt-1" style={{ color: TEXT }}>Review &amp; sign your offer</h1>
+              <p className="text-sm mt-2" style={{ color: MUTED }}>
+                Hi {hire.full_name}, please review the document{hire.documents.length !== 1 ? "s" : ""} below before signing.
+              </p>
 
-              <div className="space-y-2">
+              <div className="mt-6 space-y-2">
                 {hire.documents.map((d) => {
                   const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
                   const Icon = meta.icon;
                   return (
-                    <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl p-3.5" style={{ background: "var(--cc-soft)" }}>
+                    <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border p-3.5" style={{ borderColor: BORDER }}>
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-active-bg)", color: PLUM }}>
+                        <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-soft)", color: PLUM }}>
                           <Icon size={16} />
                         </div>
                         <div className="min-w-0">
@@ -102,60 +141,53 @@ export default function OnboardingSignPage() {
               </div>
 
               {hire.employer_signed_name && (
-                <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+                <div className="flex items-center gap-2 text-xs mt-4" style={{ color: MUTED }}>
                   <ShieldCheck size={14} style={{ color: "var(--cc-status-success)" }} className="shrink-0" />
                   Already signed by {hire.employer_signed_name} on behalf of your employer.
                 </div>
               )}
 
-              <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--cc-active-bg)" }}>
-                <div className="flex items-center gap-2">
-                  <PenLine size={15} style={{ color: PLUM }} />
-                  <p className="text-xs font-black uppercase tracking-wide" style={{ color: TEXT }}>Your signature</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold" style={{ color: MUTED }}>
-                    Type your full legal name to sign
-                  </label>
-                  <Input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={hire.full_name}
-                    className="bg-white"
-                    style={{ fontFamily: "cursive", fontSize: "16px" }}
-                  />
-                </div>
+              <div className="mt-6 border-t pt-6" style={{ borderColor: BORDER }}>
+                <label className="text-xs font-bold" style={{ color: TEXT }}>
+                  Type your full legal name to sign
+                </label>
+                <Input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder={hire.full_name}
+                  className="mt-1.5"
+                />
               </div>
 
               {signMut.isError && (
-                <p className="text-xs font-bold text-center" style={{ color: "var(--cc-status-danger)" }}>
+                <p className="text-xs font-bold mt-3" style={{ color: "var(--cc-status-danger)" }}>
                   Could not sign — please try again.
                 </p>
               )}
 
               <Button
                 variant="navy"
-                className="w-full rounded-xl gap-2 h-11"
+                className="w-full rounded-lg gap-2 h-11 mt-5"
                 onClick={() => signMut.mutate()}
                 disabled={!fullName.trim() || signMut.isPending}
               >
-                {signMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={15} />} I agree and sign
+                {signMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null} I agree and sign
               </Button>
-              <p className="text-[10px] text-center" style={{ color: MUTED }}>
+              <p className="text-[10px] text-center mt-3" style={{ color: MUTED }}>
                 By signing, you confirm you've read and agree to the document{hire.documents.length !== 1 ? "s" : ""} above.
               </p>
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 function CenterMessage({ title, body, icon }: { title: string; body: string; icon?: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "linear-gradient(180deg, var(--cc-active-bg), var(--cc-bg) 240px)" }}>
-      <div className="w-full max-w-sm rounded-2xl border p-8 text-center space-y-3 shadow-sm" style={{ background: SURFACE, borderColor: BORDER }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: SURFACE }}>
+      <div className="w-full max-w-sm text-center space-y-3">
         <div className="flex justify-center"><CareCliQLogo size={32} /></div>
         {icon}
         <h1 className="text-lg font-black" style={{ color: TEXT }}>{title}</h1>

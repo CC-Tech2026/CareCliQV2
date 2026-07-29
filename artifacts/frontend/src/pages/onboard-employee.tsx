@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, UserPlus, FileText, FileSignature, Send, CheckCircle2, Clock3,
-  Copy, Trash2, Upload, Loader2, ChevronRight, Mail, Sparkles, Briefcase,
+  Copy, Trash2, Upload, Loader2, ChevronRight, Mail, Briefcase,
   ClipboardCheck, PenLine, MailCheck, Search, ShieldCheck,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
@@ -81,12 +81,33 @@ function Avatar({ name, size = 40 }: { name: string; size?: number }) {
   return (
     <div
       className="rounded-full shrink-0 flex items-center justify-center font-black text-white"
-      style={{
-        width: size, height: size, fontSize: size * 0.36,
-        background: "linear-gradient(135deg, var(--cc-plum), var(--cc-coral))",
-      }}
+      style={{ width: size, height: size, fontSize: size * 0.36, background: PLUM }}
     >
       {initials(name)}
+    </div>
+  );
+}
+
+function StatTile({
+  icon: Icon, label, count, color,
+}: {
+  icon: typeof UserPlus;
+  label: string;
+  count: number;
+  color: string;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4 flex items-center gap-3.5"
+      style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderLeft: `3px solid ${color}` }}
+    >
+      <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: SOFT, color }}>
+        <Icon size={16} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-black leading-none" style={{ color: TEXT }}>{count}</p>
+        <p className="text-[11px] font-bold mt-1" style={{ color: MUTED }}>{label}</p>
+      </div>
     </div>
   );
 }
@@ -176,7 +197,6 @@ export default function OnboardEmployeePage() {
     const q = search.trim().toLowerCase();
     return !q || h.full_name.toLowerCase().includes(q) || h.email.toLowerCase().includes(q);
   });
-  const inProgressCount = hires.filter((h) => h.status !== "invited" && h.status !== "completed").length;
 
   const createMut = useMutation({
     mutationFn: () => createHire({ full_name: fullName.trim(), email: email.trim(), phone: phone.trim() || undefined, role }),
@@ -205,46 +225,45 @@ export default function OnboardEmployeePage() {
     );
   }
 
+  const draftCount = hires.filter((h) => h.status === "draft").length;
+  const awaitingCount = hires.filter((h) => h.status === "awaiting_signatures").length;
+  const readyCount = hires.filter((h) => h.status === "signed").length;
+
   return (
     <HubLayout>
       <div className="space-y-6 pb-10">
-        <div className="flex flex-wrap items-start gap-4">
-          <button
-            onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white shrink-0 mt-1"
-            style={{ color: MUTED, background: SOFT }}
-          >
-            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
-          </button>
-          <div
-            className="h-11 w-11 rounded-2xl shrink-0 flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, var(--cc-plum), var(--cc-coral))" }}
-          >
-            <Sparkles size={20} color="#fff" />
-          </div>
-          <div className="flex-1 min-w-[220px]">
-            <h1 className="text-2xl font-black tracking-tight" style={{ color: TEXT }}>Onboard Employee</h1>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <button
+              onClick={() => navigate("/hub")}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black transition-colors hover:bg-black/5 -ml-2.5"
+              style={{ color: MUTED }}
+            >
+              <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
+            </button>
+            <h1 className="text-2xl font-black tracking-tight mt-1" style={{ color: TEXT }}>Onboard Employee</h1>
             <p className="text-[13px] font-medium mt-0.5" style={{ color: MUTED }}>
-              Send the offer letter and service agreement for signature, then activate their CareCliQ login — all in one place.
+              Send the offer letter and service agreement for signature, then activate their CareCliQ login.
             </p>
           </div>
-          <Button variant="navy" className="gap-2 rounded-full shadow-sm" onClick={() => setNewHireOpen(true)}>
+          <Button variant="navy" className="gap-2 rounded-lg" onClick={() => setNewHireOpen(true)}>
             <UserPlus size={15} /> New Hire
           </Button>
         </div>
 
         {hires.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search new hires…" className="pl-9 rounded-xl" />
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatTile icon={UserPlus} label="Draft" count={draftCount} color={MUTED} />
+              <StatTile icon={PenLine} label="Awaiting signatures" count={awaitingCount} color={WARNING} />
+              <StatTile icon={MailCheck} label="Ready to invite" count={readyCount} color={INFO} />
             </div>
-            {inProgressCount > 0 && (
-              <p className="text-[12px] font-bold" style={{ color: MUTED }}>
-                {inProgressCount} in progress
-              </p>
-            )}
-          </div>
+
+            <div className="relative max-w-sm">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search new hires…" className="pl-9 rounded-lg" />
+            </div>
+          </>
         )}
 
         {hiresQuery.isLoading && (
