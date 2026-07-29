@@ -244,3 +244,14 @@ async def worker_training_requests(current_user: dict = Depends(get_current_user
 async def worker_training_history(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
     return {"history": worker_training_service.list_training_history(get_user_id(current_user))}
+
+
+@router.get("/training/recommendations")
+async def worker_training_recommendations(current_user: dict = Depends(get_current_user)):
+    """Training modules a coordinator has specifically assigned to this worker."""
+    _require_worker(current_user)
+    recs = worker_training_service.list_worker_recommendations(
+        get_user_id(current_user),
+        get_user_organization_id(current_user),
+    )
+    return {"recommendations": recs}

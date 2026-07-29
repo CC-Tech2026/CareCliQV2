@@ -1,5 +1,7 @@
 import { jsonFetch } from "@/services/http";
+import { apiFetch } from "@/lib/api-fetch";
 import type { DashboardSession } from "@/services/dashboardService";
+import type { Credential } from "@/services/credentialsService";
 
 export type TeamMember = {
   id: string;
@@ -9,6 +11,9 @@ export type TeamMember = {
   is_active?: boolean;
   joined_at?: string;
   last_login?: string;
+  employee_id?: string | null;
+  phone?: string | null;
+  preferred_contact_method?: string | null;
 };
 
 export type WorkerStats = TeamMember & {
@@ -156,6 +161,11 @@ export type CredentialAlertsResponse = {
 
 export function getCoordinatorCredentialAlerts() {
   return jsonFetch<CredentialAlertsResponse>("/api/coordinator/credential-alerts");
+}
+
+/** All credentials across the org's workers (coordinator-only). Filter client-side by user_id. */
+export function getTeamCredentials() {
+  return jsonFetch<Credential[]>("/api/credentials/team");
 }
 
 export function getCoordinatorFlaggedSessions() {
@@ -1610,4 +1620,158 @@ export type ComplianceCentreIncidents = {
 
 export function getComplianceCentreIncidents() {
   return jsonFetch<ComplianceCentreIncidents>("/api/compliance/centre/incidents");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Training & Induction (coordinator surface)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TrainingResource = {
+  id: string;
+  resource_type: "video" | "pdf" | "external_link";
+  title: string;
+  storage_path?: string | null;
+  external_url?: string | null;
+};
+
+export type TrainingModule = {
+  id: string;
+  organization_id: string;
+  title: string;
+  description?: string | null;
+  linked_credential_type?: string | null;
+  requires_certification: boolean;
+  is_active: boolean;
+  resources?: TrainingResource[];
+};
+
+export type TrainingRecommendation = {
+  id: string;
+  worker_id: string;
+  coordinator_id: string;
+  training_module_id: string;
+  title: string;
+  recommended_at: string;
+  dismissed_at?: string | null;
+};
+
+export type TrainingCompletion = {
+  id: string;
+  worker_id: string;
+  module_id: string;
+  completed_at: string;
+  note?: string | null;
+  status: "awaiting_confirmation" | "confirmed" | "rejected";
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+  training_modules?: { title: string };
+  users?: { full_name: string };
+};
+
+export type TeamTrainingStatus = Record<string, { assigned: number; completed: number; pending_review: number }>;
+
+export function getTrainingModules() {
+  return jsonFetch<TrainingModule[]>("/api/coordinator/training-modules");
+}
+
+export function createTrainingModule(payload: {
+  title: string;
+  description?: string;
+  linked_credential_type?: string;
+  requires_certification?: boolean;
+}) {
+  return jsonFetch<TrainingModule>("/api/coordinator/training-modules", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getTeamTrainingStatus() {
+  return jsonFetch<TeamTrainingStatus>("/api/coordinator/team-training-status");
+}
+
+export function getPendingTrainingCompletions() {
+  return jsonFetch<TrainingCompletion[]>("/api/coordinator/training-completions/pending");
+}
+
+export function reviewTrainingCompletion(completionId: string, approved: boolean, rejectionReason?: string) {
+  return jsonFetch<TrainingCompletion>(`/api/coordinator/training-completions/${encodeURIComponent(completionId)}/review`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved, rejection_reason: rejectionReason }),
+  });
+}
+
+export function getWorkerTrainingAssignments(workerId: string) {
+  return jsonFetch<{ recommendations: TrainingRecommendation[]; history: TrainingCompletion[] }>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/training-assignments`
+  );
+}
+
+export function assignTraining(workerId: string, trainingModuleId: string, title: string) {
+  return jsonFetch<TrainingRecommendation>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/training-assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ training_module_id: trainingModuleId, title }),
+  });
+}
+
+export function dismissTrainingAssignment(recommendationId: string) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/training-assignments/${encodeURIComponent(recommendationId)}`, {
+    method: "DELETE",
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Worker onboarding documents (offer letter, service agreement, other)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type WorkerOnboardingDocumentType = "offer_letter" | "service_agreement" | "other";
+
+export type WorkerOnboardingDocument = {
+  id: string;
+  worker_id: string;
+  organization_id: string;
+  document_type: WorkerOnboardingDocumentType;
+  title: string;
+  notes?: string | null;
+  file_path?: string | null;
+  file_url?: string | null;
+  uploaded_by?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function getWorkerOnboardingDocuments(workerId: string) {
+  return jsonFetch<WorkerOnboardingDocument[]>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/onboarding-documents`
+  );
+}
+
+export async function uploadWorkerOnboardingDocument(
+  workerId: string,
+  payload: { document_type: WorkerOnboardingDocumentType; title: string; notes?: string; file?: File }
+): Promise<WorkerOnboardingDocument> {
+  const formData = new FormData();
+  formData.append("document_type", payload.document_type);
+  formData.append("title", payload.title);
+  if (payload.notes) formData.append("notes", payload.notes);
+  if (payload.file) formData.append("file", payload.file);
+  const response = await apiFetch(`/api/coordinator/workers/${encodeURIComponent(workerId)}/onboarding-documents`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || "Could not save onboarding document.");
+  }
+  return response.json();
+}
+
+export function deleteWorkerOnboardingDocument(documentId: string) {
+  return jsonFetch(`/api/coordinator/onboarding-documents/${encodeURIComponent(documentId)}`, {
+    method: "DELETE",
+  });
 }

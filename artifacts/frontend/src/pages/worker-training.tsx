@@ -10,6 +10,7 @@ import {
   createTrainingRequest,
   getTrainingHistory,
   getTrainingModules,
+  getTrainingRecommendations,
   getTrainingRequests,
   getWorkerCertifications,
   markTrainingComplete,
@@ -57,7 +58,7 @@ function CertCard({ cert }: { cert: WorkerCertification }) {
 }
 
 export default function WorkerTrainingPage() {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"certs" | "modules" | "requests">("certs");
@@ -70,6 +71,11 @@ export default function WorkerTrainingPage() {
   const modulesQuery = useOrgQuery(["worker", "training-modules"], { queryFn: getTrainingModules });
   const requestsQuery = useOrgQuery(["worker", "training-requests"], { queryFn: getTrainingRequests });
   const historyQuery = useOrgQuery(["worker", "training-history"], { queryFn: getTrainingHistory });
+  const recommendationsQuery = useOrgQuery(["worker", "training-recommendations"], { queryFn: getTrainingRecommendations });
+
+  const completedModuleIds = new Set((historyQuery.data?.history ?? []).map((h) => String((h as Record<string, unknown>).module_id)));
+  const activeRecommendations = (recommendationsQuery.data?.recommendations ?? [])
+    .filter((r) => !completedModuleIds.has(r.training_module_id));
 
   const completeMut = useMutation({
     mutationFn: (moduleId: string) =>
@@ -166,6 +172,34 @@ export default function WorkerTrainingPage() {
 
       {tab === "modules" && (
         <div className="space-y-4">
+          {activeRecommendations.length > 0 && (
+            <section className="rounded-2xl border-2 p-5 shadow-sm" style={{ borderColor: PLUM, background: "linear-gradient(135deg, rgba(139,92,246,0.06), transparent)" }}>
+              <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: PLUM }}>
+                {translate("training.assignedByCoordinator")}
+              </h3>
+              <ul className="mt-3 space-y-2">
+                {activeRecommendations.map((rec) => (
+                  <li key={rec.id} className="flex items-center justify-between gap-3 rounded-xl bg-cc-bg px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{rec.title}</p>
+                      <p className="text-xs" style={{ color: MUTED }}>
+                        {translateParams("training.assignedOn", { date: format(parseISO(rec.recommended_at), "d MMM yyyy") })}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => completeMut.mutate(rec.training_module_id)}
+                      disabled={completeMut.isPending}
+                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white"
+                      style={{ background: PLUM }}
+                    >
+                      {translate("training.markComplete")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {(modulesQuery.data?.modules ?? []).map((mod) => (
             <section key={mod.id} className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="flex items-start justify-between gap-3">

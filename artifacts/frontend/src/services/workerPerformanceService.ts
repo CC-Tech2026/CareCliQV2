@@ -254,6 +254,17 @@ export function getTrainingHistory() {
   return jsonFetch<{ history: Array<Record<string, unknown>> }>("/api/worker/training/history");
 }
 
+export type TrainingRecommendation = {
+  id: string;
+  training_module_id: string;
+  title: string;
+  recommended_at: string;
+};
+
+export function getTrainingRecommendations() {
+  return jsonFetch<{ recommendations: TrainingRecommendation[] }>("/api/worker/training/recommendations");
+}
+
 export function submitCoordinatorShiftFeedback(
   shiftId: string,
   payload: {

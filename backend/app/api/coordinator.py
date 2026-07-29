@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -3808,3 +3808,178 @@ async def get_audit_engagement_pack(
     from ..services.long_shift_service import get_audit_engagement_pack
 
     return get_audit_engagement_pack(org_id, start_date=start_date, end_date=end_date)
+
+
+# ── Training & Induction (CARECLIQV2-289 coordinator surface) ─────────────────
+
+class TrainingModuleBody(BaseModel):
+    title: str
+    description: Optional[str] = None
+    linked_credential_type: Optional[str] = None
+    requires_certification: bool = False
+
+
+class TrainingAssignBody(BaseModel):
+    training_module_id: str
+    title: str
+
+
+class TrainingReviewBody(BaseModel):
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+
+@router.get("/training-modules")
+async def coordinator_list_training_modules(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.list_training_modules(org_id)
+
+
+@router.post("/training-modules")
+async def coordinator_create_training_module(
+    body: TrainingModuleBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.create_training_module(
+        organization_id=org_id,
+        created_by=get_user_id(current_user),
+        title=body.title,
+        description=body.description,
+        linked_credential_type=body.linked_credential_type,
+        requires_certification=body.requires_certification,
+    )
+
+
+@router.get("/team-training-status")
+async def coordinator_team_training_status(current_user: dict = Depends(get_current_user)):
+    """Per-worker assigned/completed/pending-review training counts, for list badges."""
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.team_training_summary(org_id)
+
+
+@router.get("/training-completions/pending")
+async def coordinator_pending_training_completions(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.list_pending_completions(org_id)
+
+
+@router.patch("/training-completions/{completion_id}/review")
+async def coordinator_review_training_completion(
+    completion_id: str,
+    body: TrainingReviewBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return await training.review_training_completion(
+        completion_id,
+        coordinator_id=get_user_id(current_user),
+        organization_id=org_id,
+        approved=body.approved,
+        rejection_reason=body.rejection_reason,
+    )
+
+
+@router.get("/workers/{worker_id}/training-assignments")
+async def coordinator_list_worker_training(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    recommendations = training.list_worker_recommendations(worker_id, org_id)
+    history = training.list_training_history(worker_id)
+    return {"recommendations": recommendations, "history": history}
+
+
+@router.post("/workers/{worker_id}/training-assignments")
+async def coordinator_assign_training(
+    worker_id: str,
+    body: TrainingAssignBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.recommend_training_module(
+        worker_id=worker_id,
+        coordinator_id=get_user_id(current_user),
+        organization_id=org_id,
+        training_module_id=body.training_module_id,
+        title=body.title,
+    )
+
+
+@router.delete("/training-assignments/{recommendation_id}")
+async def coordinator_dismiss_training_assignment(
+    recommendation_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    training.dismiss_training_recommendation(recommendation_id, org_id)
+    return {"ok": True}
+
+
+# ── Worker onboarding documents (offer letter, service agreement, other) ───
+
+@router.get("/workers/{worker_id}/onboarding-documents")
+async def coordinator_list_worker_onboarding_documents(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_onboarding_documents_service as onboarding_docs
+
+    return onboarding_docs.list_worker_documents(worker_id, org_id)
+
+
+@router.post("/workers/{worker_id}/onboarding-documents", status_code=status.HTTP_201_CREATED)
+async def coordinator_upload_worker_onboarding_document(
+    worker_id: str,
+    document_type: str = Form(...),
+    title: str = Form(...),
+    notes: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_onboarding_documents_service as onboarding_docs
+
+    record = onboarding_docs.create_document_record(
+        worker_id=worker_id,
+        organization_id=org_id,
+        document_type=document_type,
+        title=title,
+        notes=notes,
+        uploaded_by=get_user_id(current_user),
+    )
+    if file is not None and file.filename:
+        content_type = file.content_type or ""
+        raw = await file.read()
+        record = await onboarding_docs.upload_document_file(record["id"], org_id, raw, content_type)
+    return record
+
+
+@router.delete("/onboarding-documents/{document_id}", status_code=204)
+async def coordinator_delete_worker_onboarding_document(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_onboarding_documents_service as onboarding_docs
+
+    onboarding_docs.delete_document(document_id, org_id)
+    return None
