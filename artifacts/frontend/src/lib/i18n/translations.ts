@@ -3843,6 +3843,8 @@ export const en: Dict = {
   "coordinator.shiftAssign.subtitle": "Schedule a new shift. Assign a worker now or leave unassigned for later.",
   "coordinator.shiftAssign.supportWorker": "Support Worker",
   "coordinator.shiftAssign.unassigned": "Unassigned",
+  "coordinator.shiftAssign.onboardingPendingOne": "1 worker is hidden — their onboarding isn't complete yet, so they can't be rostered.",
+  "coordinator.shiftAssign.onboardingPendingMany": "{count} workers are hidden — their onboarding isn't complete yet, so they can't be rostered.",
   "coordinator.shiftAssign.compliancePct": "{pct}% compliance",
   "coordinator.shiftAssign.selectParticipant": "Select a participant…",
   "coordinator.shiftAssign.searchParticipant": "Search participants…",

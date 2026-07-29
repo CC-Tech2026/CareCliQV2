@@ -64,7 +64,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/patients",              label: "Participants",       icon: UserRound    },
         { href: "/team",                  label: "Workers",               icon: Users        },
-        { href: "/onboard-employee",      label: "Onboard Employee",   icon: UserPlus     },
         { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
         { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
         { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
@@ -194,7 +193,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Hub",                 description: "Managing Director overview",               href: "/hub",                             icon: LayoutDashboard, group: "pages",    roles: ["managing_director"] },
   { label: "Participants",        description: "Profiles, plans & NDIS goals",            href: "/patients",                        icon: UserRound,       group: "pages",    roles: ["support_coordinator"] },
   { label: "Team",                description: "Support workers & staff management",       href: "/team",                            icon: Users,           group: "pages",    roles: ["support_coordinator"] },
-  { label: "Onboard Employee",    description: "New hires: offer, agreement, sign & invite", href: "/onboard-employee",              icon: UserPlus,        group: "pages",    roles: ["support_coordinator", "managing_director"] },
+  { label: "Onboard Employee",    description: "New hires: offer, agreement, sign & invite", href: "/onboard-employee",              icon: UserPlus,        group: "pages",    roles: ["managing_director"] },
   { label: "Schedule",            description: "Roster, availability & shift management",  href: "/coordinator/rostering",           icon: CalendarDays,    group: "pages",    roles: ["support_coordinator"] },
   { label: "Quality & Compliance",description: "Audit readiness & compliance tracking",    href: "/compliance",                      icon: ShieldCheck,     group: "pages",    roles: ["support_coordinator"] },
   { label: "Invoices & Billing",  description: "NDIS invoicing & revenue reports",         href: "/billing",                         icon: CreditCard,      group: "pages",    roles: ["support_coordinator"] },

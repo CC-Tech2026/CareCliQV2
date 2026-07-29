@@ -184,7 +184,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone"
+                    "preferred_contact_method, phone, onboarding_completed"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -212,6 +212,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "employee_id": row.get("employee_id"),
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
+            "onboarding_completed": profile.get("onboarding_completed"),
         })
     return output
 
@@ -241,7 +242,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone"
+                "preferred_contact_method, phone, onboarding_completed"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -264,6 +265,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "is_active": bool(row.get("is_active")),
             "joined_at": None,
             "last_login": row.get("last_login"),
+            "onboarding_completed": row.get("onboarding_completed"),
         })
     return output
 

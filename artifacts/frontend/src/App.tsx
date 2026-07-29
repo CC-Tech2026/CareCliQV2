@@ -173,9 +173,9 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── New-hire onboarding — MD + coordinator ────────────────────────── */}
+      {/* ── New-hire onboarding — Managing Director only ──────────────────── */}
       <Route path="/onboard-employee">
-        <ProtectedRoute allowedRoles={[...MD_ROLES, ...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <OnboardEmployeePage />
         </ProtectedRoute>
       </Route>

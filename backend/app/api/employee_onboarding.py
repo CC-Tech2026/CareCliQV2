@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/employee-onboarding", tags=["employee-onboarding"])
 
-HIRE_MANAGER_ROLES = frozenset({"support_coordinator", "managing_director"})
+HIRE_MANAGER_ROLES = frozenset({"managing_director"})
 
 
 def _require_hire_manager(user: dict) -> tuple[str, str]:

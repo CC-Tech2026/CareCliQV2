@@ -123,6 +123,8 @@ async def create_invite(
         )
 
     if body.onboarding_id:
+        if user_role != "managing_director":
+            raise HTTPException(status_code=403, detail="Only managing directors can send new-hire login invites.")
         from ..services import employee_onboarding_service as onboarding_svc
         hire = onboarding_svc.get_hire(body.onboarding_id, org_id)
         if hire["status"] != "signed":

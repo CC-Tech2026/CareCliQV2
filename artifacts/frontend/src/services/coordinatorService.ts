@@ -14,6 +14,7 @@ export type TeamMember = {
   employee_id?: string | null;
   phone?: string | null;
   preferred_contact_method?: string | null;
+  onboarding_completed?: boolean | null;
 };
 
 export type WorkerStats = TeamMember & {
