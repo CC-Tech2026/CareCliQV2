@@ -18,7 +18,7 @@ HIRE_MANAGER_ROLES = frozenset({"managing_director"})
 
 def _require_hire_manager(user: dict) -> tuple[str, str]:
     if user.get("role") not in HIRE_MANAGER_ROLES:
-        raise HTTPException(status_code=403, detail="Only coordinators and managing directors can manage new hires.")
+        raise HTTPException(status_code=403, detail="Only managing directors can manage new hires.")
     org_id = user.get("organization_id")
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization membership required.")
