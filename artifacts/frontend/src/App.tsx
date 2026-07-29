@@ -11,6 +11,8 @@ import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
+import OnboardingSignPage from "@/pages/onboarding-sign";
+import OnboardEmployeePage from "@/pages/onboard-employee";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
@@ -99,6 +101,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
+      <Route path="/onboarding-sign" component={OnboardingSignPage} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
@@ -167,6 +170,13 @@ function Router() {
       <Route path="/md/onboarding">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDOnboardingPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── New-hire onboarding — MD + coordinator ────────────────────────── */}
+      <Route path="/onboard-employee">
+        <ProtectedRoute allowedRoles={[...MD_ROLES, ...COORDINATOR_ROLES]}>
+          <OnboardEmployeePage />
         </ProtectedRoute>
       </Route>
 

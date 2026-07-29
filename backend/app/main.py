@@ -235,6 +235,8 @@ app.include_router(ndis_tasks.router, prefix="/api")
 app.include_router(budget_ledger.router)  # Uses internal /api/ledger prefix
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
+from .api import employee_onboarding as employee_onboarding_api
+app.include_router(employee_onboarding_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 
