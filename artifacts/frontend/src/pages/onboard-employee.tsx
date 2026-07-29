@@ -98,8 +98,8 @@ function StatTile({
 }) {
   return (
     <div
-      className="rounded-xl p-4 flex items-center gap-3.5"
-      style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderLeft: `3px solid ${color}` }}
+      className="rounded-lg p-4 flex items-center gap-3.5 border"
+      style={{ background: SURFACE, borderColor: BORDER, borderLeft: `3px solid ${color}` }}
     >
       <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: SOFT, color }}>
         <Icon size={16} />
@@ -121,7 +121,7 @@ function StatusBadge({ status }: { status: EmployeeHire["status"] }) {
   );
 }
 
-/** Compact dot-progress used on list rows. */
+/** Compact dot-progress used in the table's Progress column. */
 function MiniProgress({ status }: { status: EmployeeHire["status"] }) {
   const active = stepIndexForStatus(status);
   return (
@@ -140,35 +140,31 @@ function MiniProgress({ status }: { status: EmployeeHire["status"] }) {
   );
 }
 
-/** Full labeled stepper used at the top of the detail view. */
+/** Vertical stepper used in the detail view's sidebar. */
 function HireStepper({ status }: { status: EmployeeHire["status"] }) {
   const active = stepIndexForStatus(status);
   return (
-    <div className="flex items-center">
+    <div>
       {STEPS.map((s, i) => {
         const Icon = s.icon;
         const done = i < active;
         const current = i === active;
+        const last = i === STEPS.length - 1;
         return (
-          <div key={s.key} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1.5">
+          <div key={s.key} className="flex gap-3">
+            <div className="flex flex-col items-center">
               <div
-                className="h-9 w-9 rounded-full flex items-center justify-center transition-colors"
+                className="h-7 w-7 rounded-full flex items-center justify-center shrink-0"
                 style={{
-                  background: done ? SUCCESS_BG : current ? "var(--cc-active-bg)" : SOFT,
-                  color: done ? SUCCESS : current ? PLUM : MUTED,
-                  boxShadow: current ? `0 0 0 3px color-mix(in srgb, ${PLUM} 18%, transparent)` : "none",
+                  background: done ? SUCCESS : current ? PLUM : SOFT,
+                  color: done || current ? "#fff" : MUTED,
                 }}
               >
-                {done ? <CheckCircle2 size={16} /> : <Icon size={15} />}
+                {done ? <CheckCircle2 size={14} /> : <Icon size={13} />}
               </div>
-              <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: current ? TEXT : MUTED }}>
-                {s.label}
-              </span>
+              {!last && <div className="w-[2px] flex-1 my-0.5" style={{ background: i < active ? SUCCESS : BORDER, minHeight: 20 }} />}
             </div>
-            {i < STEPS.length - 1 && (
-              <div className="flex-1 h-[2px] mx-1.5 mb-4" style={{ background: i < active ? SUCCESS : BORDER }} />
-            )}
+            <p className="text-[13px] font-bold pb-5" style={{ color: current ? TEXT : MUTED }}>{s.label}</p>
           </div>
         );
       })}
@@ -231,7 +227,7 @@ export default function OnboardEmployeePage() {
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-10">
+      <div className="space-y-5 pb-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <button
@@ -252,79 +248,98 @@ export default function OnboardEmployeePage() {
         </div>
 
         {hires.length > 0 && (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <StatTile icon={UserPlus} label="Draft" count={draftCount} color={MUTED} />
-              <StatTile icon={PenLine} label="Awaiting signatures" count={awaitingCount} color={WARNING} />
-              <StatTile icon={MailCheck} label="Ready to invite" count={readyCount} color={INFO} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile icon={UserPlus} label="Draft" count={draftCount} color={MUTED} />
+            <StatTile icon={PenLine} label="Awaiting signatures" count={awaitingCount} color={WARNING} />
+            <StatTile icon={MailCheck} label="Ready to invite" count={readyCount} color={INFO} />
+          </div>
+        )}
+
+        <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+            <p className="text-sm font-black" style={{ color: TEXT }}>All new hires</p>
+            <div className="relative w-full max-w-xs">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="pl-8 h-8 rounded-md text-sm" />
             </div>
+          </div>
 
-            <div className="relative max-w-sm">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search new hires…" className="pl-9 rounded-lg" />
+          {hiresQuery.isLoading && (
+            <div className="p-5 space-y-3">
+              {[1, 2].map((i) => <div key={i} className="h-12 rounded-lg animate-pulse" style={{ background: SOFT }} />)}
             </div>
-          </>
-        )}
+          )}
 
-        {hiresQuery.isLoading && (
-          <div className="space-y-3">
-            {[1, 2].map((i) => <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: SOFT }} />)}
-          </div>
-        )}
-
-        {!hiresQuery.isLoading && hires.length === 0 && (
-          <div className="rounded-2xl p-12 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
-              <UserPlus size={26} style={{ color: PLUM }} />
+          {!hiresQuery.isLoading && hires.length === 0 && (
+            <div className="p-12 text-center">
+              <div className="mx-auto mb-4 h-14 w-14 rounded-2xl flex items-center justify-center" style={{ background: SOFT }}>
+                <UserPlus size={26} style={{ color: PLUM }} />
+              </div>
+              <p className="text-base font-black" style={{ color: TEXT }}>No new hires yet</p>
+              <p className="text-sm mt-1 max-w-sm mx-auto" style={{ color: MUTED }}>
+                Create your first hire to send an offer letter and service agreement for signature.
+              </p>
+              <Button variant="navy" className="mt-5 gap-2 rounded-lg" onClick={() => setNewHireOpen(true)}>
+                <UserPlus size={15} /> New Hire
+              </Button>
             </div>
-            <p className="text-base font-black" style={{ color: TEXT }}>No new hires yet</p>
-            <p className="text-sm mt-1 max-w-sm mx-auto" style={{ color: MUTED }}>
-              Create your first hire to send an offer letter and service agreement for signature.
-            </p>
-            <Button variant="navy" className="mt-5 gap-2 rounded-full" onClick={() => setNewHireOpen(true)}>
-              <UserPlus size={15} /> New Hire
-            </Button>
-          </div>
-        )}
+          )}
 
-        {!hiresQuery.isLoading && hires.length > 0 && filteredHires.length === 0 && (
-          <div className="rounded-2xl p-10 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-            <Search size={26} className="mx-auto mb-2" style={{ color: MUTED }} />
-            <p className="text-sm font-bold" style={{ color: MUTED }}>No hires match "{search}".</p>
-          </div>
-        )}
+          {!hiresQuery.isLoading && hires.length > 0 && filteredHires.length === 0 && (
+            <div className="p-10 text-center">
+              <p className="text-sm font-bold" style={{ color: MUTED }}>No hires match "{search}".</p>
+            </div>
+          )}
 
-        {filteredHires.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {filteredHires.map((h) => (
-              <button
-                key={h.id}
-                onClick={() => setSelectedHireId(h.id)}
-                className="text-left rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
-                style={{ background: SURFACE, boxShadow: CARD_SHADOW }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar name={h.full_name} />
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm truncate" style={{ color: TEXT }}>{h.full_name}</p>
-                      <p className="text-xs truncate" style={{ color: MUTED }}>{h.email}</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} style={{ color: MUTED }} className="shrink-0 mt-1" />
-                </div>
-                <div className="mt-3.5 flex items-center justify-between gap-2">
-                  <MiniProgress status={h.status} />
-                  <StatusBadge status={h.status} />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+          {filteredHires.length > 0 && (
+            <table className="w-full">
+              <thead>
+                <tr style={{ background: SOFT }}>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Name</th>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-wide hidden sm:table-cell" style={{ color: MUTED }}>Role</th>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-wide hidden md:table-cell" style={{ color: MUTED }}>Progress</th>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-wide">Status</th>
+                  <th className="px-5 py-2.5 w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y" style={{ borderColor: BORDER }}>
+                {filteredHires.map((h) => (
+                  <tr
+                    key={h.id}
+                    onClick={() => setSelectedHireId(h.id)}
+                    className="cursor-pointer transition-colors hover:bg-black/[0.02]"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar name={h.full_name} size={32} />
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate" style={{ color: TEXT }}>{h.full_name}</p>
+                          <p className="text-xs truncate" style={{ color: MUTED }}>{h.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 hidden sm:table-cell">
+                      <span className="text-xs font-bold capitalize" style={{ color: MUTED }}>{h.role.replace(/_/g, " ")}</span>
+                    </td>
+                    <td className="px-5 py-3 hidden md:table-cell">
+                      <MiniProgress status={h.status} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusBadge status={h.status} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <ChevronRight size={16} style={{ color: MUTED }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       <Dialog open={newHireOpen} onOpenChange={setNewHireOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
+        <DialogContent className="sm:max-w-md rounded-lg" style={{ background: SURFACE }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
               <UserPlus size={18} style={{ color: PLUM }} /> New Hire
@@ -446,9 +461,12 @@ function HireDetail({
 
   if (hireQuery.isLoading || !hire) {
     return (
-      <div className="space-y-4 pb-10 max-w-2xl mx-auto">
-        <div className="h-32 rounded-2xl animate-pulse" style={{ background: SOFT }} />
-        <div className="h-40 rounded-2xl animate-pulse" style={{ background: SOFT }} />
+      <div className="space-y-4 pb-10">
+        <div className="h-10 w-32 rounded-lg animate-pulse" style={{ background: SOFT }} />
+        <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+          <div className="h-64 rounded-lg animate-pulse" style={{ background: SOFT }} />
+          <div className="h-64 rounded-lg animate-pulse" style={{ background: SOFT }} />
+        </div>
       </div>
     );
   }
@@ -456,139 +474,150 @@ function HireDetail({
   const signLink = hire.sign_token ? `${window.location.origin}/onboarding-sign?token=${hire.sign_token}` : null;
 
   return (
-    <div className="space-y-4 pb-10 max-w-2xl mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold" style={{ color: PLUM }}>
+    <div className="space-y-5 pb-10">
+      <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold -ml-2.5" style={{ color: PLUM }}>
         <ArrowLeft size={15} /> Back to hires
       </button>
 
-      {/* Hero + stepper */}
-      <div className="rounded-2xl p-5 space-y-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Avatar name={hire.full_name} size={48} />
-            <div className="min-w-0">
-              <h2 className="text-lg font-black truncate" style={{ color: TEXT }}>{hire.full_name}</h2>
-              <p className="text-xs truncate" style={{ color: MUTED }}>
-                {hire.email} · {hire.role.replace(/_/g, " ")}{hire.phone ? ` · ${hire.phone}` : ""}
-              </p>
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px] items-start">
+        {/* Main column */}
+        <div className="space-y-5 min-w-0">
+          {/* Documents */}
+          <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+              <div className="flex items-center gap-2">
+                <FileSignature size={16} style={{ color: PLUM }} />
+                <p className="text-sm font-black" style={{ color: TEXT }}>Documents</p>
+              </div>
+              {hire.status === "draft" && (
+                <Button variant="outline" size="sm" className="gap-1.5 rounded-md" onClick={() => setAddDocOpen(true)}>
+                  <FileText size={13} /> Add document
+                </Button>
+              )}
+            </div>
+            <div className="p-5">
+              {documents.length === 0 ? (
+                <div className="rounded-lg p-5 text-center" style={{ background: SOFT }}>
+                  <p className="text-xs font-medium" style={{ color: MUTED }}>
+                    No documents attached yet. Add the offer letter and service agreement before sending for signature.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: BORDER }}>
+                  {documents.map((d: OnboardingDocument) => {
+                    const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
+                    const Icon = meta.icon;
+                    return (
+                      <div key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: SOFT, color: PLUM }}>
+                            <Icon size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{d.title}</p>
+                            <p className="text-xs" style={{ color: MUTED }}>{meta.label}{d.file_url ? " · file attached" : ""}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {d.file_url && (
+                            <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
+                          )}
+                          {hire.status === "draft" && (
+                            <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Remove document">
+                              <Trash2 size={13} style={{ color: MUTED }} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-          <StatusBadge status={hire.status} />
-        </div>
-        <HireStepper status={hire.status} />
-      </div>
 
-      {/* Documents */}
-      <div className="rounded-2xl p-5 space-y-3" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileSignature size={16} style={{ color: PLUM }} />
-            <p className="text-sm font-black" style={{ color: TEXT }}>Documents</p>
+          {/* Signatures */}
+          <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+            <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+              <PenLine size={16} style={{ color: PLUM }} />
+              <p className="text-sm font-black" style={{ color: TEXT }}>Signatures</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <SignatureCard label="Employer" signedName={hire.employer_signed_name} signedAt={hire.employer_signed_at} pendingLabel="Not yet sent" />
+                <SignatureCard label="New hire" signedName={hire.worker_signed_name} signedAt={hire.worker_signed_at} pendingLabel="Awaiting signature" />
+              </div>
+
+              {hire.status === "draft" && (
+                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
+                  {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
+                </Button>
+              )}
+
+              {hire.status === "awaiting_signatures" && signLink && (
+                <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                  <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
+                  <p className="text-xs flex-1" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(signLink); toast({ title: "Sign link copied" }); }}
+                    className="rounded-lg p-1.5 hover:bg-black/5 shrink-0"
+                    aria-label="Copy sign link"
+                    title="Copy sign link"
+                  >
+                    <Copy size={13} style={{ color: MUTED }} />
+                  </button>
+                </div>
+              )}
+
+              {hire.status === "signed" && (
+                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
+                  {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
+                </Button>
+              )}
+
+              {(hire.status === "invited" || hire.status === "completed") && (
+                <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                  <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                  <p className="text-xs font-bold" style={{ color: SUCCESS }}>
+                    Login invite sent — {hire.status === "completed" ? "account activated." : "waiting for them to set up their account."}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-          {hire.status === "draft" && (
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => setAddDocOpen(true)}>
-              <FileText size={13} /> Add document
-            </Button>
+
+          {(hire.status === "invited" || hire.status === "completed") && (
+            <div className="flex items-center gap-2.5 rounded-lg p-4 border" style={{ background: INFO_BG, borderColor: BORDER }}>
+              <ShieldCheck size={16} style={{ color: INFO }} className="shrink-0" />
+              <p className="text-xs" style={{ color: TEXT }}>
+                {hire.full_name.split(" ")[0]} will appear on the Workers tab once they finish setting up their account, and can't be rostered until their onboarding checklist is complete.
+              </p>
+            </div>
           )}
         </div>
-        {documents.length === 0 ? (
-          <div className="rounded-xl p-5 text-center" style={{ background: SOFT }}>
-            <p className="text-xs font-medium" style={{ color: MUTED }}>
-              No documents attached yet. Add the offer letter and service agreement before sending for signature.
-            </p>
+
+        {/* Sidebar */}
+        <div className="space-y-5">
+          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <Avatar name={hire.full_name} size={44} />
+            <h2 className="text-base font-black mt-3" style={{ color: TEXT }}>{hire.full_name}</h2>
+            <div className="mt-1"><StatusBadge status={hire.status} /></div>
+            <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
+              <p className="text-xs" style={{ color: MUTED }}>{hire.email}</p>
+              {hire.phone && <p className="text-xs" style={{ color: MUTED }}>{hire.phone}</p>}
+              <p className="text-xs capitalize" style={{ color: MUTED }}>{hire.role.replace(/_/g, " ")}</p>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {documents.map((d: OnboardingDocument) => {
-              const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
-              const Icon = meta.icon;
-              return (
-                <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl p-3" style={{ background: SOFT }}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-active-bg)", color: PLUM }}>
-                      <Icon size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{d.title}</p>
-                      <p className="text-xs" style={{ color: MUTED }}>{meta.label}{d.file_url ? " · file attached" : ""}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {d.file_url && (
-                      <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
-                    )}
-                    {hire.status === "draft" && (
-                      <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Remove document">
-                        <Trash2 size={13} style={{ color: MUTED }} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+
+          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <p className="text-[10px] font-black uppercase tracking-wide mb-4" style={{ color: MUTED }}>Progress</p>
+            <HireStepper status={hire.status} />
           </div>
-        )}
+        </div>
       </div>
-
-      {/* Signatures */}
-      <div className="rounded-2xl p-5 space-y-3" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-        <div className="flex items-center gap-2">
-          <PenLine size={16} style={{ color: PLUM }} />
-          <p className="text-sm font-black" style={{ color: TEXT }}>Signatures</p>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <SignatureCard label="Employer" signedName={hire.employer_signed_name} signedAt={hire.employer_signed_at} pendingLabel="Not yet sent" />
-          <SignatureCard label="New hire" signedName={hire.worker_signed_name} signedAt={hire.worker_signed_at} pendingLabel="Awaiting signature" />
-        </div>
-
-        {hire.status === "draft" && (
-          <Button variant="navy" className="w-full gap-2 rounded-xl" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
-            {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
-          </Button>
-        )}
-
-        {hire.status === "awaiting_signatures" && signLink && (
-          <div className="flex items-center gap-2 rounded-xl p-3" style={{ background: WARNING_BG }}>
-            <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
-            <p className="text-xs flex-1" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
-            <button
-              onClick={() => { navigator.clipboard.writeText(signLink); toast({ title: "Sign link copied" }); }}
-              className="rounded-lg p-1.5 hover:bg-black/5 shrink-0"
-              aria-label="Copy sign link"
-              title="Copy sign link"
-            >
-              <Copy size={13} style={{ color: MUTED }} />
-            </button>
-          </div>
-        )}
-
-        {hire.status === "signed" && (
-          <Button variant="navy" className="w-full gap-2 rounded-xl" onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
-            {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
-          </Button>
-        )}
-
-        {(hire.status === "invited" || hire.status === "completed") && (
-          <div className="flex items-center gap-2 rounded-xl p-3" style={{ background: SUCCESS_BG }}>
-            <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
-            <p className="text-xs font-bold" style={{ color: SUCCESS }}>
-              Login invite sent — {hire.status === "completed" ? "account activated." : "waiting for them to set up their account."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {(hire.status === "invited" || hire.status === "completed") && (
-        <div className="flex items-center gap-2.5 rounded-2xl p-4" style={{ background: "var(--cc-status-info-bg)" }}>
-          <ShieldCheck size={16} style={{ color: INFO }} className="shrink-0" />
-          <p className="text-xs" style={{ color: TEXT }}>
-            {hire.full_name.split(" ")[0]} will appear on the Workers tab once they finish setting up their account, and can't be rostered until their onboarding checklist is complete.
-          </p>
-        </div>
-      )}
 
       <Dialog open={addDocOpen} onOpenChange={setAddDocOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
+        <DialogContent className="sm:max-w-md rounded-lg" style={{ background: SURFACE }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
               <FileText size={18} style={{ color: PLUM }} /> Add document
@@ -616,7 +645,7 @@ function HireDetail({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>File (PDF or image, optional)</label>
-              <label className="flex items-center gap-2 rounded-xl border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
+              <label className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
                 <Upload size={14} />
                 {docFile ? docFile.name : "Choose file"}
                 <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
@@ -646,8 +675,8 @@ function SignatureCard({
   const signed = !!signedAt;
   return (
     <div
-      className="rounded-xl p-3.5"
-      style={{ background: signed ? SUCCESS_BG : SOFT, border: signed ? `1px solid color-mix(in srgb, ${SUCCESS} 25%, transparent)` : "none" }}
+      className="rounded-lg p-3.5 border"
+      style={{ background: signed ? SUCCESS_BG : SOFT, borderColor: signed ? "transparent" : BORDER }}
     >
       <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
       {signed ? (
