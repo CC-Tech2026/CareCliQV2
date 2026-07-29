@@ -446,7 +446,7 @@ function HireDetail({
 
   if (hireQuery.isLoading || !hire) {
     return (
-      <div className="space-y-4 pb-10">
+      <div className="space-y-4 pb-10 max-w-2xl mx-auto">
         <div className="h-32 rounded-2xl animate-pulse" style={{ background: SOFT }} />
         <div className="h-40 rounded-2xl animate-pulse" style={{ background: SOFT }} />
       </div>
@@ -456,7 +456,7 @@ function HireDetail({
   const signLink = hire.sign_token ? `${window.location.origin}/onboarding-sign?token=${hire.sign_token}` : null;
 
   return (
-    <div className="space-y-4 pb-10 max-w-2xl">
+    <div className="space-y-4 pb-10 max-w-2xl mx-auto">
       <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold" style={{ color: PLUM }}>
         <ArrowLeft size={15} /> Back to hires
       </button>
