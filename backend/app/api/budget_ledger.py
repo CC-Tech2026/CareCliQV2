@@ -19,8 +19,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.app.core.security import get_current_user
-from backend.app.services.budget_ledger_service import (
+from ..core.security import get_current_user
+from ..services.budget_ledger_service import (
     get_budget_ledger_service,
     BudgetTransactionType,
     BudgetLedgerSource

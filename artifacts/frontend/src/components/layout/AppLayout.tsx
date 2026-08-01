@@ -621,6 +621,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   );
   const incidentOpenCount = incidentStats?.open ?? 0;
   const isWorker    = userRole === "support_worker";
+  // Quill chatbox is scoped to coordinators and managing directors only.
+  const showQuillAssistant = userRole === "support_coordinator" || userRole === "managing_director";
   const topbarAlertHref =
     userRole === "support_worker"    ? "/my-compliance" :
     userRole === "managing_director" ? "/md/compliance"  :
@@ -986,7 +988,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
         <SidebarContents {...sharedProps} isDrawer collapsed={false} onNav={() => setDrawerOpen(false)} />
       </aside>
 
-      <FloatingAiAssistant />
+      {showQuillAssistant && <FloatingAiAssistant />}
     </div>
   );
 }
