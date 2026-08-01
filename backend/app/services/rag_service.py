@@ -357,7 +357,7 @@ async def retrieve_similar_incidents(
     if not org_id:
         raise ValueError("org_id is required for incident RAG retrieval (CARECLIQV2-32)")
 
-    query_vector = await generate_session_embedding(query_text)
+    query_vector = await generate_query_embedding(query_text)
     if not query_vector:
         return []
 

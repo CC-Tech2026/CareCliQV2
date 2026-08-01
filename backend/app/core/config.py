@@ -1,6 +1,9 @@
 import os
+from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+_REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
@@ -20,6 +23,13 @@ class Settings(BaseSettings):
             return v.strip()
         return v
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    # Chatbox ("Quill") — LangGraph agent tracing via LangSmith
+    langsmith_api_key: str = os.environ.get("LANGSMITH_API_KEY", "")
+    langsmith_project: str = os.environ.get("LANGSMITH_PROJECT", "carecliq-chatbox")
+    langsmith_tracing_enabled: bool = os.environ.get("LANGSMITH_TRACING_ENABLED", "false").lower() == "true"
+    # Chatbox LLM provider — "anthropic" (production default) or "openai" (for
+    # testing when the Anthropic account has no credit balance).
+    chatbox_llm_provider: str = os.environ.get("CHATBOX_LLM_PROVIDER", "anthropic")
     frontend_base_url: str = os.environ.get(
         "FRONTEND_BASE_URL",
         os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000")),
@@ -86,7 +96,7 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
 
     class Config:
-        env_file = ".env"
+        env_file = str(_REPO_ROOT_ENV_FILE)
         extra = "ignore"
 
 
