@@ -47,6 +47,7 @@ export interface ThreadSummary {
 export interface ThreadMessage {
   role: "user" | "assistant";
   content: string;
+  created_at: string;
 }
 
 export function listChatThreads() {

@@ -215,18 +215,33 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             return {"error": "Could not load shift data right now."}
 
         on_shift = []
+        matching_rows = []
         for row in rows:
             if row.get("status") != "scheduled":
                 continue
             start = _parse_iso(row.get("scheduled_start"))
             end = _parse_iso(row.get("scheduled_end"))
             if start and end and start <= now <= end:
-                on_shift.append({
-                    "worker_id": row.get("worker_id"),
-                    "participant_id": row.get("participant_id"),
-                    "scheduled_start": row.get("scheduled_start"),
-                    "scheduled_end": row.get("scheduled_end"),
-                })
+                matching_rows.append(row)
+
+        # Resolve raw worker_id/participant_id into display names — matching
+        # the pattern get_compliance_snapshot already uses for workers.
+        team = await _team_members(org_id)
+        worker_names = {str(m.get("id")): m.get("full_name") for m in team}
+        participants = await participant_service.get_participants_list_light(current_user)
+        participant_names = {str(p.get("id")): p.get("full_name") for p in participants}
+
+        for row in matching_rows:
+            worker_id = row.get("worker_id")
+            participant_id = row.get("participant_id")
+            on_shift.append({
+                "worker_id": worker_id,
+                "worker_name": worker_names.get(str(worker_id)) or "Unknown worker",
+                "participant_id": participant_id,
+                "participant_name": participant_names.get(str(participant_id)) or "Unknown participant",
+                "scheduled_start": row.get("scheduled_start"),
+                "scheduled_end": row.get("scheduled_end"),
+            })
 
         return {"scope": "organisation-wide", "on_shift_now": on_shift, "count": len(on_shift)}
 

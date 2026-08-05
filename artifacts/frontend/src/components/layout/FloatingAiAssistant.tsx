@@ -100,6 +100,24 @@ function BlockView({ block }: { block: ChatBlock }) {
   return null;
 }
 
+/** Renders `**bold**` markers from Quill's replies as real <strong> text —
+ * intentionally minimal, not a full markdown parser, since the model is only
+ * ever instructed to use this one marker for emphasis. */
+function BoldText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i}>{part.slice(2, -2)}</strong>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 function formatThreadDate(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
@@ -422,7 +440,7 @@ export function FloatingAiAssistant() {
                             : { background: "var(--cc-soft)", color: TEXT, border: `1px solid ${BORDER}` }
                         }
                       >
-                        {m.text}
+                        {m.role === "bot" ? <BoldText text={m.text} /> : m.text}
                       </div>
                       {m.blocks?.map((b, i) => <BlockView key={i} block={b} />)}
                     </div>

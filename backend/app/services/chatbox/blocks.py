@@ -12,7 +12,31 @@ Block shapes (kept intentionally small — 3 types cover every tool today):
   {"type": "bar_chart", "title": str, "x_key": str, "series": [{"key": str, "label": str}], "data": [dict, ...]}
 """
 
+from datetime import datetime
 from typing import Any
+
+
+def _format_shift_date(value: Any) -> Any:
+    """e.g. '2026-08-05T01:30:00+00:00' -> '05 Aug'"""
+    if not value:
+        return value
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    return dt.strftime("%d %b")
+
+
+def _format_shift_time(value: Any) -> Any:
+    """e.g. '2026-08-05T01:30:00+00:00' -> '01:30 AM'"""
+    if not value:
+        return value
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    return dt.strftime("%I:%M %p")
+
 
 
 def _blocks_for_compliance_snapshot(a: dict) -> list[dict]:
@@ -57,9 +81,15 @@ def _blocks_for_shift_coverage(a: dict) -> list[dict]:
     return [{
         "type": "table",
         "title": "On shift right now",
-        "columns": ["Worker ID", "Participant ID", "Start", "End"],
+        "columns": ["Worker", "Participant", "Date", "Start", "End"],
         "rows": [
-            [s.get("worker_id"), s.get("participant_id"), s.get("scheduled_start"), s.get("scheduled_end")]
+            [
+                s.get("worker_name"),
+                s.get("participant_name"),
+                _format_shift_date(s.get("scheduled_start")),
+                _format_shift_time(s.get("scheduled_start")),
+                _format_shift_time(s.get("scheduled_end")),
+            ]
             for s in on_shift
         ],
     }]

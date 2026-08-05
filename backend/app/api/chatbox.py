@@ -44,6 +44,7 @@ class ThreadSummary(BaseModel):
 class ThreadMessage(BaseModel):
     role: str
     content: str
+    created_at: str
 
 
 @router.post("/chat", response_model=ChatResponse)

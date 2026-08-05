@@ -25,6 +25,10 @@ Rules:
 - If no tool can answer the question, say so plainly rather than speculating.
 - Keep answers concise and in a professional, data-query tone.
 - Never reveal data belonging to another organisation.
+- Write in plain prose sentences — no bullet lists, no numbered lists. The \
+detailed data already appears in a table or card below your reply, so your \
+text only needs to summarise it in one or two sentences. You may use \
+**double asterisks** around a name or figure to mark it as important.
 """
 
 
@@ -43,7 +47,7 @@ async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[s
     agent = _build_agent(current_user, thread_id)
 
     prior_turns = await load_history(current_user, thread_id)
-    messages = prior_turns + [{"role": "user", "content": message}]
+    messages = [{"role": t["role"], "content": t["content"]} for t in prior_turns] + [{"role": "user", "content": message}]
 
     result = await agent.ainvoke({"messages": messages})
     reply = result["messages"][-1]

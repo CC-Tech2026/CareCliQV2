@@ -21,7 +21,7 @@ TABLE = "chatbox_messages"
 
 async def load_history(current_user: dict, thread_id: str) -> list[dict]:
     """Return prior turns for this thread, oldest first, as
-    [{"role": "user"|"assistant", "content": str}, ...].
+    [{"role": "user"|"assistant", "content": str, "created_at": str}, ...].
 
     Scoped to the current user AND their org — a thread_id supplied by the
     client can never pull another user's history, even within the same org.
@@ -35,14 +35,14 @@ async def load_history(current_user: dict, thread_id: str) -> list[dict]:
         supabase = get_supabase_admin()
         result = (
             supabase.table(TABLE)
-            .select("role, content")
+            .select("role, content ,created_at")
             .eq("thread_id", thread_id)
             .eq("user_id", user_id)
             .eq("organization_id", org_id)
             .order("created_at")
             .execute()
         )
-        return [{"role": r["role"], "content": r["content"]} for r in (result.data or [])]
+        return [{"role": r["role"], "content": r["content"], "created_at": r["created_at"]} for r in (result.data or [])]
     except Exception as exc:
         logger.warning("Failed to load chatbox history for thread %s: %s", thread_id, exc)
         return []
