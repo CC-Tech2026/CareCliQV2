@@ -3,21 +3,23 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
-  eachDayOfInterval, isToday, isSameMonth, addDays, getDay,
+  eachDayOfInterval, isToday, isSameMonth, addDays,
 } from "date-fns";
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
-  CheckCircle2, XCircle, MinusCircle, UserCheck, Activity,
-  Search, RefreshCw,
+  Activity, Search, RefreshCw,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
+import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
 import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
@@ -28,7 +30,7 @@ import {
   type BlackoutDate,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
-import { DndScheduleView }        from "@/components/coordinator/DndScheduleView";
+import { RosterBoard }           from "@/components/coordinator/RosterBoard";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -50,7 +52,7 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-type ViewMode = "month" | "week" | "schedule" | "list";
+type ViewMode = "roster" | "month";
 
 const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
   scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#FCE3EB", color: "#E8457A" },
@@ -184,301 +186,8 @@ function MonthGrid({
   );
 }
 
-const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
-
 type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
-/** Returns 0=Mon – 6=Sun matching the available_days encoding in WorkerAvailability */
-function ccDayIndex(date: Date): number {
-  const js = getDay(date); // 0=Sun, 1=Mon – 6=Sat
-  return js === 0 ? 6 : js - 1; // convert to 0=Mon – 6=Sun
-}
-
-function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
-  const key = format(date, "yyyy-MM-dd");
-  return blackouts.some((b) => b.start_date <= key && key <= b.end_date);
-}
-
-function RosterGrid({
-  weekStart, shifts, workers, availMap, loadingAvail, onCellClick,
-}: {
-  weekStart: Date;
-  shifts: CoordinatorShiftRecord[];
-  workers: WorkerStats[];
-  availMap: AvailabilityMap;
-  loadingAvail: boolean;
-  onCellClick: (worker: WorkerStats, date: string) => void;
-}) {
-  const { translate } = useAccessibility();
-  const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
-
-  const byWorkerDay = useMemo(() => {
-    const map = new Map<string, CoordinatorShiftRecord[]>();
-    for (const s of shifts) {
-      const d = parseStart(s);
-      if (!d || !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
-      const key = `${s.worker_id}|${format(d, "yyyy-MM-dd")}`;
-      map.set(key, [...(map.get(key) ?? []), s]);
-    }
-    return map;
-  }, [shifts]);
-
-  const unassigned = useMemo(
-    () => shifts.filter((s) => !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID),
-    [shifts]
-  );
-
-  // Each day's total shift count (for column header badge)
-  const shiftsByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const s of shifts) {
-      const d = parseStart(s);
-      if (!d || !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
-      const k = format(d, "yyyy-MM-dd");
-      map.set(k, (map.get(k) ?? 0) + 1);
-    }
-    return map;
-  }, [shifts]);
-
-  const rows = workers.length > 0 ? workers : [];
-
-  return (
-    <div className="space-y-3">
-      {/* Unassigned shifts banner */}
-      {unassigned.length > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-600" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-black text-amber-900">
-              {unassigned.length} unassigned {unassigned.length === 1 ? "shift" : "shifts"} need a worker
-            </p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {unassigned.map((s) => {
-                const d = parseStart(s);
-                return (
-                  <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                    <User2 size={10} />
-                    {s.participant_name?.split(" ")[0] || "Shift"}
-                    {d ? ` · ${format(d, "d MMM, h:mm a")}` : ""}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-4 py-2.5" style={{ borderColor: BORDER }}>
-        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Availability</span>
-        {[
-          { color: "#DCFCE7", border: "#86EFAC", text: "#166534", label: "Available" },
-          { color: "#FCE3EB", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
-          { color: "#FEF3C7", border: "#FCD34D", text: "#92400E", label: "On leave" },
-          { color: "#F1F5F9", border: "#CBD5E1", text: "#64748B", label: "Not rostered" },
-        ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded" style={{ background: l.color, border: `1px solid ${l.border}` }} />
-            <span className="text-[11px]" style={{ color: MUTED }}>{l.label}</span>
-          </div>
-        ))}
-        {loadingAvail && <Loader2 size={12} className="ml-auto animate-spin" style={{ color: MUTED }} />}
-      </div>
-
-      {/* Main grid */}
-      <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
-        <table className="w-full border-separate border-spacing-0">
-          <thead>
-            <tr>
-              <th
-                className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[180px]"
-                style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
-              >
-                Worker
-              </th>
-              {days.map((d) => {
-                const dayKey = format(d, "yyyy-MM-dd");
-                const count = shiftsByDay.get(dayKey) ?? 0;
-                return (
-                  <th
-                    key={d.toISOString()}
-                    className="min-w-[120px] px-2 py-2.5 text-center"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "var(--cc-soft)" }}
-                  >
-                    <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
-                      {format(d, "EEE")}
-                    </div>
-                    <div
-                      className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "white" : TEXT }}
-                    >
-                      {format(d, "d")}
-                    </div>
-                    {count > 0 && (
-                      <div className="mt-1 text-[9px] font-black" style={{ color: PLUM }}>
-                        {count} shift{count !== 1 ? "s" : ""}
-                      </div>
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((worker) => {
-              const avail = availMap[worker.id];
-              const weekShifts = days.reduce((n, d) => n + (byWorkerDay.get(`${worker.id}|${format(d, "yyyy-MM-dd")}`) ?? []).length, 0);
-              return (
-                <tr key={worker.id}>
-                  {/* Worker column */}
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-sm"
-                        style={{ background: "var(--cc-text)" }}
-                      >
-                        {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[12px] font-bold leading-tight" style={{ color: TEXT }}>{worker.full_name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {worker.avg_compliance != null && (
-                            <span className="text-[10px] font-semibold" style={{
-                              color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
-                            }}>
-                              {worker.avg_compliance.toFixed(0)}% compliance
-                            </span>
-                          )}
-                          {weekShifts > 0 && (
-                            <span className="text-[10px]" style={{ color: MUTED }}>{weekShifts} shift{weekShifts !== 1 ? "s" : ""}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Day cells */}
-                  {days.map((d) => {
-                    const dayKey    = format(d, "yyyy-MM-dd");
-                    const dayShifts = byWorkerDay.get(`${worker.id}|${dayKey}`) ?? [];
-                    const dayIdx    = ccDayIndex(d);
-                    const onBlackout = avail ? isBlackout(d, avail.blackout_dates) : false;
-                    const isWorkDay  = avail ? avail.available_days.includes(dayIdx) : true; // assume available if not loaded
-                    const hasShift   = dayShifts.length > 0;
-
-                    // Cell state
-                    let cellBg    = "var(--cc-bg)";
-                    let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
-                    if (!avail && loadingAvail) {
-                      cellState = "loading";
-                    } else if (onBlackout) {
-                      cellState = "blackout";
-                      cellBg = "#FFFBEB";
-                    } else if (!isWorkDay) {
-                      cellState = "unavailable";
-                      cellBg = "#F8FAFC";
-                    } else if (hasShift) {
-                      cellState = "assigned";
-                      cellBg = isToday(d) ? "#FAFAFE" : "var(--cc-bg)";
-                    } else {
-                      cellState = "available";
-                      cellBg = isToday(d) ? "#F0FFF4" : "#F7FEF9";
-                    }
-
-                    return (
-                      <td
-                        key={d.toISOString()}
-                        className="px-1.5 py-1.5 align-top"
-                        style={{ borderBottom: `1px solid ${BORDER}`, background: cellBg, minWidth: 120 }}
-                      >
-                        {cellState === "loading" && (
-                          <div className="flex h-10 items-center justify-center">
-                            <div className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: BORDER }} />
-                          </div>
-                        )}
-
-                        {cellState === "blackout" && (
-                          <div className="flex flex-col items-center justify-center h-10 gap-0.5">
-                            <XCircle size={13} className="text-amber-500" />
-                            <span className="text-[9px] font-bold text-amber-700">On leave</span>
-                            {avail?.blackout_dates?.find(b => {
-                              const k = format(d, "yyyy-MM-dd");
-                              return b.start_date <= k && k <= b.end_date && b.reason;
-                            })?.reason && (
-                              <span className="text-[8px] text-amber-600 truncate max-w-[90px]">
-                                {avail.blackout_dates!.find(b => { const k = format(d, "yyyy-MM-dd"); return b.start_date <= k && k <= b.end_date && b.reason; })!.reason}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {cellState === "unavailable" && (
-                          <div className="flex h-10 items-center justify-center">
-                            <MinusCircle size={12} className="opacity-25" style={{ color: MUTED }} />
-                          </div>
-                        )}
-
-                        {cellState === "available" && (
-                          <button
-                            type="button"
-                            title={`Assign shift to ${worker.full_name} on ${format(d, "d MMM")}`}
-                            onClick={() => onCellClick(worker, dayKey)}
-                            className="group flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-green-200 hover:border-green-400 hover:bg-green-50 transition-all"
-                          >
-                            <Plus size={13} className="text-green-400 group-hover:text-green-600 transition-colors" />
-                          </button>
-                        )}
-
-                        {cellState === "assigned" && (
-                          <div className="space-y-1">
-                            {dayShifts.map((s) => {
-                              const cfg   = statusCfg(s.status, translate);
-                              const start = parseStart(s);
-                              const end   = s.scheduled_end ? parseISO(s.scheduled_end) : null;
-                              return (
-                                <div key={s.id}
-                                  className="rounded-lg px-2 py-1.5 text-[10px] font-bold"
-                                  style={{ background: cfg.bg, color: cfg.color, borderLeft: `3px solid ${cfg.color}` }}
-                                >
-                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "N/A"}</div>
-                                  {start && (
-                                    <div className="mt-0.5 font-medium opacity-80">
-                                      {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {/* Allow adding a second shift on the same day */}
-                            <button
-                              type="button"
-                              title={`Add another shift for ${worker.full_name} on ${format(d, "d MMM")}`}
-                              onClick={() => onCellClick(worker, dayKey)}
-                              className="flex h-5 w-full items-center justify-center rounded border border-dashed border-violet-200 hover:border-violet-400 hover:bg-violet-50 transition-all opacity-0 hover:opacity-100 focus:opacity-100"
-                            >
-                              <Plus size={9} style={{ color: PLUM }} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
-                  {translate("coordinator.rostering.noShiftsWeek")}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 function DayPanel({
   day, shifts, workers, onAssign,
@@ -572,7 +281,7 @@ export default function CoordinatorRosteringPage() {
   const liveOrgId = currentUser?.organizationId ?? "__no_org__";
   const [liveSearch, setLiveSearch] = useState("");
   const [pageTab,      setPageTab]      = useState<ScheduleTab>("roster");
-  const [viewMode,     setViewMode]     = useState<ViewMode>("month");
+  const [viewMode,     setViewMode]     = useState<ViewMode>("roster");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay,  setSelectedDay]  = useState(new Date());
@@ -581,6 +290,7 @@ export default function CoordinatorRosteringPage() {
   const [assignOpen,   setAssignOpen]   = useState(false);
   const [bulkOpen,     setBulkOpen]     = useState(false);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
+  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats; date: string } | null>(null);
   const [availMap,     setAvailMap]     = useState<AvailabilityMap>({});
   const [loadingAvail, setLoadingAvail] = useState(false);
@@ -588,10 +298,10 @@ export default function CoordinatorRosteringPage() {
   const participantsQuery = useGetParticipants();
   const participantList   = (participantsQuery.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
 
-  const rangeStart = (viewMode === "week" || viewMode === "schedule")
+  const rangeStart = viewMode === "roster"
     ? format(weekStart, "yyyy-MM-dd")
     : format(startOfMonth(currentMonth), "yyyy-MM-dd");
-  const rangeEnd = (viewMode === "week" || viewMode === "schedule")
+  const rangeEnd = viewMode === "roster"
     ? format(addDays(weekStart, 6), "yyyy-MM-dd")
     : format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
@@ -661,15 +371,22 @@ export default function CoordinatorRosteringPage() {
     : `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-4 pb-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
           <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Plan shifts, review worker availability and manage the roster</p>
         </div>
         {pageTab === "roster" ? (
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setTeamPanelOpen(true)}
+            variant="outline"
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black"
+            style={{ borderColor: BORDER, color: MUTED }}
+          >
+            <Users2 size={14} /> {translate("coordinator.rostering.team")}
+          </Button>
           <Button
             onClick={() => setBulkOpen(true)}
             variant="outline"
@@ -738,21 +455,21 @@ export default function CoordinatorRosteringPage() {
 
       {pageTab === "roster" && (
       <>
-      {/* Inline stat strip instead of 4 identical cards */}
-      <KpiGrid className="sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays />} />
-        <KpiCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity />} />
-        <KpiCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 />} />
-        <KpiCard
+      {/* Flat inline stat strip, not a repeated card grid */}
+      <StatCardGroup fill>
+        <StatCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays size={16} />} />
+        <StatCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity size={16} />} />
+        <StatCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 size={16} />} />
+        <StatCard
           label={workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
           value={workers.length}
-          icon={<Users2 />}
+          icon={<Users2 size={16} />}
         />
-      </KpiGrid>
+      </StatCardGroup>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
-          {(["month", "week", "schedule", "list"] as ViewMode[]).map((mode) => (
+          {(["roster", "month"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -765,34 +482,32 @@ export default function CoordinatorRosteringPage() {
           ))}
         </div>
 
-        {viewMode !== "list" && viewMode !== "schedule" && (
-          <div className="flex items-center gap-2">
-            <button
-              title={translate("coordinator.rostering.previousPeriod")}
-              onClick={handlePrev}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER }}
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
-            <button
-              title={translate("coordinator.rostering.nextPeriod")}
-              onClick={handleNext}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER }}
-            >
-              <ChevronRight size={15} />
-            </button>
-            <button
-              onClick={handleToday}
-              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER, color: PLUM }}
-            >
-              {translate("coordinator.rostering.todayBtn")}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            title={translate("coordinator.rostering.previousPeriod")}
+            onClick={handlePrev}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            style={{ borderColor: BORDER }}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
+          <button
+            title={translate("coordinator.rostering.nextPeriod")}
+            onClick={handleNext}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            style={{ borderColor: BORDER }}
+          >
+            <ChevronRight size={15} />
+          </button>
+          <button
+            onClick={handleToday}
+            className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
+            style={{ borderColor: BORDER, color: PLUM }}
+          >
+            {translate("coordinator.rostering.todayBtn")}
+          </button>
+        </div>
 
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={workerFilter} onValueChange={setWorkerFilter}>
@@ -836,8 +551,8 @@ export default function CoordinatorRosteringPage() {
         </div>
       )}
 
-      {viewMode === "week" && (
-        <RosterGrid
+      {viewMode === "roster" && (
+        <RosterBoard
           weekStart={weekStart}
           shifts={shifts}
           workers={workers}
@@ -847,62 +562,58 @@ export default function CoordinatorRosteringPage() {
             setAssignTarget({ worker, date });
             setAssignOpen(true);
           }}
+          onRefresh={() => shiftsQuery.refetch?.()}
         />
       )}
 
-      {viewMode === "list" && (
-        <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
-          <div
-            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest"
-            style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, background: SOFT }}
-          >
-            <span>{translate("common.participant")}</span><span className="hidden sm:inline">{translate("common.worker")}</span><span className="hidden md:inline">{translate("coordinator.rostering.list.dateTime")}</span><span className="hidden md:inline">{translate("coordinator.rostering.list.shiftType")}</span><span className="hidden sm:inline">{translate("coordinator.rostering.list.status")}</span>
-          </div>
-          <div>
-            {shifts.length === 0 && !shiftsQuery.isLoading && (
-              <div className="py-16 text-center">
-                <Users2 className="mx-auto mb-2" size={24} style={{ color: MUTED }} />
-                <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("coordinator.rostering.list.noMatch")}</p>
-                <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{translate("coordinator.rostering.list.noMatchHint")}</p>
+      {/* -- Team availability & skills side panel --------------------------- */}
+      <Sheet open={teamPanelOpen} onOpenChange={(open) => { setTeamPanelOpen(open); if (!open) setAvailWorker(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{translate("coordinator.rostering.workerAvailability")}</SheetTitle>
+            <SheetDescription>{translate("coordinator.rostering.teamPanelDesc")}</SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4">
+            {availWorker ? (
+              <div className="space-y-3">
+                <button
+                  onClick={() => setAvailWorker(null)}
+                  className="inline-flex items-center gap-1.5 text-[12px] font-bold"
+                  style={{ color: PLUM }}
+                >
+                  <ChevronLeft size={14} /> {translate("coordinator.rostering.allWorkers")}
+                </button>
+                <WorkerAvailabilityPanel worker={availWorker} onClose={() => setAvailWorker(null)} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {workers.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => setAvailWorker(w)}
+                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
+                    style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
+                  >
+                    <div
+                      className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white"
+                      style={{ background: "var(--cc-cta)" }}
+                    >
+                      {w.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-bold" style={{ color: PLUM }}>{w.full_name.split(" ")[0]}</p>
+                      <p className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
+                        <Settings2 size={9} /> {translate("common.settings")}
+                      </p>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
-            {shifts.map((shift) => {
-              const cfg   = statusCfg(shift.status, translate);
-              const start = parseStart(shift);
-              const end   = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
-              return (
-                <div
-                  key={shift.id}
-                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-[#F8F6FE] transition-colors"
-                  style={{ borderBottom: `1px solid ${BORDER}` }}
-                >
-                  <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
-                      {(shift.worker_name || "W").split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
-                    </div>
-                    <p className="truncate text-[12px]" style={{ color: MUTED }}>{shift.worker_name || translate("common.worker")}</p>
-                  </div>
-                  <div>
-                    {start ? (
-                      <>
-                        <p className="text-[12px] font-bold" style={{ color: TEXT }}>{format(start, "d MMM yyyy")}</p>
-                        <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}</p>
-                      </>
-                    ) : <span style={{ color: MUTED }}>N/A</span>}
-                  </div>
-                  <p className="truncate text-[11px]" style={{ color: MUTED }}>
-                    {(shift.shift_type ?? "standard_support").replace(/_/g, " ")}
-                  </p>
-                  <span className="inline-block rounded-full px-2.5 py-1 text-[10px] font-black uppercase" style={{ background: cfg.bg, color: cfg.color }}>
-                    {cfg.label}
-                  </span>
-                </div>
-              );
-            })}
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       <ShiftAssignmentModal
         open={assignOpen}
@@ -911,90 +622,6 @@ export default function CoordinatorRosteringPage() {
         workers={workers}
         initialDate={assignTarget?.date}
       />
-
-      {/* -- Schedule (DnD) view -------------------------------------------- */}
-      {viewMode === "schedule" && (
-        <div className="space-y-4">
-          {/* Period nav for schedule view */}
-          <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
-            <button
-              title={translate("coordinator.rostering.previousWeek")}
-              onClick={handlePrev}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER }}
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span>
-              {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
-            </span>
-            <button title={translate("coordinator.rostering.nextWeek")} onClick={handleNext}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER }}
-            >
-              <ChevronRight size={15} />
-            </button>
-            <button
-              onClick={handleToday}
-              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
-              style={{ borderColor: BORDER, color: PLUM }}
-            >
-              {translate("coordinator.rostering.todayBtn")}
-            </button>
-            <div className="ml-auto text-[11px] font-medium" style={{ color: MUTED }}>
-              {translate("coordinator.rostering.dragHint")}
-            </div>
-          </div>
-
-          {/* Optional: Worker availability panel */}
-          {availWorker && (
-            <WorkerAvailabilityPanel
-              worker={availWorker}
-              onClose={() => setAvailWorker(null)}
-            />
-          )}
-
-          <DndScheduleView
-            weekStart={weekStart}
-            shifts={shifts}
-            workers={workers}
-            onRefresh={() => shiftsQuery.refetch?.()}
-          />
-
-          {/* Worker settings list */}
-          <div className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
-            <p className="mb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-              {translate("coordinator.rostering.workerAvailability")}
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {workers.map((w) => (
-                <button
-                  key={w.id}
-                  onClick={() => setAvailWorker((prev) => prev?.id === w.id ? null : w)}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
-                  style={{
-                    borderColor: availWorker?.id === w.id ? PLUM : BORDER,
-                    background:  availWorker?.id === w.id ? "#FCE3EB" : "var(--cc-bg)",
-                  }}
-                >
-                  <div
-                    className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white"
-                    style={{ background: "var(--cc-cta)" }}
-                  >
-                    {w.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[11px] font-bold" style={{ color: PLUM }}>{w.full_name.split(" ")[0]}</p>
-                    <p className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
-                      <Settings2 size={9} /> {translate("common.settings")}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* -- Bulk/Recurring shift modal ------------------------------------- */}
       <BulkShiftModal

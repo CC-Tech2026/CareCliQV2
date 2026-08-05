@@ -67,9 +67,14 @@ const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
 )
 StatCard.displayName = "StatCard"
 
+export interface StatCardGroupProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Stretch items evenly across the full row instead of hugging the left edge — use on wide, low-item-count strips so the row doesn't end in a large empty gap. */
+  fill?: boolean
+}
+
 /** Row wrapper — the "flat container, not a repeated card grid" strip used across the app. */
-const StatCardGroup = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, ...props }, ref) => {
+const StatCardGroup = React.forwardRef<HTMLDivElement, StatCardGroupProps>(
+  ({ className, children, fill = false, ...props }, ref) => {
     const items = React.Children.toArray(children)
     return (
       <div
@@ -81,7 +86,7 @@ const StatCardGroup = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         {...props}
       >
         {items.map((child, i) => (
-          <div key={i} className="flex items-center gap-6">
+          <div key={i} className={cn("flex items-center gap-6", fill && "flex-1 min-w-[140px]")}>
             {i > 0 && <div className="h-7 w-px hidden sm:block" style={{ background: "var(--cc-border)" }} />}
             {child}
           </div>

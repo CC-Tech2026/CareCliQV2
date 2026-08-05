@@ -122,32 +122,105 @@ def seed_credentials(sb, user_id: str, mode: str):
         }).execute()
 
 
-def ensure_training_module(sb) -> dict:
-    existing = (
-        sb.table("training_modules")
-        .select("id,title")
-        .eq("organization_id", ORG_ID)
-        .eq("title", "New Starter Induction Pack")
-        .execute()
-    )
-    if existing.data:
-        return existing.data[0]
-    resp = sb.table("training_modules").insert({
-        "id": str(uuid4()),
-        "organization_id": ORG_ID,
+TRAINING_MODULES = [
+    {
+        "title": "Welcome to CareCliQ",
+        "description": "Meet the team, learn our mission and values, and get set up on the app before your first shift.",
+        "requires_certification": False,
+    },
+    {
         "title": "New Starter Induction Pack",
         "description": "Core NDIS induction: code of conduct, safeguarding, incident reporting basics.",
         "requires_certification": False,
-        "created_by": COORDINATOR_ID,
-        "is_active": True,
-    }).execute()
-    return resp.data[0]
+    },
+    {
+        "title": "NDIS Practice Standards Refresher",
+        "description": "Overview of the NDIS Practice Standards and how they apply to day-to-day support work.",
+        "requires_certification": True,
+    },
+    {
+        "title": "Manual Handling & Injury Prevention",
+        "description": "Safe lifting, transfers, and equipment use to protect yourself and the people you support.",
+        "requires_certification": True,
+    },
+    {
+        "title": "Medication Support Basics",
+        "description": "Assisting with medication safely, recognising errors, and when to escalate.",
+        "requires_certification": True,
+    },
+    {
+        "title": "Incident Reporting & Duty of Care",
+        "description": "What counts as a reportable incident, timeframes, and how to document what happened.",
+        "requires_certification": False,
+    },
+]
+
+
+def ensure_training_modules(sb) -> list[dict]:
+    modules = []
+    for m in TRAINING_MODULES:
+        existing = (
+            sb.table("training_modules")
+            .select("id,title")
+            .eq("organization_id", ORG_ID)
+            .eq("title", m["title"])
+            .execute()
+        )
+        if existing.data:
+            modules.append(existing.data[0])
+            continue
+        resp = sb.table("training_modules").insert({
+            "id": str(uuid4()),
+            "organization_id": ORG_ID,
+            "title": m["title"],
+            "description": m["description"],
+            "requires_certification": m["requires_certification"],
+            "created_by": COORDINATOR_ID,
+            "is_active": True,
+        }).execute()
+        modules.append(resp.data[0])
+    return modules
+
+
+def seed_onboarding_documents(sb, user_id: str, full_name: str, onboarding_completed: bool):
+    sb.table("worker_onboarding_documents").delete().eq("worker_id", user_id).execute()
+    first_name = full_name.split(" ")[0]
+    docs = [
+        {
+            "document_type": "offer_letter",
+            "title": f"Offer of Employment — {full_name}",
+            "notes": f"Signed offer letter countersigned by {first_name}.",
+        },
+        {
+            "document_type": "service_agreement",
+            "title": f"Independent Support Worker Agreement — {full_name}",
+            "notes": "Standard service agreement, reviewed annually.",
+        },
+    ]
+    if not onboarding_completed:
+        docs.append({
+            "document_type": "other",
+            "title": "Right to Work Verification (pending)",
+            "notes": "Awaiting certified copy of visa/citizenship document from worker.",
+        })
+    for d in docs:
+        sb.table("worker_onboarding_documents").insert({
+            "id": str(uuid4()),
+            "worker_id": user_id,
+            "organization_id": ORG_ID,
+            "document_type": d["document_type"],
+            "title": d["title"],
+            "notes": d["notes"],
+            "uploaded_by": COORDINATOR_ID,
+        }).execute()
 
 
 def main():
     sb = get_supabase_admin()
-    module = ensure_training_module(sb)
-    print(f"Training module ready: {module['title']} ({module['id']})")
+    modules = ensure_training_modules(sb)
+    module = next(m for m in modules if m["title"] == "New Starter Induction Pack")
+    for m in modules:
+        print(f"Training module ready: {m['title']} ({m['id']})")
 
     for w in WORKERS:
         user_id = find_or_create_auth_user(sb, w["email"], w["full_name"])
@@ -166,6 +239,7 @@ def main():
         }).execute()
         ensure_org_membership(sb, user_id)
         seed_credentials(sb, user_id, w["credentials"])
+        seed_onboarding_documents(sb, user_id, w["full_name"], w["onboarding_completed"])
 
         if w.get("assign_training"):
             sb.table("worker_training_recommendations").delete().eq("worker_id", user_id).execute()

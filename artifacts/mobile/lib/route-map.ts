@@ -16,6 +16,7 @@ export function mapWebPathToMobile(path?: string | null): string | null {
   if (url.includes("/credentials")) return "/credentials";
   if (url.includes("/incidents")) return "/incidents";
   if (url.includes("/toolkit")) return "/toolkit";
+  if (url.includes("/training")) return "/training";
   if (url.includes("/settings")) return "/(tabs)/settings";
   return null;
 }
