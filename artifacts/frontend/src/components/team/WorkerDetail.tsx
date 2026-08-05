@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock3,
+  ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2, Upload,
+  Mail, Phone, BadgeCheck, IdCard, Hourglass, AlertCircle,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -29,7 +30,7 @@ const SOFT = "var(--cc-soft)";
 const SURFACE = "var(--cc-surface)";
 const CARD_SHADOW = "var(--cc-card-shadow)";
 
-type WorkerDetailTab = "overview" | "documents" | "credentials" | "availability" | "training" | "compliance";
+type WorkerDetailTab = "overview" | "documents" | "credentials" | "availability" | "training";
 
 /** Mandatory credential types every worker is expected to have on file. */
 export const REQUIRED_CREDENTIAL_TYPES = [
@@ -103,50 +104,115 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
   });
 
   const workerCredentials = (credentialsQuery.data ?? []).filter((c: Credential) => c.user_id === worker.id);
+  const credentialsComplete = !credentialsQuery.isLoading && isWorkerCredentialsComplete(credentialsQuery.data ?? [], worker.id);
+  const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+
+  const statCells: { label: string; value: string | number; color?: string }[] = [
+    { label: translate("team.col.sessions"), value: worker.total_sessions },
+    { label: translate("team.col.thisWeek"), value: worker.sessions_this_week },
+    {
+      label: translate("team.col.compliance"),
+      value: worker.avg_compliance != null ? `${worker.avg_compliance}%` : "N/A",
+      color: complianceColour(worker.avg_compliance),
+    },
+    { label: translate("team.detail.draftCount"), value: worker.draft_count },
+    {
+      label: translate("team.detail.flaggedCount"),
+      value: worker.flagged_count,
+      color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      {/* Back + identity header */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold transition-colors"
-          style={{ color: PLUM }}
-        >
-          <ArrowLeft size={15} /> {translate("team.detail.back")}
-        </button>
-      </div>
+      {/* Back */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold transition-colors"
+        style={{ color: PLUM }}
+      >
+        <ArrowLeft size={15} /> {translate("team.detail.back")}
+      </button>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-        <div
-          className="h-14 w-14 rounded-full shrink-0 flex items-center justify-center text-lg font-black"
-          style={{ background: PLUM, color: "#fff" }}
-        >
-          {(worker.full_name || "?").charAt(0).toUpperCase()}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-black truncate" style={{ color: TEXT }}>{worker.full_name}</h2>
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{
-                background: worker.is_active !== false ? "var(--cc-status-success-bg)" : "var(--cc-status-danger-bg)",
-                color: worker.is_active !== false ? "var(--cc-status-success)" : "var(--cc-status-danger)",
-              }}
-            >
-              {worker.is_active !== false ? translate("team.status.active") : translate("team.status.inactive")}
-            </span>
+      {/* Identity + at-a-glance header */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-5">
+          <div
+            className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black"
+            style={{ background: PLUM, color: "#fff" }}
+          >
+            {(worker.full_name || "?").charAt(0).toUpperCase()}
           </div>
-          <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-            {translate("team.detail.workerId")}: <span className="font-bold" style={{ color: TEXT }}>{worker.employee_id || worker.id}</span>
-          </p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-black truncate" style={{ color: TEXT }}>{worker.full_name}</h2>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{
+                  background: worker.is_active !== false ? "var(--cc-status-success-bg)" : "var(--cc-status-danger-bg)",
+                  color: worker.is_active !== false ? "var(--cc-status-success)" : "var(--cc-status-danger)",
+                }}
+              >
+                {worker.is_active !== false ? translate("team.status.active") : translate("team.status.inactive")}
+              </span>
+              {onboardingPending && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" }}
+                >
+                  <Hourglass size={10} /> {translate("team.detail.onboardingPending")}
+                </span>
+              )}
+              {worker.training_overdue && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)" }}
+                >
+                  <AlertCircle size={10} /> {translate("team.detail.trainingOverdue")}
+                </span>
+              )}
+            </div>
+            <p className="text-xs mt-1 capitalize" style={{ color: MUTED }}>
+              {(worker.role || "").replace(/_/g, " ")}
+              <span className="mx-1.5">·</span>
+              <span className="font-bold" style={{ color: TEXT }}>{worker.employee_id || worker.id.slice(0, 8)}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs" style={{ color: MUTED }}>
+              {worker.email && (
+                <span className="inline-flex items-center gap-1.5"><Mail size={13} /> {worker.email}</span>
+              )}
+              {worker.phone && (
+                <span className="inline-flex items-center gap-1.5"><Phone size={13} /> {worker.phone}</span>
+              )}
+            </div>
+          </div>
+          <div
+            className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
+            style={{
+              background: credentialsComplete ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)",
+              color: credentialsComplete ? "var(--cc-status-success)" : "var(--cc-status-warning)",
+            }}
+          >
+            {credentialsComplete ? <BadgeCheck size={13} /> : <IdCard size={13} />}
+            {credentialsComplete ? translate("team.detail.credentialsComplete") : translate("team.detail.credentialsIncomplete")}
+          </div>
+        </div>
+
+        {/* At-a-glance stat strip */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
+          {statCells.map((cell) => (
+            <div key={cell.label} className="px-4 py-3" style={{ borderColor: BORDER }}>
+              <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{cell.label}</p>
+              <p className="text-base font-black tabular-nums mt-0.5" style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
-        {(["overview", "documents", "credentials", "availability", "training", "compliance"] as WorkerDetailTab[]).map((t) => (
+        {(["overview", "documents", "credentials", "availability", "training"] as WorkerDetailTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -173,33 +239,233 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
       )}
       {tab === "availability" && <WorkerAvailabilityPanel worker={worker} />}
       {tab === "training" && <TrainingTab worker={worker} translate={translate} />}
-      {tab === "compliance" && <ComplianceTab worker={worker} translate={translate} />}
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value?: string | null }) {
+function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div>
-      <dt className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</dt>
-      <dd className="text-sm font-semibold mt-0.5" style={{ color: TEXT }}>{value || "—"}</dd>
+    <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+      <p className="text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+      <p className="text-sm font-semibold text-right" style={{ color: TEXT }}>{value || "N/A"}</p>
     </div>
   );
 }
 
 function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+  const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
   return (
-    <div className="rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-      <dl className="grid grid-cols-2 sm:grid-cols-3 gap-5">
-        <Field label={translate("team.detail.workerId")} value={worker.employee_id || worker.id} />
-        <Field label={translate("team.col.email")} value={worker.email} />
-        <Field label={translate("team.detail.phone")} value={worker.phone} />
-        <Field label={translate("team.col.role")} value={(worker.role || "").replace(/_/g, " ")} />
-        <Field label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} />
-        <Field label={translate("team.detail.lastLogin")} value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : "—"} />
-        <Field label={translate("team.detail.preferredContact")} value={worker.preferred_contact_method} />
-      </dl>
+    <div className="space-y-4">
+      <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <DetailRow label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} />
+        <DetailRow
+          label={translate("team.detail.lastLogin")}
+          value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined}
+        />
+        <DetailRow label={translate("team.detail.preferredContact")} value={worker.preferred_contact_method} />
+        <DetailRow
+          label={translate("team.detail.onboardingStatus")}
+          value={onboardingPending ? translate("team.detail.onboardingPending") : translate("team.detail.onboardingComplete")}
+        />
+      </div>
     </div>
+  );
+}
+
+function documentTypeLabel(type: WorkerOnboardingDocumentType, translate: (k: string) => string): string {
+  return translate(`team.documents.type.${type}` as "team.documents.type.other");
+}
+
+function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+
+  const documentsQuery = useOrgQuery(["worker-onboarding-documents", worker.id], {
+    queryFn: () => getWorkerOnboardingDocuments(worker.id),
+  });
+  const documents = documentsQuery.data ?? [];
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteWorkerOnboardingDocument(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-onboarding-documents") });
+      toast({ title: translate("team.documents.removed") });
+    },
+    onError: () => toast({ title: translate("team.documents.saveFailed"), variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileText size={16} style={{ color: PLUM }} />
+          <p className="text-sm font-black" style={{ color: TEXT }}>{translate("team.documents.title")}</p>
+        </div>
+        <Button variant="navy" size="sm" className="gap-1.5 rounded-xl" onClick={() => setAddOpen(true)}>
+          <Plus size={13} /> {translate("team.documents.add")}
+        </Button>
+      </div>
+
+      {documentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
+
+      {!documentsQuery.isLoading && documents.length === 0 && (
+        <div className="rounded-2xl p-8 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
+          <FileText size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
+          <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.documents.empty")}</p>
+        </div>
+      )}
+
+      {documents.length > 0 && (
+        <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+          {documents.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="min-w-0 flex items-start gap-3">
+                <div className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: SOFT }}>
+                  <FileText size={15} style={{ color: PLUM }} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>{doc.title}</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>
+                      {documentTypeLabel(doc.document_type, translate)}
+                    </span>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                    {translate("team.documents.uploadedOn")} {safeFormat(doc.created_at)}
+                    {doc.notes ? ` · ${doc.notes}` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {doc.file_url ? (
+                  <a
+                    href={doc.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg p-1.5 hover:bg-black/5"
+                    title={translate("team.documents.download")}
+                    aria-label={translate("team.documents.download")}
+                  >
+                    <Download size={14} style={{ color: PLUM }} />
+                  </a>
+                ) : null}
+                <button
+                  onClick={() => {
+                    if (window.confirm(translate("team.documents.removeConfirm"))) deleteMut.mutate(doc.id);
+                  }}
+                  className="rounded-lg p-1.5 hover:bg-black/5"
+                  title={translate("team.documents.remove")}
+                  aria-label={translate("team.documents.remove")}
+                >
+                  <Trash2 size={14} style={{ color: MUTED }} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AddDocumentDialog open={addOpen} onOpenChange={setAddOpen} worker={worker} translate={translate} />
+    </div>
+  );
+}
+
+function AddDocumentDialog({
+  open, onOpenChange, worker, translate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  worker: WorkerStats;
+  translate: (k: string) => string;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [docType, setDocType] = useState<WorkerOnboardingDocumentType>("offer_letter");
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  const saveMut = useMutation({
+    mutationFn: () => uploadWorkerOnboardingDocument(worker.id, {
+      document_type: docType,
+      title: title.trim(),
+      notes: notes.trim() || undefined,
+      file: file || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-onboarding-documents") });
+      toast({ title: translate("team.documents.saved") });
+      onOpenChange(false);
+      setDocType("offer_letter");
+      setTitle("");
+      setNotes("");
+      setFile(null);
+    },
+    onError: () => toast({ title: translate("team.documents.saveFailed"), variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+            <FileText size={18} style={{ color: PLUM }} /> {translate("team.documents.dialogTitle").replace("{name}", worker.full_name)}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.docType")}</label>
+            <Select value={docType} onValueChange={(v) => setDocType(v as WorkerOnboardingDocumentType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="offer_letter">{translate("team.documents.type.offer_letter")}</SelectItem>
+                <SelectItem value="service_agreement">{translate("team.documents.type.service_agreement")}</SelectItem>
+                <SelectItem value="other">{translate("team.documents.type.other")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.docTitle")}</label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={translate("team.documents.docTitlePlaceholder")} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.notes")}</label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={translate("team.documents.notesPlaceholder")} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.file")}</label>
+            <label
+              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs font-semibold cursor-pointer"
+              style={{ borderColor: BORDER, color: MUTED }}
+            >
+              <Upload size={14} />
+              {file ? file.name : translate("team.documents.file")}
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
+          <Button
+            variant="navy"
+            onClick={() => saveMut.mutate()}
+            disabled={saveMut.isPending || !title.trim()}
+          >
+            {saveMut.isPending ? translate("common.saving") : translate("team.documents.save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -501,32 +767,3 @@ function AssignTrainingDialog({
   );
 }
 
-function ComplianceTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
-  const tiles = [
-    { label: translate("team.col.sessions"), value: worker.total_sessions, color: TEXT },
-    { label: translate("team.col.thisWeek"), value: worker.sessions_this_week, color: TEXT },
-    {
-      label: translate("team.col.compliance"),
-      value: worker.avg_compliance != null ? `${worker.avg_compliance}%` : "—",
-      color: complianceColour(worker.avg_compliance),
-    },
-    { label: translate("team.detail.draftCount"), value: worker.draft_count, color: TEXT },
-    { label: translate("team.detail.flaggedCount"), value: worker.flagged_count, color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : TEXT },
-  ];
-  return (
-    <div className="rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
-      <div className="flex items-center gap-2 mb-4">
-        <ShieldCheck size={16} style={{ color: complianceColour(worker.avg_compliance) }} />
-        <p className="text-sm font-black" style={{ color: TEXT }}>{translate("team.detail.complianceSummary")}</p>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-xl px-4 py-3" style={{ background: SOFT }}>
-            <p className="text-[11px] font-medium" style={{ color: MUTED }}>{tile.label}</p>
-            <p className="text-lg font-black tabular-nums mt-0.5" style={{ color: tile.color }}>{tile.value}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

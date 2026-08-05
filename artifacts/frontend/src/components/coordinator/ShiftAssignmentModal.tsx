@@ -173,9 +173,11 @@ export function ShiftAssignmentModal({
   const user = auth?.user;
   const orgId = user?.organizationId ?? "__no_org__";
 
-  // Hard gate: a worker who hasn't finished onboarding can't be rostered yet.
-  const assignableWorkers = workers.filter((w) => w.onboarding_completed !== false);
-  const onboardingPendingCount = workers.length - assignableWorkers.length;
+  // Hard gate: a worker who hasn't finished onboarding, or who has overdue
+  // mandatory training, can't be rostered yet.
+  const assignableWorkers = workers.filter((w) => w.onboarding_completed !== false && !w.training_overdue);
+  const onboardingPendingCount = workers.filter((w) => w.onboarding_completed === false).length;
+  const trainingOverdueCount = workers.filter((w) => w.onboarding_completed !== false && w.training_overdue).length;
 
   const [selectedWorkerId,      setSelectedWorkerId]      = useState(worker?.id ?? "");
   const [selectedParticipantId, setSelectedParticipantId] = useState(initialParticipantId ?? "");
@@ -438,6 +440,13 @@ export function ShiftAssignmentModal({
                 {onboardingPendingCount === 1
                   ? translate("coordinator.shiftAssign.onboardingPendingOne")
                   : translateParams("coordinator.shiftAssign.onboardingPendingMany", { count: String(onboardingPendingCount) })}
+              </p>
+            )}
+            {trainingOverdueCount > 0 && (
+              <p className="mt-1.5 text-[11px]" style={{ color: "var(--cc-status-warning)" }}>
+                {trainingOverdueCount === 1
+                  ? translate("coordinator.shiftAssign.trainingOverdueOne")
+                  : translateParams("coordinator.shiftAssign.trainingOverdueMany", { count: String(trainingOverdueCount) })}
               </p>
             )}
           </div>

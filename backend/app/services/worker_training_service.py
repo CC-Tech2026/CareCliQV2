@@ -107,7 +107,14 @@ def mark_training_complete(
     module_id: str,
     completed_at: date,
     note: str | None = None,
+    acknowledged: bool = False,
 ) -> dict[str, Any]:
+    if not acknowledged:
+        raise HTTPException(
+            status_code=422,
+            detail="You must tick the acknowledgment box confirming you completed this training before submitting.",
+        )
+    now = datetime.now(timezone.utc).isoformat()
     record = {
         "id": str(uuid4()),
         "worker_id": worker_id,
@@ -116,6 +123,8 @@ def mark_training_complete(
         "completed_at": completed_at.isoformat(),
         "note": note,
         "status": "awaiting_confirmation",
+        "acknowledged": True,
+        "acknowledged_at": now,
     }
     try:
         get_supabase_admin().table("worker_training_completions").upsert(
@@ -302,6 +311,9 @@ def create_training_module(
     return record
 
 
+TRAINING_DEADLINE_DAYS = 7
+
+
 def recommend_training_module(
     worker_id: str,
     coordinator_id: str,
@@ -309,6 +321,7 @@ def recommend_training_module(
     training_module_id: str,
     title: str,
 ) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
     record = {
         "id": str(uuid4()),
         "worker_id": worker_id,
@@ -316,6 +329,8 @@ def recommend_training_module(
         "organization_id": organization_id,
         "training_module_id": training_module_id,
         "title": title,
+        "recommended_at": now.isoformat(),
+        "due_at": (now + timedelta(days=TRAINING_DEADLINE_DAYS)).isoformat(),
     }
     try:
         get_supabase_admin().table("worker_training_recommendations").insert(record).execute()
@@ -332,7 +347,11 @@ def recommend_training_module(
             org_id=organization_id,
             event="training_recommended",
             title="New training assigned",
-            message=f'Your coordinator assigned you training: "{title}".',
+            message=(
+                f'Your coordinator assigned you training: "{title}". '
+                f"This is mandatory and must be completed within {TRAINING_DEADLINE_DAYS} days, "
+                "or further rostering may be postponed until it's done."
+            ),
             reference_key=f"training_recommendation:{record['id']}",
             severity="medium",
         )
@@ -348,6 +367,136 @@ def dismiss_training_recommendation(recommendation_id: str, organization_id: str
     get_supabase_admin().table("worker_training_recommendations").update({
         "dismissed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", recommendation_id).eq("organization_id", organization_id).execute()
+
+
+def start_training_module(worker_id: str, organization_id: str, training_module_id: str) -> dict[str, Any]:
+    """Log that a worker opened an assigned training module. Idempotent — only
+    the first open is recorded, so the timestamp reflects genuine start time."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("worker_training_recommendations")
+            .select("id, started_at")
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .eq("training_module_id", training_module_id)
+            .is_("dismissed_at", "null")
+            .order("recommended_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = (resp.data or [None])[0]
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return {"started_at": None}
+        raise
+    if not row:
+        return {"started_at": None}
+    if row.get("started_at"):
+        return {"started_at": row["started_at"]}
+    get_supabase_admin().table("worker_training_recommendations").update({
+        "started_at": now,
+    }).eq("id", row["id"]).execute()
+    return {"started_at": now}
+
+
+def _overdue_module_ids(worker_id: str, organization_id: str) -> set[str]:
+    """Module IDs assigned to this worker whose 7-day deadline has passed
+    without a confirmed (or pending review) completion on file."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        recs = (
+            get_supabase_admin()
+            .table("worker_training_recommendations")
+            .select("training_module_id, due_at")
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .is_("dismissed_at", "null")
+            .lt("due_at", now)
+            .execute()
+        )
+        overdue_ids = {r["training_module_id"] for r in (recs.data or []) if r.get("training_module_id")}
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return set()
+        raise
+    if not overdue_ids:
+        return set()
+
+    try:
+        completions = (
+            get_supabase_admin()
+            .table("worker_training_completions")
+            .select("module_id, status")
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .in_("module_id", list(overdue_ids))
+            .execute()
+        )
+        done_ids = {
+            c["module_id"] for c in (completions.data or [])
+            if c.get("status") in ("confirmed", "awaiting_confirmation")
+        }
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            done_ids = set()
+        else:
+            raise
+    return overdue_ids - done_ids
+
+
+def is_training_overdue(worker_id: str, organization_id: str) -> bool:
+    return bool(_overdue_module_ids(worker_id, organization_id))
+
+
+def team_training_overdue_map(organization_id: str) -> dict[str, bool]:
+    """Per-worker overdue flag for coordinator team views / roster gating."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        recs = (
+            get_supabase_admin()
+            .table("worker_training_recommendations")
+            .select("worker_id, training_module_id, due_at")
+            .eq("organization_id", organization_id)
+            .is_("dismissed_at", "null")
+            .lt("due_at", now)
+            .execute()
+        )
+        rows = recs.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return {}
+        raise
+    if not rows:
+        return {}
+
+    module_ids = {r["training_module_id"] for r in rows if r.get("training_module_id")}
+    try:
+        completions = (
+            get_supabase_admin()
+            .table("worker_training_completions")
+            .select("worker_id, module_id, status")
+            .eq("organization_id", organization_id)
+            .in_("module_id", list(module_ids))
+            .execute()
+        )
+        done_pairs = {
+            (c["worker_id"], c["module_id"]) for c in (completions.data or [])
+            if c.get("status") in ("confirmed", "awaiting_confirmation")
+        }
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            done_pairs = set()
+        else:
+            raise
+
+    overdue: dict[str, bool] = {}
+    for r in rows:
+        pair = (r["worker_id"], r.get("training_module_id"))
+        if pair not in done_pairs:
+            overdue[str(r["worker_id"])] = True
+    return overdue
 
 
 def list_worker_recommendations(worker_id: str, organization_id: str) -> list[dict[str, Any]]:

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { AlertCircle, BookOpen, CheckCircle2, Clock, FileText, Plus, Send } from "lucide-react";
+import {
+  AlertCircle, ArrowLeft, BookOpen, CheckCircle2, Clock, FileText, Plus, Send, ShieldAlert,
+} from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -14,6 +16,9 @@ import {
   getTrainingRequests,
   getWorkerCertifications,
   markTrainingComplete,
+  startTrainingModule,
+  type TrainingModule,
+  type TrainingRecommendation,
   type WorkerCertification,
 } from "@/services/workerPerformanceService";
 
@@ -66,6 +71,7 @@ export default function WorkerTrainingPage() {
   const [requestText, setRequestText] = useState("");
   const [requestReason, setRequestReason] = useState("");
   const [urgent, setUrgent] = useState(false);
+  const [openModuleId, setOpenModuleId] = useState<string | null>(null);
 
   const certsQuery = useOrgQuery(["worker", "certifications"], { queryFn: getWorkerCertifications });
   const modulesQuery = useOrgQuery(["worker", "training-modules"], { queryFn: getTrainingModules });
@@ -73,22 +79,40 @@ export default function WorkerTrainingPage() {
   const historyQuery = useOrgQuery(["worker", "training-history"], { queryFn: getTrainingHistory });
   const recommendationsQuery = useOrgQuery(["worker", "training-recommendations"], { queryFn: getTrainingRecommendations });
 
-  const completedModuleIds = new Set((historyQuery.data?.history ?? []).map((h) => String((h as Record<string, unknown>).module_id)));
+  const historyByModule = new Map(
+    (historyQuery.data?.history ?? []).map((h) => [String((h as Record<string, unknown>).module_id), h as Record<string, unknown>]),
+  );
+  const completedModuleIds = new Set(
+    [...historyByModule.entries()]
+      .filter(([, h]) => h.status !== "rejected")
+      .map(([id]) => id),
+  );
   const activeRecommendations = (recommendationsQuery.data?.recommendations ?? [])
     .filter((r) => !completedModuleIds.has(r.training_module_id));
+
+  const hasAutoSwitched = useRef(false);
+  useEffect(() => {
+    if (hasAutoSwitched.current) return;
+    if (!recommendationsQuery.data) return;
+    hasAutoSwitched.current = true;
+    if (activeRecommendations.length > 0) setTab("modules");
+  }, [recommendationsQuery.data, activeRecommendations.length]);
 
   const completeMut = useMutation({
     mutationFn: (moduleId: string) =>
       markTrainingComplete({
         module_id: moduleId,
         completed_at: format(new Date(), "yyyy-MM-dd"),
+        acknowledged: true,
       }),
     onSuccess: () => {
       toast({
         title: translate("training.toast.submittedTitle"),
         description: translate("training.toast.submittedDesc"),
       });
+      setOpenModuleId(null);
       void queryClient.invalidateQueries({ queryKey: ["worker", "training-history"] });
+      void queryClient.invalidateQueries({ queryKey: ["worker", "training-recommendations"] });
     },
     onError: (e: Error) =>
       toast({ title: translate("training.toast.failed"), description: e.message, variant: "destructive" }),
@@ -113,7 +137,7 @@ export default function WorkerTrainingPage() {
 
   const tabs = [
     { id: "certs" as const, label: translate("training.tab.certifications") },
-    { id: "modules" as const, label: translate("training.tab.training") },
+    { id: "modules" as const, label: translate("training.tab.training"), badge: activeRecommendations.length },
     { id: "requests" as const, label: translate("training.tab.requests") },
   ];
 
@@ -145,7 +169,7 @@ export default function WorkerTrainingPage() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className="flex-1 rounded-full py-2.5 text-xs font-black transition sm:text-sm"
+            className="relative flex-1 rounded-full py-2.5 text-xs font-black transition sm:text-sm"
             style={{
               background: tab === t.id ? "var(--cc-surface)" : "transparent",
               color: tab === t.id ? TEXT : MUTED,
@@ -153,6 +177,14 @@ export default function WorkerTrainingPage() {
             }}
           >
             {t.label}
+            {!!t.badge && (
+              <span
+                className="ml-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
+                style={{ background: PLUM }}
+              >
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -170,38 +202,62 @@ export default function WorkerTrainingPage() {
         </div>
       )}
 
-      {tab === "modules" && (
+      {tab === "modules" && openModuleId && (
+        <TrainingModuleDetail
+          module={(modulesQuery.data?.modules ?? []).find((m) => m.id === openModuleId) ?? null}
+          recommendation={(recommendationsQuery.data?.recommendations ?? []).find((r) => r.training_module_id === openModuleId) ?? null}
+          historyRecord={historyByModule.get(openModuleId) ?? null}
+          onBack={() => setOpenModuleId(null)}
+          onComplete={() => completeMut.mutate(openModuleId)}
+          completing={completeMut.isPending}
+          translate={translate}
+          translateParams={translateParams}
+        />
+      )}
+
+      {tab === "modules" && !openModuleId && (
         <div className="space-y-4">
           {activeRecommendations.length > 0 && (
-            <section className="rounded-2xl border-2 p-5 shadow-sm" style={{ borderColor: PLUM, background: "linear-gradient(135deg, rgba(139,92,246,0.06), transparent)" }}>
+            <section className="rounded-2xl border-2 p-5 shadow-sm" style={{ borderColor: PLUM }}>
               <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: PLUM }}>
                 {translate("training.assignedByCoordinator")}
               </h3>
               <ul className="mt-3 space-y-2">
-                {activeRecommendations.map((rec) => (
-                  <li key={rec.id} className="flex items-center justify-between gap-3 rounded-xl bg-cc-bg px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{rec.title}</p>
-                      <p className="text-xs" style={{ color: MUTED }}>
-                        {translateParams("training.assignedOn", { date: format(parseISO(rec.recommended_at), "d MMM yyyy") })}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => completeMut.mutate(rec.training_module_id)}
-                      disabled={completeMut.isPending}
-                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white"
-                      style={{ background: PLUM }}
-                    >
-                      {translate("training.markComplete")}
-                    </button>
-                  </li>
-                ))}
+                {activeRecommendations.map((rec) => {
+                  const overdue = !!rec.due_at && new Date(rec.due_at).getTime() < Date.now();
+                  return (
+                    <li key={rec.id} className="flex items-center justify-between gap-3 rounded-xl bg-cc-bg px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{rec.title}</p>
+                        <p className="text-xs" style={{ color: overdue ? CORAL : MUTED }}>
+                          {rec.due_at
+                            ? (overdue
+                              ? translateParams("training.overdueSince", { date: format(parseISO(rec.due_at), "d MMM yyyy") })
+                              : translateParams("training.dueBy", { date: format(parseISO(rec.due_at), "d MMM yyyy") }))
+                            : translateParams("training.assignedOn", { date: format(parseISO(rec.recommended_at), "d MMM yyyy") })}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOpenModuleId(rec.training_module_id)}
+                        className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white"
+                        style={{ background: overdue ? CORAL : PLUM }}
+                      >
+                        {translate("training.startTraining")}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}
           {(modulesQuery.data?.modules ?? []).map((mod) => (
-            <section key={mod.id} className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section
+              key={mod.id}
+              className="rounded-2xl border bg-card p-5 shadow-sm cursor-pointer transition hover:border-[color:var(--cc-plum)]"
+              style={{ borderColor: BORDER }}
+              onClick={() => setOpenModuleId(mod.id)}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-black" style={{ color: TEXT }}>{mod.title}</h3>
@@ -210,37 +266,11 @@ export default function WorkerTrainingPage() {
                   )}
                 </div>
                 {!mod.requires_certification && (
-                  <button
-                    type="button"
-                    onClick={() => completeMut.mutate(mod.id)}
-                    disabled={completeMut.isPending}
-                    className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white"
-                    style={{ background: PLUM }}
-                  >
-                    {translate("training.markComplete")}
-                  </button>
+                  <span className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white" style={{ background: PLUM }}>
+                    {translate("training.startTraining")}
+                  </span>
                 )}
               </div>
-              {!!mod.resources?.length && (
-                <ul className="mt-4 space-y-2">
-                  {mod.resources.map((res) => (
-                    <li key={res.id}>
-                      <a
-                        href={res.external_url || "#"}
-                        target={res.resource_type === "external_link" ? "_blank" : undefined}
-                        rel="noreferrer"
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition hover:bg-cc-bg"
-                        style={{ color: PLUM }}
-                      >
-                        {res.resource_type === "video" && <BookOpen size={16} />}
-                        {res.resource_type === "pdf" && <FileText size={16} />}
-                        {res.resource_type === "external_link" && <Send size={16} />}
-                        {res.title}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </section>
           ))}
           {!modulesQuery.data?.modules?.length && (
@@ -361,6 +391,138 @@ export default function WorkerTrainingPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function TrainingModuleDetail({
+  module,
+  recommendation,
+  historyRecord,
+  onBack,
+  onComplete,
+  completing,
+  translate,
+  translateParams,
+}: {
+  module: TrainingModule | null;
+  recommendation: TrainingRecommendation | null;
+  historyRecord: Record<string, unknown> | null;
+  onBack: () => void;
+  onComplete: () => void;
+  completing: boolean;
+  translate: (key: string) => string;
+  translateParams: (key: string, params: Record<string, string>) => string;
+}) {
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  useEffect(() => {
+    if (!module) return;
+    void startTrainingModule(module.id).catch(() => {
+      // Non-critical — the start timestamp is a best-effort audit log.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [module?.id]);
+
+  if (!module) {
+    return (
+      <div className="rounded-2xl border bg-card p-8 text-center" style={{ borderColor: BORDER }}>
+        <p className="text-sm font-medium" style={{ color: MUTED }}>{translate("training.noModules")}</p>
+        <button type="button" onClick={onBack} className="mt-4 inline-flex items-center gap-1.5 text-sm font-black" style={{ color: PLUM }}>
+          <ArrowLeft size={14} /> {translate("common.back")}
+        </button>
+      </div>
+    );
+  }
+
+  const status = String(historyRecord?.status ?? "not_started");
+  const overdue = !!recommendation?.due_at && new Date(recommendation.due_at).getTime() < Date.now();
+  const canSubmit = status === "not_started" || status === "rejected";
+
+  return (
+    <div className="space-y-4">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-black" style={{ color: PLUM }}>
+        <ArrowLeft size={14} /> {translate("training.backToModules")}
+      </button>
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>{module.title}</h2>
+        {module.description && (
+          <p className="mt-1.5 text-sm font-medium" style={{ color: MUTED }}>{module.description}</p>
+        )}
+
+        {recommendation?.due_at && (
+          <div
+            className="mt-4 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold"
+            style={{ background: overdue ? "var(--cc-status-danger-bg)" : "var(--cc-status-warning-bg)", color: overdue ? "var(--cc-status-danger)" : "var(--cc-status-warning)" }}
+          >
+            {overdue ? <ShieldAlert size={14} /> : <Clock size={14} />}
+            {overdue
+              ? translateParams("training.overdueBanner", { date: format(parseISO(recommendation.due_at), "d MMM yyyy") })
+              : translateParams("training.dueBanner", { date: format(parseISO(recommendation.due_at), "d MMM yyyy") })}
+          </div>
+        )}
+
+        {!!module.resources?.length && (
+          <ul className="mt-4 space-y-2">
+            {module.resources.map((res) => (
+              <li key={res.id}>
+                <a
+                  href={res.external_url || "#"}
+                  target={res.resource_type === "external_link" ? "_blank" : undefined}
+                  rel="noreferrer"
+                  className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition hover:bg-cc-bg"
+                  style={{ color: PLUM, background: "var(--cc-bg)" }}
+                >
+                  {res.resource_type === "video" && <BookOpen size={16} />}
+                  {res.resource_type === "pdf" && <FileText size={16} />}
+                  {res.resource_type === "external_link" && <Send size={16} />}
+                  {res.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {module.requires_certification ? (
+          <p className="mt-5 text-xs font-medium" style={{ color: MUTED }}>{translate("training.requiresCertificationNote")}</p>
+        ) : status === "confirmed" ? (
+          <div className="mt-5 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold" style={{ background: "#ECFDF5", color: "#059669" }}>
+            <CheckCircle2 size={16} /> {translate("training.completedConfirmed")}
+          </div>
+        ) : status === "awaiting_confirmation" ? (
+          <div className="mt-5 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold" style={{ background: "#FFFBEB", color: "#D97706" }}>
+            <Clock size={16} /> {translate("training.awaitingConfirmationNote")}
+          </div>
+        ) : (
+          <div className="mt-5 border-t pt-4" style={{ borderColor: BORDER }}>
+            {status === "rejected" && (
+              <p className="mb-3 text-xs font-bold" style={{ color: CORAL }}>
+                {translate("training.rejectedNote")}
+                {historyRecord?.rejection_reason ? ` ${String(historyRecord.rejection_reason)}` : ""}
+              </p>
+            )}
+            <label className="flex items-start gap-2.5 text-sm font-bold" style={{ color: TEXT }}>
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+                className="mt-0.5"
+              />
+              {translate("training.acknowledgment")}
+            </label>
+            <button
+              type="button"
+              onClick={onComplete}
+              disabled={!acknowledged || completing || !canSubmit}
+              className="mt-4 w-full rounded-full py-2.5 text-sm font-black text-white disabled:opacity-50"
+              style={{ background: PLUM }}
+            >
+              {completing ? translate("common.saving") : translate("training.markComplete")}
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
