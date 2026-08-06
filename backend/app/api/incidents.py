@@ -4,7 +4,10 @@ from ..core.access import is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
 from .security import require_recent_reauth
 from ..core.config import settings
-from ..schemas.incident import IncidentCreate, IncidentUpdate, WorkerIncidentCreate, IncidentCorrectionCreate, worker_status_label
+from ..schemas.incident import (
+    IncidentCreate, IncidentUpdate, WorkerIncidentCreate, IncidentCorrectionCreate,
+    ReportableOverrideBody, SubjectOfAllegationCreate, worker_status_label,
+)
 from ..services import audit_service, incident_service, participant_service, session_service, shift_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
 from ..services.incident_pattern_service import get_incident_pattern_analysis
@@ -337,3 +340,77 @@ async def update_incident(
         after_state={"id": incident_id, "status": updated.get("status")},
     )
     return updated
+
+
+@router.post("/{incident_id}/override-reportable")
+async def override_incident_reportable(
+    incident_id: str,
+    body: ReportableOverrideBody,
+    user: dict = Depends(get_current_user),
+):
+    """Coordinator correction to the auto-classified reportability. One-time only — the
+    reason is retained permanently on the record per NDIS Commission record-keeping guidance."""
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    try:
+        updated = await incident_service.set_reportable_override(
+            incident_id, body.is_reportable, body.reason, user.get("sub"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await audit_service.log_action(
+        action_type="incident.reportable_overridden",
+        entity_type="incident",
+        entity_id=incident_id,
+        user_id=user.get("sub"),
+        organization_id=user.get("organization_id"),
+        after_state={"is_reportable": body.is_reportable, "reason": body.reason},
+    )
+    return updated
+
+
+@router.post("/{incident_id}/subject-of-allegation", status_code=201)
+async def add_subject_of_allegation(
+    incident_id: str,
+    body: SubjectOfAllegationCreate,
+    user: dict = Depends(get_current_user),
+):
+    """Kept in a separate table from any personnel-file view, per the Commission's explicit
+    separation requirement — coordinator/managing-director only."""
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization on account.")
+    try:
+        return await incident_service.create_subject_of_allegation(
+            incident_id,
+            str(org_id),
+            user.get("sub"),
+            subject_type=body.subject_type,
+            subject_user_id=body.subject_user_id,
+            subject_name=body.subject_name,
+            subject_role=body.subject_role,
+            notes=body.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{incident_id}/subject-of-allegation")
+async def get_subject_of_allegation(
+    incident_id: str,
+    user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    org_id = user.get("organization_id")
+    if not org_id:
+        return {"records": []}
+    return {"records": await incident_service.list_subject_of_allegation(incident_id, str(org_id))}

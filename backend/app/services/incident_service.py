@@ -157,6 +157,7 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
 
     # Overdue calculation
     overdue = False
+    notification_due_at: Optional[str] = None
 
     if status in ("reported", "under_investigation"):
         incident_date = _parse_datetime(
@@ -176,8 +177,10 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
             overdue = (
                 datetime.now(timezone.utc) > deadline
             )
+            notification_due_at = deadline.isoformat()
 
     enriched["overdue"] = overdue
+    enriched["notification_due_at"] = notification_due_at
 
     enriched["ndis_pending"] = bool(
         enriched["ndis_reportable"]
@@ -535,6 +538,7 @@ async def create_incident(
     for key in (
         "incident_date",
         "follow_up_date",
+        "identified_at",
     ):
         if payload.get(key) is not None:
             payload[key] = str(payload[key])
@@ -850,6 +854,7 @@ async def update_incident(
         "resolved_date",
         "ndis_reported_at",
         "follow_up_date",
+        "identified_at",
     ):
         if payload.get(key) is not None:
             payload[key] = str(payload[key])
@@ -1093,3 +1098,92 @@ async def get_incident_stats(
         "overdue": overdue,
         "critical": critical_count,
     }
+
+
+# ---------------------------------------------------------------------------
+# Reportability override (coordinator correction to the classification engine)
+# ---------------------------------------------------------------------------
+
+async def set_reportable_override(
+    incident_id: str,
+    is_reportable: bool,
+    reason: str,
+    overridden_by: str,
+) -> dict[str, Any]:
+    """Set once. The spec requires the reason be 'retained permanently... not editable
+    afterward' — enforced here by refusing a second override rather than a DB trigger,
+    since (unlike the medication ledger) the rest of this row stays mutable."""
+    supabase = get_supabase_admin()
+    existing_result = supabase.table(TABLE).select("id, ndis_reportable_override").eq("id", incident_id).execute()
+    existing_rows = _safe_rows(existing_result.data)
+    if not existing_rows:
+        raise ValueError("Incident not found.")
+    if existing_rows[0].get("ndis_reportable_override") is not None:
+        raise ValueError("This incident's reportability has already been overridden and cannot be changed again.")
+
+    update_payload = {
+        "ndis_reportable_override": is_reportable,
+        "ndis_reportable_override_reason": reason.strip(),
+        "ndis_reportable_override_by": overridden_by,
+        "ndis_reportable_override_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = supabase.table(TABLE).update(update_payload).eq("id", incident_id).execute()
+    rows = _safe_rows(result.data)
+    return rows[0] if rows else update_payload
+
+
+# ---------------------------------------------------------------------------
+# Subject of allegation — stored separately from any personnel-file view (RLS + service
+# scoping, not a UI convention), per the Commission's explicit separation requirement.
+# ---------------------------------------------------------------------------
+
+async def create_subject_of_allegation(
+    incident_id: str,
+    organization_id: str,
+    created_by: str,
+    *,
+    subject_type: str,
+    subject_user_id: Optional[str],
+    subject_name: Optional[str],
+    subject_role: Optional[str],
+    notes: Optional[str],
+) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    payload = {
+        "id": str(uuid.uuid4()),
+        "incident_id": incident_id,
+        "organization_id": organization_id,
+        "subject_type": subject_type,
+        "subject_user_id": subject_user_id,
+        "subject_name": subject_name,
+        "subject_role": subject_role,
+        "notes": notes,
+        "created_by": created_by,
+    }
+    try:
+        result = supabase.table("incident_subject_of_allegation").insert(payload).execute()
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            raise ValueError("Subject-of-allegation record is not available yet.") from exc
+        raise
+    rows = _safe_rows(result.data)
+    return rows[0] if rows else payload
+
+
+async def list_subject_of_allegation(incident_id: str, organization_id: str) -> List[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    try:
+        result = (
+            supabase
+            .table("incident_subject_of_allegation")
+            .select("*")
+            .eq("incident_id", incident_id)
+            .eq("organization_id", organization_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            return []
+        raise
+    return _safe_rows(result.data)

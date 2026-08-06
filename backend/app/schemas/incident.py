@@ -89,12 +89,22 @@ def is_ndis_reportable(incident_type: str, severity: str) -> bool:
     return incident_type in NDIS_REPORTABLE_TYPES or severity in NDIS_REPORTABLE_SEVERITIES
 
 
+LOCATION_TYPES = ["private_home", "supported_accommodation", "provider_premises", "community", "other"]
+SUBJECT_TYPES = ["worker", "participant", "other"]
+
+
 class IncidentPhotoItem(BaseModel):
     data: str
     description: Optional[str] = None
     captured_at: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+
+
+class WitnessItem(BaseModel):
+    name: str
+    contact: Optional[str] = None
+    relationship: Optional[str] = None
 
 
 class IncidentCreate(BaseModel):
@@ -106,8 +116,13 @@ class IncidentCreate(BaseModel):
     incident_type: str = "other"
     severity: str = "medium"
     incident_date: datetime
+    identified_at: Optional[datetime] = None
     location: Optional[str] = None
+    location_type: Optional[str] = None
     witnesses: Optional[str] = None
+    witnesses_structured: Optional[list[WitnessItem]] = None
+    connection_to_service: Optional[bool] = None
+    connection_to_service_reasoning: Optional[str] = None
     participant_impact: Optional[str] = None
     worker_actions: Optional[str] = None
     follow_up_required: bool = False
@@ -189,8 +204,13 @@ class IncidentUpdate(BaseModel):
     status: Optional[str] = None
     incident_date: Optional[datetime] = None
     resolved_date: Optional[datetime] = None
+    identified_at: Optional[datetime] = None
     location: Optional[str] = None
+    location_type: Optional[str] = None
     witnesses: Optional[str] = None
+    witnesses_structured: Optional[list[WitnessItem]] = None
+    connection_to_service: Optional[bool] = None
+    connection_to_service_reasoning: Optional[str] = None
     participant_impact: Optional[str] = None
     worker_actions: Optional[str] = None
     investigation_notes: Optional[str] = None
@@ -199,3 +219,27 @@ class IncidentUpdate(BaseModel):
     follow_up_date: Optional[date] = None
     ndis_reported_at: Optional[datetime] = None
     escalate: Optional[bool] = None
+
+
+class SubjectOfAllegationCreate(BaseModel):
+    subject_type: str
+    subject_user_id: Optional[str] = None
+    subject_name: Optional[str] = None
+    subject_role: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_validator("subject_type")
+    @classmethod
+    def validate_subject_type(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in SUBJECT_TYPES:
+            raise ValueError(f"subject_type must be one of: {', '.join(SUBJECT_TYPES)}")
+        return normalized
+
+
+class ReportableOverrideBody(BaseModel):
+    """Coordinator correction to the auto-classified reportability. Requires a reason, and
+    (per the spec) is retained permanently once set — see incident_service.py for the
+    one-time-only enforcement."""
+    is_reportable: bool
+    reason: str = Field(min_length=1, max_length=2000)
