@@ -1614,6 +1614,8 @@ export type ComplianceIncidentRow = {
   description: string;
   status: string;
   ndis_reportable: boolean;
+  notification_due_at?: string | null;
+  overdue?: boolean;
 };
 
 export type ComplianceCentreIncidents = {

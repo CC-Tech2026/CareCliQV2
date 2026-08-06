@@ -2494,16 +2494,20 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <ParticipantShiftContextTab participantId={id} />
             )}
             {careProfileSection === "clinical" && (
-              <div className="space-y-3">
-                <ParticipantMedicationsPanel participantId={id} />
-                <ParticipantClinicalRecordEditor participantId={id} />
-                <ParticipantRestrictedTab
-                  isLoading={restrictedQuery.isLoading}
-                  draft={restrictedDraft}
-                  onDraftChange={setRestrictedDraft}
-                  onSave={() => saveRestricted.mutate()}
-                  isSaving={saveRestricted.isPending}
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-start">
+                <div className="space-y-3">
+                  <ParticipantMedicationsPanel participantId={id} />
+                </div>
+                <div className="space-y-3">
+                  <ParticipantClinicalRecordEditor participantId={id} />
+                  <ParticipantRestrictedTab
+                    isLoading={restrictedQuery.isLoading}
+                    draft={restrictedDraft}
+                    onDraftChange={setRestrictedDraft}
+                    onSave={() => saveRestricted.mutate()}
+                    isSaving={saveRestricted.isPending}
+                  />
+                </div>
               </div>
             )}
           </div>

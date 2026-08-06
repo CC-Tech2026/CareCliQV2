@@ -1,10 +1,11 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from ..core.access import get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
 from ..services import session_service, participant_service, funding_service, ai_service, shift_service, incident_service
+from ..services.incident_notification_service import compute_notification_due_at
 from ..services.compliance_engine import (
     COMPLIANCE_BLOCKED_MESSAGE,
     ComplianceBlockedError,
@@ -804,11 +805,17 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
         except Exception:
             pass
 
+    now = datetime.now(timezone.utc)
     incidents_out = []
     for r in rows:
         pid = str(r.get("participant_id") or "")
         wid = str(r.get("user_id") or "")
         desc = r.get("description") or ""
+        due_at = (
+            compute_notification_due_at(r)
+            if r.get("status") in ("reported", "under_investigation")
+            else None
+        )
         incidents_out.append({
             "id": r.get("id"),
             "incident_date": r.get("incident_date"),
@@ -818,6 +825,8 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
             "description": (desc[:140] + "…") if len(desc) > 140 else desc,
             "status": r.get("status"),
             "ndis_reportable": r.get("ndis_reportable"),
+            "notification_due_at": due_at.isoformat() if due_at else None,
+            "overdue": bool(due_at and now > due_at),
         })
 
     return {
