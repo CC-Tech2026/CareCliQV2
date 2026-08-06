@@ -486,8 +486,11 @@ export default function IncidentDetail({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Header card */}
-      <div className="cc-surface-card">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
+      <div className="space-y-6">
+
+      {/* Overview */}
+      <div className="cc-surface-card lg:col-start-1">
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -514,119 +517,6 @@ export default function IncidentDetail({ id }: { id: string }) {
         </div>
 
         <div className="px-6 pb-6 space-y-5">
-          {/* Metadata */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-[13px]">
-            <div>
-              <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                <Calendar size={11} /> {translate("incidents.detail.incidentDate")}
-              </p>
-              <p className="font-medium text-cc-text">
-                {incident.incident_date
-                  ? format(parseISO(incident.incident_date), "d MMM yyyy")
-                  : translate("common.emDash")}
-              </p>
-              <p className="text-[11px] mt-0.5 text-cc-muted">
-                {incident.incident_date
-                  ? formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })
-                  : ""}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.type")}</p>
-              <p className="font-medium text-cc-text">
-                {incidentTypeLabel(incident.incident_type, translate)}
-              </p>
-            </div>
-            {incident.location && (
-              <div>
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <MapPin size={11} /> {translate("incidents.detail.location")}
-                </p>
-                <p className="text-cc-text">{incident.location}</p>
-              </div>
-            )}
-            {incident.identified_at && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.identifiedAt")}</p>
-                <p className="text-cc-text">{format(parseISO(incident.identified_at), "d MMM yyyy, h:mm a")}</p>
-              </div>
-            )}
-            {incident.location_type && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.locationType")}</p>
-                <p className="text-cc-text">{translate(`incidents.locationType.${incident.location_type}`)}</p>
-              </div>
-            )}
-            {incident.connection_to_service !== undefined && incident.connection_to_service !== null && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.connectionToService")}</p>
-                <p className="text-cc-text">
-                  {incident.connection_to_service ? translate("common.yes") : translate("common.no")}
-                  {incident.connection_to_service_reasoning ? ` — ${incident.connection_to_service_reasoning}` : ""}
-                </p>
-              </div>
-            )}
-            {incident.witnesses_structured && incident.witnesses_structured.length > 0 ? (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <Users size={11} /> {translate("incidents.detail.structuredWitnesses")}
-                </p>
-                <ul className="text-cc-text space-y-0.5">
-                  {incident.witnesses_structured.map((w, i) => (
-                    <li key={i}>
-                      {w.name}
-                      {w.relationship ? ` (${w.relationship})` : ""}
-                      {w.contact ? ` — ${w.contact}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : incident.witnesses ? (
-              <div>
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <Users size={11} /> {translate("incidents.detail.witnesses")}
-                </p>
-                <p className="text-cc-text">{incident.witnesses}</p>
-              </div>
-            ) : null}
-            {incident.practice_standard && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisPracticeStandard")}</p>
-                <p className="flex items-center gap-1.5 text-cc-text">
-                  <Shield size={12} className="text-cc-plum" />
-                  {incident.practice_standard}
-                </p>
-              </div>
-            )}
-            {incident.ndis_reported_at && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisQscNotified")}</p>
-                <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
-                  <CheckCircle2 size={13} />
-                  {format(parseISO(incident.ndis_reported_at), "d MMM yyyy, h:mm a")}
-                </p>
-              </div>
-            )}
-            {incident.ndis_reportable_override !== undefined && incident.ndis_reportable_override !== null && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.overrideOverridden")}</p>
-                <p className="text-cc-text">
-                  {incident.ndis_reportable_override ? translate("common.yes") : translate("common.no")}
-                  {incident.ndis_reportable_override_reason ? ` — ${incident.ndis_reportable_override_reason}` : ""}
-                  {incident.ndis_reportable_override_at
-                    ? ` (${format(parseISO(incident.ndis_reportable_override_at), "d MMM yyyy")})`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {incident.resolved_date && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.resolved")}</p>
-                <p className="text-cc-text">{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
-              </div>
-            )}
-          </div>
-
           {/* What happened */}
           <div className="pt-2 border-t border-cc-border">
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-cc-muted">{translate("incidents.detail.whatHappened")}</p>
@@ -801,217 +691,8 @@ export default function IncidentDetail({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Similar past incidents � CARECLIQV2-32 */}
-      {(patternsLoading || showPatternsPanel) && (
-        <div className="cc-surface-card">
-          <div className="cc-card-header">
-            <div className="flex items-center gap-2">
-              <History size={15} className="text-cc-muted" />
-              <p className="cc-card-title">{translate("incidents.detail.similarPastIncidents")}</p>
-            </div>
-            <p className="text-[11px] mt-1 text-cc-muted">
-              {translate("incidents.detail.similarPastSubtitle")}
-            </p>
-          </div>
-
-          {patternsLoading ? (
-            <div className="p-6 space-y-3">
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-20 w-full rounded-xl" />
-            </div>
-          ) : showPatternsPanel && patternData ? (
-            <div className="p-6 space-y-5">
-              {patternData.ai_summary && (
-                <div className="cc-plum-panel rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-cc-plum" />
-                    <p className="text-[12px] font-semibold uppercase tracking-widest text-cc-plum">{translate("incidents.detail.aiPatternAnalysis")}</p>
-                  </div>
-                  <div className="space-y-3 text-[13px] leading-relaxed text-cc-text">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.patternRecognised")}</p>
-                      <p>{patternData.ai_summary.pattern_recognised}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.pastStrategies")}</p>
-                      <p>{patternData.ai_summary.past_strategies}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.recommendations")}</p>
-                      <p>{patternData.ai_summary.recommendations}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {patternData.matches.map((match) => (
-                  <div
-                    key={match.incident_id}
-                    className="rounded-xl p-4 border border-cc-border bg-cc-soft"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-cc-muted">
-                        <span className="flex items-center gap-1">
-                          <Calendar size={11} />
-                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : translate("common.emDash")}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <User size={11} />
-                          {match.participant_label}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] px-2 py-0 shrink-0 bg-violet-50 text-violet-700 border-violet-200">
-                        {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}
-                      </Badge>
-                    </div>
-                    <p className="text-[13px] leading-relaxed text-cc-text">{match.excerpt}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {/* Investigation: assigned investigator (conflict-of-interest gated) + interviews */}
-      <div className="cc-surface-card">
-        <div className="cc-card-header">
-          <div className="flex items-center gap-2">
-            <UserSearch size={15} className="text-cc-muted" />
-            <p className="cc-card-title">{translate("incidents.detail.investigation")}</p>
-          </div>
-          <p className="text-[11px] mt-1 text-cc-muted">{translate("incidents.detail.investigationSubtitle")}</p>
-        </div>
-        <div className="p-6 space-y-5">
-          <div>
-            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.assignedInvestigator")}</Label>
-            {incident.assigned_investigator_id ? (
-              <p className="text-[13px] text-cc-text flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-emerald-600" />
-                {(team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name ?? incident.assigned_investigator_id}
-              </p>
-            ) : (
-              <p className="text-[13px] text-cc-muted mb-2">{translate("incidents.detail.noInvestigatorAssigned")}</p>
-            )}
-            <div className="flex gap-2 mt-2">
-              <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {eligibleInvestigators.length === 0 ? (
-                    <div className="px-2 py-1.5 text-[12px] text-cc-muted">{translate("incidents.detail.investigatorNoOptions")}</div>
-                  ) : (
-                    eligibleInvestigators.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
-                disabled={!selectedInvestigator || assignInvestigatorMutation.isPending}
-                className="rounded-xl h-9 text-xs text-white shrink-0"
-                style={{ background: "var(--cc-cta)" }}
-              >
-                {assignInvestigatorMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
-                {translate("incidents.detail.assignInvestigator")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-cc-border">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-[12px] font-medium text-cc-text">{translate("incidents.detail.interviews")}</Label>
-              <Button size="sm" variant="outline" onClick={() => setInterviewOpen(true)} className="rounded-xl h-8 text-xs">
-                <Plus size={12} className="mr-1.5" />
-                {translate("incidents.detail.addInterview")}
-              </Button>
-            </div>
-            <p className="text-[11px] text-cc-muted mb-3">{translate("incidents.detail.interviewsSubtitle")}</p>
-            {interviewData?.records && interviewData.records.length > 0 ? (
-              <div className="space-y-2">
-                {interviewData.records.map((iv) => (
-                  <div key={iv.id} className="rounded-xl border border-cc-border p-3 text-[13px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-cc-text">{iv.interviewee_name}</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {translate(`incidents.interviewType.${iv.interviewee_type}`)}
-                      </Badge>
-                    </div>
-                    {iv.interviewed_at && (
-                      <p className="text-cc-muted text-[11px] mt-0.5">
-                        {format(parseISO(iv.interviewed_at), "d MMM yyyy, h:mm a")}
-                      </p>
-                    )}
-                    {iv.notes && <p className="text-cc-text text-[12px] mt-1">{iv.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-cc-muted">{translate("incidents.detail.noInterviews")}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserSearch size={16} className="text-cc-plum" />
-              {translate("incidents.detail.addInterview")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectType")}</Label>
-              <Select value={interviewType} onValueChange={(v) => setInterviewType(v as typeof interviewType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(["worker", "participant", "witness", "other"] as const).map((t) => (
-                    <SelectItem key={t} value={t}>{translate(`incidents.interviewType.${t}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectName")}</Label>
-              <Input value={interviewName} onChange={(e) => setInterviewName(e.target.value)} className="rounded-xl border-cc-border" />
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.interviewNotes")}</Label>
-              <Textarea
-                rows={4}
-                value={interviewNotes}
-                onChange={(e) => setInterviewNotes(e.target.value)}
-                className="text-[13px] resize-none rounded-xl border-cc-border"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setInterviewOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
-              onClick={() => addInterviewMutation.mutate()}
-              disabled={addInterviewMutation.isPending || !interviewName.trim()}
-              className="rounded-xl text-white"
-              style={{ background: "var(--cc-cta)" }}
-            >
-              {addInterviewMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
-              {translate("incidents.detail.addInterview")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Investigation & corrective actions */}
-      <div className="cc-surface-card">
+      <div className="cc-surface-card lg:col-start-1">
         <div className="cc-card-header">
           <div className="flex items-center gap-2">
             <ClipboardList size={15} className="text-cc-muted" />
@@ -1169,8 +850,343 @@ export default function IncidentDetail({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Similar past incidents � CARECLIQV2-32 */}
+      {(patternsLoading || showPatternsPanel) && (
+        <div className="cc-surface-card lg:col-start-1">
+          <div className="cc-card-header">
+            <div className="flex items-center gap-2">
+              <History size={15} className="text-cc-muted" />
+              <p className="cc-card-title">{translate("incidents.detail.similarPastIncidents")}</p>
+            </div>
+            <p className="text-[11px] mt-1 text-cc-muted">
+              {translate("incidents.detail.similarPastSubtitle")}
+            </p>
+          </div>
+
+          {patternsLoading ? (
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </div>
+          ) : showPatternsPanel && patternData ? (
+            <div className="p-6 space-y-5">
+              {patternData.ai_summary && (
+                <div className="cc-plum-panel rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-cc-plum" />
+                    <p className="text-[12px] font-semibold uppercase tracking-widest text-cc-plum">{translate("incidents.detail.aiPatternAnalysis")}</p>
+                  </div>
+                  <div className="space-y-3 text-[13px] leading-relaxed text-cc-text">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.patternRecognised")}</p>
+                      <p>{patternData.ai_summary.pattern_recognised}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.pastStrategies")}</p>
+                      <p>{patternData.ai_summary.past_strategies}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.recommendations")}</p>
+                      <p>{patternData.ai_summary.recommendations}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {patternData.matches.map((match) => (
+                  <div
+                    key={match.incident_id}
+                    className="rounded-xl p-4 border border-cc-border bg-cc-soft"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-cc-muted">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={11} />
+                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : translate("common.emDash")}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User size={11} />
+                          {match.participant_label}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] px-2 py-0 shrink-0 bg-violet-50 text-violet-700 border-violet-200">
+                        {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}
+                      </Badge>
+                    </div>
+                    <p className="text-[13px] leading-relaxed text-cc-text">{match.excerpt}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      </div>
+      <div className="space-y-6">
+
+      {/* Details */}
+      <div className="cc-surface-card lg:col-start-2">
+        <div className="cc-card-header">
+          <div className="flex items-center gap-2">
+            <Calendar size={15} className="text-cc-muted" />
+            <p className="cc-card-title">{translate("incidents.register.details")}</p>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+            <div>
+              <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
+                <Calendar size={11} /> {translate("incidents.detail.incidentDate")}
+              </p>
+              <p className="font-medium text-cc-text">
+                {incident.incident_date
+                  ? format(parseISO(incident.incident_date), "d MMM yyyy")
+                  : translate("common.emDash")}
+              </p>
+              <p className="text-[11px] mt-0.5 text-cc-muted">
+                {incident.incident_date
+                  ? formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })
+                  : ""}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.type")}</p>
+              <p className="font-medium text-cc-text">
+                {incidentTypeLabel(incident.incident_type, translate)}
+              </p>
+            </div>
+            {incident.location && (
+              <div>
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
+                  <MapPin size={11} /> {translate("incidents.detail.location")}
+                </p>
+                <p className="text-cc-text">{incident.location}</p>
+              </div>
+            )}
+            {incident.identified_at && (
+              <div>
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.identifiedAt")}</p>
+                <p className="text-cc-text">{format(parseISO(incident.identified_at), "d MMM yyyy, h:mm a")}</p>
+              </div>
+            )}
+            {incident.location_type && (
+              <div>
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.locationType")}</p>
+                <p className="text-cc-text">{translate(`incidents.locationType.${incident.location_type}`)}</p>
+              </div>
+            )}
+            {incident.connection_to_service !== undefined && incident.connection_to_service !== null && (
+              <div className="col-span-2">
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.connectionToService")}</p>
+                <p className="text-cc-text">
+                  {incident.connection_to_service ? translate("common.yes") : translate("common.no")}
+                  {incident.connection_to_service_reasoning ? ` — ${incident.connection_to_service_reasoning}` : ""}
+                </p>
+              </div>
+            )}
+            {incident.witnesses_structured && incident.witnesses_structured.length > 0 ? (
+              <div className="col-span-2">
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
+                  <Users size={11} /> {translate("incidents.detail.structuredWitnesses")}
+                </p>
+                <ul className="text-cc-text space-y-0.5">
+                  {incident.witnesses_structured.map((w, i) => (
+                    <li key={i}>
+                      {w.name}
+                      {w.relationship ? ` (${w.relationship})` : ""}
+                      {w.contact ? ` — ${w.contact}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : incident.witnesses ? (
+              <div>
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
+                  <Users size={11} /> {translate("incidents.detail.witnesses")}
+                </p>
+                <p className="text-cc-text">{incident.witnesses}</p>
+              </div>
+            ) : null}
+            {incident.practice_standard && (
+              <div className="col-span-2">
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisPracticeStandard")}</p>
+                <p className="flex items-center gap-1.5 text-cc-text">
+                  <Shield size={12} className="text-cc-plum" />
+                  {incident.practice_standard}
+                </p>
+              </div>
+            )}
+            {incident.ndis_reported_at && (
+              <div className="col-span-2">
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisQscNotified")}</p>
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
+                  <CheckCircle2 size={13} />
+                  {format(parseISO(incident.ndis_reported_at), "d MMM yyyy, h:mm a")}
+                </p>
+              </div>
+            )}
+            {incident.ndis_reportable_override !== undefined && incident.ndis_reportable_override !== null && (
+              <div className="col-span-2">
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.overrideOverridden")}</p>
+                <p className="text-cc-text">
+                  {incident.ndis_reportable_override ? translate("common.yes") : translate("common.no")}
+                  {incident.ndis_reportable_override_reason ? ` — ${incident.ndis_reportable_override_reason}` : ""}
+                  {incident.ndis_reportable_override_at
+                    ? ` (${format(parseISO(incident.ndis_reportable_override_at), "d MMM yyyy")})`
+                    : ""}
+                </p>
+              </div>
+            )}
+            {incident.resolved_date && (
+              <div>
+                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.resolved")}</p>
+                <p className="text-cc-text">{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Investigation: assigned investigator (conflict-of-interest gated) + interviews */}
+      <div className="cc-surface-card lg:col-start-2">
+        <div className="cc-card-header">
+          <div className="flex items-center gap-2">
+            <UserSearch size={15} className="text-cc-muted" />
+            <p className="cc-card-title">{translate("incidents.detail.investigation")}</p>
+          </div>
+          <p className="text-[11px] mt-1 text-cc-muted">{translate("incidents.detail.investigationSubtitle")}</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.assignedInvestigator")}</Label>
+            {incident.assigned_investigator_id ? (
+              <p className="text-[13px] text-cc-text flex items-center gap-1.5">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                {(team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name ?? incident.assigned_investigator_id}
+              </p>
+            ) : (
+              <p className="text-[13px] text-cc-muted mb-2">{translate("incidents.detail.noInvestigatorAssigned")}</p>
+            )}
+            <div className="flex gap-2 mt-2">
+              <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleInvestigators.length === 0 ? (
+                    <div className="px-2 py-1.5 text-[12px] text-cc-muted">{translate("incidents.detail.investigatorNoOptions")}</div>
+                  ) : (
+                    eligibleInvestigators.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
+                disabled={!selectedInvestigator || assignInvestigatorMutation.isPending}
+                className="rounded-xl h-9 text-xs text-white shrink-0"
+                style={{ background: "var(--cc-cta)" }}
+              >
+                {assignInvestigatorMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+                {translate("incidents.detail.assignInvestigator")}
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-cc-border">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-[12px] font-medium text-cc-text">{translate("incidents.detail.interviews")}</Label>
+              <Button size="sm" variant="outline" onClick={() => setInterviewOpen(true)} className="rounded-xl h-8 text-xs">
+                <Plus size={12} className="mr-1.5" />
+                {translate("incidents.detail.addInterview")}
+              </Button>
+            </div>
+            <p className="text-[11px] text-cc-muted mb-3">{translate("incidents.detail.interviewsSubtitle")}</p>
+            {interviewData?.records && interviewData.records.length > 0 ? (
+              <div className="space-y-2">
+                {interviewData.records.map((iv) => (
+                  <div key={iv.id} className="rounded-xl border border-cc-border p-3 text-[13px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-cc-text">{iv.interviewee_name}</span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {translate(`incidents.interviewType.${iv.interviewee_type}`)}
+                      </Badge>
+                    </div>
+                    {iv.interviewed_at && (
+                      <p className="text-cc-muted text-[11px] mt-0.5">
+                        {format(parseISO(iv.interviewed_at), "d MMM yyyy, h:mm a")}
+                      </p>
+                    )}
+                    {iv.notes && <p className="text-cc-text text-[12px] mt-1">{iv.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-cc-muted">{translate("incidents.detail.noInterviews")}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserSearch size={16} className="text-cc-plum" />
+              {translate("incidents.detail.addInterview")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectType")}</Label>
+              <Select value={interviewType} onValueChange={(v) => setInterviewType(v as typeof interviewType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["worker", "participant", "witness", "other"] as const).map((t) => (
+                    <SelectItem key={t} value={t}>{translate(`incidents.interviewType.${t}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectName")}</Label>
+              <Input value={interviewName} onChange={(e) => setInterviewName(e.target.value)} className="rounded-xl border-cc-border" />
+            </div>
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.interviewNotes")}</Label>
+              <Textarea
+                rows={4}
+                value={interviewNotes}
+                onChange={(e) => setInterviewNotes(e.target.value)}
+                className="text-[13px] resize-none rounded-xl border-cc-border"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setInterviewOpen(false)} className="rounded-xl">
+              {translate("incidents.detail.overrideCancel")}
+            </Button>
+            <Button
+              onClick={() => addInterviewMutation.mutate()}
+              disabled={addInterviewMutation.isPending || !interviewName.trim()}
+              className="rounded-xl text-white"
+              style={{ background: "var(--cc-cta)" }}
+            >
+              {addInterviewMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+              {translate("incidents.detail.addInterview")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Subject of allegation — separate from personnel records, coordinator/MD only */}
-      <div className="cc-surface-card">
+      <div className="cc-surface-card lg:col-start-2">
         <div className="cc-card-header flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -1264,7 +1280,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       </Dialog>
 
       {/* Audit trail */}
-      <div className="cc-surface-card">
+      <div className="cc-surface-card lg:col-start-2">
         <div className="cc-card-header">
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-cc-muted" />
@@ -1323,6 +1339,9 @@ export default function IncidentDetail({ id }: { id: string }) {
             </div>
           )}
         </div>
+      </div>
+
+      </div>
       </div>
     </div>
   );
