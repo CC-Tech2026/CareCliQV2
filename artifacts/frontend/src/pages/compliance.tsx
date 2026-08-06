@@ -23,6 +23,7 @@ import { AuditPackPanel } from "@/pages/audit-pack";
 import { FormPanel } from "@/components/FormPanel";
 import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditTrailEntry } from "@/services/incidentService";
 import { IncidentAccordionCard } from "@/components/incidents/IncidentAccordionCard";
+import { MedicationRegisterPanel } from "@/components/compliance/MedicationRegisterPanel";
 import { Card } from "@/components/ui/card";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
@@ -34,7 +35,7 @@ import {
   ListChecks, FileX, Search, BarChart3, Flag,
   FileCheck2, Info, ArrowRight, Eye, FilePlus, FileText, List,
   ArrowDownCircle, CircleCheck, LayoutDashboard, Loader2, Inbox,
-  MoreVertical, RefreshCw, Printer, Share2, ExternalLink, Clock, Sparkles,
+  MoreVertical, RefreshCw, Printer, Share2, ExternalLink, Clock, Sparkles, Pill,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ function FilterChip({ label, active, icon, onClick }: { label: string; active: b
   );
 }
 
-function LoadingBlock({ label }: { label: string }) {
+export function LoadingBlock({ label }: { label: string }) {
   return (
     <div className="py-20 flex flex-col items-center justify-center gap-2">
       <Loader2 size={22} className="animate-spin" style={{ color: PLUM }} />
@@ -113,7 +114,7 @@ function LoadingBlock({ label }: { label: string }) {
   );
 }
 
-function EmptyState({ label, sub }: { label: string; sub?: string }) {
+export function EmptyState({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="py-14 flex flex-col items-center justify-center gap-2 text-center">
       <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "var(--cc-plum-soft)" }}>
@@ -125,7 +126,7 @@ function EmptyState({ label, sub }: { label: string; sub?: string }) {
   );
 }
 
-function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" | "pu" | "gy" }) {
+export function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" | "pu" | "gy" }) {
   const map: Record<string, { bg: string; color: string }> = {
     gn: { bg: "var(--cc-status-success-bg)", color: SUCCESS },
     am: { bg: "var(--cc-status-warning-bg)", color: WARNING },
@@ -278,13 +279,14 @@ function ComplianceActionsMenu({ overview }: { overview: ComplianceCentreOvervie
 }
 
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
-type SubTab = "overview" | "staff" | "participants" | "incidents" | "audit_pack";
-const SUB_TABS: SubTab[] = ["overview", "staff", "participants", "incidents", "audit_pack"];
+type SubTab = "overview" | "staff" | "participants" | "incidents" | "medications" | "audit_pack";
+const SUB_TABS: SubTab[] = ["overview", "staff", "participants", "incidents", "medications", "audit_pack"];
 const TAB_ICONS: Record<SubTab, typeof LayoutDashboard> = {
   overview: LayoutDashboard,
   staff: Users,
   participants: HeartHandshake,
   incidents: ShieldAlert,
+  medications: Pill,
   audit_pack: FileCheck2,
 };
 
@@ -310,6 +312,7 @@ export default function Compliance() {
     staff: translate("compliance.centre.tab.staff"),
     participants: translate("compliance.centre.tab.participants"),
     incidents: translate("compliance.centre.tab.incidents"),
+    medications: translate("compliance.centre.tab.medications"),
     audit_pack: translate("compliance.centre.tab.auditPack"),
   };
 
@@ -417,6 +420,7 @@ export default function Compliance() {
       {activeTab === "staff" && <StaffPanel />}
       {activeTab === "participants" && <ParticipantsPanel />}
       {activeTab === "incidents" && <IncidentsPanel />}
+      {activeTab === "medications" && <MedicationRegisterPanel />}
       {activeTab === "audit_pack" && <AuditPackPanel embedded />}
     </div>
   );

@@ -65,6 +65,8 @@ import { ParticipantComplianceTab } from "@/components/participants/ParticipantC
 import { ParticipantPlanMeetingsTab } from "@/components/participants/ParticipantPlanMeetingsTab";
 import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
 import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
+import { ParticipantMedicationsPanel } from "@/components/participants/ParticipantMedicationsPanel";
+import { ParticipantClinicalRecordEditor } from "@/components/participants/ParticipantClinicalRecordEditor";
 import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
 import { safeFormat, money, statusBadge, complianceTone, normalizeGoalTitle } from "@/lib/participant-format";
@@ -1123,7 +1125,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setRestrictedDraft({
         restricted_behavioural_notes: restrictedQuery.data.restricted_behavioural_notes ?? "",
         behaviour_support_plan: restrictedQuery.data.behaviour_support_plan ?? "",
-        medications: restrictedQuery.data.medications ?? "",
         medical_alerts: restrictedQuery.data.medical_alerts ?? "",
       });
     }
@@ -2493,13 +2494,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <ParticipantShiftContextTab participantId={id} />
             )}
             {careProfileSection === "clinical" && (
-              <ParticipantRestrictedTab
-                isLoading={restrictedQuery.isLoading}
-                draft={restrictedDraft}
-                onDraftChange={setRestrictedDraft}
-                onSave={() => saveRestricted.mutate()}
-                isSaving={saveRestricted.isPending}
-              />
+              <div className="space-y-3">
+                <ParticipantMedicationsPanel participantId={id} />
+                <ParticipantClinicalRecordEditor participantId={id} />
+                <ParticipantRestrictedTab
+                  isLoading={restrictedQuery.isLoading}
+                  draft={restrictedDraft}
+                  onDraftChange={setRestrictedDraft}
+                  onSave={() => saveRestricted.mutate()}
+                  isSaving={saveRestricted.isPending}
+                />
+              </div>
             )}
           </div>
         )}

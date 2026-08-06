@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2, Upload,
-  Mail, Phone, BadgeCheck, IdCard, Hourglass, AlertCircle,
+  Mail, Phone, IdCard, Hourglass, AlertCircle,
+  CalendarDays, LogIn, MessageCircle, ArrowRight,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -95,6 +97,117 @@ function complianceColour(score: number | null | undefined): string {
   return "var(--cc-status-danger)";
 }
 
+/** Deterministic, cheerful avatar tint per worker — purely decorative variety, same soft palette used across the app. */
+const AVATAR_PALETTE = [
+  { bg: "#F3E8FF", fg: "#7C3AED" },
+  { bg: "#FCE3EB", fg: "#DB2777" },
+  { bg: "#DBEAFE", fg: "#1D4ED8" },
+  { bg: "#DCFCE7", fg: "#15803D" },
+  { bg: "#FEF3C7", fg: "#B45309" },
+  { bg: "#E0F2FE", fg: "#0369A1" },
+];
+function avatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+/** Small rounded icon square used to give list rows (documents/credentials/training) consistent visual weight. */
+function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: string; bg: string }) {
+  return (
+    <div className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: bg }}>
+      <Icon size={15} style={{ color }} />
+    </div>
+  );
+}
+
+/** Compact radial score ring, matching the Compliance Centre header's ring pattern. Animates
+ * from zero on first mount only (not on re-renders) and honours prefers-reduced-motion. */
+function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
+  const reduceMotion = useReducedMotion();
+  const color = complianceColour(score);
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={SOFT} strokeWidth="4" />
+        <motion.circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="4"
+          strokeDasharray={circ} strokeLinecap="round"
+          initial={{ strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: circ * (1 - score / 100) }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[11px] font-black" style={{ color }}>{Math.round(score)}</span>
+      </div>
+    </div>
+  );
+}
+
+type ReadinessLevel = "good" | "warning" | "danger";
+
+/** Unifies the compliance ring + onboarding pill + credentials pill into one "can I roster
+ * this person" answer, with a single most-urgent blocking reason and an action to fix it. */
+function ReadinessSummary({
+  worker, credentialsComplete, credentialsCompleteCount, credentialsTotal, onboardingPending, translate, onAction,
+}: {
+  worker: WorkerStats;
+  credentialsComplete: boolean;
+  credentialsCompleteCount: number;
+  credentialsTotal: number;
+  onboardingPending: boolean;
+  translate: (k: string) => string;
+  onAction: () => void;
+}) {
+  let level: ReadinessLevel = "good";
+  let message = translate("team.detail.readyToRoster");
+  let actionLabel: string | null = null;
+
+  if (!credentialsComplete) {
+    level = "warning";
+    message = `${translate("team.detail.credentialsIncomplete")}: ${credentialsCompleteCount}/${credentialsTotal}`;
+    actionLabel = translate("team.detail.completeCredentials");
+  } else if (onboardingPending) {
+    level = "warning";
+    message = translate("team.detail.onboardingPending");
+  } else if (worker.flagged_count > 0) {
+    level = "danger";
+    message = translateFlagged(worker.flagged_count, translate);
+  }
+
+  const levelColor = level === "good" ? "var(--cc-status-success)" : level === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
+  const score = worker.avg_compliance;
+  const a11yText = score != null
+    ? `${Math.round(score)}% ${translate("team.col.compliance").toLowerCase()}, ${message}`
+    : message;
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border px-3 py-2" style={{ background: SURFACE, borderColor: levelColor, boxShadow: CARD_SHADOW }} role="status" aria-label={a11yText}>
+      {score != null && <ScoreRing score={score} />}
+      <div className="min-w-0">
+        <p className="text-[12px] font-bold leading-tight" style={{ color: levelColor }}>{message}</p>
+        {actionLabel && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded"
+            style={{ color: PLUM, outlineColor: PLUM }}
+          >
+            {actionLabel} <ArrowRight size={11} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function translateFlagged(count: number, translate: (k: string) => string): string {
+  return `${count} ${translate(count === 1 ? "team.detail.flaggedSession" : "team.detail.flaggedSessions")}`;
+}
+
 export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: () => void }) {
   const { translate } = useAccessibility();
   const [tab, setTab] = useState<WorkerDetailTab>("overview");
@@ -102,19 +215,36 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
   const credentialsQuery = useOrgQuery(["team-credentials"], {
     queryFn: getTeamCredentials,
   });
+  const documentsQuery = useOrgQuery(["worker-onboarding-documents", worker.id], {
+    queryFn: () => getWorkerOnboardingDocuments(worker.id),
+  });
+  const trainingQuery = useOrgQuery(["worker-training-assignments", worker.id], {
+    queryFn: () => getWorkerTrainingAssignments(worker.id),
+  });
 
   const workerCredentials = (credentialsQuery.data ?? []).filter((c: Credential) => c.user_id === worker.id);
   const credentialsComplete = !credentialsQuery.isLoading && isWorkerCredentialsComplete(credentialsQuery.data ?? [], worker.id);
   const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+  const credentialsCompleteCount = REQUIRED_CREDENTIAL_TYPES.filter((type) => {
+    const cred = workerCredentials.find((c) => c.credential_type === type);
+    return cred && (cred.status === "valid" || cred.status === "expiring");
+  }).length;
+  const documentsCount = documentsQuery.data?.length ?? 0;
+  const trainingPendingCount = (trainingQuery.data?.recommendations ?? [])
+    .filter((r) => !(trainingQuery.data?.history ?? []).some((h) => h.module_id === r.training_module_id)).length;
+
+  const tabBadges: Partial<Record<WorkerDetailTab, { text: string; severity: "neutral" | "warning" | "danger" }>> = {
+    documents: documentsCount > 0 ? { text: String(documentsCount), severity: "neutral" } : undefined,
+    credentials: {
+      text: `${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`,
+      severity: credentialsComplete ? "neutral" : credentialsCompleteCount === 0 ? "danger" : "warning",
+    },
+    training: trainingPendingCount > 0 ? { text: String(trainingPendingCount), severity: "warning" } : undefined,
+  };
 
   const statCells: { label: string; value: string | number; color?: string }[] = [
     { label: translate("team.col.sessions"), value: worker.total_sessions },
     { label: translate("team.col.thisWeek"), value: worker.sessions_this_week },
-    {
-      label: translate("team.col.compliance"),
-      value: worker.avg_compliance != null ? `${worker.avg_compliance}%` : "N/A",
-      color: complianceColour(worker.avg_compliance),
-    },
     { label: translate("team.detail.draftCount"), value: worker.draft_count },
     {
       label: translate("team.detail.flaggedCount"),
@@ -122,6 +252,7 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
       color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
     },
   ];
+  const avatar = avatarColor(worker.full_name || "?");
 
   return (
     <div className="space-y-4">
@@ -136,11 +267,11 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
       </button>
 
       {/* Identity + at-a-glance header */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
+      <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
         <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-5">
           <div
-            className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black"
-            style={{ background: PLUM, color: "#fff" }}
+            className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black shadow-sm"
+            style={{ background: avatar.bg, color: avatar.fg }}
           >
             {(worker.full_name || "?").charAt(0).toUpperCase()}
           </div>
@@ -158,8 +289,8 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
               </span>
               {onboardingPending && (
                 <span
-                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" }}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                  style={{ borderColor: "var(--cc-status-warning)", color: "var(--cc-status-warning)" }}
                 >
                   <Hourglass size={10} /> {translate("team.detail.onboardingPending")}
                 </span>
@@ -187,20 +318,21 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
               )}
             </div>
           </div>
-          <div
-            className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-            style={{
-              background: credentialsComplete ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)",
-              color: credentialsComplete ? "var(--cc-status-success)" : "var(--cc-status-warning)",
-            }}
-          >
-            {credentialsComplete ? <BadgeCheck size={13} /> : <IdCard size={13} />}
-            {credentialsComplete ? translate("team.detail.credentialsComplete") : translate("team.detail.credentialsIncomplete")}
+          <div className="shrink-0 w-full sm:w-auto">
+            <ReadinessSummary
+              worker={worker}
+              credentialsComplete={credentialsComplete}
+              credentialsCompleteCount={credentialsCompleteCount}
+              credentialsTotal={REQUIRED_CREDENTIAL_TYPES.length}
+              onboardingPending={onboardingPending}
+              translate={translate}
+              onAction={() => setTab("credentials")}
+            />
           </div>
         </div>
 
         {/* At-a-glance stat strip */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
           {statCells.map((cell) => (
             <div key={cell.label} className="px-4 py-3" style={{ borderColor: BORDER }}>
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{cell.label}</p>
@@ -211,43 +343,86 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
-        {(["overview", "documents", "credentials", "availability", "training"] as WorkerDetailTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="flex-1 rounded-lg py-2 text-sm font-bold transition-colors"
-            style={{
-              background: tab === t ? "var(--cc-bg)" : "transparent",
-              color: tab === t ? PLUM : MUTED,
-              boxShadow: tab === t ? "0 1px 3px rgba(55,48,163,0.12)" : "none",
-            }}
-          >
-            {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
-          </button>
-        ))}
+      <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
+        {(["overview", "documents", "credentials", "availability", "training"] as WorkerDetailTab[]).map((t) => {
+          const badge = tabBadges[t];
+          const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
+          const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
+          return (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t ? "true" : "false"}
+              onClick={() => setTab(t)}
+              className="relative shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 pb-3 pt-1 text-sm font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded-t-lg"
+              style={{ color: tab === t ? TEXT : MUTED, outlineColor: PLUM }}
+            >
+              {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
+              {badge && (
+                <span
+                  className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                  style={{ background: badgeBg, color: badgeColor }}
+                >
+                  {badge.text}
+                </span>
+              )}
+              {tab === t && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {tab === "overview" && <OverviewTab worker={worker} translate={translate} />}
-      {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
-      {tab === "credentials" && (
-        <CredentialsTab
-          credentials={workerCredentials}
-          isLoading={credentialsQuery.isLoading}
-          translate={translate}
-        />
-      )}
-      {tab === "availability" && <WorkerAvailabilityPanel worker={worker} />}
-      {tab === "training" && <TrainingTab worker={worker} translate={translate} />}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          {tab === "overview" && <OverviewTab worker={worker} translate={translate} />}
+          {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
+          {tab === "credentials" && (
+            <CredentialsTab
+              credentials={workerCredentials}
+              isLoading={credentialsQuery.isLoading}
+              credentialsCompleteCount={credentialsCompleteCount}
+              translate={translate}
+            />
+          )}
+          {tab === "availability" && <WorkerAvailabilityPanel worker={worker} />}
+          {tab === "training" && <TrainingTab worker={worker} translate={translate} />}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
 
-function DetailRow({ label, value }: { label: string; value?: string | null }) {
+function DetailRow({
+  label, value, icon, tone, emptyText,
+}: {
+  label: string;
+  value?: string | null;
+  icon: typeof FileText;
+  tone?: "success" | "warning";
+  /** Shown, in muted italic, when value is empty — a designed empty state instead of "N/A". */
+  emptyText?: string;
+}) {
+  const color = tone === "success" ? "var(--cc-status-success)" : tone === "warning" ? "var(--cc-status-warning)" : MUTED;
+  const bg = tone === "success" ? "var(--cc-status-success-bg)" : tone === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-3.5">
-      <p className="text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
-      <p className="text-sm font-semibold text-right" style={{ color: TEXT }}>{value || "N/A"}</p>
+    <div className="flex items-center gap-3 px-5 py-3.5" style={{ background: SURFACE }}>
+      <IconBadge icon={icon} color={color} bg={bg} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        {value ? (
+          <p className="text-sm font-semibold mt-0.5" style={{ color: TEXT }}>{value}</p>
+        ) : (
+          <p className="text-sm italic mt-0.5" style={{ color: MUTED }}>{emptyText}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -256,14 +431,24 @@ function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k
   const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
-        <DetailRow label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} />
+      {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
+      <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
         <DetailRow
+          icon={LogIn}
           label={translate("team.detail.lastLogin")}
           value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined}
+          emptyText={translate("team.detail.noLoginYet")}
         />
-        <DetailRow label={translate("team.detail.preferredContact")} value={worker.preferred_contact_method} />
         <DetailRow
+          icon={MessageCircle}
+          label={translate("team.detail.preferredContact")}
+          value={worker.preferred_contact_method}
+          emptyText={translate("team.detail.contactNotSet")}
+        />
+        <DetailRow
+          icon={onboardingPending ? Hourglass : CheckCircle2}
+          tone={onboardingPending ? "warning" : "success"}
           label={translate("team.detail.onboardingStatus")}
           value={onboardingPending ? translate("team.detail.onboardingPending") : translate("team.detail.onboardingComplete")}
         />
@@ -310,14 +495,14 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
       {documentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
 
       {!documentsQuery.isLoading && documents.length === 0 && (
-        <div className="rounded-2xl p-8 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
+        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
           <FileText size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.documents.empty")}</p>
         </div>
       )}
 
       {documents.length > 0 && (
-        <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
           {documents.map((doc) => (
             <div key={doc.id} className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="min-w-0 flex items-start gap-3">
@@ -472,28 +657,50 @@ function AddDocumentDialog({
 function CredentialsTab({
   credentials,
   isLoading,
+  credentialsCompleteCount,
   translate,
 }: {
   credentials: Credential[];
   isLoading: boolean;
+  credentialsCompleteCount: number;
   translate: (k: string) => string;
 }) {
   const byType = new Map(credentials.map((c) => [c.credential_type, c]));
   const rows = REQUIRED_CREDENTIAL_TYPES.map((type) => ({ type, credential: byType.get(type) ?? null }));
   const extras = credentials.filter((c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type));
+  const total = REQUIRED_CREDENTIAL_TYPES.length;
+  const complete = credentialsCompleteCount >= total;
 
   if (isLoading) {
     return <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>;
   }
 
   return (
-    <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+    <div className="space-y-4">
+      <div
+        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        style={{
+          background: complete ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)",
+          color: complete ? "var(--cc-status-success)" : "var(--cc-status-warning)",
+        }}
+      >
+        <div>
+          <p className="text-lg font-black">{credentialsCompleteCount} / {total}</p>
+          <p className="text-xs font-bold mt-0.5">
+            {complete ? translate("team.detail.credentialsComplete") : translate("team.detail.credentialsIncomplete")}
+          </p>
+        </div>
+        {complete ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+      </div>
+
+      <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
       {[...rows, ...extras.map((c) => ({ type: c.credential_type, credential: c }))].map(({ type, credential }, i) => {
         const style = statusStyle(credential?.status ?? "missing");
         const { Icon } = style;
         return (
-          <div key={`${type}-${i}`} className="flex items-center justify-between gap-4 px-5 py-4">
-            <div className="min-w-0">
+          <div key={`${type}-${i}`} className="flex items-center gap-3 px-5 py-4">
+            <IconBadge icon={IdCard} color={style.color} bg={style.bg} />
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-bold" style={{ color: TEXT }}>{credentialLabel(type)}</p>
               <p className="text-xs mt-0.5" style={{ color: MUTED }}>
                 {credential
@@ -514,6 +721,7 @@ function CredentialsTab({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -569,17 +777,18 @@ function TrainingTab({ worker, translate }: { worker: WorkerStats; translate: (k
       {assignmentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
 
       {!assignmentsQuery.isLoading && recommendations.length === 0 && history.length === 0 && (
-        <div className="rounded-2xl p-8 text-center" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
+        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
           <GraduationCap size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.training.empty")}</p>
         </div>
       )}
 
       {recommendations.filter((r) => !completedModuleIds.has(r.training_module_id)).length > 0 && (
-        <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
           {recommendations.filter((r) => !completedModuleIds.has(r.training_module_id)).map((rec) => (
-            <div key={rec.id} className="flex items-center justify-between gap-4 px-5 py-4">
-              <div className="min-w-0">
+            <div key={rec.id} className="flex items-center gap-3 px-5 py-4">
+              <IconBadge icon={GraduationCap} color="var(--cc-status-info)" bg="var(--cc-status-info-bg)" />
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold" style={{ color: TEXT }}>{rec.title}</p>
                 <p className="text-xs mt-0.5" style={{ color: MUTED }}>{translate("team.training.assignedOn")} {safeFormat(rec.recommended_at)}</p>
               </div>
@@ -604,12 +813,13 @@ function TrainingTab({ worker, translate }: { worker: WorkerStats; translate: (k
       {history.length > 0 && (
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.14em] mb-2" style={{ color: MUTED }}>{translate("team.training.history")}</p>
-          <div className="rounded-2xl divide-y" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+          <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
             {history.map((h) => {
               const style = completionStatusStyle(h.status);
               return (
-                <div key={h.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                  <div className="min-w-0">
+                <div key={h.id} className="flex items-center gap-3 px-5 py-4">
+                  <IconBadge icon={GraduationCap} color={style.color} bg={style.bg} />
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold" style={{ color: TEXT }}>{h.training_modules?.title ?? translate("team.training.module")}</p>
                     <p className="text-xs mt-0.5" style={{ color: MUTED }}>{translate("team.training.completedOn")} {safeFormat(h.completed_at)}</p>
                     {h.note && <p className="text-xs mt-0.5 italic" style={{ color: MUTED }}>"{h.note}"</p>}
