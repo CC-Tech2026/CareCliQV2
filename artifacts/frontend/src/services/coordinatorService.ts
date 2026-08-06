@@ -42,7 +42,8 @@ export type AiDetectedPattern = {
   pattern_type:
     | "low_compliance_pair"
     | "incident_escalation"
-    | "refused_activity_no_deescalation";
+    | "refused_activity_no_deescalation"
+    | "incident_type_pattern_90d";
   severity?: "low" | "medium" | "high";
   title: string;
   message: string;
@@ -1712,11 +1713,11 @@ export function getWorkerTrainingAssignments(workerId: string) {
   );
 }
 
-export function assignTraining(workerId: string, trainingModuleId: string, title: string) {
+export function assignTraining(workerId: string, trainingModuleId: string, title: string, relatedIncidentId?: string) {
   return jsonFetch<TrainingRecommendation>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/training-assignments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ training_module_id: trainingModuleId, title }),
+    body: JSON.stringify({ training_module_id: trainingModuleId, title, related_incident_id: relatedIncidentId }),
   });
 }
 

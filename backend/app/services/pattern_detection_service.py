@@ -27,6 +27,8 @@ INCIDENT_WINDOW_DAYS = 30
 REFUSED_MIN_SESSIONS = 2
 REFUSED_LOOKBACK_DAYS = 90
 DISMISS_SUPPRESS_DAYS = 90
+INCIDENT_TYPE_PATTERN_MIN = 3
+INCIDENT_TYPE_PATTERN_WINDOW_DAYS = 90
 
 REFUSED_RE = re.compile(
     r"\b(refused|refusal|declined to|would not participate|refused activity)\b",
@@ -232,6 +234,58 @@ def detect_refused_activity_without_deescalation(
     return patterns
 
 
+def detect_incident_type_pattern_90d(
+    incidents: list[dict],
+    participant_names: dict[str, str],
+    *,
+    now: Optional[datetime] = None,
+) -> list[dict[str, Any]]:
+    """3+ incidents of the SAME type for one participant within a rolling 90-day window.
+
+    Distinct from detect_incident_escalation above (type-agnostic 30d-vs-prior-30d frequency
+    spike) and from incident_pattern_service.py's semantic similarity matching (AI/embedding
+    based, cross-participant, surfaced per-incident rather than as a standing alert) — this
+    is the deterministic "same participant, same incident type, repeat within 90 days" rule."""
+    now = now or _utc_now()
+    cutoff = now - timedelta(days=INCIDENT_TYPE_PATTERN_WINDOW_DAYS)
+
+    buckets: dict[tuple[str, str], int] = defaultdict(int)
+    for incident in incidents:
+        pid = incident.get("participant_id")
+        incident_type = incident.get("incident_type")
+        if not pid or not incident_type:
+            continue
+        dt = _parse_ts(incident.get("incident_date") or incident.get("reported_date"))
+        if not dt or dt < cutoff:
+            continue
+        buckets[(str(pid), str(incident_type))] += 1
+
+    patterns: list[dict[str, Any]] = []
+    for (pid, incident_type), count in buckets.items():
+        if count < INCIDENT_TYPE_PATTERN_MIN:
+            continue
+        participant_name = participant_names.get(pid, "Participant")
+        type_label = incident_type.replace("_", " ")
+        patterns.append({
+            "pattern_type": "incident_type_pattern_90d",
+            "severity": "high",
+            "title": "Repeat incident type pattern",
+            "message": (
+                f"{participant_name} has {count} {type_label} incidents in the last "
+                f"{INCIDENT_TYPE_PATTERN_WINDOW_DAYS} days — review for a contributing cause."
+            ),
+            "worker_id": None,
+            "participant_id": pid,
+            "metadata": {
+                "incident_type": incident_type,
+                "count": count,
+                "window_days": INCIDENT_TYPE_PATTERN_WINDOW_DAYS,
+                "participant_name": participant_name,
+            },
+        })
+    return patterns
+
+
 def _fingerprint(pattern: dict[str, Any]) -> str:
     return "|".join([
         pattern.get("pattern_type", ""),
@@ -309,7 +363,7 @@ def _fetch_org_incidents(org_id: str) -> list[dict]:
     try:
         resp = (
             supabase.table("incidents")
-            .select("id, participant_id, incident_date, reported_date")
+            .select("id, participant_id, incident_type, incident_date, reported_date")
             .eq("organization_id", org_id)
             .order("incident_date", desc=True)
             .limit(1000)
@@ -419,6 +473,7 @@ def run_pattern_detection_for_org(org_id: str) -> dict[str, Any]:
     detected: list[dict[str, Any]] = []
     detected.extend(detect_low_compliance_pairs(sessions, worker_names, participant_names))
     detected.extend(detect_incident_escalation(incidents, participant_names))
+    detected.extend(detect_incident_type_pattern_90d(incidents, participant_names))
     detected.extend(detect_refused_activity_without_deescalation(sessions, participant_names))
 
     created = _upsert_patterns(org_id, detected)

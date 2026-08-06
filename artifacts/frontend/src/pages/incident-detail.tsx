@@ -34,6 +34,7 @@ import {
   UserX,
   Plus,
   UserSearch,
+  GraduationCap,
 } from "lucide-react";
 import {
   getIncident,
@@ -52,8 +53,8 @@ import type {
   SubjectOfAllegationRecord,
   InterviewRecord,
 } from "@/services/incidentService";
-import { getCoordinatorTeam } from "@/services/coordinatorService";
-import type { TeamMember } from "@/services/coordinatorService";
+import { getCoordinatorTeam, getTrainingModules, createTrainingModule, assignTraining } from "@/services/coordinatorService";
+import type { TeamMember, TrainingModule } from "@/services/coordinatorService";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -205,6 +206,8 @@ interface Incident {
   created_by?: string;
   reference_number?: string;
   ndis_notification_content?: string;
+  user_id?: string;
+  worker_name?: string;
 }
 
 const SUBJECT_TYPES = ["worker", "participant", "other"] as const;
@@ -273,6 +276,17 @@ export default function IncidentDetail({ id }: { id: string }) {
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [notifyContent, setNotifyContent] = useState("");
   const [submittedOpen, setSubmittedOpen] = useState(false);
+  const [trainingOpen, setTrainingOpen] = useState(false);
+  const [trainingWorkerId, setTrainingWorkerId] = useState("");
+  const [trainingMode, setTrainingMode] = useState<"existing" | "new">("existing");
+  const [trainingModuleId, setTrainingModuleId] = useState("");
+  const [trainingNewTitle, setTrainingNewTitle] = useState("");
+  const [trainingNewDescription, setTrainingNewDescription] = useState("");
+
+  const { data: trainingModules } = useOrgQuery<TrainingModule[]>(["training-modules"], {
+    queryFn: () => getTrainingModules(),
+    enabled: trainingOpen,
+  });
 
   const subjectUserIds = new Set((subjectData?.records ?? []).map((s) => s.subject_user_id).filter(Boolean));
   const eligibleInvestigators = (team ?? []).filter(
@@ -365,6 +379,27 @@ export default function IncidentDetail({ id }: { id: string }) {
       setInterviewType("worker");
     },
     onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
+  });
+
+  const assignTrainingMutation = useMutation({
+    mutationFn: ({ moduleId, title }: { moduleId: string; title: string }) =>
+      assignTraining(trainingWorkerId, moduleId, title, id),
+    onSuccess: () => {
+      toast({ title: translate("incidents.detail.trainingAssigned") });
+      setTrainingOpen(false);
+      setTrainingModuleId("");
+      setTrainingNewTitle("");
+      setTrainingNewDescription("");
+      setTrainingMode("existing");
+    },
+    onError: () => toast({ title: translate("incidents.detail.trainingAssignFailed"), variant: "destructive" }),
+  });
+
+  const createModuleMutation = useMutation({
+    mutationFn: () =>
+      createTrainingModule({ title: trainingNewTitle.trim(), description: trainingNewDescription.trim() || undefined }),
+    onSuccess: (mod: TrainingModule) => assignTrainingMutation.mutate({ moduleId: mod.id, title: mod.title }),
+    onError: () => toast({ title: translate("incidents.detail.trainingAssignFailed"), variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -1004,7 +1039,19 @@ export default function IncidentDetail({ id }: { id: string }) {
               className="text-[13px] resize-none rounded-xl border-cc-border"
             />
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTrainingWorkerId(incident.user_id || incident.assigned_investigator_id || "");
+                setTrainingNewTitle(incident.title ? `Follow-up: ${incident.title}` : "");
+                setTrainingOpen(true);
+              }}
+              className="rounded-xl h-9 text-[13px]"
+            >
+              <GraduationCap size={14} className="mr-1.5" />
+              {translate("incidents.detail.assignTraining")}
+            </Button>
             <Button
               onClick={() =>
                 updateMutation.mutate({
@@ -1024,6 +1071,103 @@ export default function IncidentDetail({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      <Dialog open={trainingOpen} onOpenChange={setTrainingOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap size={16} className="text-cc-plum" />
+              {translate("incidents.detail.assignTraining")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingWorker")}</Label>
+              <Select value={trainingWorkerId} onValueChange={setTrainingWorkerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(team ?? []).map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-1 rounded-xl p-1 bg-cc-soft">
+              {(["existing", "new"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setTrainingMode(m)}
+                  className={cn(
+                    "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
+                    trainingMode === m ? "bg-white text-cc-plum" : "text-cc-muted",
+                  )}
+                >
+                  {m === "existing" ? translate("incidents.detail.trainingPickExisting") : translate("incidents.detail.trainingCreateNew")}
+                </button>
+              ))}
+            </div>
+
+            {trainingMode === "existing" ? (
+              <div>
+                <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModule")}</Label>
+                <Select value={trainingModuleId} onValueChange={setTrainingModuleId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={translate("incidents.detail.trainingChooseModule")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(trainingModules ?? []).map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModuleTitle")}</Label>
+                  <Input value={trainingNewTitle} onChange={(e) => setTrainingNewTitle(e.target.value)} className="rounded-xl border-cc-border" />
+                </div>
+                <div>
+                  <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModuleDescription")}</Label>
+                  <Input value={trainingNewDescription} onChange={(e) => setTrainingNewDescription(e.target.value)} className="rounded-xl border-cc-border" />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setTrainingOpen(false)} className="rounded-xl">
+              {translate("incidents.detail.overrideCancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                if (trainingMode === "new") {
+                  createModuleMutation.mutate();
+                } else {
+                  const mod = (trainingModules ?? []).find((m) => m.id === trainingModuleId);
+                  if (mod) assignTrainingMutation.mutate({ moduleId: mod.id, title: mod.title });
+                }
+              }}
+              disabled={
+                assignTrainingMutation.isPending ||
+                createModuleMutation.isPending ||
+                !trainingWorkerId ||
+                (trainingMode === "existing" ? !trainingModuleId : !trainingNewTitle.trim())
+              }
+              className="rounded-xl text-white"
+              style={{ background: "var(--cc-cta)" }}
+            >
+              {assignTrainingMutation.isPending || createModuleMutation.isPending ? (
+                <Loader2 size={13} className="animate-spin mr-1.5" />
+              ) : null}
+              {translate("incidents.detail.assignTraining")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Subject of allegation — separate from personnel records, coordinator/MD only */}
       <div className="cc-surface-card">

@@ -3832,6 +3832,7 @@ class TrainingModuleBody(BaseModel):
 class TrainingAssignBody(BaseModel):
     training_module_id: str
     title: str
+    related_incident_id: Optional[str] = None
 
 
 class TrainingReviewBody(BaseModel):
@@ -3928,6 +3929,7 @@ async def coordinator_assign_training(
         organization_id=org_id,
         training_module_id=body.training_module_id,
         title=body.title,
+        related_incident_id=body.related_incident_id,
     )
 
 
