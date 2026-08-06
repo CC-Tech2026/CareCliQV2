@@ -1187,3 +1187,95 @@ async def list_subject_of_allegation(incident_id: str, organization_id: str) -> 
             return []
         raise
     return _safe_rows(result.data)
+
+
+# ---------------------------------------------------------------------------
+# Investigation workflow — assigned investigator with conflict-of-interest gating,
+# plus structured interview records.
+# ---------------------------------------------------------------------------
+
+async def assign_investigator(
+    incident_id: str,
+    organization_id: str,
+    investigator_user_id: str,
+    assigned_by: str,
+) -> dict[str, Any]:
+    """Refuses the assignment (rather than silently allowing it) when the candidate
+    investigator is the reporter, the record creator, or a listed subject of allegation
+    on this incident — the conflict-of-interest check the spec requires."""
+    supabase = get_supabase_admin()
+    existing_result = supabase.table(TABLE).select("id, user_id, created_by").eq("id", incident_id).execute()
+    existing_rows = _safe_rows(existing_result.data)
+    if not existing_rows:
+        raise ValueError("Incident not found.")
+    incident = existing_rows[0]
+
+    if str(incident.get("user_id") or "") == str(investigator_user_id):
+        raise ValueError("This person reported the incident and cannot investigate it (conflict of interest).")
+    if str(incident.get("created_by") or "") == str(investigator_user_id):
+        raise ValueError("This person created the incident record and cannot investigate it (conflict of interest).")
+
+    subjects = await list_subject_of_allegation(incident_id, organization_id)
+    if any(str(s.get("subject_user_id") or "") == str(investigator_user_id) for s in subjects):
+        raise ValueError("This person is a subject of allegation on this incident and cannot investigate it (conflict of interest).")
+
+    update_payload = {
+        "assigned_investigator_id": investigator_user_id,
+        "assigned_investigator_by": assigned_by,
+        "assigned_investigator_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = supabase.table(TABLE).update(update_payload).eq("id", incident_id).execute()
+    rows = _safe_rows(result.data)
+    return rows[0] if rows else update_payload
+
+
+async def create_interview(
+    incident_id: str,
+    organization_id: str,
+    interviewed_by: str,
+    *,
+    interviewee_name: str,
+    interviewee_type: str,
+    interviewee_user_id: Optional[str],
+    interviewed_at: Optional[str],
+    notes: Optional[str],
+) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    payload = {
+        "id": str(uuid.uuid4()),
+        "incident_id": incident_id,
+        "organization_id": organization_id,
+        "interviewee_name": interviewee_name,
+        "interviewee_type": interviewee_type,
+        "interviewee_user_id": interviewee_user_id,
+        "interviewed_at": interviewed_at or datetime.now(timezone.utc).isoformat(),
+        "notes": notes,
+        "interviewed_by": interviewed_by,
+    }
+    try:
+        result = supabase.table("incident_interviews").insert(payload).execute()
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            raise ValueError("Interview records are not available yet.") from exc
+        raise
+    rows = _safe_rows(result.data)
+    return rows[0] if rows else payload
+
+
+async def list_interviews(incident_id: str, organization_id: str) -> List[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    try:
+        result = (
+            supabase
+            .table("incident_interviews")
+            .select("*")
+            .eq("incident_id", incident_id)
+            .eq("organization_id", organization_id)
+            .order("interviewed_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            return []
+        raise
+    return _safe_rows(result.data)

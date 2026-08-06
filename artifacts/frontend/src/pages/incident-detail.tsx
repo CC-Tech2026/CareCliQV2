@@ -33,6 +33,7 @@ import {
   ShieldAlert,
   UserX,
   Plus,
+  UserSearch,
 } from "lucide-react";
 import {
   getIncident,
@@ -41,12 +42,18 @@ import {
   overrideIncidentReportable,
   createSubjectOfAllegation,
   listSubjectOfAllegation,
+  assignIncidentInvestigator,
+  createIncidentInterview,
+  listIncidentInterviews,
 } from "@/services/incidentService";
 import type {
   SimilarIncidentPatternsResult,
   WitnessItem,
   SubjectOfAllegationRecord,
+  InterviewRecord,
 } from "@/services/incidentService";
+import { getCoordinatorTeam } from "@/services/coordinatorService";
+import type { TeamMember } from "@/services/coordinatorService";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -131,6 +138,9 @@ interface Incident {
   ndis_reportable_override_reason?: string;
   ndis_reportable_override_at?: string;
   notification_due_at?: string | null;
+  assigned_investigator_id?: string;
+  assigned_investigator_at?: string;
+  created_by?: string;
 }
 
 const SUBJECT_TYPES = ["worker", "participant", "other"] as const;
@@ -168,6 +178,19 @@ export default function IncidentDetail({ id }: { id: string }) {
     },
   );
 
+  const { data: interviewData } = useOrgQuery<{ records: InterviewRecord[] }>(
+    ["incident-interviews", id],
+    {
+      queryFn: () => listIncidentInterviews(id),
+      enabled: !!incident,
+    },
+  );
+
+  const { data: team } = useOrgQuery<TeamMember[]>(["coordinator-team"], {
+    queryFn: () => getCoordinatorTeam(),
+    enabled: !!incident,
+  });
+
   const [investigationNotes, setInvestigationNotes] = useState("");
   const [correctiveActions, setCorrectiveActions] = useState("");
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -178,6 +201,16 @@ export default function IncidentDetail({ id }: { id: string }) {
   const [subjectName, setSubjectName] = useState("");
   const [subjectRole, setSubjectRole] = useState("");
   const [subjectNotes, setSubjectNotes] = useState("");
+  const [selectedInvestigator, setSelectedInvestigator] = useState("");
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewType, setInterviewType] = useState<"worker" | "participant" | "witness" | "other">("worker");
+  const [interviewName, setInterviewName] = useState("");
+  const [interviewNotes, setInterviewNotes] = useState("");
+
+  const subjectUserIds = new Set((subjectData?.records ?? []).map((s) => s.subject_user_id).filter(Boolean));
+  const eligibleInvestigators = (team ?? []).filter(
+    (m) => m.id !== incident?.created_by && !subjectUserIds.has(m.id),
+  );
 
   useEffect(() => {
     if (incident) {
@@ -233,6 +266,36 @@ export default function IncidentDetail({ id }: { id: string }) {
       setSubjectRole("");
       setSubjectNotes("");
       setSubjectType("worker");
+    },
+    onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
+  });
+
+  const assignInvestigatorMutation = useMutation({
+    mutationFn: (investigatorUserId: string) => assignIncidentInvestigator(id, investigatorUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident", id] });
+      toast({ title: translate("incidents.detail.assignedInvestigator") });
+      setSelectedInvestigator("");
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : translate("incidents.detail.assignInvestigatorFailed");
+      toast({ title: translate("incidents.detail.assignInvestigatorFailed"), description: message, variant: "destructive" });
+    },
+  });
+
+  const addInterviewMutation = useMutation({
+    mutationFn: () =>
+      createIncidentInterview(id, {
+        interviewee_name: interviewName,
+        interviewee_type: interviewType,
+        notes: interviewNotes || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident-interviews", id] });
+      setInterviewOpen(false);
+      setInterviewName("");
+      setInterviewNotes("");
+      setInterviewType("worker");
     },
     onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
   });
@@ -657,6 +720,142 @@ export default function IncidentDetail({ id }: { id: string }) {
           ) : null}
         </div>
       )}
+
+      {/* Investigation: assigned investigator (conflict-of-interest gated) + interviews */}
+      <div className="cc-surface-card">
+        <div className="cc-card-header">
+          <div className="flex items-center gap-2">
+            <UserSearch size={15} className="text-cc-muted" />
+            <p className="cc-card-title">{translate("incidents.detail.investigation")}</p>
+          </div>
+          <p className="text-[11px] mt-1 text-cc-muted">{translate("incidents.detail.investigationSubtitle")}</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.assignedInvestigator")}</Label>
+            {incident.assigned_investigator_id ? (
+              <p className="text-[13px] text-cc-text flex items-center gap-1.5">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                {(team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name ?? incident.assigned_investigator_id}
+              </p>
+            ) : (
+              <p className="text-[13px] text-cc-muted mb-2">{translate("incidents.detail.noInvestigatorAssigned")}</p>
+            )}
+            <div className="flex gap-2 mt-2">
+              <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleInvestigators.length === 0 ? (
+                    <div className="px-2 py-1.5 text-[12px] text-cc-muted">{translate("incidents.detail.investigatorNoOptions")}</div>
+                  ) : (
+                    eligibleInvestigators.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
+                disabled={!selectedInvestigator || assignInvestigatorMutation.isPending}
+                className="rounded-xl h-9 text-xs text-white shrink-0"
+                style={{ background: "var(--cc-cta)" }}
+              >
+                {assignInvestigatorMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+                {translate("incidents.detail.assignInvestigator")}
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-cc-border">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-[12px] font-medium text-cc-text">{translate("incidents.detail.interviews")}</Label>
+              <Button size="sm" variant="outline" onClick={() => setInterviewOpen(true)} className="rounded-xl h-8 text-xs">
+                <Plus size={12} className="mr-1.5" />
+                {translate("incidents.detail.addInterview")}
+              </Button>
+            </div>
+            <p className="text-[11px] text-cc-muted mb-3">{translate("incidents.detail.interviewsSubtitle")}</p>
+            {interviewData?.records && interviewData.records.length > 0 ? (
+              <div className="space-y-2">
+                {interviewData.records.map((iv) => (
+                  <div key={iv.id} className="rounded-xl border border-cc-border p-3 text-[13px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-cc-text">{iv.interviewee_name}</span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {translate(`incidents.interviewType.${iv.interviewee_type}`)}
+                      </Badge>
+                    </div>
+                    {iv.interviewed_at && (
+                      <p className="text-cc-muted text-[11px] mt-0.5">
+                        {format(parseISO(iv.interviewed_at), "d MMM yyyy, h:mm a")}
+                      </p>
+                    )}
+                    {iv.notes && <p className="text-cc-text text-[12px] mt-1">{iv.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-cc-muted">{translate("incidents.detail.noInterviews")}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserSearch size={16} className="text-cc-plum" />
+              {translate("incidents.detail.addInterview")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectType")}</Label>
+              <Select value={interviewType} onValueChange={(v) => setInterviewType(v as typeof interviewType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["worker", "participant", "witness", "other"] as const).map((t) => (
+                    <SelectItem key={t} value={t}>{translate(`incidents.interviewType.${t}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectName")}</Label>
+              <Input value={interviewName} onChange={(e) => setInterviewName(e.target.value)} className="rounded-xl border-cc-border" />
+            </div>
+            <div>
+              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.interviewNotes")}</Label>
+              <Textarea
+                rows={4}
+                value={interviewNotes}
+                onChange={(e) => setInterviewNotes(e.target.value)}
+                className="text-[13px] resize-none rounded-xl border-cc-border"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setInterviewOpen(false)} className="rounded-xl">
+              {translate("incidents.detail.overrideCancel")}
+            </Button>
+            <Button
+              onClick={() => addInterviewMutation.mutate()}
+              disabled={addInterviewMutation.isPending || !interviewName.trim()}
+              className="rounded-xl text-white"
+              style={{ background: "var(--cc-cta)" }}
+            >
+              {addInterviewMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+              {translate("incidents.detail.addInterview")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Investigation & corrective actions */}
       <div className="cc-surface-card">

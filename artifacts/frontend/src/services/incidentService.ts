@@ -162,6 +162,38 @@ export function listSubjectOfAllegation(incidentId: string) {
   );
 }
 
+export function assignIncidentInvestigator<T = unknown>(incidentId: string, investigatorUserId: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/assign-investigator`, {
+    method: "POST",
+    body: JSON.stringify({ investigator_user_id: investigatorUserId }),
+  });
+}
+
+export interface InterviewPayload {
+  interviewee_name: string;
+  interviewee_type: "worker" | "participant" | "witness" | "other";
+  interviewee_user_id?: string;
+  interviewed_at?: string;
+  notes?: string;
+}
+
+export interface InterviewRecord extends InterviewPayload {
+  id: string;
+  incident_id: string;
+  created_at: string;
+}
+
+export function createIncidentInterview<T = unknown>(incidentId: string, payload: InterviewPayload) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/interviews`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listIncidentInterviews(incidentId: string) {
+  return jsonFetch<{ records: InterviewRecord[] }>(`/api/incidents/${incidentId}/interviews`);
+}
+
 export interface IncidentAuditTrailEntry {
   id: string;
   action_type: string;

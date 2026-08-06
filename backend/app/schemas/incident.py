@@ -91,6 +91,7 @@ def is_ndis_reportable(incident_type: str, severity: str) -> bool:
 
 LOCATION_TYPES = ["private_home", "supported_accommodation", "provider_premises", "community", "other"]
 SUBJECT_TYPES = ["worker", "participant", "other"]
+INTERVIEWEE_TYPES = ["worker", "participant", "witness", "other"]
 
 
 class IncidentPhotoItem(BaseModel):
@@ -234,6 +235,26 @@ class SubjectOfAllegationCreate(BaseModel):
         normalized = (value or "").strip().lower()
         if normalized not in SUBJECT_TYPES:
             raise ValueError(f"subject_type must be one of: {', '.join(SUBJECT_TYPES)}")
+        return normalized
+
+
+class AssignInvestigatorBody(BaseModel):
+    investigator_user_id: str
+
+
+class InterviewCreate(BaseModel):
+    interviewee_name: str = Field(min_length=1, max_length=200)
+    interviewee_type: str
+    interviewee_user_id: Optional[str] = None
+    interviewed_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+    @field_validator("interviewee_type")
+    @classmethod
+    def validate_interviewee_type(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in INTERVIEWEE_TYPES:
+            raise ValueError(f"interviewee_type must be one of: {', '.join(INTERVIEWEE_TYPES)}")
         return normalized
 
 

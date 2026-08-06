@@ -6,7 +6,8 @@ from .security import require_recent_reauth
 from ..core.config import settings
 from ..schemas.incident import (
     IncidentCreate, IncidentUpdate, WorkerIncidentCreate, IncidentCorrectionCreate,
-    ReportableOverrideBody, SubjectOfAllegationCreate, worker_status_label,
+    ReportableOverrideBody, SubjectOfAllegationCreate, AssignInvestigatorBody,
+    InterviewCreate, worker_status_label,
 )
 from ..services import audit_service, incident_service, participant_service, session_service, shift_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
@@ -414,3 +415,78 @@ async def get_subject_of_allegation(
     if not org_id:
         return {"records": []}
     return {"records": await incident_service.list_subject_of_allegation(incident_id, str(org_id))}
+
+
+@router.post("/{incident_id}/assign-investigator")
+async def assign_incident_investigator(
+    incident_id: str,
+    body: AssignInvestigatorBody,
+    user: dict = Depends(get_current_user),
+):
+    """Assigns an investigator, refusing the assignment when the candidate has a
+    conflict of interest (reporter, record creator, or a subject of allegation)."""
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization on account.")
+    existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    try:
+        updated = await incident_service.assign_investigator(
+            incident_id, str(org_id), body.investigator_user_id, user.get("sub"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await audit_service.log_action(
+        action_type="incident.investigator_assigned",
+        entity_type="incident",
+        entity_id=incident_id,
+        user_id=user.get("sub"),
+        organization_id=org_id,
+        after_state={"investigator_user_id": body.investigator_user_id},
+    )
+    return updated
+
+
+@router.post("/{incident_id}/interviews", status_code=201)
+async def add_incident_interview(
+    incident_id: str,
+    body: InterviewCreate,
+    user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization on account.")
+    try:
+        return await incident_service.create_interview(
+            incident_id,
+            str(org_id),
+            user.get("sub"),
+            interviewee_name=body.interviewee_name,
+            interviewee_type=body.interviewee_type,
+            interviewee_user_id=body.interviewee_user_id,
+            interviewed_at=body.interviewed_at.isoformat() if body.interviewed_at else None,
+            notes=body.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{incident_id}/interviews")
+async def get_incident_interviews(
+    incident_id: str,
+    user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    org_id = user.get("organization_id")
+    if not org_id:
+        return {"records": []}
+    return {"records": await incident_service.list_interviews(incident_id, str(org_id))}
