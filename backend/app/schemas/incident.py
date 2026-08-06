@@ -219,6 +219,7 @@ class IncidentUpdate(BaseModel):
     follow_up_required: Optional[bool] = None
     follow_up_date: Optional[date] = None
     ndis_reported_at: Optional[datetime] = None
+    ndis_notification_content: Optional[str] = None
     escalate: Optional[bool] = None
 
 

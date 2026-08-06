@@ -103,6 +103,68 @@ function incidentTypeLabel(type: string, translate: (key: string) => string) {
   return key ? translate(key) : type;
 }
 
+function fmtDateTime(iso?: string) {
+  return iso ? format(parseISO(iso), "d MMM yyyy, h:mm a") : "Not recorded";
+}
+
+/** Assembles NDIS Commission notification content from the incident record's existing
+ * fields — deterministic, no AI call, so it's reliable and reviewable/editable before
+ * submission. Coordinators can freely edit the result before marking as reported. */
+function buildNotificationContent(
+  incident: Incident,
+  investigatorName: string | undefined,
+  translate: (key: string) => string,
+): string {
+  const witnesses = incident.witnesses_structured?.length
+    ? incident.witnesses_structured
+        .map((w) => [w.name, w.relationship, w.contact].filter(Boolean).join(" — "))
+        .join("\n")
+    : incident.witnesses || "None recorded";
+
+  const lines = [
+    "NDIS REPORTABLE INCIDENT NOTIFICATION",
+    "",
+    `Reference: ${incident.reference_number || incident.id.slice(0, 8).toUpperCase()}`,
+    `Participant: ${incident.participant_name || "Not recorded"}${incident.participant_ndis ? ` (NDIS: ${incident.participant_ndis})` : ""}`,
+    `NDIS Practice Standard: ${incident.practice_standard || "Not classified"}`,
+    `Severity: ${severityLabel(incident.severity, translate)}`,
+    "",
+    "INCIDENT DETAILS",
+    `Date/time of incident: ${fmtDateTime(incident.incident_date)}`,
+    ...(incident.identified_at ? [`Date/time identified: ${fmtDateTime(incident.identified_at)}`] : []),
+    `Location: ${incident.location || "Not recorded"}${incident.location_type ? ` (${translate(`incidents.locationType.${incident.location_type}`)})` : ""}`,
+    `Type: ${incidentTypeLabel(incident.incident_type, translate)}`,
+    "",
+    "DESCRIPTION",
+    incident.description || "Not recorded",
+    "",
+    "PARTICIPANT IMPACT",
+    incident.participant_impact || "Not recorded",
+    "",
+    "IMMEDIATE ACTIONS TAKEN",
+    incident.worker_actions || "Not recorded",
+    "",
+    ...(incident.connection_to_service !== undefined && incident.connection_to_service !== null
+      ? [
+          "CONNECTION TO SERVICE PROVISION",
+          `${incident.connection_to_service ? "Yes" : "No"}${incident.connection_to_service_reasoning ? ` — ${incident.connection_to_service_reasoning}` : ""}`,
+          "",
+        ]
+      : []),
+    "WITNESSES",
+    witnesses,
+    "",
+    "INVESTIGATION STATUS",
+    `Status: ${statusLabel(incident.status, translate)}`,
+    `Assigned investigator: ${investigatorName || "Not yet assigned"}`,
+    incident.investigation_notes ? `Investigation notes: ${incident.investigation_notes}` : "Investigation notes: Not yet recorded",
+    "",
+    "CORRECTIVE ACTIONS",
+    incident.corrective_actions || "Not yet recorded",
+  ];
+  return lines.join("\n");
+}
+
 interface Incident {
   id: string;
   title: string;
@@ -141,6 +203,8 @@ interface Incident {
   assigned_investigator_id?: string;
   assigned_investigator_at?: string;
   created_by?: string;
+  reference_number?: string;
+  ndis_notification_content?: string;
 }
 
 const SUBJECT_TYPES = ["worker", "participant", "other"] as const;
@@ -206,6 +270,9 @@ export default function IncidentDetail({ id }: { id: string }) {
   const [interviewType, setInterviewType] = useState<"worker" | "participant" | "witness" | "other">("worker");
   const [interviewName, setInterviewName] = useState("");
   const [interviewNotes, setInterviewNotes] = useState("");
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [notifyContent, setNotifyContent] = useState("");
+  const [submittedOpen, setSubmittedOpen] = useState(false);
 
   const subjectUserIds = new Set((subjectData?.records ?? []).map((s) => s.subject_user_id).filter(Boolean));
   const eligibleInvestigators = (team ?? []).filter(
@@ -362,8 +429,11 @@ export default function IncidentDetail({ id }: { id: string }) {
           </div>
           <Button
             size="sm"
-            onClick={() => updateMutation.mutate({ ndis_reported_at: new Date().toISOString() })}
-            disabled={updateMutation.isPending}
+            onClick={() => {
+              const investigatorName = (team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name;
+              setNotifyContent(incident.ndis_notification_content || buildNotificationContent(incident, investigatorName, translate));
+              setNotifyOpen(true);
+            }}
             className="shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs h-8 rounded-xl"
           >
             <CheckCircle2 size={12} className="mr-1.5" />
@@ -598,6 +668,54 @@ export default function IncidentDetail({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      <Dialog open={notifyOpen} onOpenChange={setNotifyOpen}>
+        <DialogContent className="sm:max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Siren size={16} className="text-red-600" />
+              {translate("incidents.detail.notifyPrepTitle")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-[12px] text-cc-muted">{translate("incidents.detail.notifyPrepSubtitle")}</p>
+            <Textarea
+              rows={16}
+              value={notifyContent}
+              onChange={(e) => setNotifyContent(e.target.value)}
+              className="text-[12px] font-mono resize-none rounded-xl border-cc-border"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard?.writeText(notifyContent).catch(() => {});
+                toast({ title: translate("incidents.detail.copiedToClipboard") });
+              }}
+              className="rounded-xl"
+            >
+              {translate("incidents.detail.copyToClipboard")}
+            </Button>
+            <Button variant="outline" onClick={() => setNotifyOpen(false)} className="rounded-xl">
+              {translate("incidents.detail.overrideCancel")}
+            </Button>
+            <Button
+              onClick={() =>
+                updateMutation.mutate(
+                  { ndis_reported_at: new Date().toISOString(), ndis_notification_content: notifyContent },
+                  { onSuccess: () => setNotifyOpen(false) },
+                )
+              }
+              disabled={updateMutation.isPending}
+              className="rounded-xl text-white bg-red-600 hover:bg-red-700"
+            >
+              {updateMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+              {translate("incidents.detail.markReported")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
         <DialogContent className="sm:max-w-md rounded-2xl">
@@ -1044,6 +1162,22 @@ export default function IncidentDetail({ id }: { id: string }) {
               </div>
             )}
           </div>
+          {incident.ndis_notification_content && (
+            <div className="pt-3 mt-3 border-t border-cc-border">
+              <button
+                type="button"
+                onClick={() => setSubmittedOpen((v) => !v)}
+                className="text-[12px] font-semibold text-cc-plum hover:underline"
+              >
+                {translate("incidents.detail.viewSubmittedNotification")}
+              </button>
+              {submittedOpen && (
+                <pre className="mt-2 whitespace-pre-wrap text-[11px] font-mono text-cc-text bg-cc-soft rounded-xl p-3 border border-cc-border">
+                  {incident.ndis_notification_content}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
