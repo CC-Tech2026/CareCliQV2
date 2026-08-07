@@ -3,7 +3,7 @@ import { apiFetch } from "@/lib/api-fetch";
 
 export type MedicationRoute = "oral" | "topical" | "injection" | "inhaled" | "sublingual" | "rectal" | "other";
 export type MedicationFrequencyType = "scheduled" | "prn";
-export type MedicationStatus = "active" | "ceased" | "on_hold";
+export type MedicationStatus = "draft" | "pending_verification" | "active" | "rejected" | "ceased" | "on_hold";
 
 export type Medication = {
   id: string;
@@ -22,6 +22,11 @@ export type Medication = {
   is_prn: boolean;
   prn_max_per_day?: number | null;
   status: MedicationStatus;
+  source_document_id?: string | null;
+  verified_by?: string | null;
+  verified_at?: string | null;
+  verification_notes?: string | null;
+  rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -59,6 +64,51 @@ export function updateMedication(medicationId: string, updates: Partial<Medicati
     method: "PATCH",
     body: JSON.stringify(updates),
   });
+}
+
+export type MedicationCorrections = {
+  name?: string | null;
+  strength?: string | null;
+  route?: MedicationRoute | null;
+  dosage?: string | null;
+  frequency_type?: MedicationFrequencyType | null;
+  scheduled_times?: string[] | null;
+  prescriber_name?: string | null;
+  prescriber_contact?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  prn_max_per_day?: number | null;
+  verification_notes?: string | null;
+};
+
+/** The named, timestamped confirmation step — moves a medication from pending_verification to active. */
+export function verifyMedication(medicationId: string, corrections: MedicationCorrections = {}) {
+  return jsonFetch<Medication>(`/api/medications/${medicationId}/verify`, {
+    method: "POST",
+    body: JSON.stringify(corrections),
+  });
+}
+
+export function rejectMedication(medicationId: string, reason: string) {
+  return jsonFetch<Medication>(`/api/medications/${medicationId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export type MedicationStatusHistoryEntry = {
+  id: string;
+  medication_id: string;
+  from_status: MedicationStatus | null;
+  to_status: MedicationStatus;
+  changed_by: string | null;
+  changed_at: string;
+  reason: string | null;
+  users?: { full_name?: string | null } | null;
+};
+
+export function getMedicationStatusHistory(medicationId: string) {
+  return jsonFetch<{ history: MedicationStatusHistoryEntry[] }>(`/api/medications/${medicationId}/status-history`);
 }
 
 export type ExtractedMedicationFields = {

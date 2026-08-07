@@ -20,7 +20,10 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 
 const STATUS_TONE: Record<MedicationStatus, "gn" | "am" | "gy"> = {
+  draft: "gy",
+  pending_verification: "am",
   active: "gn",
+  rejected: "gy",
   on_hold: "am",
   ceased: "gy",
 };

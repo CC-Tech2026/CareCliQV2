@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
-import { FileText, Loader2, Paperclip, Pill, Plus, Trash2, X } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Paperclip, Pill, Plus, ShieldCheck, Trash2, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/ui/file-dropzone";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   createParticipantMedication,
   getMedicationDocuments,
   getParticipantMedications,
+  rejectMedication,
   updateMedication,
   uploadMedicationDocument,
+  verifyMedication,
   type Medication,
   type MedicationDocument,
   type MedicationFrequencyType,
@@ -20,7 +23,10 @@ import {
 const ROUTES: MedicationRoute[] = ["oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"];
 
 const STATUS_STYLE: Record<Medication["status"], { bg: string; text: string }> = {
+  draft: { bg: "#F1F5F9", text: "#64748B" },
+  pending_verification: { bg: "#FEF3C7", text: "#92400E" },
   active: { bg: "#DCFCE7", text: "#166534" },
+  rejected: { bg: "#FEE2E2", text: "#B91C1C" },
   on_hold: { bg: "#FEF3C7", text: "#92400E" },
   ceased: { bg: "#F1F5F9", text: "#64748B" },
 };
@@ -70,6 +76,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
   const [docsByMedication, setDocsByMedication] = useState<Record<string, MedicationDocument[]>>({});
   const [expandedDocsFor, setExpandedDocsFor] = useState<string | null>(null);
   const [loadingDocsFor, setLoadingDocsFor] = useState<string | null>(null);
+  const [verifyingMedication, setVerifyingMedication] = useState<Medication | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -196,6 +203,22 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
     try {
       await updateMedication(medication.id, { status });
       toast({ title: translate("participants.medications.updated") });
+      load();
+    } catch (err) {
+      toast({
+        title: translate("common.error"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReject = async (medication: Medication) => {
+    const reason = window.prompt(translate("participants.medications.rejectReasonPrompt"));
+    if (!reason || !reason.trim()) return;
+    try {
+      await rejectMedication(medication.id, reason.trim());
+      toast({ title: translate("participants.medications.rejected") });
       load();
     } catch (err) {
       toast({
@@ -355,7 +378,30 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
                         <Paperclip className={`h-3.5 w-3.5 ${isExpanded ? "text-cc-plum" : ""}`} />
                       )}
                     </Button>
-                    {m.status !== "active" && (
+                    {m.status === "pending_verification" && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1 text-emerald-700"
+                          onClick={() => setVerifyingMedication(m)}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" /> {translate("participants.medications.verify")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleReject(m)}
+                          title={translate("participants.medications.reject")}
+                          aria-label={translate("participants.medications.reject")}
+                        >
+                          <XCircle className="h-3.5 w-3.5 text-red-600" />
+                        </Button>
+                      </>
+                    )}
+                    {m.status === "on_hold" && (
                       <Button type="button" variant="ghost" size="sm" onClick={() => changeStatus(m, "active")}>
                         {translate("participants.medications.reactivate")}
                       </Button>
@@ -365,7 +411,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
                         {translate("participants.medications.hold")}
                       </Button>
                     )}
-                    {m.status !== "ceased" && (
+                    {(m.status === "active" || m.status === "on_hold") && (
                       <Button type="button" variant="ghost" size="icon" onClick={() => changeStatus(m, "ceased")} title={translate("participants.medications.cease")}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -405,7 +451,177 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
           })}
         </div>
       )}
+
+      <VerifyMedicationSheet
+        medication={verifyingMedication}
+        onOpenChange={(open) => { if (!open) setVerifyingMedication(null); }}
+        onVerified={() => { setVerifyingMedication(null); load(); }}
+      />
     </section>
+  );
+}
+
+function VerifyMedicationSheet({
+  medication,
+  onOpenChange,
+  onVerified,
+}: {
+  medication: Medication | null;
+  onOpenChange: (open: boolean) => void;
+  onVerified: () => void;
+}) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [fields, setFields] = useState<DraftForm>(EMPTY_DRAFT);
+  const [docs, setDocs] = useState<MedicationDocument[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  useEffect(() => {
+    if (!medication) return;
+    setFields({
+      name: medication.name,
+      strength: medication.strength ?? "",
+      route: medication.route,
+      dosage: medication.dosage ?? "",
+      frequency_type: medication.frequency_type,
+      scheduled_times: medication.scheduled_times.join(", "),
+      prescriber_name: medication.prescriber_name ?? "",
+      prescriber_contact: medication.prescriber_contact ?? "",
+      start_date: medication.start_date ?? "",
+      end_date: medication.end_date ?? "",
+      prn_max_per_day: medication.prn_max_per_day != null ? String(medication.prn_max_per_day) : "",
+    });
+    setNotes("");
+    setLoadingDocs(true);
+    getMedicationDocuments(medication.id)
+      .then((res) => setDocs(res.documents))
+      .catch(() => setDocs([]))
+      .finally(() => setLoadingDocs(false));
+  }, [medication]);
+
+  const sourceDoc = medication ? docs.find((d) => d.id === medication.source_document_id) : undefined;
+
+  const confirm = async () => {
+    if (!medication) return;
+    setSaving(true);
+    try {
+      await verifyMedication(medication.id, {
+        name: fields.name.trim(),
+        strength: fields.strength || null,
+        route: fields.route,
+        dosage: fields.dosage || null,
+        frequency_type: fields.frequency_type,
+        scheduled_times: fields.scheduled_times.split(",").map((t) => t.trim()).filter(Boolean),
+        prescriber_name: fields.prescriber_name || null,
+        prescriber_contact: fields.prescriber_contact || null,
+        start_date: fields.start_date || null,
+        end_date: fields.end_date || null,
+        prn_max_per_day: fields.prn_max_per_day ? Number(fields.prn_max_per_day) : null,
+        verification_notes: notes || null,
+      });
+      toast({ title: translate("participants.medications.verified") });
+      onVerified();
+    } catch (err) {
+      toast({
+        title: translate("common.error"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet open={!!medication} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-cc-plum" />
+            {translate("participants.medications.verifyTitle")}
+          </SheetTitle>
+        </SheetHeader>
+
+        {medication && (
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border border-cc-border bg-cc-soft p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
+                {translate("participants.medications.sourceDocument")}
+              </p>
+              {loadingDocs ? (
+                <p className="mt-1 text-[12px] text-cc-muted">{translate("common.loading")}</p>
+              ) : sourceDoc ? (
+                <a
+                  href={sourceDoc.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 flex items-center gap-1.5 text-[13px] font-bold text-cc-plum hover:underline"
+                >
+                  <FileText className="h-3.5 w-3.5" /> {sourceDoc.file_name}
+                </a>
+              ) : (
+                <p className="mt-1 text-[12px] text-cc-muted">{translate("participants.medications.noSourceDocument")}</p>
+              )}
+            </div>
+
+            <p className="text-[11px] text-cc-muted">{translate("participants.medications.verifyHint")}</p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <LabeledInput label={translate("participants.medications.name")} value={fields.name} onChange={(v) => setFields((d) => ({ ...d, name: v }))} />
+              <LabeledInput label={translate("participants.medications.strength")} value={fields.strength} onChange={(v) => setFields((d) => ({ ...d, strength: v }))} />
+              <LabeledInput label={translate("participants.medications.dosage")} value={fields.dosage} onChange={(v) => setFields((d) => ({ ...d, dosage: v }))} />
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.medications.route")}</p>
+                <select
+                  className="cc-field h-9 w-full rounded-md px-2 text-sm"
+                  value={fields.route}
+                  onChange={(e) => setFields((d) => ({ ...d, route: e.target.value as MedicationRoute }))}
+                >
+                  {ROUTES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              {fields.frequency_type === "scheduled" ? (
+                <LabeledInput
+                  label={translate("participants.medications.scheduledTimes")}
+                  placeholder="08:00, 20:00"
+                  value={fields.scheduled_times}
+                  onChange={(v) => setFields((d) => ({ ...d, scheduled_times: v }))}
+                />
+              ) : (
+                <LabeledInput
+                  label={translate("participants.medications.prnMaxPerDay")}
+                  value={fields.prn_max_per_day}
+                  onChange={(v) => setFields((d) => ({ ...d, prn_max_per_day: v.replace(/[^0-9]/g, "") }))}
+                />
+              )}
+              <LabeledInput label={translate("participants.medications.prescriberName")} value={fields.prescriber_name} onChange={(v) => setFields((d) => ({ ...d, prescriber_name: v }))} />
+              <LabeledInput label={translate("participants.medications.prescriberContact")} value={fields.prescriber_contact} onChange={(v) => setFields((d) => ({ ...d, prescriber_contact: v }))} />
+              <LabeledInput label={translate("participants.medications.startDate")} type="date" value={fields.start_date} onChange={(v) => setFields((d) => ({ ...d, start_date: v }))} />
+              <LabeledInput label={translate("participants.medications.endDate")} type="date" value={fields.end_date} onChange={(v) => setFields((d) => ({ ...d, end_date: v }))} />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.medications.verificationNotes")}</p>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={translate("participants.medications.verificationNotesPlaceholder")} />
+            </div>
+          </div>
+        )}
+
+        <SheetFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button type="button" disabled={saving || !fields.name.trim()} onClick={confirm} className="cc-btn-primary gap-1.5">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {translate("participants.medications.confirmAndActivate")}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 

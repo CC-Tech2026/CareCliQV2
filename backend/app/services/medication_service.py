@@ -19,8 +19,13 @@ logger = logging.getLogger(__name__)
 
 ROUTES = {"oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"}
 FREQUENCY_TYPES = {"scheduled", "prn"}
-STATUSES = {"active", "ceased", "on_hold"}
+STATUSES = {"draft", "pending_verification", "active", "rejected", "ceased", "on_hold"}
 ADMINISTRATION_STATUSES = {"given", "refused", "missed", "withheld"}
+# Only these statuses may move to "active" via a plain update_medication() PATCH (reactivating
+# an already-verified, on-hold medication). From draft/pending_verification/rejected, "active"
+# is only reachable through verify_medication() — that transition needs a named, timestamped
+# approval, not a silent field edit.
+REACTIVATABLE_STATUSES = {"on_hold"}
 
 # How far before/after the scheduled time a dose counts as "due now" rather than
 # "upcoming"/"overdue" — matches the escalation window described in the spec (default 30 min).
@@ -84,6 +89,7 @@ def create_medication(
     end_date: str | None,
     is_prn: bool,
     prn_max_per_day: int | None,
+    source_document_id: str | None = None,
 ) -> dict[str, Any]:
     if not name.strip():
         raise HTTPException(status_code=422, detail="Medication name is required.")
@@ -106,21 +112,140 @@ def create_medication(
         "scheduled_times": scheduled_times or [],
         "prescriber_name": prescriber_name,
         "prescriber_contact": prescriber_contact,
-        "start_date": start_date,
         "end_date": end_date,
         "is_prn": is_prn,
         "prn_max_per_day": prn_max_per_day,
-        "status": "active",
+        # Submitted, not yet confirmed by a named reviewer against the source document —
+        # it will not appear on any worker's shift checklist until verify_medication() runs.
+        "status": "pending_verification",
+        "source_document_id": source_document_id,
         "created_by": created_by,
         "updated_by": created_by,
     }
+    # start_date is NOT NULL DEFAULT CURRENT_DATE — omit the key entirely when not given so
+    # the DB default applies, rather than sending an explicit null that violates the constraint.
+    if start_date:
+        payload["start_date"] = start_date
     try:
         result = get_supabase_admin().table("medications").insert(payload).execute()
     except Exception as exc:
         if _is_missing_schema(exc):
             raise HTTPException(status_code=503, detail="Medication service unavailable.") from exc
         raise
-    return result.data[0] if result.data else payload
+    medication = result.data[0] if result.data else payload
+    _record_status_change(medication["id"], organization_id, None, "pending_verification", created_by, "Created")
+    return medication
+
+
+def _record_status_change(
+    medication_id: str,
+    organization_id: str,
+    from_status: str | None,
+    to_status: str,
+    changed_by: str,
+    reason: str | None = None,
+) -> None:
+    try:
+        get_supabase_admin().table("medication_status_history").insert({
+            "medication_id": medication_id,
+            "organization_id": organization_id,
+            "from_status": from_status,
+            "to_status": to_status,
+            "changed_by": changed_by,
+            "reason": reason,
+        }).execute()
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.warning("Could not record medication status history for %s: %s", medication_id, exc)
+
+
+def verify_medication(
+    medication_id: str,
+    organization_id: str,
+    verified_by: str,
+    *,
+    corrections: dict[str, Any] | None = None,
+    verification_notes: str | None = None,
+) -> dict[str, Any]:
+    """The named, timestamped confirmation step: a coordinator or managing director reviews
+    the extracted fields against the source document, corrects anything wrong, and confirms —
+    only this moves a medication onto the worker-facing shift checklist."""
+    medication = get_medication(medication_id, organization_id)
+    if medication["status"] != "pending_verification":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only medications pending verification can be verified (current status: {medication['status']}).",
+        )
+
+    updates: dict[str, Any] = {}
+    if corrections:
+        if "route" in corrections and corrections["route"] not in ROUTES:
+            raise HTTPException(status_code=422, detail=f"Invalid route. Must be one of: {', '.join(sorted(ROUTES))}.")
+        updates = {k: v for k, v in corrections.items() if v is not None}
+
+    updates.update({
+        "status": "active",
+        "verified_by": verified_by,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "verification_notes": verification_notes,
+        "updated_by": verified_by,
+    })
+    result = (
+        get_supabase_admin()
+        .table("medications")
+        .update(updates)
+        .eq("id", medication_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**medication, **updates}
+    _record_status_change(medication_id, organization_id, "pending_verification", "active", verified_by, verification_notes)
+    return updated
+
+
+def reject_medication(
+    medication_id: str,
+    organization_id: str,
+    rejected_by: str,
+    reason: str,
+) -> dict[str, Any]:
+    if not reason.strip():
+        raise HTTPException(status_code=422, detail="A reason is required to reject a medication.")
+    medication = get_medication(medication_id, organization_id)
+    if medication["status"] != "pending_verification":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only medications pending verification can be rejected (current status: {medication['status']}).",
+        )
+    result = (
+        get_supabase_admin()
+        .table("medications")
+        .update({"status": "rejected", "rejection_reason": reason.strip(), "updated_by": rejected_by})
+        .eq("id", medication_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**medication, "status": "rejected", "rejection_reason": reason.strip()}
+    _record_status_change(medication_id, organization_id, "pending_verification", "rejected", rejected_by, reason.strip())
+    return updated
+
+
+def list_status_history(medication_id: str, organization_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("medication_status_history")
+            .select("*, users!medication_status_history_changed_by_fkey(full_name)")
+            .eq("medication_id", medication_id)
+            .eq("organization_id", organization_id)
+            .order("changed_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return []
+        raise
 
 
 def update_medication(
@@ -134,7 +259,14 @@ def update_medication(
     if "status" in updates and updates["status"] not in STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(STATUSES))}.")
 
-    get_medication(medication_id, organization_id)  # 404s if not found / wrong org
+    existing = get_medication(medication_id, organization_id)  # 404s if not found / wrong org
+
+    new_status = updates.get("status")
+    if new_status == "active" and existing["status"] not in REACTIVATABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="This medication must go through verification before it can be made active.",
+        )
 
     clean = {k: v for k, v in updates.items() if v is not None}
     if not clean:
@@ -149,6 +281,8 @@ def update_medication(
         .eq("organization_id", organization_id)
         .execute()
     )
+    if new_status and new_status != existing["status"]:
+        _record_status_change(medication_id, organization_id, existing["status"], new_status, updated_by)
     return result.data[0] if result.data else clean
 
 

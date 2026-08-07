@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..services import medication_document_service, medication_service
 
@@ -22,6 +22,16 @@ router = APIRouter(tags=["medications"])
 def _require_coordinator(current_user: dict) -> str:
     if not is_coordinator_role(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization on account.")
+    return str(org_id)
+
+
+def _require_verifier(current_user: dict) -> str:
+    """Verifying/rejecting a medication is open to support coordinators and managing directors."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator or managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=403, detail="No organization on account.")
@@ -142,6 +152,7 @@ async def create_participant_medication(
         end_date=body.end_date,
         is_prn=body.is_prn,
         prn_max_per_day=body.prn_max_per_day,
+        source_document_id=body.source_document_id,
     )
     if body.source_document_id:
         medication_document_service.link_document_to_medication(body.source_document_id, medication["id"], org_id)
@@ -161,6 +172,66 @@ async def update_medication(
         get_user_id(current_user),
         body.model_dump(exclude_unset=True),
     )
+
+
+class MedicationVerifyBody(BaseModel):
+    """Corrections the verifier makes while confirming — extraction is a proposal, and
+    correcting it here is expected; the corrected values are what get saved as final."""
+    name: Optional[str] = None
+    strength: Optional[str] = None
+    route: Optional[str] = None
+    dosage: Optional[str] = None
+    frequency_type: Optional[str] = None
+    scheduled_times: Optional[list[str]] = None
+    prescriber_name: Optional[str] = None
+    prescriber_contact: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    prn_max_per_day: Optional[int] = None
+    verification_notes: Optional[str] = None
+
+
+class MedicationRejectBody(BaseModel):
+    reason: str
+
+
+@router.post("/medications/{medication_id}/verify")
+async def verify_medication(
+    medication_id: str,
+    body: MedicationVerifyBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """The named, timestamped confirmation step — a coordinator or managing director reviews
+    the extracted fields against the source document and confirms. Only this unlocks the
+    medication for the worker-facing shift checklist."""
+    org_id = _require_verifier(current_user)
+    corrections = body.model_dump(exclude={"verification_notes"}, exclude_unset=True)
+    return medication_service.verify_medication(
+        medication_id,
+        org_id,
+        get_user_id(current_user),
+        corrections=corrections,
+        verification_notes=body.verification_notes,
+    )
+
+
+@router.post("/medications/{medication_id}/reject")
+async def reject_medication(
+    medication_id: str,
+    body: MedicationRejectBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_verifier(current_user)
+    return medication_service.reject_medication(medication_id, org_id, get_user_id(current_user), body.reason)
+
+
+@router.get("/medications/{medication_id}/status-history")
+async def medication_status_history(
+    medication_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return {"history": medication_service.list_status_history(medication_id, org_id)}
 
 
 # ── Compliance Centre Medication Register (coordinator) ──────────────────────────────────────
