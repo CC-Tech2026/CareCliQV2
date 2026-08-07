@@ -171,7 +171,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
   };
 
   return (
-    <section className="space-y-4 rounded-2xl border border-cc-border bg-cc-soft p-4">
+    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Pill className="h-3.5 w-3.5 text-cc-plum" />
@@ -185,7 +185,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       </div>
 
       {formOpen && (
-        <div className="rounded-xl border border-cc-border bg-cc-surface p-3 space-y-3">
+        <div className="rounded-xl border border-cc-border p-3 space-y-3">
           <div className="rounded-lg border border-dashed border-cc-plum/40 bg-cc-soft p-3">
             <input
               ref={fileInputRef}
@@ -274,7 +274,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       ) : medications.length === 0 ? (
         <p className="text-[12px] text-cc-muted">{translate("participants.medications.empty")}</p>
       ) : (
-        <div className="divide-y divide-cc-border rounded-xl border border-cc-border bg-cc-surface overflow-hidden">
+        <div className="divide-y divide-cc-border rounded-xl border border-cc-border overflow-hidden">
           {medications.map((m) => {
             const style = STATUS_STYLE[m.status];
             return (
