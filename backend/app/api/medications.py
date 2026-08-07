@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
-from ..services import medication_extraction_service, medication_service
+from ..services import medication_document_service, medication_service
 
 router = APIRouter(tags=["medications"])
 
@@ -41,6 +41,7 @@ class MedicationCreateBody(BaseModel):
     end_date: Optional[str] = None
     is_prn: bool = False
     prn_max_per_day: Optional[int] = None
+    source_document_id: Optional[str] = None
 
 
 class MedicationUpdateBody(BaseModel):
@@ -69,19 +70,53 @@ async def list_participant_medications(
     return {"medications": medication_service.list_medications(participant_id, org_id, status)}
 
 
-@router.post("/participants/{participant_id}/medications/extract")
-async def extract_medication_document(
+@router.post("/participants/{participant_id}/medications/documents", status_code=201)
+async def upload_medication_document(
     participant_id: str,
     file: UploadFile = File(...),
+    document_type: str = Form("other"),
+    replaces_document_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """Upload a prescription/script (image or PDF) and get back suggested medication field
-    values for the coordinator to review — nothing is saved here, this only pre-fills the form."""
-    _require_coordinator(current_user)
+    """Upload a prescription/script/plan (image or PDF). The file is stored immediately;
+    extraction then runs against the stored file and returns suggested field values for the
+    coordinator to review — extraction is a proposal, nothing becomes an active medication
+    from this call alone. Pass replaces_document_id when this upload is a renewed/reissued
+    version of a document already on file, to mark the old one as superseded."""
+    org_id = _require_coordinator(current_user)
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=422, detail="File is empty.")
-    return await medication_extraction_service.extract_medication_fields(contents, file.content_type or "")
+    result = await medication_document_service.upload_document(
+        participant_id,
+        org_id,
+        get_user_id(current_user),
+        file_bytes=contents,
+        filename=file.filename or "document",
+        content_type=file.content_type or "",
+        document_type=document_type,
+    )
+    if replaces_document_id:
+        medication_document_service.supersede_document(replaces_document_id, result["document"]["id"], org_id)
+    return result
+
+
+@router.get("/participants/{participant_id}/medications/documents")
+async def list_participant_medication_documents(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return {"documents": medication_document_service.list_documents_for_participant(participant_id, org_id)}
+
+
+@router.get("/medications/{medication_id}/documents")
+async def list_medication_documents(
+    medication_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return {"documents": medication_document_service.list_documents_for_medication(medication_id, org_id)}
 
 
 @router.post("/participants/{participant_id}/medications", status_code=201)
@@ -91,7 +126,7 @@ async def create_participant_medication(
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_coordinator(current_user)
-    return medication_service.create_medication(
+    medication = medication_service.create_medication(
         participant_id,
         org_id,
         get_user_id(current_user),
@@ -108,6 +143,9 @@ async def create_participant_medication(
         is_prn=body.is_prn,
         prn_max_per_day=body.prn_max_per_day,
     )
+    if body.source_document_id:
+        medication_document_service.link_document_to_medication(body.source_document_id, medication["id"], org_id)
+    return medication
 
 
 @router.patch("/medications/{medication_id}")

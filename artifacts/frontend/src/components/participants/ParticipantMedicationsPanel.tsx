@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Pill, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileText, Loader2, Paperclip, Pill, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   createParticipantMedication,
-  extractMedicationFromDocument,
+  getMedicationDocuments,
   getParticipantMedications,
   updateMedication,
+  uploadMedicationDocument,
   type Medication,
+  type MedicationDocument,
   type MedicationFrequencyType,
   type MedicationRoute,
 } from "@/services/medicationService";
@@ -63,7 +66,10 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState<DraftForm>(EMPTY_DRAFT);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingDocument, setPendingDocument] = useState<MedicationDocument | null>(null);
+  const [docsByMedication, setDocsByMedication] = useState<Record<string, MedicationDocument[]>>({});
+  const [expandedDocsFor, setExpandedDocsFor] = useState<string | null>(null);
+  const [loadingDocsFor, setLoadingDocsFor] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -109,9 +115,11 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
         end_date: draft.end_date || null,
         is_prn: draft.frequency_type === "prn",
         prn_max_per_day: draft.prn_max_per_day ? Number(draft.prn_max_per_day) : null,
+        source_document_id: pendingDocument?.id ?? null,
       });
       toast({ title: translate("participants.medications.added") });
       setDraft(EMPTY_DRAFT);
+      setPendingDocument(null);
       setFormOpen(false);
       load();
     } catch (err) {
@@ -125,25 +133,32 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
     }
   };
 
-  const handleUpload = async (file: File | undefined) => {
-    if (!file) return;
+  const handleUpload = async (file: File) => {
     setExtracting(true);
     try {
-      const fields = await extractMedicationFromDocument(participantId, file);
-      setDraft((d) => ({
-        name: fields.name ?? d.name,
-        strength: fields.strength ?? d.strength,
-        dosage: fields.dosage ?? d.dosage,
-        route: fields.route ?? d.route,
-        frequency_type: fields.frequency_type ?? d.frequency_type,
-        scheduled_times: fields.scheduled_times.length > 0 ? fields.scheduled_times.join(", ") : d.scheduled_times,
-        prescriber_name: fields.prescriber_name ?? d.prescriber_name,
-        prescriber_contact: fields.prescriber_contact ?? d.prescriber_contact,
-        start_date: fields.start_date ?? d.start_date,
-        end_date: fields.end_date ?? d.end_date,
-        prn_max_per_day: fields.prn_max_per_day != null ? String(fields.prn_max_per_day) : d.prn_max_per_day,
-      }));
-      toast({ title: translate("participants.medications.extracted") });
+      const { document, extracted_fields: fields } = await uploadMedicationDocument(participantId, file, "prescription");
+      setPendingDocument(document);
+      if (fields) {
+        setDraft((d) => ({
+          name: fields.name ?? d.name,
+          strength: fields.strength ?? d.strength,
+          dosage: fields.dosage ?? d.dosage,
+          route: fields.route ?? d.route,
+          frequency_type: fields.frequency_type ?? d.frequency_type,
+          scheduled_times: fields.scheduled_times.length > 0 ? fields.scheduled_times.join(", ") : d.scheduled_times,
+          prescriber_name: fields.prescriber_name ?? d.prescriber_name,
+          prescriber_contact: fields.prescriber_contact ?? d.prescriber_contact,
+          start_date: fields.start_date ?? d.start_date,
+          end_date: fields.end_date ?? d.end_date,
+          prn_max_per_day: fields.prn_max_per_day != null ? String(fields.prn_max_per_day) : d.prn_max_per_day,
+        }));
+        toast({ title: translate("participants.medications.extracted") });
+      } else {
+        toast({
+          title: translate("participants.medications.uploadedNoExtract"),
+          description: translate("participants.medications.uploadedNoExtractDesc"),
+        });
+      }
     } catch (err) {
       toast({
         title: translate("participants.medications.extractFailed"),
@@ -152,7 +167,28 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       });
     } finally {
       setExtracting(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const toggleDocuments = async (medicationId: string) => {
+    if (expandedDocsFor === medicationId) {
+      setExpandedDocsFor(null);
+      return;
+    }
+    setExpandedDocsFor(medicationId);
+    if (docsByMedication[medicationId]) return;
+    setLoadingDocsFor(medicationId);
+    try {
+      const { documents } = await getMedicationDocuments(medicationId);
+      setDocsByMedication((prev) => ({ ...prev, [medicationId]: documents }));
+    } catch (err) {
+      toast({
+        title: translate("common.error"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDocsFor(null);
     }
   };
 
@@ -186,30 +222,34 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
 
       {formOpen && (
         <div className="rounded-xl border border-cc-border p-3 space-y-3">
-          <div className="rounded-lg border border-dashed border-cc-plum/40 bg-cc-soft p-3">
-            <input
-              ref={fileInputRef}
-              type="file"
+          {pendingDocument ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-cc-border bg-cc-soft p-2.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-cc-plum" />
+                <p className="truncate text-[12px] font-bold text-cc-text">{pendingDocument.file_name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDocument(null)}
+                className="shrink-0 rounded-full p-1 hover:bg-black/5"
+                title={translate("participants.medications.removeAttachment")}
+                aria-label={translate("participants.medications.removeAttachment")}
+              >
+                <X className="h-3.5 w-3.5 text-cc-muted" />
+              </button>
+            </div>
+          ) : (
+            <FileDropzone
               accept="application/pdf,image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => handleUpload(e.target.files?.[0])}
+              maxSizeBytes={15 * 1024 * 1024}
+              busy={extracting}
+              onFile={handleUpload}
+              onRejected={(reason) => toast({ title: reason, variant: "destructive" })}
+              label={translate("participants.medications.uploadScript")}
+              hint={translate("participants.medications.uploadHint")}
+              busyLabel={translate("participants.medications.extracting")}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={extracting}
-              onClick={() => fileInputRef.current?.click()}
-              className="gap-1.5"
-            >
-              {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              {extracting ? translate("participants.medications.extracting") : translate("participants.medications.uploadScript")}
-            </Button>
-            <p className="mt-1.5 flex items-start gap-1 text-[11px] text-cc-muted">
-              <Sparkles className="h-3 w-3 shrink-0 mt-0.5" />
-              {translate("participants.medications.uploadHint")}
-            </p>
-          </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <LabeledInput label={translate("participants.medications.name")} value={draft.name} onChange={(v) => setDraft((d) => ({ ...d, name: v }))} />
@@ -258,7 +298,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
             <LabeledInput label={translate("participants.medications.endDate")} type="date" value={draft.end_date} onChange={(v) => setDraft((d) => ({ ...d, end_date: v }))} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setFormOpen(false); setDraft(EMPTY_DRAFT); }}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setFormOpen(false); setDraft(EMPTY_DRAFT); setPendingDocument(null); }}>
               {translate("common.cancel")}
             </Button>
             <Button type="button" size="sm" disabled={saving} onClick={submit} className="cc-btn-primary">
@@ -277,43 +317,89 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
         <div className="divide-y divide-cc-border rounded-xl border border-cc-border overflow-hidden">
           {medications.map((m) => {
             const style = STATUS_STYLE[m.status];
+            const docs = docsByMedication[m.id];
+            const isExpanded = expandedDocsFor === m.id;
             return (
-              <div key={m.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-[13px] font-bold text-cc-text">{m.name}{m.strength ? ` · ${m.strength}` : ""}</p>
-                    <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase" style={{ background: style.bg, color: style.text }}>
-                      {translate(`participants.medications.status.${m.status}`)}
-                    </span>
-                    {m.is_prn && (
-                      <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase bg-cc-soft text-cc-plum">
-                        {translate("participants.medications.prn")}
+              <div key={m.id}>
+                <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[13px] font-bold text-cc-text">{m.name}{m.strength ? ` · ${m.strength}` : ""}</p>
+                      <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase" style={{ background: style.bg, color: style.text }}>
+                        {translate(`participants.medications.status.${m.status}`)}
                       </span>
+                      {m.is_prn && (
+                        <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase bg-cc-soft text-cc-plum">
+                          {translate("participants.medications.prn")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-cc-muted">
+                      {m.dosage ? `${m.dosage} · ` : ""}{m.route}
+                      {m.frequency_type === "scheduled" && m.scheduled_times.length > 0 ? ` · ${m.scheduled_times.join(", ")}` : ""}
+                      {m.prescriber_name ? ` · ${translate("participants.medications.prescribedBy")} ${m.prescriber_name}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleDocuments(m.id)}
+                      title={translate("participants.medications.viewDocuments")}
+                      aria-label={translate("participants.medications.viewDocuments")}
+                    >
+                      {loadingDocsFor === m.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Paperclip className={`h-3.5 w-3.5 ${isExpanded ? "text-cc-plum" : ""}`} />
+                      )}
+                    </Button>
+                    {m.status !== "active" && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => changeStatus(m, "active")}>
+                        {translate("participants.medications.reactivate")}
+                      </Button>
+                    )}
+                    {m.status === "active" && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => changeStatus(m, "on_hold")}>
+                        {translate("participants.medications.hold")}
+                      </Button>
+                    )}
+                    {m.status !== "ceased" && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => changeStatus(m, "ceased")} title={translate("participants.medications.cease")}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-cc-muted">
-                    {m.dosage ? `${m.dosage} · ` : ""}{m.route}
-                    {m.frequency_type === "scheduled" && m.scheduled_times.length > 0 ? ` · ${m.scheduled_times.join(", ")}` : ""}
-                    {m.prescriber_name ? ` · ${translate("participants.medications.prescribedBy")} ${m.prescriber_name}` : ""}
-                  </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {m.status !== "active" && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => changeStatus(m, "active")}>
-                      {translate("participants.medications.reactivate")}
-                    </Button>
-                  )}
-                  {m.status === "active" && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => changeStatus(m, "on_hold")}>
-                      {translate("participants.medications.hold")}
-                    </Button>
-                  )}
-                  {m.status !== "ceased" && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => changeStatus(m, "ceased")} title={translate("participants.medications.cease")}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+                {isExpanded && (
+                  <div className="border-t border-cc-border bg-cc-soft/50 px-3 py-2.5">
+                    {!docs || docs.length === 0 ? (
+                      <p className="text-[11px] text-cc-muted">{translate("participants.medications.noDocuments")}</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {docs.map((doc) => (
+                          <li key={doc.id} className="flex items-center justify-between gap-2">
+                            <a
+                              href={doc.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-cc-plum hover:underline"
+                            >
+                              <FileText className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{doc.file_name}</span>
+                            </a>
+                            <span className="shrink-0 text-[10px] text-cc-muted">
+                              {doc.superseded_at
+                                ? translate("participants.medications.superseded")
+                                : translate(`participants.medications.docType.${doc.document_type}`)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

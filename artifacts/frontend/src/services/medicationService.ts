@@ -39,6 +39,7 @@ export type MedicationPayload = {
   end_date?: string | null;
   is_prn?: boolean;
   prn_max_per_day?: number | null;
+  source_document_id?: string | null;
 };
 
 export function getParticipantMedications(participantId: string, status?: MedicationStatus) {
@@ -74,19 +75,60 @@ export type ExtractedMedicationFields = {
   prn_max_per_day: number | null;
 };
 
-/** Upload a prescription/script (image or PDF) and get back suggested field values to review — nothing is saved by this call. */
-export async function extractMedicationFromDocument(participantId: string, file: File): Promise<ExtractedMedicationFields> {
+export type MedicationDocumentType = "prescription" | "medication_management_plan" | "gp_letter" | "pharmacy_authority" | "other";
+export type MedicationDocumentExtractionStatus = "pending" | "complete" | "failed" | "needs_review";
+
+export type MedicationDocument = {
+  id: string;
+  participant_id: string;
+  medication_id: string | null;
+  file_path: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  document_type: MedicationDocumentType;
+  extracted_data: ExtractedMedicationFields | null;
+  extraction_status: MedicationDocumentExtractionStatus;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  effective_from: string;
+  superseded_by_document_id: string | null;
+  superseded_at: string | null;
+};
+
+/**
+ * Upload a prescription/script/plan (image or PDF). The file is stored permanently first;
+ * extraction then proposes field values for the coordinator to review. Nothing becomes an
+ * active medication from this call alone — the document just exists on file.
+ */
+export async function uploadMedicationDocument(
+  participantId: string,
+  file: File,
+  documentType: MedicationDocumentType = "other",
+  replacesDocumentId?: string,
+): Promise<{ document: MedicationDocument; extracted_fields: ExtractedMedicationFields | null }> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await apiFetch(`/api/participants/${participantId}/medications/extract`, {
+  formData.append("document_type", documentType);
+  if (replacesDocumentId) formData.append("replaces_document_id", replacesDocumentId);
+  const response = await apiFetch(`/api/participants/${participantId}/medications/documents`, {
     method: "POST",
     body: formData,
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || "Could not read this document.");
+    throw new Error(body.detail || "Could not upload this document.");
   }
   return response.json();
+}
+
+export function getParticipantMedicationDocuments(participantId: string) {
+  return jsonFetch<{ documents: MedicationDocument[] }>(`/api/participants/${participantId}/medications/documents`);
+}
+
+export function getMedicationDocuments(medicationId: string) {
+  return jsonFetch<{ documents: MedicationDocument[] }>(`/api/medications/${medicationId}/documents`);
 }
 
 // ── Compliance Centre Medication Register (coordinator, org-wide) ────────────────────────────
