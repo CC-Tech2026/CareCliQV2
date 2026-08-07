@@ -1,7 +1,6 @@
-"""Medication management v1 — prescribed medications, the shift-level checklist (scheduled +
-PRN), the append-only administration ledger, escalation, and the org-wide register used by the
-Compliance Centre (Medication Management spec, build order steps 1-6). Outcome linkage (step 7)
-is explicitly deferred post-v1 by the spec itself.
+"""Medication management — prescribed medications, the approval/verification lifecycle, the
+shift-level checklist (scheduled + PRN), the append-only administration ledger with structured
+outcomes and time variance, and the org-wide register used by the Compliance Centre.
 """
 
 from __future__ import annotations
@@ -20,7 +19,25 @@ logger = logging.getLogger(__name__)
 ROUTES = {"oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"}
 FREQUENCY_TYPES = {"scheduled", "prn"}
 STATUSES = {"draft", "pending_verification", "active", "rejected", "ceased", "on_hold"}
-ADMINISTRATION_STATUSES = {"given", "refused", "missed", "withheld"}
+
+# The worker picks one of these four base actions when logging a dose. When the action is
+# "given", the final outcome is classified automatically (given_on_time/given_late/
+# given_early) from the logged timestamps against the org's tolerance — not self-typed by
+# the worker under time pressure. The other three actions map straight to their outcome.
+ADMINISTRATION_ACTIONS = {"given", "refused", "missed", "withheld"}
+ADMINISTRATION_OUTCOMES = {"given_on_time", "given_late", "given_early", "refused", "missed", "withheld"}
+GIVEN_OUTCOMES = {"given_on_time", "given_late", "given_early"}
+# Outcomes that always require reason_notes, regardless of which reason_code chip was picked.
+NOTES_REQUIRED_OUTCOMES = {"refused", "missed", "withheld"}
+DEFAULT_TOLERANCE_MINUTES = 30
+
+REASON_CODES: dict[str, set[str]] = {
+    "given_late": {"participant_asleep", "worker_delayed", "participant_off_site", "other"},
+    "given_early": {"participant_requested", "schedule_conflict", "other"},
+    "refused": {"verbal", "behavioural", "communication_device", "other"},
+    "missed": {"participant_asleep", "worker_delayed", "participant_off_site", "other"},
+    "withheld": {"clinical_direction", "other"},
+}
 # Only these statuses may move to "active" via a plain update_medication() PATCH (reactivating
 # an already-verified, on-hold medication). From draft/pending_verification/rejected, "active"
 # is only reachable through verify_medication() — that transition needs a named, timestamped
@@ -286,6 +303,42 @@ def update_medication(
     return result.data[0] if result.data else clean
 
 
+def get_medication_tolerance_minutes(organization_id: str) -> int:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("organizations")
+            .select("medication_tolerance_minutes")
+            .eq("id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return DEFAULT_TOLERANCE_MINUTES
+        raise
+    if resp.data and resp.data[0].get("medication_tolerance_minutes") is not None:
+        return int(resp.data[0]["medication_tolerance_minutes"])
+    return DEFAULT_TOLERANCE_MINUTES
+
+
+def set_medication_tolerance_minutes(organization_id: str, minutes: int) -> int:
+    if minutes < 0 or minutes > 240:
+        raise HTTPException(status_code=422, detail="Tolerance must be between 0 and 240 minutes.")
+    get_supabase_admin().table("organizations").update({"medication_tolerance_minutes": minutes}).eq("id", organization_id).execute()
+    return minutes
+
+
+def classify_given_outcome(scheduled_time: datetime | None, administered_time: datetime, tolerance_minutes: int) -> str:
+    """given_on_time/given_late/given_early — the calculation the system owns, not the worker."""
+    if scheduled_time is None:
+        return "given_on_time"
+    variance = (administered_time - scheduled_time).total_seconds() / 60
+    if abs(variance) <= tolerance_minutes:
+        return "given_on_time"
+    return "given_late" if variance > 0 else "given_early"
+
+
 def _parse_dt(value: Any) -> datetime | None:
     if not value:
         return None
@@ -355,7 +408,7 @@ def build_shift_medication_checklist(shift: dict[str, Any], organization_id: str
             scheduled_iso = scheduled_dt.isoformat()
             logged = logged_by_key.get(f"{med['id']}|{scheduled_iso}")
             if logged:
-                due_status = logged.get("status")
+                due_status = logged.get("outcome")
             elif now < scheduled_dt - window:
                 due_status = "upcoming"
             elif now > scheduled_dt + window:
@@ -382,17 +435,40 @@ def create_administration(
     shift: dict[str, Any],
     organization_id: str,
     administered_by: str,
-    status: str,
+    action: str,
     scheduled_time: str | None,
+    administered_time: str | None = None,
     dose_given: str | None,
     notes: str | None,
+    reason_code: str | None = None,
+    directed_by: str | None = None,
     prn_reason: str | None = None,
     voice_captured: bool = False,
 ) -> dict[str, Any]:
-    if status not in ADMINISTRATION_STATUSES:
-        raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(ADMINISTRATION_STATUSES))}.")
-    if medication.get("is_prn") and status == "given" and not (prn_reason or "").strip():
+    if action not in ADMINISTRATION_ACTIONS:
+        raise HTTPException(status_code=422, detail=f"Invalid action. Must be one of: {', '.join(sorted(ADMINISTRATION_ACTIONS))}.")
+    if medication.get("is_prn") and action == "given" and not (prn_reason or "").strip():
         raise HTTPException(status_code=422, detail="A reason is required to log a PRN dose.")
+
+    scheduled_dt = _parse_dt(scheduled_time)
+    administered_dt = _parse_dt(administered_time) or datetime.now(timezone.utc)
+
+    if action == "given":
+        tolerance = get_medication_tolerance_minutes(organization_id)
+        outcome = classify_given_outcome(scheduled_dt, administered_dt, tolerance)
+    else:
+        outcome = action
+
+    if outcome in NOTES_REQUIRED_OUTCOMES and not (notes or "").strip():
+        raise HTTPException(status_code=422, detail=f"A note is required to log this dose as {outcome}.")
+    if reason_code:
+        allowed_codes = REASON_CODES.get(outcome, set())
+        if reason_code not in allowed_codes:
+            raise HTTPException(status_code=422, detail=f"Invalid reason for {outcome}. Must be one of: {', '.join(sorted(allowed_codes))}.")
+        if reason_code == "other" and not (notes or "").strip():
+            raise HTTPException(status_code=422, detail="A note is required when the reason is 'other'.")
+    if outcome == "withheld" and directed_by and reason_code != "clinical_direction":
+        reason_code = "clinical_direction"
 
     payload = {
         "id": str(uuid4()),
@@ -402,7 +478,10 @@ def create_administration(
         "organization_id": organization_id,
         "administered_by": administered_by,
         "scheduled_time": scheduled_time,
-        "status": status,
+        "administered_time": administered_dt.isoformat(),
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "directed_by": directed_by,
         "dose_given": dose_given,
         "notes": notes,
         "prn_reason": prn_reason,
@@ -416,7 +495,7 @@ def create_administration(
         raise
     record = result.data[0] if result.data else payload
 
-    if medication.get("is_prn") and status == "given" and medication.get("prn_max_per_day"):
+    if medication.get("is_prn") and outcome in GIVEN_OUTCOMES and medication.get("prn_max_per_day"):
         _maybe_escalate_prn_max(medication, shift, organization_id)
 
     return record
@@ -432,7 +511,7 @@ def _maybe_escalate_prn_max(medication: dict[str, Any], shift: dict[str, Any], o
             .table("medication_administrations")
             .select("id", count="exact")
             .eq("medication_id", medication["id"])
-            .eq("status", "given")
+            .in_("outcome", list(GIVEN_OUTCOMES))
             .not_.is_("prn_reason", "null")
             .gte("administered_time", day_start.isoformat())
             .lt("administered_time", day_end.isoformat())
@@ -517,7 +596,7 @@ def build_shift_prn_medications(shift: dict[str, Any], organization_id: str) -> 
 
     counts_by_med: dict[str, int] = {}
     for admin in todays_admins:
-        if admin.get("status") == "given" and admin.get("prn_reason"):
+        if admin.get("outcome") in GIVEN_OUTCOMES and admin.get("prn_reason"):
             counts_by_med[admin["medication_id"]] = counts_by_med.get(admin["medication_id"], 0) + 1
 
     medications = []
@@ -534,7 +613,7 @@ def build_shift_prn_medications(shift: dict[str, Any], organization_id: str) -> 
     pending_effects = [
         admin for admin in todays_admins
         if admin.get("shift_id") == shift_id
-        and admin.get("status") == "given"
+        and admin.get("outcome") in GIVEN_OUTCOMES
         and admin.get("prn_reason")
         and not admin.get("prn_effect_observed")
     ]
@@ -574,6 +653,47 @@ def record_prn_effect(
         .execute()
     )
     return result.data[0] if result.data else {"id": administration_id, "prn_effect_observed": effect_observed}
+
+
+def attach_administration_reason(
+    administration_id: str,
+    organization_id: str,
+    reason_code: str | None,
+    notes: str | None,
+) -> dict[str, Any]:
+    """A worker taps "confirm given" not knowing in advance whether it'll classify as
+    given_on_time or given_late/given_early — that depends on the org's tolerance, computed
+    after the fact. When it comes back late/early, this attaches the reason as a follow-up,
+    the one other narrow exception (alongside prn_effect_observed) to the immutable ledger."""
+    resp = (
+        get_supabase_admin()
+        .table("medication_administrations")
+        .select("id, outcome")
+        .eq("id", administration_id)
+        .eq("organization_id", organization_id)
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Administration record not found.")
+    outcome = rows[0]["outcome"]
+    if outcome not in {"given_late", "given_early"}:
+        raise HTTPException(status_code=422, detail="A reason can only be attached to a given_late or given_early dose.")
+    if reason_code and reason_code not in REASON_CODES.get(outcome, set()):
+        raise HTTPException(status_code=422, detail=f"Invalid reason for {outcome}.")
+    if (not notes or not notes.strip()) and (not reason_code or reason_code == "other"):
+        raise HTTPException(status_code=422, detail="A note is required.")
+
+    result = (
+        get_supabase_admin()
+        .table("medication_administrations")
+        .update({"reason_code": reason_code, "notes": notes})
+        .eq("id", administration_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {"id": administration_id, "reason_code": reason_code, "notes": notes}
 
 
 # ── Compliance Centre Medication Register (build order step 6) ──────────────────────────────
@@ -657,7 +777,7 @@ def list_medication_review_items(organization_id: str) -> dict[str, Any]:
                 .table("medication_administrations")
                 .select("id", count="exact")
                 .eq("medication_id", med["id"])
-                .eq("status", "given")
+                .in_("outcome", list(GIVEN_OUTCOMES))
                 .not_.is_("prn_reason", "null")
                 .gte("administered_time", day_start.isoformat())
                 .lt("administered_time", day_end.isoformat())

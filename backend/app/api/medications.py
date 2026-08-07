@@ -252,6 +252,28 @@ async def coordinator_medication_review_items(current_user: dict = Depends(get_c
     return medication_service.list_medication_review_items(org_id)
 
 
+class MedicationSettingsBody(BaseModel):
+    tolerance_minutes: int
+
+
+@router.get("/coordinator/medications/settings")
+async def coordinator_medication_settings(current_user: dict = Depends(get_current_user)):
+    """The org-wide on-time tolerance window used to classify given_on_time/given_late/
+    given_early — how many minutes either side of the scheduled time still counts as on time."""
+    org_id = _require_coordinator(current_user)
+    return {"tolerance_minutes": medication_service.get_medication_tolerance_minutes(org_id)}
+
+
+@router.put("/coordinator/medications/settings")
+async def update_coordinator_medication_settings(
+    body: MedicationSettingsBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    minutes = medication_service.set_medication_tolerance_minutes(org_id, body.tolerance_minutes)
+    return {"tolerance_minutes": minutes}
+
+
 @router.get("/medications/{medication_id}/history")
 async def coordinator_medication_history(
     medication_id: str,

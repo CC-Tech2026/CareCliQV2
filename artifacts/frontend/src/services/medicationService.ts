@@ -185,13 +185,18 @@ export function getMedicationDocuments(medicationId: string) {
 
 export type OrgMedication = Medication & { participant_name?: string | null };
 
+export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld";
+
 export type MedicationAdministrationRecord = {
   id: string;
   medication_id: string;
   shift_id?: string | null;
   scheduled_time?: string | null;
   administered_time: string;
-  status: "given" | "refused" | "missed" | "withheld";
+  outcome: MedicationAdministrationOutcome;
+  variance_minutes?: number | null;
+  reason_code?: string | null;
+  directed_by?: string | null;
   dose_given?: string | null;
   notes?: string | null;
   prn_reason?: string | null;

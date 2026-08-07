@@ -28,8 +28,10 @@ const STATUS_TONE: Record<MedicationStatus, "gn" | "am" | "gy"> = {
   ceased: "gy",
 };
 
-const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["status"], { bg: string; color: string }> = {
-  given: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" },
+const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["outcome"], { bg: string; color: string }> = {
+  given_on_time: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" },
+  given_late: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  given_early: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
   refused: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   missed: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   withheld: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
@@ -148,12 +150,12 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
             ) : (
               <div className="space-y-2">
                 {data.history.map((admin) => {
-                  const style = ADMIN_STATUS_STYLE[admin.status];
+                  const style = ADMIN_STATUS_STYLE[admin.outcome];
                   return (
                     <div key={admin.id} className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: style.bg, color: style.color }}>
-                          {admin.status}
+                          {admin.outcome.replace(/_/g, " ")}
                         </span>
                         <span className="text-[11px]" style={{ color: MUTED }}>
                           {new Date(admin.administered_time).toLocaleString()}
@@ -162,6 +164,13 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
                       {admin.administered_by_name && (
                         <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
                           {translate("compliance.centre.medications.by")} {admin.administered_by_name}
+                        </p>
+                      )}
+                      {admin.variance_minutes != null && admin.variance_minutes !== 0 && (
+                        <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+                          {admin.variance_minutes > 0
+                            ? `${admin.variance_minutes} min after scheduled time`
+                            : `${Math.abs(admin.variance_minutes)} min before scheduled time`}
                         </p>
                       )}
                       {admin.prn_reason && (

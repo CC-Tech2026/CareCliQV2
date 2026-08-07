@@ -323,8 +323,20 @@ export function updateShiftTasks(id: string, tasks: ShiftTask[]) {
   });
 }
 
-export type MedicationAdministrationStatus = "given" | "refused" | "missed" | "withheld";
-export type MedicationDueStatus = "upcoming" | "due_now" | "overdue" | MedicationAdministrationStatus;
+/** The worker picks one of these four base actions; "given" is then classified automatically
+ * into an on-time/late/early outcome by the server, from the logged timestamps. */
+export type MedicationAdministrationAction = "given" | "refused" | "missed" | "withheld";
+/** What a logged dose actually resolved to — the six outcomes the audit trail records. */
+export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld";
+export type MedicationDueStatus = "upcoming" | "due_now" | "overdue" | MedicationAdministrationOutcome;
+
+export const MEDICATION_REASON_CODES: Record<Exclude<MedicationAdministrationOutcome, "given_on_time">, string[]> = {
+  given_late: ["participant_asleep", "worker_delayed", "participant_off_site", "other"],
+  given_early: ["participant_requested", "schedule_conflict", "other"],
+  refused: ["verbal", "behavioural", "communication_device", "other"],
+  missed: ["participant_asleep", "worker_delayed", "participant_off_site", "other"],
+  withheld: ["clinical_direction", "other"],
+};
 
 export type MedicationChecklistItem = {
   medication_id: string;
@@ -334,7 +346,7 @@ export type MedicationChecklistItem = {
   route: string;
   scheduled_time: string;
   due_status: MedicationDueStatus;
-  administration?: { status: MedicationAdministrationStatus; notes?: string | null } | null;
+  administration?: { outcome: MedicationAdministrationOutcome; notes?: string | null } | null;
 };
 
 export function getMedicationChecklist(shiftId: string) {
@@ -346,14 +358,17 @@ export function logMedicationAdministration(
   medicationId: string,
   body: {
     scheduled_time?: string;
-    status: MedicationAdministrationStatus;
+    administered_time?: string;
+    action: MedicationAdministrationAction;
+    reason_code?: string;
+    directed_by?: string;
     dose_given?: string;
     notes?: string;
     prn_reason?: string;
     voice_captured?: boolean;
   },
 ) {
-  return workerFetch<{ id: string }>(`/api/worker/shifts/${shiftId}/medications/${medicationId}/administrations`, {
+  return workerFetch<{ id: string; outcome: MedicationAdministrationOutcome }>(`/api/worker/shifts/${shiftId}/medications/${medicationId}/administrations`, {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -381,6 +396,15 @@ export function getPrnMedications(shiftId: string) {
   return workerFetch<{ medications: PrnMedication[]; pending_effects: PrnPendingEffect[] }>(
     `/api/worker/shifts/${shiftId}/prn-medications`,
   );
+}
+
+/** Follow-up for a "given" dose that came back given_late/given_early — the worker couldn't
+ * have known that classification in advance of submitting it, so the reason is attached here. */
+export function attachMedicationReason(administrationId: string, reasonCode: string | undefined, notes: string | undefined) {
+  return workerFetch<{ id: string }>(`/api/worker/medication-administrations/${administrationId}/reason`, {
+    method: "PATCH",
+    body: JSON.stringify({ reason_code: reasonCode, notes }),
+  });
 }
 
 export function logMedicationEffect(administrationId: string, effectObserved: string, voiceCaptured = false) {
