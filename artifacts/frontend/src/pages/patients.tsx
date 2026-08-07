@@ -89,12 +89,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 // ---------------------------------------------------------------------------
 // Template Presets (backed by participant_task_templates via getTaskTemplates)
 // ---------------------------------------------------------------------------
@@ -582,11 +582,11 @@ function EditParticipantPanel({
         <span className="hidden min-[380px]:inline">{translate("common.edit")}</span>
         <span className="min-[380px]:hidden">Edit</span>
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{translate("patients.editTitle")}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{translate("patients.editTitle")}</SheetTitle>
+          </SheetHeader>
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
@@ -595,8 +595,8 @@ function EditParticipantPanel({
             hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -746,11 +746,11 @@ function SetupPlanPanel({
           </>
         )}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</SheetTitle>
+          </SheetHeader>
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -928,7 +928,7 @@ function SetupPlanPanel({
                 </div>
               )}
 
-              <DialogFooter className="gap-2 pt-2">
+              <SheetFooter className="gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
@@ -936,11 +936,11 @@ function SetupPlanPanel({
                   {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {hasPlan ? "Update Plan" : translate("patients.savePlan")}
                 </Button>
-              </DialogFooter>
+              </SheetFooter>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
