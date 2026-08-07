@@ -27,8 +27,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -530,7 +530,7 @@ export default function Team() {
         </>
       )}
 
-      <Dialog
+      <Sheet
         open={inviteOpen}
         onOpenChange={(open) => {
           setInviteOpen(open);
@@ -540,12 +540,12 @@ export default function Team() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
               <UserPlus size={18} style={{ color: PLUM }} /> {translate("team.invite.title")}
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
           <div className="space-y-4 py-1">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.invite.email")}</label>
@@ -572,7 +572,7 @@ export default function Team() {
               </Select>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <SheetFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.cancel")}</Button>
             <Button
               variant="navy"
@@ -581,9 +581,9 @@ export default function Team() {
             >
               {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {deactivateTarget && (
         <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>

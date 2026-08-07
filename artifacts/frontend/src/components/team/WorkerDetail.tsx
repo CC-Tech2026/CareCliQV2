@@ -21,7 +21,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const PLUM = "var(--cc-plum)";
@@ -591,13 +591,13 @@ function AddDocumentDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
             <FileText size={18} style={{ color: PLUM }} /> {translate("team.documents.dialogTitle").replace("{name}", worker.full_name)}
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
@@ -639,7 +639,7 @@ function AddDocumentDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
           <Button
             variant="navy"
@@ -648,9 +648,9 @@ function AddDocumentDialog({
           >
             {saveMut.isPending ? translate("common.saving") : translate("team.documents.save")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -910,13 +910,13 @@ function AssignTrainingDialog({
   const pending = createModuleMut.isPending || assignMut.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
             <GraduationCap size={18} style={{ color: PLUM }} /> {translate("team.training.assignTo").replace("{name}", worker.full_name)}
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
         <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
           {(["existing", "new"] as const).map((m) => (
@@ -962,7 +962,7 @@ function AssignTrainingDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
           <Button
             variant="navy"
@@ -971,9 +971,9 @@ function AssignTrainingDialog({
           >
             {pending ? translate("common.saving") : translate("team.training.assign")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
