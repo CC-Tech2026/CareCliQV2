@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronLeft, FileText, Loader2, Paperclip, Pill, Plus, ShieldCheck, Trash2, Upload, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,7 @@ type Props = {
 export function ParticipantMedicationsPanel({ participantId }: Props) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -95,6 +97,13 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participantId]);
 
+  // This panel keeps its own local list (not React Query), but the Compliance Centre's
+  // medication register reads the same data via React Query — invalidate it whenever a
+  // mutation here changes something, so that view isn't stale until someone refreshes.
+  const syncComplianceCentre = () => {
+    qc.invalidateQueries({ queryKey: ["compliance-centre"] });
+  };
+
   const toggleDocuments = async (medicationId: string) => {
     if (expandedDocsFor === medicationId) {
       setExpandedDocsFor(null);
@@ -122,6 +131,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       await updateMedication(medication.id, { status });
       toast({ title: translate("participants.medications.updated") });
       load();
+      syncComplianceCentre();
     } catch (err) {
       toast({
         title: translate("common.error"),
@@ -138,6 +148,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       await rejectMedication(medication.id, reason.trim());
       toast({ title: translate("participants.medications.rejected") });
       load();
+      syncComplianceCentre();
     } catch (err) {
       toast({
         title: translate("common.error"),
@@ -284,14 +295,14 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
       <VerifyMedicationSheet
         medication={verifyingMedication}
         onOpenChange={(open) => { if (!open) setVerifyingMedication(null); }}
-        onVerified={() => { setVerifyingMedication(null); load(); }}
+        onVerified={() => { setVerifyingMedication(null); load(); syncComplianceCentre(); }}
       />
 
       <AddMedicationSheet
         participantId={participantId}
         open={addOpen}
         onOpenChange={setAddOpen}
-        onCreated={load}
+        onCreated={() => { load(); syncComplianceCentre(); }}
       />
     </section>
   );
