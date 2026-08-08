@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock3, Pill, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Clock3, FileText, GitCommitHorizontal, Pill, ShieldAlert } from "lucide-react";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { LoadingBlock, EmptyState, StatusBadge } from "@/pages/compliance";
 import {
   getCoordinatorMedications,
-  getMedicationHistory,
+  getMedicationAuditTimeline,
   getMedicationReviewItems,
   getParticipantReliabilityFlags,
   type MedicationAdministrationRecord,
@@ -142,11 +142,51 @@ export function MedicationRegisterPanel() {
   );
 }
 
+function AdministrationEventCard({ admin }: { admin: MedicationAdministrationRecord }) {
+  const { translate } = useAccessibility();
+  const style = ADMIN_STATUS_STYLE[admin.outcome];
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: style.bg, color: style.color }}>
+          {admin.outcome.replace(/_/g, " ")}
+        </span>
+        <span className="text-[11px]" style={{ color: MUTED }}>
+          {new Date(admin.administered_time).toLocaleString()}
+        </span>
+      </div>
+      {admin.administered_by_name && (
+        <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
+          {translate("compliance.centre.medications.by")} {admin.administered_by_name}
+        </p>
+      )}
+      {admin.variance_minutes != null && admin.variance_minutes !== 0 && (
+        <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+          {admin.variance_minutes > 0
+            ? `${admin.variance_minutes} min after scheduled time`
+            : `${Math.abs(admin.variance_minutes)} min before scheduled time`}
+        </p>
+      )}
+      {admin.prn_reason && (
+        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
+          <span className="font-bold">{translate("participants.medications.prn")}:</span> {admin.prn_reason}
+        </p>
+      )}
+      {admin.prn_effect_observed && (
+        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
+          <span className="font-bold">{translate("compliance.centre.medications.effect")}:</span> {admin.prn_effect_observed}
+        </p>
+      )}
+      {admin.notes && <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{admin.notes}</p>}
+    </div>
+  );
+}
+
 function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: string | null; onClose: () => void }) {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({
-    queryKey: ["compliance-centre", "medication-history", medicationId],
-    queryFn: () => getMedicationHistory(medicationId as string),
+    queryKey: ["compliance-centre", "medication-audit-timeline", medicationId],
+    queryFn: () => getMedicationAuditTimeline(medicationId as string),
     enabled: !!medicationId,
   });
 
@@ -173,47 +213,58 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
               )}
             </div>
 
-            {data.history.length === 0 ? (
+            {data.timeline.length === 0 ? (
               <EmptyState label={translate("compliance.centre.medications.noHistory")} />
             ) : (
               <div className="space-y-2">
-                {data.history.map((admin) => {
-                  const style = ADMIN_STATUS_STYLE[admin.outcome];
-                  return (
-                    <div key={admin.id} className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: style.bg, color: style.color }}>
-                          {admin.outcome.replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[11px]" style={{ color: MUTED }}>
-                          {new Date(admin.administered_time).toLocaleString()}
-                        </span>
+                {data.timeline.map((event, idx) => {
+                  if (event.event_type === "administration") {
+                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} />;
+                  }
+                  if (event.event_type === "document_uploaded") {
+                    const doc = event.document;
+                    return (
+                      <div key={`doc-${doc.id}`} className="rounded-xl border p-3 flex items-start gap-2.5" style={{ borderColor: BORDER }}>
+                        <FileText size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[12px] font-bold truncate" style={{ color: TEXT }}>{doc.file_name}</p>
+                            <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
+                              {new Date(event.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+                            {translate(`participants.medications.docType.${doc.document_type}`)}
+                            {doc.superseded_at ? ` · ${translate("participants.medications.superseded")}` : ""}
+                          </p>
+                        </div>
                       </div>
-                      {admin.administered_by_name && (
-                        <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
-                          {translate("compliance.centre.medications.by")} {admin.administered_by_name}
-                        </p>
-                      )}
-                      {admin.variance_minutes != null && admin.variance_minutes !== 0 && (
-                        <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
-                          {admin.variance_minutes > 0
-                            ? `${admin.variance_minutes} min after scheduled time`
-                            : `${Math.abs(admin.variance_minutes)} min before scheduled time`}
-                        </p>
-                      )}
-                      {admin.prn_reason && (
-                        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
-                          <span className="font-bold">{translate("participants.medications.prn")}:</span> {admin.prn_reason}
-                        </p>
-                      )}
-                      {admin.prn_effect_observed && (
-                        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
-                          <span className="font-bold">{translate("compliance.centre.medications.effect")}:</span> {admin.prn_effect_observed}
-                        </p>
-                      )}
-                      {admin.notes && (
-                        <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{admin.notes}</p>
-                      )}
+                    );
+                  }
+                  const change = event.status_change;
+                  return (
+                    <div key={`status-${change.id}`} className="rounded-xl border p-3 flex items-start gap-2.5" style={{ borderColor: BORDER }}>
+                      <GitCommitHorizontal size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                            {change.from_status
+                              ? `${translate(`participants.medications.status.${change.from_status}`)} → ${translate(`participants.medications.status.${change.to_status}`)}`
+                              : translate(`participants.medications.status.${change.to_status}`)}
+                          </p>
+                          <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
+                            {new Date(event.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {change.users?.full_name && (
+                          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+                            {translate("compliance.centre.medications.by")} {change.users.full_name}
+                          </p>
+                        )}
+                        {change.reason && (
+                          <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{change.reason}</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

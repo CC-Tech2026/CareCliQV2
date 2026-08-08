@@ -274,15 +274,44 @@ async def update_coordinator_medication_settings(
     return {"tolerance_minutes": minutes}
 
 
-@router.get("/medications/{medication_id}/history")
-async def coordinator_medication_history(
+@router.get("/medications/{medication_id}/audit-timeline")
+async def coordinator_medication_audit_timeline(
     medication_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    """Everything that has ever happened to this medication — uploaded, verified, activated,
+    every administration with its outcome and variance, every status change — in one
+    chronological view, so an auditor never has to cross-reference multiple screens."""
     org_id = _require_coordinator(current_user)
     medication = medication_service.get_medication(medication_id, org_id)
-    history = medication_service.list_administrations_for_medication(medication_id, org_id)
-    return {"medication": medication, "history": history}
+    documents = medication_document_service.list_documents_for_medication(medication_id, org_id)
+    status_history = medication_service.list_status_history(medication_id, org_id)
+    administrations = medication_service.list_administrations_for_medication(medication_id, org_id)
+
+    events: list[dict] = []
+    for doc in documents:
+        events.append({
+            "event_type": "document_uploaded",
+            "timestamp": doc["uploaded_at"],
+            "document": doc,
+        })
+    for change in status_history:
+        events.append({
+            "event_type": "status_change",
+            "timestamp": change["changed_at"],
+            "status_change": change,
+        })
+    for admin in administrations:
+        events.append({
+            "event_type": "administration",
+            "timestamp": admin["administered_time"],
+            "administration": admin,
+        })
+    events.sort(key=lambda e: e["timestamp"])
+
+    return {"medication": medication, "documents": documents, "timeline": events}
+
+
 
 
 # ── Pattern detection (build order step 7) ────────────────────────────────────────────────

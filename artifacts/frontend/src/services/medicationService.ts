@@ -219,9 +219,16 @@ export function getMedicationReviewItems() {
   return jsonFetch<MedicationReviewItems>("/api/coordinator/medications/review-items");
 }
 
-export function getMedicationHistory(medicationId: string) {
-  return jsonFetch<{ medication: OrgMedication; history: MedicationAdministrationRecord[] }>(
-    `/api/medications/${medicationId}/history`,
+export type MedicationTimelineEvent =
+  | { event_type: "document_uploaded"; timestamp: string; document: MedicationDocument }
+  | { event_type: "status_change"; timestamp: string; status_change: MedicationStatusHistoryEntry }
+  | { event_type: "administration"; timestamp: string; administration: MedicationAdministrationRecord };
+
+/** Everything that's ever happened to this medication, in one chronological view — the
+ * document trail, verification/status changes, and every administration with its outcome. */
+export function getMedicationAuditTimeline(medicationId: string) {
+  return jsonFetch<{ medication: OrgMedication; documents: MedicationDocument[]; timeline: MedicationTimelineEvent[] }>(
+    `/api/medications/${medicationId}/audit-timeline`,
   );
 }
 
