@@ -66,6 +66,7 @@ import { ParticipantPlanMeetingsTab } from "@/components/participants/Participan
 import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
 import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
 import { ParticipantMedicationsPanel } from "@/components/participants/ParticipantMedicationsPanel";
+import { getParticipantMedications } from "@/services/medicationService";
 import { ParticipantClinicalRecordEditor } from "@/components/participants/ParticipantClinicalRecordEditor";
 import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
@@ -1119,6 +1120,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     }>(`/api/participants/${id}/restricted-clinical`),
     enabled: isCoordinator,
   });
+  const pendingMedicationsQuery = useOrgQuery(["participant-medications-pending", id], {
+    queryFn: () => getParticipantMedications(id, "pending_verification"),
+    enabled: isCoordinator,
+  });
   const [restrictedDraft, setRestrictedDraft] = useState<RestrictedClinicalDraft | null>(null);
   useEffect(() => {
     if (restrictedQuery.data && restrictedDraft === null) {
@@ -1253,6 +1258,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
     : Math.max(totalBudget - usedBudget, 0);
   const isOverspent = remainingBudget < 0;
+  const pendingMedicationCount = pendingMedicationsQuery.data?.medications.length ?? 0;
+
   const scoredSessions = sessions.filter((session) => session.compliance_score != null);
   const averageCompliance = scoredSessions.length
     ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
@@ -1281,6 +1288,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       value: averageCompliance == null ? translate("patients.noScore") : `${averageCompliance}%`,
       icon: ShieldCheck,
       tone: complianceTone(averageCompliance),
+      linkLabel: pendingMedicationCount > 0
+        ? translateParams("patients.metric.pendingMedications", { count: String(pendingMedicationCount) })
+        : undefined,
+      onLinkClick: () => { setActiveTab("care_profile"); setCareProfileSection("clinical"); },
     },
   ];
 
@@ -1377,6 +1388,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
                     </div>
                     <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
+                    {metric.linkLabel && (
+                      <button
+                        type="button"
+                        onClick={metric.onLinkClick}
+                        className="mt-1 flex items-center gap-0.5 text-[10px] font-bold underline decoration-dotted underline-offset-2 opacity-80 hover:opacity-100"
+                      >
+                        {metric.linkLabel} <ChevronRight className="h-2.5 w-2.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}

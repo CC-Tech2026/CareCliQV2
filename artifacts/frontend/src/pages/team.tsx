@@ -66,6 +66,15 @@ const INVITE_ROLE_KEYS: Record<string, string> = {
   support_coordinator: "team.invite.role.coordinator",
 };
 
+type PendingInvite = {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
 export default function Team() {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -106,6 +115,17 @@ export default function Team() {
 
   const teamOnboarding = useOrgQuery(["team-onboarding"], {
     queryFn: getTeamOnboarding,
+  });
+
+  const pendingInvites = useOrgQuery<PendingInvite[]>(["pending-invites"], {
+    queryFn: () => jsonFetch<PendingInvite[]>("/api/invitations/list"),
+    enabled: inviteOpen,
+  });
+
+  const revokeInviteMut = useMutation({
+    mutationFn: (inviteId: string) => jsonFetch(`/api/invitations/revoke/${inviteId}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [orgId, "pending-invites"] }),
+    onError: () => toast({ title: translate("team.toast.inviteRevokeFailed"), variant: "destructive" }),
   });
 
   const pendingTraining = useOrgQuery(["pending-training-completions"], {
@@ -175,8 +195,8 @@ export default function Team() {
             role: translate(INVITE_ROLE_KEYS[inviteRole] ?? inviteRole),
           }) + codeHint,
       });
-      setInviteOpen(false);
       setInviteEmail("");
+      qc.invalidateQueries({ queryKey: [orgId, "pending-invites"] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       toast({
@@ -572,8 +592,52 @@ export default function Team() {
               </Select>
             </div>
           </div>
+
+          <div className="mt-6 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>
+              {translate("team.invite.pendingTitle")}
+            </p>
+            {pendingInvites.isLoading ? (
+              <p className="text-xs" style={{ color: MUTED }}>{translate("common.loading")}</p>
+            ) : (pendingInvites.data ?? []).filter((inv) => !inv.accepted_at).length === 0 ? (
+              <p className="text-xs" style={{ color: MUTED }}>{translate("team.invite.pendingEmpty")}</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {(pendingInvites.data ?? []).filter((inv) => !inv.accepted_at).map((inv) => {
+                  const expired = new Date(inv.expires_at).getTime() < Date.now();
+                  return (
+                    <li
+                      key={inv.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2"
+                      style={{ borderColor: BORDER, background: SOFT }}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate" style={{ color: TEXT }}>{inv.email}</p>
+                        <p className="text-[11px]" style={{ color: expired ? "var(--cc-status-danger)" : MUTED }}>
+                          {translate(INVITE_ROLE_KEYS[inv.role] ?? inv.role)}
+                          {" · "}
+                          {expired ? translate("team.invite.expired") : translate("team.invite.pending")}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => revokeInviteMut.mutate(inv.id)}
+                        disabled={revokeInviteMut.isPending}
+                        className="shrink-0 rounded-full p-1 hover:bg-black/5"
+                        title={translate("team.invite.revoke")}
+                        aria-label={translate("team.invite.revoke")}
+                      >
+                        <UserX className="h-3.5 w-3.5" style={{ color: MUTED }} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
           <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.cancel")}</Button>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.close")}</Button>
             <Button
               variant="navy"
               onClick={handleInvite}
