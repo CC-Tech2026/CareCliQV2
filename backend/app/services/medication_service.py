@@ -447,6 +447,18 @@ def create_administration(
 ) -> dict[str, Any]:
     if action not in ADMINISTRATION_ACTIONS:
         raise HTTPException(status_code=422, detail=f"Invalid action. Must be one of: {', '.join(sorted(ADMINISTRATION_ACTIONS))}.")
+    # Defensive final check: the checklist/PRN screens already only ever show active
+    # medications (queried live), but a worker could still be looking at a stale render
+    # (cache, delayed sync, offline period) when they tap "log dose" — this is what actually
+    # stops the write, not the read-side filtering alone.
+    if medication.get("status") != "active":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This medication is currently {medication.get('status')}, not active. "
+                "It cannot be administered until a coordinator reactivates it."
+            ),
+        )
     if medication.get("is_prn") and action == "given" and not (prn_reason or "").strip():
         raise HTTPException(status_code=422, detail="A reason is required to log a PRN dose.")
 
