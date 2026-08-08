@@ -309,7 +309,7 @@ def get_medication_tolerance_minutes(organization_id: str) -> int:
             get_supabase_admin()
             .table("organizations")
             .select("medication_tolerance_minutes")
-            .eq("id", organization_id)
+            .eq("organization_id", organization_id)
             .limit(1)
             .execute()
         )
@@ -325,7 +325,7 @@ def get_medication_tolerance_minutes(organization_id: str) -> int:
 def set_medication_tolerance_minutes(organization_id: str, minutes: int) -> int:
     if minutes < 0 or minutes > 240:
         raise HTTPException(status_code=422, detail="Tolerance must be between 0 and 240 minutes.")
-    get_supabase_admin().table("organizations").update({"medication_tolerance_minutes": minutes}).eq("id", organization_id).execute()
+    get_supabase_admin().table("organizations").update({"medication_tolerance_minutes": minutes}).eq("organization_id", organization_id).execute()
     return minutes
 
 

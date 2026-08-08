@@ -34,7 +34,7 @@ SET outcome = CASE
     WHEN ma.status != 'given' THEN ma.status
     WHEN ma.scheduled_time IS NULL THEN 'given_on_time'
     WHEN ABS(EXTRACT(EPOCH FROM (ma.administered_time - ma.scheduled_time)) / 60)
-         <= COALESCE((SELECT o.medication_tolerance_minutes FROM public.organizations o WHERE o.id = ma.organization_id), 30)
+         <= COALESCE((SELECT o.medication_tolerance_minutes FROM public.organizations o WHERE o.organization_id = ma.organization_id), 30)
          THEN 'given_on_time'
     WHEN ma.administered_time > ma.scheduled_time THEN 'given_late'
     ELSE 'given_early'
