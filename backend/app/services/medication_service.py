@@ -176,6 +176,111 @@ def _record_status_change(
             logger.warning("Could not record medication status history for %s: %s", medication_id, exc)
 
 
+def _find_affected_shifts_today(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+    """Shifts for this participant that are currently in progress, or still scheduled to
+    start later today — the set of shifts a mid-shift medication status change needs to
+    reach, per the Shift Content Synchronization spec."""
+    from ..core.timezone import app_day_bounds_utc, app_today
+
+    supabase = get_supabase_admin()
+    _, day_end = app_day_bounds_utc(app_today())
+    shifts: dict[str, dict[str, Any]] = {}
+    try:
+        upcoming = (
+            supabase.table("shifts")
+            .select("id, worker_id, status, scheduled_start")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .gte("scheduled_start", datetime.now(timezone.utc).isoformat())
+            .lt("scheduled_start", day_end)
+            .neq("status", "completed")
+            .execute()
+        )
+        for row in upcoming.data or []:
+            shifts[row["id"]] = row
+        in_progress = (
+            supabase.table("shifts")
+            .select("id, worker_id, status, scheduled_start")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .eq("status", "in_progress")
+            .execute()
+        )
+        for row in in_progress.data or []:
+            shifts[row["id"]] = row
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.warning("Could not look up today's shifts for participant %s: %s", participant_id, exc)
+    return list(shifts.values())
+
+
+# Statuses that must never reach a worker — a transition INTO one of these while a shift is
+# already rostered/in-progress needs an immediate push, not just "the next read excludes it."
+_MID_SHIFT_ALERT_STATUSES = {"on_hold", "rejected", "ceased"}
+
+
+def _propagate_mid_shift_status_change(
+    medication_id: str,
+    participant_id: str,
+    organization_id: str,
+    to_status: str,
+    medication_name: str,
+) -> None:
+    if to_status not in _MID_SHIFT_ALERT_STATUSES or not participant_id:
+        return
+    shifts = _find_affected_shifts_today(participant_id, organization_id)
+    if not shifts:
+        return
+
+    from .shift_content_resolution_service import log_shift_content_resolution
+
+    for shift in shifts:
+        log_shift_content_resolution(
+            shift_id=str(shift.get("id") or ""),
+            participant_id=participant_id,
+            organization_id=organization_id,
+            checkpoint="mid_shift_change",
+            excluded_medications=[{"medication_id": medication_id, "status": to_status}],
+        )
+
+    import asyncio
+
+    from .notification_service import notify_worker
+
+    async def _notify_all() -> None:
+        for shift in shifts:
+            worker_id = shift.get("worker_id")
+            if not worker_id:
+                continue
+            in_progress = shift.get("status") == "in_progress"
+            try:
+                await notify_worker(
+                    user_id=worker_id,
+                    org_id=organization_id,
+                    event="medication_alert",
+                    alert_type="medication_status_changed_mid_shift",
+                    title=f"Medication update: {medication_name}",
+                    message=(
+                        f"{medication_name} is now {to_status.replace('_', ' ')}. "
+                        + (
+                            "It's being removed from your active checklist for this shift."
+                            if in_progress
+                            else "It will not appear on your upcoming shift's checklist."
+                        )
+                    ),
+                    reference_key=f"medication:status_change:{medication_id}:{shift['id']}:{to_status}",
+                    severity="high",
+                    shift_id=str(shift.get("id") or ""),
+                )
+            except Exception:
+                logger.warning("Mid-shift medication status push failed for worker %s", worker_id)
+
+    try:
+        asyncio.get_event_loop().create_task(_notify_all())
+    except Exception:
+        pass
+
+
 def verify_medication(
     medication_id: str,
     organization_id: str,
@@ -300,6 +405,9 @@ def update_medication(
     )
     if new_status and new_status != existing["status"]:
         _record_status_change(medication_id, organization_id, existing["status"], new_status, updated_by)
+        _propagate_mid_shift_status_change(
+            medication_id, str(existing.get("participant_id") or ""), organization_id, new_status, existing.get("name") or "Medication",
+        )
     return result.data[0] if result.data else clean
 
 
@@ -452,6 +560,15 @@ def create_administration(
     # (cache, delayed sync, offline period) when they tap "log dose" — this is what actually
     # stops the write, not the read-side filtering alone.
     if medication.get("status") != "active":
+        from .shift_content_resolution_service import log_shift_content_resolution
+        log_shift_content_resolution(
+            shift_id=str(shift.get("id") or ""),
+            participant_id=medication.get("participant_id"),
+            organization_id=organization_id,
+            checkpoint="action_time",
+            excluded_medications=[{"medication_id": medication.get("id"), "status": medication.get("status")}],
+            resolved_for_user_id=administered_by,
+        )
         raise HTTPException(
             status_code=409,
             detail=(
@@ -509,6 +626,16 @@ def create_administration(
 
     if medication.get("is_prn") and outcome in GIVEN_OUTCOMES and medication.get("prn_max_per_day"):
         _maybe_escalate_prn_max(medication, shift, organization_id)
+
+    from .shift_content_resolution_service import log_shift_content_resolution
+    log_shift_content_resolution(
+        shift_id=str(shift.get("id") or ""),
+        participant_id=medication.get("participant_id"),
+        organization_id=organization_id,
+        checkpoint="action_time",
+        resolved_medication_ids=[medication.get("id")],
+        resolved_for_user_id=administered_by,
+    )
 
     return record
 
