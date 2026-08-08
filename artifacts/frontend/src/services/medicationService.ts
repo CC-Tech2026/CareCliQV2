@@ -224,3 +224,40 @@ export function getMedicationHistory(medicationId: string) {
     `/api/medications/${medicationId}/history`,
   );
 }
+
+// ── Pattern detection (build order step 7) ────────────────────────────────────────────────
+// Two deliberately separate signals: participant_reliability is compliance-facing and
+// audit-exportable; worker_coaching is coaching-facing only and never appears in the
+// Compliance Centre. Keep their UI surfaces separate the same way the API does.
+
+export type MedicationPatternSignal = {
+  id: string;
+  signal_type: "participant_reliability" | "worker_coaching";
+  scope_id: string;
+  organization_id: string;
+  window_start: string;
+  window_end: string;
+  rate_calculated: number;
+  comparison_rate?: number | null;
+  deviation?: number | null;
+  sample_size: number;
+  triggered: boolean;
+  trigger_reason?: string | null;
+  calculated_at: string;
+};
+
+export function getParticipantReliabilityFlags(participantId?: string) {
+  const qs = participantId ? `?participant_id=${participantId}` : "";
+  return jsonFetch<{ flags: MedicationPatternSignal[] }>(`/api/coordinator/medications/pattern-signals${qs}`);
+}
+
+export function runPatternDetection() {
+  return jsonFetch<{ participant_signals: number; worker_signals: number }>(
+    "/api/coordinator/medications/pattern-signals/run",
+    { method: "POST" },
+  );
+}
+
+export function getWorkerCoachingSignal(workerId: string) {
+  return jsonFetch<{ signal: MedicationPatternSignal | null }>(`/api/coordinator/workers/${workerId}/medication-coaching-signal`);
+}

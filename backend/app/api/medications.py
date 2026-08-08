@@ -12,9 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
-from ..services import medication_document_service, medication_service
+from ..services import medication_document_service, medication_pattern_service, medication_service
 
 router = APIRouter(tags=["medications"])
 
@@ -283,3 +283,47 @@ async def coordinator_medication_history(
     medication = medication_service.get_medication(medication_id, org_id)
     history = medication_service.list_administrations_for_medication(medication_id, org_id)
     return {"medication": medication, "history": history}
+
+
+# ── Pattern detection (build order step 7) ────────────────────────────────────────────────
+# Two deliberately separate signals — see medication_pattern_service module docstring.
+# participant_reliability is compliance-facing (Compliance Centre, audit-exportable, never
+# names a worker). worker_coaching is coaching-facing only and never appears here.
+
+
+@router.get("/coordinator/medications/pattern-signals")
+async def coordinator_participant_reliability_flags(
+    participant_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return {"flags": medication_pattern_service.list_participant_reliability_flags(org_id, participant_id)}
+
+
+@router.post("/coordinator/medications/pattern-signals/run")
+async def coordinator_run_pattern_detection(current_user: dict = Depends(get_current_user)):
+    """Manual recalculation — the background scheduler also runs this on every pass, this
+    is for "recalculate now" rather than waiting for the next tick."""
+    org_id = _require_coordinator(current_user)
+    participant_count = medication_pattern_service.calculate_participant_reliability_flags(org_id)
+    worker_count = medication_pattern_service.calculate_worker_coaching_signals(org_id)
+    return {"participant_signals": participant_count, "worker_signals": worker_count}
+
+
+@router.get("/coordinator/workers/{worker_id}/medication-coaching-signal")
+async def coordinator_worker_coaching_signal(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Coaching-only view for a coordinator having a 1:1 with this worker — deliberately
+    separate from anything Compliance Centre / audit-exportable."""
+    org_id = _require_coordinator(current_user)
+    return {"signal": medication_pattern_service.get_worker_coaching_signal(org_id, worker_id)}
+
+
+@router.get("/worker/medication-coaching-signal")
+async def worker_own_coaching_signal(current_user: dict = Depends(get_current_user)):
+    if not is_support_worker(current_user):
+        raise HTTPException(status_code=403, detail="Support worker access required.")
+    org_id = get_user_organization_id(current_user)
+    return {"signal": medication_pattern_service.get_worker_coaching_signal(org_id, get_user_id(current_user))}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock3, Pill } from "lucide-react";
+import { AlertTriangle, Clock3, Pill, ShieldAlert } from "lucide-react";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -9,6 +9,7 @@ import {
   getCoordinatorMedications,
   getMedicationHistory,
   getMedicationReviewItems,
+  getParticipantReliabilityFlags,
   type MedicationAdministrationRecord,
   type MedicationStatus,
   type OrgMedication,
@@ -49,12 +50,18 @@ export function MedicationRegisterPanel() {
     queryKey: ["compliance-centre", "medication-review-items"],
     queryFn: getMedicationReviewItems,
   });
+  const { data: reliabilityData } = useQuery({
+    queryKey: ["compliance-centre", "medication-reliability-flags"],
+    queryFn: () => getParticipantReliabilityFlags(),
+  });
 
   const medications = data?.medications ?? [];
   const active = medications.filter((m) => m.status === "active");
   const prnCount = active.filter((m) => m.is_prn).length;
   const endingSoonCount = reviewItems?.ending_soon.length ?? 0;
   const atMaxCount = reviewItems?.prn_at_max.length ?? 0;
+  const triggeredFlags = (reliabilityData?.flags ?? []).filter((f) => f.triggered);
+  const participantNameById = new Map(medications.map((m) => [m.participant_id, m.participant_name]));
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -70,6 +77,27 @@ export function MedicationRegisterPanel() {
             {endingSoonCount > 0 && (
               <p className="font-bold mt-0.5">{translateParams("compliance.centre.medications.endingSoon", { count: String(endingSoonCount) })}</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {triggeredFlags.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--cc-status-danger)" }}>
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: "var(--cc-status-danger-bg)" }}>
+            <ShieldAlert size={16} style={{ color: "var(--cc-status-danger)" }} />
+            <p className="text-xs font-black uppercase tracking-wide" style={{ color: "var(--cc-status-danger)" }}>
+              {translate("compliance.centre.medications.reliabilityFlagsTitle")}
+            </p>
+          </div>
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {triggeredFlags.map((flag) => (
+              <div key={flag.id} className="px-4 py-3">
+                <p className="text-[13px] font-bold" style={{ color: TEXT }}>
+                  {participantNameById.get(flag.scope_id) ?? translate("common.participant")}
+                </p>
+                <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>{flag.trigger_reason}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}

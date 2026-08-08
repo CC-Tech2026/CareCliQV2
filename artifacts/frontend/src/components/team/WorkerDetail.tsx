@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2, Upload,
   Mail, Phone, IdCard, Hourglass, AlertCircle,
-  CalendarDays, LogIn, MessageCircle, ArrowRight,
+  CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -15,6 +15,7 @@ import {
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
 import type { Credential } from "@/services/credentialsService";
+import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -429,6 +430,13 @@ function DetailRow({
 
 function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
   const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+
+  const coachingQuery = useOrgQuery(["worker-medication-coaching-signal", worker.id], {
+    queryFn: () => getWorkerCoachingSignal(worker.id),
+    enabled: worker.role === "support_worker",
+  });
+  const coaching = coachingQuery.data?.signal;
+
   return (
     <div className="space-y-4">
       {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
@@ -453,6 +461,20 @@ function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k
           value={onboardingPending ? translate("team.detail.onboardingPending") : translate("team.detail.onboardingComplete")}
         />
       </div>
+
+      {/* Coaching input, not a compliance flag — deliberately its own card, never mixed
+          into the stat strip or any compliance-facing surface. */}
+      {coaching?.triggered && (
+        <div className="rounded-2xl p-4" style={{ background: SOFT, boxShadow: CARD_SHADOW }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <TrendingUp size={15} style={{ color: PLUM }} />
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: PLUM }}>
+              {translate("team.detail.coachingTitle")}
+            </p>
+          </div>
+          <p className="text-sm" style={{ color: TEXT }}>{coaching.trigger_reason}</p>
+        </div>
+      )}
     </div>
   );
 }
