@@ -993,6 +993,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   });
 
   // Goals & Tasks — coordinator only
+  const orgId = user?.organizationId ?? "__no_org__";
   const ndisGoalsQuery = useOrgQuery<NdisGoal[]>(["participant", id, "ndis-goals"], {
     queryFn: () => getNdisGoals({ participant_id: id }),
     enabled: isCoordinator,
@@ -1021,7 +1022,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const createGoalMut = useMutation({
     mutationFn: (payload: NdisGoalPayload) => createNdisGoal(payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] });
       setCreateMode(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
@@ -1031,7 +1032,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const editGoalMut = useMutation({
     mutationFn: ({ goalId, payload }: { goalId: string; payload: NdisGoalPayload }) => updateNdisGoal(goalId, payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] });
       setCreateMode(null); setEditingGoal(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
@@ -1040,13 +1041,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   const archiveGoalMut = useMutation({
     mutationFn: archiveNdisGoal,
-    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] }); },
     onError: () => toastFn({ title: "Failed to archive goal", variant: "destructive" }),
   });
 
   const completeGoalMut = useMutation({
     mutationFn: completeNdisGoal,
-    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] }); },
     onError: () => toastFn({ title: "Failed to complete goal", variant: "destructive" }),
   });
 
@@ -1054,7 +1055,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     mutationFn: (payload: Omit<ParticipantTaskPayload, "status">) =>
       createParticipantTask(id, { ...payload, status: "pending" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "participant-tasks"] });
       setCreateMode(null);
       setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null);
     },
@@ -1063,7 +1064,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   const deleteTaskMut = useMutation({
     mutationFn: deleteParticipantTask,
-    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] }); },
+    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "participant-tasks"] }); },
     onError: () => toastFn({ title: "Failed to delete task", variant: "destructive" }),
   });
 

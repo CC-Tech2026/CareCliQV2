@@ -84,7 +84,11 @@ export default function ParticipantEdit({ id }: { id: string }) {
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex:     String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
-      plan_management_type: String(participant.plan_management_type ?? ""),
+      plan_management_type: (["NDIA-managed", "plan-managed", "self-managed"] as const).includes(
+        participant.plan_management_type as "NDIA-managed" | "plan-managed" | "self-managed",
+      )
+        ? (participant.plan_management_type as "NDIA-managed" | "plan-managed" | "self-managed")
+        : "",
       plan_start_date:    participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date:      participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget:       Number(participant.total_budget ?? 0),
