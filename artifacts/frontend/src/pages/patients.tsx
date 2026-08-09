@@ -1593,7 +1593,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           const goalFormContent = (
             <div className="space-y-4">
               {/* AI Goal Assistant panel */}
-              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
@@ -1851,7 +1851,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             <div className="space-y-5">
 
               {/* AI TASK ASSISTANT */}
-              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
