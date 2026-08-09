@@ -245,6 +245,21 @@ export type ComplianceHistoryItem = {
   };
 };
 
+export type ComplianceCategoryStatus = "good" | "attention" | "critical" | "none";
+
+export type ComplianceCategory = {
+  key: string;
+  label: string;
+  status: ComplianceCategoryStatus;
+  detail: string;
+  score?: number | null;
+};
+
+export type ComplianceBreakdown = {
+  overall_score: number | null;
+  categories: ComplianceCategory[];
+};
+
 // Helpers moved to @/lib/participant-format (imported at top of file) so extracted
 // tab components (components/participants/*) can share them without importing this page.
 
@@ -968,6 +983,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   });
   const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
     queryFn: () => jsonFetch<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
+  });
+  const complianceBreakdownQuery = useOrgQuery(["participant", id, "compliance-breakdown"], {
+    queryFn: () => jsonFetch<ComplianceBreakdown>(`/api/participants/${id}/compliance-breakdown`),
+    enabled: isCoordinator,
   });
   const billingPeriodCurrentQuery = useOrgQuery(["participant", id, "billing-period-current"], {
     queryFn: () => getParticipantCurrentBillingPeriod(id),
@@ -2468,6 +2487,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             averageCompliance={averageCompliance}
             isLoading={complianceQuery.isLoading}
             onSelectSession={setSessionPanelId}
+            breakdown={complianceBreakdownQuery.data ?? null}
+            breakdownLoading={complianceBreakdownQuery.isLoading}
           />
         )}
 
