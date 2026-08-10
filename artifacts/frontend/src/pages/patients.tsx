@@ -71,7 +71,6 @@ import { ParticipantClinicalRecordEditor } from "@/components/participants/Parti
 import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
 import { safeFormat, money, statusBadge, complianceTone, normalizeGoalTitle } from "@/lib/participant-format";
-import { FormPanel } from "@/components/FormPanel";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import {
@@ -2448,26 +2447,31 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             </div>
             </section>
 
-            {/* Goal & Task Form Panels - Fixed right-side overlay */}
-            <FormPanel
-              isOpen={createMode === "goal" || createMode === "edit_goal"}
-              title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
-              subtitle={participant.full_name}
-              onClose={cancelGoalForm}
-              showLogo={false}
-            >
-              {goalFormContent}
-            </FormPanel>
+            {/* Goal & Task forms — right-side panels, consistent with Edit Participant / Edit Plan */}
+            <Sheet open={createMode === "goal" || createMode === "edit_goal"} onOpenChange={(open) => { if (!open) cancelGoalForm(); }}>
+              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</SheetTitle>
+                  <p className="text-[12px] text-cc-muted">{participant.full_name}</p>
+                </SheetHeader>
+                <div className="py-4">{goalFormContent}</div>
+              </SheetContent>
+            </Sheet>
 
-            <FormPanel
-              isOpen={createMode === "tasks"}
-              title="Create New Task"
-              subtitle={`Setting up support for ${participant.full_name}`}
-              onClose={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-              showLogo={false}
+            <Sheet
+              open={createMode === "tasks"}
+              onOpenChange={(open) => {
+                if (!open) { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }
+              }}
             >
-              {taskFormContent}
-            </FormPanel>
+              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Create New Task</SheetTitle>
+                  <p className="text-[12px] text-cc-muted">Setting up support for {participant.full_name}</p>
+                </SheetHeader>
+                <div className="py-4">{taskFormContent}</div>
+              </SheetContent>
+            </Sheet>
             </>
           );
         })()}
