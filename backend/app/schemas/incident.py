@@ -137,6 +137,10 @@ class IncidentCreate(BaseModel):
     behaviour_subtype: Optional[str] = None
     participant_present: Optional[bool] = None
     participant_harmed: Optional[str] = None
+    # Set only by system-generated incidents (e.g. the medication error/pattern cross-link) —
+    # never user-facing input. source_type identifies what kind of record source_id points at.
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
 
 
 class WorkerIncidentCreate(BaseModel):

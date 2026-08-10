@@ -4,6 +4,10 @@ import { apiFetch } from "@/lib/api-fetch";
 export type MedicationRoute = "oral" | "topical" | "injection" | "inhaled" | "sublingual" | "rectal" | "other";
 export type MedicationFrequencyType = "scheduled" | "prn";
 export type MedicationStatus = "draft" | "pending_verification" | "active" | "rejected" | "ceased" | "on_hold";
+// APINCH high-alert medicine categories (Medication Safety Standard).
+export type MedicationHighRiskCategory =
+  | "anti_infective" | "potassium_electrolyte" | "insulin"
+  | "narcotic_opioid" | "chemotherapy" | "anticoagulant" | "other";
 
 export type Medication = {
   id: string;
@@ -22,6 +26,8 @@ export type Medication = {
   is_prn: boolean;
   prn_max_per_day?: number | null;
   status: MedicationStatus;
+  is_high_risk?: boolean;
+  high_risk_category?: MedicationHighRiskCategory | null;
   source_document_id?: string | null;
   verified_by?: string | null;
   verified_at?: string | null;
@@ -78,6 +84,8 @@ export type MedicationCorrections = {
   start_date?: string | null;
   end_date?: string | null;
   prn_max_per_day?: number | null;
+  is_high_risk?: boolean;
+  high_risk_category?: MedicationHighRiskCategory | null;
   verification_notes?: string | null;
 };
 
@@ -87,6 +95,19 @@ export function verifyMedication(medicationId: string, corrections: MedicationCo
     method: "POST",
     body: JSON.stringify(corrections),
   });
+}
+
+/** Late-discovered correction — filed by whoever found the error, not the administering
+ * worker. Never edits the original entry; inserts a new linked row. */
+export function fileMedicationCorrection(
+  medicationId: string,
+  administrationId: string,
+  body: { error_subtype: MedicationErrorSubtype; notes?: string },
+) {
+  return jsonFetch<MedicationAdministrationRecord>(
+    `/api/medications/${medicationId}/administrations/${administrationId}/correct`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
 }
 
 export function rejectMedication(medicationId: string, reason: string) {
@@ -125,8 +146,8 @@ export type ExtractedMedicationFields = {
   prn_max_per_day: number | null;
 };
 
-export type MedicationDocumentType = "prescription" | "medication_management_plan" | "gp_letter" | "pharmacy_authority" | "other";
-export type MedicationDocumentExtractionStatus = "pending" | "complete" | "failed" | "needs_review";
+export type MedicationDocumentType = "prescription" | "medication_management_plan" | "gp_letter" | "pharmacy_authority" | "verification_photo" | "other";
+export type MedicationDocumentExtractionStatus = "pending" | "complete" | "failed" | "needs_review" | "not_applicable";
 
 export type MedicationDocument = {
   id: string;
@@ -185,7 +206,8 @@ export function getMedicationDocuments(medicationId: string) {
 
 export type OrgMedication = Medication & { participant_name?: string | null };
 
-export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld";
+export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld" | "administration_error";
+export type MedicationErrorSubtype = "wrong_medication" | "wrong_dose" | "wrong_participant" | "wrong_route" | "other";
 
 export type MedicationAdministrationRecord = {
   id: string;
@@ -203,6 +225,12 @@ export type MedicationAdministrationRecord = {
   prn_effect_observed?: string | null;
   voice_captured: boolean;
   administered_by_name?: string | null;
+  error_subtype?: MedicationErrorSubtype | null;
+  corrects_administration_id?: string | null;
+  error_discovered_at?: string | null;
+  error_discovered_by?: string | null;
+  verification_photo_url?: string | null;
+  verification_photo_taken_at?: string | null;
 };
 
 export type MedicationReviewItems = {
