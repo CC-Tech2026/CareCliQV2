@@ -156,6 +156,7 @@ export type SessionNoteRecord = {
   synced?: boolean;
   note_type?: SessionNoteType;
   file_name?: string;
+  attachment_urls?: string[];
 };
 
 export type GoalProgressNote = {
@@ -475,6 +476,38 @@ export function syncSessionNotes(sessionId: string, notes: SessionNoteRecord[]) 
       body: JSON.stringify({ notes }),
     },
   );
+}
+
+export type SessionAttachment = {
+  id: string;
+  session_id: string;
+  file_name: string;
+  file_path: string;
+  public_url: string;
+  mime_type: string;
+  size_bytes: number;
+  attachment_type: string;
+};
+
+/** Actually uploads a photo/file to storage (unlike a note's file_name, which is just a
+ * label) — call this before attaching a note so the note's attachment_urls references a
+ * real, retrievable file rather than a placeholder string. */
+export async function uploadSessionAttachment(
+  sessionId: string,
+  file: { uri: string; name: string; type: string },
+): Promise<SessionAttachment> {
+  const formData = new FormData();
+  if (Platform.OS === "web") {
+    const res = await fetch(file.uri);
+    const blob = await res.blob();
+    formData.append("file", blob, file.name);
+  } else {
+    formData.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+  }
+  return workerFetch<SessionAttachment>(`/api/sessions/${sessionId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export async function transcribeSessionAudio(sessionId: string, uri: string) {

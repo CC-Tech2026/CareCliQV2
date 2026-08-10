@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -94,6 +95,7 @@ export function WorkerMobileNoteBubble({
     ? `[Attachment: ${attachmentDisplayName(note, participantName, taskLabel)}]`
     : note.content;
   const wc = wordCount(displayContent);
+  const photoUrl = type === "photo" ? note.attachment_urls?.find((u) => u.startsWith("http")) : undefined;
   const isFail = flag?.severity === "fail";
   const accent = isFail ? colors.destructive : colors.warning;
   const metaLine = [
@@ -179,6 +181,9 @@ export function WorkerMobileNoteBubble({
         </View>
       ) : (
         <>
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.photoThumb} contentFit="cover" />
+          ) : null}
           <View style={styles.contentRow}>
             {isVoice ? (
               <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
@@ -306,6 +311,9 @@ export function WorkerMobileNoteBubble({
               </Pressable>
             </View>
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {photoUrl ? (
+                <Image source={{ uri: photoUrl }} style={styles.photoThumbLarge} contentFit="contain" />
+              ) : null}
               <View style={styles.contentRow}>
                 {isVoice ? (
                   <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
@@ -339,6 +347,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
+  },
+  photoThumb: {
+    width: "100%",
+    height: 160,
+    borderRadius: 10,
+  },
+  photoThumbLarge: {
+    width: "100%",
+    height: 280,
+    borderRadius: 12,
+    marginBottom: 8,
   },
   voiceIcon: {
     marginTop: 3,
