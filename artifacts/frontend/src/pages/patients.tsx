@@ -50,6 +50,10 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutTemplate,
+  Sunrise,
+  Sun,
+  Moon,
+  Clock,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -2031,14 +2035,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Priority</label>
                 <div className="flex gap-2">
                   {[
-                    { id: 'low', label: 'Low', color: 'blue' },
-                    { id: 'medium', label: 'Medium', color: 'amber' },
-                    { id: 'high', label: 'High', color: 'red' }
+                    { id: 'low', label: 'Low', selectedClass: 'border-blue-400 bg-blue-50 text-blue-700' },
+                    { id: 'medium', label: 'Medium', selectedClass: 'border-amber-400 bg-amber-50 text-amber-700' },
+                    { id: 'high', label: 'High', selectedClass: 'border-red-400 bg-red-50 text-red-700' }
                   ].map(p => (
                     <button key={p.id} type="button" onClick={() => setTaskPriority(p.id as any)}
                       className={`flex-1 px-3 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
-                        taskPriority === p.id 
-                          ? `border-${p.color}-400 bg-${p.color}-50 text-${p.color}-700` 
+                        taskPriority === p.id
+                          ? p.selectedClass
                           : "border-gray-200 bg-white text-[#6A6A77] hover:border-gray-300"
                       }`}>
                       {p.label}
@@ -2052,18 +2056,18 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Shift type <span className="text-red-500">*</span></label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {[
-                    { id: 'morning', label: 'Morning', icon: 'ti-sunrise' },
-                    { id: 'afternoon', label: 'Afternoon', icon: 'ti-sun' },
-                    { id: 'night', label: 'Night', icon: 'ti-moon' },
-                    { id: 'anytime', label: 'Anytime', icon: 'ti-clock' }
+                    { id: 'morning', label: 'Morning', Icon: Sunrise },
+                    { id: 'afternoon', label: 'Afternoon', Icon: Sun },
+                    { id: 'night', label: 'Night', Icon: Moon },
+                    { id: 'anytime', label: 'Anytime', Icon: Clock }
                   ].map(shift => (
                     <button key={shift.id} type="button" onClick={() => setTaskShiftType(shift.id as any)}
                       className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-colors ${
-                        taskShiftType === shift.id 
-                          ? "border-orange-400 bg-orange-50 text-orange-700" 
+                        taskShiftType === shift.id
+                          ? "border-orange-400 bg-orange-50 text-orange-700"
                           : "border-gray-200 bg-white text-[#6A6A77] hover:border-gray-300"
                       }`}>
-                      <i className={`ti ${shift.icon} text-sm`} />
+                      <shift.Icon className="h-3.5 w-3.5" />
                       {shift.label}
                     </button>
                   ))}
@@ -2490,7 +2494,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             complianceHistory={complianceHistory}
             averageCompliance={averageCompliance}
             isLoading={complianceQuery.isLoading}
-            onSelectSession={setSessionPanelId}
+            onSelectSession={(sessionId) => {
+              setSessionPanelId(sessionId);
+              setActiveTab("sessions");
+            }}
             breakdown={complianceBreakdownQuery.data ?? null}
             breakdownLoading={complianceBreakdownQuery.isLoading}
           />
