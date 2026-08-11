@@ -16,6 +16,7 @@ from .notification_service import (
 from .incident_notification_service import run_incident_notification_pass
 from .medication_pattern_service import run_medication_pattern_pass
 from .medication_reminder_service import run_medication_reminder_pass, send_pending_dose_reminders
+from .retention_service import run_retention_pass
 from .supabase_client import get_supabase_admin
 from .task_reminder_service import run_task_reminder_pass
 
@@ -155,7 +156,7 @@ async def run_notification_pass() -> dict[str, int]:
     (
         shift_count, credential_count, task_count, long_shift_count,
         random_checkin_count, medication_count, incident_notification_count,
-        medication_pattern_count, dose_reminder_count,
+        medication_pattern_count, dose_reminder_count, retention_count,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -166,6 +167,7 @@ async def run_notification_pass() -> dict[str, int]:
         run_incident_notification_pass(),
         run_medication_pattern_pass(),
         send_pending_dose_reminders(),
+        run_retention_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -177,6 +179,7 @@ async def run_notification_pass() -> dict[str, int]:
         "incident_notifications": incident_notification_count,
         "medication_pattern_signals": medication_pattern_count,
         "dose_reminders": dose_reminder_count,
+        "retention_deidentified": retention_count,
     }
 
 

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # JS/TS pnpm workspace (frontend, mobile, lib/*, scripts, artifacts/*) — Dependabot's npm
+  # updater understands pnpm workspaces from the root package.json/pnpm-lock.yaml.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 15
+    labels:
+      - "dependencies"
+
+  # Python backend (root pyproject.toml)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 15
+    labels:
+      - "dependencies"
+
+  # The GitHub Actions workflows themselves are a dependency surface too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"

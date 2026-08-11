@@ -1153,6 +1153,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setRestrictedDraft({
         restricted_behavioural_notes: restrictedQuery.data.restricted_behavioural_notes ?? "",
         behaviour_support_plan: restrictedQuery.data.behaviour_support_plan ?? "",
+        medications: restrictedQuery.data.medications ?? "",
         medical_alerts: restrictedQuery.data.medical_alerts ?? "",
       });
     }
