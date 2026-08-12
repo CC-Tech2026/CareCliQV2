@@ -37,7 +37,7 @@ export default function WorkerPerformanceDashboardPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("performance.eyebrow")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("performance.title")}
         </h1>
         <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
@@ -46,7 +46,7 @@ export default function WorkerPerformanceDashboardPage() {
       </header>
 
       <section
-        className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
+        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
         style={{ borderColor: BORDER }}
       >
         <div className="grid sm:grid-cols-[1fr_auto]">
@@ -55,7 +55,7 @@ export default function WorkerPerformanceDashboardPage() {
               {translate("performance.complianceAvg")}
             </p>
             <p className="mt-2 text-5xl font-black tracking-tight" style={{ color: TEXT }}>
-              {data?.average_score_30d ?? "—"}
+              {data?.average_score_30d ?? "N/A"}
               {data?.average_score_30d != null && (
                 <span className="text-2xl font-black" style={{ color: MUTED }}>%</span>
               )}
@@ -80,7 +80,7 @@ export default function WorkerPerformanceDashboardPage() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#059669" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.strengths")}</h2>
@@ -104,7 +104,7 @@ export default function WorkerPerformanceDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#D97706" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.focusAreas")}</h2>
@@ -129,7 +129,7 @@ export default function WorkerPerformanceDashboardPage() {
         </section>
       </div>
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Award size={18} style={{ color: PLUM }} />
           <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.badges")}</h2>
@@ -165,7 +165,7 @@ export default function WorkerPerformanceDashboardPage() {
         <Link href="/worker/training">
           <section
             className="block rounded-2xl border p-5 shadow-sm transition hover:shadow-md"
-            style={{ borderColor: BORDER, background: "linear-gradient(135deg, var(--cc-bg) 0%, var(--cc-surface) 100%)" }}
+            style={{ borderColor: BORDER, background: "var(--cc-surface)" }}
           >
             <div className="flex items-start gap-3">
               <div

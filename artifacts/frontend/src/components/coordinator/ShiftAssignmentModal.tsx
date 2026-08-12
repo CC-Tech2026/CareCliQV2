@@ -484,7 +484,7 @@ export function ShiftAssignmentModal({
                     <div className="mt-2 space-y-0.5">
                       {workerAlerts.slice(0, 3).map((a) => (
                         <p key={`${a.credential_id ?? a.credential_type}`} className="text-[11px]" style={{ color: "#92400E" }}>
-                          {a.title || a.credential_type || translate("coordinator.shiftAssign.credential")} – {a.status}
+                          {a.title || a.credential_type || translate("coordinator.shiftAssign.credential")} ({a.status})
                           {a.expiry_date ? ` (${translateParams("coordinator.shiftAssign.expires", { date: a.expiry_date })})` : ""}
                         </p>
                       ))}

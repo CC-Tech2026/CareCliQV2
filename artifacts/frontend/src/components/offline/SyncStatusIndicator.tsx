@@ -20,7 +20,7 @@ export function SyncStatusIndicator({ className }: Props) {
 
   const ariaLabel =
     visualState === "offline"
-      ? `${translate("sync.offline")} — ${translate("sync.viewQueue")}`
+      ? `${translate("sync.offline")}: ${translate("sync.viewQueue")}`
       : visualState === "syncing"
         ? `${translate("sync.syncing")} (${pendingCount})`
         : translate("sync.synced");

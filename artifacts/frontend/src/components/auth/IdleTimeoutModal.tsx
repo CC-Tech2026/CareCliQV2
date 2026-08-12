@@ -17,17 +17,17 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
     <Dialog open={open}>
       <DialogContent className="rounded-2xl sm:max-w-md" hideCloseButton>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[#111827]">
-            <Clock size={18} className="text-[#BE185D]" />
+          <DialogTitle className="flex items-center gap-2 text-[#1A1A2E]">
+            <Clock size={18} className="text-[#7C3AED]" />
             {translate("auth.idle.title")}
           </DialogTitle>
           <DialogDescription>
             {translate("auth.idle.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-2xl bg-[#F8F8FE] px-5 py-4 text-center">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6B7280]">{translate("auth.idle.countdown")}</p>
-          <p className="mt-1 text-4xl font-black text-[#3730A3]">{minutes}:{seconds}</p>
+        <div className="rounded-2xl bg-[#F4EDE6] px-5 py-4 text-center">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6A6A77]">{translate("auth.idle.countdown")}</p>
+          <p className="mt-1 text-4xl font-black text-[#E8457A]">{minutes}:{seconds}</p>
         </div>
         <DialogFooter>
           <Button onClick={onStaySignedIn} className="w-full rounded-xl">

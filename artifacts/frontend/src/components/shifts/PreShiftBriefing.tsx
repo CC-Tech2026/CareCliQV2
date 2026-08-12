@@ -22,7 +22,7 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
   if (!hasContent) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
+    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"

@@ -84,7 +84,7 @@ export function ParticipantContextPanel({
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"

@@ -34,7 +34,7 @@ function CertCard({ cert }: { cert: WorkerCertification }) {
   const { translate, translateParams } = useAccessibility();
   const style = CERT_STATUS_KEYS[cert.display_status] ?? CERT_STATUS_KEYS.valid;
   return (
-    <div className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-card p-4 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-black" style={{ color: TEXT }}>{cert.title}</p>
@@ -118,7 +118,7 @@ export default function WorkerTrainingPage() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("performance.eyebrow")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("training.title")}
           </h1>
         </div>
@@ -167,7 +167,7 @@ export default function WorkerTrainingPage() {
       {tab === "modules" && (
         <div className="space-y-4">
           {(modulesQuery.data?.modules ?? []).map((mod) => (
-            <section key={mod.id} className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section key={mod.id} className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-black" style={{ color: TEXT }}>{mod.title}</h3>
@@ -215,7 +215,7 @@ export default function WorkerTrainingPage() {
             </p>
           )}
           {!!historyQuery.data?.history?.length && (
-            <section className="rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-card p-5" style={{ borderColor: BORDER }}>
               <h3 className="text-sm font-black" style={{ color: TEXT }}>{translate("training.history")}</h3>
               <ul className="mt-3 space-y-2">
                 {historyQuery.data.history.map((h: Record<string, unknown>) => (
@@ -241,7 +241,7 @@ export default function WorkerTrainingPage() {
             const isPending = status === "pending";
             const statusKey = REQUEST_STATUS_KEYS[status];
             return (
-              <div key={String(req.id)} className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
+              <div key={String(req.id)} className="rounded-2xl border bg-card p-4" style={{ borderColor: BORDER }}>
                 <div className="flex items-center gap-2">
                   {isPending ? (
                     <Clock size={16} style={{ color: "#D97706" }} />
@@ -279,7 +279,7 @@ export default function WorkerTrainingPage() {
 
       {requestOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-2xl bg-cc-surface p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
             <h3 className="text-lg font-black" style={{ color: TEXT }}>{translate("training.request")}</h3>
             <label className="mt-4 block">
               <span className="text-xs font-black uppercase" style={{ color: MUTED }}>{translate("training.modalTitle")}</span>

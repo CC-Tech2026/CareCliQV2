@@ -26,6 +26,10 @@ const buttonVariants = cva(
         // @replit no hover, transparent border
         ghost: "border border-transparent",
         link: "text-primary underline-offset-4 hover:underline",
+        // Primary action when a screen has a single standout CTA — solid navy, no gradient.
+        // NO GRADIENT HARD RULE: Reserved. Accent is pink text only in links.
+        navy:
+  "border-none text-white bg-[var(--cc-cta)] hover:opacity-90 active:opacity-80",
       },
       size: {
         // WCAG 2.1 AA — 44px minimum touch targets

@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Loader2, Mail, CheckCircle2 } from "lucide-react";
@@ -7,7 +7,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 
 const PLUM = "var(--cc-plum)";
-const BORDER = "#C7D2FE";
+const BORDER = "#FADAE4";
 
 export default function ForgotPassword() {
   const [, navigate] = useLocation();
@@ -45,12 +45,12 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F8F8FE]">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F4EDE6]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
           <CareCliQLogo size={54} />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">{t("auth.forgot.workspace")}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6A6A77]">{t("auth.forgot.workspace")}</span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8">
@@ -64,7 +64,7 @@ export default function ForgotPassword() {
           </button>
 
           <div className="mb-8">
-            <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
+            <h1 className="text-[26px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {t("auth.forgot.title")}
             </h1>
             <p className="text-[14px] font-medium mt-1" style={{ color: "var(--cc-muted)" }}>
@@ -87,7 +87,7 @@ export default function ForgotPassword() {
                   {t("auth.forgot.email")}
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6A6A77]" />
                   <input
                     type="email"
                     value={email}
@@ -95,7 +95,7 @@ export default function ForgotPassword() {
                     placeholder={t("auth.forgot.emailPlaceholder")}
                     required
                     disabled={busy}
-                    className="w-full h-12 pl-11 pr-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F8F8FE]"
+                    className="w-full h-12 pl-11 pr-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F4EDE6]"
                     style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                   />
                 </div>
@@ -104,7 +104,7 @@ export default function ForgotPassword() {
                 type="submit"
                 disabled={busy || !email.trim()}
                 className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {t("auth.forgot.submit")}
@@ -118,7 +118,7 @@ export default function ForgotPassword() {
         </p>
       </div>
 
-      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#BE185D] via-[#9B5DE5] to-[#3730A3]">
+      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#7C3AED] via-[#9B5DE5] to-[#E8457A]">
         <img src="/login_welcome.jpg" alt="CareCliQ workspace" className="max-w-xl w-full rounded-[2rem] shadow-2xl" />
       </div>
     </div>

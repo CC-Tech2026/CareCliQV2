@@ -244,7 +244,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
                 "preferred_contact_method, phone"
             )
             .eq("organization_id", org_id)
-            .in_("role", ["support_worker", "allied_health", "support_coordinator"])
+            .in_("role", ["support_worker", "support_coordinator"])
         )
         if id_filter is not None:
             query = query.in_("id", id_filter)
@@ -2621,7 +2621,7 @@ async def get_live_shifts(
     worker_map: dict[str, dict] = {}
     if worker_ids:
         try:
-            w_resp = supabase.table("users").select("id, full_name, email").in_("id", worker_ids).execute()
+            w_resp = supabase.table("users").select("id, full_name, email, phone").in_("id", worker_ids).execute()
             for w in (w_resp.data or []):
                 worker_map[w["id"]] = w
         except Exception:
@@ -2747,6 +2747,7 @@ async def get_live_shifts(
             **shift,
             "worker_name": worker.get("full_name") or shift.get("participant_name") or "Worker",
             "worker_email": worker.get("email"),
+            "worker_phone": worker.get("phone"),
             "task_counts": task_counts,
             "alerts": shift_alerts,
             "live_status": live_status,

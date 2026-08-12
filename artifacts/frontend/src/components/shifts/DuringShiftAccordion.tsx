@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Camera, ChevronDown, MessageSquare, Phone, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, ChevronDown, Sparkles, X } from "lucide-react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { compressImageFile } from "@/lib/task-evidence-storage";
 import { unlockPageInteraction } from "@/lib/unlock-page-interaction";
 import { listIncidents } from "@/services/incidentService";
 import { WorkerIncidentReportForm } from "@/components/shifts/WorkerIncidentReportForm";
-import { listShiftMessages, sendShiftOfficeMessage, type ShiftOfficeMessage } from "@/services/shiftService";
+import { listShiftMessages, type ShiftOfficeMessage } from "@/services/shiftService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-
-const DEFAULT_OFFICE_PHONE = "1300 000 000";
-
-const FIELD_SELECT =
-  "flex h-9 w-full rounded-md border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { DuringShiftActionsSidebar } from "@/components/shifts/DuringShiftActionsSidebar";
+import { ShiftOfficeMessagePanel } from "@/components/shifts/ShiftOfficeMessagePanel";
 
 type IncidentListItem = {
   id: string;
@@ -55,8 +57,8 @@ export function DuringShiftAccordion({
   onIncidentSubmitted,
 }: Props) {
   const { translate } = useAccessibility();
-  const resolvedOfficePhone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
-  const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [, navigate] = useLocation();
 
   const [internalIncidentOpen, setInternalIncidentOpen] = useState(false);
   const isIncidentControlled = onIncidentFormOpenChange !== undefined;
@@ -65,15 +67,9 @@ export function DuringShiftAccordion({
     onIncidentFormOpenChange?.(next);
     if (!isIncidentControlled) setInternalIncidentOpen(next);
   };
-  const [showMessageForm, setShowMessageForm] = useState(false);
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
   const [incidentHistory, setIncidentHistory] = useState<IncidentListItem[]>([]);
-
-  const [officeMessage, setOfficeMessage] = useState("");
-  const [messagePriority, setMessagePriority] = useState<"normal" | "urgent" | "emergency">("normal");
   const [messageHistory, setMessageHistory] = useState<ShiftOfficeMessage[]>([]);
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [messagePhotoPreviews, setMessagePhotoPreviews] = useState<string[]>([]);
-  const messagePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -88,67 +84,37 @@ export function DuringShiftAccordion({
   }, [shiftId]);
 
   useEffect(() => {
-    if (open) void loadHistory();
-  }, [open, loadHistory]);
+    void loadHistory();
+  }, [loadHistory]);
 
   useEffect(() => {
-    if (!showIncidentForm && !showMessageForm) return;
+    if (messageModalOpen) void loadHistory();
+  }, [messageModalOpen, loadHistory]);
+
+  useEffect(() => {
+    if (!showIncidentForm) return;
     unlockPageInteraction();
-  }, [showIncidentForm, showMessageForm]);
+  }, [showIncidentForm]);
 
   const toggleIncidentForm = () => {
     unlockPageInteraction();
     setShowIncidentForm(!showIncidentForm);
-    setShowMessageForm(false);
   };
 
-  const toggleMessageForm = () => {
+  const panelExpanded = showIncidentForm;
+
+  const handleMessageOffice = () => {
     unlockPageInteraction();
-    setShowMessageForm(!showMessageForm);
-    setShowIncidentForm(false);
-  };
-
-  const panelExpanded = showIncidentForm || showMessageForm;
-
-  const handleMessagePhotoPick = async (file: File | null) => {
-    if (!file) return;
-    try {
-      const { dataUrl } = await compressImageFile(file);
-      setMessagePhotoPreviews((prev) => [...prev, dataUrl].slice(0, 2));
-    } catch {
-      toast({ title: translate("shift.during.photoFailed"), variant: "destructive" });
+    if (isMobile) {
+      navigate(`/my-shifts/${shiftId}/message-office`);
+      return;
     }
-  };
-
-  const handleSendMessage = async () => {
-    const text = officeMessage.trim();
-    if (!text) return;
-    setSendingMessage(true);
-    try {
-      await sendShiftOfficeMessage(shiftId, {
-        message: text,
-        priority: messagePriority,
-        attachment_data: messagePhotoPreviews.length ? messagePhotoPreviews : undefined,
-      });
-      toast({ title: translate("shift.during.messageSent"), description: translate("shift.during.messageSentDesc") });
-      setOfficeMessage("");
-      setMessagePhotoPreviews([]);
-      setShowMessageForm(false);
-      void loadHistory();
-    } catch (err) {
-      toast({
-        title: translate("shift.during.messageFailed"),
-        description: (err as Error).message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSendingMessage(false);
-    }
+    setMessageModalOpen(true);
   };
 
   return (
     <section
-      className={cn("rounded-2xl border bg-cc-surface shadow-sm", panelExpanded ? "overflow-visible" : "overflow-hidden")}
+      className={cn("rounded-2xl border bg-card shadow-sm", panelExpanded ? "overflow-visible" : "overflow-hidden")}
       style={{ borderColor: BORDER }}
     >
       <button
@@ -165,7 +131,7 @@ export function DuringShiftAccordion({
 
       {open && (
         <div className="space-y-3 border-t px-4 py-4" style={{ borderColor: BORDER }}>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Button
               type="button"
               variant="outline"
@@ -181,39 +147,6 @@ export function DuringShiftAccordion({
               <AlertTriangle size={14} className="mr-1.5" />
               {translate("shift.during.reportIncident")}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(
-                "h-11 rounded-xl text-xs font-bold",
-                showMessageForm && "border-violet-200 bg-violet-50 text-violet-700",
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMessageForm();
-              }}
-            >
-              <MessageSquare size={14} className="mr-1.5" />
-              {translate("shift.during.messageOffice")}
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <a href={`tel:${resolvedOfficePhone}`}>
-              <Button type="button" variant="outline" className="h-11 w-full rounded-xl text-xs font-bold">
-                <Phone size={14} className="mr-1.5" />
-                {translate("shift.during.callOffice")}
-              </Button>
-            </a>
-            <a href="tel:000">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 w-full rounded-xl border-red-200 text-xs font-bold text-red-700"
-              >
-                {translate("shift.during.emergency")}
-              </Button>
-            </a>
           </div>
 
           {showIncidentForm && (
@@ -239,94 +172,12 @@ export function DuringShiftAccordion({
             </div>
           )}
 
-          {showMessageForm && (
-            <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-wider text-violet-800">{translate("shift.during.messageOffice")}</p>
-                <button type="button" onClick={() => setShowMessageForm(false)} aria-label={translate("shift.during.closeMessage")}>
-                  <X size={16} className="text-violet-600" />
-                </button>
-              </div>
-              <select
-                value={messagePriority}
-                onChange={(e) => setMessagePriority(e.target.value as typeof messagePriority)}
-                className={FIELD_SELECT}
-                aria-label={translate("shift.during.messageOffice")}
-              >
-                <option value="normal">{translate("shift.during.priority.normal")}</option>
-                <option value="urgent">{translate("shift.during.priority.urgent")}</option>
-                <option value="emergency">{translate("shift.during.priority.emergency")}</option>
-              </select>
-              <Textarea
-                value={officeMessage}
-                onChange={(e) => setOfficeMessage(e.target.value)}
-                placeholder={translate("shift.during.messagePlaceholder")}
-                className="min-h-[80px] bg-cc-surface"
-              />
-              <div className="flex flex-wrap gap-2">
-                {messagePhotoPreviews.map((src, i) => (
-                  <div key={`${i}-${src.slice(0, 24)}`} className="relative h-14 w-14 shrink-0">
-                    <img src={src} alt="" className="h-full w-full rounded-lg border object-cover" />
-                    <button
-                      type="button"
-                      className="absolute -right-1 -top-1 rounded-full bg-black/70 p-0.5 text-white"
-                      onClick={() => setMessagePhotoPreviews((prev) => prev.filter((_, idx) => idx !== i))}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="grid h-14 w-14 place-items-center rounded-lg border border-dashed bg-cc-surface"
-                  onClick={() => messagePhotoInputRef.current?.click()}
-                >
-                  <Camera size={16} style={{ color: PLUM }} />
-                </button>
-                <input
-                  ref={messagePhotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => void handleMessagePhotoPick(e.target.files?.[0] ?? null)}
-                />
-              </div>
-              <Button
-                type="button"
-                className="w-full rounded-xl font-bold text-white"
-                style={{ background: PLUM }}
-                disabled={sendingMessage}
-                onClick={() => void handleSendMessage()}
-              >
-                {sendingMessage ? translate("shift.during.sending") : translate("shift.during.sendMessage")}
-              </Button>
-            </div>
-          )}
-
-          {messageHistory.length > 0 && (
-            <div className="rounded-xl border bg-cc-bg p-3" style={{ borderColor: BORDER }}>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                {translate("shift.during.officeMessages")}
-              </p>
-              <ul className="max-h-28 space-y-2 overflow-y-auto text-xs">
-                {messageHistory.map((msg) => (
-                  <li key={msg.id} className="rounded-lg bg-cc-surface px-2 py-1.5">
-                    <span className="font-bold capitalize">{msg.priority}</span>
-                    <span className="mx-1 text-muted-foreground">·</span>
-                    <span>{new Date(msg.created_at).toLocaleString()}</span>
-                    <p className="mt-0.5">{msg.message}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {incidentHistory.length > 0 && (
             <div className="rounded-xl border bg-[#FFF7ED] p-3" style={{ borderColor: "#FED7AA" }}>
               <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">{translate("shift.during.thisShift")}</p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
-                  <li key={item.id} className="rounded-lg bg-cc-surface px-2 py-1.5">
+                  <li key={item.id} className="rounded-lg bg-card px-2 py-1.5">
                     <span className="font-bold">{item.reference_number || item.title || item.incident_type}</span>
                     {item.incident_date && (
                       <span className="ml-1 text-muted-foreground">
@@ -340,6 +191,29 @@ export function DuringShiftAccordion({
           )}
         </div>
       )}
+
+      <DuringShiftActionsSidebar
+        onMessageOffice={handleMessageOffice}
+        officePhone={officePhone}
+      />
+
+      <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{translate("shift.during.messageOffice")}</DialogTitle>
+          </DialogHeader>
+          <ShiftOfficeMessagePanel
+            shiftId={shiftId}
+            messageHistory={messageHistory}
+            showHeader={false}
+            onSent={() => {
+              void loadHistory();
+              setMessageModalOpen(false);
+            }}
+            onCancel={() => setMessageModalOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

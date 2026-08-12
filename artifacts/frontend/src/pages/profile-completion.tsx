@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,6 @@ import { getMe, updateMe, type UserProfile } from "@/services/userService";
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 
-const DISCIPLINE_OPTIONS = [
-  { value: "OT", key: "profileCompletion.discipline.ot" },
-  { value: "Physio", key: "profileCompletion.discipline.physio" },
-  { value: "Speech", key: "profileCompletion.discipline.speech" },
-  { value: "Other", key: "profileCompletion.discipline.other" },
-] as const;
-
 export default function ProfileCompletion() {
   const [, navigate] = useLocation();
   const { user, updateUser } = useAuth();
@@ -28,7 +21,6 @@ export default function ProfileCompletion() {
   const [profile, setProfile] = useState<Partial<UserProfile>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const isAllied = user?.role === "allied_health";
 
   useEffect(() => {
     let active = true;
@@ -53,14 +45,6 @@ export default function ProfileCompletion() {
       toast({
         title: translate("profileCompletion.detailsRequired"),
         description: translate("profileCompletion.detailsRequiredDesc"),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (isAllied && !profile.discipline?.trim()) {
-      toast({
-        title: translate("profileCompletion.disciplineRequired"),
-        description: translate("profileCompletion.disciplineRequiredDesc"),
         variant: "destructive",
       });
       return;
@@ -96,7 +80,7 @@ export default function ProfileCompletion() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#E8457A]" />
         <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
@@ -105,16 +89,16 @@ export default function ProfileCompletion() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <p className="hidden" style={{ color: CORAL }}>
-          {isAllied ? translate("profileCompletion.alliedHealth") : translate("profileCompletion.supportWorker")}
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          {translate("profileCompletion.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("profileCompletion.title")}
         </h1>
-        <p className="mt-2 text-sm text-[#6B7280]">{translate("profileCompletion.subtitle")}</p>
+        <p className="mt-1 text-sm text-[#6A6A77]">{translate("profileCompletion.subtitle")}</p>
       </div>
-      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 shadow-sm">
-        <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
+      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
+        <div className="mb-6 rounded-2xl bg-[#F4EDE6] p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -134,51 +118,13 @@ export default function ProfileCompletion() {
             <Label>{translate("profileCompletion.address")}</Label>
             <Input value={profile.address || ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} className="mt-1 rounded-xl" />
           </div>
-          {isAllied && (
-            <>
-              <div>
-                <Label>{translate("profileCompletion.discipline")}</Label>
-                <select
-                  title={translate("profileCompletion.discipline")}
-                  value={profile.discipline || ""}
-                  onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
-                  className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
-                >
-                  <option value="">{translate("profileCompletion.selectDiscipline")}</option>
-                  {DISCIPLINE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{translate(opt.key)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>{translate("profileCompletion.ahpra")}</Label>
-                <Input value={profile.ahpra_registration_number || ""} onChange={(e) => setProfile({ ...profile, ahpra_registration_number: e.target.value })} className="mt-1 rounded-xl" />
-              </div>
-              <div>
-                <Label>{translate("profileCompletion.businessName")}</Label>
-                <Input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} className="mt-1 rounded-xl" />
-              </div>
-              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#111827]">
-                <input
-                  type="checkbox"
-                  checked={!!profile.professional_indemnity_confirmed}
-                  onChange={(e) => setProfile({ ...profile, professional_indemnity_confirmed: e.target.checked })}
-                />
-                {translate("profileCompletion.indemnity")}
-              </label>
-            </>
-          )}
         </div>
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm text-[#6B7280]">
+        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm text-[#6A6A77]">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
-            <span>
-              {isAllied
-                ? translate("profileCompletion.roleConfirmedAllied")
-                : translate("profileCompletion.roleConfirmedWorker")}
-            </span>
+            <ShieldCheck className="h-5 w-5 text-[#E8457A]" />
+            <span>{translate("profileCompletion.roleConfirmedWorker")}</span>
           </div>
-          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: PLUM }}>
+          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {translate("profileCompletion.save")}
           </Button>

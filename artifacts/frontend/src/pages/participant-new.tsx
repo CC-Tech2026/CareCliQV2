@@ -1,4 +1,4 @@
-﻿import { useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// -- Design tokens -------------------------------------------------------------
 const PLUM   = "var(--cc-plum)";
 const T1     = "#1C1626";
 const T2     = "#374151";
@@ -111,7 +111,7 @@ export default function ParticipantNew() {
           <UserPlus size={18} style={{ color: PLUM }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("patients.addTitle")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("patients.addTitle")}</h1>
           <p className="text-[13px]" style={{ color: T2 }}>{translate("patients.addSubtitle")}</p>
         </div>
       </div>
@@ -273,7 +273,7 @@ export default function ParticipantNew() {
               disabled={createParticipant.isPending}
               data-testid="button-add-participant"
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {createParticipant.isPending
                 ? <Loader2 size={14} className="animate-spin" />

@@ -42,11 +42,11 @@ import {
   X,
   CalendarClock,
   MessageSquare,
+  Mic,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -55,9 +55,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
-import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
+import { ParticipantOverviewTab } from "@/components/participants/ParticipantOverviewTab";
+import { ParticipantPlanTab } from "@/components/participants/ParticipantPlanTab";
+import { ParticipantComplianceTab } from "@/components/participants/ParticipantComplianceTab";
+import { ParticipantPlanMeetingsTab } from "@/components/participants/ParticipantPlanMeetingsTab";
+import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
+import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
+import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
+import { safeFormat, money, statusBadge, complianceTone, normalizeGoalTitle } from "@/lib/participant-format";
 import { FormPanel } from "@/components/FormPanel";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
@@ -347,7 +354,7 @@ type PlanBudgetCategoryOption = {
   source: "pricing" | "legacy";
 };
 
-type ParticipantRecord = {
+export type ParticipantRecord = {
   id: string;
   full_name: string;
   ndis_number?: string;
@@ -367,7 +374,7 @@ type ParticipantRecord = {
   allied_health_id?: string | null;
 };
 
-type SessionRecord = {
+export type SessionRecord = {
   id: string;
   session_date?: string | null;
   session_type?: string | null;
@@ -385,7 +392,7 @@ type SessionRecord = {
   participant_name?: string | null;
 };
 
-type BudgetSummary = {
+export type BudgetSummary = {
   has_plan: boolean;
   plan_id?: string;
   plan_number?: string;
@@ -408,7 +415,7 @@ type BudgetSummary = {
   }>;
 };
 
-type ComplianceHistoryItem = {
+export type ComplianceHistoryItem = {
   session_id: string;
   session_date?: string | null;
   session_type?: string | null;
@@ -421,52 +428,8 @@ type ComplianceHistoryItem = {
   };
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
-  if (!dateStr) return "—";
-  try {
-    return format(parseISO(dateStr), fmt);
-  } catch {
-    return dateStr;
-  }
-}
-
-function money(value?: number | string | null) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
-
-function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-    inactive: "bg-slate-100 text-slate-600 border-slate-200",
-    expired: "bg-red-50 text-red-700 border-red-200",
-    review: "bg-sky-50 text-sky-700 border-sky-200",
-    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    draft: "bg-slate-100 text-slate-600 border-slate-200",
-    cancelled: "bg-red-50 text-red-700 border-red-200",
-  };
-  return map[status] ?? "bg-slate-100 text-slate-600 border-slate-200";
-}
-
-function complianceTone(score?: number | null) {
-  if (score == null) return "bg-slate-100 text-slate-600 border-slate-200";
-  if (score >= 85) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (score >= 60) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-700 border-red-200";
-}
-
-function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
-  return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
-}
+// Helpers moved to @/lib/participant-format (imported at top of file) so extracted
+// tab components (components/participants/*) can share them without importing this page.
 
 // ---------------------------------------------------------------------------
 // Add / Edit Participant Form Component
@@ -738,8 +701,8 @@ function EditParticipantPanel({
       phone: String(participant.phone ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
-      plan_status: String(participant.plan_status ?? "active"),
-      plan_management_type: String(participant.plan_management_type ?? ""),
+      plan_status: (participant.plan_status ?? "active") as ParticipantFormValues["plan_status"],
+      plan_management_type: (participant.plan_management_type ?? "") as ParticipantFormValues["plan_management_type"],
       plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget: Number(participant.total_budget ?? 0),
@@ -756,8 +719,8 @@ function EditParticipantPanel({
       phone: String(participant.phone ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
-      plan_status: String(participant.plan_status ?? "active"),
-      plan_management_type: String(participant.plan_management_type ?? ""),
+      plan_status: (participant.plan_status ?? "active") as ParticipantFormValues["plan_status"],
+      plan_management_type: (participant.plan_management_type ?? "") as ParticipantFormValues["plan_management_type"],
       plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget: Number(participant.total_budget ?? 0),
@@ -1037,8 +1000,8 @@ function SetupPlanPanel({
                   <p className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
                     <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
                   </p>
-                  <p className="text-[12px] text-[#6B7280]">
-                    Save the plan details above first — category budgets can be added once the plan exists.
+                  <p className="text-[12px] text-[#6A6A77]">
+                    Save the plan details above first. Category budgets can be added once the plan exists.
                   </p>
                 </div>
               )}
@@ -1057,8 +1020,8 @@ function SetupPlanPanel({
                           className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
                         >
                           <div className="min-w-0">
-                            <p className="text-[12px] font-bold text-[#111827] truncate">{b.category_label || b.category}</p>
-                            <p className="text-[10px] text-[#6B7280]">
+                            <p className="text-[12px] font-bold text-[#1A1A2E] truncate">{b.category_label || b.category}</p>
+                            <p className="text-[10px] text-[#6A6A77]">
                               {money(b.allocated)} allocated
                               {b.overspent && <span className="ml-1.5 font-bold text-red-600">· Over budget</span>}
                             </p>
@@ -1091,13 +1054,13 @@ function SetupPlanPanel({
 
                   <div ref={categoryBudgetFormRef} className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
                     {allCategoriesAllocated ? (
-                      <p className="text-[12px] text-[#6B7280] text-center py-1">
+                      <p className="text-[12px] text-[#6A6A77] text-center py-1">
                         All available support categories already have a budget. Use the edit button on a row above to change an allocation.
                       </p>
                     ) : (
                       <>
                         {editingCategory ? (
-                          <div className="flex h-9 items-center rounded-md border border-purple-100/60 bg-[#FDFCFF] px-3 text-[12px] font-medium text-[#111827]">
+                          <div className="flex h-9 items-center rounded-md border border-purple-100/60 bg-[#FDFCFF] px-3 text-[12px] font-medium text-[#1A1A2E]">
                             {editingCategoryLabel}
                           </div>
                         ) : (
@@ -1170,7 +1133,7 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "plan_meetings" | "shift_context" | "restricted";
+type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile";
 
 function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
@@ -1202,7 +1165,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   // UI state — collapsible header + inline shift detail
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+  // Session detail panel — opens full session detail in-context instead of navigating away
+  const [sessionPanelId, setSessionPanelId] = useState<string | null>(null);
 
   // Assign Shift — coordinator only
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -1332,12 +1296,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     }>(`/api/participants/${id}/restricted-clinical`),
     enabled: isCoordinator,
   });
-  const [restrictedDraft, setRestrictedDraft] = useState<{
-    restricted_behavioural_notes: string;
-    behaviour_support_plan: string;
-    medications: string;
-    medical_alerts: string;
-  } | null>(null);
+  const [restrictedDraft, setRestrictedDraft] = useState<RestrictedClinicalDraft | null>(null);
   useEffect(() => {
     if (restrictedQuery.data && restrictedDraft === null) {
       setRestrictedDraft({
@@ -1365,6 +1324,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     },
     onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
+  const [careProfileSection, setCareProfileSection] = useState<"context" | "clinical">("context");
+  const [planGoalsSection, setPlanGoalsSection] = useState<"plan" | "goals">("plan");
   const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
 
   // Form state for creating / editing goals & tasks
@@ -1485,7 +1446,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       label: translate("patients.metric.budgetRemaining"),
       value: isOverspent ? `${money(remainingBudget)} · Over budget` : money(remainingBudget),
       icon: DollarSign,
-      tone: isOverspent ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-[#3730A3] border-purple-100",
+      tone: isOverspent ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-[#E8457A] border-purple-100",
     },
     {
       label: translate("patients.tab.sessions"),
@@ -1509,16 +1470,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     .toUpperCase();
 
   const TABS = [
-    { id: "overview"    as const, label: translate("patients.tab.overview"),    shortLabel: "Overview",  icon: UserCircle   },
-    { id: "plan"        as const, label: translate("patients.tab.plan"),        shortLabel: "Plan",      icon: DollarSign   },
-    ...(isCoordinator
-      ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", shortLabel: "Goals", icon: ClipboardList }]
-      : [{ id: "goals" as const, label: translate("patients.tab.goals"), shortLabel: "Goals", icon: Target }]),
-    { id: "sessions"    as const, label: "Shift History", shortLabel: "Shifts",    icon: CalendarDays },
-    { id: "compliance"  as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
-    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Plan Meetings", shortLabel: "Meetings", icon: MessageSquare }] : []),
-    ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), shortLabel: "Context", icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", shortLabel: "Clinical", icon: Lock }] : []),
+    { id: "overview"   as const, label: translate("patients.tab.overview"),   shortLabel: "Overview",  icon: UserCircle   },
+    { id: "plan_goals" as const, label: "Plan & Goals", shortLabel: "Plan", icon: DollarSign },
+    { id: "sessions"   as const, label: "Shift History",                       shortLabel: "Shifts",    icon: CalendarDays },
+    { id: "compliance" as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "care_profile"  as const, label: "Care Profile", shortLabel: "Care",     icon: ClipboardList  }] : []),
+    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Easy Capture",  shortLabel: "Meetings", icon: Mic, isNew: true }] : []),
   ];
 
   return (
@@ -1532,7 +1489,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
         {/* Avatar + name */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-[#BE185D] to-[#3730A3] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#E8457A] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
@@ -1551,7 +1508,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             </p>
             
              {/* NDIS number + plan dates — desktop */}
-              <p className="hidden sm:block text-[11px] text-[#6B7280] leading-relaxed mt-2" style={{ color: "var(--cc-muted)" }}>
+              <p className="hidden sm:block text-[11px] text-[#6A6A77] leading-relaxed mt-2" style={{ color: "var(--cc-muted)" }}>
                 {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
                 {participant.plan_start_date && participant.plan_end_date && (
                   <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
@@ -1627,16 +1584,24 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             return (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSelectedSession(null); }}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 min-h-[44px] ${
                   active
-                    ? "border-[#3730A3] text-[#3730A3]"
-                    : "border-transparent text-[#6B7280] hover:text-[#111827] hover:border-[#E5E7EB]"
+                    ? "border-[#E8457A] text-[#E8457A]"
+                    : "border-transparent text-[#6A6A77] hover:text-[#1A1A2E] hover:border-[#E8E8EA]"
                 }`}
               >
                 <Icon size={14} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
+                {"isNew" in tab && tab.isNew && (
+                  <span
+                    className="rounded-full px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white"
+                    style={{ background: "var(--cc-coral)" }}
+                  >
+                    New
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1648,257 +1613,94 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.personalDetails")}</h4>
-            </div>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                [translate("patients.field.dateOfBirth"),     safeFormat(participant.date_of_birth)],
-                [translate("patients.field.biologicalSex"),    participant.biological_sex || translate("patients.notSet")],
-                [translate("patients.field.primaryDisability"), participant.primary_disability || translate("patients.notSet")],
-                [translate("patients.field.phone"),             participant.phone || translate("patients.notSet")],
-                [translate("patients.field.email"),             participant.email || translate("patients.notSet")],
-                [translate("patients.field.planPeriod"),       participant.plan_start_date
-                  ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
-                  : translate("patients.notSet")],
-                [translate("patients.field.planStatus"),       participant.plan_status || translate("patients.notSet")],
-                [translate("patients.field.planManagementType"), planManagementTypeLabel(participant.plan_management_type, translate)],
-                [translate("patients.field.totalBudget"),      money(totalBudget || budget?.total_funding)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{label}</dt>
-                  <dd className="text-[12px] font-bold text-[#111827] truncate" title={String(value)}>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+          <ParticipantOverviewTab
+            participant={participant}
+            budget={budget}
+            totalBudget={totalBudget}
+            isCoordinator={isCoordinator}
+            billingPeriodCurrent={billingPeriodCurrentQuery.data}
+            billingPeriodCurrentLoading={billingPeriodCurrentQuery.isLoading}
+            billingPeriodHistory={billingPeriodsQuery.data?.items}
+          />
         )}
 
-        {activeTab === "overview" && isCoordinator && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.billingPeriod.title")}</h4>
+        {activeTab === "plan_goals" && (
+          <>
+            {/* Segmented section switcher */}
+            <div className="flex rounded-xl overflow-hidden border mb-5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
+              <button type="button" onClick={() => setPlanGoalsSection("plan")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: planGoalsSection === "plan" ? "var(--cc-bg)" : "transparent",
+                  color: planGoalsSection === "plan" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: planGoalsSection === "plan" ? "var(--cc-card-shadow)" : "none",
+                  margin: planGoalsSection === "plan" ? 3 : 0,
+                  borderRadius: planGoalsSection === "plan" ? "0.6rem" : 0,
+                }}
+              >
+                <DollarSign size={14} strokeWidth={1.8} />
+                Plan &amp; Budget
+              </button>
+              <button type="button" onClick={() => setPlanGoalsSection("goals")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: planGoalsSection === "goals" ? "var(--cc-bg)" : "transparent",
+                  color: planGoalsSection === "goals" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: planGoalsSection === "goals" ? "var(--cc-card-shadow)" : "none",
+                  margin: planGoalsSection === "goals" ? 3 : 0,
+                  borderRadius: planGoalsSection === "goals" ? "0.6rem" : 0,
+                }}
+              >
+                <Target size={14} strokeWidth={1.8} />
+                Goals &amp; Tasks
+              </button>
             </div>
 
-            {billingPeriodCurrentQuery.isLoading ? (
-              <Skeleton className="h-16 w-full rounded-xl" />
-            ) : (
-              <>
-                {billingPeriodCurrentQuery.data?.type_differs_from_lock && (
-                  <div
-                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900"
-                    role="status"
-                  >
-                    {billingPeriodCurrentQuery.data.message ?? translate("patients.billingPeriod.nextPeriodNote")}
-                  </div>
-                )}
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[
-                    [translate("patients.billingPeriod.currentType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.current_plan_management_type, translate)],
-                    [translate("patients.billingPeriod.lockedType"), planManagementTypeLabel(billingPeriodCurrentQuery.data?.open_period?.locked_plan_management_type, translate)],
-                    [
-                      translate("patients.billingPeriod.periodRange"),
-                      billingPeriodCurrentQuery.data?.open_period
-                        ? `${safeFormat(billingPeriodCurrentQuery.data.open_period.period_start)} – ${safeFormat(billingPeriodCurrentQuery.data.open_period.period_end)}`
-                        : translate("patients.notSet"),
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                      <dt className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{label}</dt>
-                      <dd className="text-[12px] font-bold text-[#111827]">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </>
+            {planGoalsSection === "plan" && (
+              <ParticipantPlanTab
+                budget={budget}
+                isLoading={budgetQuery.isLoading}
+                totalBudget={totalBudget}
+                usedBudget={usedBudget}
+                remainingBudget={remainingBudget}
+                isOverspent={isOverspent}
+                hasCategoryBudgets={hasCategoryBudgets}
+                categoryBudgets={categoryBudgets}
+              />
             )}
-
-            {billingPeriodsQuery.data?.items && billingPeriodsQuery.data.items.length > 0 && (
-              <div className="pt-1">
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280] mb-2">
-                  {translate("patients.billingPeriod.history")}
-                </p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {billingPeriodsQuery.data.items.map((period: BillingPeriod) => (
-                    <div
-                      key={period.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-purple-100/60 bg-white px-3 py-2 text-[12px]"
-                    >
-                      <span className="font-semibold text-[#111827]">
-                        {safeFormat(period.period_start)} – {safeFormat(period.period_end)}
-                      </span>
-                      <span className="text-[#6B7280]">
-                        {planManagementTypeLabel(period.locked_plan_management_type, translate)}
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${period.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                        {period.status === "open"
-                          ? translate("patients.billingPeriod.statusOpen")
-                          : translate("patients.billingPeriod.statusClosed")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          </>
         )}
 
-        {/* NDIS PLAN TAB */}
-        {activeTab === "plan" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <DollarSign className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.ndisFunding")}</h4>
-            </div>
-            {budgetQuery.isLoading ? (
-              <Skeleton className="h-24 w-full rounded-xl" />
-            ) : budget?.has_plan === false ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-                {translate("patients.plan.noActive")}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Plan meta */}
-                {budget?.plan_number && (
-                  <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1">{translate("patients.field.planNumber")}</p>
-                    <p className="text-[12px] font-bold text-[#111827]">{budget.plan_number}</p>
-                  </div>
-                )}
-                {/* Total / Used / Remaining — computed rollup of the category rows below once any exist */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { lbl: translate("patients.budget.total"),     val: money(totalBudget || budget?.total_funding), flagged: false },
-                    { lbl: translate("patients.budget.used"),      val: money(usedBudget), flagged: false },
-                    { lbl: translate("patients.budget.remaining"), val: money(remainingBudget), flagged: isOverspent },
-                  ].map(({ lbl, val, flagged }) => (
-                    <div
-                      key={lbl}
-                      className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-white border-purple-100/60"}`}
-                    >
-                      <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{lbl}</p>
-                      <p className={`text-[12px] font-black truncate ${flagged ? "text-red-700" : "text-[#111827]"}`}>{val}</p>
-                    </div>
-                  ))}
-                </div>
-                {isOverspent && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
-                    Plan is over budget — spending exceeds total allocated funding.
-                  </div>
-                )}
-                {/* Budget utilisation bar */}
-                {totalBudget > 0 && (
-                  <div className="rounded-xl border border-purple-100/60 bg-white p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-[#111827]">{translate("patients.budget.utilisation")}</span>
-                      <span className="text-[11px] font-black text-[#6B7280]">
-                        {Math.round((usedBudget / totalBudget) * 100)}%
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${isOverspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
-                        style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {/* Category breakdown */}
-                {hasCategoryBudgets && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">{translate("patients.budget.byCategory")}</p>
-                    {categoryBudgets.map((item) => (
-                      <div
-                        key={item.category || item.category_label}
-                        className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[12px] font-bold text-[#111827] truncate">{item.category_label || item.category}</span>
-                          <span className={`text-[11px] font-black shrink-0 ${item.overspent ? "text-red-700" : "text-[#6B7280]"}`}>
-                            {item.overspent ? "Over budget" : `${item.percent_used ?? 0}%`}
-                          </span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${item.overspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
-                            style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
-                          />
-                        </div>
-                        <p className="mt-1.5 text-[10px] font-medium text-[#6B7280]">
-                          {translateParams("patients.budget.categoryUsage", {
-                            used: money(item.used),
-                            remaining: money(item.remaining),
-                            allocated: money(item.allocated),
-                          })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* GOALS & TASKS TAB (Coordinator) */}
-        {activeTab === "goals_tasks" && isCoordinator && (() => {
+        {/* GOALS & TASKS (inside Plan & Goals tab) */}
+        {activeTab === "plan_goals" && planGoalsSection === "goals" && isCoordinator && (() => {
           const AREA_COLORS: Record<string, { bg: string; color: string; label: string }> = {
             daily_living: { bg: "#EFF6FF", color: "#1D4ED8", label: "Daily Living" },
             community:    { bg: "#F0FDF4", color: "#15803D", label: "Community"    },
             health:       { bg: "#FEF2F2", color: "#DC2626", label: "Health"       },
             social:       { bg: "#FDF4FF", color: "#7E22CE", label: "Social"       },
             employment:   { bg: "#FFFBEB", color: "#D97706", label: "Employment"   },
-            other:        { bg: "#F3F4F6", color: "#6B7280", label: "Other"        },
+            other:        { bg: "#F3F4F6", color: "#6A6A77", label: "Other"        },
           };
 
-          type SupportCatMeta = { label: string; group: "core" | "cb" | "capital"; groupLabel: string; bg: string; color: string };
+          type SupportCatMeta = { label: string; bg: string; color: string };
           const SUPPORT_CATS: Record<string, SupportCatMeta> = {
-            core_daily_activities:   { label: "Daily Activities",          group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_transport:          { label: "Transport",                 group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_consumables:        { label: "Consumables",               group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            core_social_community:   { label: "Social & Community",        group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
-            cb_support_coordination: { label: "Support Coordination",      group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_daily_living:         { label: "Daily Living Skills",       group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_health_wellbeing:     { label: "Health & Wellbeing",        group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_social_skills:        { label: "Social & Community Skills", group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_employment:           { label: "Employment",                group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            cb_learning:             { label: "Improved Learning",         group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
-            capital_assistive_tech:  { label: "Assistive Technology",      group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
-            capital_home_mods:       { label: "Home Modifications",        group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
-          };
-
-          const SUPPORT_GROUP_HEADERS: Record<"core" | "cb" | "capital", { label: string; color: string }> = {
-            core:    { label: "Core Supports",     color: "#1D4ED8" },
-            cb:      { label: "Capacity Building", color: "#15803D" },
-            capital: { label: "Capital Supports",  color: "#7E22CE" },
+            core_daily_activities: { label: "Daily Activities",   bg: "#EFF6FF", color: "#1D4ED8" },
+            core_transport:        { label: "Transport",          bg: "#EFF6FF", color: "#1D4ED8" },
+            core_consumables:      { label: "Consumables",        bg: "#EFF6FF", color: "#1D4ED8" },
+            core_social_community: { label: "Social & Community", bg: "#EFF6FF", color: "#1D4ED8" },
           };
 
           function SupportCategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-            const groups: ("core" | "cb" | "capital")[] = ["core", "cb", "capital"];
             return (
-              <div className="space-y-2">
-                {groups.map((group) => {
-                  const keys = Object.entries(SUPPORT_CATS).filter(([, m]) => m.group === group).map(([k]) => k);
-                  const hdr = SUPPORT_GROUP_HEADERS[group];
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(SUPPORT_CATS).map(([k, m]) => {
+                  const active = value === k;
                   return (
-                    <div key={group}>
-                      <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: hdr.color }}>{hdr.label}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {keys.map((k) => {
-                          const m = SUPPORT_CATS[k];
-                          const active = value === k;
-                          return (
-                            <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
-                              className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                              style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
-                              {m.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                      style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
+                      {m.label}
+                    </button>
                   );
                 })}
               </div>
@@ -1974,7 +1776,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {/* Name suggestions */}
                     {goalAiSuggestions.names.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Goal names — tap to use</p>
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Goal names, tap to use</p>
                         <div className="flex flex-wrap gap-1.5">
                           {goalAiSuggestions.names.map((name, i) => (
                             <button key={i} type="button"
@@ -1995,7 +1797,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {/* Description suggestions */}
                     {goalAiSuggestions.descriptions.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Descriptions — tap to use</p>
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Descriptions, tap to use</p>
                         <div className="space-y-1.5">
                           {goalAiSuggestions.descriptions.map((desc, i) => (
                             <div key={i}
@@ -2020,7 +1822,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {/* Success criteria suggestions */}
                     {goalAiSuggestions.success_criteria.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Success criteria — tap to use</p>
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Success criteria, tap to use</p>
                         <div className="space-y-1.5">
                           {goalAiSuggestions.success_criteria.map((crit, i) => (
                             <div key={i}
@@ -2067,7 +1869,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
               {/* Goal-area task suggestions hint */}
               {goalCategory && (
-                <div className="text-[10px] text-[#6B7280] bg-purple-50 rounded-lg p-3 border border-purple-100">
+                <div className="text-[10px] text-[#6A6A77] bg-purple-50 rounded-lg p-3 border border-purple-100">
                   <p className="font-semibold text-purple-700 mb-1">Common tasks for this goal area:</p>
                   <p className="text-purple-600">{GOAL_AREA_TASK_PRESETS[goalCategory]?.map(t => t.label).join(", ") || "No templates available"}</p>
                 </div>
@@ -2077,7 +1879,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">
                   NDIS support category <span className="text-red-500">*</span>
-                  <span className="ml-1.5 normal-case font-normal text-[#9CA3AF]">— which funded budget line does this goal draw from?</span>
+                  <span className="ml-1.5 normal-case font-normal text-[#9CA3AF]">Which funded budget line does this goal draw from?</span>
                 </label>
                 <SupportCategoryPicker value={goalSupportCategory} onChange={setGoalSupportCategory} />
                 {!goalSupportCategory && goalTitle.trim() && (
@@ -2091,7 +1893,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Description</label>
                   {goalDescriptionAiApplied && (
                     <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
-                      <Wand2 size={10} /> AI-suggested — edit as needed
+                      <Wand2 size={10} /> AI-suggested, edit as needed
                     </span>
                   )}
                 </div>
@@ -2156,7 +1958,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={cancelGoalForm}
-                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6A6A77] hover:bg-gray-50">Cancel</button>
                 <button type="button"
                   disabled={!goalTitle.trim() || !goalSupportCategory || createGoalMut.isPending || editGoalMut.isPending}
                   onClick={() => {
@@ -2175,7 +1977,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     if (createMode === "edit_goal" && editingGoal) editGoalMut.mutate({ goalId: editingGoal.id, payload });
                     else createGoalMut.mutate(payload);
                   }}
-                  className="flex-1 rounded-lg bg-[#3730A3] py-2.5 text-[12px] font-bold text-white hover:bg-[#312E81] disabled:opacity-50">
+                  className="flex-1 rounded-lg bg-[#E8457A] py-2.5 text-[12px] font-bold text-white hover:bg-[#312E81] disabled:opacity-50">
                   {(createGoalMut.isPending || editGoalMut.isPending) ? "Saving…" : createMode === "edit_goal" ? "Update goal" : "Create goal"}
                 </button>
               </div>
@@ -2184,44 +1986,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           const taskFormContent = (
             <div className="space-y-5">
-              {/* PURPOSE SELECTION - FIRST FIELD */}
-              <div className="space-y-2">
-                <label className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">What is this task for?</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setTaskPurpose("goal")}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
-                      taskPurpose === "goal" 
-                        ? "border-purple-400 bg-purple-50 text-purple-700" 
-                        : "border-gray-200 bg-white text-[#6B7280] hover:border-purple-300"
-                    }`}>
-                    <Target size={14} /> Supports a goal
-                  </button>
-                  <button type="button" onClick={() => { setTaskPurpose("core"); setLinkedGoalId(null); }}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
-                      taskPurpose === "core" 
-                        ? "border-blue-400 bg-blue-50 text-blue-700" 
-                        : "border-gray-200 bg-white text-[#6B7280] hover:border-blue-300"
-                    }`}>
-                    <Heart size={14} /> Core support
-                  </button>
-                </div>
-                {taskPurpose === "core" && (
-                  <p className="text-[11px] text-[#6B7280]">Routine support like personal care, medication, or domestic assistance — not tied to a specific goal milestone. Most tasks are this.</p>
-                )}
-              </div>
-
-              {/* GOAL SELECTOR - CONDITIONAL */}
-              {taskPurpose === "goal" && (
-                <div className="space-y-1.5">
-                  <label htmlFor="task-linked-goal" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Linked goal *</label>
-                  <select id="task-linked-goal" title="Link task to goal" value={linkedGoalId ?? ""}
-                    onChange={(e) => setLinkedGoalId(e.target.value || null)}
-                    className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
-                    <option value="">Select a goal…</option>
-                    {activeGoals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
-              )}
 
               {/* AI TASK ASSISTANT */}
               <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
@@ -2234,7 +1998,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <span className="text-[12px] font-bold text-violet-900">AI Task Assistant</span>
                       {taskAiSuggestions && !taskAiLoading && (
                         <span className="ml-1.5 text-[10px] text-violet-500 font-medium">
-                          {linkedGoalId ? 'grounded in linked goal' : `based on ${participant.full_name.split(' ')[0]}'s history`}
+                          based on {participant.full_name.split(' ')[0]}'s history
                         </span>
                       )}
                     </div>
@@ -2270,7 +2034,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   <div className="space-y-3">
                     {taskAiSuggestions.names.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Task name ideas — tap to use</p>
+                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Task name ideas, tap to use</p>
                         <div className="flex flex-wrap gap-1.5">
                           {taskAiSuggestions.names.map((name, i) => (
                             <button key={i} type="button"
@@ -2285,7 +2049,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
                     {taskAiSuggestions.instructions.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Worker instructions — tap to use</p>
+                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Worker instructions, tap to use</p>
                         <div className="space-y-1.5">
                           {taskAiSuggestions.instructions.map((instr, i) => (
                             <div key={i}
@@ -2305,17 +2069,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {(taskAiSuggestions.category || taskAiSuggestions.priority) && (
                       <div className="flex items-center gap-1.5 pt-1 border-t border-violet-100">
                         <Wand2 size={10} className="text-violet-500 shrink-0" />
-                        <p className="text-[10px] text-violet-600">Category and priority pre-filled from AI — adjust below if needed</p>
+                        <p className="text-[10px] text-violet-600">Category and priority pre-filled from AI, adjust below if needed</p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {!taskAiLoading && !taskAiSuggestions && (
+                  {!taskAiLoading && !taskAiSuggestions && (
                   <p className="text-[11px] text-violet-500/80 text-center py-0.5">
-                    {taskPurpose === 'goal' && linkedGoalId
-                      ? 'Get task ideas grounded in the linked goal'
-                      : 'Get AI-powered task name and instruction suggestions'}
+                    Get AI-powered task name and instruction suggestions
                   </p>
                 )}
               </div>
@@ -2326,7 +2088,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
                 {/* System templates */}
                 <div className="space-y-2">
-                  <p className="text-[10px] text-[#6B7280]">Or start with a system task template:</p>
+                  <p className="text-[10px] text-[#6A6A77]">Or start with a system task template:</p>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.values(SHIFT_SYSTEM_TASK_TEMPLATES).map(template => (
                       <button
@@ -2344,7 +2106,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 {/* Goal-area templates (conditional) */}
                 {linkedGoalId && (
                   <div className="space-y-2 border-t border-blue-200 pt-2">
-                    <p className="text-[10px] text-[#6B7280]">Or use a preset for this goal area:</p>
+                    <p className="text-[10px] text-[#6A6A77]">Or use a preset for this goal area:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(() => {
                         const linkedGoal = goals.find(g => g.id === linkedGoalId);
@@ -2404,7 +2166,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       className={`flex-1 px-3 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
                         taskPriority === p.id 
                           ? `border-${p.color}-400 bg-${p.color}-50 text-${p.color}-700` 
-                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                          : "border-gray-200 bg-white text-[#6A6A77] hover:border-gray-300"
                       }`}>
                       {p.label}
                     </button>
@@ -2426,7 +2188,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-colors ${
                         taskShiftType === shift.id 
                           ? "border-orange-400 bg-orange-50 text-orange-700" 
-                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                          : "border-gray-200 bg-white text-[#6A6A77] hover:border-gray-300"
                       }`}>
                       <i className={`ti ${shift.icon} text-sm`} />
                       {shift.label}
@@ -2512,12 +2274,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {/* ACTION BUTTONS */}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6A6A77] hover:bg-gray-50">Cancel</button>
                 <button type="button" disabled={!taskTitle.trim() || createTaskMut.isPending}
                   onClick={() => createTaskMut.mutate({
                     name: taskTitle.trim(),
                     description: taskInstructions || null,
-                    goal_id: taskPurpose === "goal" ? linkedGoalId : null,
+                    goal_id: null,
                     is_mandatory: isMandatory,
                     shift_type: taskShiftType,
                     category: taskCategory,
@@ -2539,8 +2301,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {/* Header — spans full width */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <h3 className="text-[16px] font-bold text-[#111827]">Goals & Tasks</h3>
-                  <p className="text-[12px] text-[#6B7280] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
+                  <h3 className="text-[16px] font-bold text-[#1A1A2E]">Goals & Tasks</h3>
+                  <p className="text-[12px] text-[#6A6A77] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
                   <button type="button"
@@ -2550,11 +2312,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   </button>
                   <button type="button"
                     onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-                    className="h-9 px-3 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    className="h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
                     + Task
                   </button>
                   <button type="button" onClick={() => setShiftModalOpen(true)}
-                    className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
                     <CalendarClock size={13} /> Assign Shift
                   </button>
                 </div>
@@ -2574,7 +2336,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   <div className="space-y-1.5">
                     {goalsNeedingCategory.map((goal) => (
                       <div key={goal.id} className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-3 py-2">
-                        <span className="text-[12px] font-semibold text-[#111827] truncate">{goal.name}</span>
+                        <span className="text-[12px] font-semibold text-[#1A1A2E] truncate">{goal.name}</span>
                         <button
                           type="button"
                           onClick={() => startEditGoal(goal)}
@@ -2590,15 +2352,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
               {/* Loading */}
               {ndisGoalsQuery.isLoading && (
-                <div className="flex items-center gap-2 py-4 text-[13px] text-[#6B7280]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
+                <div className="flex items-center gap-2 py-4 text-[13px] text-[#6A6A77]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
               )}
 
               {/* Empty state */}
               {!ndisGoalsQuery.isLoading && activeGoals.length === 0 && createMode !== "goal" && (
                 <div className="rounded-lg border border-purple-100/60 bg-purple-50/40 p-6 text-center">
-                  <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                  <p className="text-[13px] font-bold text-[#111827]">No active goals</p>
-                  <p className="text-[12px] text-[#6B7280] mt-1">Click <strong>+ Goal</strong> to create the first NDIS goal for {participant.full_name}.</p>
+                  <Target className="h-8 w-8 text-[#6A6A77] opacity-30 mx-auto mb-2" />
+                  <p className="text-[13px] font-bold text-[#1A1A2E]">No active goals</p>
+                  <p className="text-[12px] text-[#6A6A77] mt-1">Click <strong>+ Goal</strong> to create the first NDIS goal for {participant.full_name}.</p>
                 </div>
               )}
 
@@ -2616,24 +2378,24 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {/* Goal header */}
                     <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex items-start gap-2 min-w-0 flex-1">
-                        <Target size={15} className="shrink-0 mt-0.5 text-[#3730A3]" />
+                        <Target size={15} className="shrink-0 mt-0.5 text-[#E8457A]" />
                         <div className="min-w-0">
-                          <p className="text-[13px] font-bold text-[#111827] leading-snug break-words">{goal.name}</p>
+                          <p className="text-[13px] font-bold text-[#1A1A2E] leading-snug break-words">{goal.name}</p>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>
                               {areaStyle.label}
                             </span>
-                            <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            <span className="text-[10px] text-[#6A6A77]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
                             {!goal.support_category && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                                 Needs category
                               </span>
                             )}
-                            {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
+                            {goal.target_date && <span className="text-[10px] text-[#6A6A77]">Due {goal.target_date}</span>}
                           </div>
-                          {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
+                          {goal.description && <p className="text-[11px] text-[#6A6A77] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
                           {goal.success_criteria && (
-                            <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6B7280]">
+                            <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6A6A77]">
                               <span className="font-bold text-[#374151]">Success: </span>{goal.success_criteria}
                             </p>
                           )}
@@ -2646,7 +2408,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                         </button>
                         <button type="button" onClick={() => startEditGoal(goal)}
                           className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Edit goal">
-                          <Edit2 size={14} className="text-[#6B7280]" />
+                          <Edit2 size={14} className="text-[#6A6A77]" />
                         </button>
                         <button type="button" onClick={() => completeGoalMut.mutate(goal.id)} disabled={completeGoalMut.isPending}
                           className="h-9 w-9 flex items-center justify-center rounded hover:bg-green-50" title="Mark completed">
@@ -2654,12 +2416,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                         </button>
                         <button type="button" onClick={() => archiveGoalMut.mutate(goal.id)} disabled={archiveGoalMut.isPending}
                           className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Archive goal">
-                          <Archive size={14} className="text-[#6B7280]" />
+                          <Archive size={14} className="text-[#6A6A77]" />
                         </button>
                         <button type="button"
                           onClick={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}
                           className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="View progress">
-                          <BarChart2 size={14} className={progressGoalId === goal.id ? "text-[#3730A3]" : "text-[#6B7280]"} />
+                          <BarChart2 size={14} className={progressGoalId === goal.id ? "text-[#E8457A]" : "text-[#6A6A77]"} />
                         </button>
                       </div>
                     </div>
@@ -2667,27 +2429,27 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     {/* Progress panel */}
                     {progressGoalId === goal.id && (
                       <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
-                        {progressLoading && <p className="text-[12px] text-[#6B7280] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
+                        {progressLoading && <p className="text-[12px] text-[#6A6A77] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
                         {progressData && (
                           <div className="space-y-3">
-                            <p className="text-[11px] font-black uppercase tracking-widest text-[#6B7280]">Progress — Last 30 Days</p>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-[#6A6A77]">Progress: Last 30 Days</p>
                             <div className="grid grid-cols-3 gap-2">
                               {([["Sessions", progressData.sessions_count], ["With Evidence", progressData.evidence_count], ["Evidence Rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
                                 <div key={l} className="rounded-lg px-3 py-2 bg-white border border-purple-100/60 text-center">
-                                  <p className="text-[15px] font-black text-[#3730A3]">{v}</p>
-                                  <p className="text-[9px] font-semibold text-[#6B7280]">{l}</p>
+                                  <p className="text-[15px] font-black text-[#E8457A]">{v}</p>
+                                  <p className="text-[9px] font-semibold text-[#6A6A77]">{l}</p>
                                 </div>
                               ))}
                             </div>
                             <div>
-                              <div className="flex justify-between text-[10px] font-semibold mb-1 text-[#6B7280]"><span>Evidence rate</span><span>{pct}%</span></div>
+                              <div className="flex justify-between text-[10px] font-semibold mb-1 text-[#6A6A77]"><span>Evidence rate</span><span>{pct}%</span></div>
                               <div className="h-1.5 rounded-full overflow-hidden bg-purple-100">
                                 <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#22C55E" : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
                               </div>
                             </div>
                             {progressData.sessions.length > 0 && (
                               <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">Recent Sessions</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#6A6A77]">Recent Sessions</p>
                                 {progressData.sessions.slice(0, 4).map((s) => (
                                   <div key={s.id} className="flex items-center justify-between rounded-lg px-3 py-1.5 bg-white text-[11px] border border-purple-100/60">
                                     <span className="text-[#374151]">{s.session_date}</span>
@@ -2712,8 +2474,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                             <div className="flex items-center gap-2 min-w-0">
                               <CheckCircle2 size={13} className="shrink-0 text-[#059669]" />
                               <div className="min-w-0">
-                                <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
-                                {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                                <p className="text-[12px] font-semibold text-[#1A1A2E] truncate">{task.name}</p>
+                                {task.description && <p className="text-[11px] text-[#6A6A77] truncate">{task.description}</p>}
                               </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -2729,7 +2491,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     )}
                     {goalTasks.length === 0 && (
                       <div className="border-t border-purple-100/60 px-4 py-2.5 pl-9">
-                        <p className="text-[11px] text-[#9CA3AF] italic">No tasks yet — click + Task to add one</p>
+                        <p className="text-[11px] text-[#9CA3AF] italic">No tasks yet. Click + Task to add one</p>
                       </div>
                     )}
                   </div>
@@ -2742,15 +2504,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 if (coreTasks.length === 0) return null;
                 return (
                   <div className="space-y-1">
-                    <h4 className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest px-1">Core support — not linked to a goal</h4>
+                    <h4 className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest px-1">Core support, not linked to a goal</h4>
                     <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
                       {coreTasks.map((task) => (
                         <div key={task.id} className="flex items-center justify-between px-4 py-2.5">
                           <div className="flex items-center gap-2 min-w-0">
-                            <ClipboardList size={13} className="shrink-0 text-[#6B7280]" />
+                            <ClipboardList size={13} className="shrink-0 text-[#6A6A77]" />
                             <div className="min-w-0">
-                              <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
-                              {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                              <p className="text-[12px] font-semibold text-[#1A1A2E] truncate">{task.name}</p>
+                              {task.description && <p className="text-[11px] text-[#6A6A77] truncate">{task.description}</p>}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -2771,7 +2533,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {doneGoals.length > 0 && (
                 <div className="space-y-1">
                   <button type="button" onClick={() => setShowArchivedGoals((v) => !v)}
-                    className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B7280] hover:text-[#374151] px-1">
+                    className="flex items-center gap-1.5 text-[11px] font-bold text-[#6A6A77] hover:text-[#374151] px-1">
                     <Archive size={12} />
                     {showArchivedGoals ? "Hide" : "Show"} archived & completed ({doneGoals.length})
                   </button>
@@ -2785,7 +2547,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               <p className="text-[12px] font-bold text-[#374151] truncate">{goal.name}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>{areaStyle.label}</span>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${goal.status === "completed" ? "bg-green-50 text-green-700" : "bg-gray-100 text-[#6B7280]"}`}>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${goal.status === "completed" ? "bg-green-50 text-green-700" : "bg-gray-100 text-[#6A6A77]"}`}>
                                   {goal.status === "completed" ? "Completed" : "Archived"}
                                 </span>
                               </div>
@@ -2800,7 +2562,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             </div>
             </section>
 
-            {/* Goal & Task Form Panels - Independent overlays */}
+            {/* Goal & Task Form Panels - Fixed right-side overlay */}
             <FormPanel
               isOpen={createMode === "goal" || createMode === "edit_goal"}
               title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
@@ -2826,353 +2588,77 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">Shift History</h4>
-                <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
-                  {sessions.length}
-                </span>
-              </div>
-              {isCoordinator && (
-                <button type="button" onClick={() => setShiftModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
-                  <CalendarClock size={13} /> Assign Shift
-                </button>
-              )}
-            </div>
-            {sessionsQuery.isLoading ? (
-              <div className="space-y-2">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
-              </div>
-            ) : sessions.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <CalendarDays className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">No shifts yet</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">Shifts with this participant will appear here.</p>
-              </div>
-            ) : selectedSession ? (
-              /* ── Split-pane: compact list + inline detail ── */
-              <div className="flex gap-3 items-start">
-                {/* Left: compact session list — hidden on mobile when detail is open */}
-                <div className="hidden sm:flex w-[195px] shrink-0 flex-col gap-1.5 max-h-[520px] overflow-y-auto">
-                  {sessions.map((session) => {
-                    const isActive = selectedSession.id === session.id;
-                    return (
-                      <button
-                        key={session.id}
-                        type="button"
-                        onClick={() => setSelectedSession(session)}
-                        className="w-full text-left rounded-xl px-3 py-2.5 border transition-colors"
-                        style={{
-                          background: isActive ? "var(--cc-active-bg)" : "white",
-                          borderColor: isActive ? "rgba(55,48,163,0.2)" : "rgba(221,214,254,0.5)",
-                          boxShadow: isActive ? "inset 3px 0 0 var(--cc-plum)" : "none",
-                        }}
-                      >
-                        <p className="text-[12px] font-bold text-[#111827] capitalize truncate">
-                          {(session.session_type || "session").replace(/_/g, " ")}
-                        </p>
-                        <p className="text-[10px] text-[#6B7280] mt-0.5">{safeFormat(session.session_date)}</p>
-                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                          {session.compliance_score != null && (
-                            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-black ${complianceTone(session.compliance_score)}`}>
-                              {session.compliance_score}%
-                            </span>
-                          )}
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold capitalize ${statusBadge(session.status || "")}`}>
-                            {session.status || "draft"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Right: shift detail panel */}
-                <div className="flex-1 min-w-0 rounded-xl border border-purple-100/60 bg-white overflow-hidden">
-                  {/* Detail header */}
-                  <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: "1px solid var(--cc-border)" }}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      {/* Mobile back button */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSession(null)}
-                        className="sm:hidden flex items-center gap-1 text-[12px] font-bold shrink-0"
-                        style={{ color: "var(--cc-plum)" }}
-                      >
-                        <ChevronLeft size={14} /> Back
-                      </button>
-                      <CalendarDays className="hidden sm:block h-3.5 w-3.5 text-[#3730A3] shrink-0" />
-                      <p className="text-[13px] font-black text-[#111827] capitalize truncate">
-                        {(selectedSession.session_type || "Session").replace(/_/g, " ")}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <a
-                        href={`/sessions/${selectedSession.id}`}
-                        className="flex items-center gap-1 text-[11px] font-bold hover:underline"
-                        style={{ color: "var(--cc-plum)" }}
-                      >
-                        <ExternalLink size={11} /> Full details
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSession(null)}
-                        aria-label="Close shift detail"
-                        className="hidden sm:flex h-6 w-6 rounded-full items-center justify-center hover:bg-purple-50 text-[#6B7280]"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Detail body */}
-                  <div className="p-4 space-y-3">
-                    {/* Date + Duration */}
-                    <div className="flex gap-2">
-                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280]">Date</p>
-                        <p className="text-[13px] font-bold text-[#111827] mt-0.5">{safeFormat(selectedSession.session_date)}</p>
-                      </div>
-                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280]">Duration</p>
-                        <p className="text-[13px] font-bold text-[#111827] mt-0.5">{selectedSession.duration_minutes || 0} min</p>
-                      </div>
-                    </div>
-
-                    {/* Status + Compliance */}
-                    <div className="flex gap-2">
-                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Status</p>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(selectedSession.status || "")}`}>
-                          {selectedSession.status || "draft"}
-                        </span>
-                      </div>
-                      {selectedSession.compliance_score != null && (
-                        <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Compliance</p>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(selectedSession.compliance_score)}`}>
-                            {selectedSession.compliance_score}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Notes */}
-                    {(selectedSession.translated_english_note || selectedSession.compliance_input_text || selectedSession.notes) && (
-                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2.5">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Notes</p>
-                        <p className="text-[12px] text-[#111827] leading-relaxed">
-                          {selectedSession.translated_english_note || selectedSession.compliance_input_text || selectedSession.notes}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Translation audit */}
-                    {(selectedSession.original_language_input || selectedSession.translated_english_note) && (
-                      <TranslationAuditView
-                        originalLanguageInput={selectedSession.original_language_input ?? undefined}
-                        translatedEnglishNote={selectedSession.translated_english_note ?? undefined}
-                        translationMetadata={selectedSession.translation_metadata ?? null}
-                        translationStatus={selectedSession.translation_status ?? undefined}
-                        translationProvider={selectedSession.translation_provider ?? undefined}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* ── Full-width list (no session selected) ── */
-              <div className="space-y-2">
-                {sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    type="button"
-                    onClick={() => setSelectedSession(session)}
-                    className="w-full text-left rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
-                          {(session.session_type || "session").replace(/_/g, " ")}
-                        </p>
-                        <p className="text-[11px] text-[#6B7280] mt-0.5">
-                          {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {session.compliance_score != null && (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
-                            {session.compliance_score}%
-                          </span>
-                        )}
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(session.status || "")}`}>
-                          {session.status || "draft"}
-                        </span>
-                        <ChevronRight size={14} className="text-[#6B7280] opacity-40 shrink-0" />
-                      </div>
-                    </div>
-                    {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                      <p className="mt-1.5 text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">
-                        {session.translated_english_note || session.compliance_input_text || session.notes}
-                      </p>
-                    )}
-                    {(session.original_language_input || session.translated_english_note) && (
-                      <div className="mt-2">
-                        <TranslationAuditView
-                          originalLanguageInput={session.original_language_input ?? undefined}
-                          translatedEnglishNote={session.translated_english_note ?? undefined}
-                          translationMetadata={session.translation_metadata ?? null}
-                          translationStatus={session.translation_status ?? undefined}
-                          translationProvider={session.translation_provider ?? undefined}
-                        />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
+          <ParticipantSessionsTab
+            sessions={sessions}
+            isLoading={sessionsQuery.isLoading}
+            isCoordinator={isCoordinator}
+            onAssignShift={() => setShiftModalOpen(true)}
+            sessionPanelId={sessionPanelId}
+            onSessionPanelIdChange={setSessionPanelId}
+          />
         )}
-
-        {/* COMPLIANCE TAB */}
         {activeTab === "compliance" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.complianceHistory")}</h4>
-              </div>
-              {complianceHistory.length > 0 && averageCompliance != null && (
-                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
-                  {translateParams("patients.compliance.avg", { score: String(averageCompliance) })}
-                </span>
-              )}
-            </div>
-            {complianceQuery.isLoading ? (
-              <div className="space-y-2">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
-              </div>
-            ) : complianceHistory.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <ShieldCheck className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.compliance.empty")}</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.compliance.emptyHint")}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {complianceHistory.map((item) => {
-                  const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
-                  const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
-                  return (
-                    <Link key={item.session_id} href={`/sessions/${item.session_id}`}>
-                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
-                              {(item.session_type || "session").replace(/_/g, " ")}
-                            </p>
-                            <p className="text-[11px] text-[#6B7280] mt-0.5">
-                              {translateParams("patients.compliance.sessionDate", { date: safeFormat(item.session_date) })}
-                              {auditDate ? ` · ${translateParams("patients.compliance.audited", { date: safeFormat(auditDate, "MMM d") })}` : ""}
-                            </p>
-                          </div>
-                          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
-                            {score == null ? "–" : `${score}%`}
-                          </span>
-                        </div>
-                        {item.latest_audit?.status && (
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#6B7280]">
-                            {item.latest_audit.status.replace(/_/g, " ")}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+          <ParticipantComplianceTab
+            complianceHistory={complianceHistory}
+            averageCompliance={averageCompliance}
+            isLoading={complianceQuery.isLoading}
+            onSelectSession={setSessionPanelId}
+          />
         )}
 
-        {/* PLAN MEETINGS TAB — coordinator only */}
         {activeTab === "plan_meetings" && isCoordinator && (
-          <section className="space-y-3">
-            <PlanMeetingCapture participantId={id} participantName={participant.full_name} />
-          </section>
+          <ParticipantPlanMeetingsTab participantId={id} participantName={participant.full_name} />
         )}
 
-        {/* RESTRICTED CLINICAL TAB — coordinator only */}
-        {activeTab === "restricted" && isCoordinator && (
-          <section className="rounded-2xl border border-orange-200/70 bg-orange-50/30 p-4 space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Lock className="h-3.5 w-3.5 text-orange-600" />
-                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
+        {activeTab === "care_profile" && isCoordinator && (
+          <div className="space-y-0">
+            {/* Segmented section switcher */}
+            <div className="flex rounded-xl overflow-hidden border mb-6" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
+              <button
+                type="button"
+                onClick={() => setCareProfileSection("context")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: careProfileSection === "context" ? "var(--cc-bg)" : "transparent",
+                  color: careProfileSection === "context" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: careProfileSection === "context" ? "var(--cc-card-shadow)" : "none",
+                  margin: careProfileSection === "context" ? 3 : 0,
+                  borderRadius: careProfileSection === "context" ? "0.6rem" : 0,
+                }}
+              >
+                <Users size={14} strokeWidth={1.8} />
+                Worker Shift Context
+              </button>
+              <button
+                type="button"
+                onClick={() => setCareProfileSection("clinical")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
+                style={{
+                  background: careProfileSection === "clinical" ? "var(--cc-bg)" : "transparent",
+                  color: careProfileSection === "clinical" ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: careProfileSection === "clinical" ? "var(--cc-card-shadow)" : "none",
+                  margin: careProfileSection === "clinical" ? 3 : 0,
+                  borderRadius: careProfileSection === "clinical" ? "0.6rem" : 0,
+                }}
+              >
+                <Lock size={14} strokeWidth={1.8} />
+                Clinical Records
+              </button>
             </div>
-            <p className="text-[12px] text-orange-700/80 leading-relaxed">
-              This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
-            </p>
-            {restrictedQuery.isLoading ? (
-              <div className="space-y-3">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {([
-                  { key: "restricted_behavioural_notes" as const, label: "Behavioural Notes (Restricted)", placeholder: "Document restricted behavioural observations and incidents…" },
-                  { key: "behaviour_support_plan"       as const, label: "Behaviour Support Plan",         placeholder: "Summarise the participant's current behaviour support plan…" },
-                  { key: "medications"                  as const, label: "Medications",                    placeholder: "Current medications, dosages, and administration notes…" },
-                  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Known allergies, contraindications, emergency protocols…" },
-                ] as const).map(({ key, label, placeholder }) => (
-                  <div key={key} className="space-y-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
-                    <textarea
-                      className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
-                      placeholder={placeholder}
-                      value={restrictedDraft?.[key] ?? ""}
-                      onChange={(e) => setRestrictedDraft((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
-                    />
-                  </div>
-                ))}
-                <Button
-                  size="sm"
-                  disabled={saveRestricted.isPending || !restrictedDraft}
-                  onClick={() => saveRestricted.mutate()}
-                  className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
-                >
-                  {saveRestricted.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {translate("patients.restricted.save")}
-                </Button>
-              </div>
+
+            {careProfileSection === "context" && (
+              <ParticipantShiftContextTab participantId={id} />
             )}
-          </section>
-        )}
-
-        {/* SHIFT CONTEXT TAB — coordinator only */}
-        {activeTab === "shift_context" && isCoordinator && (
-          <section className="space-y-3">
-            <div className="rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-violet-700" />
-                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
-                  Coordinator Authoring
-                </span>
-              </div>
-              <p className="text-[12px] leading-relaxed text-violet-700/80">
-                This information appears in the Support Worker My Shift experience. Keep instructions concise, current, and action-oriented.
-              </p>
-            </div>
-
-            <ParticipantShiftContextEditor participantId={id} />
-          </section>
+            {careProfileSection === "clinical" && (
+              <ParticipantRestrictedTab
+                isLoading={restrictedQuery.isLoading}
+                draft={restrictedDraft}
+                onDraftChange={setRestrictedDraft}
+                onSave={() => saveRestricted.mutate()}
+                isSaving={saveRestricted.isPending}
+              />
+            )}
+          </div>
         )}
 
       </div>
@@ -3185,6 +2671,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           initialParticipantId={id}
         />
       )}
+
     </div>
   );
 }
@@ -3468,7 +2955,7 @@ export default function Patients() {
                         className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
                         style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}
                       >
-                        NDIS {p.ndis_number || "—"}
+                        NDIS {p.ndis_number || "N/A"}
                       </span>
                     </div>
                   </div>

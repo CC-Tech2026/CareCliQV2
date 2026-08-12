@@ -49,7 +49,7 @@ function ScoreBar({ score }: { score: number }) {
       <div className="flex-1 h-1.5 rounded-full" style={{ background: BORDER }}>
         <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(score, 100)}%`, background: color }} />
       </div>
-      <span className="w-8 text-right text-[11px] font-black" style={{ color }}>{score > 0 ? `${score}%` : "—"}</span>
+      <span className="w-8 text-right text-[11px] font-black" style={{ color }}>{score > 0 ? `${score}%` : "N/A"}</span>
     </div>
   );
 }
@@ -161,7 +161,7 @@ export default function MDStaffPage() {
                       onClick={() => setFilter(f)}
                       className="rounded-lg px-3 py-1 text-[11px] font-black transition-colors"
                       style={{
-                        background: filter === f ? PLUM : SOFT,
+                        background: filter === f ? "var(--cc-cta)" : SOFT,
                         color: filter === f ? "#fff" : MUTED,
                       }}
                     >

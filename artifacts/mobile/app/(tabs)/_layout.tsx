@@ -2,24 +2,28 @@ import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { WorkerMobileTabBar } from "@/components/worker/WorkerMobileTabBar";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "list.bullet", selected: "list.bullet" }} />
-        <Label>Sessions</Label>
+      <NativeTabs.Trigger name="shifts">
+        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
+        <Label>My Shifts</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="participants">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>Participants</Label>
+      <NativeTabs.Trigger name="compliance">
+        <Icon sf={{ default: "shield", selected: "shield.fill" }} />
+        <Label>Compliance</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>My Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -35,18 +39,18 @@ function ClassicTabLayout() {
 
   return (
     <Tabs
+      initialRouteName="shifts"
+      tabBar={(props) => <WorkerMobileTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.card,
-          borderTopWidth: isWeb ? 1 : 0.5,
-          borderTopColor: colors.border,
+          backgroundColor: isIOS ? "transparent" : colors.background,
+          borderTopWidth: 0,
           elevation: 0,
-          paddingBottom: isWeb ? 0 : insets.bottom,
-          ...(isWeb ? { height: 84 } : {}),
+          height: isWeb ? 84 : 60 + insets.bottom,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -59,7 +63,7 @@ function ClassicTabLayout() {
             <View
               style={[
                 StyleSheet.absoluteFill,
-                { backgroundColor: colors.card },
+                { backgroundColor: colors.background },
               ]}
             />
           ) : null,
@@ -68,25 +72,34 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Sessions",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="list.bullet" tintColor={color} size={22} />
-            ) : (
-              <Feather name="list" size={22} color={color} />
-            ),
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="shifts"
+        options={{
+          title: "My Shifts",
+          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="compliance"
+        options={{
+          title: "Compliance",
+          tabBarIcon: ({ color }) => <Feather name="shield" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "My Profile",
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="participants"
         options={{
-          title: "Participants",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.2.fill" tintColor={color} size={22} />
-            ) : (
-              <Feather name="users" size={22} color={color} />
-            ),
+          href: null,
         }}
       />
     </Tabs>

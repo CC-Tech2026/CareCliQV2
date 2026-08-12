@@ -55,13 +55,13 @@ export function TranslationAuditView({
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[rgba(55,48,163,0.04)] border-b border-[rgba(232,213,232,0.4)]">
         <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-[#3730A3]" />
+          <Globe className="h-4 w-4 text-[#E8457A]" />
           <span className="text-sm font-semibold text-[#1C1626]">
             Translation Audit Trail
           </span>
           <Badge
             variant="outline"
-            className="text-[10px] py-0 px-1.5 border-[#3730A3]/30 text-[#3730A3] bg-[#3730A3]/5"
+            className="text-[10px] py-0 px-1.5 border-[#E8457A]/30 text-[#E8457A] bg-[#E8457A]/5"
           >
             {translationStatus ?? "audit"}
           </Badge>
@@ -109,7 +109,7 @@ export function TranslationAuditView({
         {/* Right: translated English */}
         <div className="p-4 bg-[rgba(55,48,163,0.015)]">
           <div className="flex items-center gap-2 mb-2">
-            <FileText className="h-3.5 w-3.5 text-[#3730A3]" />
+            <FileText className="h-3.5 w-3.5 text-[#E8457A]" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#7A6A8A]">
               Translated (English)
             </span>

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Plus, TrendingUp, Zap, Settings, Lock } from "lucide-react";
+import { Check, Loader2, Plus, TrendingUp, Zap, Settings, Lock, FileText, Clock } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getRevenueReport, getParticipantCurrentBillingPeriod, planManagementTypeLabel } from "@/services/coordinatorService";
@@ -10,6 +10,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
+import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -75,7 +76,7 @@ export default function Billing() {
   const { toast } = useToast();
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
-  const canInvoice = user?.role === "support_coordinator" || user?.role === "allied_health";
+  const canInvoice = user?.role === "support_coordinator";
 
   const [loading,            setLoading           ] = useState(true);
   const [savingSubscription, setSavingSubscription] = useState(false);
@@ -292,7 +293,7 @@ export default function Billing() {
   if (!canInvoice) {
     return (
       <div className="space-y-2 py-10">
-        <h1 className="text-xl font-black text-cc-plum">{translate("billing.title")}</h1>
+        <h1 className="text-xl font-black text-cc-text">{translate("billing.title")}</h1>
         <p className="text-sm font-medium text-cc-muted">{translate("billing.restricted")}</p>
       </div>
     );
@@ -316,34 +317,24 @@ export default function Billing() {
         {/* ── Page header ───────────────────────────────────────────────────── */}
         <div>
           <p className="hidden text-cc-muted">
-            {user?.role === "allied_health" ? translate("billing.role.alliedHealth") : translate("billing.role.coordinator")}
+            {translate("billing.role.coordinator")}
           </p>
-          <h1 className="text-xl font-black tracking-tight text-cc-plum">
+          <h1 className="text-xl font-black tracking-tight text-cc-text">
             {translate("billing.title")}
           </h1>
         </div>
 
         {/* ── Inline stat strip ─────────────────────────────────────────────── */}
-        <div
-          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-cc-border bg-white px-5 py-4"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-cc-text">{invoices.length}</span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.invoices")}</span>
-          </div>
-          <div className="h-4 w-px bg-cc-border" />
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-black ${totalOutstanding > 0 ? "text-amber-600" : "text-cc-text"}`}>
-              {cents(totalOutstanding)}
-            </span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.outstanding")}</span>
-          </div>
-          <div className="h-4 w-px bg-cc-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-emerald-700">{cents(totalPaid)}</span>
-            <span className="text-sm font-medium text-cc-muted">{translate("billing.stat.paid")}</span>
-          </div>
-        </div>
+        <KpiGrid className="sm:grid-cols-3 lg:grid-cols-3">
+          <KpiCard label={translate("billing.stat.invoices")} value={invoices.length} icon={<FileText />} />
+          <KpiCard
+            label={translate("billing.stat.outstanding")}
+            value={cents(totalOutstanding)}
+            tone={totalOutstanding > 0 ? "warning" : "neutral"}
+            icon={<Clock />}
+          />
+          <KpiCard label={translate("billing.stat.paid")} value={cents(totalPaid)} tone="success" icon={<Check />} />
+        </KpiGrid>
 
         {/* ── Subscription management (coordinator only) ────────────────────── */}
         {isCoordinator && subscription && (
@@ -367,7 +358,7 @@ export default function Billing() {
                   title={translate("billing.plan")}
                   value={subscription.plan_name}
                   onChange={e => setSubscription({ ...subscription, plan_name: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
                 >
                   {["starter", "team", "pro", "enterprise"].map(p => (
                     <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
@@ -380,7 +371,7 @@ export default function Billing() {
                   title={translate("billing.status")}
                   value={subscription.status}
                   onChange={e => setSubscription({ ...subscription, status: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
                 >
                   {["trialing", "active", "past_due", "cancelled", "manual_review"].map(s => (
                     <option key={s} value={s}>{s.replace("_", " ")}</option>
@@ -443,7 +434,7 @@ export default function Billing() {
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
 
           {/* Invoice form */}
-          <Card title={user?.role === "allied_health" ? translate("billing.newInvoice") : translate("billing.issueInvoice")}>
+          <Card title={translate("billing.issueInvoice")}>
             <div className="space-y-4">
               <div>
                 <Label className="text-xs font-bold text-cc-muted">{translate("billing.participant")}</Label>
@@ -709,7 +700,7 @@ function RevenueReportPanel() {
                       <div key={m.month} className="flex items-center gap-4 px-4 py-3 hover:bg-[#F8F6FE] transition-colors">
                         <p className="text-sm font-black w-20 shrink-0 text-cc-text">{m.month}</p>
                         <div className="flex-1 min-w-0">
-                          <div className="h-1.5 overflow-hidden rounded-full bg-[#EEEAFB]">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-[#EDE3FC]">
                             <div className="h-full rounded-full bg-emerald-600" style={{ width: `${paidPct}%` }} />
                           </div>
                         </div>

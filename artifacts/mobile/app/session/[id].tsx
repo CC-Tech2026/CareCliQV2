@@ -207,7 +207,7 @@ export default function LiveSessionScreen() {
         Alert.alert(
           "Saved Offline",
           "Your notes have been saved locally and will sync automatically when you are back online.",
-          [{ text: "OK", onPress: () => router.replace("/(tabs)") }]
+          [{ text: "OK", onPress: () => router.replace("/(tabs)/shifts") }]
         );
       } catch {
         Alert.alert("Error", "Failed to save notes offline. Please try again.");
@@ -230,7 +230,7 @@ export default function LiveSessionScreen() {
       await saveWithAI.mutateAsync({ sessionId: id });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCompleteModal(false);
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/shifts");
     } catch {
       Alert.alert("Error", "Failed to save session. Please try again.");
     } finally {
@@ -538,7 +538,7 @@ export default function LiveSessionScreen() {
         <Pressable
           onPress={() => {
             if (session?.participant_id) {
-              router.push(`/incidents/${session.participant_id}`);
+              router.push(`/incidents/participant/${session.participant_id}`);
             }
           }}
           style={[styles.incidentBtn, { borderColor: "#DC2626" }]}

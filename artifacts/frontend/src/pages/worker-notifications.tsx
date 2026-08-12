@@ -37,7 +37,7 @@ function NotificationRow({
   const unread = !item.read_at && !item.dismissed_at;
   return (
     <div
-      className="rounded-2xl border bg-cc-surface p-4"
+      className="rounded-2xl border bg-card p-4"
       style={{
         borderColor: unread ? PLUM : BORDER,
         borderLeftWidth: unread ? 4 : 1,
@@ -100,7 +100,7 @@ export default function WorkerNotificationsPage() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("nav.notifications")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("notifications.title")}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
@@ -115,7 +115,7 @@ export default function WorkerNotificationsPage() {
       )}
 
       {!isLoading && notifications.length === 0 && (
-        <div className="rounded-2xl border bg-cc-surface px-6 py-10 text-center" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-card px-6 py-10 text-center" style={{ borderColor: BORDER }}>
           <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: TEXT }}>
             {translate("notifications.empty")}

@@ -17,6 +17,7 @@ export function notifySessionNotesUpdated() {
 }
 
 function mapNoteType(noteType?: string): TaskEvidenceType {
+  if (noteType === "check-in") return "text";
   if (noteType === "voice") return "voice";
   if (noteType === "photo") return "photo";
   if (noteType === "file") return "file";

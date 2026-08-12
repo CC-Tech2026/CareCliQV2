@@ -22,6 +22,18 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-destructive-foreground shadow-xs",
           // @replit shadow-xs" - use badge outline variable
         outline: "text-foreground border [border-color:var(--badge-outline)]",
+        // ── Status chips — functional colours, not brand pink/purple. Pending founding-team
+        // sign-off per DESIGN_BRIEF.md; use only for compliance/status semantics, never decoratively.
+        success:
+          "rounded-full border-transparent bg-[var(--cc-status-success-bg)] text-[var(--cc-status-success)]",
+        warning:
+          "rounded-full border-transparent bg-[var(--cc-status-warning-bg)] text-[var(--cc-status-warning)]",
+        // Compliance/safety danger severity — real red, not brand pink/purple. Use this, not
+        // `destructive` (brand action colour), for status semantics like "non-compliant"/"RP flag".
+        danger:
+          "rounded-full border-transparent bg-[var(--cc-status-danger-bg)] text-[var(--cc-status-danger)]",
+        info:
+          "rounded-full border-transparent bg-[var(--cc-status-info-bg)] text-[var(--cc-status-info)]",
       },
     },
     defaultVariants: {

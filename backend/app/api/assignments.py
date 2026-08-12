@@ -55,7 +55,7 @@ def _worker_membership_profiles(org_id: Optional[str]) -> list[dict]:
             supabase.table("organization_members")
             .select("user_id, role, is_active, joined_at")
             .eq("organization_id", org_id)
-            .in_("role", ["support_worker", "allied_health"])
+            .in_("role", ["support_worker"])
             .execute()
         )
     except Exception as exc:
@@ -147,7 +147,7 @@ async def list_org_workers(user: dict = Depends(get_current_user)):
         q = (
             supabase.table("users")
             .select("id, full_name, email, role, account_type")
-            .in_("role", ["support_worker", "allied_health"])
+            .in_("role", ["support_worker"])
         )
         if org_id:
             q = q.eq("organization_id", org_id)

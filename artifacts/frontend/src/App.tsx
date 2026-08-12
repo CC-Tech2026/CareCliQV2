@@ -37,6 +37,7 @@ import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
 import CoordinatorLivePage from "@/pages/coordinator-live";
 import CoordinatorMonitorPage from "@/pages/coordinator-monitor";
 import AuditPack from "@/pages/audit-pack";
+import DesignSystem from "@/pages/design-system";
 import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Credentials from "@/pages/credentials";
@@ -56,6 +57,7 @@ import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
 import MyShiftBriefing from "@/pages/my-shift-briefing";
+import MyShiftMessageOffice from "@/pages/my-shift-message-office";
 import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
 import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
 import WorkerAvailabilityPage from "@/pages/worker-availability";
@@ -79,13 +81,10 @@ import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
-const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "managing_director"] as const;
 
 // Support Coordinator / CareCliQ Parent only — oversight, billing, team, compliance.
 const COORDINATOR_ROLES = ["support_coordinator"] as const;
-
-// Coordinator + allied health — reports contain clinical documentation allied health needs.
-const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 const WORKER_ROLES = ["support_worker"] as const;
 
 // Managing Director only
@@ -102,6 +101,12 @@ function Router() {
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
+
+      <Route path="/design-system">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><DesignSystem /></AppLayout>
+        </ProtectedRoute>
+      </Route>
 
       <Route path="/verify-email">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
@@ -256,6 +261,14 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/my-shifts/:id/message-office">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyShiftMessageOffice /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
       <Route path="/my-shifts/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -373,7 +386,7 @@ function Router() {
       </Route>
 
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -396,13 +409,13 @@ function Router() {
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Sessions /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><SessionNew /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -459,19 +472,19 @@ function Router() {
 
       {/* ── Reports — support coordinator + allied health ────────────────── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/billing">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Billing /></AppLayout>
         </ProtectedRoute>
       </Route>

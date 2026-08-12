@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
@@ -255,7 +255,7 @@ export default function WorkerSecurity() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#E8457A]" />
         <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
@@ -269,22 +269,22 @@ export default function WorkerSecurity() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("profile.account")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("security.title")}
         </h1>
-        <p className="mt-2 text-sm text-[#6B7280]">
+        <p className="mt-2 text-sm text-[#6A6A77]">
           {translate("security.subtitle")}
         </p>
       </div>
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <ShieldCheck className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("security.twoFactor")}</h2>
-            <p className="text-sm text-[#6B7280]">
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("security.twoFactor")}</h2>
+            <p className="text-sm text-[#6A6A77]">
               {mfaStatus?.enabled
                 ? translate("security.twoFactorActive")
                 : translate("security.twoFactorInactive")}
@@ -298,7 +298,7 @@ export default function WorkerSecurity() {
             <p className="mt-1 text-sm text-amber-800">
               {translate("security.recoveryCodesHint")}
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#1A1A2E] sm:grid-cols-4">
               {recoveryCodes.map((code) => (
                 <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">
                   {code}
@@ -315,13 +315,13 @@ export default function WorkerSecurity() {
         {!mfaStatus?.enabled ? (
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
-              <div className="rounded-2xl bg-[#F8F8FE] p-4">
-                <p className="text-sm font-semibold text-[#111827]">{translate("security.setupAuthenticator")}</p>
-                <p className="mt-1 text-sm text-[#6B7280]">
+              <div className="rounded-2xl bg-[#F4EDE6] p-4">
+                <p className="text-sm font-semibold text-[#1A1A2E]">{translate("security.setupAuthenticator")}</p>
+                <p className="mt-1 text-sm text-[#6A6A77]">
                   {translate("security.setupAuthenticatorHint")}
                 </p>
                 <div className="mt-3 flex items-stretch gap-2">
-                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">
+                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#E8457A]">
                     {enrollSecret}
                   </code>
                   <button
@@ -329,10 +329,10 @@ export default function WorkerSecurity() {
                     onClick={() => setQrOpen(true)}
                     aria-label={translate("security.showQrAria")}
                     title={translate("security.showQrTitle")}
-                    className="flex min-w-[52px] items-center justify-center rounded-xl border bg-white px-3 transition-colors hover:bg-[#EEF2FF]"
+                    className="flex min-w-[52px] items-center justify-center rounded-xl border bg-white px-3 transition-colors hover:bg-[#F2EBFD]"
                     style={{ borderColor: BORDER }}
                   >
-                    <QrCode className="h-5 w-5 text-[#3730A3]" />
+                    <QrCode className="h-5 w-5 text-[#E8457A]" />
                   </button>
                 </div>
               </div>
@@ -367,7 +367,7 @@ export default function WorkerSecurity() {
                   type="submit"
                   disabled={enrollBusy || !enrollCode.trim()}
                   className="rounded-xl"
-                  style={{ background: PLUM }}
+                  style={{ background: "var(--cc-cta)" }}
                 >
                   {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
                 </Button>
@@ -379,7 +379,7 @@ export default function WorkerSecurity() {
               onClick={() => void handleStartEnrollment()}
               disabled={enrollBusy}
               className="rounded-xl gap-2"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
               {translate("security.enableAuthenticator")}
@@ -387,7 +387,7 @@ export default function WorkerSecurity() {
           )
         ) : (
           <form onSubmit={handleDisableMfa} className="max-w-md space-y-3">
-            <p className="text-sm text-[#6B7280]">
+            <p className="text-sm text-[#6A6A77]">
               {translate("security.disableTwoFactorHint")}
             </p>
             <div>
@@ -413,17 +413,17 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <MonitorSmartphone className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <MonitorSmartphone className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("security.trustedDevices")}</h2>
-            <p className="text-sm text-[#6B7280]">{translate("security.trustedDevicesHint")}</p>
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("security.trustedDevices")}</h2>
+            <p className="text-sm text-[#6A6A77]">{translate("security.trustedDevicesHint")}</p>
           </div>
         </div>
 
         {trustedDevices.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">{translate("security.noTrustedDevices")}</p>
+          <p className="text-sm text-[#6A6A77]">{translate("security.noTrustedDevices")}</p>
         ) : (
           <div className="space-y-3">
             {trustedDevices.map((device) => (
@@ -433,15 +433,15 @@ export default function WorkerSecurity() {
                 style={{ borderColor: BORDER }}
               >
                 <div>
-                  <p className="font-semibold text-[#111827]">
+                  <p className="font-semibold text-[#1A1A2E]">
                     {device.device_name}
                     {device.is_current ? (
-                      <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
+                      <span className="ml-2 rounded-full bg-[#F2EBFD] px-2 py-0.5 text-[11px] font-bold text-[#E8457A]">
                         {translate("security.thisDevice")}
                       </span>
                     ) : null}
                   </p>
-                  <p className="text-sm text-[#6B7280]">
+                  <p className="text-sm text-[#6A6A77]">
                     {translateParams("security.trustedUntil", {
                       os: device.os_name,
                       when: formatWhen(device.trusted_until),
@@ -480,12 +480,12 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <LockKeyhole className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("security.activeSessions")}</h2>
-            <p className="text-sm text-[#6B7280]">{translate("security.sessionsHint")}</p>
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("security.activeSessions")}</h2>
+            <p className="text-sm text-[#6A6A77]">{translate("security.sessionsHint")}</p>
           </div>
         </div>
 
@@ -497,15 +497,15 @@ export default function WorkerSecurity() {
               style={{ borderColor: BORDER }}
             >
               <div>
-                <p className="font-semibold text-[#111827]">
+                <p className="font-semibold text-[#1A1A2E]">
                   {session.device_name}
                   {session.is_current ? (
-                    <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
+                    <span className="ml-2 rounded-full bg-[#F2EBFD] px-2 py-0.5 text-[11px] font-bold text-[#E8457A]">
                       {translate("security.currentSession")}
                     </span>
                   ) : null}
                 </p>
-                <p className="text-sm text-[#6B7280]">
+                <p className="text-sm text-[#6A6A77]">
                   {translateParams("security.sessionLocation", {
                     city: session.city || translate("security.unknownCity"),
                     country: session.country || translate("security.unknownCountry"),
@@ -531,7 +531,7 @@ export default function WorkerSecurity() {
         </div>
 
         <form onSubmit={handleLogoutOthers} className="mt-6 max-w-md space-y-3 border-t pt-6" style={{ borderColor: BORDER }}>
-          <p className="text-sm font-semibold text-[#111827]">{translate("security.signOutAllOthers")}</p>
+          <p className="text-sm font-semibold text-[#1A1A2E]">{translate("security.signOutAllOthers")}</p>
           <div>
             <Label htmlFor="logout-others-password">{translate("security.confirmPassword")}</Label>
             <PasswordInput
@@ -554,17 +554,17 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
-            <AlertTriangle className="h-5 w-5 text-[#3730A3]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+            <AlertTriangle className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">{translate("security.recentSignIns")}</h2>
-            <p className="text-sm text-[#6B7280]">{translate("security.recentSignInsHint")}</p>
+            <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("security.recentSignIns")}</h2>
+            <p className="text-sm text-[#6A6A77]">{translate("security.recentSignInsHint")}</p>
           </div>
         </div>
 
         {loginHistory.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">{translate("security.noSignInHistory")}</p>
+          <p className="text-sm text-[#6A6A77]">{translate("security.noSignInHistory")}</p>
         ) : (
           <div className="space-y-3">
             {loginHistory.map((entry) => (
@@ -574,15 +574,15 @@ export default function WorkerSecurity() {
                 style={{ borderColor: entry.is_suspicious ? "rgba(190,24,93,0.35)" : BORDER }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-[#111827]">{entry.device_name}</p>
+                  <p className="font-semibold text-[#1A1A2E]">{entry.device_name}</p>
                   {entry.is_suspicious ? (
                     <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
                       {translate("security.unusualSignIn")}
                     </span>
                   ) : null}
                 </div>
-                <p className="text-sm text-[#6B7280]">
-                  {entry.location_label} · {formatWhen(entry.created_at)}
+                <p className="text-sm text-[#6A6A77]">
+                  {entry.location_label} � {formatWhen(entry.created_at)}
                 </p>
               </div>
             ))}
@@ -593,17 +593,17 @@ export default function WorkerSecurity() {
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-sm rounded-[1.5rem] border-0 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#111827]">{translate("security.scanQr")}</DialogTitle>
-            <DialogDescription className="text-[#6B7280]">
+            <DialogTitle className="text-[#1A1A2E]">{translate("security.scanQr")}</DialogTitle>
+            <DialogDescription className="text-[#6A6A77]">
               {translate("security.qrDescription")}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-center rounded-2xl bg-white p-5 ring-1 ring-[#E5E7EB]">
+          <div className="flex justify-center rounded-2xl bg-white p-5 ring-1 ring-[#E8E8EA]">
             {enrollOtpAuthUrl ? (
-              <QRCode value={enrollOtpAuthUrl} size={220} bgColor="#FFFFFF" fgColor="#111827" />
+              <QRCode value={enrollOtpAuthUrl} size={220} bgColor="#FFFFFF" fgColor="#1A1A2E" />
             ) : null}
           </div>
-          <p className="text-center text-xs text-[#6B7280]">
+          <p className="text-center text-xs text-[#6A6A77]">
             {translate("security.qrManualHint")}
           </p>
         </DialogContent>
@@ -613,9 +613,9 @@ export default function WorkerSecurity() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#111827]">{translate("security.renameDevice")}</h3>
+              <h3 className="text-lg font-bold text-[#1A1A2E]">{translate("security.renameDevice")}</h3>
               <button type="button" onClick={() => setRenamingId(null)} aria-label={translate("common.close")}>
-                <X className="h-5 w-5 text-[#6B7280]" />
+                <X className="h-5 w-5 text-[#6A6A77]" />
               </button>
             </div>
             <Input
@@ -628,7 +628,7 @@ export default function WorkerSecurity() {
               <Button type="button" variant="outline" onClick={() => setRenamingId(null)} className="rounded-xl">
                 {translate("common.cancel")}
               </Button>
-              <Button type="button" onClick={() => void submitRename()} className="rounded-xl" style={{ background: PLUM }}>
+              <Button type="button" onClick={() => void submitRename()} className="rounded-xl" style={{ background: "var(--cc-cta)" }}>
                 {translate("common.save")}
               </Button>
             </div>

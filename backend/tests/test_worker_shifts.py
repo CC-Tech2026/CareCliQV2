@@ -787,14 +787,14 @@ def test_acknowledge_shift_risks_persists_timestamp(mock_get, mock_admin, _mock_
     assert update_payload["risks_acknowledged_at"]
 
 
+@patch("backend.app.services.safety_protocol_service.build_worker_safety_status", return_value=_MOCK_SAFETY_CLEAR)
 @patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_clock_in_shift_blocked_without_risk_acknowledgement(mock_get, _mock_session):
+def test_clock_in_allowed_without_risk_acknowledgement(mock_get, _mock_session, _mock_safety):
     mock_get.return_value = _sample_shift(
         health_alerts="⛔ Risk of falls — supervise transfers",
     )
-    with pytest.raises(ValueError, match="Acknowledge risks"):
-        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+    shift_service._ensure_risks_acknowledged_if_required(mock_get.return_value, "org-1")
 
 
 @patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)

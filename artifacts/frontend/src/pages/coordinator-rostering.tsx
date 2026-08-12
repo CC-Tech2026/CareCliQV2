@@ -1,4 +1,5 @@
-﻿import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
@@ -7,11 +8,13 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
-  CheckCircle2, XCircle, MinusCircle, UserCheck,
+  CheckCircle2, XCircle, MinusCircle, UserCheck, Activity,
+  Search, RefreshCw,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -29,7 +32,16 @@ import { DndScheduleView }        from "@/components/coordinator/DndScheduleView
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { appLocalDateKey } from "@/lib/datetime";
+import CoordinatorLivePage from "./coordinator-live";
+import CoordinatorMonitorPage from "./coordinator-monitor";
+
+type ScheduleTab = "roster" | "live";
+const SCHEDULE_TABS: { id: ScheduleTab; label: string }[] = [
+  { id: "roster", label: "Roster"         },
+  { id: "live",   label: "Live Monitor" },
+];
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -41,7 +53,7 @@ const SOFT   = "var(--cc-soft)";
 type ViewMode = "month" | "week" | "schedule" | "list";
 
 const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
-  scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#EDE9FF", color: "#3730A3" },
+  scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#FCE3EB", color: "#E8457A" },
   in_progress: { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
   clocked_in:  { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
   completed:   { labelKey: "coordinator.rostering.status.completed", bg: "#DCFCE7", color: "#166534" },
@@ -71,7 +83,7 @@ function ShiftChip({ shift }: { shift: CoordinatorShiftRecord }) {
       style={{ background: cfg.bg, color: cfg.color }}
       title={translateParams("coordinator.rostering.shiftChipTitle", { participant, worker, time: timeSuffix })}
     >
-      {shift.participant_name?.split(" ")[0] || "—"}
+      {shift.participant_name?.split(" ")[0] || "N/A"}
       {d ? ` ${format(d, "HH:mm")}` : ""}
     </div>
   );
@@ -144,7 +156,7 @@ function MonthGrid({
                 <span
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-black"
                   style={{
-                    background: today ? PLUM : "transparent",
+                    background: today ? "var(--cc-text)" : "transparent",
                     color: today ? "white" : isSelected ? PLUM : inMonth ? TEXT : MUTED,
                   }}
                 >
@@ -176,10 +188,10 @@ const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
 type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
-/** Returns 0=Mon … 6=Sun matching the available_days encoding in WorkerAvailability */
+/** Returns 0=Mon – 6=Sun matching the available_days encoding in WorkerAvailability */
 function ccDayIndex(date: Date): number {
-  const js = getDay(date); // 0=Sun, 1=Mon … 6=Sat
-  return js === 0 ? 6 : js - 1; // convert to 0=Mon … 6=Sun
+  const js = getDay(date); // 0=Sun, 1=Mon – 6=Sat
+  return js === 0 ? 6 : js - 1; // convert to 0=Mon – 6=Sun
 }
 
 function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
@@ -261,7 +273,7 @@ function RosterGrid({
         <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Availability</span>
         {[
           { color: "#DCFCE7", border: "#86EFAC", text: "#166534", label: "Available" },
-          { color: "#EDE9FF", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
+          { color: "#FCE3EB", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
           { color: "#FEF3C7", border: "#FCD34D", text: "#92400E", label: "On leave" },
           { color: "#F1F5F9", border: "#CBD5E1", text: "#64748B", label: "Not rostered" },
         ].map((l) => (
@@ -298,7 +310,7 @@ function RosterGrid({
                     </div>
                     <div
                       className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? PLUM : "transparent", color: isToday(d) ? "white" : TEXT }}
+                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "white" : TEXT }}
                     >
                       {format(d, "d")}
                     </div>
@@ -323,7 +335,7 @@ function RosterGrid({
                     <div className="flex items-center gap-2.5">
                       <div
                         className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-sm"
-                        style={{ background: PLUM }}
+                        style={{ background: "var(--cc-text)" }}
                       >
                         {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                       </div>
@@ -428,7 +440,7 @@ function RosterGrid({
                                   className="rounded-lg px-2 py-1.5 text-[10px] font-bold"
                                   style={{ background: cfg.bg, color: cfg.color, borderLeft: `3px solid ${cfg.color}` }}
                                 >
-                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "—"}</div>
+                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "N/A"}</div>
                                   {start && (
                                     <div className="mt-0.5 font-medium opacity-80">
                                       {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
@@ -500,7 +512,7 @@ function DayPanel({
             size="sm"
             onClick={onAssign}
             className="flex items-center gap-1.5 rounded-full text-white text-xs"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={12} /> {translate("coordinator.rostering.assign")}
           </Button>
@@ -528,7 +540,7 @@ function DayPanel({
                   </span>
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <Clock3 size={11} />
-                    {start ? format(start, "h:mm a") : "—"}
+                    {start ? format(start, "h:mm a") : "N/A"}
                     {end ? ` – ${format(end, "h:mm a")}` : ""}
                     {durH ? ` · ${durH}h` : ""}
                   </span>
@@ -553,18 +565,13 @@ function DayPanel({
   );
 }
 
-function KpiCard({ label, value, sub, color = TEXT }: { label: string; value: string | number; sub?: string; color?: string }) {
-  return (
-    <div className="rounded-xl border bg-white px-4 py-4" style={{ borderColor: BORDER }}>
-      <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{label}</p>
-      <p className="mt-1.5 text-2xl font-black leading-none" style={{ color }}>{value}</p>
-      {sub && <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{sub}</p>}
-    </div>
-  );
-}
-
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
+  const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const liveOrgId = currentUser?.organizationId ?? "__no_org__";
+  const [liveSearch, setLiveSearch] = useState("");
+  const [pageTab,      setPageTab]      = useState<ScheduleTab>("roster");
   const [viewMode,     setViewMode]     = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -657,9 +664,11 @@ export default function CoordinatorRosteringPage() {
     <div className="space-y-5 pb-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("coordinator.rostering.title")}</h1>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Plan shifts, review worker availability and manage the roster</p>
         </div>
+        {pageTab === "roster" ? (
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setBulkOpen(true)}
@@ -672,44 +681,74 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setAssignOpen(true)}
             className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
           </Button>
         </div>
+        ) : pageTab === "live" ? (
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: MUTED }} />
+            <input
+              value={liveSearch}
+              onChange={(e) => setLiveSearch(e.target.value)}
+              placeholder="Search worker or participant…"
+              className="h-9 pl-8 pr-3 rounded-xl border text-[13px] outline-none w-56 focus:w-72 transition-all"
+              style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl gap-1.5 h-9"
+            style={{ borderColor: BORDER }}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["live-shifts", liveOrgId] })}
+          >
+            <RefreshCw size={13} /> Refresh
+          </Button>
+        </div>
+        ) : null}
       </div>
 
-      {/* Inline stat strip instead of 4 identical cards */}
-      <div
-        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-white px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <div className="flex items-center gap-2">
-          <CalendarDays size={14} style={{ color: MUTED }} />
-          <span className="text-sm font-black" style={{ color: TEXT }}>{shiftsToday.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.today")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-          <span className="text-sm font-black text-blue-700">{activeShifts.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.activeNow")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: PLUM }} />
-          <span className="text-sm font-black" style={{ color: PLUM }}>{scheduledCount}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.upcoming")}</span>
-        </div>
-        <div className="h-4 w-px" style={{ background: BORDER }} />
-        <div className="flex items-center gap-2">
-          <Users2 size={14} style={{ color: MUTED }} />
-          <span className="text-sm font-black" style={{ color: TEXT }}>{workers.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>
-            {workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
-          </span>
-        </div>
+      {/* Page-level tabs: Roster | Live | Monitor */}
+      <div role="tablist" className="flex gap-5 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
+        {SCHEDULE_TABS.map((tab) => {
+          const active = pageTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active ? "true" : "false"}
+              onClick={() => setPageTab(tab.id)}
+              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
+            >
+              {tab.label}
+              {active && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
+
+      {pageTab === "roster" && (
+      <>
+      {/* Inline stat strip instead of 4 identical cards */}
+      <KpiGrid className="sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays />} />
+        <KpiCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity />} />
+        <KpiCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 />} />
+        <KpiCard
+          label={workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
+          value={workers.length}
+          icon={<Users2 />}
+        />
+      </KpiGrid>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
@@ -719,7 +758,7 @@ export default function CoordinatorRosteringPage() {
               type="button"
               onClick={() => setViewMode(mode)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === mode ? PLUM : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
+              style={{ background: viewMode === mode ? "var(--cc-cta)" : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
             >
               {translate(`coordinator.rostering.view.${mode}`)}
             </button>
@@ -839,7 +878,7 @@ export default function CoordinatorRosteringPage() {
                 >
                   <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: PLUM }}>
+                    <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
                       {(shift.worker_name || "W").split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                     </div>
                     <p className="truncate text-[12px]" style={{ color: MUTED }}>{shift.worker_name || translate("common.worker")}</p>
@@ -850,7 +889,7 @@ export default function CoordinatorRosteringPage() {
                         <p className="text-[12px] font-bold" style={{ color: TEXT }}>{format(start, "d MMM yyyy")}</p>
                         <p className="text-[11px]" style={{ color: MUTED }}>{format(start, "h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}</p>
                       </>
-                    ) : <span style={{ color: MUTED }}>—</span>}
+                    ) : <span style={{ color: MUTED }}>N/A</span>}
                   </div>
                   <p className="truncate text-[11px]" style={{ color: MUTED }}>
                     {(shift.shift_type ?? "standard_support").replace(/_/g, " ")}
@@ -873,7 +912,7 @@ export default function CoordinatorRosteringPage() {
         initialDate={assignTarget?.date}
       />
 
-      {/* ── Schedule (DnD) view ──────────────────────────────────────────── */}
+      {/* -- Schedule (DnD) view -------------------------------------------- */}
       {viewMode === "schedule" && (
         <div className="space-y-4">
           {/* Period nav for schedule view */}
@@ -932,15 +971,15 @@ export default function CoordinatorRosteringPage() {
                 <button
                   key={w.id}
                   onClick={() => setAvailWorker((prev) => prev?.id === w.id ? null : w)}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F8F8FE]"
+                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
                   style={{
                     borderColor: availWorker?.id === w.id ? PLUM : BORDER,
-                    background:  availWorker?.id === w.id ? "#EDE9FF" : "var(--cc-bg)",
+                    background:  availWorker?.id === w.id ? "#FCE3EB" : "var(--cc-bg)",
                   }}
                 >
                   <div
                     className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white"
-                    style={{ background: PLUM }}
+                    style={{ background: "var(--cc-cta)" }}
                   >
                     {w.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                   </div>
@@ -957,13 +996,15 @@ export default function CoordinatorRosteringPage() {
         </div>
       )}
 
-      {/* ── Bulk/Recurring shift modal ───────────────────────────────────── */}
+      {/* -- Bulk/Recurring shift modal ------------------------------------- */}
       <BulkShiftModal
         open={bulkOpen}
         onOpenChange={setBulkOpen}
         participants={participantList}
         workers={workers}
       />
+      </>
+      )}
     </div>
   );
 }

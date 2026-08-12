@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   AlertTriangle, FileCheck2, ShieldCheck, Download,
@@ -13,20 +13,28 @@ import {
 } from "@/services/coordinatorService";
 import { getAuditEngagementPack } from "@/services/longShiftService";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { KpiCard, KpiGrid, kpiTint, toneColour, type StatTone } from "@/components/ui/stat-card";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM  = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT  = "#F8F8FE";
+const SOFT  = "#F4EDE6";
 
 function complianceColour(score?: number | null) {
   if (score == null) return MUTED;
   if (score >= 85) return "#16A34A";
   if (score >= 60) return "#D97706";
   return "#DC2626";
+}
+
+function complianceTone(score?: number | null): StatTone {
+  if (score == null) return "neutral";
+  if (score >= 85) return "success";
+  if (score >= 60) return "warning";
+  return "danger";
 }
 
 function TrendIcon({ score }: { score?: number | null }) {
@@ -39,8 +47,8 @@ function TrendIcon({ score }: { score?: number | null }) {
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
 /** Rendered both at the standalone /audit-pack route and as a Compliance
- * Centre sub-tab — kept as one component so the two never drift apart. */
-export function AuditPackPanel() {
+ * Centre sub-tab � kept as one component so the two never drift apart. */
+export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
 
@@ -97,77 +105,70 @@ export function AuditPackPanel() {
 
   const statCards = useMemo(() => [
     {
-      icon: ShieldCheck,
+      icon: <ShieldCheck />,
       label: translate("auditPack.stat.teamCompliance"),
       value: compliance.data ? `${compliance.data.average_score}%` : translate("common.emDash"),
-      colour: complianceColour(compliance.data?.average_score),
+      tone: complianceTone(compliance.data?.average_score),
     },
     {
-      icon: FileCheck2,
+      icon: <FileCheck2 />,
       label: translate("auditPack.stat.sessionRecords"),
       value: compliance.data?.total_sessions ?? translate("common.emDash"),
-      colour: PLUM,
+      tone: "brand" as const,
     },
     {
-      icon: AlertTriangle,
+      icon: <AlertTriangle />,
       label: translate("auditPack.stat.rpFlags"),
       value: flags.data?.length ?? translate("common.emDash"),
-      colour: CORAL,
+      tone: "danger" as const,
     },
     {
-      icon: Flag,
+      icon: <Flag />,
       label: translate("auditPack.stat.needsReview"),
       value: flagged.data?.length ?? translate("common.emDash"),
-      colour: "#D97706",
+      tone: "warning" as const,
     },
   ], [translate, compliance.data, flags.data, flagged.data]);
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="hidden" style={{ color: CORAL }}>{translate("common.coordinator")}</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("auditPack.title")}</h1>
-          <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
-        </div>
+      {/* Header � skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
+      <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
+        {!embedded && (
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>{translate("auditPack.eyebrow")}</p>
+            <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("auditPack.title")}</h1>
+            <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
+          </div>
+        )}
         <Button
           onClick={handleExport}
           className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           <Download size={15} /> {translate("auditPack.export")}
         </Button>
       </div>
 
       {/* Stat strip */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border bg-white px-5 py-3" style={{ borderColor: BORDER }}>
-        {statCards.map(({ icon: Icon, label, value, colour }, i) => (
-          <div key={label} className="flex items-center gap-6">
-            {i > 0 && <div className="h-7 w-px hidden sm:block" style={{ background: BORDER }} />}
-            <div className="flex items-center gap-2">
-              <Icon size={16} style={{ color: colour }} className="shrink-0" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>{label}</p>
-                <p className="text-lg font-black leading-tight mt-0.5" style={{ color: TEXT }}>{value}</p>
-              </div>
-            </div>
-          </div>
+      <KpiGrid>
+        {statCards.map(({ icon, label, value, tone }) => (
+          <KpiCard key={label} label={label} value={value} tone={tone} icon={icon} />
         ))}
-      </div>
+      </KpiGrid>
 
       {/* Compliance status strip */}
       {compliance.data && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {[
-            { label: translate("auditPack.compliant"), count: compliance.data.compliant, bg: "#DCFCE7", colour: "#16A34A" },
-            { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, bg: "#FEF3C7", colour: "#D97706" },
-            { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, bg: "#FEE2E2", colour: "#DC2626" },
-          ].map(({ label, count, bg, colour }) => (
-            <div key={label} className="rounded-xl p-3 text-center" style={{ background: bg }}>
-              <p className="text-2xl font-black" style={{ color: colour }}>{count}</p>
-              <p className="text-xs font-bold mt-0.5" style={{ color: colour }}>{label}</p>
-            </div>
+            { label: translate("auditPack.compliant"), count: compliance.data.compliant, tone: "success" as const },
+            { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, tone: "warning" as const },
+            { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, tone: "danger" as const },
+          ].map(({ label, count, tone }) => (
+            <Card key={label} className="rounded-2xl border-0 shadow-sm p-4 text-center" style={{ background: kpiTint(tone) }}>
+              <p className="text-2xl font-black" style={{ color: toneColour[tone] }}>{count}</p>
+              <p className="text-xs font-bold mt-0.5" style={{ color: toneColour[tone] }}>{label}</p>
+            </Card>
           ))}
         </div>
       )}
@@ -190,7 +191,7 @@ export function AuditPackPanel() {
         ))}
       </div>
 
-      {/* ── Summary tab ── */}
+      {/* -- Summary tab -- */}
       {activeTab === "summary" && (
         <section className="rounded-2xl bg-white p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>{translate("auditPack.rpFlagsTitle")}</h2>
@@ -200,7 +201,7 @@ export function AuditPackPanel() {
           ) : (
             <div className="space-y-2">
               {(flags.data || []).map((flag, index) => (
-                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EEEAFB" }}>
+                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EDE3FC" }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || translate("common.participant")}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
@@ -242,7 +243,7 @@ export function AuditPackPanel() {
                     {engagement.data.check16_compliance_row.name} ({engagement.data.check16_compliance_row.rule})
                   </p>
                   <p style={{ color: MUTED }}>
-                    Period result: {engagement.data.check16_compliance_row.period_result} ·{" "}
+                    Period result: {engagement.data.check16_compliance_row.period_result} �{" "}
                     {engagement.data.check16_compliance_row.sessions_flagged} sessions flagged
                   </p>
                 </div>
@@ -250,17 +251,17 @@ export function AuditPackPanel() {
 
               <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
-                  Section 3a — Long shift engagement log
+                  Section 3a: Long shift engagement log
                 </h2>
                 <div className="mt-3 space-y-2">
                   {engagement.data.long_shift_engagement_log.map((row) => (
                     <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
                       <p className="font-bold" style={{ color: TEXT }}>
-                        {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
+                        {row.participant_name || "Participant"} � {row.worker_name || "Worker"}
                       </p>
                       <p style={{ color: MUTED }}>
-                        {row.shift_duration_hours}h · Check-ins {row.checkins_completed}/{row.checkins_required} ·
-                        Max gap {row.max_activity_gap_mins}m · Break {row.break_duration_mins}m · Score {row.engagement_score}
+                        {row.shift_duration_hours}h � Check-ins {row.checkins_completed}/{row.checkins_required} �
+                        Max gap {row.max_activity_gap_mins}m � Break {row.break_duration_mins}m � Score {row.engagement_score}
                       </p>
                     </div>
                   ))}
@@ -283,8 +284,8 @@ export function AuditPackPanel() {
                     >
                       <p className="font-bold" style={{ color: TEXT }}>{row.participant_name || "Participant"}</p>
                       <p style={{ color: MUTED }}>
-                        Billed {row.billed_hours ?? "—"}h · Billable {row.billable_hours ?? "—"}h · Break {row.break_hours ?? 0}h
-                        {row.flagged ? " · discrepancy flagged" : ""}
+                        Billed {row.billed_hours ?? "N/A"}h � Billable {row.billable_hours ?? "N/A"}h � Break {row.break_hours ?? 0}h
+                        {row.flagged ? " � discrepancy flagged" : ""}
                       </p>
                     </div>
                   ))}
@@ -297,7 +298,7 @@ export function AuditPackPanel() {
         </div>
       )}
 
-      {/* ── Worker performance tab ── */}
+      {/* -- Worker performance tab -- */}
       {activeTab === "workers" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
@@ -343,7 +344,7 @@ export function AuditPackPanel() {
         </section>
       )}
 
-      {/* ── Flagged sessions tab ── */}
+      {/* -- Flagged sessions tab -- */}
       {activeTab === "flagged" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
@@ -373,7 +374,7 @@ export function AuditPackPanel() {
                     <a
                       href={`/sessions/${s.id}`}
                       className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                      style={{ background: PLUM }}
+                      style={{ background: "var(--cc-cta)" }}
                     >
                       {translate("auditPack.review")}
                     </a>

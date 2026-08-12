@@ -30,6 +30,7 @@ class PushTokenBody(BaseModel):
     device_id: str = Field(min_length=8, max_length=128)
     push_token: str = Field(min_length=1)
     platform: str = "web"
+    token_type: str = "expo"
 
 
 class AckBody(BaseModel):
@@ -62,6 +63,7 @@ async def register_worker_push_token(
         body.device_id,
         body.push_token,
         body.platform,
+        body.token_type,
     )
     return {"registered": ok}
 
@@ -72,6 +74,7 @@ async def list_notifications(
     unread_only: bool = Query(default=False),
     banners_only: bool = Query(default=False),
     limit: int = Query(default=100, le=200),
+    offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
     _require_worker(current_user)
@@ -82,6 +85,7 @@ async def list_notifications(
         unread_only=unread_only,
         banners_only=banners_only,
         limit=limit,
+        offset=offset,
     )
     return {"notifications": items, "count": len(items)}
 

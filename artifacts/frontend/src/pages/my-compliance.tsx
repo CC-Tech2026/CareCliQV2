@@ -48,7 +48,7 @@ export default function MyCompliance() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: MUTED }}>Support Worker</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("compliance.title")}</h1>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.title")}</h1>
       </div>
 
       <div
@@ -100,7 +100,7 @@ export default function MyCompliance() {
         </div>
         <div className="space-y-3">
           {(data?.sessions || []).map((session) => (
-            <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+            <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: "#EDE3FC" }}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-black capitalize" style={{ color: TEXT }}>{(session.session_type || "session").replace("_", " ")}</p>

@@ -105,7 +105,7 @@ export function SignatureCanvas({ minWidth = 150, minHeight = 60, className, onC
   return (
     <div className={cn("space-y-2", className)}>
       <div
-        className="overflow-hidden rounded-xl border-2 border-dashed bg-[var(--cc-surface)]"
+        className="overflow-hidden rounded-xl border-2 border-dashed bg-card"
         style={{ borderColor: hasStroke ? PLUM : BORDER, touchAction: "none", opacity: hasStroke ? 1 : undefined }}
       >
         <canvas

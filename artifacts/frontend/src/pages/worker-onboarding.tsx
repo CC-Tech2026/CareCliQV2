@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { BookOpen, CheckCircle2, Loader2, Save, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,7 @@ export default function WorkerOnboarding() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#E8457A]" />
         <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
@@ -101,41 +101,41 @@ export default function WorkerOnboarding() {
       <div className="space-y-6">
         <div>
           <p className="hidden" style={{ color: CORAL }}>{translate("onboarding.supportWorker")}</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate("onboarding.title")}
           </h1>
-          <p className="mt-2 text-sm text-[#6B7280]">{translate("onboarding.subtitleLater")}</p>
+          <p className="mt-2 text-sm text-[#6A6A77]">{translate("onboarding.subtitleLater")}</p>
         </div>
         <WorkerOnboardingChecklist items={items} onToggle={toggleItem} />
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
-          <div className="mb-4 flex items-center gap-2 text-[#111827]">
-            <UserRound className="h-5 w-5 text-[#3730A3]" />
+        <div className="rounded-2xl border border-[#E8E8EA] bg-white p-5">
+          <div className="mb-4 flex items-center gap-2 text-[#1A1A2E]">
+            <UserRound className="h-5 w-5 text-[#E8457A]" />
             <h2 className="font-black">{translate("onboarding.profilePhoto")}</h2>
           </div>
           <ProfilePhotoUpload currentUrl={user?.profile_photo_url} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Link href="/credentials" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <CheckCircle2 className="h-5 w-5 text-[#3730A3]" />
-            <p className="mt-3 text-sm font-black text-[#111827]">{translate("onboarding.addCredentials")}</p>
-            <p className="mt-1 text-xs text-[#6B7280]">{translate("onboarding.addCredentialsHint")}</p>
+          <Link href="/credentials" className="rounded-2xl border border-[#E8E8EA] bg-white p-5 transition hover:bg-[#F8F6FE]">
+            <CheckCircle2 className="h-5 w-5 text-[#E8457A]" />
+            <p className="mt-3 text-sm font-black text-[#1A1A2E]">{translate("onboarding.addCredentials")}</p>
+            <p className="mt-1 text-xs text-[#6A6A77]">{translate("onboarding.addCredentialsHint")}</p>
           </Link>
-          <Link href="/my-clients" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <BookOpen className="h-5 w-5 text-[#3730A3]" />
-            <p className="mt-3 text-sm font-black text-[#111827]">{translate("onboarding.reviewClients")}</p>
-            <p className="mt-1 text-xs text-[#6B7280]">{translate("onboarding.reviewClientsHint")}</p>
+          <Link href="/my-clients" className="rounded-2xl border border-[#E8E8EA] bg-white p-5 transition hover:bg-[#F8F6FE]">
+            <BookOpen className="h-5 w-5 text-[#E8457A]" />
+            <p className="mt-3 text-sm font-black text-[#1A1A2E]">{translate("onboarding.reviewClients")}</p>
+            <p className="mt-1 text-xs text-[#6A6A77]">{translate("onboarding.reviewClientsHint")}</p>
           </Link>
         </div>
       </div>
-      <aside className="h-fit rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6B7280]">{translate("onboarding.progress")}</p>
+      <aside className="h-fit rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6A6A77]">{translate("onboarding.progress")}</p>
         <p className="mt-2 text-4xl font-black" style={{ color: PLUM }}>{completeCount}/{items.length}</p>
-        <p className="mt-2 text-sm text-[#6B7280]">{translate("onboarding.progressHint")}</p>
+        <p className="mt-2 text-sm text-[#6A6A77]">{translate("onboarding.progressHint")}</p>
         <Button
           onClick={complete}
           disabled={!allComplete || saving}
           className="mt-5 w-full gap-2 rounded-xl"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {translate("onboarding.confirmReadiness")}

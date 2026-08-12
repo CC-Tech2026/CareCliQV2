@@ -52,7 +52,7 @@ export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, tutoria
           if (!tutorialDemo && !interactionLocked) onOpenChange(false);
         }}
       />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col gap-4 overflow-hidden rounded-lg border border-cc-border bg-cc-surface p-6 text-cc-text shadow-lg">
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col gap-4 overflow-hidden rounded-lg border border-cc-border bg-card p-6 text-cc-text shadow-lg">
         {!tutorialDemo && (
           <button
             type="button"

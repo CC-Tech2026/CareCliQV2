@@ -131,7 +131,7 @@ export function ShiftMapPanel({
                 )}
               </div>
 
-              <div className="relative aspect-[16/10] w-full bg-[#F8F8FE]">
+              <div className="relative aspect-[16/10] w-full bg-[#F4EDE6]">
                 <iframe
                   title={translate("shift.map.iframeTitle")}
                   src={embedMapUrl(resolvedAddress)}

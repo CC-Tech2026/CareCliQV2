@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, FileText } from "lucide-react";
 
-const PLUM = "#3730A3";
-const BORDER = "#E5E7EB";
+const PLUM = "#E8457A";
+const BORDER = "#E8E8EA";
 const TEXT = "#1F2937";
-const MUTED = "#6B7280";
+const MUTED = "#6A6A77";
 const SOFT = "#F9FAFB";
 
-const SPEAKER_COLORS = ["#3730A3", "#166534", "#BE185D", "#0369A1", "#B45309"];
+const SPEAKER_COLORS = ["#E8457A", "#166534", "#7C3AED", "#0369A1", "#B45309"];
 
 function speakerColor(name: string): string {
   let hash = 0;

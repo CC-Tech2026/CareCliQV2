@@ -19,6 +19,9 @@ from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
+# Match frontend shift-utils.ts — briefing not required for clock-in until re-enabled.
+BRIEFING_GATE_ENABLED = False
+
 MAX_BRIEFING_ALERTS = 3
 
 
@@ -572,7 +575,7 @@ def _briefing_schema_available() -> bool:
 
 def ensure_briefing_completed(shift: dict[str, Any], worker_id: str) -> None:
     """Raise ValueError when pre-shift briefing is required but incomplete."""
-    if shift.get("clocked_in_at") or shift.get("status") in {"in_progress", "completed"}:
+    if not BRIEFING_GATE_ENABLED:
         return
     if not _briefing_schema_available():
         return

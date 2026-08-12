@@ -38,7 +38,7 @@ function GoalCard({ goal, index, translate, translateParams }: { goal: GoalDetai
   return (
     <div
       className="rounded-lg border p-4 space-y-3"
-      style={{ borderColor: "#EEEAFB", background: SOFT }}
+      style={{ borderColor: "#EDE3FC", background: SOFT }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-black leading-snug" style={{ color: TEXT }}>

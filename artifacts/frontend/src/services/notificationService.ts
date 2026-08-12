@@ -92,10 +92,20 @@ export async function snoozeTaskReminder(shiftId: string, taskId: string) {
   );
 }
 
-export async function registerPushToken(deviceId: string, pushToken: string, platform = "web") {
+export async function registerPushToken(
+  deviceId: string,
+  pushToken: string,
+  platform = "web",
+  tokenType: "expo" | "fcm" = "expo",
+) {
   return jsonFetch<{ registered: boolean }>("/api/worker/notifications/push-token", {
     method: "POST",
-    body: JSON.stringify({ device_id: deviceId, push_token: pushToken, platform }),
+    body: JSON.stringify({
+      device_id: deviceId,
+      push_token: pushToken,
+      platform,
+      token_type: tokenType,
+    }),
   });
 }
 

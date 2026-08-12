@@ -16,20 +16,20 @@ import {
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
-const T1     = "#111827";
+const T1     = "#1A1A2E";
 const T2     = "#374151";
-const T3     = "#6B7280";
+const T3     = "#6A6A77";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
 function safeDateTime(v?: string | null) {
-  if (!v) return "—";
+  if (!v) return "N/A";
   try { return format(parseISO(v), "d MMM yyyy, h:mm a"); }
   catch { return v; }
 }
 
 function formatMinutes(mins?: number | null) {
-  if (mins == null) return "—";
+  if (mins == null) return "N/A";
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -47,7 +47,7 @@ function CheckRow({ passed, warning, label, detail }: { passed: boolean; warning
       <CheckIcon passed={passed} warning={warning} />
       <div className="min-w-0">
         <span className="text-xs font-bold dark:text-white" style={{ color: T1 }}>{label}</span>
-        {detail && <span className="ml-1.5 text-xs font-medium dark:text-white" style={{ color: T3 }}>— {detail}</span>}
+        {detail && <span className="ml-1.5 text-xs font-medium dark:text-white" style={{ color: T3 }}>: {detail}</span>}
       </div>
     </div>
   );
@@ -128,7 +128,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
       <div className="border-t px-5 py-3 space-y-1.5" style={{ borderColor: BORDER, background: SOFT }}>
         <CheckRow
           passed={!evidence.flagged}
-          label={`Evidence & compliance — ${evidence.compliance_score ?? "—"}%`}
+          label={`Evidence & compliance: ${evidence.compliance_score ?? "N/A"}%`}
           detail={
             evidence.flagged
               ? `${evidence.mandatory_without_evidence ?? 0} mandatory task(s) without evidence`
@@ -156,7 +156,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           </p>
           <ul className="space-y-1 text-xs font-medium dark:text-white" style={{ color: T2 }}>
             {evidence.flagged_tasks.map((t, i) => (
-              <li key={i}>{String((t as Record<string, unknown>).label ?? "Task")} — {String((t as Record<string, unknown>).flag_type ?? "")}</li>
+              <li key={i}>{String((t as Record<string, unknown>).label ?? "Task")}: {String((t as Record<string, unknown>).flag_type ?? "")}</li>
             ))}
           </ul>
         </div>
@@ -177,7 +177,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           </option>
           {priceItems.map((p) => (
             <option key={p.item_code} value={p.item_code}>
-              {p.item_code} — {p.name || p.support_purpose || "Unnamed item"}
+              {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
               {p.price_national != null ? ` ($${(p.price_national / 100).toFixed(2)}/hr)` : ""}
             </option>
           ))}
@@ -205,7 +205,10 @@ export default function CoordinatorShiftVerification() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+          Schedule
+        </p>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           Shift Verification
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
@@ -220,8 +223,8 @@ export default function CoordinatorShiftVerification() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
               <div className="space-y-2">
-                <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
-                <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
+                <div className="h-4 w-48 rounded bg-[#E8E8EA]" />
+                <div className="h-3 w-32 rounded bg-[#E8E8EA]" />
               </div>
             </div>
           ))}

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const DEBOUNCE_MS = 500;
-const GRADIENT = "#3730A3";
+const GRADIENT = "#E8457A";
 
 type Props = {
   shiftId: string;

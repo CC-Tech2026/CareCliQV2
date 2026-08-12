@@ -34,6 +34,7 @@ import {
 } from "@/lib/shift-utils";
 import type { ShiftSignature } from "@/services/complianceService";
 import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
+import { DuringShiftActionsSidebar } from "@/components/shifts/DuringShiftActionsSidebar";
 
 export type WorkerMobilePhase = "scheduled" | "session" | "review" | "signature" | "submitted" | "completed";
 
@@ -50,7 +51,10 @@ type Props = {
   submissionComplete?: boolean;
   onClockIn: () => void;
   onAutoStartSession: () => Promise<void>;
+  onAttemptEndShift: () => void | Promise<boolean>;
   onShiftComplete: () => Promise<void>;
+  endValidating?: boolean;
+  focusMobileTaskId?: string | null;
   ackChecked: boolean;
   setAckChecked: (v: boolean) => void;
   onRequestAcknowledge: () => void;
@@ -73,7 +77,10 @@ export function WorkerMobileShiftView({
   participantFirstName,
   onClockIn,
   onAutoStartSession,
+  onAttemptEndShift,
   onShiftComplete,
+  endValidating = false,
+  focusMobileTaskId,
   ackChecked,
   setAckChecked,
   onRequestAcknowledge,
@@ -103,6 +110,7 @@ export function WorkerMobileShiftView({
   const [incidentDraft, setIncidentDraft] = useState<{ noteId?: string; content?: string } | null>(null);
   const [autoStarted, setAutoStarted] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [endingReview, setEndingReview] = useState(false);
 
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const isSessionLike = visualState === "clocked_in" || visualState === "session_active";
@@ -115,6 +123,13 @@ export function WorkerMobileShiftView({
   const riskAckAlerts = shift.health_alerts ?? [];
   const showEnd = visualState === "session_active" && phase === "session";
   const isFullImmersive = phase !== "scheduled";
+  const showDuringShiftFab =
+    (visualState === "clocked_in" || visualState === "session_active") &&
+    (phase === "session" || phase === "review");
+
+  const handleMessageOffice = () => {
+    navigate(`/my-shifts/${shift.id}/message-office`);
+  };
 
   const { notes: complianceNotes, sessionNotes, refresh: refreshComplianceNotes } =
     useGoalLinkedTaskComplianceNotes(sessionId, activeTasks);
@@ -206,8 +221,17 @@ export function WorkerMobileShiftView({
   };
 
   const handleEnd = () => {
-    void refreshComplianceNotes();
-    setPhase("review");
+    if (endingReview || endValidating || busy !== null) return;
+    void (async () => {
+      setEndingReview(true);
+      try {
+        await refreshComplianceNotes();
+        const canProceed = await onAttemptEndShift();
+        if (canProceed) setPhase("review");
+      } finally {
+        setEndingReview(false);
+      }
+    })();
   };
 
   const openIncidentReport = (noteId?: string, content?: string) => {
@@ -266,7 +290,7 @@ export function WorkerMobileShiftView({
 
     return {
       participantName: shift.participant_name ?? "Participant",
-      duration: formatMobileShiftDuration(shift, elapsed || undefined) || duration || "—",
+      duration: formatMobileShiftDuration(shift, elapsed || undefined) || duration || "N/A",
       tasksCompleted,
       tasksTotal,
       score: compliance.score,
@@ -343,6 +367,14 @@ export function WorkerMobileShiftView({
             rules={compliance.rules}
             onClose={() => setComplianceOpen(false)}
             onOpenIncidentReport={() => openIncidentReport()}
+          />
+        )}
+
+        {showDuringShiftFab && (
+          <DuringShiftActionsSidebar
+            onMessageOffice={handleMessageOffice}
+            officePhone={shift.office_contact_number ?? undefined}
+            pinned
           />
         )}
       </div>
@@ -464,7 +496,7 @@ export function WorkerMobileShiftView({
         breakElapsed={longShiftBreak.breakElapsed}
         showEnd={showEnd}
         onEnd={handleEnd}
-        endBusy={busy === "end"}
+        endBusy={endValidating || endingReview || busy === "end"}
         onBack={() => navigate("/my-shifts")}
       />
 
@@ -478,6 +510,7 @@ export function WorkerMobileShiftView({
         sessionElapsed={elapsed}
         longShiftBreak={longShiftBreak}
         initialCheckinStatus={shift.checkin_status}
+        focusTaskId={focusMobileTaskId}
         tasks={activeTasks}
         onTasksChange={setTasks}
         sessionNotes={sessionNotes}
@@ -489,7 +522,7 @@ export function WorkerMobileShiftView({
         onOpenIncidentReport={openIncidentReport}
         onNotesRefresh={refreshComplianceNotes}
         tutorialDemo={isTutorialDemo}
-        disabled={busy !== null}
+        disabled={busy !== null || endValidating || endingReview}
       />
 
       {incidentDraft && (
@@ -512,6 +545,14 @@ export function WorkerMobileShiftView({
           rules={compliance.rules}
           onClose={() => setComplianceOpen(false)}
           onOpenIncidentReport={() => openIncidentReport()}
+        />
+      )}
+
+      {showDuringShiftFab && (
+        <DuringShiftActionsSidebar
+          onMessageOffice={handleMessageOffice}
+          officePhone={shift.office_contact_number ?? undefined}
+          pinned
         />
       )}
     </div>

@@ -243,7 +243,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
               {/* Title - Auto-filled by AI */}
               <div className="mb-3">
                 <Label htmlFor="title" className="text-sm">
-                  Task Title * {aiSuggestionApplied && <span className="text-xs text-purple-600">(AI-suggested{aiSourceDate ? ` — from session ${aiSourceDate}` : ""})</span>}
+                  Task Title * {aiSuggestionApplied && <span className="text-xs text-purple-600">(AI-suggested{aiSourceDate ? `, from session ${aiSourceDate}` : ""})</span>}
                 </Label>
                 <Input
                   id="title"

@@ -13,7 +13,7 @@ type Props = {
 };
 
 function formatTs(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   try {
     const d = new Date(value);
     return `${d.toLocaleString()} (UTC: ${format(d, "yyyy-MM-dd HH:mm")}Z)`;
@@ -45,7 +45,7 @@ export function EvidenceDetailsPanel({ metadata, defaultOpen = false, showRetent
           <Detail label={translate("shift.evidence.device")} value={metadata.device_type ?? translate("shift.evidence.unknown")} />
           <Detail label={translate("shift.evidence.sha256")} value={metadata.file_hash ?? translate("shift.evidence.pendingSync")} mono />
           {showRetention && metadata.retention_until && (
-            <p className="rounded-lg border border-cc-border bg-cc-surface px-2.5 py-2 text-xs font-semibold leading-snug" style={{ color: TEXT }}>
+            <p className="rounded-lg border border-cc-border bg-card px-2.5 py-2 text-xs font-semibold leading-snug" style={{ color: TEXT }}>
               {translateParams("shift.evidence.retention", {
                 date: format(new Date(metadata.retention_until), "d MMM yyyy"),
               })}

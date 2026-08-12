@@ -82,7 +82,7 @@ function shiftStatusCfg(shift: CalendarShift, translate: (key: string) => string
   if (shift.calendar_status === "tentative") {
     return { label: translate("calendar.status.tentative"), bg: "#FEF3C7", color: "#D97706" };
   }
-  return { label: translate("calendar.status.scheduled"), bg: "#EDE9FF", color: 'var(--cc-plum)' };
+  return { label: translate("calendar.status.scheduled"), bg: "#FCE3EB", color: 'var(--cc-plum)' };
 }
 
 function WorkerShiftChip({
@@ -147,7 +147,7 @@ function WorkerMonthGrid({
   }, [shifts]);
 
   return (
-    <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-card overflow-hidden" style={{ borderColor: BORDER }}>
       <div
         className="grid grid-cols-7"
         style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}
@@ -189,7 +189,7 @@ function WorkerMonthGrid({
                 <span
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-black"
                   style={{
-                    background: today ? PLUM : "transparent",
+                    background: today ? "var(--cc-text)" : "transparent",
                     color: today ? "white" : isSelected ? PLUM : inMonth ? TEXT : MUTED,
                   }}
                 >
@@ -249,7 +249,7 @@ function WorkerDayPanel({
   const off = timeOffOnDay(timeOff, day);
 
   return (
-    <div className="flex flex-col rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
+    <div className="flex flex-col rounded-2xl border bg-card" style={{ borderColor: BORDER }}>
       <div
         className="flex items-center justify-between px-4 py-3.5"
         style={{ borderBottom: `1px solid ${BORDER}` }}
@@ -425,7 +425,7 @@ export default function WorkerScheduleCalendar() {
       y += 5;
       doc.setFont("helvetica", "normal");
       for (const s of dayShifts) {
-        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end)} — ${anonymiseName(s.participant_name)}`;
+        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end)} · ${anonymiseName(s.participant_name)}`;
         doc.text(line, 18, y);
         y += 5;
       }
@@ -471,7 +471,7 @@ export default function WorkerScheduleCalendar() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("common.supportWorker")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("calendar.title")}
           </h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>
@@ -510,7 +510,7 @@ export default function WorkerScheduleCalendar() {
       </header>
 
       <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-cc-surface px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-card px-4 py-3"
         style={{ borderColor: BORDER }}
       >
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
@@ -520,7 +520,7 @@ export default function WorkerScheduleCalendar() {
               type="button"
               onClick={() => setViewMode(m)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === m ? PLUM : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
+              style={{ background: viewMode === m ? "var(--cc-cta)" : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
             >
               {translate(m === "month" ? "calendar.month" : "calendar.week")}
             </button>
@@ -530,6 +530,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigatePrev}
+            aria-label={translate("calendar.prev")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >
@@ -541,6 +542,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigateNext}
+            aria-label={translate("calendar.next")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >
@@ -561,7 +563,7 @@ export default function WorkerScheduleCalendar() {
             type="button"
             onClick={() => feedMut.mutate()}
             className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black text-white"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Link2 size={14} /> {feedMut.isPending ? translate("calendar.generating") : translate("calendar.share")}
           </button>
@@ -620,7 +622,7 @@ export default function WorkerScheduleCalendar() {
             return (
               <div
                 key={day.toISOString()}
-                className="rounded-2xl border bg-cc-surface p-3"
+                className="rounded-2xl border bg-card p-3"
                 style={{ borderColor: BORDER }}
               >
                 <p className="mb-2 text-xs font-black uppercase" style={{ color: isToday(day) ? PLUM : MUTED }}>
@@ -667,25 +669,26 @@ export default function WorkerScheduleCalendar() {
       )}
 
       {isLoading && viewMode === "month" && (
-        <div className="rounded-2xl border bg-cc-surface p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-card p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
           <CalendarDays className="mx-auto mb-2 opacity-40" />
           {translate("calendar.loading")}
         </div>
       )}
 
       <div
-        className="flex flex-wrap gap-4 rounded-xl border bg-cc-surface px-4 py-3 text-[11px] font-bold"
+        className="flex flex-wrap gap-4 rounded-xl border bg-card px-4 py-3 text-[11px] font-bold"
         style={{ borderColor: BORDER }}
       >
         <LegendItem label={translate("calendar.legend.confirmed")} swatch={{ background: PLUM }} />
         <LegendItem
           label={translate("calendar.legend.tentative")}
           swatch={{
-            background: `repeating-linear-gradient(45deg, ${PLUM}44, ${PLUM}44 4px, ${PLUM}22 4px, ${PLUM}22 8px)`,
+            background: "transparent",
+            border: `2px dashed ${PLUM}`,
           }}
         />
         <LegendItem label={translate("calendar.legend.cancelled")} swatch={{ background: "#CBD5E1", textDecoration: "line-through" }} />
-        <LegendItem label={translate("calendar.legend.timeOff")} swatch={{ background: "#E2E8F0" }} />
+        <LegendItem label={translate("calendar.legend.timeOff")} swatch={{ background: "#E8E8EA" }} />
       </div>
 
       <WorkerShiftConfirmDialog

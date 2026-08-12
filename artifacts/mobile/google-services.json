@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "73068767059",
+    "project_id": "carecliq-13c18",
+    "storage_bucket": "carecliq-13c18.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73068767059:android:111e0a77fdf292a2cae3a6",
+        "android_client_info": {
+          "package_name": "care.cliq2026"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw2TedpturF3LWtExgC4Duojg6BN4AXRg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,7 +15,6 @@ from ..core.access import (
     get_user_id,
     get_user_organization_id,
     get_user_role,
-    is_allied_health,
     is_coordinator_role,
 )
 from .supabase_client import get_supabase_admin
@@ -26,7 +25,7 @@ from . import billing_period_service
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
 SUBSCRIPTION_PLANS = {"starter", "team", "pro", "enterprise"}
 INVOICE_STATUSES = {"draft", "finalized", "issued", "sent", "paid", "void", "overdue", "cancelled"}
-BILLING_ROLES = {"support_coordinator", "allied_health", "managing_director"}
+BILLING_ROLES = {"support_coordinator", "managing_director"}
 
 
 def _now_iso() -> str:
@@ -210,8 +209,6 @@ async def upsert_subscription(user: dict, data: dict) -> dict:
 def _invoice_select_query(supabase, user: dict):
     org_id = _require_org(user)
     query = supabase.table("invoices").select("*").eq("organization_id", org_id)
-    if is_allied_health(user):
-        query = query.eq("issued_by", get_user_id(user))
     return query
 
 

@@ -480,19 +480,35 @@ async def my_client_ndis_plan(participant_id: str, current_user: dict = Depends(
 
 
 @router.get("/my-compliance")
-async def my_compliance(current_user: dict = Depends(get_current_user)):
+async def my_compliance(
+    sessions_limit: Optional[int] = Query(default=None, ge=0, le=50),
+    sessions_offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(get_current_user),
+):
     _require_worker(current_user)
     sessions = await session_service.get_all_sessions(500, current_user)
     scored = [s for s in sessions if s.get("compliance_score") is not None]
     scores = [float(s["compliance_score"]) for s in scored]
     average = round(sum(scores) / len(scores), 1) if scores else 0
+    compliant_sessions = sum(
+        1 for session in scored if _score_status(session.get("compliance_score")) == "compliant"
+    )
+    session_payloads = [_session_payload(session) for session in sessions]
+    total_sessions = len(session_payloads)
+    if sessions_limit is not None:
+        page_sessions = session_payloads[sessions_offset : sessions_offset + sessions_limit]
+    else:
+        page_sessions = session_payloads
     return {
         "average_score": average,
         "status": _score_status(average),
         "total_sessions": len(sessions),
         "reviewed_sessions": len(scored),
         "at_risk": sum(1 for score in scores if score < 85),
-        "sessions": [_session_payload(session) for session in sessions],
+        "compliant_sessions": compliant_sessions,
+        "sessions": page_sessions,
+        "sessions_total": total_sessions,
+        "latest_session": session_payloads[0] if session_payloads else None,
     }
 
 

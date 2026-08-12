@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -203,9 +203,9 @@ function checkLiveCompliance(
     const nowMs = Date.now();
     const deltaDays = (nowMs - sessionMs) / (1000 * 60 * 60 * 24);
     if (deltaDays > 7) {
-      issues.push({ type: "error", rule: "48_hour_overdue", msg: `Notes are ${Math.floor(deltaDays)} days overdue — NDIS requires documentation within 48 hours of service` });
+      issues.push({ type: "error", rule: "48_hour_overdue", msg: `Notes are ${Math.floor(deltaDays)} days overdue. NDIS requires documentation within 48 hours of service` });
     } else if (deltaDays > 2) {
-      issues.push({ type: "warning", rule: "48_hour_warning", msg: `Session was ${Math.floor(deltaDays)} days ago — NDIS recommends documenting within 48 hours` });
+      issues.push({ type: "warning", rule: "48_hour_warning", msg: `Session was ${Math.floor(deltaDays)} days ago. NDIS recommends documenting within 48 hours` });
     }
   }
   return issues;
@@ -411,7 +411,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: `Compliance re-run complete — ${data.score.toFixed(0)}%` });
+      toast({ title: `Compliance re-run complete: ${data.score.toFixed(0)}%` });
       refetch();
     },
     onError: () => toast({ title: translate("sessions.detail.toast.complianceFailed"), variant: "destructive" }),
@@ -618,7 +618,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   {liveRpFlags.slice(0, 6).map((flag, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-md px-2 py-1.5">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span><strong>"{flag.phrase}"</strong> — {flag.message}</span>
+                      <span><strong>"{flag.phrase}"</strong>: {flag.message}</span>
                     </li>
                   ))}
                 </ul>
@@ -653,7 +653,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               }}
               className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
             >
-              Acknowledged — Save Notes
+              Acknowledged: Save Notes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -688,7 +688,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-xl font-black tracking-tight">
+            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {session.participants?.full_name || translate("sessions.detail.sessionRecord")}
             </h1>
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>
@@ -708,12 +708,6 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Top bar control utilities */}
         <div className="flex gap-2 flex-wrap items-center">
-          <Link href={participantId ? `/patients?id=${participantId}&tab=sessions` : "/patients"}>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              {translate("sessions.detail.viewParticipant")}
-            </Button>
-          </Link>
           {isCoordinator && !(session as unknown as { review_flag?: boolean }).review_flag && (
             <Button
               variant="outline"
@@ -762,7 +756,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </Button>
           <Button
             className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ background: "var(--cc-plum)" }}
+            style={{ background: "var(--cc-cta)" }}
             onClick={handleAIAnalysis}
             disabled={isAISaving || hasBlockers}
             title={hasBlockers ? translate("sessions.detail.fixBlockers") : undefined}
@@ -841,7 +835,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                           : "bg-amber-50 text-amber-700 border-b border-amber-100"
                       }`}>
                         {criticalLiveIssues.length > 0 ? (
-                          <><XCircle className="h-3.5 w-3.5" /> {criticalLiveIssues.length} critical issue{criticalLiveIssues.length > 1 ? "s" : ""} — review before saving</>
+                          <><XCircle className="h-3.5 w-3.5" /> {criticalLiveIssues.length} critical issue{criticalLiveIssues.length > 1 ? "s" : ""}, review before saving</>
                         ) : (
                           <><AlertTriangle className="h-3.5 w-3.5" /> {liveIssues.length} compliance warning{liveIssues.length > 1 ? "s" : ""}</>
                         )}
@@ -861,7 +855,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   {liveIssues.length === 0 && notes.length > 50 && (
                     <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      Notes look good — no compliance issues detected
+                      Notes look good, no compliance issues detected
                     </div>
                   )}
                   {/* Character count metrics */}
@@ -971,7 +965,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-muted)" }}>Next Session</p>
                     <ul className="space-y-1">
                       {aiInsights.next_session_recommendations.map((rec: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>→</span>{rec}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>?</span>{rec}</li>
                       ))}
                     </ul>
                   </div>
@@ -981,7 +975,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest text-red-500 font-semibold mb-1.5">Concerns</p>
                     <ul className="space-y-1">
                       {aiInsights.concerns.map((c: string, i: number) => (
-                        <li key={i} className="text-[13px] text-red-700 flex gap-2"><span>⚠</span>{c}</li>
+                        <li key={i} className="text-[13px] text-red-700 flex gap-2"><span>?</span>{c}</li>
                       ))}
                     </ul>
                   </div>
@@ -991,7 +985,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--cc-plum)" }}>AI Recommendations</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_recommendations.map((r: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>→</span>{r}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "var(--cc-plum)" }}>?</span>{r}</li>
                       ))}
                     </ul>
                   </div>
@@ -1001,7 +995,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest text-amber-600 font-semibold mb-1.5">Compliance Flags</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_flags.map((f: string, i: number) => (
-                        <li key={i} className="text-[12px] text-amber-700 flex gap-2 bg-amber-50 rounded px-2 py-1"><span>⚑</span>{f}</li>
+                        <li key={i} className="text-[12px] text-amber-700 flex gap-2 bg-amber-50 rounded px-2 py-1"><span>?</span>{f}</li>
                       ))}
                     </ul>
                   </div>

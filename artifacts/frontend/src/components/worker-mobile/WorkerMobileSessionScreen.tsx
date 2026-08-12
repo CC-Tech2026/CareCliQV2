@@ -45,6 +45,7 @@ type Props = {
   sessionElapsed?: string;
   longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
   initialCheckinStatus?: CheckinWindowStatus | null;
+  focusTaskId?: string | null;
 };
 
 function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]) {
@@ -110,6 +111,7 @@ export function WorkerMobileSessionScreen({
   sessionElapsed,
   longShiftBreak,
   initialCheckinStatus,
+  focusTaskId,
 }: Props) {
   const { toast } = useToast();
   const { translate } = useAccessibility();
@@ -121,6 +123,17 @@ export function WorkerMobileSessionScreen({
   useEffect(() => {
     setLocalTasks(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    if (!focusTaskId) return;
+    setActiveTaskId(focusTaskId);
+    requestAnimationFrame(() => {
+      document.getElementById(`wm-shift-task-${focusTaskId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [focusTaskId]);
 
   useEffect(() => {
     setLocalSessionNotes(sessionNotes);
@@ -275,6 +288,8 @@ export function WorkerMobileSessionScreen({
               sessionElapsed={sessionElapsed}
               breakControl={longShiftBreak}
               initialCheckinStatus={initialCheckinStatus}
+              tasks={localTasks}
+              onNotesRefresh={onNotesRefresh}
             />
           </div>
         )}
