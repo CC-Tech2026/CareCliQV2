@@ -155,6 +155,10 @@ function RootLayoutNav() {
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
+        name="training"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
         name="accessibility"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />

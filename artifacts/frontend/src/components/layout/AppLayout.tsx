@@ -91,10 +91,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Safety & Resources",
       items: [
-        { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
-        { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
-        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
-        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
+        { href: "/my-compliance",   label: "My Compliance", icon: ShieldCheck   },
+        { href: "/worker/training", label: "Training",      icon: GraduationCap },
+        { href: "/incidents",       label: "Incidents",     icon: AlertTriangle },
+        { href: "/credentials",     label: "Credentials",   icon: BadgeCheck    },
+        { href: "/toolkit",         label: "Toolkit",       icon: Wrench        },
       ],
     },
   ],
@@ -202,6 +203,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "My Clients",          description: "Your assigned participants",              href: "/my-clients",                      icon: UserRound,       group: "pages",    roles: ["support_worker"] },
   { label: "My Availability",     description: "Set working hours & blackout dates",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
   { label: "My Compliance",       description: "Your training & credential status",       href: "/my-compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["support_worker"] },
+  { label: "Training",            description: "Assigned training modules & certifications", href: "/worker/training",              icon: GraduationCap,   group: "pages",    roles: ["support_worker"] },
   { label: "Credentials",         description: "Manage certifications & licences",        href: "/credentials",                     icon: BadgeCheck,      group: "pages",    roles: ["support_worker"] },
   { label: "Incidents",           description: "Incident reports & history",              href: "/incidents",                       icon: AlertTriangle,   group: "pages",    roles: ["support_coordinator", "support_worker"] },
   { label: "Toolkit",             description: "Resources & reference materials",         href: "/toolkit",                         icon: Wrench,          group: "pages",    roles: ["support_coordinator", "support_worker"] },
@@ -621,6 +623,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   );
   const incidentOpenCount = incidentStats?.open ?? 0;
   const isWorker    = userRole === "support_worker";
+  // Quill chatbox is scoped to coordinators and managing directors only.
+  const showQuillAssistant = userRole === "support_coordinator" || userRole === "managing_director";
   const topbarAlertHref =
     userRole === "support_worker"    ? "/my-compliance" :
     userRole === "managing_director" ? "/md/compliance"  :
@@ -986,7 +990,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
         <SidebarContents {...sharedProps} isDrawer collapsed={false} onNav={() => setDrawerOpen(false)} />
       </aside>
 
-      <FloatingAiAssistant />
+      {showQuillAssistant && <FloatingAiAssistant />}
     </div>
   );
 }

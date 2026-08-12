@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ProfileAvailabilityPanel } from "@/components/worker/profile/ProfileAvailabilityPanel";
 import { ProfileCredentialsPanel } from "@/components/worker/profile/ProfileCredentialsPanel";
 import { ProfileToolkitPanel } from "@/components/worker/profile/ProfileToolkitPanel";
+import { ProfileTrainingPanel } from "@/components/worker/profile/ProfileTrainingPanel";
 import { WorkerProfileHeader } from "@/components/worker/profile/WorkerProfileHeader";
 import { WorkerProfileTabs, type ProfileTab } from "@/components/worker/profile/WorkerProfileTabs";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -57,6 +58,9 @@ export function WorkerProfileScreen({ initialTab = "availability", bottomInset =
         </View>
         <View style={activeTab === "credentials" ? styles.panel : styles.hidden}>
           <ProfileCredentialsPanel bottomInset={bottomInset} />
+        </View>
+        <View style={activeTab === "training" ? styles.panel : styles.hidden}>
+          <ProfileTrainingPanel bottomInset={bottomInset} />
         </View>
       </View>
     </View>

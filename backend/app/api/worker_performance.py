@@ -196,6 +196,7 @@ class MarkCompleteBody(BaseModel):
     module_id: str
     completed_at: date
     note: Optional[str] = None
+    acknowledged: bool = False
 
 
 @router.post("/training/complete", status_code=201)
@@ -210,6 +211,21 @@ async def worker_mark_training_complete(
         body.module_id,
         body.completed_at,
         body.note,
+        body.acknowledged,
+    )
+
+
+@router.post("/training/{module_id}/start", status_code=201)
+async def worker_start_training(
+    module_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log that the worker opened this assigned training module (start timestamp for the audit trail)."""
+    _require_worker(current_user)
+    return worker_training_service.start_training_module(
+        get_user_id(current_user),
+        get_user_organization_id(current_user),
+        module_id,
     )
 
 

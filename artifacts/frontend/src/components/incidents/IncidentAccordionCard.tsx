@@ -21,7 +21,17 @@ export interface IncidentCardData {
   ndis_reportable?: boolean;
   ndis_pending?: boolean;
   overdue?: boolean;
+  notification_due_at?: string | null;
   auto_detected?: boolean;
+}
+
+/** "Due in 6h 12m" / "Overdue by 2h 5m" — same deadline the backend escalation job uses. */
+function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
+  const diffMs = Math.abs(parseISO(dueAtIso).getTime() - Date.now());
+  const hours = Math.floor(diffMs / 3_600_000);
+  const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+  const span = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return overdue ? `Overdue by ${span}` : `Due in ${span}`;
 }
 
 type Accent = "rd" | "am" | "gn";
@@ -128,8 +138,16 @@ export function IncidentAccordionCard({
             </span>
           )}
           {incident.ndis_pending && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#FAEEDA] text-[#633806] ml-1 shrink-0">
-              <Clock size={10} /> {translate("incidents.register.windowOpen")}
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-1 shrink-0",
+                incident.overdue ? "bg-[#FCEBEB] text-[#791F1F]" : "bg-[#FAEEDA] text-[#633806]",
+              )}
+            >
+              <Clock size={10} />
+              {incident.notification_due_at
+                ? formatNotificationCountdown(incident.notification_due_at, !!incident.overdue)
+                : translate("incidents.register.windowOpen")}
             </span>
           )}
         </div>
@@ -167,6 +185,9 @@ export function IncidentAccordionCard({
                 [translate("incidents.detail.incidentDate"), dateStr],
                 [translate("incidents.detail.location"), incident.location || "—"],
                 [translate("incidents.register.ndisReportable"), incident.ndis_reportable ? translate("common.yes") : translate("common.no")],
+                ...(incident.ndis_pending && incident.notification_due_at
+                  ? [[translate("incidents.register.notificationDue"), format(parseISO(incident.notification_due_at), "d MMM yyyy, h:mm a")]]
+                  : []),
               ].map(([label, val]) => (
                 <div key={label} className="flex gap-2 text-xs">
                   <span className="text-[var(--cc-muted)] min-w-[100px] shrink-0">{label}</span>
@@ -188,7 +209,13 @@ export function IncidentAccordionCard({
                   <TimelineItem icon={User} tone="no" label={translate("incidents.register.timelineReported")} time={dateStr} />
                 )}
                 {incident.ndis_pending && (
-                  <TimelineItem icon={Clock} tone="cr" label={translate("incidents.register.timelineReportPending")} time="—" danger />
+                  <TimelineItem
+                    icon={Clock}
+                    tone="cr"
+                    label={translate("incidents.register.timelineReportPending")}
+                    time={incident.notification_due_at ? formatNotificationCountdown(incident.notification_due_at, !!incident.overdue) : "—"}
+                    danger
+                  />
                 )}
               </div>
             </div>

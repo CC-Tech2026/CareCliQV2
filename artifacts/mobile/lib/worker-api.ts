@@ -323,6 +323,73 @@ export function updateShiftTasks(id: string, tasks: ShiftTask[]) {
   });
 }
 
+export type MedicationAdministrationStatus = "given" | "refused" | "missed" | "withheld";
+export type MedicationDueStatus = "upcoming" | "due_now" | "overdue" | MedicationAdministrationStatus;
+
+export type MedicationChecklistItem = {
+  medication_id: string;
+  name: string;
+  strength?: string | null;
+  dosage?: string | null;
+  route: string;
+  scheduled_time: string;
+  due_status: MedicationDueStatus;
+  administration?: { status: MedicationAdministrationStatus; notes?: string | null } | null;
+};
+
+export function getMedicationChecklist(shiftId: string) {
+  return workerFetch<{ checklist: MedicationChecklistItem[] }>(`/api/worker/shifts/${shiftId}/medication-checklist`);
+}
+
+export function logMedicationAdministration(
+  shiftId: string,
+  medicationId: string,
+  body: {
+    scheduled_time?: string;
+    status: MedicationAdministrationStatus;
+    dose_given?: string;
+    notes?: string;
+    prn_reason?: string;
+    voice_captured?: boolean;
+  },
+) {
+  return workerFetch<{ id: string }>(`/api/worker/shifts/${shiftId}/medications/${medicationId}/administrations`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type PrnMedication = {
+  id: string;
+  name: string;
+  strength?: string | null;
+  dosage?: string | null;
+  route: string;
+  prn_max_per_day?: number | null;
+  doses_given_today: number;
+  at_or_over_max: boolean;
+};
+
+export type PrnPendingEffect = {
+  id: string;
+  medication_id: string;
+  prn_reason: string;
+  administered_time: string;
+};
+
+export function getPrnMedications(shiftId: string) {
+  return workerFetch<{ medications: PrnMedication[]; pending_effects: PrnPendingEffect[] }>(
+    `/api/worker/shifts/${shiftId}/prn-medications`,
+  );
+}
+
+export function logMedicationEffect(administrationId: string, effectObserved: string, voiceCaptured = false) {
+  return workerFetch<{ id: string }>(`/api/worker/medication-administrations/${administrationId}/effect`, {
+    method: "PATCH",
+    body: JSON.stringify({ effect_observed: effectObserved, voice_captured: voiceCaptured }),
+  });
+}
+
 export function getShiftBriefing(shiftId: string) {
   return workerFetch<ShiftBriefingPayload>(`/api/worker/shifts/${shiftId}/briefing`);
 }

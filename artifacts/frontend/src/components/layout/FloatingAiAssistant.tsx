@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Send, GripHorizontal } from "lucide-react";
+import { X, Send, GripHorizontal, Plus, MessageSquare, Trash2 } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import {
+  sendChatMessage,
+  listChatThreads,
+  getChatThreadMessages,
+  deleteChatThread,
+  type ChatBlock,
+  type ThreadSummary,
+} from "@/services/chatboxService";
 
 const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -9,11 +18,114 @@ const BORDER = "var(--cc-border)";
 
 const MASCOT_SRC = "/carecliq-bot-quill-animated.svg";
 const BTN_SIZE = 60;
-const PANEL_W = 340;
-const PANEL_H = 460;
+// Panel sizes to at least half the viewport, never smaller than these floors.
+const MIN_PANEL_W = 340;
+const MIN_PANEL_H = 460;
 const MARGIN = 16;
+const SIDEBAR_W = 220;
 
-type ChatMessage = { id: string; role: "bot" | "user"; text: string };
+type ChatMessage = { id: string; role: "bot" | "user"; text: string; blocks?: ChatBlock[] };
+
+function StatBlockView({ block }: { block: Extract<ChatBlock, { type: "stat" }> }) {
+  return (
+    <div className="rounded-xl border px-3 py-2" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{block.label}</p>
+      <p className="text-[18px] font-black leading-tight" style={{ color: PLUM }}>
+        {block.value ?? "—"}
+        {block.target != null && (
+          <span className="text-[11px] font-semibold" style={{ color: MUTED }}> / {block.target} target</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function TableBlockView({ block }: { block: Extract<ChatBlock, { type: "table" }> }) {
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: BORDER }}>
+      <p className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{block.title}</p>
+      <div className="overflow-x-auto px-2 pb-2 pt-1">
+        <table className="w-full text-[11px]" style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {block.columns.map((c) => (
+                <th key={c} className="text-left font-bold px-1.5 py-1" style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {block.rows.map((row, i) => (
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j} className="px-1.5 py-1" style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+                    {cell ?? "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function BarChartBlockView({ block }: { block: Extract<ChatBlock, { type: "bar_chart" }> }) {
+  const seriesKey = block.series[0]?.key;
+  return (
+    <div className="rounded-xl border px-3 py-2" style={{ borderColor: BORDER }}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: MUTED }}>{block.title}</p>
+      <div style={{ width: "100%", height: 120 }}>
+        <ResponsiveContainer>
+          <BarChart data={block.data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+            <XAxis dataKey={block.x_key} tick={{ fontSize: 10, fill: MUTED }} axisLine={{ stroke: BORDER }} tickLine={false} />
+            <Tooltip
+              contentStyle={{ fontSize: 11, background: "var(--cc-bg)", border: `1px solid ${BORDER}`, borderRadius: 8 }}
+            />
+            {seriesKey && <Bar dataKey={seriesKey} fill={PLUM} radius={[4, 4, 0, 0]} />}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function BlockView({ block }: { block: ChatBlock }) {
+  if (block.type === "stat") return <StatBlockView block={block} />;
+  if (block.type === "table") return <TableBlockView block={block} />;
+  if (block.type === "bar_chart") return <BarChartBlockView block={block} />;
+  return null;
+}
+
+/** Renders `**bold**` markers from Quill's replies as real <strong> text —
+ * intentionally minimal, not a full markdown parser, since the model is only
+ * ever instructed to use this one marker for emphasis. */
+function BoldText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i}>{part.slice(2, -2)}</strong>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function formatThreadDate(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
@@ -27,7 +139,8 @@ const SUGGESTIONS = [
   "Summarise today's incidents",
 ];
 
-const DEMO_REPLY = "Thanks — I'm still a demo preview, so I can't pull live data or take actions yet. This is here to show how the assistant will fit into your day-to-day workflow.";
+const CHAT_ERROR_REPLY = "Sorry, I couldn't get that data right now — please try again in a moment.";
+const HISTORY_ERROR_REPLY = "Sorry, I couldn't load that conversation right now.";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -39,6 +152,9 @@ export function FloatingAiAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [threadsLoaded, setThreadsLoaded] = useState(false);
 
   const dragState = useRef<{ dragging: boolean; moved: boolean; offsetX: number; offsetY: number }>({
     dragging: false, moved: false, offsetX: 0, offsetY: 0,
@@ -46,12 +162,23 @@ export function FloatingAiAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isFreshConversation = messages.length === 1 && messages[0].id === "welcome";
+
   // Autofocus the input each time the panel opens, so a coordinator can start typing immediately.
   useEffect(() => {
     if (!open) return undefined;
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
+
+  // Load the thread list the first time the panel is opened.
+  useEffect(() => {
+    if (!open || threadsLoaded) return;
+    setThreadsLoaded(true);
+    listChatThreads()
+      .then(setThreads)
+      .catch(() => setThreads([]));
+  }, [open, threadsLoaded]);
 
   // Default to bottom-right on first mount, leaving room for the mobile bottom nav.
   useEffect(() => {
@@ -100,22 +227,76 @@ export function FloatingAiAssistant() {
     if (!wasDrag) setOpen((v) => !v);
   }
 
-  function sendMessage(text: string) {
+  function refreshThreads() {
+    listChatThreads().then(setThreads).catch(() => {});
+  }
+
+  function startNewChat() {
+    if (sending) return;
+    setThreadId(undefined);
+    setMessages([WELCOME_MESSAGE]);
+    setDraft("");
+  }
+
+  async function handleDeleteThread(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("Delete this conversation? This can't be undone.")) return;
+    setThreads((prev) => prev.filter((t) => t.thread_id !== id));
+    if (id === threadId) startNewChat();
+    try {
+      await deleteChatThread(id);
+    } catch {
+      refreshThreads(); // put it back in the list if the delete actually failed server-side
+    }
+  }
+
+  async function openThread(id: string) {
+    if (sending || id === threadId) return;
+    setThreadId(id);
+    setSending(true);
+    try {
+      const history = await getChatThreadMessages(id);
+      setMessages(
+        history.map((m, i) => ({
+          id: `${id}-${i}`,
+          role: m.role === "assistant" ? "bot" : "user",
+          text: m.content,
+        })),
+      );
+    } catch {
+      setMessages([{ id: `err-${Date.now()}`, role: "bot", text: HISTORY_ERROR_REPLY }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
+    const wasNewThread = !threadId;
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: trimmed }]);
     setDraft("");
     setSending(true);
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: `b-${Date.now()}`, role: "bot", text: DEMO_REPLY }]);
+    try {
+      const { reply, thread_id, blocks } = await sendChatMessage(trimmed, threadId);
+      setThreadId(thread_id);
+      setMessages((prev) => [...prev, { id: `b-${Date.now()}`, role: "bot", text: reply, blocks }]);
+      if (wasNewThread) refreshThreads();
+    } catch {
+      setMessages((prev) => [...prev, { id: `b-${Date.now()}`, role: "bot", text: CHAT_ERROR_REPLY }]);
+    } finally {
       setSending(false);
-    }, 700);
+    }
   }
 
   if (!pos) return null;
 
   const openUpward = pos.y > window.innerHeight / 2;
   const openLeftward = pos.x > window.innerWidth / 2;
+
+  // At least half the viewport in each dimension, never smaller than the floor.
+  const PANEL_W = Math.max(MIN_PANEL_W, Math.round(window.innerWidth * 0.7));
+  const PANEL_H = Math.max(MIN_PANEL_H, Math.round(window.innerHeight * 0.9));
 
   const panelStyle: React.CSSProperties = {
     position: "fixed",
@@ -168,108 +349,177 @@ export function FloatingAiAssistant() {
             </button>
           </div>
 
-          {/* Messages */}
-          <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-            {/* Welcome mascot display — shown only before any user message */}
-            {messages.length === 1 && (
-              <div className="flex flex-col items-center pt-2 pb-3 animate-in fade-in-0 duration-300">
-                <div className="h-20 w-20 rounded-3xl overflow-hidden shadow-sm mb-2" style={{ border: `2px solid ${BORDER}` }}>
-                  <img src={MASCOT_SRC} alt="Quill" className="h-full w-full" draggable={false} />
-                </div>
-                <p className="text-[11px] font-semibold text-center" style={{ color: MUTED }}>
-                  Hi! I'm Quill, your NDIS care assistant.
-                </p>
+          <div className="flex flex-1 min-h-0">
+            {/* Sidebar — conversation history */}
+            <aside
+              className="flex flex-col shrink-0 border-r"
+              style={{ width: SIDEBAR_W, borderColor: BORDER, background: "var(--cc-soft)" }}
+            >
+              <div className="p-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={startNewChat}
+                  className="flex w-full items-center gap-1.5 rounded-xl border px-3 py-2 text-[12px] font-bold transition-colors"
+                  style={{ borderColor: BORDER, color: PLUM, background: "var(--cc-bg)" }}
+                >
+                  <Plus size={14} /> New chat
+                </button>
               </div>
-            )}
-
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex items-end gap-2 animate-in fade-in-0 slide-in-from-bottom-1 duration-300 ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {m.role === "bot" && (
-                  <span className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
-                    <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
-                  </span>
+              <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+                {threads.length === 0 && (
+                  <p className="px-1.5 py-2 text-[11px]" style={{ color: MUTED }}>
+                    {threadsLoaded ? "No past conversations yet." : "Loading…"}
+                  </p>
                 )}
-                <div
-                  className="max-w-[78%] rounded-2xl px-3 py-2 text-[12.5px] leading-snug"
-                  style={
-                    m.role === "user"
-                      ? { background: CORAL, color: "#fff" }
-                      : { background: "var(--cc-soft)", color: TEXT, border: `1px solid ${BORDER}` }
-                  }
-                >
-                  {m.text}
-                </div>
+                {threads.map((t) => {
+                  const active = t.thread_id === threadId;
+                  return (
+                    <div
+                      key={t.thread_id}
+                      className="group flex w-full items-center gap-0.5 rounded-lg transition-colors"
+                      style={{ background: active ? "var(--cc-plum-soft, rgba(232,69,122,0.08))" : "transparent" }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openThread(t.thread_id)}
+                        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left"
+                      >
+                        <span className="flex w-full items-center gap-1 text-[11.5px] font-semibold truncate" style={{ color: active ? PLUM : TEXT }}>
+                          <MessageSquare size={11} className="shrink-0" />
+                          <span className="truncate">{t.title || "New conversation"}</span>
+                        </span>
+                        <span className="text-[10px]" style={{ color: MUTED }}>{formatThreadDate(t.updated_at)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteThread(t.thread_id, e)}
+                        aria-label="Delete conversation"
+                        className="shrink-0 rounded-md p-1.5 mr-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/5"
+                        style={{ color: MUTED }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-            {sending && (
-              <div className="flex items-end justify-start gap-2 animate-in fade-in-0 duration-200">
-                <span className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
-                  <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
-                </span>
-                <div
-                  className="flex items-center gap-1 rounded-2xl px-3 py-2.5"
-                  style={{ background: "var(--cc-soft)", border: `1px solid ${BORDER}` }}
-                >
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 rounded-full animate-bounce"
-                      style={{ background: MUTED, animationDelay: `${i * 120}ms` }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+            </aside>
 
-          {/* Suggestions */}
-          {messages.length === 1 && (
-            <div className="shrink-0 animate-in fade-in-0 duration-300 px-3 pb-2">
-              <p className="pb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                Try asking
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => sendMessage(s)}
-                    className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors hover:text-white"
-                    style={{ background: "var(--cc-soft)", color: PLUM, borderColor: BORDER }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = PLUM; e.currentTarget.style.borderColor = PLUM; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--cc-soft)"; e.currentTarget.style.borderColor = BORDER; }}
+            {/* Main chat column */}
+            <div className="flex flex-1 min-w-0 flex-col">
+              {/* Messages */}
+              <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+                {/* Welcome mascot display — shown only before any user message */}
+                {isFreshConversation && (
+                  <div className="flex flex-col items-center pt-2 pb-3 animate-in fade-in-0 duration-300">
+                    <div className="h-20 w-20 rounded-3xl overflow-hidden shadow-sm mb-2" style={{ border: `2px solid ${BORDER}` }}>
+                      <img src={MASCOT_SRC} alt="Quill" className="h-full w-full" draggable={false} />
+                    </div>
+                    <p className="text-[11px] font-semibold text-center" style={{ color: MUTED }}>
+                      Hi! I'm Quill, your NDIS care assistant.
+                    </p>
+                  </div>
+                )}
+
+                {messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`flex items-start gap-2 animate-in fade-in-0 slide-in-from-bottom-1 duration-300 ${m.role === "user" ? "justify-end" : "justify-start"}`}
                   >
-                    {s}
-                  </button>
+                    {m.role === "bot" && (
+                      <span className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
+                        <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
+                      </span>
+                    )}
+                    <div className={`flex flex-col gap-1.5 ${m.role === "user" ? "items-end" : "items-start"} ${m.blocks?.length ? "w-full max-w-[92%]" : "max-w-[78%]"}`}>
+                      <div
+                        className="rounded-2xl px-3 py-2 text-[12.5px] leading-snug"
+                        style={
+                          m.role === "user"
+                            ? { background: CORAL, color: "#fff" }
+                            : { background: "var(--cc-soft)", color: TEXT, border: `1px solid ${BORDER}` }
+                        }
+                      >
+                        {m.role === "bot" ? <BoldText text={m.text} /> : m.text}
+                      </div>
+                      {m.blocks?.map((b, i) => <BlockView key={i} block={b} />)}
+                    </div>
+                  </div>
                 ))}
+                {sending && (
+                  <div className="flex items-end justify-start gap-2 animate-in fade-in-0 duration-200">
+                    <span className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
+                      <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
+                    </span>
+                    <div
+                      className="flex items-center gap-1 rounded-2xl px-3 py-2.5"
+                      style={{ background: "var(--cc-soft)", border: `1px solid ${BORDER}` }}
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="h-1.5 w-1.5 rounded-full animate-bounce"
+                          style={{ background: MUTED, animationDelay: `${i * 120}ms` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Suggestions */}
+              {isFreshConversation && (
+                <div className="shrink-0 animate-in fade-in-0 duration-300 px-3 pb-2">
+                  <p className="pb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+                    Try asking
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTIONS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => sendMessage(s)}
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                        style={{ background: "transparent", color: PLUM, borderColor: BORDER }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--cc-plum-soft, rgba(232,69,122,0.08))";
+                          e.currentTarget.style.borderColor = PLUM;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = BORDER;
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Input */}
+              <div className="flex items-center gap-2 border-t px-3 py-2.5 shrink-0" style={{ borderColor: BORDER }}>
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendMessage(draft)}
+                  placeholder="Ask Quill anything..."
+                  className="flex-1 rounded-full border px-3.5 py-2 text-[12.5px] outline-none transition-colors focus:border-[var(--cc-plum)]"
+                  style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => sendMessage(draft)}
+                  disabled={!draft.trim() || sending}
+                  aria-label="Send message"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-40"
+                  style={{ background: CORAL }}
+                >
+                  <Send size={13} />
+                </button>
               </div>
             </div>
-          )}
-
-          {/* Input */}
-          <div className="flex items-center gap-2 border-t px-3 py-2.5 shrink-0" style={{ borderColor: BORDER }}>
-            <input
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage(draft)}
-              placeholder="Ask Quill anything..."
-              className="flex-1 rounded-full border px-3.5 py-2 text-[12.5px] outline-none transition-colors focus:border-[var(--cc-plum)]"
-              style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
-            />
-            <button
-              type="button"
-              onClick={() => sendMessage(draft)}
-              disabled={!draft.trim() || sending}
-              aria-label="Send message"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-40"
-              style={{ background: CORAL }}
-            >
-              <Send size={13} />
-            </button>
           </div>
         </div>
       )}

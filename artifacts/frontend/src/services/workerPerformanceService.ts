@@ -228,10 +228,17 @@ export function markTrainingComplete(payload: {
   module_id: string;
   completed_at: string;
   note?: string;
+  acknowledged: boolean;
 }) {
   return jsonFetch("/api/worker/training/complete", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function startTrainingModule(moduleId: string) {
+  return jsonFetch<{ started_at: string | null }>(`/api/worker/training/${moduleId}/start`, {
+    method: "POST",
   });
 }
 
@@ -259,6 +266,8 @@ export type TrainingRecommendation = {
   training_module_id: string;
   title: string;
   recommended_at: string;
+  due_at?: string | null;
+  started_at?: string | null;
 };
 
 export function getTrainingRecommendations() {

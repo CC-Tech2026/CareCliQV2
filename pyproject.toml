@@ -26,6 +26,11 @@ dependencies = [
     "jinja2>=3.1.0",
     "weasyprint>=62.0",
     "firebase-admin>=6.5.0",
+    "langgraph>=1.2.9",
+    "langchain-anthropic>=1.5.0",
+    "langsmith>=0.10.9",
+    "langchain-openai>=1.4.1",
+    "pypdf>=5.1.0",
 ]
 
 [project.optional-dependencies]

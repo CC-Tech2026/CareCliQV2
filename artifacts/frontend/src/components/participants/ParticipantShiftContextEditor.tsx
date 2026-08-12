@@ -4,11 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { jsonFetch } from "@/services/http";
-import type { ParticipantAllergy, ParticipantContext } from "@/services/shiftService";
+import type { ParticipantContext } from "@/services/shiftService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
+// Allergies, conditions, and GP contact live in ParticipantClinicalRecordEditor now —
+// clinical/health data belongs in the Clinical Record tab, not this operational briefing tab.
 type ShiftContextPayload = {
-  profile?: { preferred_name?: string; case_manager?: { name?: string; phone?: string } };
+  profile?: {
+    preferred_name?: string;
+    case_manager?: { name?: string; phone?: string };
+  };
   preferences?: {
     likes_dislikes?: string;
     sensory_preferences?: string;
@@ -38,9 +43,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   const [communicationStyle, setCommunicationStyle] = useState("");
   const [communicationGuidance, setCommunicationGuidance] = useState("");
   const [previousVisitNotes, setPreviousVisitNotes] = useState("");
-  const [currentConditions, setCurrentConditions] = useState("");
   const [activities, setActivities] = useState<string[]>([]);
-  const [allergies, setAllergies] = useState<ParticipantAllergy[]>([]);
   const [behaviouralNotes, setBehaviouralNotes] = useState([{ title: translate("participants.shiftContext.defaultNoteTitle"), body: "" }]);
   const [backgroundSummary, setBackgroundSummary] = useState("");
   const [briefingAlerts, setBriefingAlerts] = useState<string[]>([]);
@@ -55,9 +58,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
     setCommunicationStyle(data.preferences?.communication_style ?? "");
     setCommunicationGuidance(data.context?.communication_guidance ?? "");
     setPreviousVisitNotes(data.context?.previous_visit_notes ?? "");
-    setCurrentConditions(data.context?.medical?.conditions ?? "");
     setActivities(data.context?.preferred_activities ?? []);
-    setAllergies(data.context?.medical?.allergies ?? []);
     setBehaviouralNotes(
       data.context?.behavioural_notes?.length
         ? data.context.behavioural_notes
@@ -107,10 +108,8 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
           communication_preferences: communicationStyle || null,
           communication_guidance: communicationGuidance || null,
           previous_visit_notes: previousVisitNotes || null,
-          current_conditions: currentConditions || null,
           preferred_activities: activities.filter(Boolean),
           behavioural_notes: behaviouralNotes.filter((n) => n.body.trim()),
-          allergies: allergies.filter((a) => a.allergen.trim()),
           background_summary: backgroundSummary || null,
           briefing_alerts: briefingAlerts.filter(Boolean),
         }),
@@ -192,7 +191,6 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
       <TextArea label={translate("participants.shiftContext.cultural")} value={cultural} onChange={setCultural} />
       <TextArea label={translate("participants.shiftContext.communicationStyle")} value={communicationStyle} onChange={setCommunicationStyle} />
       <TextArea label={translate("participants.shiftContext.communicationGuidance")} value={communicationGuidance} onChange={setCommunicationGuidance} />
-      <TextArea label={translate("participants.shiftContext.currentConditions")} value={currentConditions} onChange={setCurrentConditions} />
       <TextArea label={translate("participants.shiftContext.previousVisits")} value={previousVisitNotes} onChange={setPreviousVisitNotes} />
 
       <div>
@@ -207,39 +205,6 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
         ))}
         <Button type="button" variant="outline" size="sm" onClick={() => setActivities((prev) => [...prev, ""])}>
           <Plus className="mr-1 h-3.5 w-3.5" /> {translate("participants.shiftContext.addActivity")}
-        </Button>
-      </div>
-
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.allergies")}</p>
-        {allergies.map((item, i) => (
-          <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[1fr_120px_auto]">
-            <Input
-              placeholder={translate("participants.shiftContext.allergen")}
-              value={item.allergen}
-              onChange={(e) =>
-                setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, allergen: e.target.value } : a)))
-              }
-            />
-            <select
-              className="cc-field rounded-md px-2 text-sm h-9"
-              value={item.severity}
-              onChange={(e) =>
-                setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, severity: e.target.value } : a)))
-              }
-            >
-              <option value="mild">{translate("participants.shiftContext.severity.mild")}</option>
-              <option value="moderate">{translate("participants.shiftContext.severity.moderate")}</option>
-              <option value="severe">{translate("participants.shiftContext.severity.severe")}</option>
-              <option value="anaphylactic">{translate("participants.shiftContext.severity.anaphylactic")}</option>
-            </select>
-            <Button type="button" variant="ghost" size="icon" onClick={() => setAllergies((prev) => prev.filter((_, j) => j !== i))}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => setAllergies((prev) => [...prev, { allergen: "", severity: "mild" }])}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> {translate("participants.shiftContext.addAllergy")}
         </Button>
       </div>
 

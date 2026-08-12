@@ -208,6 +208,67 @@ export function requestToolkitRestock(itemId: string, quantity: number) {
   });
 }
 
+export type TrainingResource = {
+  id: string;
+  module_id: string;
+  title: string;
+  resource_type?: "video" | "pdf" | "external_link" | null;
+  storage_path?: string | null;
+  external_url?: string | null;
+};
+
+export type TrainingModule = {
+  id: string;
+  title: string;
+  description?: string | null;
+  requires_certification?: boolean;
+  resources?: TrainingResource[];
+};
+
+export type TrainingRecommendation = {
+  id: string;
+  training_module_id: string;
+  title: string;
+  recommended_at?: string;
+  due_at?: string | null;
+  started_at?: string | null;
+};
+
+export type TrainingHistoryItem = {
+  id: string;
+  module_id: string;
+  completed_at: string;
+  status: string;
+  note?: string | null;
+  rejection_reason?: string | null;
+  training_modules?: { title: string } | null;
+};
+
+export function getTrainingModules() {
+  return workerFetch<{ modules: TrainingModule[] }>("/api/worker/training/modules");
+}
+
+export function getTrainingRecommendations() {
+  return workerFetch<{ recommendations: TrainingRecommendation[] }>("/api/worker/training/recommendations");
+}
+
+export function getTrainingHistory() {
+  return workerFetch<{ history: TrainingHistoryItem[] }>("/api/worker/training/history");
+}
+
+export function markTrainingComplete(moduleId: string, completedAt: string, acknowledged: boolean, note?: string) {
+  return workerFetch<TrainingHistoryItem>("/api/worker/training/complete", {
+    method: "POST",
+    body: JSON.stringify({ module_id: moduleId, completed_at: completedAt, acknowledged, note: note || undefined }),
+  });
+}
+
+export function startTrainingModule(moduleId: string) {
+  return workerFetch<{ started_at: string | null }>(`/api/worker/training/${moduleId}/start`, {
+    method: "POST",
+  });
+}
+
 export function listIncidents() {
   return workerFetch<IncidentSummary[]>("/api/incidents");
 }

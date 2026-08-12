@@ -21,8 +21,8 @@ from decimal import Decimal
 from uuid import UUID
 import logging
 
-from backend.app.core.database import supabase_client
-from backend.app.core.config import settings
+from ..core.database import supabase_client
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 

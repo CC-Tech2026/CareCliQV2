@@ -198,6 +198,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
         except Exception:
             profiles_by_id = {}
 
+    from ..services import worker_training_service as training
+    overdue_map = training.team_training_overdue_map(org_id)
+
     output = []
     for row in rows:
         profile = profiles_by_id.get(str(row.get("user_id")), {})
@@ -213,6 +216,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
             "onboarding_completed": profile.get("onboarding_completed"),
+            "training_overdue": overdue_map.get(str(row.get("user_id")), False),
         })
     return output
 
@@ -253,6 +257,9 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
     except Exception:
         return []
 
+    from ..services import worker_training_service as training
+    overdue_map = training.team_training_overdue_map(org_id)
+
     output = []
     for row in profiles.data or []:
         if not isinstance(row, dict) or not row.get("id"):
@@ -266,6 +273,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "joined_at": None,
             "last_login": row.get("last_login"),
             "onboarding_completed": row.get("onboarding_completed"),
+            "training_overdue": overdue_map.get(str(row.get("id")), False),
         })
     return output
 

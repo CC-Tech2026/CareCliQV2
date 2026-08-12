@@ -107,7 +107,7 @@ function RecordingWave({ color }: { color: string }) {
   );
 }
 
-type VoiceRecordingControls = {
+export type VoiceRecordingControls = {
   save: () => Promise<void>;
   cancel: () => Promise<void>;
 };
@@ -115,8 +115,10 @@ type VoiceRecordingControls = {
 /**
  * Owns useAudioRecorder only while mounted so the native shared object
  * is never accessed after expo-audio releases it (common crash on Android).
+ * Exported so other shift-scoped voice-capture entry points (e.g. PRN medication
+ * reason/effect fields) can reuse the same recording pipeline instead of duplicating it.
  */
-function ActiveVoiceRecording({
+export function ActiveVoiceRecording({
   color,
   mutedColor,
   controlsRef,
