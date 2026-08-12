@@ -795,15 +795,87 @@ def _legacy_support_instructions(shift: dict, participant_ctx: Optional[dict[str
     return sections
 
 
+def _format_hhmm(iso_dt: str) -> str:
+    try:
+        return datetime.fromisoformat(iso_dt.replace("Z", "+00:00")).strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return iso_dt
+
+
+def _live_medication_support_section(shift: dict) -> Optional[dict[str, str]]:
+    """Medication content for support_instructions is never taken from a stored/legacy
+    snapshot — it's computed fresh from the structured medication model on every call, so a
+    status change (on_hold, rejected, reactivated) is reflected immediately regardless of
+    when the rest of the shift's instructions were last snapshotted. See the Shift Content
+    Synchronization spec: "resolve live, never trust a snapshot" for medication content."""
+    org_id = str(shift.get("organization_id") or "")
+    participant_id = str(shift.get("participant_id") or "")
+    if not org_id or not participant_id:
+        return None
+    from . import medication_service
+    from .shift_content_resolution_service import log_shift_content_resolution
+
+    lines: list[str] = []
+    resolved_ids: list[str] = []
+    for item in medication_service.build_shift_medication_checklist(shift, org_id):
+        name = item["name"] + (f" {item['strength']}" if item.get("strength") else "")
+        status_label = {
+            "upcoming": "upcoming", "due_now": "due now", "overdue": "overdue",
+        }.get(item["due_status"], item["due_status"])
+        lines.append(f"{name} — {_format_hhmm(item['scheduled_time'])} ({status_label})")
+        resolved_ids.append(item["medication_id"])
+
+    prn = medication_service.build_shift_prn_medications(shift, org_id)
+    for med in prn.get("medications", []):
+        suffix = " — at daily max, check with coordinator before giving another dose" if med.get("at_or_over_max") else " — PRN, give as needed"
+        lines.append(f"{med['name']}{suffix}")
+        resolved_ids.append(med["id"])
+
+    # Every non-active medication on this participant's record, for the audit trail's
+    # "correctly excluded" half — cheap relative to the checklist queries above and only
+    # runs once per single-shift detail/briefing read (never per list card, see
+    # include_live_medications on build_support_instructions).
+    excluded = [
+        {"medication_id": m["id"], "status": m.get("status")}
+        for m in medication_service.list_medications(participant_id, org_id)
+        if m.get("status") != "active"
+    ]
+    log_shift_content_resolution(
+        shift_id=str(shift.get("id") or ""),
+        participant_id=participant_id,
+        organization_id=org_id,
+        checkpoint="pre_shift_briefing",
+        resolved_medication_ids=resolved_ids,
+        excluded_medications=excluded,
+        resolved_for_user_id=str(shift.get("worker_id") or "") or None,
+    )
+
+    if not lines:
+        return None
+    return _instruction_section("Medication Prompts", "\n".join(lines))
+
+
 def build_support_instructions(
     shift: dict,
     participant_ctx: Optional[dict[str, Any]] = None,
+    *,
+    include_live_medications: bool = False,
 ) -> list[dict[str, str]]:
-    """Return labelled support-instruction sections for a shift (CARECLIQV2-157)."""
+    """Return labelled support-instruction sections for a shift (CARECLIQV2-157).
+
+    include_live_medications defaults to False because this is called once per row when
+    building shift LIST cards (_shift_card_payload, batched over many shifts) — resolving
+    medications live there would be an N+1 query per card. It's only worth the extra reads
+    at the single-shift detail/briefing endpoints, which pass True explicitly."""
     stored = _stored_support_instructions(shift)
-    if stored:
-        return stored
-    return _legacy_support_instructions(shift, participant_ctx)
+    sections = list(stored) if stored else _legacy_support_instructions(shift, participant_ctx)
+    if not include_live_medications:
+        return sections
+    sections = [s for s in sections if s.get("category") != "Medication Prompts"]
+    live_medication_section = _live_medication_support_section(shift)
+    if live_medication_section:
+        sections.append(live_medication_section)
+    return sections
 
 
 def _parse_support_instructions(
@@ -1682,7 +1754,7 @@ def get_shift_detail_for_worker(
     ctx = _fetch_participant_context(participant_id, organization_id)
     payload.update(ctx)
     _enrich_shift_participant_context(payload, shift)
-    payload["support_instructions"] = build_support_instructions(shift, payload)
+    payload["support_instructions"] = build_support_instructions(shift, payload, include_live_medications=True)
     payload["health_alerts"] = build_participant_risks(shift, organization_id)
     payload["has_risk_alerts"] = bool(payload["health_alerts"])
     if participant_id and worker_id:
@@ -1793,7 +1865,7 @@ def get_support_instructions_for_worker(
     ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
     return {
         "shift_id": shift_id,
-        "support_instructions": build_support_instructions(shift, ctx),
+        "support_instructions": build_support_instructions(shift, ctx, include_live_medications=True),
     }
 
 

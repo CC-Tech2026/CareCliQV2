@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useGetParticipant } from "@workspace/api-client-react";
+import { useGetParticipant, getGetParticipantsQueryKey, getGetParticipantQueryKey } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Edit, Loader2 } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM        = "#E8457A";
@@ -59,6 +59,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
+  const qc = useQueryClient();
 
   const { data: participantData, isLoading } = useGetParticipant(id, {});
   const participant = (participantData as { data?: Record<string, unknown> } | undefined)?.data ?? null;
@@ -83,7 +84,11 @@ export default function ParticipantEdit({ id }: { id: string }) {
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex:     String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
-      plan_management_type: String(participant.plan_management_type ?? ""),
+      plan_management_type: (["NDIA-managed", "plan-managed", "self-managed"] as const).includes(
+        participant.plan_management_type as "NDIA-managed" | "plan-managed" | "self-managed",
+      )
+        ? (participant.plan_management_type as "NDIA-managed" | "plan-managed" | "self-managed")
+        : "",
       plan_start_date:    participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date:      participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget:       Number(participant.total_budget ?? 0),
@@ -113,6 +118,8 @@ export default function ParticipantEdit({ id }: { id: string }) {
     },
     onSuccess: () => {
       toast({ title: translate("patients.toast.updated") });
+      qc.invalidateQueries({ queryKey: getGetParticipantsQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetParticipantQueryKey(id) });
       navigate("/patients");
     },
     onError: (err: Error) => {

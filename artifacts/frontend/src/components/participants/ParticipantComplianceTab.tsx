@@ -1,14 +1,59 @@
-import { ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, ShieldCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { safeFormat, complianceTone } from "@/lib/participant-format";
-import type { ComplianceHistoryItem } from "@/pages/patients";
+import type { ComplianceBreakdown, ComplianceCategoryStatus, ComplianceHistoryItem } from "@/pages/patients";
 
 interface ParticipantComplianceTabProps {
   complianceHistory: ComplianceHistoryItem[];
   averageCompliance: number | null;
   isLoading: boolean;
   onSelectSession: (sessionId: string) => void;
+  breakdown?: ComplianceBreakdown | null;
+  breakdownLoading?: boolean;
+}
+
+const STATUS_STYLE: Record<ComplianceCategoryStatus, { icon: typeof CheckCircle2; color: string }> = {
+  good: { icon: CheckCircle2, color: "#166534" },
+  attention: { icon: AlertTriangle, color: "#92400E" },
+  critical: { icon: AlertTriangle, color: "#B91C1C" },
+  none: { icon: Circle, color: "#6A6A77" },
+};
+
+function ComplianceBreakdownSection({ breakdown, isLoading }: { breakdown: ComplianceBreakdown | null; isLoading: boolean }) {
+  const { translate } = useAccessibility();
+
+  if (isLoading) {
+    return (
+      <div className="mb-4 space-y-2">
+        {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-11 w-full rounded-xl" />)}
+      </div>
+    );
+  }
+  if (!breakdown) return null;
+
+  return (
+    <div className="mb-4 rounded-xl bg-white border border-purple-100/60 divide-y divide-purple-100/60 overflow-hidden">
+      {breakdown.categories.map((cat) => {
+        const style = STATUS_STYLE[cat.status];
+        const Icon = style.icon;
+        return (
+          <div key={cat.key} className="flex items-center gap-3 px-3 py-2.5">
+            <Icon className="h-4 w-4 shrink-0" style={{ color: style.color }} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold text-[#1A1A2E]">{translate(`patients.compliance.category.${cat.key}`)}</p>
+              <p className="text-[11px] text-[#6A6A77] truncate">{cat.detail}</p>
+            </div>
+            {cat.score != null && (
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(cat.score)}`}>
+                {cat.score}%
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /** "Compliance" facet of the participant Detail archetype. */
@@ -17,6 +62,8 @@ export function ParticipantComplianceTab({
   averageCompliance,
   isLoading,
   onSelectSession,
+  breakdown = null,
+  breakdownLoading = false,
 }: ParticipantComplianceTabProps) {
   const { translate, translateParams } = useAccessibility();
 
@@ -33,6 +80,9 @@ export function ParticipantComplianceTab({
           </span>
         )}
       </div>
+
+      <ComplianceBreakdownSection breakdown={breakdown} isLoading={breakdownLoading} />
+
       {isLoading ? (
         <div className="space-y-2">
           {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}

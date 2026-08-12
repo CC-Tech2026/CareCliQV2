@@ -132,13 +132,13 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-cc-border bg-cc-soft p-4">
+    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
       <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">{translate("participants.shiftContext.title")}</p>
       <p className="text-[12px] text-cc-muted">
         {translate("participants.shiftContext.hint")}
       </p>
 
-      <div className="rounded-xl border border-cc-border bg-cc-surface p-3 space-y-3">
+      <div className="rounded-xl border border-cc-border p-3 space-y-3">
         <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">{translate("participants.shiftContext.briefing")}</p>
         <TextArea
           label={translate("participants.shiftContext.aboutParticipant")}

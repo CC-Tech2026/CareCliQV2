@@ -93,7 +93,7 @@ export function ParticipantClinicalRecordEditor({ participantId }: Props) {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-cc-border bg-cc-soft p-4">
+    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
       <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">{translate("participants.clinicalRecord.contactTitle")}</p>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={translate("participants.shiftContext.gpName")} value={gpName} onChange={setGpName} />

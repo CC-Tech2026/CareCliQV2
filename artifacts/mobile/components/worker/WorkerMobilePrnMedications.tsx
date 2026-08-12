@@ -121,7 +121,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
     mutationFn: () => {
       if (!doseTarget) throw new Error("No medication selected.");
       return logMedicationAdministration(shiftId, doseTarget.id, {
-        status: "given",
+        action: "given",
         prn_reason: reason.trim(),
         dose_given: doseGiven.trim() || undefined,
       });

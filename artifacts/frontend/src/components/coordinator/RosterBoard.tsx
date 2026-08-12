@@ -168,7 +168,7 @@ function DayCell({
     disabled,
   });
   return (
-    <div
+    <td
       ref={setNodeRef}
       className="px-1.5 py-1.5 align-top transition-colors"
       style={{
@@ -179,7 +179,7 @@ function DayCell({
       }}
     >
       {children}
-    </div>
+    </td>
   );
 }
 
