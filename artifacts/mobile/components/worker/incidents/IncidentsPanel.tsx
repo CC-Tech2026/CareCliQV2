@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -212,6 +213,7 @@ export function IncidentsPanel() {
   const router = useRouter();
   const t = useT();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const [search, setSearch] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("all");
@@ -226,11 +228,13 @@ export function IncidentsPanel() {
       const result = await listIncidents();
       return Array.isArray(result) ? result : (result as { items?: IncidentSummary[] }).items ?? [];
     },
+    enabled: isAuthenticated,
   });
 
   const { data: stats } = useQuery({
     queryKey: ["incident-stats"],
     queryFn: getIncidentStats,
+    enabled: isAuthenticated,
   });
 
   const filtered = useMemo(() => {

@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -20,23 +20,16 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { useAuth } from "@/context/AuthContext";
 import { usePreferences, useT, type ThemeMode } from "@/context/PreferencesContext";
-import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
-import {
-  disableBiometricUnlock,
-  enableBiometricUnlock,
-  getAvailableBiometricKinds,
-  isBiometricUnlockEnabled,
-  labelForBiometricKind,
-  type BiometricKind,
-} from "@/lib/biometric-auth";
 import * as Haptics from "@/lib/haptics";
-import { listMyCredentials } from "@/lib/resource-api";
 import { resolveWorkerDisplayName } from "@/lib/display-name";
 import { shiftInitials } from "@/lib/shift-utils";
 import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
 import { showAlert } from "@/lib/alert";
 import { getWorkerProfile } from "@/lib/user-api";
+import { LANGUAGES } from "@/lib/i18n/translations";
+
+type FeatherIconName = keyof typeof Feather.glyphMap;
 
 function formatRole(role?: string): string {
   if (!role) return "Support worker";
@@ -72,7 +65,7 @@ function SettingsRow({
   showDivider = true,
   trailing,
 }: {
-  icon: keyof typeof Feather.glyphMap;
+  icon: FeatherIconName;
   label: string;
   onPress?: () => void;
   showDivider?: boolean;
@@ -131,13 +124,32 @@ function SettingsToggle({
   );
 }
 
+type SettingsItem = {
+  key: string;
+  icon: FeatherIconName;
+  label: string;
+  keywords: string;
+  render: (showDivider: boolean) => React.ReactNode;
+};
+
+type SettingsGroupConfig = {
+  key: string;
+  title: string;
+  items: SettingsItem[];
+};
+
+const TEXT_SIZE_OPTIONS = [
+  { id: "small" as const, labelKey: "accessibility.textSize.small" as const, preview: 13 },
+  { id: "default" as const, labelKey: "accessibility.textSize.default" as const, preview: 16 },
+  { id: "large" as const, labelKey: "accessibility.textSize.large" as const, preview: 20 },
+];
+
 export default function SettingsTabScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
-  const { user, logout, updateUser } = useAuth();
-  const { showToast } = useToast();
+  const { user, logout, updateUser, isAuthenticated } = useAuth();
   const {
     highContrast,
     setHighContrast,
@@ -148,44 +160,22 @@ export default function SettingsTabScreen() {
     hapticFeedback,
     setHapticFeedback,
     language,
+    setLanguage,
+    textScale,
+    setTextScale,
     themeMode,
     setThemeMode,
   } = usePreferences();
 
-  const [biometric, setBiometric] = useState(false);
-  const [availableKinds, setAvailableKinds] = useState<BiometricKind[]>([]);
-  const [confirmKind, setConfirmKind] = useState<BiometricKind | null>(null);
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [confirmBusy, setConfirmBusy] = useState(false);
-  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const landing = useWorkerLandingDashboard();
   const { data: profile } = useQuery({
     queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
+    enabled: isAuthenticated,
   });
-
-  const { data: credentials } = useQuery({
-    queryKey: ["credentials", "me"],
-    queryFn: listMyCredentials,
-  });
-  const expiringCount = useMemo(
-    () => (credentials ?? []).filter((item) => item.status === "expiring").length,
-    [credentials],
-  );
-
-  const refreshBiometric = useCallback(async () => {
-    const [enabled, kinds] = await Promise.all([
-      isBiometricUnlockEnabled(),
-      getAvailableBiometricKinds(),
-    ]);
-    setBiometric(enabled);
-    setAvailableKinds(kinds);
-  }, []);
-
-  useEffect(() => {
-    void refreshBiometric();
-  }, [refreshBiometric]);
 
   useEffect(() => {
     if (profile?.profile_photo_url && profile.profile_photo_url !== user?.profile_photo_url) {
@@ -212,62 +202,9 @@ export default function SettingsTabScreen() {
         : language === "zh"
           ? "简体中文"
           : "العربية";
-  const loginIdentifier = user?.email?.trim() || "";
-
-  const openEnableConfirm = (kind: BiometricKind) => {
-    if (!availableKinds.includes(kind)) {
-      showAlert(labelForBiometricKind(kind), t("settings.biometric.unavailable"));
-      return;
-    }
-    setConfirmKind(kind);
-    setConfirmPassword("");
-    setConfirmError(null);
-  };
-
-  const handleConfirmEnable = async () => {
-    if (!confirmKind) return;
-    if (!confirmPassword.trim()) {
-      setConfirmError(t("settings.biometric.passwordRequired"));
-      return;
-    }
-    if (!loginIdentifier) {
-      setConfirmError(t("settings.biometric.passwordRequired"));
-      return;
-    }
-    setConfirmBusy(true);
-    setConfirmError(null);
-    try {
-      const method = labelForBiometricKind(confirmKind);
-      const result = await enableBiometricUnlock({
-        identifier: loginIdentifier,
-        password: confirmPassword,
-        promptMessage: t("settings.biometric.confirmCta", { method }),
-      });
-      if (!result.ok) {
-        if (result.reason === "unavailable") {
-          showAlert(method, t("settings.biometric.unavailable"));
-        }
-        setConfirmBusy(false);
-        return;
-      }
-      setBiometric(true);
-      setConfirmKind(null);
-      setConfirmPassword("");
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(t("settings.biometric.enabledHint", { method }), "success");
-    } finally {
-      setConfirmBusy(false);
-    }
-  };
-
-  const handleBiometricToggle = async (kind: BiometricKind, next: boolean) => {
-    if (next) {
-      openEnableConfirm(kind);
-      return;
-    }
-    await disableBiometricUnlock();
-    setBiometric(false);
-  };
+  const textSizeLabel = t(
+    TEXT_SIZE_OPTIONS.find((o) => o.id === textScale)?.labelKey ?? "accessibility.textSize.default",
+  );
 
   const handleHapticToggle = (next: boolean) => {
     setHapticFeedback(next);
@@ -287,13 +224,233 @@ export default function SettingsTabScreen() {
     void logout().then(() => router.replace("/login" as never));
   };
 
+  const themeSegmented = (
+    <View style={[styles.segmented, { backgroundColor: colors.soft, borderColor: colors.border }]}>
+      {(
+        [
+          { id: "light" as ThemeMode, icon: "sun" as const, labelKey: "accessibility.theme.light" as const },
+          { id: "dark" as ThemeMode, icon: "moon" as const, labelKey: "accessibility.theme.dark" as const },
+          { id: "system" as ThemeMode, icon: "monitor" as const, labelKey: "accessibility.theme.system" as const },
+        ] as const
+      ).map((option) => {
+        const active = themeMode === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            onPress={() => {
+              setThemeMode(option.id);
+              void Haptics.selectionAsync();
+            }}
+            style={[styles.segmentedOption, active && { backgroundColor: colors.card }]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+          >
+            <Feather name={option.icon} size={18} color={active ? colors.primary : colors.mutedForeground} />
+            <Text
+              style={[
+                styles.segmentedOptionLabel,
+                {
+                  color: active ? colors.foreground : colors.mutedForeground,
+                  fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
+                },
+              ]}
+            >
+              {t(option.labelKey)}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const textSizeSegmented = (
+    <View style={[styles.segmented, { backgroundColor: colors.soft, borderColor: colors.border }]}>
+      {TEXT_SIZE_OPTIONS.map((option) => {
+        const active = textScale === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            onPress={() => {
+              setTextScale(option.id);
+              void Haptics.selectionAsync();
+            }}
+            style={[styles.segmentedOption, active && { backgroundColor: colors.card }]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+          >
+            <Text
+              style={{
+                color: active ? colors.primary : colors.mutedForeground,
+                fontFamily: "Inter_700Bold",
+                fontSize: option.preview,
+              }}
+            >
+              Aa
+            </Text>
+            <Text
+              style={[
+                styles.segmentedOptionLabel,
+                {
+                  color: active ? colors.foreground : colors.mutedForeground,
+                  fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
+                },
+              ]}
+            >
+              {t(option.labelKey)}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const groupsConfig: SettingsGroupConfig[] = useMemo(
+    () => [
+      {
+        key: "worker",
+        title: t("settings.worker"),
+        items: [
+          {
+            key: "account",
+            icon: "user",
+            label: t("settings.row.accountDetails"),
+            keywords: "profile name phone email compliance",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="user"
+                label={t("settings.row.accountDetails")}
+                onPress={() => router.push("/(tabs)/settings/account" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        key: "security",
+        title: t("settings.group.securityPrivacy"),
+        items: [
+          {
+            key: "security",
+            icon: "shield",
+            label: t("nav.security"),
+            keywords:
+              "password login change password face id fingerprint touch id biometric unlock two factor authentication mfa 2fa otp",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="shield"
+                label={t("nav.security")}
+                onPress={() => router.push("/worker/security" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+          {
+            key: "sessions",
+            icon: "monitor",
+            label: t("security.activeSessions"),
+            keywords: "devices logged in sessions",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="monitor"
+                label={t("security.activeSessions")}
+                onPress={() => router.push("/worker/sessions" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+          {
+            key: "privacy",
+            icon: "file-text",
+            label: t("nav.privacy"),
+            keywords:
+              "privacy policy legal terms data permissions access consent agreement analytics download export delete account",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="file-text"
+                label={t("nav.privacy")}
+                onPress={() => router.push("/worker/privacy" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        key: "support",
+        title: t("settings.group.support"),
+        items: [
+          {
+            key: "accessibility",
+            icon: "sliders",
+            label: t("nav.accessibility"),
+            keywords:
+              "accessibility display theme appearance dark mode light font size text scale reduce motion high contrast dyslexia haptic feedback language english vietnamese chinese arabic translate",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="sliders"
+                label={t("nav.accessibility")}
+                onPress={() => setAccessibilityOpen(true)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+          {
+            key: "help",
+            icon: "help-circle",
+            label: t("help.title"),
+            keywords: "help faq support contact email known issues",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="help-circle"
+                label={t("help.title")}
+                onPress={() => router.push("/worker/help" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
+          {
+            key: "about",
+            icon: "info",
+            label: t("settings.row.about", { version: appVersion }),
+            keywords: "about version app info",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="info"
+                label={t("settings.row.about", { version: appVersion })}
+                onPress={() => showAlert(t("settings.row.about", { version: appVersion }), "CareCliQ")}
+                showDivider={showDivider}
+              />
+            ),
+          },
+        ],
+      },
+    ],
+    [t, router, colors, appVersion],
+  );
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredGroups = useMemo(() => {
+    if (!normalizedQuery) return groupsConfig;
+    return groupsConfig
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) =>
+          `${item.label} ${item.keywords}`.toLowerCase().includes(normalizedQuery),
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [groupsConfig, normalizedQuery]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <WorkerMobileHeader title={t("nav.profile")} showBack />
+
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.profileHero}>
           <Pressable
@@ -322,310 +479,179 @@ export default function SettingsTabScreen() {
           </Text>
         </View>
 
-        <SettingsGroup title={t("settings.worker")}>
-          <SettingsRow
-            icon="award"
-            label={t("nav.credentials")}
-            onPress={() => router.push("/credentials" as never)}
-            trailing={
-              expiringCount > 0 ? (
-                <View style={[styles.expiringChip, { backgroundColor: colors.statusProgressBg }]}>
-                  <Text style={[styles.expiringChipText, { color: colors.warning, fontFamily: "Inter_600SemiBold" }]}>
-                    {t("settings.credentialsExpiring", { count: expiringCount })}
-                  </Text>
-                </View>
-              ) : (
-                <Feather name="chevron-right" size={15} color={colors.mutedForeground} />
-              )
-            }
+        <View style={[styles.searchBar, { backgroundColor: colors.soft }]}>
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("settings.search.placeholder")}
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
           />
-          <SettingsRow
-            icon="briefcase"
-            label={t("nav.toolkit")}
-            onPress={() => router.push("/toolkit" as never)}
-          />
-          <SettingsRow
-            icon="calendar"
-            label={t("nav.availability")}
-            onPress={() => router.push("/worker/availability" as never)}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup title={t("settings.group.account")}>
-          <SettingsRow
-            icon="user"
-            label={t("settings.row.profileDetails")}
-            onPress={() => router.push("/(tabs)/settings/account" as never)}
-          />
-          <SettingsRow
-            icon="home"
-            label={t("settings.nav.provider")}
-            onPress={() => router.push("/(tabs)/settings/provider" as never)}
-          />
-          <SettingsRow
-            icon="sliders"
-            label={t("settings.nav.defaults")}
-            onPress={() => router.push("/(tabs)/settings/defaults" as never)}
-          />
-          <SettingsRow
-            icon="shield"
-            label={t("settings.nav.compliance")}
-            onPress={() => router.push("/(tabs)/settings/compliance" as never)}
-          />
-          <SettingsRow
-            icon="bell"
-            label={t("nav.notifications")}
-            onPress={() => router.push("/worker/notifications" as never)}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup title={t("settings.group.security")}>
-          <SettingsRow
-            icon="key"
-            label={t("settings.row.changePassword")}
-            onPress={() => router.push("/(tabs)/settings/change-password" as never)}
-          />
-          {(availableKinds.includes("face") || availableKinds.length === 0) && (
-            <SettingsRow
-              icon="user"
-              label={
-                availableKinds.includes("face")
-                  ? labelForBiometricKind("face")
-                  : t("settings.biometric.face")
-              }
-              trailing={
-                <SettingsToggle
-                  value={biometric && availableKinds.includes("face")}
-                  onValueChange={(v) => void handleBiometricToggle("face", v)}
-                />
-              }
-            />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <View style={[styles.searchClear, { backgroundColor: colors.card }]}>
+                <Feather name="x" size={12} color={colors.mutedForeground} />
+              </View>
+            </Pressable>
           )}
-          {(availableKinds.includes("fingerprint") || availableKinds.length === 0) && (
-            <SettingsRow
-              icon="smartphone"
-              label={
-                availableKinds.includes("fingerprint")
-                  ? labelForBiometricKind("fingerprint")
-                  : t("settings.biometric.fingerprint")
-              }
-              trailing={
-                <SettingsToggle
-                  value={biometric && availableKinds.includes("fingerprint")}
-                  onValueChange={(v) => void handleBiometricToggle("fingerprint", v)}
-                />
-              }
-            />
-          )}
-          <SettingsRow
-            icon="monitor"
-            label={t("security.activeSessions")}
-            onPress={() => router.push("/worker/sessions" as never)}
-          />
-          <SettingsRow
-            icon="shield"
-            label={t("security.twoFactor")}
-            onPress={() => router.push("/worker/security" as never)}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup title={t("settings.group.privacy")}>
-          <SettingsRow
-            icon="file-text"
-            label={t("privacy.policy")}
-            onPress={() => router.push("/worker/privacy-policy" as never)}
-          />
-          <SettingsRow
-            icon="sliders"
-            label={t("settings.row.dataPermissions")}
-            onPress={() => router.push("/worker/data-permissions" as never)}
-          />
-          <SettingsRow
-            icon="check-square"
-            label={t("settings.row.consent")}
-            onPress={() => router.push("/worker/consent" as never)}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup title={t("nav.accessibility")}>
-          <SettingsRow
-            icon="type"
-            label={t("accessibility.fontSize")}
-            onPress={() => router.push("/(tabs)/settings/text-size" as never)}
-          />
-          <SettingsRow
-            icon="pause"
-            label={t("settings.row.reduceMotion")}
-            trailing={
-              <SettingsToggle value={reduceMotion} onValueChange={handleReduceMotionToggle} />
-            }
-          />
-          <SettingsRow
-            icon="sun"
-            label={t("accessibility.highContrast")}
-            trailing={<SettingsToggle value={highContrast} onValueChange={setHighContrast} />}
-          />
-          <SettingsRow
-            icon="book-open"
-            label={t("accessibility.dyslexia")}
-            trailing={<SettingsToggle value={dyslexiaFont} onValueChange={setDyslexiaFont} />}
-          />
-          <SettingsRow
-            icon="activity"
-            label={t("settings.row.haptic")}
-            trailing={
-              <SettingsToggle value={hapticFeedback} onValueChange={handleHapticToggle} />
-            }
-          />
-          <SettingsRow
-            icon="globe"
-            label={`${t("accessibility.languageHeading")} · ${languageLabel}`}
-            onPress={() => router.push("/(tabs)/settings/language" as never)}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup title={t("settings.group.support")}>
-          <SettingsRow
-            icon="help-circle"
-            label={t("settings.row.help")}
-            onPress={() => router.push("/worker/help" as never)}
-          />
-          <SettingsRow
-            icon="mail"
-            label={t("settings.row.contact")}
-            onPress={() => router.push("/worker/contact" as never)}
-          />
-          <SettingsRow
-            icon="info"
-            label={t("settings.row.about", { version: appVersion })}
-            onPress={() => showAlert(t("settings.row.about", { version: appVersion }), "CareCliQ")}
-            showDivider={false}
-          />
-        </SettingsGroup>
-
-        <View style={styles.themeSection}>
-          <Text style={[styles.groupTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            {t("accessibility.theme")}
-          </Text>
-          <View style={[styles.themeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {(
-              [
-                { id: "light" as ThemeMode, icon: "sun" as const, labelKey: "accessibility.theme.light" as const },
-                { id: "dark" as ThemeMode, icon: "moon" as const, labelKey: "accessibility.theme.dark" as const },
-                { id: "system" as ThemeMode, icon: "monitor" as const, labelKey: "accessibility.theme.system" as const },
-              ] as const
-            ).map((option) => {
-              const active = themeMode === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => {
-                    setThemeMode(option.id);
-                    void Haptics.selectionAsync();
-                  }}
-                  style={[
-                    styles.themeOption,
-                    active && {
-                      backgroundColor: colors.soft,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Feather
-                    name={option.icon}
-                    size={20}
-                    color={active ? colors.primary : colors.mutedForeground}
-                  />
-                  <Text
-                    style={[
-                      styles.themeOptionLabel,
-                      {
-                        color: active ? colors.foreground : colors.mutedForeground,
-                        fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
-                      },
-                    ]}
-                  >
-                    {t(option.labelKey)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </View>
 
-        <Pressable
-          onPress={handleSignOut}
-          style={[styles.signOut, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <Text style={[styles.signOutText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-            {t("common.signOut")}
-          </Text>
-        </Pressable>
+        {filteredGroups.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Feather name="search" size={22} color={colors.mutedForeground} />
+            <Text style={[styles.emptyStateText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              {t("settings.search.empty", { query })}
+            </Text>
+          </View>
+        ) : (
+          filteredGroups.map((group) => (
+            <SettingsGroup key={group.key} title={group.title}>
+              {group.items.map((item, index) => (
+                <React.Fragment key={item.key}>{item.render(index < group.items.length - 1)}</React.Fragment>
+              ))}
+            </SettingsGroup>
+          ))
+        )}
+
+        {!normalizedQuery && (
+          <Pressable
+            onPress={handleSignOut}
+            style={[styles.signOut, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={[styles.signOutText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+              {t("common.signOut")}
+            </Text>
+          </Pressable>
+        )}
       </ScrollView>
 
       <Modal
-        visible={confirmKind !== null}
+        visible={accessibilityOpen}
         transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmKind(null)}
+        animationType="slide"
+        onRequestClose={() => setAccessibilityOpen(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setConfirmKind(null)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setAccessibilityOpen(false)}>
           <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.sheetCard, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {t("settings.biometric.confirmTitle")}
-            </Text>
-            <Text style={[styles.modalHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("settings.biometric.confirmHint", {
-                method: confirmKind ? labelForBiometricKind(confirmKind) : t("settings.row.biometric"),
-              })}
-            </Text>
-            <TextInput
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!confirmBusy}
-              placeholder="Password"
-              placeholderTextColor={colors.mutedForeground}
-              style={[
-                styles.modalInput,
-                {
-                  color: colors.foreground,
-                  borderColor: confirmError ? colors.destructive : colors.border,
-                  backgroundColor: colors.background,
-                  fontFamily: "Inter_400Regular",
-                },
-              ]}
-            />
-            {confirmError ? (
-              <Text style={[styles.modalError, { color: colors.destructive, fontFamily: "Inter_500Medium" }]}>
-                {confirmError}
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {t("nav.accessibility")}
               </Text>
-            ) : null}
-            <Pressable
-              onPress={() => void handleConfirmEnable()}
-              disabled={confirmBusy}
-              style={[
-                styles.modalCta,
-                { backgroundColor: colors.primary, opacity: confirmBusy ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={[styles.modalCtaText, { fontFamily: "Inter_600SemiBold" }]}>
-                {t("settings.biometric.confirmCta", {
-                  method: confirmKind ? labelForBiometricKind(confirmKind) : t("settings.row.biometric"),
+              <Pressable onPress={() => setAccessibilityOpen(false)} hitSlop={8}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.groupTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                {t("accessibility.theme")}
+              </Text>
+              {themeSegmented}
+
+              <Text
+                style={[
+                  styles.groupTitle,
+                  styles.sheetSectionSpacing,
+                  { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {`${t("accessibility.fontSize")} · ${textSizeLabel}`}
+              </Text>
+              {textSizeSegmented}
+
+              <Text
+                style={[
+                  styles.groupTitle,
+                  styles.sheetSectionSpacing,
+                  { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {`${t("accessibility.languageHeading")} · ${languageLabel}`}
+              </Text>
+              <View style={[styles.groupCard, { borderColor: colors.border }]}>
+                {LANGUAGES.map((lang, index) => {
+                  const active = language === lang.code;
+                  return (
+                    <Pressable
+                      key={lang.code}
+                      onPress={() => {
+                        setLanguage(lang.code);
+                        void Haptics.selectionAsync();
+                      }}
+                      style={[
+                        styles.row,
+                        index < LANGUAGES.length - 1 && { borderBottomColor: colors.soft, borderBottomWidth: 1 },
+                        active && { backgroundColor: colors.activeBg },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: active ? colors.primary : colors.foreground,
+                            fontFamily: "Inter_600SemiBold",
+                            fontSize: 14,
+                          }}
+                        >
+                          {lang.nativeLabel}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.mutedForeground,
+                            fontFamily: "Inter_400Regular",
+                            fontSize: 12,
+                            marginTop: 1,
+                          }}
+                        >
+                          {lang.label}
+                        </Text>
+                      </View>
+                      {active ? <Feather name="check" size={16} color={colors.primary} /> : null}
+                    </Pressable>
+                  );
                 })}
+              </View>
+
+              <Text
+                style={[
+                  styles.groupTitle,
+                  styles.sheetSectionSpacing,
+                  { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {t("settings.preferences")}
               </Text>
-            </Pressable>
+              <View style={[styles.groupCard, { borderColor: colors.border }]}>
+                <SettingsRow
+                  icon="pause"
+                  label={t("settings.row.reduceMotion")}
+                  trailing={<SettingsToggle value={reduceMotion} onValueChange={handleReduceMotionToggle} />}
+                />
+                <SettingsRow
+                  icon="sun"
+                  label={t("accessibility.highContrast")}
+                  trailing={<SettingsToggle value={highContrast} onValueChange={setHighContrast} />}
+                />
+                <SettingsRow
+                  icon="book-open"
+                  label={t("accessibility.dyslexia")}
+                  trailing={<SettingsToggle value={dyslexiaFont} onValueChange={setDyslexiaFont} />}
+                />
+                <SettingsRow
+                  icon="activity"
+                  label={t("settings.row.haptic")}
+                  showDivider={false}
+                  trailing={<SettingsToggle value={hapticFeedback} onValueChange={handleHapticToggle} />}
+                />
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -635,7 +661,37 @@ export default function SettingsTabScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  scroll: { paddingHorizontal: 16, paddingTop: 12 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  searchClear: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 48,
+  },
+  emptyStateText: { fontSize: 13, textAlign: "center", paddingHorizontal: 24 },
   profileHero: {
     alignItems: "center",
     gap: 8,
@@ -687,25 +743,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
-  themeSection: { marginTop: 10 },
-  themeCard: {
+  segmented: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 4,
     flexDirection: "row",
     gap: 4,
   },
-  themeOption: {
+  segmentedOption: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
+    gap: 5,
+    paddingVertical: 10,
     paddingHorizontal: 6,
     borderRadius: 10,
-    minHeight: 72,
+    minHeight: 60,
   },
-  themeOptionLabel: {
+  segmentedOptionLabel: {
     fontSize: 11,
     textAlign: "center",
     lineHeight: 14,
@@ -725,12 +780,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   rowLabel: { flex: 1, fontSize: 13 },
-  expiringChip: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  expiringChipText: { fontSize: 10 },
   signOut: {
     borderWidth: 1,
     borderRadius: 12,
@@ -740,34 +789,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   signOutText: { fontSize: 13 },
-  modalBackdrop: {
+  sheetBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    justifyContent: "flex-end",
   },
-  modalCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 18,
-    gap: 10,
+  sheetCard: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 10,
+    maxHeight: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  modalTitle: { fontSize: 17 },
-  modalHint: { fontSize: 13, lineHeight: 18 },
-  modalInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    marginTop: 4,
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
   },
-  modalError: { fontSize: 12 },
-  modalCta: {
-    marginTop: 6,
-    borderRadius: 12,
-    paddingVertical: 13,
+  sheetHeader: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    marginBottom: 6,
   },
-  modalCtaText: { color: "#FFFFFF", fontSize: 14 },
+  sheetTitle: { fontSize: 17 },
+  sheetScroll: { paddingHorizontal: 18, paddingBottom: 12 },
+  sheetBody: { paddingHorizontal: 18, paddingBottom: 12, gap: 10 },
+  sheetSectionSpacing: { marginTop: 18 },
 });

@@ -94,7 +94,11 @@ export async function workerFetch<T>(
     } catch {
       /* use default */
     }
-    if (response.status === 401 && !isAuthEndpoint(path)) {
+    if (response.status === 401 && !isAuthEndpoint(path) && token) {
+      // Only clear the session for a 401 that was actually rejecting a token we
+      // sent. A request fired with no token (e.g. one that raced ahead of login
+      // completing) isn't a session being rejected — it never had one — so its
+      // late-arriving 401 must not be allowed to clear a session established since.
       unauthorizedHandler?.();
     }
     throw new WorkerApiError(message, response.status);

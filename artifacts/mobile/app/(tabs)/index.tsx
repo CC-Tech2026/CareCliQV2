@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
@@ -16,11 +16,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftStatusBadge } from "@/components/worker/ShiftStatusBadge";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
-import { useColors } from "@/hooks/useColors";
+import { useColors, type ThemeColors } from "@/hooks/useColors";
 import type { DashboardShiftSummary } from "@/lib/dashboard-api";
+import { listMyCredentials } from "@/lib/resource-api";
 import type { ShiftVisualState } from "@/lib/worker-api";
 import {
   findInProgressShift,
@@ -32,6 +35,50 @@ import {
 } from "@/lib/shift-utils";
 import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 import { resolveWorkerDisplayName } from "@/lib/display-name";
+
+type QuickAccessTileConfig = {
+  key: string;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  accent: string;
+  href: string;
+  badge?: string;
+};
+
+function QuickAccessTile({
+  tile,
+  colors,
+  onPress,
+}: {
+  tile: QuickAccessTileConfig;
+  colors: ThemeColors;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        elevatedCardShadow(colors.scheme === "dark"),
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+      ]}
+    >
+      <View style={[styles.tileIcon, { backgroundColor: colors.soft }]}>
+        <Feather name={tile.icon} size={20} color={tile.accent} />
+      </View>
+      <Text style={[styles.tileLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
+        {tile.label}
+      </Text>
+      {tile.badge ? (
+        <View style={[styles.tileBadge, { backgroundColor: colors.statusProgressBg }]}>
+          <Text style={[styles.tileBadgeText, { color: colors.warning, fontFamily: "Inter_700Bold" }]}>
+            {tile.badge}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 function HomeShiftCard({
   shift,
@@ -84,9 +131,18 @@ export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const t = useT();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const landing = useWorkerLandingDashboard();
+  const { data: credentials } = useQuery({
+    queryKey: ["credentials", "me"],
+    queryFn: listMyCredentials,
+    enabled: isAuthenticated,
+  });
+  const expiringCount = useMemo(
+    () => (credentials ?? []).filter((item) => item.status === "expiring").length,
+    [credentials],
+  );
 
   const displayName = resolveWorkerDisplayName({
     landingFullName: landing.data?.worker.full_name,
@@ -133,6 +189,38 @@ export default function HomeScreen() {
     router.push("/(tabs)/shifts" as never);
   };
 
+  const quickAccessTiles: QuickAccessTileConfig[] = [
+    {
+      key: "participants",
+      icon: "users",
+      label: t("dashboard.myParticipants"),
+      accent: colors.pink,
+      href: "/(tabs)/participants",
+    },
+    {
+      key: "availability",
+      icon: "calendar",
+      label: t("nav.availability"),
+      accent: colors.primary,
+      href: "/worker/availability",
+    },
+    {
+      key: "toolkit",
+      icon: "briefcase",
+      label: t("nav.toolkit"),
+      accent: colors.navy,
+      href: "/toolkit",
+    },
+    {
+      key: "credentials",
+      icon: "award",
+      label: t("nav.credentials"),
+      accent: colors.warning,
+      href: "/credentials",
+      badge: expiringCount > 0 ? t("settings.credentialsExpiring", { count: expiringCount }) : undefined,
+    },
+  ];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
@@ -154,7 +242,7 @@ export default function HomeScreen() {
             />
           }
         >
-          <Text style={[styles.greeting, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.greeting, { color: colors.foreground, fontFamily: FontFamily.h1 }]}>
             {t("dashboard.greetingWithName", { greeting, name: displayName })}
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -181,7 +269,7 @@ export default function HomeScreen() {
             </View>
             <Pressable
               onPress={openContinue}
-              style={[styles.continueBtn, { backgroundColor: colors.primary }]}
+              style={[styles.continueBtn, { backgroundColor: colors.pink }]}
               accessibilityRole="button"
             >
               <Feather name="play" size={14} color="#FFFFFF" />
@@ -191,25 +279,18 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.quickRow}>
-            <Pressable
-              onPress={() => router.push("/(tabs)/participants" as never)}
-              style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <Feather name="users" size={18} color={colors.primary} />
-              <Text style={[styles.quickText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                {t("dashboard.myParticipants")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/worker/availability" as never)}
-              style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <Feather name="calendar" size={18} color={colors.primary} />
-              <Text style={[styles.quickText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                {t("nav.availability")}
-              </Text>
-            </Pressable>
+          <Text style={[styles.sectionTitle, styles.quickAccessTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("dashboard.quickAccess")}
+          </Text>
+          <View style={styles.quickGrid}>
+            {quickAccessTiles.map((tile) => (
+              <QuickAccessTile
+                key={tile.key}
+                tile={tile}
+                colors={colors}
+                onPress={() => router.push(tile.href as never)}
+              />
+            ))}
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
@@ -257,17 +338,37 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   continueText: { color: "#FFFFFF", fontSize: 12 },
-  quickRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  quickCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+  quickAccessTitle: { marginTop: 4 },
+  quickGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 18,
   },
-  quickText: { fontSize: 12, flex: 1 },
+  tile: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 10,
+  },
+  tileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileLabel: { fontSize: 13, lineHeight: 17 },
+  tileBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: -2,
+  },
+  tileBadgeText: { fontSize: 10 },
   sectionTitle: { fontSize: 15, marginBottom: 8 },
   shiftCard: {
     borderWidth: 1,

@@ -57,14 +57,6 @@ class WorkerSessionCreate(BaseModel):
     participant_choice_control: Optional[str] = None
 
 
-class WorkerNoteCreate(BaseModel):
-    notes: str = Field(min_length=1)
-    session_date: date = Field(default_factory=date.today)
-    session_type: str = "progress_note"
-    duration_minutes: int = Field(default=1, ge=1)
-    goals_addressed: list[str] = Field(default_factory=list)
-
-
 class ShiftTaskItem(BaseModel):
     task_id: str
     type: str = "default"
@@ -679,40 +671,6 @@ async def create_my_client_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
     await audit_service.log_action(
         action_type="worker.session.created",
-        entity_type="session",
-        entity_id=session.get("id", ""),
-        user_id=get_user_id(current_user),
-        organization_id=get_user_organization_id(current_user),
-        after_state={"participant_id": participant_id, "session_type": body.session_type},
-    )
-    return _session_payload(session)
-
-
-@router.post("/my-clients/{participant_id}/notes", status_code=status.HTTP_201_CREATED)
-async def create_my_client_note(
-    participant_id: str,
-    body: WorkerNoteCreate,
-    current_user: dict = Depends(get_current_user),
-):
-    await _assigned_participant(participant_id, current_user)
-    _require_worker_ready_for_sessions(current_user)
-    payload = SessionCreate(
-        participant_id=participant_id,
-        session_date=body.session_date,
-        duration_minutes=body.duration_minutes,
-        session_type=body.session_type,
-        notes=body.notes,
-        goals_addressed=body.goals_addressed,
-        status="completed",
-    )
-    try:
-        session = await session_service.create_session(payload, current_user)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except PermissionError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
-    await audit_service.log_action(
-        action_type="worker.note.created",
         entity_type="session",
         entity_id=session.get("id", ""),
         user_id=get_user_id(current_user),

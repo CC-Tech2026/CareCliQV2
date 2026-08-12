@@ -7,8 +7,7 @@ export default function ClientDetailLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="overview" />
       <Stack.Screen name="plan" />
-      <Stack.Screen name="sessions" />
-      <Stack.Screen name="notes" />
+      <Stack.Screen name="shift-notes" />
       <Stack.Screen name="compliance" />
       <Stack.Screen name="session" options={{ animation: "slide_from_bottom" }} />
     </Stack>

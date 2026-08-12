@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/AuthContext";
 import {
   disableMfa,
   getMfaStatus,
@@ -16,26 +17,32 @@ import {
 const SECURITY_KEY = ["worker", "security"] as const;
 
 export function useMfaStatus() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...SECURITY_KEY, "mfa"],
     queryFn: getMfaStatus,
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 
 export function useTrustedDevices() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...SECURITY_KEY, "devices"],
     queryFn: listTrustedDevices,
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 
 export function useActiveSessions() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...SECURITY_KEY, "sessions"],
     queryFn: listSessions,
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 

@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
   Platform,
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WorkerProfileDropdown } from "@/components/worker/WorkerProfileDropdown";
+import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkerNotifications } from "@/hooks/worker/useWorkerNotifications";
 import { useColors } from "@/hooks/useColors";
@@ -45,25 +47,27 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
   const photoUrl = user?.profile_photo_url || null;
 
   const topPad = Platform.OS === "web" ? 12 : insets.top;
+  const headerBg = colors.primary;
 
   return (
     <>
+      <StatusBar style="light" />
       <View
         style={[
           styles.header,
           {
             paddingTop: topPad + 8,
-            backgroundColor: colors.background,
+            backgroundColor: headerBg,
           },
         ]}
       >
         {showBack ? (
           <Pressable
             onPress={() => (onBack ? onBack() : goBackOrHome(router))}
-            style={styles.sideBtn}
+            style={[styles.sideBtn, { backgroundColor: "rgba(255,255,255,0.16)" }]}
             accessibilityLabel="Go back"
           >
-            <Feather name="arrow-left" size={20} color={colors.foreground} />
+            <Feather name="arrow-left" size={19} color="#FFFFFF" />
           </Pressable>
         ) : (
           <Pressable
@@ -75,11 +79,11 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
             style={styles.avatarWrap}
             accessibilityLabel="Open profile"
           >
-            <View style={[styles.avatar, { backgroundColor: colors.soft }]}>
+            <View style={[styles.avatar, { backgroundColor: colors.card, borderColor: "rgba(255,255,255,0.55)" }]}>
               {photoUrl ? (
                 <Image source={{ uri: photoUrl }} style={styles.avatarImage} contentFit="cover" />
               ) : (
-                <Text style={[styles.avatarText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.avatarText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
                   {initials}
                 </Text>
               )}
@@ -88,7 +92,7 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
               <View
                 style={[
                   styles.avatarDot,
-                  { backgroundColor: colors.pink, borderColor: colors.background },
+                  { backgroundColor: colors.pink, borderColor: headerBg },
                 ]}
               />
             ) : null}
@@ -98,7 +102,7 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
         {minimal ? null : (
           <>
             <Text
-              style={[styles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+              style={[styles.title, { color: "#FFFFFF", fontFamily: FontFamily.h2 }]}
               numberOfLines={1}
             >
               {title}
@@ -106,16 +110,16 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
 
             <Pressable
               onPress={() => router.push("/worker/notifications" as never)}
-              style={styles.sideBtn}
+              style={[styles.sideBtn, { backgroundColor: "rgba(255,255,255,0.16)" }]}
               accessibilityLabel={
                 notificationCount > 0
                   ? `${notificationCount} unread notifications`
                   : "Notifications"
               }
             >
-              <Feather name="bell" size={22} color={colors.foreground} />
+              <Feather name="bell" size={19} color="#FFFFFF" />
               {notificationCount > 0 ? (
-                <View style={[styles.bellDot, { backgroundColor: colors.pink }]} />
+                <View style={[styles.bellDot, { backgroundColor: colors.pink, borderColor: headerBg }]} />
               ) : null}
             </Pressable>
           </>
@@ -135,10 +139,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 8,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
   sideBtn: {
     width: 36,
     height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -151,6 +163,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -161,8 +174,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -1,
     right: -1,
-    width: 9,
-    height: 9,
+    width: 10,
+    height: 10,
     borderRadius: 5,
     borderWidth: 2,
   },
@@ -171,8 +184,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     right: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 1.5,
   },
 });

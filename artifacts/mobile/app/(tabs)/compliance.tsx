@@ -16,6 +16,7 @@ import { ComplianceIncidentsSection } from "@/components/worker/compliance/Compl
 import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceScoreRing";
 import { ComplianceSessionHistoryItem } from "@/components/worker/compliance/ComplianceSessionHistoryItem";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useT } from "@/context/PreferencesContext";
 import {
@@ -59,6 +60,7 @@ function trendLabel(value: string, index: number, total: number, t: ReturnType<t
 
 export default function ComplianceTabScreen() {
   const colors = useColors();
+  const isDark = colors.scheme === "dark";
   const insets = useSafeAreaInsets();
   const t = useT();
   const loadingMoreRef = useRef(false);
@@ -229,7 +231,7 @@ export default function ComplianceTabScreen() {
       <WorkerMobileHeader title={t("nav.compliance")} />
 
       <View style={styles.segmentWrap}>
-        <View style={[styles.segmentTrack, { backgroundColor: colors.soft }]}>
+        <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
           {(
             [
               ["overview", t("compliance.segment.overview")],
@@ -241,14 +243,17 @@ export default function ComplianceTabScreen() {
               <Pressable
                 key={key}
                 onPress={() => setSegment(key)}
-                style={[styles.segmentBtn, active && { backgroundColor: colors.primary }]}
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: active ? colors.primary : colors.soft },
+                ]}
               >
                 <Text
                   style={[
                     styles.segmentText,
                     {
-                      color: active ? "#FFFFFF" : colors.primary,
-                      fontFamily: "Inter_600SemiBold",
+                      color: active ? colors.primaryForeground : colors.mutedForeground,
+                      fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
                     },
                   ]}
                 >
@@ -313,18 +318,18 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   error: { fontSize: 14, padding: 24, textAlign: "center" },
-  segmentWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  segmentWrap: { paddingHorizontal: 16, paddingTop: 16 },
   segmentTrack: {
     flexDirection: "row",
-    borderRadius: 999,
-    padding: 3,
+    gap: 3,
   },
   segmentBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   segmentText: { fontSize: 12 },
   list: { paddingHorizontal: 16, paddingTop: 4 },

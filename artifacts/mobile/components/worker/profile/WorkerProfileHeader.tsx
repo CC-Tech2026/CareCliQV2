@@ -3,6 +3,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { formatProfileSubtitle, formatWorkerRole } from "@/components/worker/profile/profile-ui";
+import { FontFamily } from "@/constants/typography";
 import { useColors } from "@/hooks/useColors";
 import type { WorkerProfile } from "@/lib/user-api";
 import { shiftInitials } from "@/lib/shift-utils";
@@ -35,7 +36,7 @@ export function WorkerProfileHeader({ profile, fallbackName, fallbackRole }: Pro
         )}
       </View>
       <View style={styles.textBlock}>
-        <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_700Bold" }]} numberOfLines={1}>
+        <Text style={[styles.name, { color: colors.foreground, fontFamily: FontFamily.h1 }]} numberOfLines={1}>
           {displayName}
         </Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>

@@ -6,9 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   SettingsPanelCard,
   SettingsSaveButton,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -20,10 +20,12 @@ export default function SettingsContactScreen() {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
+    enabled: isAuthenticated,
   });
 
   const [phone, setPhone] = useState("");
@@ -57,42 +59,39 @@ export default function SettingsContactScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection
-          title={t("settings.contact.title")}
-          description={t("settings.contact.subtitle")}
-          icon="phone"
-        >
-          <SettingsPanelCard label={t("settings.contact.section")}>
-            <View style={styles.form}>
-              <View style={styles.field}>
-                <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                  {t("settings.contact.phone")}
-                </Text>
-                <TextInput
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder={t("settings.contact.phonePlaceholder")}
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="phone-pad"
-                  editable={!isLoading}
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.foreground,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                />
-              </View>
-              <SettingsSaveButton
-                label={t("settings.contact.save")}
-                saving={saving}
-                onPress={() => void handleSave()}
+        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("settings.contact.subtitle")}
+        </Text>
+        <SettingsPanelCard label={t("settings.contact.section")}>
+          <View style={styles.form}>
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                {t("settings.contact.phone")}
+              </Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                placeholder={t("settings.contact.phonePlaceholder")}
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="phone-pad"
+                editable={!isLoading}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
               />
             </View>
-          </SettingsPanelCard>
-        </SettingsSection>
+            <SettingsSaveButton
+              label={t("settings.contact.save")}
+              saving={saving}
+              onPress={() => void handleSave()}
+            />
+          </View>
+        </SettingsPanelCard>
       </ScrollView>
     </SettingsSubScreen>
   );
@@ -100,6 +99,7 @@ export default function SettingsContactScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  subtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
   form: { gap: 14 },
   field: { gap: 6 },
   label: { fontSize: 12 },

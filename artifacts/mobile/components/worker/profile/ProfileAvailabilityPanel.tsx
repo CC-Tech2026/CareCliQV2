@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -52,10 +53,12 @@ export function ProfileAvailabilityPanel({ bottomInset = 24, footerBottom = 0 }:
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["worker", "availability"],
     queryFn: getWorkerAvailability,
+    enabled: isAuthenticated,
   });
 
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
@@ -189,7 +192,7 @@ export function ProfileAvailabilityPanel({ bottomInset = 24, footerBottom = 0 }:
           {
             backgroundColor: colors.background,
             borderTopColor: colors.border,
-            paddingBottom: Math.max(insets.bottom, 0) + 10,
+            paddingBottom: Math.max(insets.bottom, footerBottom) + 10,
           },
         ]}
       >
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   banner: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 15, lineHeight: 20 },
   bannerMeta: { fontSize: 13, lineHeight: 18 },
   gridCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingTop: 14,

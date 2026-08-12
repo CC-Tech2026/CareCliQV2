@@ -13,27 +13,30 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
-import { SettingsSection } from "@/components/worker/settings/settings-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
 
-function statusMeta(status: string): {
+function statusMeta(
+  status: string,
+  colors: ReturnType<typeof useColors>,
+): {
   labelKey: "credentials.valid" | "credentials.expiring" | "credentials.expired" | "credentials.pendingReview";
   color: string;
   bg: string;
   bar: string;
 } {
   if (status === "valid") {
-    return { labelKey: "credentials.valid", color: "#15803D", bg: "#DCFCE7", bar: "#22C55E" };
+    return { labelKey: "credentials.valid", color: colors.success, bg: colors.statusDocumentedBg, bar: colors.success };
   }
   if (status === "expiring") {
-    return { labelKey: "credentials.expiring", color: "#B45309", bg: "#FEF3C7", bar: "#F59E0B" };
+    return { labelKey: "credentials.expiring", color: colors.warning, bg: colors.statusProgressBg, bar: colors.warning };
   }
   if (status === "expired" || status === "rejected") {
-    return { labelKey: "credentials.expired", color: "#B91C1C", bg: "#FEE2E2", bar: "#EF4444" };
+    return { labelKey: "credentials.expired", color: colors.destructive, bg: colors.dangerBg, bar: colors.destructive };
   }
-  return { labelKey: "credentials.pendingReview", color: "#3730A3", bg: "#EEF0FF", bar: "#6366F1" };
+  return { labelKey: "credentials.pendingReview", color: colors.primary, bg: colors.statusUpcomingBg, bar: colors.primary };
 }
 
 function formatCredentialDate(credential: Credential, t: ReturnType<typeof useT>): string {
@@ -62,19 +65,20 @@ function statusBadgeLabel(status: string, t: ReturnType<typeof useT>): string {
 
 type Props = {
   bottomInset?: number;
-  showSectionHeader?: boolean;
 };
 
-export function ProfileCredentialsPanel({ bottomInset = 24, showSectionHeader = false }: Props) {
+export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["credentials", "me"],
     queryFn: listMyCredentials,
+    enabled: isAuthenticated,
   });
 
   const summary = useMemo(
@@ -109,28 +113,24 @@ export function ProfileCredentialsPanel({ bottomInset = 24, showSectionHeader = 
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
-      {showSectionHeader ? (
-        <SettingsSection
-          title={t("credentials.title")}
-          description={t("settings.credentials.subtitle")}
-          icon="award"
-        />
-      ) : null}
+      <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("settings.credentials.subtitle")}
+      </Text>
       <View style={styles.summaryRow}>
         <SummaryPill
           label={t("profile.credentials.summary.valid", { count: summary.valid })}
-          backgroundColor="#DCFCE7"
-          textColor="#15803D"
+          backgroundColor={colors.statusDocumentedBg}
+          textColor={colors.success}
         />
         <SummaryPill
           label={t("profile.credentials.summary.expiring", { count: summary.expiring })}
-          backgroundColor="#FEF3C7"
-          textColor="#B45309"
+          backgroundColor={colors.statusProgressBg}
+          textColor={colors.warning}
         />
         <SummaryPill
           label={t("profile.credentials.summary.expired", { count: summary.expired })}
-          backgroundColor="#FEE2E2"
-          textColor="#B91C1C"
+          backgroundColor={colors.dangerBg}
+          textColor={colors.destructive}
         />
       </View>
 
@@ -176,7 +176,7 @@ function SummaryPill({
 function CredentialCard({ credential, isDark }: { credential: Credential; isDark: boolean }) {
   const colors = useColors();
   const t = useT();
-  const meta = statusMeta(credential.status);
+  const meta = statusMeta(credential.status, colors);
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -242,6 +242,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
+  subtitle: { fontSize: 12, lineHeight: 17 },
   summaryRow: { flexDirection: "row", gap: 10 },
   summaryPill: {
     flex: 1,

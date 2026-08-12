@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
-import { SettingsSection } from "@/components/worker/settings/settings-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -29,20 +29,21 @@ function isLow(item: ToolkitItem): boolean {
 
 type Props = {
   bottomInset?: number;
-  showSectionHeader?: boolean;
 };
 
-export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = false }: Props) {
+export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const t = useT();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["toolkit", "me"],
     queryFn: getMyToolkit,
+    enabled: isAuthenticated,
   });
 
   const items = data?.items ?? [];
@@ -92,13 +93,9 @@ export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = fals
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
-      {showSectionHeader ? (
-        <SettingsSection
-          title={t("toolkit.title")}
-          description={t("toolkit.subtitle")}
-          icon="briefcase"
-        />
-      ) : null}
+      <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("toolkit.subtitle")}
+      </Text>
       <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
         {t("profile.toolkit.inventoryHint")}
       </Text>
@@ -120,11 +117,12 @@ export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = fals
           {items.map((item, index) => {
             const low = isLow(item);
             const category = item.category || t("toolkit.general");
+            const quantity = Number(item.quantity ?? 0);
             const meta = t("toolkit.unitsAvailable", {
               category,
-              count: `${item.quantity} ${item.unit}`,
+              count: `${quantity} ${item.unit}`,
             });
-            const canUse = item.quantity > 0;
+            const canUse = quantity > 0;
 
             return (
               <View
@@ -137,11 +135,11 @@ export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = fals
                   },
                 ]}
               >
-                <View style={[styles.iconWrap, { backgroundColor: low ? "#FEF3C7" : colors.soft }]}>
+                <View style={[styles.iconWrap, { backgroundColor: low ? colors.statusProgressBg : colors.soft }]}>
                   <Feather
                     name={low ? "alert-triangle" : "package"}
                     size={18}
-                    color={low ? "#B45309" : colors.composerPurple}
+                    color={low ? colors.warning : colors.composerPurple}
                   />
                 </View>
                 <View style={styles.copy}>
@@ -153,7 +151,7 @@ export function ProfileToolkitPanel({ bottomInset = 24, showSectionHeader = fals
                     {item.minimum_quantity ? ` · ${t("toolkit.minimum", { count: item.minimum_quantity })}` : ""}
                   </Text>
                   {low ? (
-                    <Text style={[styles.lowTag, { color: "#B45309", fontFamily: "Inter_700Bold" }]}>
+                    <Text style={[styles.lowTag, { color: colors.warning, fontFamily: "Inter_700Bold" }]}>
                       {t("toolkit.lowStock")}
                     </Text>
                   ) : null}
@@ -196,16 +194,17 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  subtitle: { fontSize: 12, lineHeight: 17 },
   hint: { fontSize: 13, lineHeight: 18 },
   emptyCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     padding: 24,
     alignItems: "center",
   },
   empty: { fontSize: 14, textAlign: "center" },
   card: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
   },

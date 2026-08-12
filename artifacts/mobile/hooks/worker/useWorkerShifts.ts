@@ -1,18 +1,22 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/AuthContext";
 import { getWorkerShifts, type ShiftFilter } from "@/lib/worker-api";
 
 export const SHIFTS_PAGE_SIZE = 10;
 
 export function useWorkerShifts(filter: ShiftFilter = "today") {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ["worker", "shifts", filter],
     queryFn: () => getWorkerShifts(filter),
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 
 export function useWorkerShiftsInfinite(filter: ShiftFilter) {
+  const { isAuthenticated } = useAuth();
   return useInfiniteQuery({
     queryKey: ["worker", "shifts", "infinite", filter],
     queryFn: async ({ pageParam }) => {
@@ -28,5 +32,6 @@ export function useWorkerShiftsInfinite(filter: ShiftFilter) {
       return offset + SHIFTS_PAGE_SIZE;
     },
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
