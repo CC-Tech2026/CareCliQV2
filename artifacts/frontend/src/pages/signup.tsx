@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Quote,
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 
@@ -21,6 +22,10 @@ const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const BG = "var(--auth-input-bg)";
+
+// Solid colors sampled from the CareCliQ logo mark — no gradients.
+const LOGO_PINK = "#E94B8C";
+const LOGO_PURPLE = "#6B3FA0";
 
 // ── Password Strength Indicator ───────────────────────────────────────────────
 function PasswordStrengthBar({ password, t }: { password: string; t: (key: string) => string }) {
@@ -199,6 +204,7 @@ function StyledSelect({
   return (
     <select
       name={name}
+      title={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
@@ -394,6 +400,22 @@ export default function Signup() {
         .step-content {
           animation: stepSlideIn 0.28s ease-out;
         }
+        @keyframes headlineLineIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .auth-headline-line {
+          display: block;
+          opacity: 0;
+          animation: headlineLineIn 0.55s ease-out forwards;
+        }
+        @keyframes authGlowPulse {
+          0%, 100% { opacity: 0.75; }
+          50%      { opacity: 1; }
+        }
+        .auth-glow {
+          animation: authGlowPulse 9s ease-in-out infinite;
+        }
       `,
         }}
       />
@@ -404,9 +426,10 @@ export default function Signup() {
       >
         {/* Subtle radial glow */}
         <div
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none auth-glow"
           style={{ background: "var(--auth-marketing-glow)" }}
         />
+        <div className="absolute inset-0 pointer-events-none auth-motif" />
 
         <div className="relative z-10 flex flex-col justify-between h-full">
           <div>
@@ -418,9 +441,12 @@ export default function Signup() {
 
           <div>
             <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "var(--auth-headline)" }}>
-              {t("auth.signup.marketing.headline1")}
-              <br />
-              <span style={{ color: "var(--auth-accent)" }}>{t("auth.signup.marketing.headline2")}</span>
+              <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>
+                {t("auth.signup.marketing.headline1")}
+              </span>
+              <span className="auth-headline-line" style={{ animationDelay: "100ms", color: "var(--auth-accent)" }}>
+                {t("auth.signup.marketing.headline2")}
+              </span>
             </h1>
             <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "var(--auth-marketing-body)" }}>
               {t("auth.signup.marketing.description")}
@@ -443,27 +469,31 @@ export default function Signup() {
               </div>
             </div>
 
-            {/* People / social proof */}
-            <div className="mt-8 flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {[
-                  { initials: "SC", bg: "#3730A3" },
-                  { initials: "OT", bg: "#0D7C66" },
-                  { initials: "TL", bg: "#7B3F9E" },
-                  { initials: "PM", bg: "#1A6FA8" },
-                ].map((a) => (
-                  <div
-                    key={a.initials}
-                    className="h-8 w-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white"
-                    style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
-                  >
-                    {a.initials}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[13px] font-medium" style={{ color: "var(--auth-headline)" }}>
-                {t("auth.signup.marketing.joinedBy")}
+            {/* Testimonial */}
+            <div
+              className="mt-8 max-w-[380px] rounded-2xl p-4"
+              style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
+            >
+              <Quote size={16} style={{ color: LOGO_PINK }} />
+              <p className="mt-2.5 text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
+                {t("auth.signup.marketing.testimonialQuote")}
               </p>
+              <div className="mt-3 flex items-center gap-2.5">
+                <div
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0"
+                  style={{ background: LOGO_PURPLE }}
+                >
+                  PN
+                </div>
+                <div>
+                  <p className="text-[12px] font-black" style={{ color: "var(--auth-headline)" }}>
+                    {t("auth.signup.marketing.testimonialName")}
+                  </p>
+                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
+                    {t("auth.signup.marketing.testimonialRole")} · {t("auth.signup.marketing.testimonialOrg")}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

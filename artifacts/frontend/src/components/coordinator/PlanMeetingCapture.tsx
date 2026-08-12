@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mic, Pause, Play, Loader2, Check, X, Pencil,
-  AlertTriangle, FileText, MessageSquare, Download,
+  AlertTriangle, FileText, MessageSquare, Download, ChevronRight, Target, ListChecks, ArrowLeft, ShieldCheck, Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -14,12 +14,15 @@ import {
   extractGoalsAndTasks,
   applyPlanMeetingSuggestions,
   listPlanMeetings,
+  getPlanMeeting,
   type PlanMeeting,
   type PlanMeetingType,
   type Stage1ResolutionResult,
   type Stage2ExtractionResult,
   type ExtractedGoalPayload,
   type ExtractedTaskPayload,
+  type ConsentGivenBy,
+  type ConsentMethod,
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
@@ -149,9 +152,11 @@ function DraftCard({
         <>
           <p className="text-[13px] font-semibold mb-1.5" style={{ color: TEXT }}>{text}</p>
           {quote && (
-            <p className="text-[11px] italic px-2.5 py-1.5 rounded-lg mb-2 leading-relaxed" style={{ background: SOFT, color: MUTED }}>
-              "{quote.text}" <span className="not-italic font-semibold">— {quote.speaker}</span>
-            </p>
+            <div className="rounded-lg mb-2 px-2.5 py-2" style={{ background: SOFT }}>
+              <Quote size={12} style={{ color: PLUM }} />
+              <p className="text-[11px] italic leading-relaxed mt-1" style={{ color: MUTED }}>{quote.text}</p>
+              <p className="text-[10px] font-semibold mt-1" style={{ color: MUTED }}>— {quote.speaker}</p>
+            </div>
           )}
           <div className="flex items-center gap-2">
             <button
@@ -189,15 +194,29 @@ function DraftCard({
 
 // ── Record + review flow ─────────────────────────────────────────────────────────
 
+function ConsentPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 h-10 rounded-full text-[13px] font-bold transition-all"
+      style={active ? { background: PLUM, color: "#fff" } : { background: "#fff", color: TEXT, border: `1px solid ${BORDER}` }}
+    >
+      {label}
+    </button>
+  );
+}
+
 type Phase = "idle" | "recording" | "processing" | "review";
 
 interface RecordMeetingFlowProps {
   participantId: string;
+  participantName: string;
   onDone: () => void;
   onCancel: () => void;
 }
 
-function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlowProps) {
+function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }: RecordMeetingFlowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -205,6 +224,10 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   const [phase, setPhase] = useState<Phase>("idle");
   const [voiceNotSupported, setVoiceNotSupported] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
+
+  const [consentGivenBy, setConsentGivenBy] = useState<ConsentGivenBy>("participant");
+  const [consentMethod, setConsentMethod] = useState<ConsentMethod>("verbal");
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -266,6 +289,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   };
 
   const handleMicTap = async () => {
+    if (!consentConfirmed) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setVoiceNotSupported(true);
       toast({ variant: "destructive", title: "Voice recording not supported", description: "Please use a different browser or device." });
@@ -276,7 +300,14 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       let sid: string;
       try {
-        const session = await createMeetingSession(meetingType, new Date().toISOString().slice(0, 10), undefined, participantId);
+        const session = await createMeetingSession(
+          meetingType,
+          new Date().toISOString().slice(0, 10),
+          undefined,
+          participantId,
+          consentGivenBy,
+          consentMethod,
+        );
         sid = session.session_id;
         setSessionId(sid);
       } catch (err: any) {
@@ -329,6 +360,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     setMediaRecorder(null);
     setElapsedTime(0);
     setIsPaused(false);
+    setConsentConfirmed(false);
     setPhase("idle");
   };
 
@@ -377,6 +409,8 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
     setDraftTasks([]);
     setEditingId(null);
     setElapsedTime(0);
+    // Each new recording attempt needs its own consent confirmation.
+    setConsentConfirmed(false);
     setPhase("idle");
   };
 
@@ -462,10 +496,18 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
       return applyPlanMeetingSuggestions(sessionId as string, goalPayload, taskPayload);
     },
     onSuccess: (result) => {
-      toast({ title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.` });
+      const goalsShort = result.goals_created < acceptedGoals.length;
+      const tasksShort = result.tasks_created < acceptedTasks.length;
+      toast({
+        title: `Applied: ${result.goals_created} goal(s) and ${result.tasks_created} task(s) created.`,
+        variant: goalsShort || tasksShort ? "destructive" : undefined,
+        description: goalsShort || tasksShort ? "Some accepted items failed to save — check Goals & Tasks and try again." : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["plan-meetings", participantId] });
-      qc.invalidateQueries({ queryKey: ["ndis-goals"] });
-      qc.invalidateQueries({ queryKey: ["participant-tasks"] });
+      // Goals/tasks queries are org-scoped via useOrgQuery, which prepends orgId to
+      // the real query key — match by key membership instead of a fixed prefix.
+      qc.invalidateQueries({ predicate: (query) => query.queryKey.includes("ndis-goals") });
+      qc.invalidateQueries({ predicate: (query) => query.queryKey.includes("participant-tasks") });
       onDone();
     },
     onError: (err: any) => toast({ variant: "destructive", title: "Failed to apply", description: err?.message ?? "" }),
@@ -474,6 +516,11 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
   // ── Render: idle ────────────────────────────────────────────────────────────
 
   if (phase === "idle") {
+    const consentGivenByLabel = consentGivenBy === "participant" ? participantName : `${participantName}'s ${consentGivenBy}`;
+    const nowLabel = new Date().toLocaleString("en-AU", {
+      day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
+    });
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-center gap-2">
@@ -491,22 +538,60 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
           </select>
         </div>
 
-        <div className="rounded-2xl p-8 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <button
-            type="button"
-            onClick={handleMicTap}
-            disabled={startingSession || voiceNotSupported}
-            aria-label="Start recording"
-            className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
-            style={{ background: PLUM, boxShadow: "0 4px 16px rgba(55,48,163,0.28)" }}
-          >
-            {startingSession ? <Loader2 size={26} className="animate-spin text-white" /> : <Mic size={26} className="text-white" />}
-          </button>
-          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>Tap to start recording</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            Speak naturally — CareCliQ transcribes the conversation and drafts NDIS goals and tasks automatically.
-          </p>
+        <div className="rounded-2xl p-5 flex items-start gap-3" style={{ background: CORAL }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.2)" }}>
+            <ShieldCheck size={18} className="text-white" />
+          </div>
+          <div>
+            <p className="font-black text-[15px] text-white">Consent required</p>
+            <p className="text-[13px] text-white mt-0.5" style={{ opacity: 0.9 }}>
+              Recording cannot start without explicit consent.
+            </p>
+          </div>
         </div>
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: MUTED }}>Consent given by</p>
+          <div className="flex gap-2">
+            <ConsentPill label="Participant" active={consentGivenBy === "participant"} onClick={() => setConsentGivenBy("participant")} />
+            <ConsentPill label="Nominee" active={consentGivenBy === "nominee"} onClick={() => setConsentGivenBy("nominee")} />
+            <ConsentPill label="Guardian" active={consentGivenBy === "guardian"} onClick={() => setConsentGivenBy("guardian")} />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: MUTED }}>Method</p>
+          <div className="flex gap-2">
+            <ConsentPill label="Verbal" active={consentMethod === "verbal"} onClick={() => setConsentMethod("verbal")} />
+            <ConsentPill label="Written" active={consentMethod === "written"} onClick={() => setConsentMethod("written")} />
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2.5 rounded-2xl p-4 cursor-pointer" style={{ border: `1px solid ${BORDER}` }}>
+          <input
+            type="checkbox"
+            checked={consentConfirmed}
+            onChange={(e) => setConsentConfirmed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded shrink-0"
+          />
+          <span className="text-[13px]" style={{ color: TEXT }}>
+            I confirm <strong>{consentGivenByLabel}</strong> has been informed the conversation will be recorded and has given {consentMethod} consent.
+          </span>
+        </label>
+
+        <p className="text-center text-[11px]" style={{ color: MUTED }}>Recorded {nowLabel}</p>
+
+        <button
+          type="button"
+          onClick={handleMicTap}
+          disabled={!consentConfirmed || startingSession || voiceNotSupported}
+          aria-label="Confirm consent and start recording"
+          className="w-full h-12 rounded-full flex items-center justify-center gap-2 font-black text-[14px] text-white hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+          style={{ background: CORAL }}
+        >
+          {startingSession ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
+          Confirm consent &amp; record
+        </button>
 
         <div className="flex gap-2 pt-2 border-t" style={{ borderColor: BORDER }}>
           <Button variant="outline" className="rounded-xl flex-1" style={{ borderColor: BORDER }} onClick={onCancel}>
@@ -585,7 +670,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
             type="button"
             onClick={() => setActiveTab("drafts")}
             className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
-            style={{ background: activeTab === "drafts" ? PLUM : "#fff", color: activeTab === "drafts" ? "#fff" : TEXT, border: `1px solid ${activeTab === "drafts" ? PLUM : BORDER}` }}
+            style={{ background: activeTab === "drafts" ? CORAL : "#fff", color: activeTab === "drafts" ? "#fff" : TEXT, border: `1px solid ${activeTab === "drafts" ? CORAL : BORDER}` }}
           >
             Drafts ({visibleGoals.length + visibleTasks.length})
           </button>
@@ -593,7 +678,7 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
             type="button"
             onClick={() => setActiveTab("transcript")}
             className="px-3 py-1.5 rounded-full text-[12px] font-black transition-colors"
-            style={{ background: activeTab === "transcript" ? PLUM : "#fff", color: activeTab === "transcript" ? "#fff" : TEXT, border: `1px solid ${activeTab === "transcript" ? PLUM : BORDER}` }}
+            style={{ background: activeTab === "transcript" ? CORAL : "#fff", color: activeTab === "transcript" ? "#fff" : TEXT, border: `1px solid ${activeTab === "transcript" ? CORAL : BORDER}` }}
           >
             Transcript
           </button>
@@ -610,18 +695,20 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
 
       {activeTab === "drafts" ? (
         <div className="space-y-3 pb-16">
-          <div className="rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
-            <p className="text-[11px] leading-relaxed" style={{ color: MUTED }}>
-              Nothing here is saved yet — accept the items you want, then Apply to create them for this participant.
+          <div className="rounded-xl p-3 flex items-start gap-2.5" style={{ background: "rgba(55,48,163,0.06)" }}>
+            <ShieldCheck size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+            <p className="text-[11px] leading-relaxed" style={{ color: PLUM }}>
+              Nothing is final in CareCliQ. Approve items, then export back to your system of record.
             </p>
-            <div className="flex gap-2 shrink-0">
-              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportCsv}>
-                <Download size={11} /> CSV
-              </Button>
-              <Button size="sm" variant="outline" className="rounded-lg gap-1 text-[11px]" style={{ borderColor: BORDER }} onClick={exportPdf}>
-                <Download size={11} /> PDF
-              </Button>
-            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: PLUM, color: "#fff" }} onClick={exportCsv}>
+              <FileText size={11} /> CSV
+            </Button>
+            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: CORAL, color: "#fff" }} onClick={exportPdf}>
+              <FileText size={11} /> PDF
+            </Button>
           </div>
 
           {(attentionFlags.length > 0 || (stage1Results?.flags.length ?? 0) > 0) && (
@@ -713,19 +800,177 @@ function RecordMeetingFlow({ participantId, onDone, onCancel }: RecordMeetingFlo
 
 // ── Meeting history row ────────────────────────────────────────────────────────
 
-function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
+const REQUIREMENT_META: Record<string, { label: string; bg: string; color: string }> = {
+  mandatory: { label: "Mandatory", bg: "#FEF2F2", color: CORAL },
+  optional:  { label: "Optional",  bg: SOFT,      color: MUTED },
+};
+
+function MeetingDetailView({ meetingId, onBack }: { meetingId: string; onBack: () => void }) {
+  const detailQuery = useQuery({
+    queryKey: ["plan-meeting-detail", meetingId],
+    queryFn: () => getPlanMeeting(meetingId),
+    select: (d) => d.meeting,
+  });
+
+  const meeting = detailQuery.data;
+  const meta = meeting ? MEETING_TYPE_META[meeting.meeting_type] ?? MEETING_TYPE_META.check_in : null;
+  const status = meeting ? STATUS_META[meeting.suggestions_status] ?? STATUS_META.pending_review : null;
+  const dateLabel = useMemo(() => {
+    if (!meeting) return "";
+    try {
+      const hasTime = /T\d{2}:\d{2}/.test(meeting.meeting_date);
+      const d = new Date(meeting.meeting_date);
+      const datePart = d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      if (!hasTime) return datePart;
+      const timePart = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+      return `${datePart} · ${timePart}`;
+    } catch {
+      return meeting.meeting_date;
+    }
+  }, [meeting]);
+
+  const goals = meeting?.extracted_goals ?? [];
+  const tasks = meeting?.extracted_tasks ?? [];
+  const legacyNotes: Array<[string, string]> = meeting
+    ? ([
+        ["Participant priorities", meeting.participant_priorities],
+        ["Coordinator observations", meeting.coordinator_observations],
+        ["Agreed outcomes", meeting.agreed_outcomes],
+        ["Notes", meeting.conversation_notes],
+      ].filter(([, v]) => !!v) as Array<[string, string]>)
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-[12px] font-semibold hover:opacity-70 transition-opacity"
+        style={{ color: PLUM }}
+      >
+        <ArrowLeft size={14} /> Back to meetings
+      </button>
+
+      {meeting && meta && status && (
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-black"
+            style={{ background: meta.bg, color: meta.color }}
+          >
+            {meta.abbr}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-black text-[13px]" style={{ color: TEXT }}>{meta.label}</p>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: status.bg, color: status.color }}>
+                {status.label}
+              </span>
+            </div>
+            <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{dateLabel}</p>
+          </div>
+        </div>
+      )}
+
+      {detailQuery.isLoading && (
+        <div className="text-center py-8">
+          <Loader2 size={20} className="animate-spin mx-auto" style={{ color: MUTED }} />
+        </div>
+      )}
+
+      {!detailQuery.isLoading && (detailQuery.isError || !meeting) && (
+        <p className="text-[12px] py-2" style={{ color: MUTED }}>Couldn't load this meeting's details.</p>
+      )}
+
+      {meeting && meeting.source === "legacy" && (
+        legacyNotes.length === 0 ? (
+          <p className="text-[12px] py-2" style={{ color: MUTED }}>No notes recorded for this meeting.</p>
+        ) : (
+          <div className="space-y-3">
+            {legacyNotes.map(([label, value]) => (
+              <div key={label}>
+                <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>{label}</p>
+                <p className="text-[12px] mt-0.5" style={{ color: TEXT }}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {meeting && meeting.source !== "legacy" && (
+        <div className="space-y-3">
+          <TranscriptViewer
+            rawTranscript={meeting.raw_transcript ?? []}
+            cleanTranscript={meeting.clean_transcript ?? []}
+          />
+
+          {(goals.length > 0 || tasks.length > 0) && (
+            <div className="rounded-xl overflow-hidden border" style={{ borderColor: BORDER }}>
+              <div className="p-3" style={{ background: SOFT }}>
+                <p className="font-semibold text-[13px]" style={{ color: TEXT }}>Goals &amp; tasks from this meeting</p>
+                <p className="text-[11px]" style={{ color: MUTED }}>What the AI extracted from the conversation</p>
+              </div>
+              <div className="border-t p-3 space-y-2" style={{ borderColor: BORDER }}>
+                {goals.map((g, i) => (
+                  <div key={i} className="rounded-lg p-2.5 flex items-start gap-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                    <Target size={13} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                    <div className="min-w-0">
+                      <p className="text-[12px]" style={{ color: TEXT }}>{g.goal_text}</p>
+                      {g.support_category && (
+                        <span className="text-[10px] font-semibold" style={{ color: MUTED }}>{g.support_category}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {tasks.map((t, i) => {
+                  const req = REQUIREMENT_META[t.requirement_level] ?? REQUIREMENT_META.optional;
+                  return (
+                    <div key={i} className="rounded-lg p-2.5 flex items-start gap-2" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                      <ListChecks size={13} className="shrink-0 mt-0.5" style={{ color: GREEN }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px]" style={{ color: TEXT }}>{t.task_text}</p>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: req.bg, color: req.color }}>
+                        {req.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {goals.length === 0 && tasks.length === 0 && (
+            <p className="text-[12px]" style={{ color: MUTED }}>No goals or tasks were extracted from this meeting.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeetingRow({ meeting, onSelect }: { meeting: PlanMeeting; onSelect: (id: string) => void }) {
   const meta = MEETING_TYPE_META[meeting.meeting_type] ?? MEETING_TYPE_META.check_in;
   const status = STATUS_META[meeting.suggestions_status] ?? STATUS_META.pending_review;
   const dateLabel = useMemo(() => {
     try {
-      return new Date(meeting.meeting_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      const hasTime = /T\d{2}:\d{2}/.test(meeting.meeting_date);
+      const d = new Date(meeting.meeting_date);
+      const datePart = d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      if (!hasTime) return datePart;
+      const timePart = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+      return `${datePart} · ${timePart}`;
     } catch {
       return meeting.meeting_date;
     }
   }, [meeting.meeting_date]);
 
   return (
-    <div className="rounded-xl flex items-center gap-3 p-3" style={{ border: `1px solid ${BORDER}` }}>
+    <button
+      type="button"
+      onClick={() => onSelect(meeting.id)}
+      className="w-full rounded-xl flex items-center gap-3 p-3 text-left hover:opacity-80 transition-opacity"
+      style={{ border: `1px solid ${BORDER}` }}
+    >
       <div
         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-black"
         style={{ background: meta.bg, color: meta.color }}
@@ -741,7 +986,8 @@ function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
         </div>
         <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{dateLabel}</p>
       </div>
-    </div>
+      <ChevronRight size={14} className="shrink-0" style={{ color: MUTED }} />
+    </button>
   );
 }
 
@@ -749,15 +995,19 @@ function MeetingRow({ meeting }: { meeting: PlanMeeting }) {
 
 interface PlanMeetingCaptureProps {
   participantId: string;
+  participantName: string;
 }
 
-export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
+export function PlanMeetingCapture({ participantId, participantName }: PlanMeetingCaptureProps) {
   const [recording, setRecording] = useState(false);
+  const [viewingMeetingId, setViewingMeetingId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const qc = useQueryClient();
 
   const meetingsQuery = useQuery({
-    queryKey: ["plan-meetings", participantId],
-    queryFn: () => listPlanMeetings(participantId),
+    queryKey: ["plan-meetings", participantId, dateFrom, dateTo],
+    queryFn: () => listPlanMeetings(participantId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
     select: (d) => d.meetings,
   });
 
@@ -769,12 +1019,22 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
   if (recording) {
     return (
       <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
-        <RecordMeetingFlow participantId={participantId} onDone={handleDone} onCancel={() => setRecording(false)} />
+        <RecordMeetingFlow participantId={participantId} participantName={participantName} onDone={handleDone} onCancel={() => setRecording(false)} />
+      </div>
+    );
+  }
+
+  if (viewingMeetingId) {
+    return (
+      <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: "#fff" }}>
+        <MeetingDetailView meetingId={viewingMeetingId} onBack={() => setViewingMeetingId(null)} />
       </div>
     );
   }
 
   const meetings = meetingsQuery.data ?? [];
+  const hasFilter = !!(dateFrom || dateTo);
+  const clearFilter = () => { setDateFrom(""); setDateTo(""); };
 
   return (
     <div className="space-y-3">
@@ -801,6 +1061,42 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
         </Button>
       </div>
 
+      {/* Date filter */}
+      {(meetings.length > 0 || hasFilter) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>
+            From
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="ml-1.5 rounded-lg border px-2 py-1 text-[11px]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </label>
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>
+            To
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="ml-1.5 rounded-lg border px-2 py-1 text-[11px]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </label>
+          {hasFilter && (
+            <button
+              type="button"
+              onClick={clearFilter}
+              className="text-[11px] font-semibold hover:opacity-70 transition-opacity"
+              style={{ color: PLUM }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Loading */}
       {meetingsQuery.isLoading && (
         <div className="text-center py-6">
@@ -808,8 +1104,24 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
         </div>
       )}
 
-      {/* Empty state */}
-      {!meetingsQuery.isLoading && meetings.length === 0 && (
+      {/* Empty state — filtered to zero results */}
+      {!meetingsQuery.isLoading && meetings.length === 0 && hasFilter && (
+        <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
+          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>No meetings in this date range</p>
+          <p className="text-[12px]" style={{ color: MUTED }}>Try a different range, or clear the filter to see all meetings.</p>
+          <button
+            type="button"
+            onClick={clearFilter}
+            className="mt-3 text-[12px] font-semibold hover:opacity-70 transition-opacity"
+            style={{ color: PLUM }}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
+      {/* Empty state — no meetings recorded at all */}
+      {!meetingsQuery.isLoading && meetings.length === 0 && !hasFilter && (
         <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
           <div
             className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center"
@@ -835,7 +1147,7 @@ export function PlanMeetingCapture({ participantId }: PlanMeetingCaptureProps) {
       {/* Meeting list */}
       {meetings.length > 0 && (
         <div className="space-y-2">
-          {meetings.map((m) => <MeetingRow key={m.id} meeting={m} />)}
+          {meetings.map((m) => <MeetingRow key={m.id} meeting={m} onSelect={setViewingMeetingId} />)}
         </div>
       )}
     </div>

@@ -80,6 +80,16 @@
   33%       { border-radius: 45% 55% 40% 60% / 60% 40% 55% 45%; }
   66%       { border-radius: 55% 45% 60% 40% / 40% 55% 45% 60%; }
 }
+.auth-motif {
+  background-color: var(--auth-marketing-muted);
+  opacity: var(--auth-motif-opacity, 0.06);
+  -webkit-mask-image: var(--auth-motif-svg);
+  mask-image: var(--auth-motif-svg);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -278,6 +288,9 @@
   --auth-marketing-glow:
     radial-gradient(ellipse at 5% 110%, rgba(55,48,163,0.08) 0%, transparent 55%),
     radial-gradient(ellipse at 95% -5%, rgba(190,24,93,0.06) 0%, transparent 45%);
+  /* Faint node-and-line motif tiled across the auth marketing panels — texture, not decoration */
+  --auth-motif-svg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22220%22%20height%3D%22220%22%3E%0A%20%20%3Ccircle%20cx%3D%2226%22%20cy%3D%22150%22%20r%3D%222.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2250%22%20cy%3D%22172%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2226%22%20y1%3D%22150%22%20x2%3D%2250%22%20y2%3D%22172%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22158%22%20cy%3D%2234%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22130%22%20cy%3D%2218%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22158%22%20y1%3D%2234%22%20x2%3D%22130%22%20y2%3D%2218%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2296%22%20r%3D%222.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2264%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2296%22%20y1%3D%2296%22%20x2%3D%2296%22%20y2%3D%2264%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22176%22%20cy%3D%22148%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22198%22%20cy%3D%22170%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22176%22%20y1%3D%22148%22%20x2%3D%22198%22%20y2%3D%22170%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2264%22%20cy%3D%2238%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2234%22%20cy%3D%22100%22%20r%3D%221.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%22196%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E%0A");
+  --auth-motif-opacity: 0.06;
   --auth-headline: #2D1B4E;
   --auth-marketing-muted: #6B5B95;
   --auth-marketing-body: #5A4A78;
@@ -379,6 +392,7 @@
   --auth-marketing-glow:
     radial-gradient(ellipse at 5% 110%, rgba(129, 140, 248, 0.12) 0%, transparent 55%),
     radial-gradient(ellipse at 95% -5%, rgba(244, 114, 182, 0.08) 0%, transparent 45%);
+  --auth-motif-opacity: 0.09;
   --auth-headline: #F9FAFB;
   --auth-marketing-muted: #9CA3AF;
   --auth-marketing-body: #D1D5DB;

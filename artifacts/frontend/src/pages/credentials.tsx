@@ -34,13 +34,37 @@ const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 
+// Canonical snake_case values for the credential types the Staff compliance
+// table tracks as fixed columns (see migration 095). Values with no clean
+// legacy equivalent (Police Check, Other, AHPRA Registration, etc.) stay as
+// plain display strings — unchanged from before.
+const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
+  ndis_screening: "NDIS Worker Screening",
+  wwcc: "Working with Children Check (WWCC)",
+  code_of_conduct: "Code of Conduct acknowledgement",
+  first_aid: "First Aid",
+  cpr: "CPR",
+  manual_handling: "Manual handling",
+  infection_control: "Infection control",
+  medication_admin: "Medication administration",
+  drivers_licence: "Driver Licence",
+};
+
+function credentialTypeLabel(type: string): string {
+  return CREDENTIAL_TYPE_LABELS[type] ?? type;
+}
+
 const WORKER_TYPES = [
-  "NDIS Worker Screening",
+  "ndis_screening",
+  "wwcc",
+  "code_of_conduct",
   "Police Check",
-  "First Aid",
-  "CPR",
-  "Working With Children",
-  "Driver Licence",
+  "first_aid",
+  "cpr",
+  "manual_handling",
+  "infection_control",
+  "medication_admin",
+  "drivers_licence",
   "Other",
 ];
 
@@ -110,7 +134,7 @@ function CredentialRow({
           </span>
         </div>
         <p className="mt-1 text-xs font-medium text-[#6B7280]">
-          {credential.credential_type}
+          {credentialTypeLabel(credential.credential_type)}
           {credential.issuer ? ` • ${credential.issuer}` : ""}
           {credential.expiry_date
             ? ` • ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
@@ -340,6 +364,7 @@ export default function Credentials() {
       const haystack = [
         item.title,
         item.credential_type,
+        credentialTypeLabel(item.credential_type),
         item.issuer,
         item.user?.full_name,
         item.user?.email,
@@ -527,7 +552,7 @@ export default function Credentials() {
                 className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
               >
                 {ruleCredentialTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type}>{credentialTypeLabel(type)}</option>
                 ))}
               </select>
             </div>
@@ -590,7 +615,7 @@ export default function Credentials() {
                 onChange={(event) => setForm({ ...form, credential_type: event.target.value })}
                 className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
               >
-                {credentialTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                {credentialTypes.map((type) => <option key={type} value={type}>{credentialTypeLabel(type)}</option>)}
               </select>
             </div>
             <div>

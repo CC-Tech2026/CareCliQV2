@@ -1,6 +1,10 @@
+from datetime import date, timedelta
+from typing import Any, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from ..core.access import get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
-from ..services import session_service, participant_service, funding_service, ai_service, shift_service
+from ..services import session_service, participant_service, funding_service, ai_service, shift_service, incident_service
 from ..services.compliance_engine import (
     COMPLIANCE_BLOCKED_MESSAGE,
     ComplianceBlockedError,
@@ -8,10 +12,32 @@ from ..services.compliance_engine import (
 )
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.settings_service import get_physical_exam_session_types
+from ..services.supabase_client import get_supabase_admin
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/compliance", tags=["compliance"])
+
+
+def _require_coordinator_org(current_user: dict) -> str:
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Only support coordinators can access the compliance centre.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization found for this user.")
+    return org_id
+
+
+def _session_score_band(score: float) -> str:
+    if score >= 85:
+        return "compliant"
+    if score >= 60:
+        return "at_risk"
+    return "non_compliant"
+
+
+def _worker_id_of(row: dict) -> str:
+    return str(row.get("worker_id") or row.get("support_worker_id") or row.get("owner_user_id") or "")
 
 
 @router.get("/rules")
@@ -158,4 +184,647 @@ async def compliance_report_for_patient(patient_id: str, current_user: dict = De
         "at_risk": at_risk,
         "non_compliant": non_compliant,
         "sessions": sorted(session_rows, key=lambda x: x.get("session_date") or "", reverse=True),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMPLIANCE CENTRE — Overview / Staff / Participant / Incidents sub-tabs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# The 8 credential types the Staff compliance table always shows as columns
+# (Tier 1 + Tier 2 of the credential taxonomy, plus Medication Admin).
+FIXED_CREDENTIAL_TYPES = [
+    "ndis_screening", "wwcc", "code_of_conduct",
+    "first_aid", "cpr", "manual_handling", "infection_control",
+    "medication_admin",
+]
+
+
+def _date_range(date_from: Optional[str], date_to: Optional[str]) -> tuple[str, str]:
+    """Default to the last 30 days when no explicit range is supplied."""
+    since = date_from or (date.today() - timedelta(days=30)).isoformat()
+    until = date_to or date.today().isoformat()
+    return since, until
+
+
+@router.get("/centre/overview")
+async def compliance_centre_overview(current_user: dict = Depends(get_current_user)):
+    """Compliance centre — Overview: KPIs, urgent actions, session bands, common
+    issues, and staff/participant snapshots. All real data, last 30 days."""
+    org_id = _require_coordinator_org(current_user)
+    supabase = get_supabase_admin()
+    since = (date.today() - timedelta(days=30)).isoformat()
+
+    try:
+        sessions_resp = (
+            supabase.table("sessions")
+            .select("id, session_date, compliance_score, worker_id, support_worker_id, owner_user_id, participant_id")
+            .eq("organization_id", org_id)
+            .gte("session_date", since)
+            .not_.is_("compliance_score", "null")
+            .execute()
+        )
+        sessions = sessions_resp.data or []
+    except Exception as exc:
+        logger.warning("compliance centre overview: session fetch failed: %s", exc)
+        sessions = []
+
+    scores = [float(s["compliance_score"]) for s in sessions if s.get("compliance_score") is not None]
+    overall_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+    compliant = sum(1 for s in scores if s >= 85)
+    at_risk = sum(1 for s in scores if 60 <= s < 85)
+    non_compliant = sum(1 for s in scores if s < 60)
+
+    incident_stats = await incident_service.get_incident_stats(org_id=org_id, current_user=current_user)
+
+    # ── Common issues: compliance_rule_results (fail/warning), last 30 days ────
+    common_issues: list[dict[str, Any]] = []
+    try:
+        rr_resp = (
+            supabase.table("compliance_rule_results")
+            .select("rule_id, status, checked_at")
+            .in_("status", ["fail", "warning"])
+            .gte("checked_at", since)
+            .execute()
+        )
+        counts: dict[str, int] = {}
+        for r in (rr_resp.data or []):
+            code = r.get("rule_id")
+            if code:
+                counts[code] = counts.get(code, 0) + 1
+        catalog = {r["rule"]: r for r in get_rules_catalog()}
+        top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:4]
+        max_count = top[0][1] if top else 1
+        for code, count in top:
+            label = catalog.get(code, {}).get("label") or code
+            common_issues.append({"rule_code": code, "label": label, "count": count, "pct": round(count / max_count * 100)})
+    except Exception as exc:
+        logger.warning("compliance centre overview: rule results fetch failed: %s", exc)
+
+    # ── Urgent actions: critical incidents, expiring credentials, unsigned agreements ──
+    try:
+        crit_resp = (
+            supabase.table("incidents")
+            .select("id, participant_id, user_id, incident_type, incident_date")
+            .eq("organization_id", org_id)
+            .eq("ndis_reportable", True)
+            .in_("status", ["reported", "under_investigation"])
+            .order("incident_date", desc=True)
+            .execute()
+        )
+        crit_rows = crit_resp.data or []
+    except Exception:
+        crit_rows = []
+
+    try:
+        warn_date = (date.today() + timedelta(days=30)).isoformat()
+        exp_resp = (
+            supabase.table("credentials")
+            .select("id, user_id, credential_type, expiry_date")
+            .eq("organization_id", org_id)
+            .in_("status", ["expiring", "expired"])
+            .lte("expiry_date", warn_date)
+            .order("expiry_date")
+            .execute()
+        )
+        exp_rows = exp_resp.data or []
+    except Exception:
+        exp_rows = []
+    seen_workers: set[str] = set()
+    exp_rows_dedup = []
+    for r in exp_rows:
+        wid = str(r.get("user_id") or "")
+        if wid and wid not in seen_workers:
+            seen_workers.add(wid)
+            exp_rows_dedup.append(r)
+
+    try:
+        agr_resp = (
+            supabase.table("ndis_plans")
+            .select("id, patient_id, agreement_status")
+            .eq("organization_id", org_id)
+            .eq("agreement_status", "unsigned")
+            .execute()
+        )
+        agr_rows = agr_resp.data or []
+    except Exception:
+        agr_rows = []
+
+    participant_ids = {str(r.get("participant_id")) for r in crit_rows if r.get("participant_id")}
+    participant_ids |= {str(r.get("patient_id")) for r in agr_rows if r.get("patient_id")}
+    worker_ids = {str(r.get("user_id")) for r in exp_rows_dedup if r.get("user_id")}
+    worker_ids |= {str(r.get("user_id")) for r in crit_rows if r.get("user_id")}
+
+    participants_by_id: dict[str, dict] = {}
+    if participant_ids:
+        try:
+            presp = supabase.table("patients").select("id, full_name").in_("id", list(participant_ids)).execute()
+            participants_by_id = {str(p["id"]): p for p in (presp.data or [])}
+        except Exception:
+            pass
+
+    workers_by_id: dict[str, dict] = {}
+    if worker_ids:
+        try:
+            wresp = supabase.table("users").select("id, full_name").in_("id", list(worker_ids)).execute()
+            workers_by_id = {str(w["id"]): w for w in (wresp.data or [])}
+        except Exception:
+            pass
+
+    urgent: list[dict[str, Any]] = []
+    for r in crit_rows:
+        pid = str(r.get("participant_id") or "")
+        pname = participants_by_id.get(pid, {}).get("full_name") or "Unknown participant"
+        urgent.append({
+            "severity": "critical",
+            "type": "incident",
+            "label": f"Restrictive practice — {pname}",
+            "detail": str(r.get("incident_date") or "")[:10],
+            "link": f"/incident/{r.get('id')}",
+        })
+    for r in exp_rows_dedup:
+        wid = str(r.get("user_id") or "")
+        wname = workers_by_id.get(wid, {}).get("full_name") or "Team member"
+        try:
+            days_left = (date.fromisoformat(str(r["expiry_date"])[:10]) - date.today()).days
+        except Exception:
+            days_left = None
+        urgent.append({
+            "severity": "high",
+            "type": "credential",
+            "label": f"Screening expiring — {wname}",
+            "detail": f"{max(days_left, 0)} days" if days_left is not None else "",
+            "link": "/credentials",
+        })
+    for r in agr_rows:
+        pid = str(r.get("patient_id") or "")
+        pname = participants_by_id.get(pid, {}).get("full_name") or "Unknown participant"
+        urgent.append({
+            "severity": "high",
+            "type": "agreement",
+            "label": f"Service agreement unsigned — {pname}",
+            "detail": "",
+            "link": f"/patients/{pid}",
+        })
+    urgent.sort(key=lambda a: 0 if a["severity"] == "critical" else 1)
+    urgent = urgent[:5]
+
+    # ── Staff snapshot (top 3 by urgency: RP flag, expiring cred, low score) ──
+    scores_by_worker: dict[str, list[float]] = {}
+    for s in sessions:
+        wid = _worker_id_of(s)
+        if wid and s.get("compliance_score") is not None:
+            scores_by_worker.setdefault(wid, []).append(float(s["compliance_score"]))
+
+    rp_flag_workers = {str(r.get("user_id")) for r in crit_rows if r.get("user_id")}
+    expiry_by_worker = {str(r.get("user_id")): r.get("expiry_date") for r in exp_rows if r.get("user_id")}
+    all_worker_ids = set(scores_by_worker.keys()) | set(expiry_by_worker.keys()) | rp_flag_workers
+    staff_names: dict[str, str] = {}
+    if all_worker_ids:
+        try:
+            wresp2 = supabase.table("users").select("id, full_name").in_("id", list(all_worker_ids)).execute()
+            staff_names = {str(w["id"]): w.get("full_name") for w in (wresp2.data or [])}
+        except Exception:
+            pass
+
+    staff_snapshot = []
+    for wid in all_worker_ids:
+        worker_scores = scores_by_worker.get(wid, [])
+        avg = round(sum(worker_scores) / len(worker_scores), 1) if worker_scores else None
+        staff_snapshot.append({
+            "user_id": wid,
+            "full_name": staff_names.get(wid) or "Team member",
+            "expiry_date": expiry_by_worker.get(wid),
+            "avg_score": avg,
+            "rp_flag": wid in rp_flag_workers,
+        })
+    staff_snapshot.sort(key=lambda w: 0 if w["rp_flag"] else (1 if w["expiry_date"] else (2 if (w["avg_score"] or 100) < 60 else 3)))
+    staff_snapshot = staff_snapshot[:3]
+
+    # ── Participant snapshot (top 3: unsigned agreement, open flags, low score) ──
+    unsigned_ids = {str(r.get("patient_id")) for r in agr_rows if r.get("patient_id")}
+    flagged_ids = {str(r.get("participant_id")) for r in crit_rows if r.get("participant_id")}
+    participant_scores: dict[str, list[float]] = {}
+    for s in sessions:
+        pid = str(s.get("participant_id") or "")
+        if pid and s.get("compliance_score") is not None:
+            participant_scores.setdefault(pid, []).append(float(s["compliance_score"]))
+
+    all_participant_ids = unsigned_ids | flagged_ids | set(participant_scores.keys())
+    participant_names: dict[str, str] = {}
+    if all_participant_ids:
+        try:
+            presp2 = supabase.table("patients").select("id, full_name").in_("id", list(all_participant_ids)).execute()
+            participant_names = {str(p["id"]): p.get("full_name") for p in (presp2.data or [])}
+        except Exception:
+            pass
+
+    participant_snapshot = []
+    for pid in all_participant_ids:
+        pscores = participant_scores.get(pid, [])
+        avg_p = round(sum(pscores) / len(pscores), 1) if pscores else None
+        participant_snapshot.append({
+            "participant_id": pid,
+            "full_name": participant_names.get(pid) or "Unknown participant",
+            "agreement_unsigned": pid in unsigned_ids,
+            "has_flag": pid in flagged_ids,
+            "note_quality": avg_p,
+        })
+    participant_snapshot.sort(key=lambda p: 0 if p["agreement_unsigned"] else (1 if p["has_flag"] else (2 if (p["note_quality"] or 100) < 60 else 3)))
+    participant_snapshot = participant_snapshot[:3]
+
+    return {
+        "kpis": {
+            "overall_score": overall_score,
+            "compliant_sessions": compliant,
+            "at_risk_sessions": at_risk,
+            "open_incidents": incident_stats.get("open", 0),
+        },
+        "urgent_actions": urgent,
+        "bands": {"compliant": compliant, "at_risk": at_risk, "non_compliant": non_compliant},
+        "common_issues": common_issues,
+        "staff_snapshot": staff_snapshot,
+        "participant_snapshot": participant_snapshot,
+    }
+
+
+@router.get("/centre/staff")
+async def compliance_centre_staff(current_user: dict = Depends(get_current_user)):
+    """Compliance centre — Staff compliance sub-tab: every worker's credential
+    status across the 8 fixed columns, avg session score, and RP flag status."""
+    org_id = _require_coordinator_org(current_user)
+    supabase = get_supabase_admin()
+    since = (date.today() - timedelta(days=30)).isoformat()
+
+    try:
+        users_resp = (
+            supabase.table("users")
+            .select("id, full_name, role")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .execute()
+        )
+        workers = users_resp.data or []
+    except Exception as exc:
+        logger.warning("compliance centre staff: worker fetch failed: %s", exc)
+        workers = []
+    worker_ids = [str(w["id"]) for w in workers]
+
+    creds_by_worker: dict[str, dict[str, dict]] = {}
+    if worker_ids:
+        try:
+            creds_resp = (
+                supabase.table("credentials")
+                .select("user_id, credential_type, expiry_date, status")
+                .eq("organization_id", org_id)
+                .in_("user_id", worker_ids)
+                .execute()
+            )
+            for row in (creds_resp.data or []):
+                wid = str(row.get("user_id") or "")
+                ctype = row.get("credential_type")
+                if wid and ctype in FIXED_CREDENTIAL_TYPES:
+                    creds_by_worker.setdefault(wid, {})[ctype] = {
+                        "status": row.get("status"),
+                        "expiry_date": row.get("expiry_date"),
+                    }
+        except Exception as exc:
+            logger.warning("compliance centre staff: credential fetch failed: %s", exc)
+
+    scores_by_worker: dict[str, list[float]] = {}
+    if worker_ids:
+        try:
+            sess_resp = (
+                supabase.table("sessions")
+                .select("worker_id, support_worker_id, owner_user_id, compliance_score")
+                .eq("organization_id", org_id)
+                .gte("session_date", since)
+                .not_.is_("compliance_score", "null")
+                .execute()
+            )
+            for s in (sess_resp.data or []):
+                wid = _worker_id_of(s)
+                if wid in worker_ids and s.get("compliance_score") is not None:
+                    scores_by_worker.setdefault(wid, []).append(float(s["compliance_score"]))
+        except Exception as exc:
+            logger.warning("compliance centre staff: session fetch failed: %s", exc)
+
+    rp_flag_workers: set[str] = set()
+    if worker_ids:
+        try:
+            inc_resp = (
+                supabase.table("incidents")
+                .select("user_id")
+                .eq("organization_id", org_id)
+                .eq("ndis_reportable", True)
+                .in_("status", ["reported", "under_investigation"])
+                .in_("user_id", worker_ids)
+                .execute()
+            )
+            rp_flag_workers = {str(r.get("user_id")) for r in (inc_resp.data or []) if r.get("user_id")}
+        except Exception as exc:
+            logger.warning("compliance centre staff: incident fetch failed: %s", exc)
+
+    today = date.today()
+    rows = []
+    total_expiring = 0
+    total_action = 0
+    total_compliant = 0
+    for w in workers:
+        wid = str(w["id"])
+        worker_creds = creds_by_worker.get(wid, {})
+        expiring_soon = any(
+            c.get("status") in ("expiring", "expired") for c in worker_creds.values()
+        )
+        rp_flag = wid in rp_flag_workers
+        worker_scores = scores_by_worker.get(wid, [])
+        avg_score = round(sum(worker_scores) / len(worker_scores), 1) if worker_scores else None
+
+        groups = []
+        if expiring_soon:
+            groups.append("expiring")
+            total_expiring += 1
+        if rp_flag:
+            groups.append("action")
+            total_action += 1
+        if not expiring_soon and not rp_flag:
+            groups.append("compliant")
+            total_compliant += 1
+
+        rows.append({
+            "user_id": wid,
+            "full_name": w.get("full_name") or "Team member",
+            "credentials": worker_creds,
+            "avg_score": avg_score,
+            "rp_flag": rp_flag,
+            "groups": groups,
+        })
+
+    return {
+        "kpis": {
+            "total_workers": len(workers),
+            "fully_compliant": total_compliant,
+            "expiring_credentials": total_expiring,
+            "action_required": total_action,
+        },
+        "fixed_credential_types": FIXED_CREDENTIAL_TYPES,
+        "workers": rows,
+        "generated_at": today.isoformat(),
+    }
+
+
+@router.get("/centre/participants")
+async def compliance_centre_participants(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Compliance centre — Participant compliance sub-tab: agreement status, note
+    quality, and open flags per participant."""
+    org_id = _require_coordinator_org(current_user)
+    supabase = get_supabase_admin()
+    since, until = _date_range(date_from, date_to)
+
+    try:
+        patients_resp = (
+            supabase.table("patients")
+            .select("id, full_name, ndis_number, plan_status, ndis_plan_id")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        patients = patients_resp.data or []
+    except Exception as exc:
+        logger.warning("compliance centre participants: patient fetch failed: %s", exc)
+        patients = []
+    patient_ids = [str(p["id"]) for p in patients]
+
+    agreements_by_patient: dict[str, dict] = {}
+    if patient_ids:
+        try:
+            plans_resp = (
+                supabase.table("ndis_plans")
+                .select("patient_id, agreement_status, agreement_signed_at")
+                .eq("organization_id", org_id)
+                .in_("patient_id", patient_ids)
+                .execute()
+            )
+            for row in (plans_resp.data or []):
+                pid = str(row.get("patient_id") or "")
+                if pid:
+                    agreements_by_patient[pid] = row
+        except Exception as exc:
+            logger.warning("compliance centre participants: plan fetch failed: %s", exc)
+
+    sessions_by_patient: dict[str, list[float]] = {}
+    session_count_by_patient: dict[str, int] = {}
+    if patient_ids:
+        try:
+            sess_resp = (
+                supabase.table("sessions")
+                .select("participant_id, compliance_score, session_date")
+                .eq("organization_id", org_id)
+                .gte("session_date", since)
+                .lte("session_date", until)
+                .in_("participant_id", patient_ids)
+                .execute()
+            )
+            for s in (sess_resp.data or []):
+                pid = str(s.get("participant_id") or "")
+                if not pid:
+                    continue
+                session_count_by_patient[pid] = session_count_by_patient.get(pid, 0) + 1
+                if s.get("compliance_score") is not None:
+                    sessions_by_patient.setdefault(pid, []).append(float(s["compliance_score"]))
+        except Exception as exc:
+            logger.warning("compliance centre participants: session fetch failed: %s", exc)
+
+    rp_flag_patients: set[str] = set()
+    if patient_ids:
+        try:
+            inc_resp = (
+                supabase.table("incidents")
+                .select("participant_id")
+                .eq("organization_id", org_id)
+                .eq("ndis_reportable", True)
+                .in_("status", ["reported", "under_investigation"])
+                .in_("participant_id", patient_ids)
+                .execute()
+            )
+            rp_flag_patients = {str(r.get("participant_id")) for r in (inc_resp.data or []) if r.get("participant_id")}
+        except Exception as exc:
+            logger.warning("compliance centre participants: incident fetch failed: %s", exc)
+
+    goal_not_linked_patients: set[str] = set()
+    if patient_ids:
+        try:
+            goals_resp = (
+                supabase.table("ndis_goals")
+                .select("participant_id, support_category")
+                .eq("organization_id", org_id)
+                .in_("participant_id", patient_ids)
+                .execute()
+            )
+            for g in (goals_resp.data or []):
+                if not g.get("support_category"):
+                    goal_not_linked_patients.add(str(g.get("participant_id") or ""))
+        except Exception as exc:
+            logger.warning("compliance centre participants: goals fetch failed: %s", exc)
+
+    allocations_by_patient: dict[str, str] = {}
+    if patient_ids:
+        try:
+            alloc_resp = (
+                supabase.table("practitioner_allocations")
+                .select("patient_id, user_id, allocated_role")
+                .eq("organization_id", org_id)
+                .eq("is_active", True)
+                .eq("allocated_role", "support_worker")
+                .in_("patient_id", patient_ids)
+                .execute()
+            )
+            worker_ids_needed = set()
+            for a in (alloc_resp.data or []):
+                pid = str(a.get("patient_id") or "")
+                wid = str(a.get("user_id") or "")
+                if pid and wid and pid not in allocations_by_patient:
+                    allocations_by_patient[pid] = wid
+                    worker_ids_needed.add(wid)
+            worker_names: dict[str, str] = {}
+            if worker_ids_needed:
+                wresp = supabase.table("users").select("id, full_name").in_("id", list(worker_ids_needed)).execute()
+                worker_names = {str(w["id"]): w.get("full_name") for w in (wresp.data or [])}
+            allocations_by_patient = {pid: worker_names.get(wid, "Unassigned") for pid, wid in allocations_by_patient.items()}
+        except Exception as exc:
+            logger.warning("compliance centre participants: allocation fetch failed: %s", exc)
+
+    rows = []
+    total_signed = 0
+    all_note_scores: list[float] = []
+    total_open_flags = 0
+    for p in patients:
+        pid = str(p["id"])
+        agreement = agreements_by_patient.get(pid, {})
+        agreement_status = agreement.get("agreement_status") or "unsigned"
+        if agreement_status == "signed":
+            total_signed += 1
+        p_scores = sessions_by_patient.get(pid, [])
+        avg_note = round(sum(p_scores) / len(p_scores), 1) if p_scores else None
+        if avg_note is not None:
+            all_note_scores.append(avg_note)
+
+        flags = []
+        if pid in rp_flag_patients:
+            flags.append("rp")
+        if agreement_status == "unsigned":
+            flags.append("agreement")
+        if pid in goal_not_linked_patients:
+            flags.append("goal")
+        total_open_flags += len(flags)
+
+        groups = []
+        if flags:
+            groups.append("flags")
+        if agreement_status == "unsigned":
+            groups.append("agreement")
+        if avg_note is not None and avg_note < 70:
+            groups.append("lowscore")
+
+        rows.append({
+            "participant_id": pid,
+            "full_name": p.get("full_name"),
+            "ndis_number": p.get("ndis_number"),
+            "plan_status": p.get("plan_status"),
+            "agreement_status": agreement_status,
+            "agreement_signed_at": agreement.get("agreement_signed_at"),
+            "sessions_count": session_count_by_patient.get(pid, 0),
+            "avg_note_quality": avg_note,
+            "flags": flags,
+            "worker_name": allocations_by_patient.get(pid, "Unassigned"),
+            "groups": groups,
+        })
+
+    return {
+        "kpis": {
+            "total_participants": len(patients),
+            "agreements_signed": total_signed,
+            "avg_note_quality": round(sum(all_note_scores) / len(all_note_scores), 1) if all_note_scores else 0,
+            "open_flags": total_open_flags,
+        },
+        "participants": rows,
+        "date_from": since,
+        "date_to": until,
+    }
+
+
+@router.get("/centre/incidents")
+async def compliance_centre_incidents(current_user: dict = Depends(get_current_user)):
+    """Compliance centre — Incidents sub-tab: read-only list, action buttons link
+    to the existing incident pages."""
+    org_id = _require_coordinator_org(current_user)
+    supabase = get_supabase_admin()
+
+    stats = await incident_service.get_incident_stats(org_id=org_id, current_user=current_user)
+
+    try:
+        month_start = date.today().replace(day=1).isoformat()
+        inc_resp = (
+            supabase.table("incidents")
+            .select("id, participant_id, user_id, incident_type, description, status, severity, incident_date, ndis_reportable")
+            .eq("organization_id", org_id)
+            .order("incident_date", desc=True)
+            .limit(50)
+            .execute()
+        )
+        rows = inc_resp.data or []
+    except Exception as exc:
+        logger.warning("compliance centre incidents: fetch failed: %s", exc)
+        rows = []
+        month_start = date.today().replace(day=1).isoformat()
+
+    resolved_this_month = sum(
+        1 for r in rows
+        if r.get("status") == "closed" and str(r.get("incident_date") or "")[:10] >= month_start
+    )
+    rp_flags = sum(1 for r in rows if r.get("incident_type") == "restrictive_practice" and r.get("status") != "closed")
+
+    participant_ids = {str(r.get("participant_id")) for r in rows if r.get("participant_id")}
+    worker_ids = {str(r.get("user_id")) for r in rows if r.get("user_id")}
+    participant_names: dict[str, str] = {}
+    worker_names: dict[str, str] = {}
+    if participant_ids:
+        try:
+            presp = supabase.table("patients").select("id, full_name").in_("id", list(participant_ids)).execute()
+            participant_names = {str(p["id"]): p.get("full_name") for p in (presp.data or [])}
+        except Exception:
+            pass
+    if worker_ids:
+        try:
+            wresp = supabase.table("users").select("id, full_name").in_("id", list(worker_ids)).execute()
+            worker_names = {str(w["id"]): w.get("full_name") for w in (wresp.data or [])}
+        except Exception:
+            pass
+
+    incidents_out = []
+    for r in rows:
+        pid = str(r.get("participant_id") or "")
+        wid = str(r.get("user_id") or "")
+        desc = r.get("description") or ""
+        incidents_out.append({
+            "id": r.get("id"),
+            "incident_date": r.get("incident_date"),
+            "worker_name": worker_names.get(wid) or "Unknown",
+            "participant_name": participant_names.get(pid) or "Unknown",
+            "incident_type": r.get("incident_type"),
+            "description": (desc[:140] + "…") if len(desc) > 140 else desc,
+            "status": r.get("status"),
+            "ndis_reportable": r.get("ndis_reportable"),
+        })
+
+    return {
+        "kpis": {
+            "open_incidents": stats.get("open", 0),
+            "rp_flags": rp_flags,
+            "resolved_this_month": resolved_this_month,
+        },
+        "incidents": incidents_out,
     }
