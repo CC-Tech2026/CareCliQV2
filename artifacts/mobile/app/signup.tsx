@@ -1182,22 +1182,22 @@ export default function SignupScreen() {
 
             <Pressable
               onPress={() => setAskOpen(false)}
-              style={({ pressed, hovered }) => [
+              style={({ pressed }) => [
                 styles.askGotItBtn,
                 {
                   borderColor: auth.plum,
-                  backgroundColor: pressed || hovered ? auth.plum : "transparent",
+                  backgroundColor: pressed ? auth.plum : "transparent",
                   marginTop: 8,
                 },
               ]}
             >
-              {({ pressed, hovered }) => (
+              {({ pressed }) => (
                 <Text
                   style={[
                     styles.askGotItBtnText,
                     {
                       fontFamily: "Inter_700Bold",
-                      color: pressed || hovered ? "#FFFFFF" : auth.plum,
+                      color: pressed ? "#FFFFFF" : auth.plum,
                     },
                   ]}
                 >
