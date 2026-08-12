@@ -6,6 +6,7 @@ export function useWorkerComplianceDetail(days: 7 | 30 = 7) {
   return useQuery({
     queryKey: ["worker", "compliance-detail", days],
     queryFn: () => getWorkerComplianceDetail(days),
-    staleTime: 60_000,
+    staleTime: 30_000,
+    refetchOnFocus: true,
   });
 }

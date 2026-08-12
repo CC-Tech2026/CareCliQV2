@@ -298,6 +298,7 @@ async def load_price_schedule(
                 "item_code": item_code,
                 "schedule_id": None,  # Will be set after schedule is created
                 "support_category_number": cat_num,
+                "category_number": cat_num,
                 "support_category_name": cat_name,
                 "support_purpose": support_purpose,
                 "registration_group": reg_group,

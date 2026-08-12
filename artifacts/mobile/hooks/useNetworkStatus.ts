@@ -1,94 +1,45 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useRef, useState } from "react";
-
+import { useCallback, useMemo } from "react";
 import { Platform } from "react-native";
+import { useNetworkState } from "expo-network";
 
-import { getMobileApiBaseUrl } from "@/lib/api-base-url";
-import { getLastSuccessfulWorkerFetchAt } from "@/lib/worker-fetch";
-
-const PING_INTERVAL_OFFLINE = 5000;
-const PING_TIMEOUT = 4000;
-const RECENT_FETCH_GRACE_MS = 60_000;
-
-async function pingServer(): Promise<boolean> {
-  const base = getMobileApiBaseUrl();
-  const url = base
-    ? `${base}/api/health`
-    : Platform.OS === "web"
-      ? "/api/health"
-      : null;
-
-  if (!url) {
-    return Date.now() - getLastSuccessfulWorkerFetchAt() < RECENT_FETCH_GRACE_MS;
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PING_TIMEOUT);
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok || res.status < 500) return true;
-  } catch {
-    clearTimeout(timer);
-  }
-
-  return Date.now() - getLastSuccessfulWorkerFetchAt() < RECENT_FETCH_GRACE_MS;
-}
-
+/**
+ * Device connectivity for the offline banner / queue gating.
+ * Uses OS network state (Wi‑Fi / cellular) — NOT CareCliQ API reachability.
+ * Phone online but API unreachable must not show the Offline banner.
+ */
 export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const state = useNetworkState();
 
-  const checkOnline = async () => {
-    const online = await pingServer();
-    setIsOnline(online);
-    return online;
-  };
-
-  const startPolling = () => {
-    if (intervalRef.current) return;
-    intervalRef.current = setInterval(async () => {
-      const online = await pingServer();
-      setIsOnline(online);
-      if (online && intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }, PING_INTERVAL_OFFLINE);
-  };
-
-  const stopPolling = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const isOnline = useMemo(() => {
+    if (Platform.OS === "web") {
+      return typeof navigator !== "undefined" ? navigator.onLine : true;
     }
-  };
+    // While probing, isInternetReachable can be null — treat as online if linked.
+    if (state.isConnected == null) return true;
+    return state.isConnected === true && state.isInternetReachable !== false;
+  }, [state.isConnected, state.isInternetReachable]);
 
-  useEffect(() => {
-    checkOnline().then((online) => {
-      if (!online) startPolling();
-    });
-    return () => stopPolling();
+  const checkOnline = useCallback(async () => {
+    if (Platform.OS === "web") {
+      return typeof navigator !== "undefined" ? navigator.onLine : true;
+    }
+    try {
+      const Network = await import("expo-network");
+      const next = await Network.getNetworkStateAsync();
+      if (next.isConnected == null) return true;
+      return next.isConnected === true && next.isInternetReachable !== false;
+    } catch {
+      return true;
+    }
   }, []);
 
-  useEffect(() => {
-    if (!isOnline) {
-      startPolling();
-    } else {
-      stopPolling();
-    }
-  }, [isOnline]);
+  const markOffline = useCallback(() => {
+    /* no-op: device network is source of truth */
+  }, []);
 
-  const markOffline = () => {
-    setIsOnline(false);
-  };
-
-  const markOnline = () => {
-    setIsOnline(true);
-  };
+  const markOnline = useCallback(() => {
+    /* no-op: device network is source of truth */
+  }, []);
 
   return { isOnline, markOffline, markOnline, checkOnline };
 }

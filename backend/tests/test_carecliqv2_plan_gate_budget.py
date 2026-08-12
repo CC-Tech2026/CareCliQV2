@@ -119,6 +119,20 @@ async def test_verify_shift_records_budget_usage():
             select_chain = table.select.return_value.eq.return_value
             select_chain.execute.return_value = MagicMock(data=[])
             table.insert.return_value.execute.return_value = MagicMock(data=[verification_row])
+        elif name == "shift_tasks":
+            table.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[{"task_id": "task-1"}, {"task_id": "task-2"}]
+            )
+        elif name == "participant_tasks":
+            table.select.return_value.in_.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[
+                    {"id": "task-1", "participant_id": "patient-1"},
+                    {"id": "task-2", "participant_id": "patient-1"},
+                ]
+            )
+        elif name == "task_completions":
+            table.select.return_value.eq.return_value.in_.return_value.execute.return_value = MagicMock(data=[])
+            table.insert.return_value.execute.return_value = MagicMock(data=[{"id": "tc-1"}])
         elif name == "plan_budgets":
             table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         return table
@@ -154,6 +168,7 @@ async def test_verify_shift_records_budget_usage():
         )
 
     assert result["billed_amount"] > 0
+    assert len(result["task_completions"]) == 2
     record_usage.assert_called_once()
     call_kwargs = record_usage.call_args.kwargs
     assert call_kwargs["shift_verification_id"] == "ver-1"

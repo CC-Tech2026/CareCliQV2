@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as Location from "expo-location";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -30,9 +30,12 @@ import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
   clockInShift,
+  deleteSessionNote,
   endShift,
   startShiftSession,
   syncSessionNotes,
+  updateShiftTasks,
+  type ActiveBreakStatus,
   type CheckinWindowStatus,
   type SessionNoteRecord,
   type ShiftTask,
@@ -44,6 +47,7 @@ import {
   formatMobileShiftDuration,
   formatShiftTimeRange,
   hasIncompleteMandatoryTasks,
+  MIN_EVIDENCE_NOTE_CHARS,
   newClientNoteId,
   parseIsoMs,
   resolveActiveShiftTasks,
@@ -87,6 +91,7 @@ type Props = {
   canCheckin?: boolean;
   onCheckin?: () => void;
   checkinStatus?: CheckinWindowStatus;
+  breakStatus?: ActiveBreakStatus;
 };
 
 export function WorkerMobileShiftView({
@@ -99,6 +104,7 @@ export function WorkerMobileShiftView({
   canCheckin,
   onCheckin,
   checkinStatus,
+  breakStatus,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -305,6 +311,55 @@ export function WorkerMobileShiftView({
     refreshNotes();
   };
 
+  const handleRemoveNote = async (noteId: string) => {
+    if (!sessionId) return;
+    const note = localNotes.find((n) => n.note_id === noteId);
+    if (!note) return;
+
+    const updated = localNotes.filter((n) => n.note_id !== noteId);
+    setLocalNotes(updated);
+
+    const taskId = note.task_id;
+    if (taskId) {
+      const remainingForTask = updated.filter((n) => n.task_id === taskId && n.content?.trim());
+      const combined = remainingForTask.map((n) => n.content.trim()).join("\n");
+      const stillDocumented =
+        combined.length >= MIN_EVIDENCE_NOTE_CHARS ||
+        remainingForTask.some(
+          (n) => n.note_type === "photo" || n.note_type === "file" || n.note_type === "voice",
+        );
+
+      if (!stillDocumented) {
+        const nextTasks = tasks.map((task) => {
+          if (task.task_id !== taskId) return task;
+          return {
+            ...task,
+            completed: false,
+            completed_at: null,
+            has_photo: remainingForTask.some((n) => n.note_type === "photo"),
+            has_voice: remainingForTask.some((n) => n.note_type === "voice"),
+            has_text_notes: remainingForTask.some(
+              (n) => n.note_type === "text" || n.note_type === "file" || !n.note_type,
+            ),
+          };
+        });
+        setTasks(nextTasks);
+        try {
+          await updateShiftTasks(shift.id, nextTasks);
+        } catch {
+          /* optimistic */
+        }
+      }
+    }
+
+    try {
+      await deleteSessionNote(sessionId, noteId);
+    } catch {
+      /* optimistic */
+    }
+    refreshNotes();
+  };
+
   const handleAddMissingNote = async (taskId: string, content: string) => {
     if (!sessionId) return;
     const note: SessionNoteRecord = {
@@ -429,6 +484,7 @@ export function WorkerMobileShiftView({
           compliance={compliance}
           busy={Boolean(busy)}
           onSaveNote={handleSaveNote}
+          onRemoveNote={handleRemoveNote}
           onAddMissingNote={handleAddMissingNote}
           onSubmit={handleSubmitReview}
           onViewComplianceReport={() => setPhase("compliance")}
@@ -500,7 +556,8 @@ export function WorkerMobileShiftView({
           onOpenIncidentReport={openIncidentReport}
           disabled={Boolean(busy)}
           sessionElapsed={elapsed}
-          checkinStatus={checkinStatus}
+          checkinStatus={checkinStatus ?? shift.checkin_status}
+          breakStatus={breakStatus ?? shift.break_status}
           onCheckin={onCheckin}
         />
         <Modal

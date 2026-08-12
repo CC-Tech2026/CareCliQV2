@@ -8,7 +8,7 @@ export default function SettingsAccountScreen() {
   const t = useT();
 
   return (
-    <SettingsSubScreen title={t("settings.nav.account")}>
+    <SettingsSubScreen showBottomNav={false} title={t("settings.row.profileDetails")}>
       <SettingsAccountPanel />
     </SettingsSubScreen>
   );

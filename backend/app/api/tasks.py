@@ -137,114 +137,113 @@ async def get_participant_task_templates(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Task Instance Endpoints
+# Task Instance Endpoints (RETIRED — CARECLIQV2-331)
+# Canonical model: participant_tasks + shift_tasks (not task_instances).
+# GET is rewired to shift_tasks; write endpoints return 410 Gone.
 # ──────────────────────────────────────────────────────────────────────
 
-@router.get("/shifts/{shift_id}/instances", response_model=list[TaskInstance])
+@router.get("/shifts/{shift_id}/instances")
 async def get_shift_task_instances(
     shift_id: UUID,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get all task instances for a shift."""
-    service = get_task_management_service()
-    instances = await service.get_shift_tasks(shift_id)
+    """List checklist tasks for a shift from shift_tasks → participant_tasks."""
+    from ..services import shift_service
+
+    org_id = get_user_organization_id(current_user)
+    tasks = shift_service._load_tasks_from_shift_tasks(str(shift_id), org_id)
+    # Shape compatible with TaskListPerShift (legacy TaskInstance-like fields).
+    instances = []
+    for task in tasks:
+        status = "completed" if task.get("completed") else "pending"
+        if task.get("marked_na"):
+            status = "completed"
+        instances.append({
+            "id": task.get("shift_task_id") or task.get("task_id"),
+            "task_id": task.get("task_id"),
+            "task_template_id": None,
+            "shift_id": str(shift_id),
+            "participant_id": None,
+            "due_window_start": None,
+            "due_window_end": None,
+            "status": status,
+            "completed_by": None,
+            "completed_at": task.get("completed_at"),
+            "evidence_photo_url": None,
+            "evidence_notes": task.get("note") or None,
+            "completion_notes": task.get("note") or None,
+            "carried_over_from_instance_id": None,
+            "created_at": None,
+            "updated_at": None,
+            "title": task.get("label"),
+            "name": task.get("label"),
+            "priority": "medium",
+            "requirement_level": "mandatory" if task.get("mandatory") else "optional",
+            "evidence_required": task.get("evidence_required") or "none",
+            "goal_id": task.get("goal_id"),
+            "goal_title": task.get("goal_title"),
+        })
     return instances
 
 
-@router.patch("/instances/{instance_id}/complete", response_model=TaskInstance, status_code=200)
+@router.patch("/instances/{instance_id}/complete", status_code=410)
 async def complete_task_instance(
     instance_id: UUID,
     payload: TaskInstanceComplete,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Mark a task instance as completed with evidence.
-    
-    Validation:
-    - If template requires photo evidence, evidence_photo_url must be set
-    - If template requires notes evidence, evidence_notes must be set
-    
-    Returns error if evidence requirements not met.
-    """
-    service = get_task_management_service()
-    
-    result = await service.complete_task_instance(
-        instance_id,
-        completed_by=payload.completed_by,
-        completion_notes=payload.completion_notes,
-        evidence_photo_url=payload.evidence_photo_url,
-        evidence_notes=payload.evidence_notes,
+    """Retired (CARECLIQV2-331). Use worker shift checklist PATCH instead."""
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "task_instances completion is retired. "
+            "Complete tasks via /api/worker/shifts/{shift_id}/tasks "
+            "(participant_tasks + shift_tasks)."
+        ),
     )
-    
-    if "error" in result:
-        raise HTTPException(
-            status_code=400,
-            detail=result["error"],
-            headers={"X-Missing-Evidence": ",".join(result.get("missing_evidence", []))},
-        )
-    
-    return result["instance"]
 
 
-@router.patch("/instances/{instance_id}/reassign", response_model=TaskInstance)
+@router.patch("/instances/{instance_id}/reassign", status_code=410)
 async def reassign_task_instance(
     instance_id: UUID,
     payload: TaskInstanceReassign,
     current_user: dict = Depends(get_current_user),
 ):
-    """Reassign a task instance to a different worker."""
-    service = get_task_management_service()
-    
-    update_dict = payload.model_dump(exclude_unset=True)
-    result = await service.sb.table("task_instances").update(update_dict).eq(
-        "id", str(instance_id)
-    ).execute()
-    
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    
-    return result.data[0]
+    """Retired (CARECLIQV2-331)."""
+    raise HTTPException(
+        status_code=410,
+        detail="task_instances reassignment is retired. Use participant_tasks + shift_tasks.",
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Internal Jobs
+# Internal Jobs (RETIRED — CARECLIQV2-331)
 # ──────────────────────────────────────────────────────────────────────
 
-@router.post("/internal/generate-instances", status_code=202)
+@router.post("/internal/generate-instances", status_code=410)
 async def generate_task_instances(
     shift_id: Optional[UUID] = Query(None),
     lookhead_days: int = Query(7),
 ):
-    """
-    Generate task instances.
-    
-    If shift_id provided: generate for that specific shift.
-    Otherwise: run nightly job to generate for next N days.
-    """
-    service = get_task_management_service()
-    
-    if shift_id:
-        instances = await service.generate_task_instances_for_shift(shift_id)
-        return {"generated": len(instances), "instances": instances}
-    else:
-        result = await service.generate_future_instances(lookhead_days)
-        return result
+    """Retired (CARECLIQV2-331). Task links are created on shift assign."""
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "task_instances generation is retired. "
+            "Tasks are linked via shift_tasks on coordinator assign_shift."
+        ),
+    )
 
 
-@router.post("/internal/process-handover", status_code=200)
+@router.post("/internal/process-handover", status_code=410)
 async def process_shift_handover(
     shift_id: UUID,
 ):
-    """
-    Process handover when a shift ends.
-    
-    For each pending task:
-    1. Mark as missed
-    2. Create carried-over instance on next shift
-    """
-    service = get_task_management_service()
-    result = await service.process_shift_handover(shift_id)
-    return result
+    """Retired (CARECLIQV2-331)."""
+    raise HTTPException(
+        status_code=410,
+        detail="task_instances handover is retired.",
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────

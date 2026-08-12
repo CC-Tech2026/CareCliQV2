@@ -1,33 +1,26 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-  type ListRenderItem,
-} from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 
 export const SECURITY_LIST_PAGE_SIZE = 10;
-const CARD_LIST_MAX_HEIGHT = 280;
 
-type Props<T> = {
-  items: T[];
-  keyExtractor: (item: T) => string;
-  renderItem: ListRenderItem<T>;
+type Props = {
+  items: readonly unknown[];
+  keyExtractor: (item: any) => string;
+  renderItem: (info: { item: any; index: number }) => React.ReactElement | null;
   emptyLabel: string;
 };
 
-export function SecurityCardScrollList<T>({
+export function SecurityCardScrollList({
   items,
   keyExtractor,
   renderItem,
   emptyLabel,
-}: Props<T>) {
+}: Props) {
   const colors = useColors();
-  const loadingMoreRef = useRef(false);
+  const t = useT();
   const [visibleCount, setVisibleCount] = useState(SECURITY_LIST_PAGE_SIZE);
 
   useEffect(() => {
@@ -38,12 +31,8 @@ export function SecurityCardScrollList<T>({
   const hasMore = visibleCount < items.length;
 
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || loadingMoreRef.current) return;
-    loadingMoreRef.current = true;
+    if (!hasMore) return;
     setVisibleCount((count) => Math.min(count + SECURITY_LIST_PAGE_SIZE, items.length));
-    requestAnimationFrame(() => {
-      loadingMoreRef.current = false;
-    });
   }, [hasMore, items.length]);
 
   if (items.length === 0) {
@@ -55,33 +44,38 @@ export function SecurityCardScrollList<T>({
   }
 
   return (
-    <FlatList
-      data={visibleItems}
-      keyExtractor={keyExtractor}
-      renderItem={renderItem}
-      style={styles.list}
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-      nestedScrollEnabled
-      showsVerticalScrollIndicator
-      onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.25}
-      ListFooterComponent={
-        hasMore ? (
-          <View style={styles.footer}>
-            <ActivityIndicator color={colors.primary} size="small" />
-          </View>
-        ) : (
-          <View style={styles.footerSpacer} />
-        )
-      }
-    />
+    <View>
+      {visibleItems.map((item, index) => (
+        <View key={keyExtractor(item)} style={index > 0 ? styles.itemGap : undefined}>
+          {renderItem({ item, index })}
+        </View>
+      ))}
+      {hasMore ? (
+        <Pressable
+          onPress={handleLoadMore}
+          style={[styles.loadMore, { borderColor: colors.border }]}
+        >
+          <Text style={[styles.loadMoreText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            {t("common.loadMore")}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={styles.footerSpacer} />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { maxHeight: CARD_LIST_MAX_HEIGHT },
-  separator: { height: 10 },
+  itemGap: { marginTop: 10 },
   empty: { fontSize: 13, lineHeight: 18 },
-  footer: { paddingVertical: 12, alignItems: "center" },
+  loadMore: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  loadMoreText: { fontSize: 13 },
   footerSpacer: { height: 4 },
 });

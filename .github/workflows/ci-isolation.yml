@@ -1,4 +1,4 @@
-name: CCQ-109 — Multi-Tenant Isolation Tests
+name: Multi-Tenant Isolation Tests
 
 on:
   pull_request:

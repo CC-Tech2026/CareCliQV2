@@ -19,20 +19,13 @@ def get_scheduler() -> AsyncIOScheduler:
 
 
 async def nightly_task_generation() -> None:
+    """Retired CARECLIQV2-331: task_instances generation no longer runs.
+
+    Shift task links are created on coordinator assign via shift_tasks.
     """
-    Nightly job: Generate task instances for next 7 days.
-    
-    Runs at midnight (00:00) every day.
-    Calls POST /api/tasks/internal/generate-instances?lookhead_days=7
-    """
-    try:
-        from ..services.task_management_service import get_task_management_service
-        
-        service = get_task_management_service()
-        result = await service.generate_future_instances(lookhead_days=7)
-        logger.info(f"Nightly task generation completed: {result}")
-    except Exception as e:
-        logger.error(f"Nightly task generation failed: {e}", exc_info=True)
+    logger.info(
+        "Skipping retired nightly task_instances generation (CARECLIQV2-331)"
+    )
 
 
 def start_scheduler() -> None:
@@ -44,12 +37,12 @@ def start_scheduler() -> None:
         logger.warning("Scheduler already running")
         return
     
-    # Schedule nightly task generation at 00:00 (midnight) every day
+    # Job retained as a no-op for schedule compatibility; generation is retired.
     scheduler.add_job(
         nightly_task_generation,
         CronTrigger(hour=0, minute=0),
         id="nightly_task_generation",
-        name="Generate task instances for next 7 days",
+        name="Retired task_instances generation (no-op)",
         replace_existing=True,
     )
     

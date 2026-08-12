@@ -673,7 +673,7 @@ function InlineSessionComposer({
       }}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EDE3FC" }}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: BORDER }}>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="hidden" style={{ color: MUTED }}>
@@ -682,9 +682,9 @@ function InlineSessionComposer({
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E8E8EA" : "#A7F3D0",
-                background: ended ? "#F4EDE6" : "#ECFDF5",
-                color: ended ? MUTED : "#047857",
+                borderColor: ended ? BORDER : "color-mix(in srgb, var(--cc-status-success) 35%, transparent)",
+                background: ended ? SOFT : "var(--cc-status-success-bg)",
+                color: ended ? MUTED : "var(--cc-status-success)",
               }}
             >
               {ended ? translate("client.session.ended") : translate("client.session.inProgress")}
@@ -749,8 +749,8 @@ function InlineSessionComposer({
                 title={translate("client.session.inputLanguage")}
                 value={language}
                 onChange={(event) => onLanguageChange(event.target.value)}
-                className="h-10 rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none"
-                style={{ borderColor: BORDER, color: TEXT }}
+                className="h-10 rounded-full border px-4 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INPUT_LANGUAGE_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>{translate(item.labelKey)}</option>
@@ -759,9 +759,9 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4" style={{ background: SOFT }}>
             <div className="w-full space-y-3">
-              <div className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
+              <div className="mx-auto flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED, background: "var(--cc-surface)" }}>
                 {isListening && (
                   <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
                     <span className="h-2 w-1 animate-pulse rounded-full" style={{ background: PLUM }} />
@@ -781,7 +781,7 @@ function InlineSessionComposer({
 
               <div
                 className="min-h-[150px] max-h-[260px] overflow-y-auto rounded-2xl border border-dashed bg-transparent p-4 text-base font-medium italic leading-7"
-                style={{ borderColor: "#DCD6F1", color: TEXT }}
+                style={{ borderColor: BORDER, color: TEXT }}
                 aria-live="polite"
               >
                 {draft.trim() ? (
@@ -828,13 +828,13 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EDE3FC" }}>
+          <div className="shrink-0 border-t p-3" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
             {ended ? (
               <div className="space-y-2">
                 {translatedFromLang && (
                   <div
                     className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold w-fit"
-                    style={{ borderColor: "#C4B8E8", color: PLUM, background: "var(--cc-soft)" }}
+                    style={{ borderColor: BORDER, color: PLUM, background: "var(--cc-soft)" }}
                   >
                     <Languages size={13} />
                     {translateParams("client.session.translatedFrom", {
@@ -880,7 +880,7 @@ function InlineSessionComposer({
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm" style={{ borderColor: BORDER }}>
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border px-3 py-2 shadow-sm" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
                   <input
                     title={translate("client.session.attachFile")}
                     ref={fileInputRef}
@@ -925,8 +925,8 @@ function InlineSessionComposer({
                 <button
                   type="button"
                   onClick={onToggleDictation}
-                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition hover:scale-[1.02]"
-                  style={{ background: isListening ? CORAL : PLUM }}
+                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-white shadow-lg transition hover:scale-[1.02]"
+                  style={{ background: isListening ? CORAL : PLUM, borderColor: "var(--cc-surface)" }}
                   aria-label={isListening ? translate("client.session.stopDictation") : translate("client.session.startDictation")}
                 >
                   {isListening ? <MicOff size={28} /> : <Mic size={30} />}
@@ -1068,7 +1068,7 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EDE3FC" }}>
+          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: BORDER }}>
             <button
               type="button"
               onClick={() => setComposerStep("record")}
@@ -1128,7 +1128,7 @@ function InlineSessionComposer({
               </div>
             </div>
           </div>
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EDE3FC" }}>
+          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: BORDER }}>
             <button type="button" onClick={() => setComposerStep("goals")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
               {translate("client.session.back")}
             </button>
@@ -1300,8 +1300,8 @@ function IncidentReportModal({
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
-        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl"
-        style={{ borderColor: BORDER, maxHeight: "92vh" }}
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ borderColor: BORDER, maxHeight: "92vh", background: "var(--cc-surface)" }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-3">
@@ -1342,8 +1342,8 @@ function IncidentReportModal({
                 title={translate("client.incident.typeTitle")}
                 value={form.incident_type}
                 onChange={(event) => setField("incident_type", event.target.value)}
-                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
-                style={{ borderColor: BORDER, color: TEXT }}
+                className="h-10 w-full rounded-xl border px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INCIDENT_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{translate(t.labelKey)}</option>)}
               </select>
@@ -1354,8 +1354,8 @@ function IncidentReportModal({
                 title={translate("client.incident.severityTitle")}
                 value={form.severity}
                 onChange={(event) => setField("severity", event.target.value)}
-                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
-                style={{ borderColor: BORDER, color: TEXT }}
+                className="h-10 w-full rounded-xl border px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INCIDENT_SEVERITY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{translate(s.labelKey)}</option>)}
               </select>
@@ -1368,8 +1368,8 @@ function IncidentReportModal({
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder={translate("client.incident.titlePlaceholder")}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
-              style={{ borderColor: BORDER, color: TEXT }}
+              className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+              style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
             />
           </div>
 
@@ -1380,8 +1380,8 @@ function IncidentReportModal({
                 type="button"
                 onClick={handleComply}
                 disabled={comply.loading || !form.description.trim()}
-                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black transition hover:bg-[#F0EDFB] disabled:opacity-40"
-                style={{ borderColor: "#C4B8F0", color: PLUM }}
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black transition hover:bg-[var(--cc-soft)] disabled:opacity-40"
+                style={{ borderColor: BORDER, color: PLUM }}
               >
                 {comply.loading
                   ? <Loader2 size={11} className="animate-spin" />
@@ -1394,8 +1394,8 @@ function IncidentReportModal({
               onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
               placeholder={translate("client.incident.descriptionPlaceholder")}
               rows={4}
-              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
-              style={{ borderColor: BORDER, color: TEXT }}
+              className="w-full rounded-xl border p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
+              style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
             />
           </div>
 
@@ -1404,7 +1404,7 @@ function IncidentReportModal({
             const scoreColor = r.compliance_score >= 75 ? "#10B981" : r.compliance_score >= 50 ? "#F59E0B" : "#EF4444";
             const criteriaLabels = INCIDENT_CRITERIA_KEYS;
             return (
-              <div className="space-y-3 rounded-xl border bg-[#F8F6FE] p-4" style={{ borderColor: "#DDD8F5" }}>
+              <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: BORDER, background: SOFT }}>
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.complianceScore")}</p>
                   <span className="text-sm font-black" style={{ color: scoreColor }}>{r.compliance_score}%</span>
@@ -1477,8 +1477,8 @@ function IncidentReportModal({
                     setComply({ loading: false, result: null });
                     toast({ title: translate("client.incident.compliantTextApplied"), description: translate("client.incident.reviewBeforeSubmit") });
                   }}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-white"
-                  style={{ borderColor: "#C4B8F0", color: PLUM, background: "rgba(255,255,255,0.5)" }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-[var(--cc-soft)]"
+                  style={{ borderColor: BORDER, color: PLUM, background: "var(--cc-bg)" }}
                 >
                   <Sparkles size={13} />
                   {translate("client.incident.applyCompliantText")}
@@ -1494,8 +1494,8 @@ function IncidentReportModal({
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
                 placeholder={translate("client.incident.locationPlaceholder")}
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
-                style={{ borderColor: BORDER, color: TEXT }}
+                className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+                style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
               />
             </div>
             <div>
@@ -1504,8 +1504,8 @@ function IncidentReportModal({
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
                 placeholder={translate("client.incident.immediateActionsPlaceholder")}
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
-                style={{ borderColor: BORDER, color: TEXT }}
+                className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+                style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
               />
             </div>
           </div>

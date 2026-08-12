@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
-import { AlertTriangle, ArrowRight, Search, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Search, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -11,6 +11,7 @@ const CORAL  = "var(--cc-coral)";
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
+const PAGE_SIZE = 10;
 
 function initials(name?: string) {
   return (name || "?").split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -82,8 +83,101 @@ function ClientCard({ client, translate, translateParams }: { client: WorkerClie
   );
 }
 
+function ClientsPagination({
+  page,
+  totalPages,
+  from,
+  to,
+  total,
+  onPageChange,
+  translate,
+  translateParams,
+}: {
+  page: number;
+  totalPages: number;
+  from: number;
+  to: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  translate: (key: string) => string;
+  translateParams: (key: string, params: Record<string, string>) => string;
+}) {
+  const pages = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 3) return [1, 2, 3, 4, totalPages];
+    if (page >= totalPages - 2) return [1, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, page - 1, page, page + 1, totalPages];
+  }, [page, totalPages]);
+
+  return (
+    <div
+      className="flex flex-col items-center gap-2 border-t px-4 py-3"
+      style={{ borderColor: BORDER, background: "var(--cc-surface)" }}
+    >
+      <p className="text-[12px] font-medium tabular-nums" style={{ color: MUTED }}>
+        {translateParams("clients.pagination.showing", {
+          from: String(from),
+          to: String(to),
+          total: String(total),
+        })}
+      </p>
+      <nav className="flex items-center justify-center gap-1" aria-label={translate("clients.title")}>
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition disabled:opacity-40"
+          style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
+          aria-label={translate("clients.pagination.previous")}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        {pages.map((p, idx) => {
+          const prev = pages[idx - 1];
+          const showEllipsis = prev != null && p - prev > 1;
+          const active = p === page;
+          return (
+            <span key={p} className="flex items-center gap-1">
+              {showEllipsis && (
+                <span className="px-1 text-[12px] font-bold" style={{ color: MUTED }} aria-hidden>
+                  …
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onPageChange(p)}
+                className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-[12px] font-black tabular-nums transition"
+                style={{
+                  borderColor: active ? PLUM : BORDER,
+                  background: active ? PLUM : "var(--cc-bg)",
+                  color: active ? "#fff" : TEXT,
+                }}
+                aria-label={translateParams("clients.pagination.page", { page: String(p) })}
+                aria-current={active ? "page" : undefined}
+              >
+                {p}
+              </button>
+            </span>
+          );
+        })}
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition disabled:opacity-40"
+          style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
+          aria-label={translate("clients.pagination.next")}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </nav>
+    </div>
+  );
+}
+
 export default function MyClients() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const { translate, translateParams } = useAccessibility();
 
   const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], {
@@ -98,6 +192,21 @@ export default function MyClients() {
       return c.full_name.toLowerCase().includes(q) || ndis.includes(q);
     })
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const paged = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const from = filtered.length === 0 ? 0 : pageStart + 1;
+  const to = Math.min(pageStart + PAGE_SIZE, filtered.length);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const compliantCount    = data.filter((c) => c.compliance_status === "compliant").length;
   const needsReviewCount  = data.filter((c) => c.compliance_status !== "compliant").length;
@@ -207,9 +316,22 @@ export default function MyClients() {
           </div>
         )}
 
-        {filtered.map((client) => (
+        {paged.map((client) => (
           <ClientCard key={client.id} client={client} translate={translate} translateParams={translateParams} />
         ))}
+
+        {!isLoading && filtered.length > 0 && (
+          <ClientsPagination
+            page={safePage}
+            totalPages={totalPages}
+            from={from}
+            to={to}
+            total={filtered.length}
+            onPageChange={setPage}
+            translate={translate}
+            translateParams={translateParams}
+          />
+        )}
       </div>
     </div>
   );

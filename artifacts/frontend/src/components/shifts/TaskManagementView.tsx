@@ -1,67 +1,25 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit2, Pause, Archive, Loader2, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { jsonFetch } from "@/services/http";
-import type { TaskTemplate, ShiftType } from "@/types/task";
+import {
+  getParticipantTasks,
+  type ParticipantTask,
+} from "@/services/coordinatorService";
 
 type Props = {
   participantId: string;
   onCreateNew?: () => void;
-  onEditTemplate?: (template: TaskTemplate) => void;
+  onEditTemplate?: (_template: never) => void;
 };
 
 export function TaskManagementView({ participantId, onCreateNew, onEditTemplate }: Props) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  void onEditTemplate;
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Fetch task templates for participant
-  const { data: templates = [], isLoading } = useQuery<TaskTemplate[]>({
-    queryKey: ["tasks", "templates", participantId],
-    queryFn: () => jsonFetch<TaskTemplate[]>(`/api/tasks/templates/participant/${participantId}`),
-  });
-
-  // Pause template mutation
-  const pauseMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      return jsonFetch(`/api/tasks/templates/${templateId}/pause`, {
-        method: "POST",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Template paused", description: "No new tasks will be generated." });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "templates", participantId] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error pausing template",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Archive template mutation
-  const archiveMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      return jsonFetch(`/api/tasks/templates/${templateId}/archive`, {
-        method: "POST",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Template archived", description: "Template hidden from view." });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "templates", participantId] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error archiving template",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+  const { data: tasks = [], isLoading } = useQuery<ParticipantTask[]>({
+    queryKey: ["participant-tasks", participantId],
+    queryFn: () => getParticipantTasks(participantId),
   });
 
   if (isLoading) {
@@ -72,87 +30,52 @@ export function TaskManagementView({ participantId, onCreateNew, onEditTemplate 
     );
   }
 
-  const activeTemplates = templates.filter((t) => t.status === "active");
-  const pausedTemplates = templates.filter((t) => t.status === "paused");
-  const archivedTemplates = templates.filter((t) => t.status === "archived");
+  const activeTasks = tasks.filter((task) => task.status !== "completed");
+  const completedTasks = tasks.filter((task) => task.status === "completed");
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Task Templates</h3>
+        <h3 className="text-lg font-semibold">Tasks</h3>
         <Button onClick={onCreateNew} size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
-          New Template
+          New Task
         </Button>
       </div>
 
-      {/* Active Templates */}
-      {activeTemplates.length > 0 && (
+      {/* Active Tasks */}
+      {activeTasks.length > 0 && (
         <div>
           <h4 className="mb-3 text-sm font-semibold text-gray-700">Active</h4>
           <div className="space-y-2">
-            {activeTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                isExpanded={expandedId === template.id}
+            {activeTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                isExpanded={expandedId === task.id}
                 onToggleExpand={() =>
-                  setExpandedId(expandedId === template.id ? null : template.id)
+                  setExpandedId(expandedId === task.id ? null : task.id)
                 }
-                onEdit={() => onEditTemplate?.(template)}
-                onPause={() => pauseMutation.mutate(template.id)}
-                onArchive={() => archiveMutation.mutate(template.id)}
-                isPauseLoading={pauseMutation.isPending}
-                isArchiveLoading={archiveMutation.isPending}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Paused Templates */}
-      {pausedTemplates.length > 0 && (
+      {/* Completed Tasks */}
+      {completedTasks.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-semibold text-gray-500">Paused</h4>
+          <h4 className="mb-3 text-sm font-semibold text-gray-500">Completed</h4>
           <div className="space-y-2 opacity-75">
-            {pausedTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                isExpanded={expandedId === template.id}
+            {completedTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                isExpanded={expandedId === task.id}
                 onToggleExpand={() =>
-                  setExpandedId(expandedId === template.id ? null : template.id)
+                  setExpandedId(expandedId === task.id ? null : task.id)
                 }
-                onEdit={() => onEditTemplate?.(template)}
-                onPause={() => pauseMutation.mutate(template.id)}
-                onArchive={() => archiveMutation.mutate(template.id)}
-                isPauseLoading={pauseMutation.isPending}
-                isArchiveLoading={archiveMutation.isPending}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Archived Templates */}
-      {archivedTemplates.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-sm font-semibold text-gray-400">Archived</h4>
-          <div className="space-y-2 opacity-50">
-            {archivedTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                isExpanded={expandedId === template.id}
-                onToggleExpand={() =>
-                  setExpandedId(expandedId === template.id ? null : template.id)
-                }
-                onEdit={() => onEditTemplate?.(template)}
-                onPause={() => pauseMutation.mutate(template.id)}
-                onArchive={() => archiveMutation.mutate(template.id)}
-                isPauseLoading={pauseMutation.isPending}
-                isArchiveLoading={archiveMutation.isPending}
               />
             ))}
           </div>
@@ -160,12 +83,12 @@ export function TaskManagementView({ participantId, onCreateNew, onEditTemplate 
       )}
 
       {/* Empty State */}
-      {templates.length === 0 && (
+      {tasks.length === 0 && (
         <div className="rounded bg-gray-50 p-8 text-center">
-          <p className="text-sm text-gray-500">No task templates yet.</p>
+          <p className="text-sm text-gray-500">No tasks yet.</p>
           <Button onClick={onCreateNew} variant="outline" size="sm" className="mt-4 gap-2">
             <Plus className="h-4 w-4" />
-            Create First Template
+            Create First Task
           </Button>
         </div>
       )}
@@ -173,49 +96,21 @@ export function TaskManagementView({ participantId, onCreateNew, onEditTemplate 
   );
 }
 
-type TemplateCardProps = {
-  template: TaskTemplate;
+type TaskCardProps = {
+  task: ParticipantTask;
   isExpanded: boolean;
   onToggleExpand: () => void;
-  onEdit: () => void;
-  onPause: () => void;
-  onArchive: () => void;
-  isPauseLoading: boolean;
-  isArchiveLoading: boolean;
 };
 
-function TemplateCard({
-  template,
-  isExpanded,
-  onToggleExpand,
-  onEdit,
-  onPause,
-  onArchive,
-  isPauseLoading,
-  isArchiveLoading,
-}: TemplateCardProps) {
+function TaskCard({ task, isExpanded, onToggleExpand }: TaskCardProps) {
   const getRecurrenceLabel = (): string => {
-    if (template.recurrence_type === "one_off") return "One-off";
-    if (template.recurrence_frequency === "every_matching_shift") {
-      return `Every ${template.primary_shift_type} shift`;
-    }
-    if (template.recurrence_frequency === "daily_regardless_of_shift") return "Daily";
-    if (template.recurrence_frequency === "specific_weekdays") {
-      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const selectedDays = (template.recurrence_weekdays || [])
-        .map((d) => days[d])
-        .join(", ");
-      return `On ${selectedDays}`;
+    if (!task.is_recurring) return "One-off";
+    if (task.frequency_pattern === "specific_days_of_week") return "Specific days";
+    if (task.frequency_pattern === "daily_all_shifts") return "Daily";
+    if (task.frequency_pattern?.startsWith("every_")) {
+      return task.frequency_pattern.replaceAll("_", " ");
     }
     return "Recurring";
-  };
-
-  const getShiftTypes = (): ShiftType[] => {
-    const types: ShiftType[] = [template.primary_shift_type];
-    if (template.additional_shift_types) {
-      types.push(...template.additional_shift_types);
-    }
-    return types;
   };
 
   return (
@@ -226,9 +121,9 @@ function TemplateCard({
         className="flex w-full items-center justify-between px-4 py-3 hover:bg-gray-50"
       >
         <div className="flex-1 text-left">
-          <h5 className="font-medium text-gray-900">{template.title}</h5>
+          <h5 className="font-medium text-gray-900">{task.name}</h5>
           <p className="mt-1 text-xs text-gray-500">
-            {template.category.replace("_", " ")} • {getRecurrenceLabel()}
+            {(task.category || "other").replaceAll("_", " ")} • {getRecurrenceLabel()}
           </p>
         </div>
         {isExpanded ? (
@@ -246,92 +141,46 @@ function TemplateCard({
               <div>
                 <p className="font-medium text-gray-700">Priority</p>
                 <p className="mt-1 text-gray-600">
-                  {template.priority.charAt(0).toUpperCase() + template.priority.slice(1)}
+                  {(task.priority || "medium").charAt(0).toUpperCase() + (task.priority || "medium").slice(1)}
                 </p>
               </div>
               <div>
                 <p className="font-medium text-gray-700">Requirement</p>
                 <p className="mt-1 text-gray-600">
-                  {template.requirement_level.charAt(0).toUpperCase() +
-                    template.requirement_level.slice(1)}
+                  {task.is_mandatory ? "Mandatory" : "Optional"}
                 </p>
               </div>
               <div>
                 <p className="font-medium text-gray-700">Evidence</p>
                 <p className="mt-1 text-gray-600">
-                  {template.evidence_required === "none"
+                  {(task.evidence_required || "none") === "none"
                     ? "Not required"
-                    : template.evidence_required.replace("_", " ")}
+                    : (task.evidence_required || "none").replaceAll("_", " ")}
                 </p>
               </div>
               <div>
                 <p className="font-medium text-gray-700">Shifts</p>
                 <p className="mt-1 text-gray-600">
-                  {getShiftTypes()
-                    .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
-                    .join(", ")}
+                  {task.shift_type
+                    ? task.shift_type.charAt(0).toUpperCase() + task.shift_type.slice(1)
+                    : "Any"}
                 </p>
               </div>
             </div>
 
-            {template.due_window_start && (
+            {task.goal_name && (
               <div className="mt-3 text-xs">
-                <p className="font-medium text-gray-700">Due Window</p>
-                <p className="mt-1 text-gray-600">
-                  {template.due_window_start} - {template.due_window_end}
-                </p>
+                <p className="font-medium text-gray-700">Goal</p>
+                <p className="mt-1 text-gray-600">{task.goal_name}</p>
               </div>
             )}
 
-            {template.notes && (
+            {task.description && (
               <div className="mt-3 text-xs">
-                <p className="font-medium text-gray-700">Notes</p>
-                <p className="mt-1 text-gray-600">{template.notes}</p>
+                <p className="font-medium text-gray-700">Description</p>
+                <p className="mt-1 text-gray-600">{task.description}</p>
               </div>
             )}
-          </div>
-
-          {/* Actions */}
-          <div className="border-t border-gray-200 flex gap-2 px-4 py-3">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onEdit}
-              className="gap-2 flex-1"
-            >
-              <Edit2 className="h-4 w-4" />
-              Edit
-            </Button>
-            {template.status === "active" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onPause}
-                disabled={isPauseLoading}
-                className="gap-2 flex-1"
-              >
-                {isPauseLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Pause className="h-4 w-4" />
-                )}
-                Pause
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onArchive}
-              disabled={isArchiveLoading}
-              className="gap-2 flex-1"
-            >
-              {isArchiveLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Archive className="h-4 w-4" />
-              )}
-              Archive
-            </Button>
           </div>
         </>
       )}

@@ -304,6 +304,8 @@ class OnboardingCompleteRequest(BaseModel):
     team_size: Optional[str] = None
     participant_volume: Optional[str] = None
     contact_number: Optional[str] = None
+    address: Optional[str] = None
+    org_address: Optional[str] = None
 
 
 class PasswordResetRequest(BaseModel):
@@ -922,9 +924,30 @@ async def complete_onboarding(
         "onboarding_completed": True,
     }
 
-    # For small providers: create an organisation row and link it
-    if body.account_type == "small_provider" and body.organization_name:
+    # For small providers: create an organisation only when the user is not
+    # already linked (e.g. joining via invitation must not spawn a second org).
+    existing_org_id = current_user.get("organization_id")
+    if not existing_org_id:
         try:
+            profile = (
+                supabase.table("users")
+                .select("organization_id")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if profile.data:
+                existing_org_id = profile.data[0].get("organization_id")
+        except Exception as e:
+            logger.debug("Could not load existing organization_id for %s: %s", user_id, e)
+
+    if (
+        body.account_type == "small_provider"
+        and body.organization_name
+        and not existing_org_id
+    ):
+        try:
+            org_address = (body.org_address or body.address or "").strip() or None
             org_payload = {
                 "owner_user_id": user_id,
                 "organization_name": body.organization_name,
@@ -933,13 +956,30 @@ async def complete_onboarding(
                 "team_size": body.team_size,
                 "participant_volume": body.participant_volume,
                 "contact_number": body.contact_number,
+                "org_address": org_address,
             }
             org_payload = {k: v for k, v in org_payload.items() if v is not None}
             org_result = supabase.table("organizations").insert(org_payload).execute()
             if org_result.data:
-                update_payload["organization_id"] = org_result.data[0]["id"]
+                row = org_result.data[0]
+                update_payload["organization_id"] = (
+                    row.get("organization_id") or row.get("id")
+                )
         except Exception as e:
             logger.warning(f"Could not create organisation for {user_id}: {e}")
+    elif existing_org_id:
+        update_payload["organization_id"] = existing_org_id
+        if body.organization_name or body.provider_type or body.team_size or body.address or body.org_address:
+            update_payload["onboarding_data"] = {
+                **(body.onboarding_data or {}),
+                "organization_name": body.organization_name,
+                "provider_type": body.provider_type,
+                "registration_status": body.registration_status,
+                "team_size": body.team_size,
+                "participant_volume": body.participant_volume,
+                "contact_number": body.contact_number,
+                "address": body.address or body.org_address,
+            }
 
     # Two-pass update: with new columns, then fallback
     try:
@@ -990,9 +1030,9 @@ async def confirm_password_reset(body: PasswordResetConfirmRequest):
     token = body.access_token.strip()
     token_hash = body.token_hash.strip()
     password = body.password
-    if len(password) < 8:
+    if len(password) < 10:
         raise HTTPException(
-            status_code=422, detail="Password must be at least 8 characters."
+            status_code=422, detail="Password must be at least 10 characters."
         )
     if not token and token_hash:
         verify_result = _supabase_auth_request(
@@ -1076,10 +1116,12 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     onboarding_complete = profile.get("onboarding_complete")
     if onboarding_complete is None:
         onboarding_complete = True
+    full_name = (profile.get("full_name") or "").strip() or None
     return {
         "user": {
             "id": user_id,
             "email": current_user.get("email"),
+            "full_name": full_name,
             "role": profile.get("role") or current_user.get("role", "support_worker"),
             "account_type": current_user.get("account_type")
             or profile.get("account_type")

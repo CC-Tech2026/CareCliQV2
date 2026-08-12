@@ -27,14 +27,17 @@ import {
 } from "lucide-react";
 
 // -- Design tokens --------------------------------------------------------------
-const PLUM   = "var(--cc-plum)";
-const CORAL  = "#F1738A";
-const T1     = "#1C1626";
-const T2     = "#374151";
-const T3     = "#7A6A8A";
-const BORDER = "var(--cc-border)";
-const CARD   = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
-const BG     = "#F7F5FC";
+const PLUM      = "var(--cc-plum)";
+const CORAL     = "#F1738A";
+const T1        = "var(--cc-text)";
+const T2        = "var(--cc-text)";
+const T3        = "var(--cc-muted)";
+const BORDER    = "var(--cc-border)";
+const SURFACE   = "var(--cc-surface)";
+const SOFT      = "var(--cc-soft)";
+const ACTIVE_BG = "var(--cc-active-bg)";
+const CARD      = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BG        = SOFT;
 
 // -- Helpers --------------------------------------------------------------------
 async function apiFetch<T = unknown>(path: string): Promise<T> {
@@ -90,8 +93,8 @@ function SeverityBadge({ sev }: { sev: string }) {
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("bg-white rounded-2xl overflow-hidden", className)}
-      style={{ boxShadow: CARD }}>{children}</div>
+    <div className={cn("rounded-2xl overflow-hidden", className)}
+      style={{ boxShadow: CARD, background: SURFACE }}>{children}</div>
   );
 }
 function CardHeader({ title, action }: { title: string; action?: React.ReactNode }) {
@@ -187,8 +190,8 @@ function ClinicalReportGenerator() {
               title="Participant"
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
-              style={{ borderColor: BORDER, color: T1 }}
+              className="h-10 w-full rounded-xl border px-3 text-sm"
+              style={{ borderColor: BORDER, color: T1, background: SURFACE }}
             >
               <option value="">{translate("reports.generator.selectParticipant")}</option>
               {(participants as any[]).map((participant) => (
@@ -202,8 +205,8 @@ function ClinicalReportGenerator() {
               title="Report type"
               value={reportType}
               onChange={(event) => setReportType(event.target.value)}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
-              style={{ borderColor: BORDER, color: T1 }}
+              className="h-10 w-full rounded-xl border px-3 text-sm"
+              style={{ borderColor: BORDER, color: T1, background: SURFACE }}
             >
               <option value="functional_capacity_assessment">Functional Capacity Assessment</option>
               <option value="therapy_progress_report">Therapy Progress Report</option>
@@ -225,7 +228,7 @@ function ClinicalReportGenerator() {
           ) : (
             <div className="grid gap-2">
               {history.slice(0, 5).map((report: any) => (
-                <div key={report.id} className="flex items-center gap-3 rounded-xl bg-[#F7F5FC] px-3 py-2">
+                <div key={report.id} className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ background: SOFT }}>
                   <FileText className="h-4 w-4" style={{ color: PLUM }} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-bold" style={{ color: T1 }}>{report.title || report.report_type}</p>
@@ -1182,16 +1185,20 @@ export default function Reports() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Vertical sidebar nav — desktop */}
           <aside className="hidden lg:block w-56 shrink-0">
-            <nav className="bg-white rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD }}>
+            <nav className="rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD, background: SURFACE }}>
               {TABS.map(t => {
                 const Icon = t.icon;
                 const active = activeTab === t.id;
                 return (
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className={cn("w-full flex items-center gap-3 px-4 py-3 text-left text-[12px] font-semibold transition-all",
-                      active ? "bg-violet-50" : "hover:bg-slate-50"
+                      !active && "hover:bg-slate-50"
                     )}
-                    style={{ color: active ? PLUM : T2, borderRight: active ? `2px solid ${PLUM}` : "2px solid transparent" }}>
+                    style={{
+                      background: active ? ACTIVE_BG : "transparent",
+                      color: active ? PLUM : T2,
+                      borderRight: active ? `2px solid ${PLUM}` : "2px solid transparent",
+                    }}>
                     <Icon size={15} style={{ color: active ? PLUM : T3 }} />
                     <span className="truncate">{translate(t.labelKey)}</span>
                   </button>

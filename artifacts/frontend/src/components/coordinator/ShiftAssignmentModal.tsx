@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -26,6 +26,7 @@ import {
   formatAppTime,
   utcIsoToDatetimeLocalValue,
 } from "@/lib/datetime";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +36,13 @@ import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
 import {
-  CheckCircle2, AlertTriangle, Loader2, User2,
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
+import {
+  Check, CheckCircle2, AlertTriangle, Loader2, User2,
   CalendarClock, ShieldCheck, CheckSquare, ChevronDown,
 } from "lucide-react";
 
@@ -45,6 +52,95 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
+
+type SearchableOption = {
+  value: string;
+  label: string;
+  keywords?: string;
+};
+
+function SearchableSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  renderTrigger,
+  renderOption,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: SearchableOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyText: string;
+  renderTrigger?: (selected: SearchableOption | undefined) => ReactNode;
+  renderOption?: (option: SearchableOption, selected: boolean) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-xl border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm outline-none focus:ring-1 focus:ring-ring"
+          style={{ borderColor: BORDER }}
+        >
+          <span className={cn("truncate", !selected && "text-cc-muted")}>
+            {renderTrigger
+              ? renderTrigger(selected)
+              : selected?.label ?? placeholder}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="z-[100] w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+        style={{ borderColor: BORDER }}
+      >
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => {
+                const isSelected = option.value === value;
+                return (
+                  <CommandItem
+                    key={option.value}
+                    value={option.keywords ?? option.label}
+                    onSelect={() => {
+                      onValueChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                      {renderOption
+                        ? renderOption(option, isSelected)
+                        : option.label}
+                    </span>
+                    <Check
+                      className={cn(
+                        "ml-2 h-4 w-4 shrink-0",
+                        isSelected ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const SHIFT_TYPE_KEYS: Record<string, string> = {
   standard_support: "coordinator.bulkShift.shiftType.standardSupport",
@@ -269,51 +365,86 @@ export function ShiftAssignmentModal({
                 <ShieldCheck size={16} style={{ color: "#16A34A" }} />
               </div>
             ) : (
-              <Select
+              <SearchableSelect
                 value={selectedWorkerId || "__unassigned__"}
                 onValueChange={(val) => setSelectedWorkerId(val === "__unassigned__" ? "" : val)}
-              >
-                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned__">
-                    <span className="flex items-center gap-2" style={{ color: MUTED }}>
-                      <User2 size={12} />
-                      Unassigned
-                    </span>
-                  </SelectItem>
-                  {workers.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      <span className="flex items-center gap-2">
+                placeholder={translate("coordinator.shiftAssign.unassigned")}
+                searchPlaceholder={translate("coordinator.shiftAssign.searchWorker")}
+                emptyText={translate("common.noResults")}
+                options={[
+                  {
+                    value: "__unassigned__",
+                    label: translate("coordinator.shiftAssign.unassigned"),
+                    keywords: translate("coordinator.shiftAssign.unassigned"),
+                  },
+                  ...workers.map((w) => ({
+                    value: w.id,
+                    label: w.full_name,
+                    keywords: `${w.full_name} ${w.avg_compliance != null ? w.avg_compliance.toFixed(0) : ""}`,
+                  })),
+                ]}
+                renderTrigger={(selected) => {
+                  if (!selected || selected.value === "__unassigned__") {
+                    return (
+                      <span className="flex items-center gap-2" style={{ color: MUTED }}>
                         <User2 size={12} />
-                        {w.full_name}
-                        {w.avg_compliance != null && (
-                          <span className="text-[11px]" style={{ color: MUTED }}>
-                            {w.avg_compliance.toFixed(0)}%
-                          </span>
-                        )}
+                        {translate("coordinator.shiftAssign.unassigned")}
                       </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    );
+                  }
+                  const w = workers.find((worker) => worker.id === selected.value);
+                  return (
+                    <span className="flex items-center gap-2">
+                      <User2 size={12} />
+                      {selected.label}
+                      {w?.avg_compliance != null && (
+                        <span className="text-[11px]" style={{ color: MUTED }}>
+                          {w.avg_compliance.toFixed(0)}%
+                        </span>
+                      )}
+                    </span>
+                  );
+                }}
+                renderOption={(option) => {
+                  if (option.value === "__unassigned__") {
+                    return (
+                      <span className="flex items-center gap-2" style={{ color: MUTED }}>
+                        <User2 size={12} />
+                        {option.label}
+                      </span>
+                    );
+                  }
+                  const w = workers.find((worker) => worker.id === option.value);
+                  return (
+                    <span className="flex items-center gap-2">
+                      <User2 size={12} />
+                      {option.label}
+                      {w?.avg_compliance != null && (
+                        <span className="text-[11px]" style={{ color: MUTED }}>
+                          {w.avg_compliance.toFixed(0)}%
+                        </span>
+                      )}
+                    </span>
+                  );
+                }}
+              />
             )}
           </div>
 
           {/* Participant */}
           <div className="space-y-2">
             <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("common.participant")}</label>
-            <Select value={selectedParticipantId} onValueChange={setSelectedParticipantId}>
-              <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                <SelectValue placeholder={translate("coordinator.shiftAssign.selectParticipant")} />
-              </SelectTrigger>
-              <SelectContent>
-                {participantList.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={selectedParticipantId}
+              onValueChange={setSelectedParticipantId}
+              placeholder={translate("coordinator.shiftAssign.selectParticipant")}
+              searchPlaceholder={translate("coordinator.shiftAssign.searchParticipant")}
+              emptyText={translate("common.noResults")}
+              options={participantList.map((p) => ({
+                value: p.id,
+                label: p.full_name,
+              }))}
+            />
           </div>
 
           {/* Goals & Tasks validation */}

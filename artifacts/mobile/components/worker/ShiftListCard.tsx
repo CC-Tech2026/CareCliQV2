@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -25,20 +25,24 @@ import {
 import {
   avatarShouldPulse,
   emergencyContactDisplay,
+  findInProgressShift,
   formatActiveGoalLabel,
   formatShiftTimeRange,
+  isBlockedByInProgressShift,
   isShiftCompletedForList,
   shiftInitials,
-  STATE_AVATAR_COLORS,
 } from "@/lib/shift-utils";
+import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
 
 type Props = {
   shift: WorkerShift;
   showActions?: boolean;
   onRefresh?: () => void;
+  /** Other shifts on the same list — used to block opening Upcoming while one is In progress. */
+  siblingShifts?: WorkerShift[];
 };
 
-export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) {
+export function ShiftListCard({ shift, showActions = false, onRefresh, siblingShifts = [] }: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
@@ -49,12 +53,12 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
   const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
+  const inProgressShift = findInProgressShift(siblingShifts.length ? siblingShifts : [shift]);
 
   const avatarColor = isCancelled
     ? colors.destructive
-    : isCompleted
-      ? colors.mutedForeground
-      : STATE_AVATAR_COLORS[shift.visual_state] ?? colors.primary;
+    : colors.soft;
+  const avatarTextColor = isCancelled ? "#FFFFFF" : colors.primary;
 
   const mapsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
@@ -77,7 +81,15 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
   const coordinatorLine = [caseManager?.phone, caseManager?.email].filter(Boolean).join(" · ");
   const officePhone = shift.office_contact_number?.trim() || null;
 
+  const showBlockedAlert = () => {
+    showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+  };
+
   const navigateToShift = () => {
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedAlert();
+      return;
+    }
     router.push(`/shift/${shift.id}` as never);
   };
 
@@ -104,6 +116,11 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
   const handleClockIn = async () => {
     if (starting) return;
+
+    if (isBlockedByInProgressShift(shift, inProgressShift)) {
+      showBlockedAlert();
+      return;
+    }
 
     if (isSessionLive) {
       navigateToShift();
@@ -172,10 +189,10 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
       ]}
       testID={`shift-card-${shift.id}`}
     >
-      <View>
+      <Pressable onPress={navigateToShift}>
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: avatarColor }, pulse && styles.avatarPulse]}>
-            <Text style={[styles.avatarText, { fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.avatarText, { color: avatarTextColor, fontFamily: "Inter_600SemiBold" }]}>
               {shiftInitials(shift.participant_name)}
             </Text>
           </View>
@@ -192,12 +209,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
               >
                 {shift.participant_name ?? t("shifts.listCard.participant")}
               </Text>
-              {!isCancelled && !isCompleted && <ShiftStatusBadge visualState={shift.visual_state} />}
-              {isCompleted && (
-                <Text style={[styles.doneBadge, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  {t("shifts.listCard.done").toUpperCase()}
-                </Text>
-              )}
+              {!isCancelled && <ShiftStatusBadge visualState={isCompleted ? "completed" : shift.visual_state} />}
             </View>
 
             <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
@@ -224,6 +236,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
             </View>
           </View>
         </View>
+      </Pressable>
 
         {showDetails && goals.length > 0 && (
           <View style={styles.goalRow}>
@@ -316,7 +329,6 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
             headerTitle={t("shifts.listCard.medicalAlert")}
           />
         )}
-      </View>
 
       {showActions && !isCancelled && !isCompleted && (
         <View style={styles.actions}>
@@ -379,19 +391,19 @@ export function ShiftListCard({ shift, showActions = false, onRefresh }: Props) 
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
     gap: 12,
   },
   row: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -399,12 +411,11 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   avatarText: {
-    color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
   },
   content: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   titleRow: {
     flexDirection: "row",
@@ -413,7 +424,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   name: {
-    fontSize: 16,
+    fontSize: 13,
     flex: 1,
   },
   strikethrough: {
@@ -424,7 +435,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   time: {
-    fontSize: 13,
+    fontSize: 11,
   },
   addressRow: {
     flexDirection: "row",

@@ -3,17 +3,25 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { useShiftBreakStatus } from "@/hooks/worker/useShiftCheckin";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
-import { endLongShiftBreak, startLongShiftBreak, type CheckinWindowStatus } from "@/lib/worker-api";
+import {
+  endLongShiftBreak,
+  startLongShiftBreak,
+  type ActiveBreakStatus,
+  type CheckinWindowStatus,
+  type WorkerShift,
+} from "@/lib/worker-api";
 
 type Props = {
   shiftId: string;
   sessionId: string | null;
   checkinStatus?: CheckinWindowStatus;
+  breakStatus?: ActiveBreakStatus;
   sessionElapsed?: string;
   onCheckin?: () => void;
+  onReportIncident?: () => void;
   disabled?: boolean;
 };
 
@@ -30,13 +38,15 @@ export function LongShiftEngagementPanel({
   shiftId,
   sessionId,
   checkinStatus,
+  breakStatus,
   sessionElapsed,
   onCheckin,
+  onReportIncident,
   disabled,
 }: Props) {
   const colors = useColors();
+  const t = useT();
   const queryClient = useQueryClient();
-  const { data: breakStatus } = useShiftBreakStatus(shiftId, Boolean(sessionId));
 
   const [breakElapsed, setBreakElapsed] = useState("00:00:00");
 
@@ -74,9 +84,10 @@ export function LongShiftEngagementPanel({
     return () => clearInterval(id);
   }, [onBreak, breakStartAt]);
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shift", shiftId, "break-status"] });
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shift", shiftId, "checkin-status"] });
+  const invalidateShift = () => {
+    // Refresh embedded checkin_status / break_status from the same shift payload
+    // used offline — no separate status endpoints.
+    void queryClient.invalidateQueries({ queryKey: ["worker", "shift", shiftId] });
   };
 
   const breakMutation = useMutation({
@@ -84,11 +95,44 @@ export function LongShiftEngagementPanel({
       if (!sessionId) throw new Error("No active session");
       return onBreak ? endLongShiftBreak(sessionId) : startLongShiftBreak(sessionId);
     },
-    onSuccess: invalidate,
+    onSuccess: (breakRow) => {
+      queryClient.setQueryData<WorkerShift>(["worker", "shift", shiftId], (prev) => {
+        if (!prev) return prev;
+        if (onBreak) {
+          return {
+            ...prev,
+            break_status: {
+              active: false,
+              completed_breaks: (prev.break_status?.completed_breaks ?? 0) + 1,
+              max_breaks_per_shift: prev.break_status?.max_breaks_per_shift ?? 1,
+              can_start_break: false,
+              block_reason: "break_limit_reached",
+              total_break_secs: prev.break_status?.total_break_secs,
+            },
+          };
+        }
+        return {
+          ...prev,
+          break_status: {
+            active: true,
+            id: breakRow?.id,
+            break_start_at: breakRow?.break_start_at ?? new Date().toISOString(),
+            completed_breaks: prev.break_status?.completed_breaks ?? 0,
+            max_breaks_per_shift: prev.break_status?.max_breaks_per_shift ?? 1,
+            can_start_break: false,
+            block_reason: "break_in_progress",
+          },
+          checkin_status: prev.checkin_status
+            ? { ...prev.checkin_status, can_submit_checkin: false, block_reason: "on_break" }
+            : prev.checkin_status,
+        };
+      });
+      invalidateShift();
+    },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : "Break action failed";
       if (msg.toLowerCase().includes("already in progress")) {
-        invalidate();
+        invalidateShift();
         return;
       }
       showAlert("Break action failed", msg);
@@ -217,6 +261,31 @@ export function LongShiftEngagementPanel({
             </>
           )}
         </Pressable>
+
+        {onReportIncident ? (
+          <Pressable
+            onPress={onReportIncident}
+            disabled={actionBusy}
+            style={[
+              styles.btn,
+              {
+                backgroundColor: "transparent",
+                borderColor: colors.destructive,
+                opacity: actionBusy ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Feather name="alert-triangle" size={14} color={colors.destructive} />
+            <Text
+              style={[
+                styles.btnText,
+                { color: colors.destructive, fontFamily: "Inter_700Bold" },
+              ]}
+            >
+              {t("compliance.reportIncident")}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {breakLimitReached && !onBreak && (

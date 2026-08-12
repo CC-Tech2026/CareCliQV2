@@ -19,25 +19,25 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 /** Sticky banner stack — see notification-display.ts (A ticket strict, B view = dismiss). */
 const BANNER_STYLES = {
   red: {
-    accent: "#DC2626",
-    bg: "#FEF2F2",
-    border: "#FECACA",
-    text: "#991B1B",
-    muted: "#B91C1C",
+    accent: "var(--cc-status-danger)",
+    bg: "var(--cc-status-danger-bg)",
+    border: "color-mix(in srgb, var(--cc-status-danger) 35%, transparent)",
+    text: "var(--cc-status-danger)",
+    muted: "var(--cc-muted)",
   },
   orange: {
-    accent: "#EA580C",
-    bg: "#FFF7ED",
-    border: "#FDBA74",
-    text: "#9A3412",
-    muted: "#C2410C",
+    accent: "var(--cc-status-warning)",
+    bg: "var(--cc-status-warning-bg)",
+    border: "color-mix(in srgb, var(--cc-status-warning) 35%, transparent)",
+    text: "var(--cc-status-warning)",
+    muted: "var(--cc-muted)",
   },
   yellow: {
-    accent: "#CA8A04",
-    bg: "#FEFCE8",
-    border: "#FDE047",
-    text: "#854D0E",
-    muted: "#A16207",
+    accent: "var(--cc-amber)",
+    bg: "var(--cc-amber-tint)",
+    border: "color-mix(in srgb, var(--cc-amber) 35%, transparent)",
+    text: "var(--cc-status-warning)",
+    muted: "var(--cc-muted)",
   },
 };
 
@@ -121,7 +121,7 @@ function BannerItem({
             ) : (
               <button
                 type="button"
-                className="rounded-lg p-1.5 transition hover:bg-black/5"
+                className="rounded-lg p-1.5 transition hover:bg-black/5 dark:hover:bg-white/10"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

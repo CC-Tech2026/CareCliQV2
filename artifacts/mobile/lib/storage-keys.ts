@@ -10,6 +10,11 @@ export const CCQ_HIGH_CONTRAST_KEY = "ccq_high_contrast";
 export const CCQ_DYSLEXIA_FONT_KEY = "ccq_dyslexia_font";
 export const CCQ_REAUTH_TOKEN_KEY = "ccq_reauth_token";
 export const CCQ_REAUTH_UNTIL_KEY = "ccq_reauth_until";
+export const CCQ_BIOMETRIC_KEY = "ccq_biometric_unlock";
+export const CCQ_REDUCE_MOTION_KEY = "ccq_reduce_motion";
+export const CCQ_HAPTIC_KEY = "ccq_haptic_feedback";
+export const CCQ_BIOMETRIC_CREDS_KEY = "ccq_biometric_creds";
+export const CCQ_ONBOARDING_DONE_KEY = "ccq_onboarding_done";
 
 const LEGACY_KEY_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["carescribe_token", CCQ_TOKEN_KEY],

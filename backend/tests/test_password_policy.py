@@ -7,24 +7,24 @@ class PasswordPolicyTests(unittest.TestCase):
     def test_rejects_short_password(self):
         self.assertEqual(
             validate_password_policy("Ab1"),
-            "Password must be at least 8 characters.",
+            "Password must be at least 10 characters.",
         )
 
     def test_requires_uppercase(self):
         self.assertEqual(
-            validate_password_policy("password1"),
+            validate_password_policy("password12"),
             "Password must include at least one uppercase letter.",
         )
 
     def test_requires_number(self):
         self.assertEqual(
-            validate_password_policy("Password"),
+            validate_password_policy("Passwordab"),
             "Password must include at least one number.",
         )
 
     def test_rejects_common_password(self):
         self.assertEqual(
-            validate_password_policy("Password1"),
+            validate_password_policy("Password123"),
             "This password is too common. Choose a stronger password.",
         )
 

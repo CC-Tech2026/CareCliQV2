@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { WorkerBottomNav, workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
 import { useColors } from "@/hooks/useColors";
+import { goBackOrHome } from "@/lib/go-back";
 
 type Props = {
   title: string;
@@ -26,7 +27,7 @@ export function ClientScreenShell({ title, subtitle, backHref, children }: Props
       router.replace(backHref as never);
       return;
     }
-    router.back();
+    goBackOrHome(router);
   }
 
   return (
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
@@ -92,6 +93,6 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, alignItems: "center" },
   headerTitle: { fontSize: 17, textAlign: "center" },
   headerSubtitle: { fontSize: 12, textAlign: "center", marginTop: 2 },
-  body: { flex: 1 },
+  body: { flex: 1, paddingTop: 16 },
   bottomNav: { position: "absolute", left: 0, right: 0, bottom: 0 },
 });

@@ -8,7 +8,7 @@ export default function WorkerSecurityScreen() {
   const t = useT();
 
   return (
-    <SettingsSubScreen title={t("nav.security")} showBack={false}>
+    <SettingsSubScreen title={t("security.twoFactor")} showBack>
       <SecurityPanel />
     </SettingsSubScreen>
   );

@@ -1,3 +1,4 @@
+import { Brand } from "@/constants/brand";
 import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/lib/worker-api";
 
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
@@ -7,18 +8,43 @@ export const APP_TIMEZONE =
   process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
 
 export const STATE_AVATAR_COLORS: Record<ShiftVisualState, string> = {
-  scheduled: "#5271FF",
-  clocked_in: "#FB923C",
-  session_active: "#22C55E",
-  completed: "#9CA3AF",
+  scheduled: Brand.purple,
+  clocked_in: Brand.warning,
+  session_active: Brand.warning,
+  completed: Brand.success,
 };
 
 export const STATE_LABELS: Record<ShiftVisualState, string> = {
-  scheduled: "Scheduled",
-  clocked_in: "Clocked In",
-  session_active: "Active",
-  completed: "Completed",
+  scheduled: "Upcoming",
+  clocked_in: "In progress",
+  session_active: "In progress",
+  completed: "Documented",
 };
+
+export function greetingForHour(now = new Date()): "morning" | "afternoon" | "evening" {
+  const h = now.getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
+
+export function shortLocationLabel(address?: string | null): string | null {
+  if (!address?.trim()) return null;
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return parts[parts.length - 2] ?? parts[0] ?? null;
+  return parts[0] ?? null;
+}
+
+export function formatHomeDateLabel(now = new Date()): string {
+  return now.toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 export function shiftInitials(name?: string): string {
   return (name || "Client")
@@ -54,12 +80,29 @@ function formatTime(iso: string): string {
   }
 }
 
+export function formatShiftDate(iso?: string): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-AU", {
+      timeZone: APP_TIMEZONE,
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function formatShiftTimeRange(start?: string, end?: string): string {
   if (!start) return "Time not set";
   try {
+    const date = formatShiftDate(start);
     const s = formatTime(start);
     const e = end ? formatTime(end) : null;
-    return e ? `${s} – ${e}` : s;
+    const time = e ? `${s} – ${e}` : s;
+    return date ? `${date} · ${time}` : time;
   } catch {
     return start;
   }
@@ -179,12 +222,49 @@ export function hasStrongTaskEvidence(task: ShiftTask): boolean {
   return Boolean(task.has_photo || task.has_voice);
 }
 
+/** Match web/backend: explicit mandatory, or default tasks in the first 4 slots. */
+export function isMandatoryTask(task: ShiftTask): boolean {
+  return (
+    task.mandatory === true ||
+    (task.type === "default" && task.mandatory !== false && (task.order ?? 0) <= 4)
+  );
+}
+
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]): boolean {
-  return tasks.some((t) => !t.marked_na && t.mandatory && !t.completed);
+  return tasks.some((t) => !t.marked_na && isMandatoryTask(t) && !t.completed);
 }
 
 export function incompleteMandatoryTasks(tasks: ShiftTask[]): ShiftTask[] {
-  return tasks.filter((t) => !t.marked_na && t.mandatory && !t.completed);
+  return tasks.filter((t) => !t.marked_na && isMandatoryTask(t) && !t.completed);
+}
+
+export function isShiftInProgress(shift: {
+  visual_state?: string | null;
+  status?: string | null;
+}): boolean {
+  const state = shift.visual_state ?? "";
+  if (state === "session_active" || state === "clocked_in") return true;
+  return (shift.status ?? "").toLowerCase() === "in_progress";
+}
+
+export function findInProgressShift<T extends { id: string; visual_state?: string | null; status?: string | null }>(
+  shifts: T[],
+): T | null {
+  return shifts.find((s) => isShiftInProgress(s)) ?? null;
+}
+
+/**
+ * True when opening `target` should be blocked because another shift is still in progress.
+ * The in-progress shift itself (and completed/cancelled) can always be opened.
+ */
+export function isBlockedByInProgressShift<
+  T extends { id: string; visual_state?: string | null; status?: string | null },
+>(target: T, inProgress: T | null): boolean {
+  if (!inProgress || inProgress.id === target.id) return false;
+  if (isShiftCompletedForList(target as WorkerShift)) return false;
+  if ((target.status ?? "").toLowerCase() === "cancelled") return false;
+  if (isShiftInProgress(target)) return false;
+  return true;
 }
 
 export function sortTodayShiftsForList(shifts: WorkerShift[], now = new Date()): WorkerShift[] {
@@ -255,3 +335,34 @@ export function formatMobileShiftDuration(
     ) ?? "—"
   );
 }
+
+function slugFilePart(value: string, fallback = "unknown"): string {
+  const cleaned = value
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "")
+    .slice(0, 48);
+  return cleaned || fallback;
+}
+
+function extensionFromName(originalName?: string | null, fallback = "jpg"): string {
+  const match = originalName?.trim().match(/\.([a-zA-Z0-9]+)$/);
+  return (match?.[1] ?? fallback).toLowerCase();
+}
+
+/** Builds attachment filenames as patientname_tasktitle_datetime.ext */
+export function buildAttachmentFileName(options: {
+  participantName?: string | null;
+  taskTitle?: string | null;
+  date?: Date | string | null;
+  originalName?: string | null;
+}): string {
+  const patient = slugFilePart(options.participantName ?? "", "participant");
+  const task = slugFilePart(options.taskTitle ?? "", "task");
+  const d = options.date ? new Date(options.date) : new Date();
+  const safeDate = Number.isNaN(d.getTime()) ? new Date() : d;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const datetime = `${safeDate.getFullYear()}${pad(safeDate.getMonth() + 1)}${pad(safeDate.getDate())}-${pad(safeDate.getHours())}${pad(safeDate.getMinutes())}${pad(safeDate.getSeconds())}`;
+  const ext = extensionFromName(options.originalName);
+  return `${patient}_${task}_${datetime}.${ext}`;
+}
+

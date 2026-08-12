@@ -365,6 +365,87 @@ async def get_worker_sessions_grouped(
     return grouped
 
 
+async def get_worker_own_sessions(
+    current_user: Optional[dict],
+    *,
+    limit: int = 500,
+) -> List[Dict[str, Any]]:
+    """Fetch sessions owned by the current support worker (for compliance overview).
+
+    Unlike get_all_sessions(), this filters by worker ownership at query time so
+    older worker sessions are not crowded out by other org activity.
+    """
+    org_id = _user_org_or_none(current_user)
+    worker_id = get_user_id(current_user) if current_user else None
+    if not org_id or not worker_id:
+        return []
+
+    supabase = get_supabase_admin()
+    wid = str(worker_id)
+    owner_filter = (
+        f"worker_id.eq.{wid},"
+        f"owner_user_id.eq.{wid},"
+        f"created_by.eq.{wid},"
+        f"support_worker_id.eq.{wid}"
+    )
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select("*")
+            .eq("organization_id", org_id)
+            .or_(owner_filter)
+            .order("session_date", desc=True)
+            .limit(max(1, min(limit, 1000)))
+            .execute()
+        )
+        sessions = _safe_rows(result.data)
+    except Exception as exc:
+        # Older schemas may lack support_worker_id — retry without it.
+        err = str(exc).lower()
+        if "support_worker_id" in err or _is_missing_column_error(exc):
+            try:
+                result = (
+                    supabase.table("sessions")
+                    .select("*")
+                    .eq("organization_id", org_id)
+                    .or_(f"worker_id.eq.{wid},owner_user_id.eq.{wid},created_by.eq.{wid}")
+                    .order("session_date", desc=True)
+                    .limit(max(1, min(limit, 1000)))
+                    .execute()
+                )
+                sessions = _safe_rows(result.data)
+            except Exception as retry_exc:
+                if _is_missing_column_error(retry_exc):
+                    logger.warning("Worker own session query failed closed: %s", retry_exc)
+                    return []
+                raise
+        else:
+            raise
+
+    accessible = await _filter_sessions_for_user(sessions, current_user)
+    patient_ids = list({
+        str(s.get("patient_id") or s.get("participant_id"))
+        for s in accessible
+        if s.get("patient_id") or s.get("participant_id")
+    })
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
+
+    output: List[Dict[str, Any]] = []
+    for session in accessible:
+        row = _normalize(session)
+        patient_info = name_map.get(
+            str(session.get("patient_id") or session.get("participant_id") or ""),
+            {},
+        )
+        row["participants"] = {
+            "full_name": patient_info.get("full_name", ""),
+            "ndis_number": patient_info.get("ndis_number", ""),
+        }
+        output.append(row)
+    return output
+
+
 def _fetch_patient_name_map(
     supabase,
     patient_ids: List[str],

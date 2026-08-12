@@ -3,8 +3,6 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SecurityMfaPanel } from "@/components/worker/security/SecurityMfaPanel";
-import { SecuritySessionsPanel } from "@/components/worker/security/SecuritySessionsPanel";
-import { SecurityTrustedDevicesPanel } from "@/components/worker/security/SecurityTrustedDevicesPanel";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { useMfaStatus } from "@/hooks/worker/useWorkerSecurity";
@@ -48,13 +46,10 @@ export function SecurityPanel({ bottomInset = 24 }: Props) {
     >
       <View style={styles.header}>
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {t("security.subtitle")}
+          {t("security.twoFactorSubtitle")}
         </Text>
       </View>
-
       <SecurityMfaPanel />
-      <SecurityTrustedDevicesPanel />
-      <SecuritySessionsPanel />
     </ScrollView>
   );
 }

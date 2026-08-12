@@ -27,6 +27,7 @@ NOTIFICATION_EVENTS = (
     "certification_expiry",
     "task_reminder",
     "safety_alert",
+    "invite_request",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -40,6 +41,7 @@ EVENT_ALERT_TYPES = {
     "certification_expiry": "credential_expiry",
     "task_reminder": "task_reminder",
     "safety_alert": "safety_alert",
+    "invite_request": "invite_request",
 }
 
 

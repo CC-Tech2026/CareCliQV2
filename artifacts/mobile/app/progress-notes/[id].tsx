@@ -4,7 +4,7 @@ import {
   useGetParticipant,
   useUpdateSession,
 } from "@workspace/api-client-react";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {

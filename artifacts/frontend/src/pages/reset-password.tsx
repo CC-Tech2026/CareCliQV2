@@ -36,7 +36,7 @@ export default function ResetPassword() {
       toast({ title: t("auth.reset.toast.expired"), description: t("auth.reset.toast.requestNew"), variant: "destructive" });
       return;
     }
-    if (password.length < 8) {
+    if (password.length < 10) {
       toast({ title: t("auth.reset.toast.tooShort"), description: t("auth.reset.toast.minChars"), variant: "destructive" });
       return;
     }
@@ -149,7 +149,7 @@ export default function ResetPassword() {
               </div>
               <button
                 type="submit"
-                disabled={busy || !hasRecoveryToken || password.length < 8 || password !== confirm}
+                disabled={busy || !hasRecoveryToken || password.length < 10 || password !== confirm}
                 className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
                 style={{ background: "var(--cc-cta)" }}
               >

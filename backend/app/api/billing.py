@@ -48,6 +48,9 @@ class InvoiceCreate(BaseModel):
     status: str = "draft"
     due_date: Optional[str] = None
     notes: Optional[str] = None
+    generate_from_verified_tasks: bool = False
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
 
 
 class InvoiceUpdate(BaseModel):

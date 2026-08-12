@@ -11,7 +11,7 @@ export default function NewIncidentScreen() {
 
   const handleDone = () => {
     if (router.canGoBack()) router.back();
-    else router.replace("/incidents" as never);
+    else router.replace("/(tabs)/compliance?segment=incidents" as never);
   };
 
   return (

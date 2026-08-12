@@ -126,6 +126,9 @@ async def send_fcm_to_user(
                 notification=messaging.AndroidNotification(
                     channel_id=android_channel_id,
                     sound="default",
+                    priority="high",
+                    visibility="public",
+                    default_vibrate_timings=True,
                 ),
             ),
             apns=messaging.APNSConfig(

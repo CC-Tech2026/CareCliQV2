@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     # Google Cloud Translation
     google_cloud_translation_api_key: str = os.environ.get("GOOGLE_CLOUD_TRANSLATION_API_KEY", "")
     google_translate_url: str = os.environ.get("GOOGLE_TRANSLATE_URL", "https://translation.googleapis.com/language/translate/v2")
+    # Optional Speech-to-Text key; defaults to GOOGLE_CLOUD_TRANSLATION_API_KEY (same GCP project)
+    google_cloud_speech_api_key: str = os.environ.get("GOOGLE_CLOUD_SPEECH_API_KEY", "")
+    # Optional override for Speech recognize URL (v1). Discovery document URLs are ignored.
+    google_speech_to_text_url: str = os.environ.get(
+        "GOOGLE_SPEECH_TO_TEXT_URL",
+        "https://speech.googleapis.com/v1/speech:recognize",
+    )
     google_maps_api_key: str = os.environ.get("GOOGLE_MAPS_API_KEY", "")
     # AES-256 GCM PII encryption (Privacy Act 2026)
     # Set PII_ENCRYPTION_ENABLED=true and PII_ENCRYPTION_KEY=<32-byte base64> to activate.

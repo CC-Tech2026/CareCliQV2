@@ -79,6 +79,8 @@ def test_matches_filter_upcoming():
         ("cancelled", {"status": "in_progress"}, False),
         ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00"}, True),
         ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00", "status": "cancelled"}, False),
+        ("past", {"status": "completed"}, True),
+        ("past", {"status": "scheduled"}, False),
         ("all", {"status": "scheduled"}, True),
         ("all", {}, True),
     ],
@@ -201,12 +203,15 @@ def test_shift_card_payload_session_active_state():
     assert payload["visual_state"] == "session_active"
 
 
+@patch("backend.app.services.shift_service._load_tasks_from_shift_tasks", return_value=[])
+@patch("backend.app.services.shift_service._load_tasks_from_templates")
 @patch("backend.app.services.shift_service.log_shift_check_in")
 @patch("backend.app.services.shift_service._apply_verified_check_in", return_value={"clock_in_method": "gps", "clock_in_verified": True})
 @patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard, _mock_verify, _mock_log):
+def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard, _mock_verify, _mock_log, mock_templates, _mock_st):
     """Fresh clock-in must not inherit an old session (CARECLIQV2-127)."""
+    mock_templates.return_value = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     shift = _sample_shift(status="scheduled", session_id="old-sess")
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -238,11 +243,14 @@ def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard, _mock_v
     assert update_payload.get("session_id") is None
 
 
+@patch("backend.app.services.shift_service._load_tasks_from_shift_tasks", return_value=[])
+@patch("backend.app.services.shift_service._load_tasks_from_templates")
 @patch("backend.app.services.shift_service.log_shift_check_in")
 @patch("backend.app.services.shift_service._apply_verified_check_in", return_value={"clock_in_method": "gps", "clock_in_verified": True})
 @patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_verify, _mock_log):
+def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_verify, _mock_log, mock_templates, _mock_st):
+    mock_templates.return_value = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     shift = _sample_shift()
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -251,13 +259,14 @@ def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_v
         data=[{**shift, "status": "in_progress", "clocked_in_at": datetime.now(timezone.utc).isoformat(), "tasks": copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)}]
     )
 
-    result = shift_service.clock_in_shift(
-        "shift-1",
-        "worker-1",
-        "org-1",
-        method="gps",
-        location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
-    )
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        result = shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
+        )
     assert result is not None
     assert result["visual_state"] == "clocked_in"
     assert len(result["tasks"]) == 6

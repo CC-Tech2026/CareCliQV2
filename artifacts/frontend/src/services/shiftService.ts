@@ -58,6 +58,7 @@ export type ShiftTask = {
   goal_id?: string | null;
   goal_title?: string | null;
   outcome_tip?: string | null;
+  evidence_required?: string | null;
   photo_evidence?: string | null;
   voice_evidence?: string | null;
   photo_thumbnails?: string[];

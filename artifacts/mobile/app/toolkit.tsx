@@ -1,7 +1,15 @@
 import React from "react";
 
-import { WorkerProfileScreen } from "@/components/worker/profile/WorkerProfileScreen";
+import { ProfileToolkitPanel } from "@/components/worker/profile/ProfileToolkitPanel";
+import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
+import { useT } from "@/context/PreferencesContext";
 
 export default function ToolkitScreen() {
-  return <WorkerProfileScreen initialTab="toolkit" bottomInset={24} />;
+  const t = useT();
+
+  return (
+    <WorkerStackScreen headerTitle={t("nav.toolkit")} cardsOnBackground showBack>
+      <ProfileToolkitPanel bottomInset={24} showSectionHeader />
+    </WorkerStackScreen>
+  );
 }

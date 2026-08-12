@@ -39,6 +39,8 @@ function buildEntries(
     preview:
       record.type === "text"
         ? record.content
+        : record.type === "voice"
+          ? (record.content?.startsWith("data:audio") ? undefined : record.content)
         : record.type === "file"
           ? record.file_name || record.content
           : undefined,
@@ -86,6 +88,7 @@ function TimelineRow({
   translateParams: (key: string, params: Record<string, string>) => string;
 }) {
   const isMedia = entry.kind === "photo" || entry.kind === "voice" || entry.kind === "file";
+  const showVoiceTranscript = entry.kind === "voice" && Boolean(entry.preview);
 
   return (
     <li className="flex gap-3 border-b px-4 py-3 last:border-b-0" style={{ borderColor: BORDER }}>
@@ -106,7 +109,17 @@ function TimelineRow({
           </span>
         </div>
 
-        {isMedia ? (
+        {showVoiceTranscript ? (
+          <>
+            <p className="mt-1.5 text-sm leading-snug whitespace-pre-wrap" style={{ color: TEXT }}>
+              {entry.preview}
+            </p>
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: MUTED }}>
+              <EntryActionIcon kind={entry.kind} />
+              {translate("shift.evidence.voiceNote")}
+            </p>
+          </>
+        ) : isMedia ? (
           <p className="mt-1.5 flex items-center gap-1.5 text-sm font-black" style={{ color: TEXT }}>
             <EntryActionIcon kind={entry.kind} />
             {entryActionLabel(entry, translate, translateParams)}

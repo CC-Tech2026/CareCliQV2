@@ -1,21 +1,7 @@
+import { Redirect } from "expo-router";
 import React from "react";
 
-import { IncidentsPanel } from "@/components/worker/incidents/IncidentsPanel";
-import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
-import { useT } from "@/context/PreferencesContext";
-
+/** Incidents list lives under Compliance → Incidents (v1.5 redesign). */
 export default function IncidentsListScreen() {
-  const t = useT();
-
-  return (
-    <WorkerStackScreen
-      headerTitle={t("nav.incidents")}
-      pageTitle={t("incidents.title")}
-      subtitle={t("incidents.subtitle")}
-      cardsOnBackground
-      showBack={false}
-    >
-      <IncidentsPanel />
-    </WorkerStackScreen>
-  );
+  return <Redirect href={"/(tabs)/compliance?segment=incidents" as never} />;
 }

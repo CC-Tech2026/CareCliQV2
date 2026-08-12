@@ -23,6 +23,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isWorkerMobileShiftDetailPath, workerMobileShiftBackHref } from "@/lib/worker-shift-routes";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { getIncidentStats } from "@/services/incidentService";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -64,15 +66,15 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/team",                  label: "Workers",               icon: Users        },
         { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
         { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
+        { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
         { href: "/billing",               label: "Invoices",           icon: CreditCard   },
         { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
     },
     {
-      group: "Settings & Help",
+      group: "Settings",
       items: [
-        { href: "/toolkit",     label: "Toolkit",    icon: Wrench        },
-        { href: "/worker/help", label: "Help",       icon: HelpCircle    },
+        { href: "/toolkit", label: "Toolkit", icon: Wrench },
       ],
     },
   ],
@@ -119,12 +121,7 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
     { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
   ],
-  support_worker: [
-    { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
-    { href: "/my-shifts",     label: "My Shifts",  icon: Clock           },
-    { href: "/my-clients",    label: "My Clients", icon: UserRound       },
-    { href: "/my-compliance", label: "Compliance", icon: ShieldCheck     },
-  ],
+  support_worker: [],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
     { href: "/md/executive",  label: "Executive", icon: BarChart2       },
@@ -166,10 +163,8 @@ function isActive(location: string, href: string) {
      location.startsWith("/coordinator/shift-verification") ||
      location.startsWith("/coordinator/travel") ||
      location.startsWith("/approvals"))) return true;
-  // Quality & Compliance: incidents and audit-pack roll up to /compliance
-  if (href === "/compliance" &&
-    (location.startsWith("/incidents") ||
-     location.startsWith("/audit-pack"))) return true;
+  // Quality & Compliance: audit-pack rolls up to /compliance
+  if (href === "/compliance" && location.startsWith("/audit-pack")) return true;
   // Team: credentials roll up to /team
   if (href === "/team" && location.startsWith("/credentials")) return true;
   return location === href || location.startsWith(href + "/");
@@ -374,12 +369,13 @@ function GlobalSearch({ userRole }: { userRole: NavRole | undefined }) {
 // ── Sidebar contents ──────────────────────────────────────────────────────────
 function SidebarContents({
   location, collapsed, isDrawer,
-  alertCount, displayName, displayRole, initials,
+  alertCount, incidentOpenCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
   isDark, toggleTheme,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
-  alertCount: number; displayName: string; displayRole: string; initials: string;
+  alertCount: number; incidentOpenCount: number;
+  displayName: string; displayRole: string; initials: string;
   onNav?: () => void; onLogout: () => void;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
@@ -443,7 +439,9 @@ function SidebarContents({
                 const Icon = item.icon;
                 const label = navLabelForHref(item.href, item.label, translate);
                 const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
+                const isIncidents = item.href === "/incidents";
                 const hasAlert     = alertCount > 0 && isCompliance;
+                const hasIncidentBadge = incidentOpenCount > 0 && isIncidents;
                 return (
                   <Link
                     key={item.href}
@@ -466,6 +464,14 @@ function SidebarContents({
                     >
                       <Icon size={17} strokeWidth={active ? 2.2 : 1.8} style={{ color: active ? "#fff" : MUTED }} />
                       {!compact && <span className="flex-1 truncate">{label}</span>}
+                      {!compact && hasIncidentBadge && (
+                        <span
+                          className="ml-auto min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
+                          style={{ background: active ? "rgba(255,255,255,0.3)" : "#E24B4A", color: "#fff" }}
+                        >
+                          {incidentOpenCount}
+                        </span>
+                      )}
                       {!compact && hasAlert && (
                         <span
                           className="ml-auto min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
@@ -606,6 +612,12 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   const initials    = getInitials(displayName);
   const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
   const userRole    = user?.role as NavRole | undefined;
+  const isCoordinator = userRole === "support_coordinator";
+  const { data: incidentStats } = useOrgQuery<{ open: number }>(
+    ["incident-stats", "nav-badge"],
+    { queryFn: () => getIncidentStats<{ open: number }>(), enabled: isCoordinator },
+  );
+  const incidentOpenCount = incidentStats?.open ?? 0;
   const isWorker    = userRole === "support_worker";
   const topbarAlertHref =
     userRole === "support_worker"    ? "/my-compliance" :
@@ -636,7 +648,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   };
 
   const sharedProps = {
-    location, collapsed, alertCount, displayName, displayRole, initials,
+    location, collapsed, alertCount, incidentOpenCount, displayName, displayRole, initials,
     onLogout: logout, translate, translateParams, isDark, toggleTheme,
   };
 

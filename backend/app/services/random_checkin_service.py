@@ -245,6 +245,21 @@ def evaluate_random_checkin_window(
     required = len(scheduled_checkins) if scheduled_checkins else min(RANDOM_CHECKIN_COUNT_OPTIONS)
     completed = sum(1 for row in scheduled_checkins if row.get("status") == "completed")
 
+    upcoming_checkins: list[dict[str, Any]] = []
+    for row in scheduled_checkins:
+        status = str(row.get("status") or "")
+        if status not in ("pending", "prompted"):
+            continue
+        scheduled_at = _parse_dt(row.get("scheduled_at"))
+        if not scheduled_at:
+            continue
+        upcoming_checkins.append({
+            "id": str(row.get("id") or ""),
+            "sequence_number": int(row.get("sequence_number") or 0),
+            "scheduled_at": scheduled_at.isoformat(),
+            "status": status,
+        })
+
     base: dict[str, Any] = {
         "applicable": applicable,
         "can_submit_checkin": False,
@@ -257,6 +272,7 @@ def evaluate_random_checkin_window(
         "last_checkin_at": last_checkin_at.isoformat() if last_checkin_at else None,
         "checkin_response_window_secs": RANDOM_CHECKIN_RESPONSE_SECS,
         "uses_random_schedule": True,
+        "upcoming_checkins": upcoming_checkins,
     }
     if not applicable:
         return base

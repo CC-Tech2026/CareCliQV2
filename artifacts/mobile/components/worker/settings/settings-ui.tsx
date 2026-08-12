@@ -97,7 +97,7 @@ type SectionProps = {
   title: string;
   description: string;
   icon: keyof typeof Feather.glyphMap;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 };
 
 export function SettingsSection({ title, description, icon, children }: SectionProps) {
@@ -118,7 +118,7 @@ export function SettingsSection({ title, description, icon, children }: SectionP
           </Text>
         </View>
       </View>
-      <View style={styles.sectionBody}>{children}</View>
+      {children != null && children !== false ? <View style={styles.sectionBody}>{children}</View> : null}
     </View>
   );
 }

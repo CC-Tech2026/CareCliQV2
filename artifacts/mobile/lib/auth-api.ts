@@ -7,6 +7,7 @@ export type AuthUser = {
   full_name?: string;
   role?: string;
   organizationId?: string;
+  profile_photo_url?: string | null;
 };
 
 export type LoginResult =
@@ -24,6 +25,10 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
       : raw.organizationId
         ? String(raw.organizationId)
         : undefined,
+    profile_photo_url:
+      raw.profile_photo_url != null && String(raw.profile_photo_url).trim()
+        ? String(raw.profile_photo_url)
+        : null,
   };
 }
 
@@ -117,6 +122,17 @@ export async function requestPasswordReset(email: string): Promise<void> {
   });
 }
 
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<{ message: string }> {
+  return workerFetch<{ message: string }>("/api/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type RegisterPayload = {
   email: string;
   password: string;
@@ -139,6 +155,8 @@ export type OnboardingPayload = {
   team_size?: string;
   participant_volume?: string;
   contact_number?: string;
+  address?: string;
+  org_address?: string;
 };
 
 export async function completeOnboarding(
@@ -150,5 +168,62 @@ export async function completeOnboarding(
       method: "POST",
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export type InviteLookup = {
+  email: string;
+  role: string;
+  token: string;
+  organization_id: string;
+  organization_name: string | null;
+  expires_at: string;
+  short_code?: string;
+};
+
+export async function lookupInviteCode(code: string): Promise<InviteLookup> {
+  return workerFetch<InviteLookup>(`/api/invitations/lookup/${encodeURIComponent(code.trim())}`);
+}
+
+export async function acceptInvite(
+  token: string,
+  payload: { full_name: string; password: string },
+): Promise<{ accessToken: string; user: AuthUser }> {
+  const data = await workerFetch<{
+    access_token?: string;
+    user?: Record<string, unknown>;
+  }>(`/api/invitations/accept/${encodeURIComponent(token)}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!data.access_token || !data.user) {
+    throw new Error("Invite acceptance failed");
+  }
+  return {
+    accessToken: data.access_token,
+    user: mapUser(data.user),
+  };
+}
+
+export async function requestStaffInvite(payload: {
+  full_name: string;
+  email: string;
+  organization_id?: string;
+  organization_name?: string;
+}): Promise<{ ok: boolean; message: string; organization_name?: string }> {
+  return workerFetch<{ ok: boolean; message: string; organization_name?: string }>(
+    "/api/invitations/request-invite",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function listJoinableOrganizations(): Promise<
+  { id: string; organization_name: string }[]
+> {
+  return workerFetch<{ id: string; organization_name: string }[]>(
+    "/api/invitations/organizations",
   );
 }

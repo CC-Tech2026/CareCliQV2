@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 import { workerFetch } from "@/lib/worker-fetch";
 
 export type ShiftVisualState = "scheduled" | "clocked_in" | "session_active" | "completed";
@@ -29,6 +31,8 @@ export type ShiftTask = {
   mandatory?: boolean;
   goal_id?: string | null;
   goal_title?: string | null;
+  /** From participant_tasks via shift_tasks (CARECLIQV2-330). */
+  evidence_required?: string | null;
   marked_na?: boolean;
   na_reason?: string | null;
 };
@@ -94,6 +98,9 @@ export type WorkerShift = {
     mandatory_completed: number;
     mandatory_total: number;
   };
+  /** Embedded on shift detail — do not fetch separately for offline. */
+  checkin_status?: CheckinWindowStatus;
+  break_status?: ActiveBreakStatus;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -101,6 +108,10 @@ export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "pa
 export type WorkerShiftsResponse = {
   shifts: WorkerShift[];
   filter: ShiftFilter;
+  total?: number;
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
 };
 
 export type ShiftBriefingAlert = {
@@ -265,8 +276,14 @@ export type ClockInRequest = {
   client_timestamp?: string;
 };
 
-export function getWorkerShifts(filter: ShiftFilter = "today") {
-  return workerFetch<WorkerShiftsResponse>(`/api/worker/shifts?filter=${filter}`);
+export function getWorkerShifts(
+  filter: ShiftFilter = "today",
+  options?: { limit?: number; offset?: number },
+) {
+  const params = new URLSearchParams({ filter });
+  if (typeof options?.limit === "number") params.set("limit", String(options.limit));
+  if (typeof options?.offset === "number") params.set("offset", String(options.offset));
+  return workerFetch<WorkerShiftsResponse>(`/api/worker/shifts?${params.toString()}`);
 }
 
 export function getWorkerShift(id: string) {
@@ -332,6 +349,51 @@ export function syncSessionNotes(sessionId: string, notes: SessionNoteRecord[]) 
       body: JSON.stringify({ notes }),
     },
   );
+}
+
+export async function transcribeSessionAudio(sessionId: string, uri: string) {
+  const cleanPath = uri.split("?")[0] ?? uri;
+  const ext = cleanPath.split(".").pop()?.toLowerCase() || "m4a";
+  const mime =
+    ext === "webm"
+      ? "audio/webm"
+      : ext === "wav"
+        ? "audio/wav"
+        : ext === "caf"
+          ? "audio/x-caf"
+          : ext === "mp3"
+            ? "audio/mpeg"
+            : "audio/mp4";
+  const filename = `voice-note.${ext}`;
+
+  const formData = new FormData();
+  // Native RN FormData needs { uri, name, type }. Blob only works on web —
+  // using Blob on Android causes "Network request failed".
+  if (Platform.OS === "web") {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    formData.append("audio_file", blob, filename);
+  } else {
+    formData.append(
+      "audio_file",
+      {
+        uri,
+        name: filename,
+        type: mime,
+      } as unknown as Blob,
+    );
+  }
+
+  return workerFetch<{ transcript: string }>(
+    `/api/worker/sessions/${sessionId}/transcribe`,
+    { method: "POST", body: formData },
+  );
+}
+
+export function deleteSessionNote(sessionId: string, noteId: string) {
+  return workerFetch<void>(`/api/worker/sessions/${sessionId}/notes/${noteId}`, {
+    method: "DELETE",
+  });
 }
 
 export function submitShiftSignature(
@@ -432,6 +494,13 @@ export function getMyCompliance(params?: { sessionsLimit?: number; sessionsOffse
 
 export type CheckinStatus = "GOING_WELL" | "NEEDS_ATTENTION" | "INCIDENT_REPORTED";
 
+export type UpcomingCheckin = {
+  id: string;
+  sequence_number?: number;
+  scheduled_at: string;
+  status?: string;
+};
+
 export type CheckinWindowStatus = {
   applicable?: boolean;
   can_submit_checkin?: boolean;
@@ -444,6 +513,8 @@ export type CheckinWindowStatus = {
   last_checkin_at?: string | null;
   uses_random_schedule?: boolean;
   checkin_response_window_secs?: number;
+  /** Pending/prompted check-ins — used to schedule offline-capable local notifications. */
+  upcoming_checkins?: UpcomingCheckin[];
 };
 
 export type UserNotification = {
@@ -574,6 +645,12 @@ export function fetchNotifications(params?: {
   return workerFetch<{ notifications: UserNotification[]; count: number }>(
     `/api/worker/notifications?${q}`,
   );
+}
+
+export function markNotificationRead(id: string) {
+  return workerFetch<{ ok: boolean }>(`/api/worker/notifications/${id}/read`, {
+    method: "POST",
+  });
 }
 
 export function dismissNotification(id: string) {

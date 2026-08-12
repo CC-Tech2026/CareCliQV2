@@ -22,6 +22,7 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { AuditPackPanel } from "@/pages/audit-pack";
 import { FormPanel } from "@/components/FormPanel";
 import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditTrailEntry } from "@/services/incidentService";
+import { IncidentAccordionCard } from "@/components/incidents/IncidentAccordionCard";
 import { Card } from "@/components/ui/card";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
@@ -96,7 +97,7 @@ function FilterChip({ label, active, icon, onClick }: { label: string; active: b
       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold transition-colors whitespace-nowrap"
       style={active
         ? { background: "var(--cc-plum-soft)", border: `1px solid ${PLUM}`, color: PLUM }
-        : { background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}
+        : { background: "var(--cc-surface)", border: `1px solid ${BORDER}`, color: MUTED }}
     >
       {icon} {label}
     </button>
@@ -128,7 +129,7 @@ function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" 
   const map: Record<string, { bg: string; color: string }> = {
     gn: { bg: "var(--cc-status-success-bg)", color: SUCCESS },
     am: { bg: "var(--cc-status-warning-bg)", color: WARNING },
-    rd: { bg: "rgba(220,38,38,0.1)", color: CRITICAL },
+    rd: { bg: "var(--cc-status-danger-bg)", color: CRITICAL },
     pu: { bg: "var(--cc-plum-soft)", color: PLUM },
     gy: { bg: SOFT, color: MUTED },
   };
@@ -333,7 +334,7 @@ export default function Compliance() {
           <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border border-[var(--cc-border)] shadow-sm px-5 py-3">
             {urgentCount > 0 && (
               <div className="flex items-center gap-1.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(220,38,38,0.1)" }}>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-status-danger-bg)" }}>
                   <ShieldAlert size={15} style={{ color: CRITICAL }} />
                 </span>
                 <span className="text-[12px] font-bold" style={{ color: CRITICAL }}>
@@ -443,8 +444,8 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       </KpiGrid>
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-danger-bg)" }}>
             <AlertTriangle size={17} style={{ color: CRITICAL }} />
           </span>
           <div className="min-w-0">
@@ -458,8 +459,12 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               {data!.urgent_actions.map((a, i) => (
                 <Link key={i} href={a.link}>
                   <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer hover:opacity-80 bg-white"
-                    style={{ color: a.severity === "critical" ? CRITICAL : WARNING }}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer hover:opacity-80"
+                    style={{
+                      background: "var(--cc-surface)",
+                      border: `1px solid ${BORDER}`,
+                      color: a.severity === "critical" ? CRITICAL : WARNING,
+                    }}
                   >
                     {a.type === "incident" ? <ShieldAlert size={11} /> : a.type === "credential" ? <FileText size={11} /> : <FileX size={11} />}
                     {a.label}{a.detail ? ` · ${a.detail}` : ""}
@@ -653,8 +658,8 @@ function AiPatternsSection() {
                   type="button"
                   disabled={dismissingId === p.id}
                   onClick={() => handleDismiss(p.id)}
-                  className="text-[11px] font-bold px-3 py-1 rounded-full disabled:opacity-50 bg-white"
-                  style={{ color: MUTED, border: `1px solid ${BORDER}` }}
+                  className="text-[11px] font-bold px-3 py-1 rounded-full disabled:opacity-50"
+                  style={{ background: "var(--cc-surface)", color: MUTED, border: `1px solid ${BORDER}` }}
                 >
                   {dismissingId === p.id ? translate("compliance.centre.overview.aiPatternDismissing") : translate("compliance.centre.overview.aiPatternDismiss")}
                 </button>
@@ -735,17 +740,17 @@ function StaffPanel() {
         <FilterChip label={translate("compliance.centre.staff.filterAction")} icon={<ShieldAlert size={12} />} active={filter === "action"} onClick={() => setFilter("action")} />
         <FilterChip label={translate("compliance.centre.staff.filterCompliant")} icon={<CircleCheck size={12} />} active={filter === "compliant"} onClick={() => setFilter("compliant")} />
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 bg-white" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-1.5 rounded-full border px-3.5 py-2" style={{ background: "var(--cc-surface)", borderColor: BORDER }}>
             <Search size={13} style={{ color: MUTED }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={translate("compliance.centre.staff.searchPlaceholder")}
-              className="text-[12px] outline-none w-32"
+              className="text-[12px] outline-none w-32 bg-transparent"
               style={{ color: TEXT }}
             />
           </div>
-          <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold bg-white" style={{ borderColor: BORDER, color: MUTED }}>
+          <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold" style={{ background: "var(--cc-surface)", borderColor: BORDER, color: MUTED }}>
             <Download size={13} /> {translate("compliance.centre.staff.export")}
           </button>
         </div>
@@ -755,7 +760,7 @@ function StaffPanel() {
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
             <thead>
-              <tr style={{ background: TEXT }}>
+              <tr style={{ background: "var(--cc-sidebar-bg)" }}>
                 <th className="w-48 px-4 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colWorker")}</th>
                 {Object.entries(credLabels).map(([key, label]) => (
                   <th key={key} className="w-[84px] px-1.5 h-11 text-center text-[9px] font-bold uppercase tracking-wide leading-tight text-white">{label}</th>
@@ -766,7 +771,7 @@ function StaffPanel() {
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((w, idx) => (
-                <tr key={w.user_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
+                <tr key={w.user_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "var(--cc-plum-subtle)" } : undefined}>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-2.5 min-w-0">
                       <Avatar name={w.full_name} size={26} />
@@ -813,13 +818,13 @@ function StaffPanel() {
       </Card>
 
       {expiringSoon && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(217,119,6,0.06)" }}>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(217,119,6,0.12)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-warning-bg)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-warning-bg)" }}>
             <Info size={16} style={{ color: WARNING }} />
           </span>
           <div>
-            <p className="text-[13px] font-bold mb-0.5" style={{ color: "#92400E" }}>{translate("compliance.centre.staff.reminderTitle")}</p>
-            <p className="text-[12px] mb-2" style={{ color: "#854D0B" }}>
+            <p className="text-[13px] font-bold mb-0.5" style={{ color: "var(--cc-status-warning)" }}>{translate("compliance.centre.staff.reminderTitle")}</p>
+            <p className="text-[12px] mb-2" style={{ color: "var(--cc-muted)" }}>
               {translateParams("compliance.centre.staff.reminderBody", { name: expiringSoon.full_name })}
             </p>
             <button
@@ -890,14 +895,14 @@ function ParticipantsPanel() {
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value as "30" | "90" | "180")}
           title="Date range"
-          className="ml-auto text-[12px] rounded-full border px-3.5 py-2 bg-white"
-          style={{ borderColor: BORDER, color: TEXT }}
+          className="ml-auto text-[12px] rounded-full border px-3.5 py-2"
+          style={{ background: "var(--cc-surface)", borderColor: BORDER, color: TEXT }}
         >
           <option value="30">{translate("compliance.centre.participants.range30")}</option>
           <option value="90">{translate("compliance.centre.participants.range90")}</option>
           <option value="180">{translate("compliance.centre.participants.range180")}</option>
         </select>
-        <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold bg-white" style={{ borderColor: BORDER, color: MUTED }}>
+        <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold" style={{ background: "var(--cc-surface)", borderColor: BORDER, color: MUTED }}>
           <Download size={13} /> {translate("compliance.centre.participants.export")}
         </button>
       </div>
@@ -906,7 +911,7 @@ function ParticipantsPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr style={{ background: TEXT }}>
+              <tr style={{ background: "var(--cc-sidebar-bg)" }}>
                 {[
                   translate("compliance.centre.participants.colParticipant"),
                   translate("compliance.centre.participants.colPlanStatus"),
@@ -923,7 +928,7 @@ function ParticipantsPanel() {
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((p, idx) => (
-                <tr key={p.participant_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
+                <tr key={p.participant_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "var(--cc-plum-subtle)" } : undefined}>
                   <td className="px-3 py-3 whitespace-nowrap">
                     <span className="flex items-center gap-2.5">
                       <Avatar name={p.full_name} size={26} />
@@ -951,7 +956,7 @@ function ParticipantsPanel() {
                       : (
                         <div className="flex gap-1 flex-wrap">
                           {p.flags.map((f) => (
-                            <span key={f} className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: f === "rp" ? "rgba(220,38,38,0.1)" : "rgba(217,119,6,0.1)", color: f === "rp" ? CRITICAL : WARNING }}>
+                            <span key={f} className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: f === "rp" ? "var(--cc-status-danger-bg)" : "var(--cc-status-warning-bg)", color: f === "rp" ? CRITICAL : WARNING }}>
                               {f === "rp" ? translate("compliance.centre.participants.flagRp") : f === "agreement" ? translate("compliance.centre.participants.flagAgreement") : translate("compliance.centre.participants.flagGoal")}
                             </span>
                           ))}
@@ -975,8 +980,8 @@ function ParticipantsPanel() {
       </Card>
 
       {unsignedExample && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-danger-bg)" }}>
             <ShieldAlert size={16} style={{ color: CRITICAL }} />
           </span>
           <div>
@@ -1124,8 +1129,8 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
             </div>
 
             {incident.ndis_reportable && (
-              <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+              <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-danger-bg)" }}>
                   <ShieldAlert size={16} style={{ color: CRITICAL }} />
                 </span>
                 <div className="min-w-0">
@@ -1193,122 +1198,86 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
 function IncidentsPanel() {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "incidents"], queryFn: getComplianceCentreIncidents });
-  const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
+
+  const triggered = useMemo(() => {
+    const rows = data?.incidents ?? [];
+    return rows.filter((inc) =>
+      /auto-detect|compliance engine/i.test(inc.description || "") ||
+      inc.incident_type === "restrictive_practice" ||
+      inc.incident_type === "medication_error",
+    );
+  }, [data?.incidents]);
+
+  const typeLabel = (type: string) => {
+    if (type === "restrictive_practice") return translate("compliance.centre.incidents.restrictivePractice");
+    if (type === "medication_error") return translate("incidents.type.medicationError");
+    return type.replace(/_/g, " ");
+  };
+
+  const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      reported: translate("compliance.centre.incidents.statusReported"),
+      under_investigation: translate("compliance.centre.incidents.statusUnderInvestigation"),
+      resolved: translate("compliance.centre.incidents.statusResolved"),
+      closed: translate("compliance.centre.incidents.statusClosed"),
+    };
+    return map[status] ?? status.replace(/_/g, " ");
+  };
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
-  function actionFor(incident: NonNullable<typeof data>["incidents"][number]) {
-    if (incident.status !== "closed" && incident.incident_type === "restrictive_practice") {
-      return (
-        <Link href={`/incident-new?participant_id=${incident.id}&type=restrictive_practice`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: CRITICAL, background: "rgba(220,38,38,0.08)" }}>
-            <FilePlus size={13} /> {translate("compliance.centre.incidents.fileReport")}
-          </span>
-        </Link>
-      );
-    }
-    if (incident.status === "closed") {
-      return (
-        <Link href={`/incident/${incident.id}`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
-            <FileText size={13} /> {translate("compliance.centre.incidents.viewReport")}
-          </span>
-        </Link>
-      );
-    }
-    return (
-      <Link href={`/incident/${incident.id}`}>
-        <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
-          <Eye size={13} /> {translate("compliance.centre.incidents.review")}
-        </span>
-      </Link>
-    );
-  }
-
   return (
     <div className="space-y-5">
+      <div className="rounded-xl border px-4 py-3 flex gap-3" style={{ borderColor: BORDER, background: "var(--cc-status-warning-bg)" }}>
+        <Info size={18} className="shrink-0 mt-0.5" style={{ color: "var(--cc-status-warning)" }} />
+        <div>
+          <p className="text-sm font-bold" style={{ color: "var(--cc-status-warning)" }}>{translate("compliance.centre.incidents.complianceOnlyTitle")}</p>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>
+            {translate("compliance.centre.incidents.complianceOnlyBody")}{" "}
+            <Link href="/incidents" className="font-bold text-[var(--cc-plum)] hover:underline inline-flex items-center gap-0.5">
+              {translate("compliance.centre.incidents.goToRegister")} <ArrowRight size={12} />
+            </Link>
+          </p>
+        </div>
+      </div>
+
       <KpiGrid>
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
       </KpiGrid>
 
-      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[13px]">
-            <thead>
-              <tr style={{ background: TEXT }}>
-                {[
-                  translate("compliance.centre.incidents.colDate"),
-                  translate("compliance.centre.incidents.colWorker"),
-                  translate("compliance.centre.incidents.colParticipant"),
-                  translate("compliance.centre.incidents.colType"),
-                  translate("compliance.centre.incidents.colDescription"),
-                  translate("compliance.centre.incidents.colStatus"),
-                  translate("compliance.centre.incidents.colAction"),
-                  "",
-                ].map((h, i) => (
-                  <th key={h || `h${i}`} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {(data?.incidents ?? []).map((inc, idx) => (
-                <tr key={inc.id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{String(inc.incident_date).slice(0, 10)}</td>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.worker_name}</td>
-                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.participant_name}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge
-                      label={inc.incident_type === "restrictive_practice" ? translate("compliance.centre.incidents.restrictivePractice") : inc.incident_type.replace(/_/g, " ")}
-                      tone={inc.ndis_reportable ? "rd" : "am"}
-                    />
-                  </td>
-                  <td className="px-3 py-3 text-[12px] max-w-[220px] truncate" style={{ color: MUTED }} title={inc.description}>{inc.description}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge label={inc.status.replace(/_/g, " ")} tone={inc.status === "closed" ? "gn" : inc.status === "under_investigation" ? "am" : "rd"} />
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">{actionFor(inc)}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate("compliance.centre.actions.menuLabel")}
-                          className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
-                          style={{ color: MUTED }}
-                        >
-                          <MoreVertical size={15} />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
-                          <Eye size={15} /> {translate("compliance.centre.incidents.kebabReviewStatus")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
-                          <Clock size={15} /> {translate("compliance.centre.incidents.kebabAuditTrail")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href={`/incident/${inc.id}`} className="flex items-center gap-2">
-                            <ExternalLink size={15} /> {translate("compliance.centre.incidents.kebabOpenReport")}
-                          </Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-              {(data?.incidents.length ?? 0) === 0 && (
-                <tr><td colSpan={8}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
-              )}
-            </tbody>
-          </table>
+      {triggered.length === 0 ? (
+        <EmptyState label={translate("compliance.centre.incidents.noIncidents")} />
+      ) : (
+        <div className="space-y-3">
+          {triggered.map((inc) => (
+            <IncidentAccordionCard
+              key={inc.id}
+              incident={{
+                id: inc.id,
+                title: inc.description?.slice(0, 60) || inc.incident_type,
+                description: inc.description,
+                incident_type: inc.incident_type,
+                severity: inc.ndis_reportable ? "critical" : "medium",
+                status: inc.status,
+                incident_date: String(inc.incident_date),
+                participant_name: inc.participant_name,
+                worker_name: inc.worker_name,
+                ndis_reportable: inc.ndis_reportable,
+                ndis_pending: inc.ndis_reportable && inc.status !== "closed",
+                auto_detected: true,
+              }}
+              typeLabel={typeLabel(inc.incident_type)}
+              statusLabel={statusLabel(inc.status)}
+              translate={translate}
+              showFlaggedNote
+              onViewFull={(id) => { window.location.assign(`/incidents/${id}`); }}
+              onCompleteReport={(id) => { window.location.assign(`/incidents/${id}`); }}
+              onAddNote={(id) => { window.location.assign(`/incidents/${id}`); }}
+            />
+          ))}
         </div>
-      </Card>
-
-      {openIncidentId && (
-        <IncidentDetailDrawer incidentId={openIncidentId} onClose={() => setOpenIncidentId(null)} />
       )}
     </div>
   );
