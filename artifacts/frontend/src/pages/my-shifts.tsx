@@ -19,11 +19,12 @@ import {
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 
-type CountFilter = "today" | "upcoming" | "completed" | "cancelled";
+type ShiftSeg = "today" | "upcoming" | "past";
 
-const FILTER_TABS: { id: CountFilter; labelKey: string }[] = [
+const FILTER_TABS: { id: ShiftSeg; labelKey: string }[] = [
   { id: "today", labelKey: "shifts.filter.today" },
-  { id: "completed", labelKey: "shifts.filter.completed" },
+  { id: "upcoming", labelKey: "shifts.filter.upcoming" },
+  { id: "past", labelKey: "shifts.filter.past" },
 ];
 
 function shiftMinutes(shift: WorkerShift): number {
@@ -63,7 +64,7 @@ export default function MyShifts() {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [nowTick, setNowTick] = useState(0);
-  const [activeFilter, setActiveFilter] = useState<CountFilter>("today");
+  const [activeFilter, setActiveFilter] = useState<ShiftSeg>("today");
 
   const refreshPendingCount = useCallback(async () => {
     const actions = await listPendingActions();
@@ -103,16 +104,24 @@ export default function MyShifts() {
     queryFn: () => getWorkerShifts("today"),
   });
 
-  const filterQuery = useOrgQuery(["worker", "shifts", activeFilter], {
-    queryFn: () => getWorkerShifts(activeFilter),
-    enabled: activeFilter !== "today",
+  const upcomingQuery = useOrgQuery(["worker", "shifts", "upcoming"], {
+    queryFn: () => getWorkerShifts("upcoming"),
+  });
+
+  const pastQuery = useOrgQuery(["worker", "shifts", "past"], {
+    queryFn: () => getWorkerShifts("past"),
   });
 
   const countsQuery = useOrgQuery(["worker", "shifts", "counts"], {
     queryFn: () => getWorkerShiftCounts(),
   });
 
-  const listQuery = activeFilter === "today" ? todayQuery : filterQuery;
+  const listQuery =
+    activeFilter === "today"
+      ? todayQuery
+      : activeFilter === "upcoming"
+        ? upcomingQuery
+        : pastQuery;
   const counts = countsQuery.data?.counts;
 
   const firstName = (user?.full_name || translate("hub.header.greetingFallback")).split(" ")[0];
@@ -132,12 +141,24 @@ export default function MyShifts() {
   const { sortedShifts, primaryShiftId } = useMemo(() => {
     const list = listQuery.data?.shifts ?? [];
     void nowTick;
+    if (activeFilter !== "today") {
+      return { sortedShifts: list, primaryShiftId: null as string | null };
+    }
     const now = new Date();
     return {
       sortedShifts: sortTodayShiftsForList(list, now),
       primaryShiftId: getPrimaryTodayShiftId(list, now),
     };
-  }, [listQuery.data?.shifts, nowTick]);
+  }, [listQuery.data?.shifts, nowTick, activeFilter]);
+
+  const tabCount = useCallback(
+    (id: ShiftSeg): number => {
+      if (id === "today") return counts?.today ?? 0;
+      if (id === "upcoming") return counts?.upcoming ?? 0;
+      return pastQuery.data?.shifts.length ?? 0;
+    },
+    [counts?.today, counts?.upcoming, pastQuery.data?.shifts.length],
+  );
 
   return (
     <div className="space-y-4 pb-6">
@@ -170,11 +191,10 @@ export default function MyShifts() {
         </div>
       </div>
 
-      {/* Filter tabs */}
       <div className="flex items-center gap-1 rounded-full bg-cc-soft p-1">
         {FILTER_TABS.map(({ id, labelKey }) => {
           const active = activeFilter === id;
-          const count = counts?.[id] ?? 0;
+          const count = tabCount(id);
           return (
             <button
               key={id}

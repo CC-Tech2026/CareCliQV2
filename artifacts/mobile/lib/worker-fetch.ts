@@ -2,6 +2,7 @@ import { getMobileApiBaseUrl } from "@/lib/api-base-url";
 import { readMobileAuthToken } from "@/lib/session";
 
 let lastSuccessfulWorkerFetchAt = 0;
+let unauthorizedHandler: (() => void) | null = null;
 
 export function getLastSuccessfulWorkerFetchAt(): number {
   return lastSuccessfulWorkerFetchAt;
@@ -9,6 +10,11 @@ export function getLastSuccessfulWorkerFetchAt(): number {
 
 export function touchSuccessfulWorkerFetch(): void {
   lastSuccessfulWorkerFetchAt = Date.now();
+}
+
+/** Called once from AuthProvider so expired tokens clear the session instead of crashing. */
+export function setWorkerUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
 }
 
 export class WorkerApiError extends Error {
@@ -19,6 +25,31 @@ export class WorkerApiError extends Error {
     super(message);
     this.name = "WorkerApiError";
   }
+}
+
+function formatApiErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return null;
+      })
+      .filter((part): part is string => Boolean(part?.trim()));
+    if (parts.length) return parts.join(". ");
+  }
+  if (detail && typeof detail === "object" && "msg" in detail) {
+    const msg = String((detail as { msg: unknown }).msg ?? "").trim();
+    if (msg) return msg;
+  }
+  return fallback;
+}
+
+function isAuthEndpoint(path: string): boolean {
+  return path.startsWith("/api/auth/");
 }
 
 export async function workerFetch<T>(
@@ -39,22 +70,32 @@ export async function workerFetch<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  if (init.body && !headers["Content-Type"]) {
+  if (init.body && !headers["Content-Type"] && !(init.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers,
-  });
+  const url = `${base}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers,
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Network request failed";
+    throw new WorkerApiError(`${reason} → ${url}`, 0);
+  }
 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
-      const body = (await response.json()) as { detail?: string; message?: string };
-      message = body.detail ?? body.message ?? message;
+      const body = (await response.json()) as { detail?: unknown; message?: string };
+      message = formatApiErrorDetail(body.detail, body.message ?? message);
     } catch {
       /* use default */
+    }
+    if (response.status === 401 && !isAuthEndpoint(path)) {
+      unauthorizedHandler?.();
     }
     throw new WorkerApiError(message, response.status);
   }

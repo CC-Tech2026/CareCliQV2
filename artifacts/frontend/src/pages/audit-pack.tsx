@@ -21,13 +21,15 @@ const PLUM  = "var(--cc-plum)";
 const TEXT  = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT  = "#F4EDE6";
+const SOFT  = "var(--cc-soft)";
+const SURFACE = "var(--cc-surface)";
+const CARD_SHADOW = "var(--cc-card-shadow)";
 
 function complianceColour(score?: number | null) {
   if (score == null) return MUTED;
-  if (score >= 85) return "#16A34A";
-  if (score >= 60) return "#D97706";
-  return "#DC2626";
+  if (score >= 85) return "var(--cc-status-success)";
+  if (score >= 60) return "var(--cc-status-warning)";
+  return "var(--cc-status-danger)";
 }
 
 function complianceTone(score?: number | null): StatTone {
@@ -39,9 +41,9 @@ function complianceTone(score?: number | null): StatTone {
 
 function TrendIcon({ score }: { score?: number | null }) {
   if (score == null) return <Minus size={14} color={MUTED} />;
-  if (score >= 85) return <TrendingUp size={14} color="#16A34A" />;
-  if (score >= 60) return <Minus size={14} color="#D97706" />;
-  return <TrendingDown size={14} color="#DC2626" />;
+  if (score >= 85) return <TrendingUp size={14} color="var(--cc-status-success)" />;
+  if (score >= 60) return <Minus size={14} color="var(--cc-status-warning)" />;
+  return <TrendingDown size={14} color="var(--cc-status-danger)" />;
 }
 
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
@@ -183,7 +185,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
             style={{
               background: activeTab === t.key ? "var(--cc-bg)" : "transparent",
               color: activeTab === t.key ? PLUM : MUTED,
-              boxShadow: activeTab === t.key ? "0 1px 3px rgba(55,48,163,0.12)" : "none",
+              boxShadow: activeTab === t.key ? "var(--cc-shadow-sm)" : "none",
             }}
           >
             {t.label}
@@ -193,7 +195,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
       {/* -- Summary tab -- */}
       {activeTab === "summary" && (
-        <section className="rounded-2xl bg-white p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl p-5 space-y-3" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
           <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>{translate("auditPack.rpFlagsTitle")}</h2>
           {(compliance.error || flags.error) && <p className="text-sm text-red-600">{translate("auditPack.loadError")}</p>}
           {(flags.data || []).length === 0 ? (
@@ -201,7 +203,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
           ) : (
             <div className="space-y-2">
               {(flags.data || []).map((flag, index) => (
-                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EDE3FC" }}>
+                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: BORDER }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || translate("common.participant")}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
@@ -224,7 +226,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
             <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
           ) : engagement.data ? (
             <>
-              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <section className="rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
                   Engagement compliance (Check 16)
                 </h2>
@@ -249,7 +251,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                 </div>
               </section>
 
-              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <section className="rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
                   Section 3a: Long shift engagement log
                 </h2>
@@ -271,7 +273,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                 </div>
               </section>
 
-              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <section className="rounded-2xl p-5" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
                   Billable vs billed hours
                 </h2>
@@ -300,7 +302,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
       {/* -- Worker performance tab -- */}
       {activeTab === "workers" && (
-        <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl overflow-hidden" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("auditPack.workerPerformanceTitle")}</h2>
           </div>
@@ -346,7 +348,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
       {/* -- Flagged sessions tab -- */}
       {activeTab === "flagged" && (
-        <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl overflow-hidden" style={{ background: SURFACE, boxShadow: CARD_SHADOW }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("auditPack.flaggedSessionsTitle")}</h2>
           </div>

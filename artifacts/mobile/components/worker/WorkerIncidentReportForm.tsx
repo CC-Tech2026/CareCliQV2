@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
   BEHAVIOUR_SUBTYPES,
@@ -70,6 +71,7 @@ export function WorkerIncidentReportForm({
   onCancel,
 }: Props) {
   const colors = useColors();
+  const t = useT();
   const [reportType, setReportType] = useState(initialReportType);
   const [behaviourSubtype, setBehaviourSubtype] = useState(initialBehaviourSubtype);
   const [severity, setSeverity] = useState(initialSeverity);
@@ -83,6 +85,7 @@ export function WorkerIncidentReportForm({
 
   const descLen = description.trim().length;
   const canSubmit = descLen >= 20 && descLen <= 2000 && !submitting;
+  const counterColor = descLen < 20 || descLen > 2000 ? colors.accent : colors.mutedForeground;
 
   const applyBehaviourSubtype = (subtype: string) => {
     setBehaviourSubtype(subtype);
@@ -168,19 +171,19 @@ export function WorkerIncidentReportForm({
       <View style={[styles.confirmCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
         <Feather name="check-circle" size={32} color={colors.primary} />
         <Text style={[styles.confirmTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          Incident report submitted
+          {t("incidents.form.submitted")}
         </Text>
         <Text style={[styles.confirmRef, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
           {confirmationRef}
         </Text>
         <Text style={[styles.confirmHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          Keep this reference number for your records.
+          {t("incidents.form.keepRef")}
         </Text>
         <Pressable
           onPress={onCancel}
           style={[styles.submitBtn, { backgroundColor: colors.primary }]}
         >
-          <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>Done</Text>
+          <Text style={[styles.submitText, { fontFamily: "Inter_600SemiBold" }]}>{t("common.done")}</Text>
         </Pressable>
       </View>
     );
@@ -190,18 +193,21 @@ export function WorkerIncidentReportForm({
     active,
     label,
     onPress,
+    flex,
   }: {
     active: boolean;
     label: string;
     onPress: () => void;
+    flex?: boolean;
   }) => (
     <Pressable
       onPress={onPress}
       style={[
         styles.chip,
+        flex && styles.chipFlex,
         {
           borderColor: active ? colors.primary : colors.border,
-          backgroundColor: active ? colors.activeBg : colors.background,
+          backgroundColor: active ? colors.activeBg : colors.card,
         },
       ]}
     >
@@ -210,7 +216,7 @@ export function WorkerIncidentReportForm({
           styles.chipText,
           {
             color: active ? colors.primary : colors.foreground,
-            fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
+            fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
           },
         ]}
       >
@@ -224,91 +230,113 @@ export function WorkerIncidentReportForm({
       style={styles.scroll}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
+      <Text style={[styles.intro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("incidents.form.intro")}
+      </Text>
+
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        REPORT TYPE
+        {t("incidents.form.reportType")}
       </Text>
       <View style={styles.chipRow}>
-        {WORKER_REPORT_TYPES.map((t) => (
-          <Chip key={t.value} active={reportType === t.value} label={t.label} onPress={() => setReportType(t.value)} />
+        {WORKER_REPORT_TYPES.map((item) => (
+          <Chip
+            key={item.value}
+            active={reportType === item.value}
+            label={item.label}
+            onPress={() => setReportType(item.value)}
+          />
         ))}
       </View>
 
-      {reportType === "participant_behaviour" && (
+      {reportType === "participant_behaviour" ? (
         <>
           <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            BEHAVIOUR TYPE
+            {t("incidents.form.behaviourType")}
           </Text>
           <View style={styles.chipRow}>
-            {BEHAVIOUR_SUBTYPES.map((t) => (
+            {BEHAVIOUR_SUBTYPES.map((item) => (
               <Chip
-                key={t.value}
-                active={behaviourSubtype === t.value}
-                label={t.label}
-                onPress={() => applyBehaviourSubtype(t.value)}
+                key={item.value}
+                active={behaviourSubtype === item.value}
+                label={item.label}
+                onPress={() => applyBehaviourSubtype(item.value)}
               />
             ))}
           </View>
         </>
-      )}
+      ) : null}
 
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        SEVERITY
+        {t("incidents.form.severity")}
       </Text>
-      <View style={styles.chipRow}>
-        {WORKER_SEVERITIES.map((s) => (
-          <Chip key={s.value} active={severity === s.value} label={s.label} onPress={() => setSeverity(s.value)} />
+      <View style={styles.severityRow}>
+        {WORKER_SEVERITIES.map((item) => (
+          <Chip
+            key={item.value}
+            flex
+            active={severity === item.value}
+            label={item.label}
+            onPress={() => setSeverity(item.value)}
+          />
         ))}
       </View>
 
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        WHAT HAPPENED
+        {t("incidents.form.whatHappened")}
       </Text>
       <TextInput
         value={description}
         onChangeText={setDescription}
-        placeholder="Describe what happened, when, and who was involved…"
+        placeholder={t("incidents.form.whatHappenedPlaceholder")}
         placeholderTextColor={colors.mutedForeground}
         multiline
         maxLength={2000}
         style={[
           styles.textArea,
-          { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground, fontFamily: "Inter_400Regular" },
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            color: colors.foreground,
+            fontFamily: "Inter_400Regular",
+          },
         ]}
       />
-      <Text
-        style={[
-          styles.counter,
-          { color: descLen < 20 || descLen > 2000 ? colors.destructive : colors.mutedForeground, fontFamily: "Inter_500Medium" },
-        ]}
-      >
-        {descLen}/2000 {descLen < 20 ? "(minimum 20)" : ""}
+      <Text style={[styles.counter, { color: counterColor, fontFamily: "Inter_500Medium" }]}>
+        {descLen}/2000{descLen < 20 ? ` ${t("incidents.form.minChars")}` : ""}
       </Text>
 
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        ACTIONS TAKEN
+        {t("incidents.form.actionsTaken")}
       </Text>
       <TextInput
         value={workerActions}
         onChangeText={setWorkerActions}
-        placeholder="What did you do in response?"
+        placeholder={t("incidents.form.actionsPlaceholder")}
         placeholderTextColor={colors.mutedForeground}
         multiline
         maxLength={1000}
         style={[
           styles.textArea,
-          { minHeight: 60, borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground, fontFamily: "Inter_400Regular" },
+          {
+            minHeight: 60,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            color: colors.foreground,
+            fontFamily: "Inter_400Regular",
+          },
         ]}
       />
 
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        WAS THE PARTICIPANT PRESENT?
+        {t("incidents.form.participantPresent")}
       </Text>
       <View style={styles.chipRow}>
-        <Chip active={participantPresent === true} label="Yes" onPress={() => setParticipantPresent(true)} />
+        <Chip active={participantPresent === true} label={t("common.yes")} onPress={() => setParticipantPresent(true)} />
         <Chip
           active={participantPresent === false}
-          label="No"
+          label={t("common.no")}
           onPress={() => {
             setParticipantPresent(false);
             setParticipantHarmed("");
@@ -316,26 +344,26 @@ export function WorkerIncidentReportForm({
         />
       </View>
 
-      {participantPresent && (
+      {participantPresent ? (
         <>
           <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            WAS THE PARTICIPANT HARMED?
+            {t("incidents.form.participantHarmed")}
           </Text>
           <View style={styles.chipRow}>
             {(["yes", "no", "unknown"] as const).map((v) => (
               <Chip
                 key={v}
                 active={participantHarmed === v}
-                label={v === "yes" ? "Yes" : v === "no" ? "No" : "Unknown"}
+                label={v === "yes" ? t("common.yes") : v === "no" ? t("common.no") : t("common.unknown")}
                 onPress={() => setParticipantHarmed(v)}
               />
             ))}
           </View>
         </>
-      )}
+      ) : null}
 
       <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        PHOTOS (OPTIONAL)
+        {t("incidents.form.photos")}
       </Text>
       <View style={styles.photoRow}>
         {photos.map((photo, i) => (
@@ -349,26 +377,28 @@ export function WorkerIncidentReportForm({
             </Pressable>
           </View>
         ))}
-        {photos.length < 3 && (
+        {photos.length < 3 ? (
           <Pressable
             onPress={handleCapturePhoto}
-            style={[styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.background }]}
+            style={[styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.card }]}
           >
             <Feather name="camera" size={20} color={colors.mutedForeground} />
           </Pressable>
-        )}
+        ) : null}
       </View>
 
       <Pressable
         onPress={handleSubmit}
         disabled={!canSubmit}
-        style={[styles.submitBtn, { backgroundColor: colors.destructive, opacity: canSubmit ? 1 : 0.5 }]}
+        style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.5 }]}
       >
         {submitting ? (
           <ActivityIndicator color="#FFFFFF" size="small" />
         ) : (
-          <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>
-            {participantName ? `Submit report for ${participantName}` : "Submit incident report"}
+          <Text style={[styles.submitText, { fontFamily: "Inter_600SemiBold" }]}>
+            {participantName
+              ? t("incidents.form.submitFor", { name: participantName })
+              : t("incidents.form.submit")}
           </Text>
         )}
       </Pressable>
@@ -378,26 +408,35 @@ export function WorkerIncidentReportForm({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { padding: 16, gap: 8, paddingBottom: 40 },
-  label: { fontSize: 11, letterSpacing: 0.6, marginTop: 8 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1,
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 6 },
+  intro: { fontSize: 12, marginBottom: 6, lineHeight: 18 },
+  label: {
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: 6,
   },
-  chipText: { fontSize: 13 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  severityRow: { flexDirection: "row", gap: 6, marginBottom: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  chipFlex: { flex: 1, alignItems: "center", paddingHorizontal: 0, paddingVertical: 8 },
+  chipText: { fontSize: 12 },
   textArea: {
-    minHeight: 100,
+    minHeight: 84,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
-    fontSize: 14,
+    fontSize: 13,
     textAlignVertical: "top",
   },
-  counter: { fontSize: 11, textAlign: "right" },
-  photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  counter: { fontSize: 10, textAlign: "right", marginBottom: 8 },
+  photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 4 },
   photoWrap: { width: 64, height: 64 },
   photo: { width: 64, height: 64, borderRadius: 10 },
   photoRemove: {
@@ -418,13 +457,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   submitBtn: {
-    marginTop: 16,
-    height: 50,
-    borderRadius: 14,
+    marginTop: 10,
+    height: 46,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
-  submitText: { color: "#FFFFFF", fontSize: 15 },
+  submitText: { color: "#FFFFFF", fontSize: 14 },
   confirmCard: {
     margin: 16,
     padding: 24,

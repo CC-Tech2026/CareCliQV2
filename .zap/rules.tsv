@@ -1,0 +1,10 @@
+# ZAP alert rules — MUST use TAB between columns (not spaces).
+# Format: <rule_id>	<action>	<optional comment>
+# Actions: IGNORE | WARN | FAIL
+#
+# Common noisy / environment-specific alerts for SPA + CI HTTP scan:
+
+10096	IGNORE	(Timestamp Disclosure - info; often false positive on static assets)
+10109	IGNORE	(Modern Web Application - informational)
+10027	IGNORE	(Information Disclosure - Suspicious Comments)
+10049	IGNORE	(Non-Storable Content - informational for SPA)

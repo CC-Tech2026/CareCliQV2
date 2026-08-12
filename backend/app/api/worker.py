@@ -7,14 +7,25 @@ from datetime import date, datetime, timedelta
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
+from ..core.timezone import app_today, shift_local_date
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
+from ..services import (
+    ai_service,
+    audit_service,
+    evidence_upload_service,
+    funding_service,
+    goals_service,
+    participant_service,
+    session_service,
+    shift_service,
+    travel_expense_service,
+)
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
@@ -244,15 +255,76 @@ def _safe_json(value: Any) -> Any:
     return value if value is not None else {}
 
 
+def _session_compliance_score(session: dict) -> float | None:
+    """Prefer sessions.compliance_score; fall back to end_validation / task validation."""
+    raw = session.get("compliance_score")
+    if raw is not None:
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            pass
+    end_validation = _safe_json(session.get("end_validation"))
+    if isinstance(end_validation, dict) and end_validation.get("compliance_score") is not None:
+        try:
+            return float(end_validation["compliance_score"])
+        except (TypeError, ValueError):
+            pass
+    tasks = session.get("tasks")
+    if isinstance(tasks, list) and tasks:
+        try:
+            from ..services.shift_validation_service import compute_shift_validation
+
+            derived = compute_shift_validation(tasks).get("compliance_score")
+            if derived is not None:
+                return float(derived)
+        except Exception:
+            return None
+    return None
+
+
+def _session_calendar_date(session: dict) -> str:
+    """Care-day for compliance trend/history.
+
+    Prefer APP_TIMEZONE local day of start_time so Score Trend / Session History
+    match Shifts → Past (scheduled_start local). session_date alone can be a day
+    early when stored from a UTC timestamptz cast. Overnight completions finished
+    today still map onto Today.
+    """
+    today = app_today()
+    care: date | None = shift_local_date(session.get("start_time"))
+    if care is None:
+        session_day = _date_part(session.get("session_date"))
+        if session_day:
+            try:
+                care = date.fromisoformat(session_day)
+            except ValueError:
+                care = None
+
+    if str(session.get("status") or "").lower() == "completed":
+        completed_local: date | None = None
+        for key in ("completed_at", "updated_at", "end_time"):
+            completed_local = shift_local_date(session.get(key))
+            if completed_local:
+                break
+        if completed_local == today:
+            if care is None or care == today or care == today - timedelta(days=1):
+                return today.isoformat()
+
+    if care is not None:
+        return care.isoformat()
+    local = shift_local_date(session.get("created_at"))
+    return local.isoformat() if local else ""
+
+
 def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
     """Daily average compliance scores for the last N days (inclusive of today)."""
     days = max(1, min(days, 90))
-    start = date.today() - timedelta(days=days - 1)
+    start = app_today() - timedelta(days=days - 1)
     day_scores: dict[str, list[float]] = defaultdict(list)
     day_counts: dict[str, int] = defaultdict(int)
 
     for session in sessions:
-        session_day = _date_part(session.get("session_date"))
+        session_day = _session_calendar_date(session)
         if not session_day:
             continue
         try:
@@ -261,8 +333,9 @@ def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
         except ValueError:
             continue
         day_counts[session_day] += 1
-        if session.get("compliance_score") is not None:
-            day_scores[session_day].append(float(session["compliance_score"]))
+        score = _session_compliance_score(session)
+        if score is not None:
+            day_scores[session_day].append(score)
 
     trend: list[dict] = []
     for offset in range(days):
@@ -277,10 +350,15 @@ def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
 
 
 async def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
-    """Return rules from the most recently checked scored session."""
+    """Return rules from the newest scored session that has a rule breakdown.
+
+    Sessions can have compliance_score from end_validation / task checks without
+    R1–R12 results. Walk newest-first so the UI does not show all-pending rules
+    while an average score still exists from older engine runs.
+    """
     scored = [
         s for s in sessions
-        if s.get("compliance_score") is not None
+        if _session_compliance_score(s) is not None
     ]
     if not scored:
         return [], None
@@ -289,25 +367,30 @@ async def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | 
         return str(
             session.get("compliance_checked_at")
             or session.get("updated_at")
+            or _session_calendar_date(session)
             or session.get("session_date")
             or ""
         )
 
-    latest = sorted(scored, key=_sort_key, reverse=True)[0]
-    session_id = str(latest.get("id"))
-    insights = _safe_json(latest.get("ai_insights"))
-    rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
-    rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
-    if isinstance(rules, list) and rules:
-        return rules, session_id
+    for session in sorted(scored, key=_sort_key, reverse=True):
+        session_id = str(session.get("id") or "")
+        if not session_id:
+            continue
 
-    logs = await funding_service.get_compliance_audit_logs(session_id)
-    if logs:
-        all_rules = logs[0].get("all_rules")
-        if isinstance(all_rules, list) and all_rules:
-            return all_rules, session_id
+        insights = _safe_json(session.get("ai_insights"))
+        rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
+        rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
+        if isinstance(rules, list) and rules:
+            return rules, session_id
 
-    return [], session_id
+        logs = await funding_service.get_compliance_audit_logs(session_id)
+        if logs:
+            all_rules = logs[0].get("all_rules")
+            if isinstance(all_rules, list) and all_rules:
+                return all_rules, session_id
+
+    latest_id = str(sorted(scored, key=_sort_key, reverse=True)[0].get("id") or "") or None
+    return [], latest_id
 
 
 def _limited_participant(participant: dict) -> dict:
@@ -339,17 +422,18 @@ def _limited_participant(participant: dict) -> dict:
 
 def _session_payload(session: dict) -> dict:
     note_text = session.get("translated_english_note") or session.get("compliance_input_text") or session.get("notes")
+    score = _session_compliance_score(session)
     return {
         "id": session.get("id"),
         "participant_id": session.get("participant_id") or session.get("patient_id"),
-        "session_date": session.get("session_date"),
+        "session_date": _session_calendar_date(session) or session.get("session_date"),
         "session_type": session.get("session_type"),
         "duration_minutes": session.get("duration_minutes"),
         "status": session.get("status"),
         "notes": note_text,
         "legal_record_text": session.get("legal_record_text") or note_text,
-        "compliance_score": session.get("compliance_score"),
-        "compliance_status": _score_status(session.get("compliance_score")),
+        "compliance_score": score,
+        "compliance_status": _score_status(score),
         "goals_addressed": session.get("goals_addressed") or [],
         "translation_status": session.get("translation_status"),
         # SCRUM-226
@@ -486,12 +570,21 @@ async def my_compliance(
     current_user: dict = Depends(get_current_user),
 ):
     _require_worker(current_user)
-    sessions = await session_service.get_all_sessions(500, current_user)
-    scored = [s for s in sessions if s.get("compliance_score") is not None]
-    scores = [float(s["compliance_score"]) for s in scored]
+    sessions = await session_service.get_worker_own_sessions(current_user, limit=500)
+    sessions = sorted(
+        sessions,
+        key=lambda s: (
+            _session_calendar_date(s) or "",
+            str(s.get("updated_at") or s.get("created_at") or ""),
+        ),
+        reverse=True,
+    )
+    scored = [s for s in sessions if _session_compliance_score(s) is not None]
+    scores = [_session_compliance_score(s) for s in scored]
+    scores = [float(v) for v in scores if v is not None]
     average = round(sum(scores) / len(scores), 1) if scores else 0
     compliant_sessions = sum(
-        1 for session in scored if _score_status(session.get("compliance_score")) == "compliant"
+        1 for session in scored if _score_status(_session_compliance_score(session)) == "compliant"
     )
     session_payloads = [_session_payload(session) for session in sessions]
     total_sessions = len(session_payloads)
@@ -519,9 +612,9 @@ async def worker_compliance_detail(
 ):
     """Real-time compliance score, 12-rule breakdown, red flags, and daily trend."""
     _require_worker(current_user)
-    sessions = await session_service.get_all_sessions(500, current_user)
-    scored = [s for s in sessions if s.get("compliance_score") is not None]
-    scores = [float(s["compliance_score"]) for s in scored]
+    sessions = await session_service.get_worker_own_sessions(current_user, limit=500)
+    scored = [s for s in sessions if _session_compliance_score(s) is not None]
+    scores = [float(v) for v in (_session_compliance_score(s) for s in scored) if v is not None]
     average = round(sum(scores) / len(scores), 1) if scores else 0
 
     raw_rules, _ = await _latest_rule_results(sessions)
@@ -632,14 +725,21 @@ async def create_my_client_note(
 @router.get("/shifts")
 async def worker_shifts(
     filter: str = Query(default="today", alias="filter"),
+    limit: Optional[int] = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
     """List shifts for the authenticated support worker (CARECLIQV2-116)."""
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
-    shifts = shift_service.list_shifts_for_worker(worker_id, org_id, filter)
-    return {"shifts": shifts, "filter": filter}
+    return shift_service.list_shifts_for_worker(
+        worker_id,
+        org_id,
+        filter,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/shifts/counts")
@@ -1099,18 +1199,7 @@ async def worker_end_shift(
         except Exception as exc:
             logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
 
-    async def _process_task_handover() -> None:
-        """Process task handover when shift ends."""
-        try:
-            from ..services.task_management_service import get_task_management_service
-            service = get_task_management_service()
-            await service.process_shift_handover(shift_id)
-            logger.info(f"Task handover processed for shift {shift_id}")
-        except Exception as exc:
-            logger.warning(f"Task handover failed for shift {shift_id}: {exc}")
-
     background_tasks.add_task(_auto_summary_and_notify)
-    background_tasks.add_task(_process_task_handover)
     return shift
 
 
@@ -1233,6 +1322,49 @@ async def worker_delete_session_note(
         after_state={"note_id": note_id},
     )
     return None
+
+
+@router.post("/sessions/{session_id}/transcribe")
+async def worker_transcribe_session_audio(
+    session_id: str,
+    audio_file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Speech-to-text for worker voice notes. Returns transcript only — does not mutate session notes."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    session_notes = shift_service.list_session_notes(session_id, worker_id, org_id)
+    if session_notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    filename = audio_file.filename or "voice-note.m4a"
+    contents = await audio_file.read()
+    if not contents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file is empty")
+    if len(contents) > 25 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Audio file too large. Maximum size is 25MB.",
+        )
+
+    try:
+        text = await ai_service.transcribe_audio(contents, filename)
+        transcript = (text or "").strip()
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not transcribe audio. Please try again with clearer speech.",
+            )
+        return {"transcript": transcript}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Worker voice note transcription failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Transcription failed. Please try again.",
+        )
 
 
 @router.post("/sessions/{session_id}/evidence")

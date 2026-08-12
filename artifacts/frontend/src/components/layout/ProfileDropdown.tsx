@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { Link } from "wouter";
-import { LogOut, Settings, User, LockKeyhole, Shield } from "lucide-react";
+import { LogOut, Settings, User, LockKeyhole, Shield, HelpCircle } from "lucide-react";
 import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
 import { ProfileThemeToggle } from "@/components/layout/ProfileThemeToggle";
 import {
@@ -97,15 +97,6 @@ export function ProfileDropdown({
             </DropdownMenuItem>
           )}
 
-          {isWorker && (
-            <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
-              <Link href="/worker/privacy" onClick={() => setOpen(false)}>
-                <Shield size={16} strokeWidth={2} />
-                <span>{translate("nav.privacy")}</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
-
           <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
             <Link href="/settings" onClick={() => setOpen(false)}>
               <Settings size={16} strokeWidth={2} />
@@ -118,6 +109,24 @@ export function ProfileDropdown({
               <Link href="/worker/security" onClick={() => setOpen(false)}>
                 <LockKeyhole size={16} strokeWidth={2} />
                 <span>{translate("nav.security")}</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
+
+          {isWorker && (
+            <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
+              <Link href="/worker/privacy" onClick={() => setOpen(false)}>
+                <Shield size={16} strokeWidth={2} />
+                <span>{translate("nav.privacy")}</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
+
+          {isWorker && (
+            <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
+              <Link href="/worker/help" onClick={() => setOpen(false)}>
+                <HelpCircle size={16} strokeWidth={2} />
+                <span>{translate("nav.help")}</span>
               </Link>
             </DropdownMenuItem>
           )}

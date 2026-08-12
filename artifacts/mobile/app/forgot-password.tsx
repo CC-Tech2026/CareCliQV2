@@ -115,7 +115,7 @@ export default function ForgotPasswordScreen() {
               />
             </View>
             {error ? (
-              <Text style={[styles.error, { color: auth.coral, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+              <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
             ) : null}
             <Pressable
               onPress={handleSubmit}

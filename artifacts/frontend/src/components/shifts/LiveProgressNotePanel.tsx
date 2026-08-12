@@ -150,6 +150,7 @@ export function LiveProgressNotePanel({
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [noteToDelete, setNoteToDelete] = useState<SessionNoteRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [offlineVoiceOpen, setOfflineVoiceOpen] = useState(false);
 
   const refreshNotes = useCallback(async () => {
     if (!sessionId || tutorialDemo) return;
@@ -310,6 +311,10 @@ export function LiveProgressNotePanel({
     }
 
     if (typeof window === "undefined") return;
+    if (!online || (typeof navigator !== "undefined" && !navigator.onLine)) {
+      setOfflineVoiceOpen(true);
+      return;
+    }
     const speechWindow = window as unknown as LiveSpeechWindow;
     const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -597,14 +602,39 @@ export function LiveProgressNotePanel({
               type="button"
               onClick={toggleDictation}
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-cc-surface text-white shadow-lg transition hover:scale-[1.02]"
-              style={{ background: isListening ? CORAL : PLUM }}
-              aria-label={isListening ? translate("shift.session.stopDictation") : translate("shift.session.startDictation")}
+              style={{
+                background: isListening ? CORAL : PLUM,
+                opacity: !online && !isListening ? 0.45 : 1,
+              }}
+              aria-label={
+                isListening
+                  ? translate("shift.session.stopDictation")
+                  : !online
+                    ? translate("composer.voice.offlineTitle")
+                    : translate("shift.session.startDictation")
+              }
             >
               {isListening ? <MicOff size={28} /> : <Mic size={30} />}
             </button>
           </div>
         </div>
       )}
+
+      <AlertDialog open={offlineVoiceOpen} onOpenChange={setOfflineVoiceOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{translate("composer.voice.offlineTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {translate("composer.voice.offlineBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setOfflineVoiceOpen(false)}>
+              {translate("common.close")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={Boolean(noteToDelete)} onOpenChange={(open) => !open && !deleting && setNoteToDelete(null)}>
         <AlertDialogContent>

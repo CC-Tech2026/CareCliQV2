@@ -8,22 +8,23 @@ import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WorkerMobileTabBar } from "@/components/worker/WorkerMobileTabBar";
+import type { WorkerMobileTabBarProps } from "@/components/worker/WorkerBottomNav";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
   return (
     <NativeTabs>
+      <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Home</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="shifts">
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
-        <Label>My Shifts</Label>
+        <Icon sf={{ default: "calendar", selected: "calendar" }} />
+        <Label>Shifts</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="compliance">
         <Icon sf={{ default: "shield", selected: "shield.fill" }} />
         <Label>Compliance</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
-        <Label>My Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -39,8 +40,10 @@ function ClassicTabLayout() {
 
   return (
     <Tabs
-      initialRouteName="shifts"
-      tabBar={(props) => <WorkerMobileTabBar {...props} />}
+      initialRouteName="index"
+      tabBar={(props) => (
+        <WorkerMobileTabBar {...(props as unknown as WorkerMobileTabBarProps)} />
+      )}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -50,7 +53,7 @@ function ClassicTabLayout() {
           backgroundColor: isIOS ? "transparent" : colors.background,
           borderTopWidth: 0,
           elevation: 0,
-          height: isWeb ? 84 : 60 + insets.bottom,
+          height: isWeb ? 96 : 72 + insets.bottom,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -72,14 +75,15 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          href: null,
+          title: "Home",
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="shifts"
         options={{
-          title: "My Shifts",
-          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+          title: "Shifts",
+          tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -90,10 +94,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
-          title: "My Profile",
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -108,7 +117,11 @@ function ClassicTabLayout() {
 
 export default function TabLayout() {
   if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
+    return (
+      <NativeTabLayout></NativeTabLayout>
+    );
   }
-  return <ClassicTabLayout />;
+  return (
+    <ClassicTabLayout></ClassicTabLayout>
+  );
 }

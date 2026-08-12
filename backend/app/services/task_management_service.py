@@ -1,4 +1,9 @@
-"""Task management service — handles generation, handover, and completion logic."""
+"""Task management service — legacy task_templates / task_instances helpers.
+
+CARECLIQV2-331: The canonical task model is participant_tasks + shift_tasks.
+Instance generation/handover/completion against task_instances is retired;
+prefer shift_service and coordinator assign_shift paths instead.
+"""
 
 from datetime import datetime, timedelta, time, date
 from typing import Optional

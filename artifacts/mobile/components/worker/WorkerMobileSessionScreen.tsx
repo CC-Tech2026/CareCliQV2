@@ -1,4 +1,4 @@
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -19,6 +19,7 @@ import { WorkerMobileTaskList } from "@/components/worker/WorkerMobileTaskList";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import type {
+  ActiveBreakStatus,
   CheckinWindowStatus,
   SessionNoteRecord,
   ShiftHealthAlert,
@@ -27,6 +28,7 @@ import type {
 import { updateShiftTasks } from "@/lib/worker-api";
 import {
   hasStrongTaskEvidence,
+  isMandatoryTask,
   MIN_EVIDENCE_NOTE_CHARS,
   SESSION_NOTE_MAX,
 } from "@/lib/shift-utils";
@@ -48,6 +50,7 @@ type Props = {
   disabled?: boolean;
   sessionElapsed?: string;
   checkinStatus?: CheckinWindowStatus;
+  breakStatus?: ActiveBreakStatus;
   onCheckin?: () => void;
 };
 
@@ -100,6 +103,7 @@ export function WorkerMobileSessionScreen({
   disabled,
   sessionElapsed,
   checkinStatus,
+  breakStatus,
   onCheckin,
 }: Props) {
   const colors = useColors();
@@ -118,12 +122,18 @@ export function WorkerMobileSessionScreen({
   }, [sessionNotes]);
 
   const activeTasks = useMemo(() => localTasks.filter((t) => !t.marked_na), [localTasks]);
-  const doneCount = activeTasks.filter((t) => t.completed).length;
-  const startedCount = activeTasks.filter((t) => taskStarted(t, localSessionNotes)).length;
+  const mandatoryTasks = useMemo(
+    () => activeTasks.filter((t) => isMandatoryTask(t)),
+    [activeTasks],
+  );
+  const doneMandatory = mandatoryTasks.filter((t) => t.completed).length;
+  const startedMandatory = mandatoryTasks.filter((t) => taskStarted(t, localSessionNotes)).length;
   const progressLabel =
-    doneCount > 0
-      ? `${doneCount} of ${activeTasks.length} done`
-      : `${startedCount} of ${activeTasks.length} started`;
+    mandatoryTasks.length > 0
+      ? doneMandatory > 0
+        ? `${doneMandatory} of ${mandatoryTasks.length} required done`
+        : `${startedMandatory} of ${mandatoryTasks.length} required started`
+      : `${activeTasks.filter((t) => t.completed).length} of ${activeTasks.length} done`;
 
   const activeTask = activeTasks.find((t) => t.task_id === activeTaskId);
 
@@ -157,7 +167,11 @@ export function WorkerMobileSessionScreen({
     const task = localTasks.find((t) => t.task_id === taskId);
     if (!task) return;
 
-    if (!task.completed && !taskHasMobileDocumentation(task, localSessionNotes)) {
+    if (
+      !task.completed &&
+      isMandatoryTask(task) &&
+      !taskHasMobileDocumentation(task, localSessionNotes)
+    ) {
       Alert.alert(
         "Evidence required",
         "Add a note (20+ characters) or photo/voice before marking complete.",
@@ -220,8 +234,12 @@ export function WorkerMobileSessionScreen({
           shiftId={shiftId}
           sessionId={sessionId}
           checkinStatus={checkinStatus}
+          breakStatus={breakStatus}
           sessionElapsed={sessionElapsed}
           onCheckin={onCheckin}
+          onReportIncident={
+            onOpenIncidentReport ? () => onOpenIncidentReport() : undefined
+          }
           disabled={disabled || busy}
         />
 
@@ -239,7 +257,9 @@ export function WorkerMobileSessionScreen({
             activeTaskId={activeTaskId}
             onSelectTask={setActiveTaskId}
             onToggleTask={toggleTask}
-            taskCanComplete={(t) => taskHasMobileDocumentation(t, localSessionNotes)}
+            taskCanComplete={(t) =>
+              !isMandatoryTask(t) || taskHasMobileDocumentation(t, localSessionNotes)
+            }
             disabled={disabled || busy}
           />
         </View>
@@ -262,6 +282,7 @@ export function WorkerMobileSessionScreen({
                 <WorkerMobileNoteBubble
                   key={note.note_id}
                   note={note}
+                  participantName={participantName}
                   taskLabel={task?.label}
                   goalTitle={task?.goal_title ?? undefined}
                   flag={flag}
@@ -277,6 +298,7 @@ export function WorkerMobileSessionScreen({
         sessionId={sessionId}
         taskId={activeTask?.task_id}
         taskLabel={activeTask?.label}
+        participantName={participantName}
         disabled={disabled || busy || !sessionId}
         onNoteSaved={handleNoteSaved}
       />

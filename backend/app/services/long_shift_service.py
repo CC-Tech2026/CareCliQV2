@@ -412,6 +412,7 @@ def _evaluate_checkin_window(
         "checkin_gap_secs": checkin_gap_secs,
         "checkin_cooldown_secs": CHECKIN_COOLDOWN_SECS,
         "checkin_early_window_secs": CHECKIN_EARLY_WINDOW_SECS,
+        "upcoming_checkins": [],
     }
     if not base["applicable"]:
         return base

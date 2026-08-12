@@ -1930,12 +1930,12 @@ function ShiftWorkflow({
         />
       )}
 
-      <SupportInstructionsAccordion
+      {/* <SupportInstructionsAccordion
         instructions={shift.support_instructions}
         open={supportOpen}
         onToggle={() => setSupportOpen(!supportOpen)}
         sectionId="shift-support-instructions"
-      />
+      /> */}
 
       {goalLinkedTaskFeedSection}
 

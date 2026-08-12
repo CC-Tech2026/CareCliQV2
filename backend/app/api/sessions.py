@@ -1321,7 +1321,9 @@ async def transcribe_audio(session_id: str, file: UploadFile = File(...), curren
             raise HTTPException(status_code=404, detail="Session not found")
         contents = await file.read()
         text = await ai_service.transcribe_audio(contents, file.filename)
-        await session_service.update_session(session_id, {"transcription": text, "notes": text}, current_user)
+        # Persist Whisper output on the session transcription field only — do not
+        # overwrite structured progress notes used by the live Notes feed.
+        await session_service.update_session(session_id, {"transcription": text}, current_user)
         return {"transcription": text}
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")

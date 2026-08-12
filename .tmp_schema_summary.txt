@@ -1,0 +1,142 @@
+access_logs	10	id, user_id, participant_id, action, ip_address, purpose, organization_id, created_at, session_id, metadata
+account_deletion_requests	8	id, user_id, organization_id, status, confirmation_text, requested_at, processed_at, coordinator_notified_at
+account_security_tokens	6	id, user_id, token_hash, expires_at, used_at, created_at
+achievement_definitions	4	key, title, description, unlock_criteria
+ai_detected_patterns	14	id, organization_id, pattern_type, severity, title, message, worker_id, participant_id, metadata, detected_at, dismissed_at, dismissed_by, created_at, updated_at
+ai_insights	6	id, session_id, improvements, risks, recommendations, created_at
+ai_summaries	4	id, patient_id, summary, created_at
+alerts	15	id, patient_id, session_id, alert_type, severity, title, message, is_read, created_at, read_at, priority, escalated, created_by, recipient_user_id, organization_id
+announcements	8	id, organization_id, title, body, severity, category, created_by, created_at
+app_support_config	7	id, support_phone, support_email, business_hours_json, outside_hours_message, intercom_app_id, updated_at
+audit_logs	14	id, user_id, action, resource_type, resource_id, details, ip_address, created_at, organization_id, action_type, entity_type, entity_id, before_state, after_state
+billing_periods	10	id, organization_id, participant_id, period_start, period_end, locked_plan_management_type, status, locked_at, created_at, updated_at
+billing_subscriptions	16	id, organization_id, plan_name, status, billing_email, seats, price_cents, currency, renewal_date, payment_provider, external_customer_id, external_subscription_id, notes, updated_by, updated_at, created_at
+budget_transactions	13	id, organization_id, participant_id, plan_id, category, transaction_type, amount_cents, description, ledger_source, reference_id, metadata, created_by, created_at
+budget_usage	11	id, plan_id, session_id, category, amount, hourly_rate, duration_minutes, description, created_at, organization_id, shift_verification_id
+compliance_audit_logs	11	id, session_id, compliance_score, rules_checked, rules_passed, rules_warnings, rules_failed, failed_rules, all_rules, created_at, organization_id
+compliance_checks	5	id, session_id, status, issues, created_at
+compliance_exports	6	id, organization_id, exported_by, export_type, file_url, created_at
+compliance_rule_results	10	id, session_id, rule_code, rule_name, status, message, suggestion, created_at, organization_id, enforcement_tier
+compliance_rules	13	id, rule_code, name, description, severity, version, is_active, created_at, is_blocking, config, category, guidance_text, enforcement_tier
+conversation_messages	11	id, conversation_id, sender_id, body, attachment_url, message_type, requires_action, actioned_at, delivered_at, read_at, created_at
+conversations	11	id, organization_id, worker_id, coordinator_id, shift_id, participant_id, participant_name, status, last_message_at, created_at, updated_at
+credential_expiry_reminders	6	id, credential_id, days_before, recipient_role, recipient_id, sent_at
+credentials	17	id, user_id, organization_id, credential_type, title, credential_number, issuer, issue_date, expiry_date, status, file_path, file_url, verified_by, verified_at, notes, created_at, updated_at
+data_export_requests	10	id, user_id, organization_id, status, requested_at, completed_at, download_token_hash, expires_at, file_path, error_message
+evidence_access_audit_log	17	id, evidence_id, session_id, organization_id, accessed_by, action, ip_address, user_agent, file_hash_match, file_hash_stored, file_hash_computed, purpose, error_code, error_message, created_at, shift_id, notes
+evidence_deletion_log	9	id, evidence_id, session_id, shift_id, organization_id, deleted_by, deletion_reason, file_hash, deleted_at
+feedback_tags	6	id, organization_id, label, category, is_active, created_at
+incident_corrections	6	id, incident_id, worker_id, organization_id, note, created_at
+incident_reference_counters	2	ref_date, next_seq
+incidents	36	id, participant_id, session_id, title, description, incident_type, severity, status, incident_date, reported_date, resolved_date, location, witnesses, ndis_reportable, ndis_reported_at, practice_standard, participant_impact, worker_actions, investigation_notes, corrective_actions, follow_up_required, follow_up_date, created_by, created_at, updated_at, organization_id, user_id, shift_id, photo_urls, escalate, photo_metadata, reference_number, worker_report_type, behaviour_subtype, participant_present, participant_harmed
+invitations	11	id, organization_id, invited_by, email, role, token, expires_at, accepted_at, accepted_by, created_at, short_code
+invoice_line_items	13	id, invoice_id, price_item_code, description, support_category, quantity, unit_price, total_price, day_type, time_type, support_intensity, task_ids, created_at
+invoices	28	id, organization_id, issued_by, participant_id, session_id, invoice_number, recipient_name, recipient_email, line_items, subtotal_cents, tax_cents, total_cents, currency, status, due_date, issued_at, finalized_at, paid_at, payment_date, payment_reference, notes, pdf_path, pdf_url, cancelled_at, cancelled_by, updated_at, created_at, billing_period_id
+media_files	5	id, session_id, file_url, file_type, created_at
+ndis_goals	18	id, participant_id, organization_id, created_by, name, goal_area, description, target_date, status, archived_at, completed_at, created_at, updated_at, support_category, plan_id, worker_focus, priority, why_it_matters
+ndis_plans	11	id, patient_id, plan_number, plan_start, plan_end, total_funding, status, created_at, updated_at, organization_id, plan_management_type
+ndis_price_items	21	id, organization_id, schedule_id, item_code, name, description, unit, price_national, price_remote, price_very_remote, effective_date, valid_from, valid_to, day_type, time_type, support_intensity, support_purpose, category_number, registration_group, created_at, updated_at
+ndis_price_schedules	9	id, organization_id, financial_year, effective_date, source_json, created_at, updated_at, source_document, version
+news_audit_log	7	id, news_item_id, action, actor_label, ip_address, notes, created_at
+news_item_comments	6	id, news_item_id, client_id, display_name, body, created_at
+news_item_likes	4	id, news_item_id, client_id, created_at
+news_items	15	id, source_id, headline, url, summary, tags, importance, published_at, ingested_at, status, reviewed_at, rejection_reason, image_url, created_at, updated_at
+news_sources	12	id, name, url, kind, poll_minutes, licence, auto_publish, active, last_polled_at, last_etag, created_at, updated_at
+note_embeddings	8	id, session_id, embedding, model, token_count, created_at, updated_at, organization_id
+notification_deliveries	6	id, user_id, event, reference_key, channel, sent_at
+onboarding_assignments	7	id, program_id, user_id, org_id, assigned_by, assigned_at, status
+onboarding_programs	6	id, org_id, name, description, created_by, created_at
+onboarding_stage_progress	9	id, assignment_id, stage_id, org_id, status, submitted_at, approved_by, approved_at, notes
+onboarding_stage_resources	10	id, stage_id, org_id, name, resource_type, file_key, url, file_size_bytes, category, created_at
+onboarding_stages	8	id, program_id, org_id, title, instructions, stage_order, completion_requirements, created_at
+org_events	10	id, organization_id, title, event_date, duration, event_type, location, participants_desc, created_by, created_at
+organization_data_policies	3	organization_id, evidence_retention_days, updated_at
+organization_long_shift_settings	5	organization_id, checkin_gap_minutes, activity_gap_fail_minutes, long_shift_threshold_hours, updated_at
+organization_members	9	id, user_id, organization_id, role, is_active, created_at, invited_by, joined_at, employee_id
+organization_mileage_rate_history	6	id, organization_id, rate_cents, effective_from, created_by, created_at
+organization_travel_settings	5	organization_id, mileage_rate_cents, currency, updated_by, updated_at
+organizations	18	organization_id, name, ndis_provider_number, created_at, user_id, provider_type, registration_status, team_size, participant_volume, contact_number, owner_user_id, organization_name, abn, plan_tier, compliance_target, email, org_address, invoice_sequence
+participant_allergies	8	id, participant_id, organization_id, allergen, severity, notes, created_at, updated_at
+participant_briefing_alerts	8	id, participant_id, organization_id, alert_text, sort_order, is_active, created_at, updated_at
+participant_check_in_codes	12	id, organization_id, participant_id, label, token_hash, latitude, longitude, expires_at, revoked_at, created_by, created_at, updated_at
+participant_plan_meetings	17	id, participant_id, organization_id, coordinator_id, meeting_date, meeting_type, attendees, conversation_notes, participant_priorities, coordinator_observations, agreed_outcomes, ai_suggestions_raw, suggestions_accepted, suggestions_status, ai_generated_at, created_at, updated_at
+participant_safety_protocols	10	participant_id, organization_id, safety_card_body, scenarios, deescalation_techniques, physical_safety_notes, escalation_contacts, content_version, updated_at, updated_by
+participant_task_templates	28	id, participant_id, organization_id, created_by, name, description, evidence_required, is_mandatory, estimated_duration_minutes, is_custom, is_active, sort_order, created_at, updated_at, reminder_minutes, scheduled_offset_minutes, primary_shift_type, additional_shift_types, recurrence_type, recurrence_frequency, recurrence_weekdays, due_window_start, due_window_end, category, priority, assigned_worker_id, linked_goal_id, status
+participant_tasks	32	id, participant_id, goal_id, organization_id, created_by, name, description, frequency, status, is_mandatory, completed_at, created_at, updated_at, task_template_id, shift_id, due_window_start, due_window_end, category, priority, carried_over_from_instance_id, completed_by, support_category, shift_type, evidence_required, is_recurring, frequency_pattern, frequency_metadata, price_item_code, effective_hourly_rate, recurrence_start_date, recurrence_end_date, recurrence_instances_created
+patients	69	id, full_name, ndis_number, date_of_birth, email, phone, plan_status, plan_start_date, plan_end_date, total_budget, primary_disability, created_at, updated_at, address, biological_sex, organization_id, risk_level, risk_triggers, risk_management_plan, allergies, communication_preferences, external_pseudonym, disposal_date, is_purged, pii_encrypted, assigned_worker_id, allied_health_id, clinician_id, created_by, user_id, emergency_contact, upcoming_review_date, owner_user_id, restricted_behavioural_notes, behaviour_support_plan, medications, medical_alerts, plan_management_type, emergency_contact_name, emergency_contact_relationship, emergency_contact_number, address_notes, address_history, preferences_arrival_time, preferences_other, favourite_activities, interests, daily_routine, preferred_schedule, worker_notes, case_manager_name, case_manager_phone, case_manager_email, profile_photo_url, preferred_name, likes_dislikes, sensory_preferences, cultural_preferences, preferred_activities, communication_guidance, previous_visit_notes, previous_visit_notes_updated_at, current_conditions, behavioural_notes, latitude, longitude, background_summary, background_summary_updated_at, briefing_content_version
+pg_all_foreign_keys	16	fk_schema_name, fk_table_name, fk_constraint_name, fk_table_oid, fk_columns, pk_schema_name, pk_table_name, pk_constraint_name, pk_table_oid, pk_index_name, pk_columns, match_type, on_delete, on_update, is_deferrable, is_deferred
+plan_budgets	7	id, plan_id, category, allocated_amount, used_amount, created_at, organization_id
+plan_meeting_sessions	29	id, organization_id, coordinator_id, participant_id, created_at, recorded_at, meeting_type, conversation_context, stage_1_status, stage_1_completed_at, stage_1_error, raw_transcript, clean_transcript, resolved_names, name_confidence, stage_2_status, stage_2_completed_at, stage_2_error, extracted_goals, extracted_tasks, goal_confidence, attention_flags, review_status, reviewed_by, reviewed_at, review_notes, consent_given_by, consent_method, consent_confirmed_at
+plans	5	id, patient_id, start_date, end_date, created_at
+practitioner_allocations	9	id, patient_id, user_id, allocated_role, is_active, assigned_at, assigned_by, organization_id, created_at
+practitioner_settings	10	user_id, name, credentials, signature, avatar_id, provider, session_defaults, compliance, updated_at, created_at
+privacy_policy_versions	6	id, version, summary_text, full_pdf_path, published_at, is_current
+report_history	10	id, organization_id, participant_id, generated_by, report_type, title, content, file_path, file_url, created_at
+restock_requests	9	id, organization_id, requested_by, item_id, quantity_requested, status, notes, created_at, updated_at
+restrictive_practice_flags	9	id, session_id, practice_type, detected_phrase, context_excerpt, severity, suggested_rewrite, created_at, organization_id
+security_events	10	id, event_type, accessor_id, participant_id, ip_address, description, severity, is_reported, organization_id, created_at
+session_attachments	11	id, session_id, organization_id, uploaded_by, file_name, file_path, public_url, mime_type, size_bytes, attachment_type, created_at
+session_embeddings	11	id, organization_id, session_id, participant_id, worker_id, chunk_index, content, embedding, metadata, created_at, incident_id
+session_messages	17	id, session_id, sender_role, message_type, content, media_url, created_at, metadata, translated_content, detected_language, ai_processed, organization_id, translation_status, translation_metadata, attachment_id, original_language_input, translation_provider
+sessions	89	id, patient_id, session_date, duration_minutes, session_type, notes, created_at, transcription, ai_summary, ai_insights, compliance_score, compliance_notes, tags, goals_addressed, photo_urls, audio_url, status, body_markers, organization_id, compliance_status, cost, support_category, activities_performed, outcomes, participant_response, progress_toward_goals, restrictive_practice_detected, restrictive_practice_types, compliance_flags, compliance_checked_at, input_language, voice_input, incident_language_detected, started_at, ended_at, draft_saved_at, worker_signature, export_ready, ai_generation_status, compliance_review_required, original_language, translated_to_english, updated_at, is_ready_for_billing, original_language_input, translated_english_note, translation_metadata, worker_id, practitioner_id, created_by, owner_user_id, user_id, detected_language, compliance_input_text, translation_status, translation_provider, translation_confidence, translation_error, translation_completed_at, legal_record_text, display_notes, start_time, end_time, rp_incident_linked, note_completed_at, goal_progress_notes, participant_choice_control, review_flag, review_note, review_requested_by, review_requested_at, support_worker_id, acknowledged_warn_rules, progress_delta, shift_id, tasks, task_evidence, end_validation, last_activity_at, max_gap_secs, checkin_count, break_duration_secs, billable_duration_secs, engagement_score, is_long_shift, gap_paused_secs, offline_since_at, engagement_check16, random_checkins_scheduled
+shift_activity_events	11	id, session_id, shift_id, event_type, occurred_at, recorded_at, worker_id, patient_id, metadata, is_billable, gap_before_secs
+shift_breaks	10	id, session_id, shift_id, worker_id, break_start_at, break_end_at, duration_secs, is_compliant, break_number, created_at
+shift_briefing_acknowledgements	8	id, shift_id, worker_id, organization_id, acknowledged_at, patient_briefing_version, shift_briefing_version, scrolled_to_bottom
+shift_briefing_alert_acknowledgements	5	id, shift_id, alert_id, worker_id, acknowledged_at
+shift_change_acknowledgements	6	id, shift_id, worker_id, notification_id, change_snapshot, acknowledged_at
+shift_check_ins	12	id, shift_id, worker_id, organization_id, method, location, verified, verification_distance_meters, qr_code_id, client_timestamp, server_timestamp, created_at
+shift_checkins	14	id, session_id, shift_id, worker_id, patient_id, status, note, prompt_triggered_at, submitted_at, response_time_secs, gap_at_prompt_secs, linked_incident_id, coordinator_notified, created_at
+shift_export_requests	14	id, shift_id, organization_id, requested_by, status, file_path, file_url, error_message, emailed_at, expires_at, created_at, updated_at, auto_generated, shared_recipients
+shift_feedback	11	id, shift_id, worker_id, coordinator_id, organization_id, strengths, areas_to_improve, action_items, submitted_at, acknowledged_at, notification_sent_at
+shift_feedback_tags	2	feedback_id, tag_id
+shift_messages	9	id, shift_id, sender_id, recipient_id, organization_id, message, message_type, is_read, created_at
+shift_office_messages	8	id, organization_id, shift_id, worker_id, message, priority, attachment_urls, created_at
+shift_reminder_settings	4	shift_id, worker_id, silence_optional_reminders, set_at
+shift_scheduled_checkins	14	id, session_id, shift_id, worker_id, organization_id, sequence_number, scheduled_at, status, prompted_at, response_deadline_at, shift_checkin_id, notification_reference_key, created_at, updated_at
+shift_signatures	13	shift_id, worker_id, organization_id, confirm_tasks_accurate, confirm_safety_followed, confirm_no_unreported_incidents, signature_svg, signature_png_path, content_hash, device_id, ip_address, user_agent, signed_at
+shift_tasks	5	id, shift_id, task_id, organization_id, created_at
+shift_travel_expenses	22	id, shift_id, worker_id, organization_id, expense_type, status, submission_batch_id, calculated_km, claimed_km, rate_cents_snapshot, amount_cents, transit_type, receipt_storage_path, submitted_at, approved_at, approved_by, paid_at, rejected_at, rejection_reason, correction_of_id, created_at, updated_at
+shift_verifications	12	id, shift_id, organization_id, participant_id, checks_run, price_item_code, support_category, hourly_rate_applied, billed_amount, verified_by, verified_at, created_at
+shift_view_events	4	id, shift_id, worker_id, first_viewed_at
+shift_visit_notes	14	id, organization_id, shift_id, session_id, worker_id, content, category, attachment_urls, created_at, updated_at, task_id, goal_id, client_note_id, auto_saved_at
+shifts	46	id, organization_id, participant_id, worker_id, support_category, scheduled_start, scheduled_end, status, notes, clock_in_at, clock_out_at, duration_minutes, session_id, created_at, updated_at, clocked_in_at, clocked_out_at, participant_name, participant_dob, participant_gender, participant_address, participant_phone, allergies, health_flags, health_alerts, visit_notes, access_instructions, coordinator_notes, entry_instructions, active_goals, tasks, risks_acknowledged_at, risks_acknowledged_by, support_instructions, clock_in_method, clock_in_location, clock_in_verified, participant_latitude, participant_longitude, emergency_flagged, emergency_flagged_at, emergency_note, confirmation_status, preference_override_reason, special_instructions, briefing_content_version
+staff_invite_requests	7	id, organization_id, requester_email, requester_full_name, requester_email_norm, requester_full_name_norm, created_at
+support_faq_articles	9	id, slug, title, body_markdown, tags, sort_order, is_published, created_at, updated_at
+support_items	7	id, item_code, item_name, category, unit, default_rate, created_at
+support_known_issues	9	id, title, description, affected_version, workaround, expected_fix_date, is_active, created_at, updated_at
+tap_funky	13	oid, schema, name, owner, args, returns, langoid, is_strict, kind, is_definer, returns_set, volatility, is_visible
+task_completions	21	id, task_id, shift_id, participant_id, organization_id, completed_by, completion_date, completion_time, duration_minutes, evidence_type, evidence_photo_url, evidence_notes, evidence_verified, verified_by, verified_at, status, price_item_code, billed_amount, invoice_id, created_at, updated_at
+task_evidence_metadata	31	id, evidence_id, session_id, organization_id, uploaded_by, uploaded_at, file_hash, file_hash_algorithm, file_size_bytes, mime_type, storage_path, storage_provider, file_url, ip_address, user_agent, evidence_type, task_id, goal_id, duration_seconds, created_at, updated_at, integrity_verified_at, is_finalized, device_type, retention_until, shift_id, deleted_at, deleted_by, deletion_reason, quarantined_at, quarantine_reason
+task_instances	12	id, task_template_id, participant_id, organization_id, scheduled_date, scheduled_time, shift_type, assigned_worker_id, status, completion_id, created_at, updated_at
+task_templates	21	id, participant_id, organization_id, name, description, primary_shift_type, additional_shift_types, recurrence_type, recurrence_frequency, recurrence_weekdays, due_window_start, due_window_end, category, priority, assigned_worker_id, linked_goal_id, status, is_mandatory, created_by, created_at, updated_at
+toolkit_items	15	id, organization_id, assigned_user_id, name, category, sku, quantity, unit, minimum_quantity, expiry_date, batch_number, fifo_order, status, created_at, updated_at
+toolkit_movements	8	id, item_id, user_id, movement_type, quantity, notes, created_at, organization_id
+training_modules	10	id, organization_id, title, description, linked_credential_type, requires_certification, created_by, is_active, created_at, updated_at
+training_resources	8	id, module_id, resource_type, title, storage_path, external_url, sort_order, created_at
+travel_expense_submissions	9	id, worker_id, organization_id, total_amount_cents, status, submitted_at, actioned_at, actioned_by, rejection_reason
+user_accessibility_preferences	8	id, user_id, device_id, font_size, theme_mode, high_contrast, dyslexia_font, updated_at
+user_login_events	10	id, user_id, device_id, device_name, os_name, ip_address, city, country, is_suspicious, created_at
+user_mfa_recovery_codes	5	id, user_id, code_hash, used_at, created_at
+user_notification_preferences	5	id, user_id, device_id, preferences, updated_at
+user_notifications	18	id, user_id, organization_id, event_type, title, body, severity, shift_id, conversation_id, action_url, payload, banner_style, requires_ack, acknowledged_at, read_at, dismissed_at, reference_key, created_at
+user_push_tokens	8	id, user_id, device_id, platform, push_token, created_at, updated_at, token_type
+user_sessions	14	id, user_id, session_jti, device_id, device_name, custom_name, os_name, user_agent, ip_address, city, country, last_active_at, revoked_at, created_at
+user_trusted_devices	10	id, user_id, device_id, device_name, custom_name, os_name, user_agent, trusted_until, last_active_at, created_at
+users	41	id, organization_id, email, full_name, role, is_active, created_at, account_type, onboarding_data, onboarding_complete, last_login, email_verified, profile_completed, onboarding_completed, role_specific_profile_completed, phone, suburb, address, emergency_contact, discipline, ahpra_registration_number, professional_indemnity_confirmed, business_name, profile_photo_path, profile_photo_url, onboarding_checklist, onboarding_policy, date_of_birth, coordinator_id, avatar_url, photo_url, failed_login_count, locked_until, preferred_contact_method, pending_email, mfa_enabled, mfa_method, mfa_totp_secret, mfa_phone, mfa_pending_secret, preferred_language
+waitlist_signups	12	id, name, email, reason, organisation, provider_type, team_size, current_system, preferred_time, message, source, created_at
+worker_achievements	6	id, worker_id, organization_id, achievement_key, unlocked_at, context
+worker_availability	9	id, user_id, organization_id, available_days, day_start_time, day_end_time, max_hours_per_week, created_at, updated_at
+worker_availability_preferences	6	user_id, organization_id, max_shifts_per_week, emergency_override_date, emergency_override_expires_at, updated_at
+worker_blackout_dates	8	id, user_id, organization_id, start_date, end_date, reason, created_at, source
+worker_calendar_feed_tokens	7	id, user_id, organization_id, token_hash, created_at, last_accessed_at, revoked_at
+worker_preferred_shift_request_details	3	request_id, participant_id, preferred_days
+worker_privacy_preferences	3	user_id, analytics_opt_out, updated_at
+worker_safety_acknowledgements	6	id, worker_id, participant_id, organization_id, content_version, acknowledged_at
+worker_schedule_requests	11	id, user_id, organization_id, request_type, status, worker_notes, coordinator_notes, resolved_at, resolved_by, created_at, updated_at
+worker_shift_swap_request_details	2	request_id, shift_id
+worker_time_off_request_details	4	request_id, start_date, end_date, reason_code
+worker_training_completions	11	id, worker_id, module_id, organization_id, completed_at, note, status, reviewed_by, reviewed_at, rejection_reason, created_at
+worker_training_recommendations	8	id, worker_id, coordinator_id, organization_id, training_module_id, title, recommended_at, dismissed_at
+worker_training_requests	11	id, worker_id, organization_id, request_text, reason, urgent, status, coordinator_response, actioned_at, actioned_by, created_at
+worker_tutorial_progress	4	user_id, step_key, completed_at, skipped
+worker_weekly_availability_slots	6	user_id, organization_id, day_of_week, time_slot, status, updated_at

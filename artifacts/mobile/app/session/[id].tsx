@@ -1,13 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import type { Audio } from "expo-av";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from "expo-audio";
 import {
   useGetParticipant,
   useGetSession,
   useUpdateSession,
   useSaveSessionWithAI,
 } from "@workspace/api-client-react";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -79,8 +84,8 @@ export default function LiveSessionScreen() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const recordingRef = useRef<InstanceType<typeof Audio.Recording> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
     if (session?.notes && !notes) {
@@ -152,38 +157,33 @@ export default function LiveSessionScreen() {
     }
     if (isRecording) {
       setIsRecording(false);
-      if (recordingRef.current) {
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-          const uri = recordingRef.current.getURI();
-          const noteText = `Voice note ${voiceNotes.length + 1} — ${new Date().toLocaleTimeString()} (${uri ? "recorded" : "failed"})`;
-          setVoiceNotes((prev) => [...prev, noteText]);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch {
-          setVoiceNotes((prev) => [...prev, `Voice note ${voiceNotes.length + 1}`]);
-        }
-        recordingRef.current = null;
+      try {
+        await audioRecorder.stop();
+        await setAudioModeAsync({ allowsRecording: false });
+        const uri = audioRecorder.uri;
+        const noteText = `Voice note ${voiceNotes.length + 1} — ${new Date().toLocaleTimeString()} (${uri ? "recorded" : "failed"})`;
+        setVoiceNotes((prev) => [...prev, noteText]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {
+        setVoiceNotes((prev) => [...prev, `Voice note ${voiceNotes.length + 1}`]);
       }
     } else {
       try {
-        const { Audio } = await import("expo-av");
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== "granted") {
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        if (!granted) {
           Alert.alert("Permission needed", "Microphone access is required for voice notes.");
           return;
         }
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        recordingRef.current = recording;
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
         setIsRecording(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } catch {
         Alert.alert("Error", "Could not start recording. Please try again.");
       }
     }
-  }, [isRecording, voiceNotes.length]);
+  }, [isRecording, voiceNotes.length, audioRecorder]);
 
   const handleComplete = useCallback(async () => {
     setIsSaving(true);

@@ -9,7 +9,6 @@ ENV PNPM_HOME="/pnpm" \
     EXPO_NO_TELEMETRY=1 \
     CHOKIDAR_USEPOLLING=true \
     WATCHPACK_POLLING=true \
-    REACT_NATIVE_PACKAGER_HOSTNAME=localhost \
     EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
 
 RUN corepack enable
@@ -20,4 +19,4 @@ RUN corepack pnpm install --frozen-lockfile
 
 EXPOSE 8081
 
-CMD ["corepack", "pnpm", "--filter", "@workspace/mobile", "run", "dev:web"]
+CMD ["sh", "-c", "corepack pnpm install --frozen-lockfile && corepack pnpm --filter @workspace/mobile run dev:docker"]

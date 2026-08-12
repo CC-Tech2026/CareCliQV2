@@ -8,7 +8,7 @@ const BAR_COLORS = ["#EF4444", "#F97316", "#FBBF24", "#22C55E"];
 
 function getScore(password: string): number {
   let score = 0;
-  if (password.length >= 8) score++;
+  if (password.length >= 10) score++;
   if (password.length >= 12) score++;
   if (/[a-z]/.test(password)) score++;
   if (/[A-Z]/.test(password)) score++;
@@ -45,6 +45,9 @@ export function PasswordStrengthBar({ password, auth }: { password: string; auth
       <Text style={[styles.label, { color: BAR_COLORS[Math.max(score - 1, 0)], fontFamily: "Inter_500Medium" }]}>
         {labels[Math.max(score - 1, 0)]}
       </Text>
+      <Text style={[styles.hint, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
+        {t("auth.signup.passwordHint")}
+      </Text>
     </View>
   );
 }
@@ -54,4 +57,5 @@ const styles = StyleSheet.create({
   bars: { flexDirection: "row", gap: 6 },
   bar: { flex: 1, height: 6, borderRadius: 999 },
   label: { fontSize: 11 },
+  hint: { fontSize: 11, lineHeight: 15 },
 });

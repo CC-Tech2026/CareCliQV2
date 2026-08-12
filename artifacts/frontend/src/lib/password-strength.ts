@@ -1,5 +1,5 @@
 export function validatePasswordPolicy(password: string): string | null {
-  if (password.length < 8) return "Password must be at least 8 characters.";
+  if (password.length < 10) return "Password must be at least 10 characters.";
   if (!/[A-Z]/.test(password)) return "Password must include at least one uppercase letter.";
   if (!/\d/.test(password)) return "Password must include at least one number.";
   const common = new Set([
@@ -25,7 +25,7 @@ export function validatePasswordPolicy(password: string): string | null {
 export function passwordStrengthScore(password: string): number {
   if (!password) return 0;
   let score = 0;
-  if (password.length >= 8) score += 1;
+  if (password.length >= 10) score += 1;
   if (password.length >= 12) score += 1;
   if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
   if (/\d/.test(password) && /[^A-Za-z0-9]/.test(password)) score += 1;

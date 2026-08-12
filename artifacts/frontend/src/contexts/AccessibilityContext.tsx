@@ -41,7 +41,7 @@ type AccessibilityContextValue = {
 
 const AccessibilityContext = createContext<AccessibilityContextValue | null>(null);
 
-const THEME_PERSIST_DEBOUNCE_MS = 5000;
+const ACCESSIBILITY_PERSIST_DEBOUNCE_MS = 5000;
 
 const FONT_SCALE: Record<FontSize, string> = {
   small: "0.9",
@@ -77,8 +77,8 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<AccessibilityPreferences | null>(null);
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [loading, setLoading] = useState(true);
-  const themePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingThemeRef = useRef<ThemeMode | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatchRef = useRef<Partial<AccessibilityPreferences>>({});
 
   useEffect(() => {
     let active = true;
@@ -142,29 +142,32 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     [deviceId, language],
   );
 
-  const scheduleThemePersist = useCallback(
-    (theme_mode: ThemeMode) => {
-      pendingThemeRef.current = theme_mode;
-      if (themePersistTimerRef.current) clearTimeout(themePersistTimerRef.current);
-      themePersistTimerRef.current = setTimeout(() => {
-        themePersistTimerRef.current = null;
-        const mode = pendingThemeRef.current;
-        pendingThemeRef.current = null;
-        if (mode) void persist({ theme_mode: mode }).catch(() => undefined);
-      }, THEME_PERSIST_DEBOUNCE_MS);
+  const schedulePersist = useCallback(
+    (patch: Partial<AccessibilityPreferences>) => {
+      pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => {
+        persistTimerRef.current = null;
+        const queued = pendingPatchRef.current;
+        pendingPatchRef.current = {};
+        if (Object.keys(queued).length === 0) return;
+        void persist(queued).catch(() => undefined);
+      }, ACCESSIBILITY_PERSIST_DEBOUNCE_MS);
     },
     [persist],
   );
 
   useEffect(() => {
     return () => {
-      if (themePersistTimerRef.current) {
-        clearTimeout(themePersistTimerRef.current);
-        themePersistTimerRef.current = null;
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
       }
-      const mode = pendingThemeRef.current;
-      pendingThemeRef.current = null;
-      if (mode) void persist({ theme_mode: mode }).catch(() => undefined);
+      const queued = pendingPatchRef.current;
+      pendingPatchRef.current = {};
+      if (Object.keys(queued).length > 0) {
+        void persist(queued).catch(() => undefined);
+      }
     };
   }, [persist]);
 
@@ -208,9 +211,9 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
             };
         return next;
       });
-      if (isAuthenticated) scheduleThemePersist(theme_mode);
+      if (isAuthenticated) schedulePersist({ theme_mode });
     },
-    [deviceId, isAuthenticated, scheduleThemePersist],
+    [deviceId, isAuthenticated, schedulePersist],
   );
 
   const value = useMemo<AccessibilityContextValue>(
@@ -220,16 +223,16 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       loading,
       setFontSize: async (font_size) => {
         applyPrefsPatch({ font_size });
-        await persist({ font_size });
+        if (isAuthenticated) schedulePersist({ font_size });
       },
       setThemeMode,
       setHighContrast: async (high_contrast) => {
         applyPrefsPatch({ high_contrast });
-        await persist({ high_contrast });
+        if (isAuthenticated) schedulePersist({ high_contrast });
       },
       setDyslexiaFont: async (dyslexia_font) => {
         applyPrefsPatch({ dyslexia_font });
-        await persist({ dyslexia_font });
+        if (isAuthenticated) schedulePersist({ dyslexia_font });
       },
       setLanguage: async (lang) => {
         await updatePreferredLanguage(lang);
@@ -239,7 +242,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       translate: (key) => t(language, key),
       translateParams: (key, params) => tParams(language, key, params),
     }),
-    [prefs, language, loading, persist, setThemeMode, applyPrefsPatch],
+    [prefs, language, loading, setThemeMode, applyPrefsPatch, schedulePersist, isAuthenticated],
   );
 
   return (

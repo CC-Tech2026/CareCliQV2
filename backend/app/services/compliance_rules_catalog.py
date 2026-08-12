@@ -191,7 +191,7 @@ def enrich_rule_results(rules: list[dict] | None) -> list[dict[str, Any]]:
                 "rule": code,
                 "label": db_row.get("name") or static.get("label") or code,
                 "status": "pending",
-                "message": "No recent session data for this rule.",
+                "message": "Rule check not recorded for recent sessions.",
                 "severity": db_row.get("severity") or "medium",
                 "category": db_row.get("category") or static.get("category") or "documentation",
                 "explanation": db_row.get("guidance_text") or static.get("explanation") or "",

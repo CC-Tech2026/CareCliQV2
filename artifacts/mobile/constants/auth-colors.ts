@@ -1,4 +1,5 @@
 import type { ResolvedScheme } from "@/context/PreferencesContext";
+import { Brand, BrandDark } from "@/constants/brand";
 
 export type AuthColors = {
   shellBg: string;
@@ -22,54 +23,61 @@ export type AuthColors = {
   coral: string;
   cta: string;
   valid: string;
+  error: string;
 };
 
+/**
+ * Auth / onboarding surfaces — same CareCliQ brand as the rest of the app.
+ * `plum` / `cta` map to CareCliQ Purple; `coral` is Pink accent only.
+ */
 const light: AuthColors = {
-  shellBg: "#FFFFFF",
-  formBg: "#FFFFFF",
-  marketingBg: "#FDF6EE",
-  headline: "#1A1A2E",
-  marketingMuted: "#6A6A77",
-  marketingBody: "#33334A",
-  accent: "#7C3AED",
-  inputBorder: "#E8E8EA",
-  inputBg: "#F4EDE6",
-  cardBg: "rgba(255, 255, 255, 0.7)",
-  cardBorder: "rgba(26, 26, 46, 0.10)",
-  statValue: "#1A1A2E",
-  statCardBorder: "rgba(26, 26, 46, 0.10)",
-  footer: "#94A3B8",
-  dragHandle: "#E8E8EA",
-  text: "#0D0D55",
-  muted: "#6B6B8A",
-  plum: "#7C3AED",
-  coral: "#E8457A",
-  cta: "#E8457A",
-  valid: "#22C55E",
+  shellBg: Brand.ivory,
+  formBg: Brand.white,
+  marketingBg: Brand.ivory,
+  headline: Brand.navy,
+  marketingMuted: "#6B6B7A",
+  marketingBody: Brand.navy,
+  accent: Brand.purple,
+  inputBorder: Brand.purpleTint10,
+  inputBg: Brand.purpleTint10,
+  cardBg: "rgba(255, 255, 255, 0.92)",
+  cardBorder: "rgba(45, 45, 61, 0.10)",
+  statValue: Brand.navy,
+  statCardBorder: "rgba(45, 45, 61, 0.10)",
+  footer: "#6B6B7A",
+  dragHandle: Brand.purpleTint10,
+  text: Brand.navy,
+  muted: "#6B6B7A",
+  plum: Brand.purple,
+  coral: Brand.pink,
+  cta: Brand.purple,
+  valid: Brand.success,
+  error: Brand.error,
 };
 
 const dark: AuthColors = {
-  shellBg: "#1A1A2E",
-  formBg: "#2C2C3F",
-  marketingBg: "#1A1A2E",
-  headline: "#F9FAFB",
-  marketingMuted: "#9CA3AF",
-  marketingBody: "#D1D5DB",
-  accent: "#A78BFA",
-  inputBorder: "#4B5563",
-  inputBg: "#374151",
-  cardBg: "rgba(31, 41, 55, 0.85)",
-  cardBorder: "rgba(249, 250, 251, 0.12)",
-  statValue: "#F9FAFB",
-  statCardBorder: "rgba(249, 250, 251, 0.12)",
-  footer: "#6B7280",
-  dragHandle: "#4B5563",
-  text: "#F9FAFB",
-  muted: "#9CA3AF",
-  plum: "#F472B6",
-  coral: "#A78BFA",
-  cta: "#A78BFA",
-  valid: "#4ADE80",
+  shellBg: BrandDark.ivory,
+  formBg: BrandDark.white,
+  marketingBg: BrandDark.ivory,
+  headline: BrandDark.navy,
+  marketingMuted: BrandDark.muted,
+  marketingBody: BrandDark.navy,
+  accent: BrandDark.purple,
+  inputBorder: BrandDark.border,
+  inputBg: BrandDark.purpleTint,
+  cardBg: "rgba(31, 30, 42, 0.92)",
+  cardBorder: "rgba(245, 244, 250, 0.12)",
+  statValue: BrandDark.navy,
+  statCardBorder: "rgba(245, 244, 250, 0.12)",
+  footer: BrandDark.muted,
+  dragHandle: BrandDark.border,
+  text: BrandDark.navy,
+  muted: BrandDark.muted,
+  plum: BrandDark.purple,
+  coral: BrandDark.pink,
+  cta: BrandDark.purple,
+  valid: BrandDark.success,
+  error: BrandDark.error,
 };
 
 export function getAuthColors(scheme: ResolvedScheme): AuthColors {
@@ -77,9 +85,9 @@ export function getAuthColors(scheme: ResolvedScheme): AuthColors {
 }
 
 export const TRUST_AVATARS = [
-  { i: "SM", bg: "#E8457A" },
-  { i: "AK", bg: "#0D7C66" },
-  { i: "LP", bg: "#7B3F9E" },
-  { i: "JW", bg: "#C0392B" },
-  { i: "RN", bg: "#1A6FA8" },
+  { i: "SM", bg: Brand.pink },
+  { i: "AK", bg: Brand.success },
+  { i: "LP", bg: Brand.purple },
+  { i: "JW", bg: Brand.error },
+  { i: "RN", bg: Brand.legacyPurple },
 ];

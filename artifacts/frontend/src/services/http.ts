@@ -5,6 +5,10 @@ function extractErrorMessage(payload: unknown): string | undefined {
   const { detail, message } = payload as { detail?: unknown; message?: unknown };
 
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail) {
+    const nested = String((detail as { message?: unknown }).message ?? "").trim();
+    if (nested) return nested;
+  }
   if (Array.isArray(detail)) {
     const msgs = detail
       .map((d) => (d && typeof d === "object" && "msg" in d ? String((d as { msg: unknown }).msg) : null))

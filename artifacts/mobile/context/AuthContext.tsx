@@ -15,20 +15,28 @@ import {
   type AuthUser,
   type LoginResult,
 } from "@/lib/auth-api";
+import { saveBiometricCredentials } from "@/lib/biometric-auth";
 import {
   clearMobileAuthSession,
   persistMobileAuthSession,
   readMobileAuthToken,
   readStoredUserJson,
 } from "@/lib/session";
+import { setWorkerUnauthorizedHandler } from "@/lib/worker-fetch";
 
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
-  completeMfa: (challengeToken: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
+  completeMfa: (
+    challengeToken: string,
+    code: string,
+    trustDevice?: boolean,
+    credentials?: { identifier: string; password: string },
+  ) => Promise<AuthUser>;
   updateSession: (accessToken: string, user: AuthUser) => Promise<void>;
+  updateUser: (patch: Partial<AuthUser>) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -55,10 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const storedJson = await readStoredUserJson();
+      let cached: AuthUser | null = null;
       if (storedJson) {
         try {
-          const parsed = JSON.parse(storedJson) as AuthUser;
-          if (!cancelled) setUser(parsed);
+          cached = JSON.parse(storedJson) as AuthUser;
+          if (!cancelled) setUser(cached);
         } catch {
           /* fall through to /me */
         }
@@ -67,8 +76,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const fresh = await fetchCurrentUser();
       if (!cancelled) {
         if (fresh) {
-          setUser(fresh);
-          await persistMobileAuthSession(token, JSON.stringify(fresh));
+          const merged: AuthUser = {
+            ...fresh,
+            full_name: fresh.full_name || cached?.full_name,
+            profile_photo_url: fresh.profile_photo_url ?? cached?.profile_photo_url ?? null,
+          };
+          setUser(merged);
+          await persistMobileAuthSession(token, JSON.stringify(merged));
         } else {
           await clearMobileAuthSession();
           setUser(null);
@@ -83,17 +97,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    setWorkerUnauthorizedHandler(() => {
+      void clearMobileAuthSession().then(() => setUser(null));
+    });
+    return () => setWorkerUnauthorizedHandler(null);
+  }, []);
+
   const login = useCallback(async (identifier: string, password: string, rememberDevice = true) => {
     const result = await loginWithPassword(identifier, password, rememberDevice);
     if (result.status === "authenticated") {
       await persistMobileAuthSession(result.accessToken, JSON.stringify(result.user));
       setUser(result.user);
+      await saveBiometricCredentials({ identifier: identifier.trim(), password });
     }
     return result;
   }, []);
 
   const completeMfa = useCallback(
-    async (challengeToken: string, code: string, trustDevice = false) => {
+    async (
+      challengeToken: string,
+      code: string,
+      trustDevice = false,
+      credentials?: { identifier: string; password: string },
+    ) => {
       const { user: authUser, accessToken } = await completeMfaLogin(
         challengeToken,
         code,
@@ -101,6 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
       setUser(authUser);
+      if (credentials) {
+        await saveBiometricCredentials(credentials);
+      }
       return authUser;
     },
     [],
@@ -109,6 +139,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateSession = useCallback(async (accessToken: string, authUser: AuthUser) => {
     await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
     setUser(authUser);
+  }, []);
+
+  const updateUser = useCallback(async (patch: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      void readMobileAuthToken().then((token) => {
+        if (token) void persistMobileAuthSession(token, JSON.stringify(next));
+      });
+      return next;
+    });
   }, []);
 
   const logout = useCallback(async () => {
@@ -125,9 +166,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       completeMfa,
       updateSession,
+      updateUser,
       logout,
     }),
-    [user, isLoading, login, completeMfa, updateSession, logout],
+    [user, isLoading, login, completeMfa, updateSession, updateUser, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

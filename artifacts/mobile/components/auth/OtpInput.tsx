@@ -58,7 +58,7 @@ export function OtpInput({ value, onChange, disabled, error, auth }: Props) {
               styles.box,
               {
                 backgroundColor: auth.inputBg,
-                borderColor: error ? auth.coral : filled ? auth.plum : auth.inputBorder,
+                borderColor: error ? auth.error : filled ? auth.plum : auth.inputBorder,
                 color: auth.text,
               },
             ]}
@@ -72,16 +72,23 @@ export function OtpInput({ value, onChange, disabled, error, auth }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: 8,
+    width: "100%",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 6,
   },
   box: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: 56,
-    borderWidth: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    height: 48,
+    maxWidth: 52,
+    borderWidth: 1.5,
     borderRadius: 12,
     textAlign: "center",
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
+    paddingHorizontal: 0,
   },
 });

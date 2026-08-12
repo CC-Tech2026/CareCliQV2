@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef } from "react";
 import {
@@ -16,12 +17,14 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { NotificationListItem } from "@/components/worker/notifications/NotificationListItem";
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { useT } from "@/context/PreferencesContext";
 import {
+  markShiftComplianceCheckinNotificationsRead,
   useDismissNotification,
   useWorkerNotificationsInfinite,
 } from "@/hooks/worker/useWorkerNotifications";
-import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { goBackToHome } from "@/lib/go-back";
 import type { UserNotification } from "@/lib/worker-api";
 
 type ListRow =
@@ -46,6 +49,7 @@ export default function WorkerNotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const t = useT();
   const dismiss = useDismissNotification();
   const loadingMoreRef = useRef(false);
@@ -78,11 +82,14 @@ export default function WorkerNotificationsScreen() {
   const handlePress = useCallback(
     (item: UserNotification) => {
       if (item.shift_id) {
+        if (item.event_type === "compliance_checkin") {
+          markShiftComplianceCheckinNotificationsRead(queryClient, item.shift_id);
+        }
         const query = item.event_type === "compliance_checkin" ? "?checkin=pending" : "";
         router.push(`/shift/${item.shift_id}${query}` as never);
       }
     },
-    [router],
+    [queryClient, router],
   );
 
   const handleLoadMore = useCallback(() => {
@@ -105,7 +112,11 @@ export default function WorkerNotificationsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.notifications")} showBack />
+      <WorkerMobileHeader
+        title={t("nav.notifications")}
+        showBack
+        onBack={() => goBackToHome(router)}
+      />
 
       <View style={[styles.subheader, { borderBottomColor: colors.border }]}>
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -183,7 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
+    paddingTop: 16,
   },
   subtitle: { fontSize: 12, lineHeight: 17 },
   list: { paddingHorizontal: 16, paddingTop: 16 },

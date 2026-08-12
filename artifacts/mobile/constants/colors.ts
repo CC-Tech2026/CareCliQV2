@@ -1,116 +1,202 @@
+import { Brand, BrandDark } from "@/constants/brand";
+
+export type ColorSchemeTokens = {
+  text: string;
+  tint: string;
+
+  background: string;
+  foreground: string;
+
+  card: string;
+  cardForeground: string;
+
+  primary: string;
+  primaryForeground: string;
+
+  secondary: string;
+  secondaryForeground: string;
+
+  muted: string;
+  mutedForeground: string;
+
+  accent: string;
+  accentForeground: string;
+
+  destructive: string;
+  destructiveForeground: string;
+
+  success: string;
+  successForeground: string;
+
+  warning: string;
+  warningForeground: string;
+
+  border: string;
+  input: string;
+
+  soft: string;
+  activeBg: string;
+  alertBg: string;
+
+  clockInBg: string;
+  clockInBorder: string;
+  clockInText: string;
+  clockInIcon: string;
+  composerPink: string;
+  composerPurple: string;
+
+  dangerBg: string;
+  dangerBorder: string;
+  dangerText: string;
+  dangerIcon: string;
+
+  navy: string;
+  pink: string;
+  lime: string;
+  blue: string;
+
+  heroCard: string;
+  heroMuted: string;
+  progressTrack: string;
+  statusDocumentedBg: string;
+  statusProgressBg: string;
+  statusUpcomingBg: string;
+};
+
+const light: ColorSchemeTokens = {
+  text: Brand.navy,
+  tint: Brand.pink,
+
+  background: Brand.ivory,
+  foreground: Brand.navy,
+
+  card: Brand.white,
+  cardForeground: Brand.navy,
+
+  primary: Brand.purple,
+  primaryForeground: Brand.white,
+
+  secondary: Brand.purpleTint10,
+  secondaryForeground: Brand.purple,
+
+  muted: Brand.purpleTint10,
+  mutedForeground: "#6B6B7A",
+
+  accent: Brand.pink,
+  accentForeground: Brand.white,
+
+  destructive: Brand.error,
+  destructiveForeground: Brand.white,
+
+  success: Brand.success,
+  successForeground: Brand.white,
+
+  warning: Brand.warning,
+  warningForeground: Brand.white,
+
+  border: Brand.purpleTint10,
+  input: "#D9D6E8",
+
+  soft: Brand.purpleTint10,
+  activeBg: Brand.purpleTint10,
+  alertBg: "rgba(232,69,122,0.08)",
+
+  clockInBg: "#E3F0EA",
+  clockInBorder: "#B7D6C8",
+  clockInText: Brand.success,
+  clockInIcon: Brand.success,
+  composerPink: Brand.pink,
+  composerPurple: Brand.purple,
+
+  dangerBg: "#FBEEEE",
+  dangerBorder: "#F0C4C4",
+  dangerText: "#791F1F",
+  dangerIcon: Brand.error,
+
+  navy: Brand.navy,
+  pink: Brand.pink,
+  lime: Brand.success,
+  blue: Brand.purple,
+
+  heroCard: Brand.navy,
+  heroMuted: "#B9B6C9",
+  progressTrack: "#4A4960",
+  statusDocumentedBg: "#E3F0EA",
+  statusProgressBg: "#F7EEDD",
+  statusUpcomingBg: Brand.purpleTint10,
+};
+
+const dark: ColorSchemeTokens = {
+  text: BrandDark.navy,
+  tint: BrandDark.pink,
+
+  background: BrandDark.ivory,
+  foreground: BrandDark.navy,
+
+  card: BrandDark.white,
+  cardForeground: BrandDark.navy,
+
+  primary: BrandDark.purple,
+  primaryForeground: BrandDark.ivory,
+
+  secondary: BrandDark.purpleTint,
+  secondaryForeground: BrandDark.purpleMuted,
+
+  muted: BrandDark.purpleTint,
+  mutedForeground: BrandDark.muted,
+
+  accent: BrandDark.pink,
+  accentForeground: BrandDark.ivory,
+
+  destructive: BrandDark.error,
+  destructiveForeground: BrandDark.ivory,
+
+  success: BrandDark.success,
+  successForeground: BrandDark.ivory,
+
+  warning: BrandDark.warning,
+  warningForeground: BrandDark.ivory,
+
+  border: BrandDark.border,
+  input: BrandDark.border,
+
+  soft: BrandDark.purpleTint,
+  activeBg: BrandDark.purpleTint,
+  alertBg: "rgba(244,114,182,0.16)",
+
+  clockInBg: "rgba(74,222,128,0.12)",
+  clockInBorder: "rgba(74,222,128,0.35)",
+  clockInText: "#86EFAC",
+  clockInIcon: BrandDark.success,
+  composerPink: BrandDark.pink,
+  composerPurple: BrandDark.purpleMuted,
+
+  dangerBg: "rgba(248,113,113,0.12)",
+  dangerBorder: "rgba(248,113,113,0.35)",
+  dangerText: "#FCA5A5",
+  dangerIcon: BrandDark.error,
+
+  navy: BrandDark.purpleMuted,
+  pink: BrandDark.pink,
+  lime: BrandDark.success,
+  blue: BrandDark.purpleMuted,
+
+  heroCard: "#1A1824",
+  heroMuted: "#9A97AD",
+  progressTrack: "#3A3850",
+  statusDocumentedBg: "rgba(46,125,91,0.22)",
+  statusProgressBg: "rgba(185,122,26,0.22)",
+  statusUpcomingBg: "rgba(75,63,145,0.28)",
+};
+
+/**
+ * Semantic colour tokens for light + dark.
+ * Prefer `useColors()` in components — edit brand.ts to re-theme the app.
+ */
 const colors = {
-  light: {
-    text: "#0D0D55",
-    tint: "#E8457A",
-
-    background: "#F7F7FA",
-    foreground: "#0D0D55",
-
-    card: "#FFFFFF",
-    cardForeground: "#0D0D55",
-
-    primary: "#E8457A",
-    primaryForeground: "#FFFFFF",
-
-    secondary: "#EDF6C0",
-    secondaryForeground: "#2B3700",
-
-    muted: "#EEEEF2",
-    mutedForeground: "#6B6B8A",
-
-    accent: "#FA879F",
-    accentForeground: "#1C0716",
-
-    destructive: "#EF4444",
-    destructiveForeground: "#FFFFFF",
-
-    success: "#D9F103",
-    successForeground: "#0D0D55",
-
-    warning: "#FB923C",
-    warningForeground: "#FFFFFF",
-
-    border: "#DDDDE8",
-    input: "#DDDDE8",
-
-    soft: "#F1F0FB",
-    activeBg: "#ECEEFF",
-    alertBg: "rgba(190,24,93,0.08)",
-
-    clockInBg: "#EAF3DE",
-    clockInBorder: "#C0DD97",
-    clockInText: "#27500A",
-    clockInIcon: "#3B6D11",
-    composerPink: "#D4537E",
-    composerPurple: "#7F77DD",
-
-    dangerBg: "#FCEBEB",
-    dangerBorder: "#F7C1C1",
-    dangerText: "#791F1F",
-    dangerIcon: "#A32D2D",
-
-    navy: "#0D0D55",
-    pink: "#FA879F",
-    lime: "#D9F103",
-    blue: "#5271FF",
-  },
-
-  dark: {
-    text: "#F9FAFB",
-    tint: "#F472B6",
-
-    background: "#111827",
-    foreground: "#F9FAFB",
-
-    card: "#1F2937",
-    cardForeground: "#F9FAFB",
-
-    primary: "#F472B6",
-    primaryForeground: "#111827",
-
-    secondary: "#1E1B4B",
-    secondaryForeground: "#C7D2FE",
-
-    muted: "#374151",
-    mutedForeground: "#9CA3AF",
-
-    accent: "#F472B6",
-    accentForeground: "#FFFFFF",
-
-    destructive: "#F87171",
-    destructiveForeground: "#111827",
-
-    success: "#34D399",
-    successForeground: "#111827",
-
-    warning: "#FCD34D",
-    warningForeground: "#111827",
-
-    border: "#374151",
-    input: "#374151",
-
-    soft: "#374151",
-    activeBg: "#1E1B4B",
-    alertBg: "rgba(190,24,93,0.2)",
-
-    clockInBg: "rgba(74,222,128,0.12)",
-    clockInBorder: "rgba(74,222,128,0.35)",
-    clockInText: "#86EFAC",
-    clockInIcon: "#4ADE80",
-    composerPink: "#F472B6",
-    composerPurple: "#A5B4FC",
-
-    dangerBg: "rgba(248,113,113,0.12)",
-    dangerBorder: "rgba(248,113,113,0.35)",
-    dangerText: "#FCA5A5",
-    dangerIcon: "#F87171",
-
-    navy: "#818CF8",
-    pink: "#F472B6",
-    lime: "#34D399",
-    blue: "#818CF8",
-  },
-
+  light,
+  dark,
+  /** @deprecated Prefer `radius.md` from layout tokens via `useTheme()`. */
   radius: 12,
 };
 
