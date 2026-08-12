@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     shift_reminder_minutes_second: int = int(os.environ.get("SHIFT_REMINDER_MINUTES_SECOND", "30") or 30)
     expo_push_enabled: bool = os.environ.get("EXPO_PUSH_ENABLED", "false").lower() == "true"
     expo_access_token: str = os.environ.get("EXPO_ACCESS_TOKEN", "")
+    firebase_enabled: bool = os.environ.get("FIREBASE_ENABLED", "false").lower() == "true"
+    firebase_credentials_json: str = os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
+    firebase_credentials_path: str = os.environ.get("FIREBASE_CREDENTIALS_PATH", "")
 
     # Task evidence object storage (CARECLIQV2-230)
     # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below

@@ -26,7 +26,7 @@ function formatAud(cents: number) {
 }
 
 function formatDate(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "N/A";
   return new Date(iso).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
@@ -135,7 +135,7 @@ export default function CoordinatorTravelExpenses() {
           <Button
             type="button"
             className="font-black text-white"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
             disabled={rateMut.isPending}
             onClick={() => rateMut.mutate()}
           >

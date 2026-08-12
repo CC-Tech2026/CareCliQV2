@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -132,7 +132,7 @@ function ThreadView({
               <div
                 className="max-w-[85%] rounded-2xl px-3 py-2 text-sm"
                 style={{
-                  background: mine ? PLUM : "#F8F8FE",
+                  background: mine ? PLUM : "#F4EDE6",
                   color: mine ? "#fff" : TEXT,
                 }}
               >
@@ -158,8 +158,9 @@ function ThreadView({
           <button
             type="button"
             disabled={!draft.trim() || sending}
+            aria-label={translate("messages.send")}
             className="rounded-xl px-3 py-2 text-white disabled:opacity-50"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
             onClick={() => {
               onSend(draft.trim());
               setDraft("");
@@ -217,7 +218,7 @@ export default function WorkerMessages() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("messages.title")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("messages.title")}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>

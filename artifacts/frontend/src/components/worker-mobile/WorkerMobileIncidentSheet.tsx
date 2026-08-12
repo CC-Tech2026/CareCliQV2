@@ -55,7 +55,7 @@ export function WorkerMobileIncidentSheet({
             Incident report
           </p>
           <p className="truncate text-[12px]" style={{ color: WM.muted }}>
-            Session stays open — return when done
+            Session stays open. Return when done
           </p>
         </div>
       </header>

@@ -128,8 +128,6 @@ async def update_my_profile(body: dict, current_user: dict = Depends(get_current
     role_complete = False
     if role == "support_worker":
         role_complete = required_common
-    elif role == "allied_health":
-        role_complete = required_common and bool(payload.get("discipline"))
     elif role == "support_coordinator":
         role_complete = required_common or bool(payload.get("full_name"))
     if role_complete:

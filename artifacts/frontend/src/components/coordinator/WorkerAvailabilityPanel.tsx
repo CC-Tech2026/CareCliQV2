@@ -314,7 +314,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                     <span
                       key={s.skill}
                       className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
-                      style={{ background: "#EDE9FF", color: PLUM }}
+                      style={{ background: "#FCE3EB", color: PLUM }}
                     >
                       <Check size={9} />
                       {s.skill}
@@ -340,7 +340,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
-                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3]"
+                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#E8457A]"
                   style={{ borderColor: BORDER }}
                   placeholder={translate("coordinator.availability.skillPlaceholder")}
                 />
@@ -360,7 +360,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   <button
                     key={key}
                     onClick={() => addSkillMut.mutate(translate(key))}
-                    className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-[#EDE9FF]"
+                    className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-[#FCE3EB]"
                     style={{ borderColor: BORDER, color: MUTED }}
                   >
                     + {translate(key)}

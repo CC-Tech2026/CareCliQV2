@@ -143,7 +143,7 @@ export function BodyExaminationPanel({
                           {getZoneLabel(m.zone, translate)}
                         </span>
                         <span className="text-muted-foreground shrink-0">
-                          — {getMarkerColorLabel(m.color, translate)}
+                          · {getMarkerColorLabel(m.color, translate)}
                         </span>
                       </div>
                       {!readOnly && (

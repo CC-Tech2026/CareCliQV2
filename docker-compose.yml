@@ -11,10 +11,13 @@ services:
       PORT: "8000"
       TZ: Australia/Adelaide
       APP_TIMEZONE: Australia/Adelaide
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8081}
     ports:
       - "8000:8000"
     expose:
       - "8000"
+    volumes:
+      - ./backend/secrets:/app/backend/secrets:ro
     healthcheck:
       test:
         [
@@ -47,6 +50,19 @@ services:
       PORT: "80"
     ports:
       - "3000:80"
+    restart: unless-stopped
+
+  mobile:
+    build:
+      context: .
+      dockerfile: artifacts/mobile/Dockerfile
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8081:80"
     restart: unless-stopped
 
   k6:

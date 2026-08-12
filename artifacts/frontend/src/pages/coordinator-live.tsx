@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Radio, Clock, User, AlertTriangle, MessageSquare, Activity,
   XCircle, CheckCircle2, ChevronRight, X, Send, Zap, Flag,
-  RefreshCw, Filter, Eye,
+  RefreshCw, Filter, Eye, MoreVertical, Search, Phone, Mail, LogIn, Clock3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   getLiveShifts, sendShiftMessage, flagShift, emergencyStopShift, updateShiftBriefing,
@@ -71,7 +75,7 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
 function TaskBar({ total, completed }: { total: number; completed: number }) {
   const { translate } = useAccessibility();
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E5E7EB";
+  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E8E8EA";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
@@ -153,7 +157,7 @@ function MessageModal({
               onClick={() => setType(t.v)}
               className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
               style={{
-                background: type === t.v ? PLUM : SOFT,
+                background: type === t.v ? "var(--cc-cta)" : SOFT,
                 color: type === t.v ? "#fff" : MUTED,
               }}
             >
@@ -178,7 +182,7 @@ function MessageModal({
                 <div
                   className="max-w-[80%] px-3 py-2 rounded-2xl text-[13px]"
                   style={{
-                    background: mine ? PLUM : "var(--cc-bg)",
+                    background: mine ? "var(--cc-cta)" : "var(--cc-bg)",
                     color: mine ? "#fff" : TEXT,
                     border: mine ? "none" : `1px solid ${BORDER}`,
                   }}
@@ -202,8 +206,8 @@ function MessageModal({
           />
           <Button
             size="sm"
+            variant="navy"
             className="rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
             disabled={!text.trim() || sendMut.isPending}
             onClick={() => sendMut.mutate()}
           >
@@ -403,8 +407,30 @@ function LiveShiftCard({
             <p className="font-black text-[14px] leading-tight" style={{ color: TEXT }}>
               {shift.worker_name}
             </p>
-            <p className="text-[11px] font-medium" style={{ color: MUTED }}>
-              {shift.participant_name ?? "—"}
+            {/* Contact details */}
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              {shift.worker_phone ? (
+                <a
+                  href={`tel:${shift.worker_phone}`}
+                  className="flex items-center gap-1 text-[11px] font-medium hover:underline"
+                  style={{ color: MUTED }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Phone size={10} /> {shift.worker_phone}
+                </a>
+              ) : shift.worker_email ? (
+                <a
+                  href={`mailto:${shift.worker_email}`}
+                  className="flex items-center gap-1 text-[11px] font-medium hover:underline truncate max-w-[140px]"
+                  style={{ color: MUTED }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Mail size={10} /> {shift.worker_email}
+                </a>
+              ) : null}
+            </div>
+            <p className="text-[11px] font-medium mt-0.5" style={{ color: MUTED }}>
+              {shift.participant_name ?? "N/A"}
             </p>
           </div>
         </div>
@@ -486,35 +512,41 @@ function LiveShiftCard({
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 h-7 text-[11px] rounded-xl gap-1"
-          style={{ borderColor: BORDER, color: MUTED }}
-          onClick={() => onMessage(shift)}
+      {/* Actions — three-dots dropdown */}
+      <div className="flex items-center justify-between mt-1" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-colors hover:bg-black/5"
+          style={{ color: MUTED }}
+          onClick={() => onDetail(shift)}
         >
-          <MessageSquare size={12} /> {translate("coordinator.live.message")}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 h-7 text-[11px] rounded-xl gap-1"
-          style={{ borderColor: BORDER, color: "#D97706" }}
-          onClick={() => onFlag(shift)}
-        >
-          <Flag size={12} /> {translate("coordinator.live.action.flag")}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 w-7 p-0 rounded-xl shrink-0"
-          style={{ borderColor: "#FECACA", color: CORAL }}
-          onClick={() => onEmergency(shift)}
-        >
-          <Zap size={12} />
-        </Button>
+          <Eye size={12} /> View details
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="h-8 w-8 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors"
+              style={{ color: MUTED }}
+              aria-label="Shift actions"
+            >
+              <MoreVertical size={16} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onMessage(shift)}>
+              <MessageSquare size={13} className="mr-2" /> Message worker
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFlag(shift)}>
+              <Flag size={13} className="mr-2" /> Flag issue
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+              onClick={() => onEmergency(shift)}
+            >
+              <Zap size={13} className="mr-2" /> Emergency stop
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -574,7 +606,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
           />
           <Button
             className="w-full rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             disabled={!note.trim() || flagMut.isPending}
             onClick={() => flagMut.mutate()}
           >
@@ -651,11 +683,15 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-export default function CoordinatorLivePage() {
+export default function CoordinatorLivePage({ embedded = false, externalSearch }: { embedded?: boolean; externalSearch?: string } = {}) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const [filter, setFilter] = useState<"all" | "green" | "yellow" | "red">("all");
+  const [search, setSearch] = useState("");
+  const [durationFilter, setDurationFilter] = useState<"all" | "short" | "long">("all");
+  const [timeOfDayFilter, setTimeOfDayFilter] = useState<"all" | "morning" | "afternoon" | "evening" | "night">("all");
+  const [clockInFilter, setClockInFilter] = useState<"all" | "clocked_in" | "not_clocked_in">("all");
   const [msgShift, setMsgShift] = useState<LiveShift | null>(null);
   const [flagShiftState, setFlagShiftState] = useState<LiveShift | null>(null);
   const [emergShift, setEmergShift] = useState<LiveShift | null>(null);
@@ -663,7 +699,55 @@ export default function CoordinatorLivePage() {
 
   const { data: shifts = [], isLoading, dataUpdatedAt, refetch } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], { queryFn: getLiveShifts, refetchInterval: 30_000 });
 
-  const filtered = filter === "all" ? shifts : shifts.filter((s) => s.live_status === filter);
+  // Derive time-of-day from scheduled_start (6–12 morning, 12–17 afternoon, 17–22 evening, else night)
+  const getTimeSlot = (iso?: string | null): "morning" | "afternoon" | "evening" | "night" | null => {
+    if (!iso) return null;
+    try {
+      const h = new Date(iso).getHours();
+      if (h >= 6  && h < 12) return "morning";
+      if (h >= 12 && h < 17) return "afternoon";
+      if (h >= 17 && h < 22) return "evening";
+      return "night";
+    } catch { return null; }
+  };
+
+  // Only show time-of-day chips that actually appear in the current data
+  const availableTimeSlots = useMemo(() => {
+    const slots = new Set(shifts.map((s) => getTimeSlot(s.scheduled_start)).filter(Boolean) as string[]);
+    const order = ["morning", "afternoon", "evening", "night"];
+    return order.filter((t) => slots.has(t)) as Array<"morning" | "afternoon" | "evening" | "night">;
+  }, [shifts]);
+
+  // Long shift = scheduled duration >= 6 hours; falls back to backend flag if times unavailable
+  const isLongShift = (s: LiveShift): boolean => {
+    if (s.scheduled_start && s.scheduled_end) {
+      const hrs = (new Date(s.scheduled_end).getTime() - new Date(s.scheduled_start).getTime()) / 3_600_000;
+      return hrs >= 6;
+    }
+    return !!s.engagement?.is_long_shift;
+  };
+
+  const filtered = (() => {
+    let result = filter === "all" ? shifts : shifts.filter((s) => s.live_status === filter);
+    if (durationFilter === "short") result = result.filter((s) => !isLongShift(s));
+    if (durationFilter === "long")  result = result.filter((s) => isLongShift(s));
+    if (timeOfDayFilter !== "all")  result = result.filter((s) => getTimeSlot(s.scheduled_start) === timeOfDayFilter);
+    if (clockInFilter === "clocked_in")     result = result.filter((s) => !!s.clocked_in_at);
+    if (clockInFilter === "not_clocked_in") result = result.filter((s) => !s.clocked_in_at);
+    const activeSearch = externalSearch ?? search;
+    if (activeSearch.trim()) {
+      const q = activeSearch.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.worker_name?.toLowerCase().includes(q) ||
+          s.participant_name?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  })();
+
+  const clockedInCount    = shifts.filter((s) => !!s.clocked_in_at).length;
+  const notClockedInCount = shifts.filter((s) => !s.clocked_in_at).length;
 
   const counts = {
     all:    shifts.length,
@@ -676,46 +760,47 @@ export default function CoordinatorLivePage() {
 
   return (
     <div className="pb-10">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: PLUM }}>
-            <Radio size={20} className="text-white" />
+      {/* Header — full when standalone, compact toolbar when embedded */}
+      {/* When embedded the parent (rostering page) owns search + refresh — just show refresh timestamp */}
+      {embedded ? (
+        <p className="text-[11px] mb-4" style={{ color: MUTED }}>Auto-updating every 30s · Last refresh {lastRefresh}</p>
+      ) : (
+        <div className="flex items-center mb-5 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-text)" }}>
+              <Radio size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+                {translate("coordinator.live.eyebrow")}
+              </p>
+              <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+                {translate("coordinator.live.title")}
+              </h1>
+              <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
+                {translateParams("coordinator.live.subtitle", { time: lastRefresh })}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-              {translate("coordinator.live.title")}
-            </h1>
-            <p className="text-[12px]" style={{ color: MUTED }}>
-              {translateParams("coordinator.live.subtitle", { time: lastRefresh })}
-            </p>
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <div className="relative hidden sm:block">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: MUTED }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search worker or participant…" className="h-8 pl-8 pr-3 rounded-xl border text-[12px] outline-none w-52 transition-all focus:w-64" style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }} />
+            </div>
+            {counts.red > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-black" style={{ background: "#FEF2F2", color: CORAL }}>
+                <AlertTriangle size={13} /> {counts.red === 1 ? translateParams("coordinator.live.alertCount", { count: String(counts.red) }) : translateParams("coordinator.live.alertCountPlural", { count: String(counts.red) })}
+              </span>
+            )}
+            <Button size="sm" variant="outline" className="rounded-xl gap-1.5" style={{ borderColor: BORDER }} onClick={() => refetch()}>
+              <RefreshCw size={13} /> {translate("coordinator.live.refresh")}
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {counts.red > 0 && (
-            <span
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-black"
-              style={{ background: "#FEF2F2", color: CORAL }}
-            >
-              <AlertTriangle size={13} /> {counts.red === 1
-                ? translateParams("coordinator.live.alertCount", { count: String(counts.red) })
-                : translateParams("coordinator.live.alertCountPlural", { count: String(counts.red) })}
-            </span>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-xl gap-1.5"
-            style={{ borderColor: BORDER }}
-            onClick={() => refetch()}
-          >
-            <RefreshCw size={13} /> {translate("coordinator.live.refresh")}
-          </Button>
-        </div>
-      </div>
+      )}
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
+      {/* Summary stats — status filter cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
         {(["all", "green", "yellow", "red"] as const).map((k) => {
           const meta = k === "all"
             ? { ring: PLUM, bg: SOFT, label: translate("coordinator.live.filter.totalActive") }
@@ -739,6 +824,92 @@ export default function CoordinatorLivePage() {
             </button>
           );
         })}
+      </div>
+
+      {/* ── Filter bar — segmented controls, no outer card ── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 mb-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+
+        {/* Clock-in status */}
+        <div className="flex items-center gap-0.5 rounded-xl p-0.5" style={{ background: SOFT }}>
+          {([
+            { id: "all",            label: "All",            count: shifts.length },
+            { id: "clocked_in",     label: "Clocked in",    count: clockedInCount,    icon: LogIn },
+            { id: "not_clocked_in", label: "Not clocked in", count: notClockedInCount, icon: Clock3 },
+          ] as const).map((opt) => {
+            const Icon = opt.id !== "all" ? (opt as { icon: React.ElementType }).icon : null;
+            const active = clockInFilter === opt.id;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setClockInFilter(opt.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
+                style={{
+                  background: active ? CORAL : "transparent",
+                  color: active ? "#fff" : MUTED,
+                  boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                }}
+              >
+                {Icon && <Icon size={10} />}
+                {opt.label}
+                <span
+                  className="text-[9px] font-black px-1 rounded-full"
+                  style={{ background: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)", color: active ? "#fff" : MUTED }}
+                >{opt.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="h-5 w-px shrink-0" style={{ background: BORDER }} />
+
+        {/* Duration */}
+        <div className="flex items-center gap-0.5 rounded-xl p-0.5" style={{ background: SOFT }}>
+          {(["all", "short", "long"] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDurationFilter(d)}
+              className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
+              style={{
+                background: durationFilter === d ? CORAL : "transparent",
+                color: durationFilter === d ? "#fff" : MUTED,
+                boxShadow: durationFilter === d ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+              }}
+            >
+              {d === "all" ? "Any duration" : d === "short" ? "Regular" : "Long shift"}
+            </button>
+          ))}
+        </div>
+
+        {/* Time of day — only shown if data covers multiple time slots */}
+        {availableTimeSlots.length > 0 && (
+          <>
+            <div className="h-5 w-px shrink-0" style={{ background: BORDER }} />
+            <div className="flex items-center gap-0.5 rounded-xl p-0.5" style={{ background: SOFT }}>
+              <button
+                onClick={() => setTimeOfDayFilter("all")}
+                className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
+                style={{
+                  background: timeOfDayFilter === "all" ? CORAL : "transparent",
+                  color: timeOfDayFilter === "all" ? "#fff" : MUTED,
+                  boxShadow: timeOfDayFilter === "all" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                }}
+              >All times</button>
+              {availableTimeSlots.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTimeOfDayFilter(t)}
+                  className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150 capitalize"
+                  style={{
+                    background: timeOfDayFilter === t ? CORAL : "transparent",
+                    color: timeOfDayFilter === t ? "#fff" : MUTED,
+                    boxShadow: timeOfDayFilter === t ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                  }}
+                >{t}</button>
+              ))}
+            </div>
+          </>
+        )}
+
       </div>
 
       {/* Grid */}

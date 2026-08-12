@@ -1,6 +1,6 @@
 import { jsonFetch } from "@/services/http";
 
-export type SessionNoteType = "text" | "voice" | "photo" | "file";
+export type SessionNoteType = "text" | "voice" | "photo" | "file" | "check-in";
 
 export type SessionNoteRecord = {
   note_id: string;

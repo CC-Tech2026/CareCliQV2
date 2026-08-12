@@ -1,19 +1,35 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
+import { getMobileApiBaseUrl } from "@/lib/api-base-url";
+
 type PushRegisterResponse = { registered: boolean };
 
 async function apiBaseUrl(): Promise<string> {
-  if (process.env.EXPO_PUBLIC_DOMAIN) {
-    return `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-  }
-  return "";
+  return getMobileApiBaseUrl();
 }
 
 export async function registerExpoPushToken(
   authToken: string,
   deviceId: string,
   pushToken: string,
+): Promise<boolean> {
+  return registerPushToken(authToken, deviceId, pushToken, "expo");
+}
+
+export async function registerFcmPushToken(
+  authToken: string,
+  deviceId: string,
+  pushToken: string,
+): Promise<boolean> {
+  return registerPushToken(authToken, `${deviceId}:fcm`, pushToken, "fcm");
+}
+
+async function registerPushToken(
+  authToken: string,
+  deviceId: string,
+  pushToken: string,
+  tokenType: "expo" | "fcm",
 ): Promise<boolean> {
   const base = await apiBaseUrl();
   const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
@@ -29,6 +45,7 @@ export async function registerExpoPushToken(
       device_id: deviceId,
       push_token: pushToken,
       platform,
+      token_type: tokenType,
     }),
   });
 

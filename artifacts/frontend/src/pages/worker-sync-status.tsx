@@ -75,7 +75,7 @@ export default function WorkerSyncStatusPage() {
       </div>
 
       {activeShiftId && (
-        <div className="rounded-2xl border border-cc-border bg-[var(--cc-surface)] p-4">
+        <div className="rounded-2xl border border-cc-border bg-card p-4">
           <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
             {translate("sync.page.mobileData")}
           </p>
@@ -88,7 +88,7 @@ export default function WorkerSyncStatusPage() {
       <div className="space-y-3">
         {queueItems.length === 0 ? (
           <div
-            className="rounded-2xl border border-dashed border-cc-border bg-[var(--cc-surface)] p-8 text-center text-sm"
+            className="rounded-2xl border border-dashed border-cc-border bg-card p-8 text-center text-sm"
             style={{ color: MUTED }}
           >
             {translate("sync.page.empty")}
@@ -100,11 +100,11 @@ export default function WorkerSyncStatusPage() {
             return (
               <div
                 key={item.id}
-                className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-[var(--cc-surface)] p-4"
+                className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-card p-4"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-black text-safe" style={{ color: TEXT }}>
-                    {item.label} — {item.detail} — {translate("sync.page.queued")} {queuedLabel}
+                    {item.label} · {item.detail} · {translate("sync.page.queued")} {queuedLabel}
                   </p>
                   {result && !result.ok && (
                     <p className="mt-1 text-xs text-red-600">{result.error}</p>

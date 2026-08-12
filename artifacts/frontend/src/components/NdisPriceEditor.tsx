@@ -181,7 +181,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           {showHistory && history.length > 0 && (
             <div className="rounded-lg p-4 border" style={{ background: SOFT, borderColor: BORDER }}>
               <p className="text-xs font-bold mb-3" style={{ color: MUTED }}>{translate("coordinator.ndis.price.recentVersions")}</p>
-              <div className="divide-y space-y-2" style={{ borderColor: "#EEEAFB" }}>
+              <div className="divide-y space-y-2" style={{ borderColor: "#EDE3FC" }}>
                 {history.map((item, idx) => (
                   <div key={idx} className="py-2 text-xs">
                     <div className="flex items-center justify-between">

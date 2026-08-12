@@ -62,7 +62,7 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
             type="button"
             onClick={onViewDetails}
             className="w-full rounded-full py-3 text-sm font-black text-white"
-            style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})` }}
+            style={{ background: PLUM }}
           >
             {translate("shift.confirm.viewDetails")}
           </button>

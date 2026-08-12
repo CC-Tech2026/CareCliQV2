@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,11 +9,10 @@ import { Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from "lucide-react"
 
 const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
-const BORDER = "#C7D2FE";
+const BORDER = "#FADAE4";
 
 const ROLE_KEYS: Record<string, string> = {
   support_worker:      "auth.invite.role.supportWorker",
-  allied_health:       "auth.invite.role.alliedHealth",
   support_coordinator: "auth.invite.role.supportCoordinator",
 };
 
@@ -130,7 +129,7 @@ export default function AcceptInvite() {
         <div className="flex justify-center mb-6">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-sm"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-text)" }}
           >
             C
           </div>
@@ -263,7 +262,7 @@ export default function AcceptInvite() {
                 disabled={busy}
                 className="w-full py-3 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2 transition-opacity"
                 style={{
-                  background: PLUM,
+                  background: "var(--cc-cta)",
                   opacity: busy ? 0.7 : 1,
                 }}
               >

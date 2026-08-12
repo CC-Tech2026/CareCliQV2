@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
@@ -10,7 +10,7 @@ import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-// ── Design tokens — aligned with Dashboard ────────────────────────────────────
+// -- Design tokens � aligned with Dashboard ------------------------------------
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const TEXT   = "var(--cc-text)";
@@ -105,27 +105,30 @@ export default function Incidents() {
   return (
     <div className="space-y-6 pb-10">
 
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      {/* -- Page header ------------------------------------------------------- */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="hidden" style={{ color: CORAL }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             NDIS Practice Standard 2.3
           </p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("incidents.title")}
           </h1>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+            Report and track incidents, restrictive practices and safety concerns
+          </p>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
           className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           <Plus size={15} strokeWidth={2.5} />
           {translate("incidents.log")}
         </button>
       </div>
 
-      {/* ── Stat cards ──────────────────────────────────────────────────────── */}
+      {/* -- Stat cards -------------------------------------------------------- */}
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {([
           { label: translate("incidents.total"), value: stats?.total ?? 0, icon: ClipboardList, valueColor: PLUM },
@@ -148,7 +151,7 @@ export default function Incidents() {
         ))}
       </div>
 
-      {/* ── NDIS notification banner ─────────────────────────────────────────── */}
+      {/* -- NDIS notification banner ------------------------------------------- */}
       {(stats?.ndis_pending ?? 0) > 0 && (
         <div
           className="rounded-lg border px-4 py-3.5 flex items-start gap-3"
@@ -161,7 +164,7 @@ export default function Incidents() {
         </div>
       )}
 
-      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      {/* -- Filter bar -------------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Input
@@ -196,7 +199,7 @@ export default function Incidents() {
         </Select>
       </div>
 
-      {/* ── Incident list ────────────────────────────────────────────────────── */}
+      {/* -- Incident list ------------------------------------------------------ */}
       <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
 
         {/* list header */}
@@ -234,7 +237,7 @@ export default function Incidents() {
             )}
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+          <div className="divide-y" style={{ borderColor: "#EDE3FC" }}>
             {filtered.map(incident => {
               const sevStyle = SEVERITY_STYLES[incident.severity] ?? SEVERITY_STYLES.medium;
               const stStyle = STATUS_STYLES[incident.status] ?? STATUS_STYLES.reported;
@@ -253,15 +256,15 @@ export default function Incidents() {
 
                   {/* Main text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black truncate transition group-hover:text-[#3730A3]" style={{ color: TEXT }}>
+                    <p className="text-sm font-black truncate transition group-hover:text-[#E8457A]" style={{ color: TEXT }}>
                       {incident.title}
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
                       {incident.participant_name || translate("incidents.noParticipant")}
-                      {" · "}
+                      {" � "}
                       {incidentTypeLabel(incident.incident_type, translate)}
                       {incident.incident_date && (
-                        <> · {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
+                        <> � {formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })}</>
                       )}
                     </p>
                   </div>

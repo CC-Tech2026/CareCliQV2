@@ -15,7 +15,6 @@ const ROLE_KEYS: Record<string, string> = {
   support_worker: "hub.role.supportWorker",
   support_coordinator: "hub.role.supportCoordinator",
   managing_director: "hub.role.managingDirector",
-  allied_health: "hub.role.alliedHealth",
   admin: "hub.role.admin",
 };
 

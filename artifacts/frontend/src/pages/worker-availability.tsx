@@ -143,7 +143,7 @@ export default function WorkerAvailabilityPage() {
 
       {isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
 
-      <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-4" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black mb-3" style={{ color: TEXT }}>{translate("availability.weekly")}</h2>
         <p className="text-xs mb-3" style={{ color: MUTED }}>{translate("availability.tapHint")}</p>
         <div className="overflow-x-auto">
@@ -192,7 +192,7 @@ export default function WorkerAvailabilityPage() {
         </button>
       </section>
 
-      <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-4" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("availability.maxShifts")}</h2>
         <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>{translate("availability.maxShiftsHint")}</p>
         <input
@@ -214,7 +214,7 @@ export default function WorkerAvailabilityPage() {
         </button>
       </section>
 
-      <section className="rounded-2xl border bg-cc-surface p-4 space-y-3" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-4 space-y-3" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("availability.blackoutDates")}</h2>
         <p className="text-xs" style={{ color: MUTED }}>{translate("availability.blackoutHint")}</p>
         {blackouts.map((b, i) => (

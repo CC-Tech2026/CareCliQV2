@@ -276,7 +276,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     onChange={(e) => setStartTime(e.target.value)}
                     title={translate("coordinator.bulkShift.startTime")}
                     placeholder={translate("coordinator.bulkShift.timePlaceholder")}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
+                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#E8457A]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
@@ -288,7 +288,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     onChange={(e) => setEndTime(e.target.value)}
                     title={translate("coordinator.bulkShift.endTime")}
                     placeholder={translate("coordinator.bulkShift.timePlaceholder")}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
+                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#E8457A]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
@@ -329,7 +329,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                   <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>{translate("coordinator.bulkShift.summary")}</p>
                   <div className="space-y-1 text-[12px]">
                     {[
-                      [translate("common.participant"), participant?.full_name || "—"],
+                      [translate("common.participant"), participant?.full_name || "N/A"],
                       ...(worker ? [[translate("common.worker"), worker.full_name]] as [string, string][] : []),
                       [translate("coordinator.bulkShift.schedule"), `${selectedDays.map((d) => DAYS_OF_WEEK[d]?.label).join(", ")} · ${startTime}–${endTime}`],
                       [translate("coordinator.bulkShift.duration"), translateParams("coordinator.bulkShift.durationValue", { weeks: String(weeks), date: format(new Date(startDate + "T00:00:00"), "d MMM yyyy") })],

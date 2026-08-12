@@ -80,3 +80,58 @@ async def log_action(
         supabase.table("audit_logs").insert(row).execute()
     except Exception as exc:
         logger.warning("audit_service.log_action failed (non-fatal): %s", exc)
+
+
+async def get_entity_audit_trail(
+    entity_type: str,
+    entity_id: str,
+    organization_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Read-only: the immutable audit trail for one entity, newest first.
+
+    Actor display names are resolved from `users` in a single batch lookup;
+    entries with no `user_id` (system-originated) are labelled "System".
+    """
+    try:
+        supabase = get_supabase_admin()
+        query = (
+            supabase.table("audit_logs")
+            .select("id, action_type, action, user_id, before_state, after_state, details, created_at")
+            .eq("entity_type", entity_type)
+            .eq("entity_id", entity_id)
+        )
+        if organization_id:
+            query = query.eq("organization_id", organization_id)
+        rows = (query.order("created_at", desc=True).execute().data) or []
+    except Exception as exc:
+        logger.warning("audit_service.get_entity_audit_trail failed (non-fatal): %s", exc)
+        return []
+
+    user_ids = sorted({r["user_id"] for r in rows if r.get("user_id")})
+    names: dict[str, str] = {}
+    if user_ids:
+        try:
+            users = (
+                get_supabase_admin()
+                .table("users")
+                .select("id, full_name, email")
+                .in_("id", user_ids)
+                .execute()
+                .data
+            ) or []
+            names = {u["id"]: (u.get("full_name") or u.get("email") or u["id"]) for u in users}
+        except Exception as exc:
+            logger.warning("audit_service.get_entity_audit_trail user lookup failed (non-fatal): %s", exc)
+
+    return [
+        {
+            "id": r.get("id"),
+            "action_type": r.get("action_type") or r.get("action"),
+            "actor_name": names.get(r.get("user_id") or "", r.get("user_id")) if r.get("user_id") else "System",
+            "before_state": r.get("before_state"),
+            "after_state": r.get("after_state"),
+            "details": r.get("details"),
+            "created_at": r.get("created_at"),
+        }
+        for r in rows
+    ]

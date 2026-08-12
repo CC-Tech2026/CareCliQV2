@@ -79,8 +79,11 @@ def list_user_notifications(
     unread_only: bool = False,
     banners_only: bool = False,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     since = (datetime.now(timezone.utc) - timedelta(days=max(1, days))).isoformat()
+    page_size = max(1, limit)
+    range_end = offset + page_size - 1
     try:
         query = (
             get_supabase_admin()
@@ -89,7 +92,7 @@ def list_user_notifications(
             .eq("user_id", user_id)
             .gte("created_at", since)
             .order("created_at", desc=True)
-            .limit(limit)
+            .range(offset, range_end)
         )
         if unread_only:
             query = query.is_("read_at", "null").is_("dismissed_at", "null")
@@ -120,6 +123,17 @@ def dismiss_notification(notification_id: str, user_id: str) -> bool:
         get_supabase_admin().table("user_notifications").update(
             {"dismissed_at": now, "read_at": now}
         ).eq("id", notification_id).eq("user_id", user_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def dismiss_notifications_by_reference(user_id: str, reference_key: str) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        get_supabase_admin().table("user_notifications").update(
+            {"dismissed_at": now, "read_at": now}
+        ).eq("user_id", user_id).eq("reference_key", reference_key).is_("dismissed_at", "null").execute()
         return True
     except Exception:
         return False

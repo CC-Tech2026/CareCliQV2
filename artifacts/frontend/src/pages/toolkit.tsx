@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { AlertTriangle, Loader2, PackagePlus, RotateCcw, Wrench } from "lucide-react";
@@ -51,10 +51,10 @@ function ItemRow({
   const unitLabel = item.unit || (coordinator ? "units" : translate("toolkit.units"));
 
   return (
-    <div className="grid gap-3 border-b border-[#EEEAFB] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div className="grid gap-3 border-b border-[#EDE3FC] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-black text-[#111827]">{item.name}</p>
+          <p className="font-black text-[#1A1A2E]">{item.name}</p>
           {low && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700">
               <AlertTriangle className="h-3 w-3" />
@@ -62,17 +62,17 @@ function ItemRow({
             </span>
           )}
         </div>
-        <p className="mt-1 text-xs text-[#6B7280]">
+        <p className="mt-1 text-xs text-[#6A6A77]">
           {coordinator
-            ? `${category} • ${item.quantity} ${unitLabel} available${item.minimum_quantity ? ` • minimum ${item.minimum_quantity}` : ""}${item.expiry_date ? ` • expires ${item.expiry_date}` : ""}`
-            : `${translateParams("toolkit.unitsAvailable", { category, count: String(item.quantity) })}${item.minimum_quantity ? ` • ${translateParams("toolkit.minimum", { count: String(item.minimum_quantity) })}` : ""}${item.expiry_date ? ` • ${translateParams("toolkit.expiresOn", { date: item.expiry_date })}` : ""}`}
+            ? `${category} � ${item.quantity} ${unitLabel} available${item.minimum_quantity ? ` � minimum ${item.minimum_quantity}` : ""}${item.expiry_date ? ` � expires ${item.expiry_date}` : ""}`
+            : `${translateParams("toolkit.unitsAvailable", { category, count: String(item.quantity) })}${item.minimum_quantity ? ` � ${translateParams("toolkit.minimum", { count: String(item.minimum_quantity) })}` : ""}${item.expiry_date ? ` � ${translateParams("toolkit.expiresOn", { date: item.expiry_date })}` : ""}`}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {!coordinator && (
           <>
             <Button variant="outline" size="sm" onClick={() => onUse(item)} className="rounded-xl">{translate("toolkit.useItem")}</Button>
-            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-[#3730A3]">{translate("toolkit.requestRestock")}</Button>
+            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-[#E8457A]">{translate("toolkit.requestRestock")}</Button>
           </>
         )}
         {coordinator && (
@@ -184,12 +184,15 @@ export default function Toolkit() {
   return (
     <div className="space-y-6 pb-10">
       <div>
-        <p className="hidden" style={{ color: CORAL }}>
-          {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Clinical" : "Support Worker"}
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          {isCoordinator ? "Organisation" : "Support Worker"}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {isCoordinator ? "Team Toolkit" : translate("toolkit.title")}
         </h1>
+        <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+          Guides, templates and quick references for day-to-day work
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -206,8 +209,8 @@ export default function Toolkit() {
             ]
         ).map(([label, value]) => (
           <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-xs font-bold uppercase text-[#6B7280]">{label}</p>
-            <p className="mt-1 text-2xl font-black text-[#111827]">{value}</p>
+            <p className="text-xs font-bold uppercase text-[#6A6A77]">{label}</p>
+            <p className="mt-1 text-2xl font-black text-[#1A1A2E]">{value}</p>
           </div>
         ))}
       </div>
@@ -215,8 +218,8 @@ export default function Toolkit() {
       {isCoordinator && (
         <form onSubmit={addItem} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex items-center gap-2">
-            <PackagePlus className="h-5 w-5 text-[#3730A3]" />
-            <h2 className="font-black text-[#111827]">Add stock item</h2>
+            <PackagePlus className="h-5 w-5 text-[#E8457A]" />
+            <h2 className="font-black text-[#1A1A2E]">Add stock item</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-5">
             <div className="md:col-span-2">
@@ -237,7 +240,7 @@ export default function Toolkit() {
             </div>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: PLUM }}>
+            <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
               {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
               Save item
             </Button>
@@ -247,7 +250,7 @@ export default function Toolkit() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <Wrench className="h-5 w-5 text-[#3730A3]" />
+          <Wrench className="h-5 w-5 text-[#E8457A]" />
           <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation stock" : translate("toolkit.assignedKit")}</h2>
         </div>
         {isLoading && (
@@ -257,7 +260,7 @@ export default function Toolkit() {
         )}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && items.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No toolkit items are currently assigned." : translate("toolkit.empty")}
           </p>
         )}
@@ -278,23 +281,23 @@ export default function Toolkit() {
       {isCoordinator && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
-            <RotateCcw className="h-5 w-5 text-[#3730A3]" />
+            <RotateCcw className="h-5 w-5 text-[#E8457A]" />
             <h2 className="font-black" style={{ color: TEXT }}>Restock requests</h2>
           </div>
           {restockRequests.length === 0 ? (
-            <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
+            <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
           ) : (
-            <div className="mt-3 divide-y divide-[#EEEAFB]">
+            <div className="mt-3 divide-y divide-[#EDE3FC]">
               {restockRequests.map((request) => (
                 <div key={request.id} className="flex flex-wrap items-center gap-3 py-3">
                   <div className="flex-1">
-                    <p className="font-bold text-[#111827]">{request.item?.name || request.item_id}</p>
-                    <p className="text-xs text-[#6B7280]">{request.quantity_requested} requested • {request.status}</p>
+                    <p className="font-bold text-[#1A1A2E]">{request.item?.name || request.item_id}</p>
+                    <p className="text-xs text-[#6A6A77]">{request.quantity_requested} requested � {request.status}</p>
                   </div>
                   {request.status === "pending" && (
                     <>
                       <Button variant="outline" size="sm" onClick={() => restockReviewMutation.mutate({ request, status: "approved" })}>Approve</Button>
-                      <Button variant="ghost" size="sm" className="text-[#BE185D]" onClick={() => restockReviewMutation.mutate({ request, status: "rejected" })}>Reject</Button>
+                      <Button variant="ghost" size="sm" className="text-[#7C3AED]" onClick={() => restockReviewMutation.mutate({ request, status: "rejected" })}>Reject</Button>
                     </>
                   )}
                 </div>
@@ -306,24 +309,24 @@ export default function Toolkit() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <RotateCcw className="h-5 w-5 text-[#3730A3]" />
+          <RotateCcw className="h-5 w-5 text-[#E8457A]" />
           <h2 className="font-black" style={{ color: TEXT }}>
             {isCoordinator ? "Movement history" : translate("toolkit.movementHistory")}
           </h2>
         </div>
         {movements.length === 0 ? (
-          <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No toolkit movements have been recorded yet." : translate("toolkit.movementEmpty")}
           </p>
         ) : (
-          <div className="mt-3 divide-y divide-[#EEEAFB]">
+          <div className="mt-3 divide-y divide-[#EDE3FC]">
             {movements.slice(0, 8).map((movement) => (
               <div key={movement.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                <span className="rounded-full bg-[#F8F8FE] px-3 py-1 text-xs font-black uppercase text-[#3730A3]">
+                <span className="rounded-full bg-[#F4EDE6] px-3 py-1 text-xs font-black uppercase text-[#E8457A]">
                   {movement.movement_type}
                 </span>
-                <span className="font-bold text-[#111827]">{movement.quantity}</span>
-                <span className="text-[#6B7280]">{movement.notes || movement.item_id}</span>
+                <span className="font-bold text-[#1A1A2E]">{movement.quantity}</span>
+                <span className="text-[#6A6A77]">{movement.notes || movement.item_id}</span>
               </div>
             ))}
           </div>

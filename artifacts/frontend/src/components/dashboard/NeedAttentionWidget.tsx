@@ -26,7 +26,7 @@ function getStatusMeta(status: NeedAttentionItem['status']) {
   const map: Record<NeedAttentionItem['status'], { icon: React.ComponentType<any>; label: string; color: string; bg: string }> = {
     'blocked': { icon: AlertTriangle, label: 'Blocked', color: '#DC2626', bg: '#FEF2F2' },
     'stalled': { icon: TrendingDown, label: 'Stalled', color: '#D97706', bg: '#FFFBEB' },
-    'low_compliance': { icon: BarChart3, label: 'Low Compliance', color: '#7C3AED', bg: '#F5F3FF' },
+    'low_compliance': { icon: BarChart3, label: 'Low Compliance', color: '#E8457A', bg: '#F5F3FF' },
     'budget_concern': { icon: DollarSign, label: 'Budget Issue', color: '#F59E0B', bg: '#FEF3C7' },
   };
   return map[status];

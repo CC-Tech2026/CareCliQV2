@@ -62,7 +62,7 @@ export function WorkerMobileComplianceReport({ score, rules, onClose, onOpenInci
             <span className="text-[11px]" style={{ color: WM.muted }}>/100</span>
           </div>
           <p className="mt-2 text-[12px]" style={{ color: WM.muted }}>
-            Compliance score · {attention} of 12 rules need attention
+            Compliance score · {attention} of {rules.length} rules need attention
           </p>
           <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full" style={{ background: WM.border }}>
             <div
@@ -187,7 +187,7 @@ export function WorkerMobileSubmitSuccess({
           <button
             type="button"
             onClick={onBack}
-            className="mt-8 flex h-[50px] w-full max-w-sm items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white"
+            className="mt-8 flex h-[50px] w-full max-w-sm items-center justify-center gap-2 rounded-xl text-[15px] font-semibold dark:text-white text-black"
             style={{ background: WM.purple }}
           >
             <Home size={18} />

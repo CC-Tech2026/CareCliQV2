@@ -95,8 +95,28 @@ def _session_duration_secs(session: dict, shift: Optional[dict] = None) -> int:
     return mins * 60
 
 
-def _required_checkins(shift_hours: float, duration_secs: int) -> int:
-    """16b: 1 per 90-min window; 6h+ also requires 1 per 3-hour block."""
+def _planned_shift_duration_secs(shift: Optional[dict], session: dict) -> int:
+    """Scheduled shift length (not elapsed time), used to decide random check-ins."""
+    if shift:
+        start = _parse_dt(shift.get("scheduled_start"))
+        end = _parse_dt(shift.get("scheduled_end"))
+        if start and end and end > start:
+            return max(0, int((end - start).total_seconds()))
+        mins = int(shift.get("duration_minutes") or 0)
+        if mins > 0:
+            return mins * 60
+    mins = int(session.get("duration_minutes") or 0)
+    if mins > 0:
+        return mins * 60
+    return _session_duration_secs(session, shift)
+
+
+def _required_checkins(shift_hours: float, duration_secs: int, session_id: Optional[str] = None) -> int:
+    """Check-in count required for compliance evaluation."""
+    from .random_checkin_service import required_random_checkins, uses_random_checkins
+
+    if uses_random_checkins(duration_secs):
+        return required_random_checkins(session_id or "", duration_secs)
     if duration_secs < LONG_SHIFT_THRESHOLD_SECS:
         return 0
     per_ninety = max(1, math.floor(shift_hours / 1.5))
@@ -483,6 +503,24 @@ def get_checkin_status(
     offline_since = _parse_dt(session.get("offline_since_at"))
     gap_paused = int(session.get("gap_paused_secs") or 0)
 
+    from .random_checkin_service import (
+        evaluate_random_checkin_window,
+        uses_random_checkins,
+        _list_scheduled_checkins,
+    )
+
+    planned_secs = _planned_shift_duration_secs(shift, session)
+    scheduled = _list_scheduled_checkins(session_id)
+    if scheduled or uses_random_checkins(planned_secs):
+        return evaluate_random_checkin_window(
+            now=now,
+            scheduled_checkins=scheduled,
+            on_break=on_break,
+            last_checkin_at=last_checkin_at,
+            duration_secs=max(planned_secs, duration_secs),
+            checkin_count=checkin_count,
+        )
+
     return _evaluate_checkin_window(
         now=now,
         last_activity_at=last_activity,
@@ -545,7 +583,17 @@ def submit_checkin(
     shift_id = str(shift["id"])
     patient_id = _patient_id(session, shift)
     now = _now()
-    prompted = _parse_dt(prompt_triggered_at) or now
+
+    from .random_checkin_service import _list_scheduled_checkins, uses_random_checkins
+
+    prompted = _parse_dt(prompt_triggered_at)
+    planned_secs = _planned_shift_duration_secs(shift, session)
+    if not prompted and (uses_random_checkins(planned_secs) or _list_scheduled_checkins(session_id)):
+        scheduled = _list_scheduled_checkins(session_id)
+        active = next((row for row in scheduled if row.get("status") == "prompted"), None)
+        if active:
+            prompted = _parse_dt(active.get("prompted_at"))
+    prompted = prompted or now
     response_secs = max(0, int((now - prompted).total_seconds()))
     note_text = (note or "").strip()[:500] or None
 
@@ -581,6 +629,15 @@ def submit_checkin(
 
     if status_norm != "GOING_WELL":
         _notify_coordinator_attention(session, shift, status_norm, note_text)
+
+    from .random_checkin_service import complete_scheduled_checkin
+
+    if checkin.get("id"):
+        complete_scheduled_checkin(
+            session_id=session_id,
+            worker_id=worker_id,
+            shift_checkin_id=str(checkin["id"]),
+        )
 
     if status_norm == "INCIDENT_REPORTED":
         incident_id = _create_incident_for_checkin(
@@ -955,9 +1012,23 @@ def evaluate_check16(session: dict, shift: Optional[dict] = None) -> dict[str, A
     checkin_count = int(session.get("checkin_count") or 0)
     shift_hours = duration_secs / 3600
 
+    from .random_checkin_service import uses_random_checkins, _list_scheduled_checkins
+
     result_16a = max_gap <= ACTIVITY_GAP_FAIL_SECS
-    required_checkins = _required_checkins(shift_hours, duration_secs)
-    result_16b = checkin_count >= required_checkins
+    if uses_random_checkins(duration_secs):
+        scheduled = _list_scheduled_checkins(session_id)
+        if scheduled:
+            completed_scheduled = sum(1 for row in scheduled if row.get("status") == "completed")
+            missed_scheduled = sum(1 for row in scheduled if row.get("status") == "missed")
+            required_checkins = len(scheduled)
+            checkin_count = completed_scheduled
+            result_16b = completed_scheduled >= required_checkins and missed_scheduled == 0
+        else:
+            required_checkins = _required_checkins(shift_hours, duration_secs, session_id)
+            result_16b = checkin_count >= required_checkins
+    else:
+        required_checkins = _required_checkins(shift_hours, duration_secs, session_id)
+        result_16b = checkin_count >= required_checkins
     missed_checkins = max(0, required_checkins - checkin_count)
 
     result_16c = True
@@ -1182,8 +1253,37 @@ def build_live_shift_engagement(shift: dict, session: Optional[dict] = None) -> 
         gap_paused_secs=gap_paused,
     )
     shift_hours = duration_secs / 3600 if duration_secs else 0
-    required_checkins = _required_checkins(shift_hours, duration_secs)
+    required_checkins = _required_checkins(shift_hours, duration_secs, session_id)
     checkin_count = int(session.get("checkin_count") or 0)
+
+    from .random_checkin_service import uses_random_checkins, _list_scheduled_checkins
+
+    next_checkin_due = None
+    if uses_random_checkins(duration_secs):
+        scheduled = _list_scheduled_checkins(session_id) if session_id else []
+        completed_scheduled = sum(1 for row in scheduled if row.get("status") == "completed")
+        checkin_count = completed_scheduled or checkin_count
+        prompted = next((row for row in scheduled if row.get("status") == "prompted"), None)
+        pending = next(
+            (
+                row for row in scheduled
+                if row.get("status") == "pending"
+                and (_parse_dt(row.get("scheduled_at")) or now) > now
+            ),
+            None,
+        )
+        if prompted:
+            next_checkin_due = 0
+        elif pending:
+            scheduled_at = _parse_dt(pending.get("scheduled_at"))
+            if scheduled_at:
+                next_checkin_due = max(0, int((scheduled_at - now).total_seconds()))
+    else:
+        checkin_gap = org_settings["checkin_gap_secs"]
+        next_checkin_due = (
+            max(0, checkin_gap - current_gap) if duration_secs >= LONG_SHIFT_THRESHOLD_SECS else None
+        )
+
     engagement_score = session.get("engagement_score")
     break_logged = int(session.get("break_duration_secs") or 0) > 0
     break_elapsed_secs = 0
@@ -1209,7 +1309,8 @@ def build_live_shift_engagement(shift: dict, session: Optional[dict] = None) -> 
 
     status = _derive_live_status(current_gap) if duration_secs >= LONG_SHIFT_THRESHOLD_SECS else "GREEN"
     checkin_gap = org_settings["checkin_gap_secs"]
-    next_checkin_due = max(0, checkin_gap - current_gap) if duration_secs >= LONG_SHIFT_THRESHOLD_SECS else None
+    if next_checkin_due is None and not uses_random_checkins(duration_secs):
+        next_checkin_due = max(0, checkin_gap - current_gap) if duration_secs >= LONG_SHIFT_THRESHOLD_SECS else None
     coordinator_alerted = current_gap >= checkin_gap
 
     return {
@@ -1321,10 +1422,13 @@ async def run_long_shift_monitor_pass() -> int:
 
         worker_id = shift.get("worker_id")
         if worker_id and 90 <= gap_mins < 120:
-            try:
-                await _prompt_worker_checkin(str(worker_id), str(shift.get("id") or ""), gap_mins)
-            except Exception as exc:
-                logger.debug("worker check-in push failed: %s", exc)
+            from .random_checkin_service import uses_random_checkins
+
+            if not uses_random_checkins(duration_secs):
+                try:
+                    await _prompt_worker_checkin(str(worker_id), str(shift.get("id") or ""), gap_mins)
+                except Exception as exc:
+                    logger.debug("worker check-in push failed: %s", exc)
 
     return notified
 
@@ -1563,7 +1667,7 @@ def get_audit_engagement_pack(
 
         duration_mins = int(sess.get("duration_minutes") or shift.get("duration_minutes") or 0)
         shift_hours = duration_mins / 60 if duration_mins else 0
-        required = _required_checkins(shift_hours, duration_mins * 60)
+        required = _required_checkins(shift_hours, duration_mins * 60, session_id)
         completed = int(sess.get("checkin_count") or 0)
         score = int(sess.get("engagement_score") or 0)
         check16 = sess.get("engagement_check16") or {}

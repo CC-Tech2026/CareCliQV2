@@ -1,4 +1,4 @@
-﻿import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,9 @@ import {
   Pencil,
   QrCode,
   AlertTriangle,
+  Accessibility as AccessibilityIcon,
 } from "lucide-react";
+import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { formatDistanceToNow } from "date-fns";
 import QRCode from "react-qr-code";
 import { PasswordInput } from "@/components/PasswordInput";
@@ -82,13 +84,14 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
   { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
+  { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
 ];
@@ -139,7 +142,7 @@ function Section({
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: "rgba(55,48,163,0.09)" }}
         >
-          <Icon className="h-[18px] w-[18px]" style={{ color: "#3730A3" }} />
+          <Icon className="h-[18px] w-[18px]" style={{ color: "#E8457A" }} />
         </div>
         <div>
           <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
@@ -179,7 +182,7 @@ function PanelCard({
             borderColor: "#EBE5F6",
           }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#3730A3" }}>{label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#E8457A" }}>{label}</p>
         </div>
       )}
       <div className="p-5">{children}</div>
@@ -192,13 +195,11 @@ function PanelCard({
 // ---------------------------------------------------------------------------
 const ROLE_LABELS: Record<string, string> = {
   support_coordinator: "CareCliQ Parent",
-  allied_health:       "CareCliQ Pro",
   support_worker:      "CareCliQ Child",
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  support_coordinator: { bg: "rgba(55,48,163,0.1)",   color: "#3730A3" },
-  allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
+  support_coordinator: { bg: "rgba(55,48,163,0.1)",   color: "#E8457A" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
 };
 
@@ -220,9 +221,9 @@ interface PendingInvite {
   token?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // CARECLIQV2-241 — Notification Preferences section
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
   { key: "worker_clocked_in",    label: "Worker Clocked In",         description: "Notified when a worker clocks in to a shift" },
@@ -336,7 +337,7 @@ function NotificationsSection() {
       icon={Bell}
     >
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E5E7EB" }}>
+      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E8E8EA" }}>
         <table className="w-full text-[13px]">
           <thead>
             <tr style={{ background: "var(--cc-soft)" }}>
@@ -364,7 +365,7 @@ function NotificationsSection() {
                       checked={prefs.events[ev.key]?.[ch] ?? false}
                       disabled={ch === "in_app"}
                       onChange={() => toggleEvent(ev.key, ch)}
-                      className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                      className="w-4 h-4 accent-[#E8457A] cursor-pointer disabled:cursor-default disabled:opacity-60"
                     />
                   </td>
                 ))}
@@ -398,7 +399,7 @@ function NotificationsSection() {
                     checked={prefs.events[ev.key]?.[ch] ?? false}
                     disabled={ch === "in_app"}
                     onChange={() => toggleEvent(ev.key, ch)}
-                    className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                    className="w-4 h-4 accent-[#E8457A] cursor-pointer disabled:cursor-default disabled:opacity-60"
                   />
                 </div>
               ))}
@@ -408,7 +409,7 @@ function NotificationsSection() {
       </div>
 
       {/* Quiet hours */}
-      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid #E5E7EB" }}>
+      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid #E8E8EA" }}>
         <div className="flex items-center justify-between">
           <div>
             <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>Quiet Hours</p>
@@ -426,7 +427,7 @@ function NotificationsSection() {
                 value={prefs.quiet_from}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
-                style={{ border: "1px solid #E5E7EB" }}
+                style={{ border: "1px solid #E8E8EA" }}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -437,7 +438,7 @@ function NotificationsSection() {
                 value={prefs.quiet_to}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
-                style={{ border: "1px solid #E5E7EB" }}
+                style={{ border: "1px solid #E8E8EA" }}
               />
             </div>
           </div>
@@ -448,7 +449,7 @@ function NotificationsSection() {
       <div className="flex justify-end pt-2">
         <Button
           className="rounded-2xl px-8"
-          style={{ background: "var(--cc-plum)", color: "#fff" }}
+          style={{ background: "var(--cc-cta)", color: "#fff" }}
           disabled={saving}
           onClick={save}
         >
@@ -459,9 +460,9 @@ function NotificationsSection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Security Section — available to all roles
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 function SecuritySection() {
   const { toast } = useToast();
@@ -646,8 +647,8 @@ function SecuritySection() {
             <DialogDescription>{translate("security.qrDescription")}</DialogDescription>
           </DialogHeader>
           {enrollOtpAuthUrl && (
-            <div className="flex justify-center rounded-xl bg-white p-5 ring-1 ring-[#E5E7EB]">
-              <QRCode value={enrollOtpAuthUrl} size={200} bgColor="#FFFFFF" fgColor="#111827" />
+            <div className="flex justify-center rounded-xl bg-white p-5 ring-1 ring-[#E8E8EA]">
+              <QRCode value={enrollOtpAuthUrl} size={200} bgColor="#FFFFFF" fgColor="#1A1A2E" />
             </div>
           )}
           <p className="text-center text-xs" style={{ color: "var(--cc-muted)" }}>{translate("security.qrManualHint")}</p>
@@ -664,7 +665,7 @@ function SecuritySection() {
             <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="rounded-xl" autoFocus />
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setRenamingId(null); setRenameKind(null); setRenameValue(""); }}>{translate("common.cancel")}</Button>
-              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-plum)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>{translate("common.save")}</Button>
+              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-cta)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>{translate("common.save")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -676,7 +677,7 @@ function SecuritySection() {
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-bold text-amber-900">{translate("security.recoveryCodes")}</p>
             <p className="mt-1 text-sm text-amber-800">{translate("security.recoveryCodesHint")}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#1A1A2E] sm:grid-cols-4">
               {recoveryCodes.map((code) => (
                 <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">{code}</div>
               ))}
@@ -691,14 +692,14 @@ function SecuritySection() {
         {!mfaStatus?.enabled ? (
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
-              <div className="rounded-xl bg-[#F8F8FE] p-4">
+              <div className="rounded-xl bg-[#F4EDE6] p-4">
                 <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.setupAuthenticator")}</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.setupAuthenticatorHint")}</p>
                 <div className="mt-3 flex items-stretch gap-2">
-                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">{enrollSecret}</code>
+                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#E8457A]">{enrollSecret}</code>
                   <button type="button" onClick={() => setQrOpen(true)} aria-label={translate("security.showQrAria")} title={translate("security.showQrTitle")}
-                    className="flex min-w-[48px] items-center justify-center rounded-xl border bg-white px-3 hover:bg-[#EEF2FF]" style={{ borderColor: "var(--cc-border)" }}>
-                    <QrCode className="h-5 w-5 text-[#3730A3]" />
+                    className="flex min-w-[48px] items-center justify-center rounded-xl border bg-white px-3 hover:bg-[#F2EBFD]" style={{ borderColor: "var(--cc-border)" }}>
+                    <QrCode className="h-5 w-5 text-[#E8457A]" />
                   </button>
                 </div>
               </div>
@@ -711,7 +712,7 @@ function SecuritySection() {
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setEnrolling(false); setEnrollSecret(null); setEnrollOtpAuthUrl(null); setQrOpen(false); setEnrollCode(""); }}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={enrollBusy || !enrollCode.trim()} className="rounded-xl" style={{ background: "var(--cc-plum)" }}>
+                <Button type="submit" disabled={enrollBusy || !enrollCode.trim()} className="rounded-xl" style={{ background: "var(--cc-cta)" }}>
                   {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
                 </Button>
               </div>
@@ -719,7 +720,7 @@ function SecuritySection() {
           ) : (
             <div className="space-y-3">
               <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Add an extra layer of protection with an authenticator app (Google Authenticator, Authy, 1Password).</p>
-              <Button type="button" onClick={() => void handleStartEnrollment()} disabled={enrollBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-plum)" }}>
+              <Button type="button" onClick={() => void handleStartEnrollment()} disabled={enrollBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-cta)" }}>
                 {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
                 {translate("security.enableAuthenticator")}
               </Button>
@@ -756,7 +757,7 @@ function SecuritySection() {
                 <div>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
                     {device.device_name}
-                    {device.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.thisDevice")}</span>}
+                    {device.is_current && <span className="ml-2 rounded-full bg-[#F2EBFD] px-2 py-0.5 text-[11px] font-bold text-[#E8457A]">{translate("security.thisDevice")}</span>}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
                     {translateParams("security.trustedUntil", { os: device.os_name, when: formatWhen(device.trusted_until) })}
@@ -790,7 +791,7 @@ function SecuritySection() {
                 <div>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
                     {session.device_name}
-                    {session.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.currentSession")}</span>}
+                    {session.is_current && <span className="ml-2 rounded-full bg-[#F2EBFD] px-2 py-0.5 text-[11px] font-bold text-[#E8457A]">{translate("security.currentSession")}</span>}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
                     {translateParams("security.sessionLocation", { city: session.city || translate("security.unknownCity"), country: session.country || translate("security.unknownCountry"), when: formatWhen(session.last_active_at) })}
@@ -846,7 +847,7 @@ function SecuritySection() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export default function Settings() {
   const { toast } = useToast();
@@ -860,36 +861,36 @@ export default function Settings() {
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
 
-  // ── Draw pad state ─────────────────────────────────────────────────────────
+  // -- Draw pad state ---------------------------------------------------------
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const [hasDrawing, setHasDrawing] = useState(false);
 
-  // ── Upload state ───────────────────────────────────────────────────────────
+  // -- Upload state -----------------------------------------------------------
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Avatar state ───────────────────────────────────────────────────────────
+  // -- Avatar state -----------------------------------------------------------
   const [avatarId, setAvatarId] = useState<string | null>(null);
 
-  // ── Practitioner Details state ─────────────────────────────────────────────
+  // -- Practitioner Details state ---------------------------------------------
   const [practName, setPractName] = useState("");
   const [practCredentials, setPractCredentials] = useState("");
   const [isSavingPract, setIsSavingPract] = useState(false);
 
-  // ── Provider Information state ─────────────────────────────────────────────
+  // -- Provider Information state ---------------------------------------------
   const [businessName, setBusinessName] = useState("");
   const [abn, setAbn] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
 
-  // ── Session Defaults state ─────────────────────────────────────────────────
+  // -- Session Defaults state -------------------------------------------------
   const [defaultDuration, setDefaultDuration] = useState<string>("60");
   const [autoStartTimer, setAutoStartTimer] = useState(false);
   const [enableVoice, setEnableVoice] = useState(false);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
 
-  // ── Compliance Requirements state ──────────────────────────────────────────
+  // -- Compliance Requirements state ------------------------------------------
   const [requireActivity, setRequireActivity] = useState(false);
   const [requireNotes, setRequireNotes] = useState(false);
   const [requireDuration, setRequireDuration] = useState(false);
@@ -904,7 +905,7 @@ export default function Settings() {
     "manual therapy", "sports therapy",
   ];
 
-  // ── Team state (support coordinator only) ──────────────────────────────────
+  // -- Team state (support coordinator only) ----------------------------------
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
@@ -981,14 +982,14 @@ export default function Settings() {
     });
   };
 
-  // ── API ────────────────────────────────────────────────────────────────────
+  // -- API --------------------------------------------------------------------
   const { data: serverSettings, isLoading: isLoadingSettings } =
     useGetPractitionerSettings();
 
   const { mutateAsync: saveToServer, isPending: isSaving } =
     useSavePractitionerSettings();
 
-  // ── Populate all fields from server settings ───────────────────────────────
+  // -- Populate all fields from server settings -------------------------------
   useEffect(() => {
     if (isLoadingSettings || !serverSettings) return;
 
@@ -1031,7 +1032,7 @@ export default function Settings() {
     }
   }, [serverSettings, isLoadingSettings]);
 
-  // ── Canvas helpers ─────────────────────────────────────────────────────────
+  // -- Canvas helpers ---------------------------------------------------------
   const getCanvasPos = (
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
   ): { x: number; y: number } => {
@@ -1088,7 +1089,7 @@ export default function Settings() {
     setHasDrawing(false);
   }, []);
 
-  // ── Save helpers ───────────────────────────────────────────────────────────
+  // -- Save helpers -----------------------------------------------------------
   const persistSignature = useCallback(
     async (dataUrl: string) => {
       saveSignature(dataUrl);
@@ -1147,7 +1148,7 @@ export default function Settings() {
     toast({ title: translate("settings.toast.signatureRemoved"), description: translate("settings.toast.signatureRemovedDesc") });
   }, [clearCanvas, saveToServer, serverSettings, toast]);
 
-  // ── File upload ────────────────────────────────────────────────────────────
+  // -- File upload ------------------------------------------------------------
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1164,7 +1165,7 @@ export default function Settings() {
     reader.readAsDataURL(file);
   };
 
-  // ── Avatar auto-save ───────────────────────────────────────────────────────
+  // -- Avatar auto-save -------------------------------------------------------
   const handleAvatarChange = async (newId: string | null) => {
     setAvatarId(newId);
     try {
@@ -1174,7 +1175,7 @@ export default function Settings() {
     }
   };
 
-  // ── Section save handlers ──────────────────────────────────────────────────
+  // -- Section save handlers --------------------------------------------------
   const handleSavePractitioner = async () => {
     setIsSavingPract(true);
     try {
@@ -1264,7 +1265,7 @@ export default function Settings() {
     setPhysicalExamSessionTypes(DEFAULT_PHYSICAL_TYPES);
   };
 
-  // ── Loading overlay ────────────────────────────────────────────────────────
+  // -- Loading overlay --------------------------------------------------------
   const LoadingRow = () => (
     <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1272,12 +1273,12 @@ export default function Settings() {
     </div>
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // -- Render -----------------------------------------------------------------
   return (
     <div className="flex flex-col gap-5 min-h-full pb-12">
       {modal}
 
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      {/* -- Page header ------------------------------------------------------- */}
       <div
         className="rounded-2xl px-6 py-4 flex items-center gap-4"
         style={{
@@ -1289,17 +1290,17 @@ export default function Settings() {
           className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: "rgba(55,48,163,0.1)" }}
         >
-          <Settings2 className="h-5 w-5" style={{ color: "#3730A3" }} />
+          <Settings2 className="h-5 w-5" style={{ color: "#E8457A" }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("settings.title")}</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
           <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-muted)" }}>
             {translate("settings.subtitle")}
           </p>
         </div>
       </div>
 
-      {/* ── Mobile nav (outside flex row — stacks vertically on mobile) ────── */}
+      {/* -- Mobile nav (outside flex row — stacks vertically on mobile) ------ */}
       <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
         {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -1307,11 +1308,11 @@ export default function Settings() {
             onClick={() => setActiveSection(id)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
             style={{
-              background: activeSection === id ? "#3730A3" : "rgba(55,48,163,0.06)",
+              background: activeSection === id ? "var(--cc-cta)" : "rgba(55,48,163,0.06)",
               color: activeSection === id ? "white" : "#374151",
             }}
           >
-            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#6B7280" }} />
+            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#6A6A77" }} />
             {translate(labelKey)}
           </button>
         ))}
@@ -1319,7 +1320,7 @@ export default function Settings() {
 
       <div className="flex gap-6">
 
-      {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
+      {/* -- Sticky sidebar ---------------------------------------------------- */}
       <aside className="hidden lg:flex flex-col w-52 shrink-0">
         <div
           className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
@@ -1338,13 +1339,13 @@ export default function Settings() {
               onClick={() => setActiveSection(id)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-150 text-left"
               style={{
-                background: activeSection === id ? "#3730A3" : "transparent",
+                background: activeSection === id ? "var(--cc-cta)" : "transparent",
                 color: activeSection === id ? "white" : "#374151",
               }}
             >
               <Icon
                 className="h-4 w-4 shrink-0"
-                style={{ color: activeSection === id ? "white" : "#6B7280" }}
+                style={{ color: activeSection === id ? "white" : "#6A6A77" }}
               />
               {translate(labelKey)}
             </button>
@@ -1352,10 +1353,10 @@ export default function Settings() {
         </div>
       </aside>
 
-      {/* ── Content panel ───────────────────────────────────────────────────── */}
+      {/* -- Content panel ----------------------------------------------------- */}
       <main className="flex-1 min-w-0 space-y-6">
 
-        {/* ── Account section ─────────────────────────────────────────────── */}
+        {/* -- Account section ----------------------------------------------- */}
         {activeSection === "account" && (
           <Section
             title={translate("settings.account.title")}
@@ -1449,7 +1450,7 @@ export default function Settings() {
                           <>
                             <ImageIcon className="h-8 w-8 mb-2" style={{ color: "rgba(232,213,232,0.9)" }} />
                             <span className="text-[13px]" style={{ color: "#7A6A8A" }}>Click to upload a signature image</span>
-                            <span className="text-[11px] mt-1" style={{ color: "#7A6A8A" }}>PNG or JPG — max 2 MB</span>
+                            <span className="text-[11px] mt-1" style={{ color: "#7A6A8A" }}>PNG or JPG, max 2 MB</span>
                           </>
                         )}
                       </div>
@@ -1546,7 +1547,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Provider section ─────────────────────────────────────────────── */}
+        {/* -- Provider section ----------------------------------------------- */}
         {activeSection === "provider" && (
           <Section
             title={translate("settings.provider.title")}
@@ -1604,7 +1605,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Session Defaults section ─────────────────────────────────────── */}
+        {/* -- Session Defaults section --------------------------------------- */}
         {activeSection === "defaults" && (
           <Section
             title={translate("settings.defaults.title")}
@@ -1666,7 +1667,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Compliance section ───────────────────────────────────────────── */}
+        {/* -- Compliance section --------------------------------------------- */}
         {activeSection === "compliance" && (
           <Section
             title={translate("settings.compliance.title")}
@@ -1707,7 +1708,7 @@ export default function Settings() {
                 <div className="space-y-4">
                   <p className="text-[12px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     When a session's type matches one of the names below, the compliance engine will warn if no body examination markers have been recorded.
-                    Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults — leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
+                    Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults. Leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
                   </p>
 
                   {/* Current list */}
@@ -1717,7 +1718,7 @@ export default function Settings() {
                         <span
                           key={i}
                           className="inline-flex items-center gap-1 rounded-full text-[12px] font-medium px-2.5 py-1"
-                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3", border: "1px solid rgba(55,48,163,0.2)" }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#E8457A", border: "1px solid rgba(55,48,163,0.2)" }}
                         >
                           {type}
                           <button
@@ -1735,7 +1736,7 @@ export default function Settings() {
                     <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed"
                       style={{ color: "#7A6A8A", background: "rgba(246,244,251,0.8)", borderColor: "rgba(232,213,232,0.7)" }}>
                       <Info className="h-3.5 w-3.5 shrink-0" />
-                      <span>No custom types saved — the built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
+                      <span>No custom types saved. The built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
                     </div>
                   )}
 
@@ -1794,7 +1795,7 @@ export default function Settings() {
                   style={{
                     background: "rgba(55,48,163,0.04)",
                     border: "1px solid rgba(55,48,163,0.12)",
-                    borderLeft: "3px solid #3730A3",
+                    borderLeft: "3px solid #E8457A",
                   }}
                 >
                   <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How compliance requirements work</p>
@@ -1813,7 +1814,12 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Notifications section (coordinator only) ─────────────────────── */}
+        {/* -- Accessibility section ------------------------------------------- */}
+        {activeSection === "accessibility" && (
+          <AccessibilityPanel showHeader={false} />
+        )}
+
+        {/* -- Notifications section (coordinator only) ----------------------- */}
         {activeSection === "notifications" && isCoordinator && (
           <NotificationsSection />
         )}
@@ -1843,7 +1849,7 @@ export default function Settings() {
                         {/* Avatar */}
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3" }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#E8457A" }}
                         >
                           {(m.full_name || m.email || "?")[0].toUpperCase()}
                         </div>
@@ -1867,7 +1873,6 @@ export default function Settings() {
                           >
                             <option value="support_worker">Support Worker</option>
                             <option value="support_coordinator">Support Coordinator</option>
-                            <option value="allied_health">Allied Health</option>
                           </select>
                         ) : (
                           <span
@@ -1880,7 +1885,7 @@ export default function Settings() {
 
                         {/* Joined date */}
                         <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
-                          Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                          Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                         </span>
 
                         {/* Remove — prevent removing self */}
@@ -1917,7 +1922,7 @@ export default function Settings() {
                       <div key={inv.id} className="flex items-center gap-3 py-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{inv.email}</p>
-                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#6B7280" }}>
+                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#6A6A77" }}>
                             {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                           </p>
                         </div>
@@ -1933,7 +1938,7 @@ export default function Settings() {
                           onClick={() => copyInviteLink(inv)}
                           title="Copy invite link"
                           className="p-1.5 rounded-lg transition-colors hover:bg-[#F0EDF9] shrink-0"
-                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#6B7280" }}
+                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#6A6A77" }}
                         >
                           {copiedToken === inv.id ? <Check size={13} /> : <Copy size={13} />}
                         </button>
@@ -1967,7 +1972,7 @@ export default function Settings() {
               style={{
                 background: "rgba(55,48,163,0.04)",
                 border: "1px solid rgba(55,48,163,0.12)",
-                borderLeft: "3px solid #3730A3",
+                borderLeft: "3px solid #E8457A",
               }}
             >
               <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How staff invitations work</p>
@@ -1978,7 +1983,7 @@ export default function Settings() {
                 your org allocates to them.
               </p>
               <p style={{ color: "var(--cc-text)" }}>
-                Email delivery is not yet configured — copy and share the link manually. Pending invitations
+                Email delivery is not yet configured. Copy and share the link manually. Pending invitations
                 can be revoked at any time before they are accepted.
               </p>
             </div>

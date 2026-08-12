@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { CheckCircle2, Clock3 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -178,7 +178,7 @@ export default function Approvals() {
         {/* Left - Mobile/Approvals Panel */}
         <div className="w-full lg:w-[420px] lg:border-r" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <div className="sticky top-0 z-10 border-b px-6 py-4" style={{ borderColor: BORDER }}>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {translate("approvals.title")}
             </h1>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>
@@ -240,7 +240,7 @@ export default function Approvals() {
             </button>
             <button
               className="flex-1 h-11 rounded-lg font-bold text-sm text-white transition-opacity hover:opacity-90"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {translateParams("approvals.approve", { count: String(approvedCount) })}
             </button>
@@ -308,7 +308,7 @@ export default function Approvals() {
                     <div className="w-[220px] px-6 py-4 border-r flex items-center gap-3 bg-white" style={{ borderColor: BORDER }}>
                       <div
                         className="flex h-9 w-9 items-center justify-center rounded-full text-white text-xs font-bold shrink-0"
-                        style={{ background: PLUM }}
+                        style={{ background: "var(--cc-text)" }}
                       >
                         {staff.initials}
                       </div>

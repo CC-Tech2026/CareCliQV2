@@ -115,7 +115,7 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
             {preview ? translate("profile.photo.replace") : translate("profile.photo.upload")}
           </Button>
           {preview && (
-            <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-[#BE185D]">
+            <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-[#7C3AED]">
               <Trash2 className="h-4 w-4" />
               {translate("profile.photo.remove")}
             </Button>

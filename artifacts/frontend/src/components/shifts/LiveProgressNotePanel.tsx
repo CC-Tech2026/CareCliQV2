@@ -420,7 +420,7 @@ export function LiveProgressNotePanel({
 
   return (
     <aside
-      className="flex h-full flex-col overflow-hidden rounded-lg border border-cc-border bg-cc-surface shadow-sm"
+      className="flex h-full flex-col overflow-hidden rounded-lg border border-cc-border bg-card shadow-sm"
       data-tutorial="live-progress-note"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cc-border px-5 py-3">
@@ -495,7 +495,7 @@ export function LiveProgressNotePanel({
       <div className="min-h-0 flex-1 overflow-y-auto bg-cc-bg p-4">
         <div className="mx-auto max-w-3xl space-y-3">
           <div
-            className="mx-auto flex w-fit items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-3 py-1 text-xs font-bold shadow-sm"
+            className="mx-auto flex w-fit items-center gap-2 rounded-full border border-cc-border bg-card px-3 py-1 text-xs font-bold shadow-sm"
             style={{ color: MUTED }}
           >
             {isListening && (
@@ -511,7 +511,7 @@ export function LiveProgressNotePanel({
 
           {isListening && livePreview && (
             <div
-              className="rounded-lg border border-cc-border bg-cc-surface px-3 py-2 text-sm italic"
+              className="rounded-lg border border-cc-border bg-card px-3 py-2 text-sm italic"
               style={{ color: MUTED }}
               aria-live="polite"
             >
@@ -544,10 +544,10 @@ export function LiveProgressNotePanel({
       </div>
 
       {!ended && (
-        <div className="shrink-0 border-t border-cc-border bg-cc-surface p-3">
+        <div className="shrink-0 border-t border-cc-border bg-card p-3">
           <div className="flex items-center gap-3">
             <div
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-3 py-2 shadow-sm"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-cc-border bg-card px-3 py-2 shadow-sm"
             >
               <input
                 ref={fileInputRef}

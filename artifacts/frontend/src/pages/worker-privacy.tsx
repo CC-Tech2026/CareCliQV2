@@ -125,7 +125,7 @@ export default function WorkerPrivacy() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("privacy.eyebrow")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("privacy.title")}
         </h1>
         <p className="mt-2 text-sm text-cc-muted">
@@ -133,7 +133,7 @@ export default function WorkerPrivacy() {
         </p>
       </div>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-cc-text">
           <Shield className="h-5 w-5 text-cc-plum" /> {translate("privacy.dataHeld")}
         </h2>
@@ -150,7 +150,7 @@ export default function WorkerPrivacy() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-2 text-lg font-bold text-cc-text">{translate("privacy.downloadData")}</h2>
         <p className="mb-4 text-sm text-cc-muted">
           {translate("privacy.downloadHint")}
@@ -158,7 +158,7 @@ export default function WorkerPrivacy() {
         <Button
           type="button"
           className="rounded-xl gap-2"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
           disabled={exportBusy}
           onClick={() => void handleExport()}
         >
@@ -167,7 +167,7 @@ export default function WorkerPrivacy() {
         </Button>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-2 text-lg font-bold text-cc-text">{translate("privacy.policy")}</h2>
         <p className="text-sm leading-relaxed text-cc-text">
           {overview?.privacy_policy.summary_text}
@@ -202,7 +202,7 @@ export default function WorkerPrivacy() {
         )}
       </section>
 
-      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-cc-text">{translate("privacy.analyticsOptOut")}</h2>
@@ -216,11 +216,11 @@ export default function WorkerPrivacy() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border border-red-200 bg-red-50/40 p-6 shadow-sm">
+      <section className="rounded-[1.5rem] border border-red-300 dark:border-red-700 p-6 shadow-sm">
         <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-red-800">
           <Trash2 className="h-5 w-5" /> {translate("privacy.requestDeletion")}
         </h2>
-        <p className="mb-4 text-sm text-red-700">
+        <p className="mb-4 text-sm dark:text-red-700 text-red-700">
           {translateParams("privacy.deleteHint", { phrase: deletePhrase })}
         </p>
         <div className="space-y-3">

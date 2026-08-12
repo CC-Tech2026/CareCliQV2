@@ -1,4 +1,4 @@
-﻿import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -24,7 +24,7 @@ export default function NotFound() {
         <Link href="/dashboard">
           <span
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: "var(--cc-plum)" }}
+            style={{ background: "var(--cc-cta)" }}
           >
             {t("auth.notFound.back")}
           </span>

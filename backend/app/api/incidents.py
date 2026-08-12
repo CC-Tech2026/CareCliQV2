@@ -91,6 +91,16 @@ async def get_incident(incident_id: str, user: dict = Depends(get_current_user))
     return incident
 
 
+@router.get("/{incident_id}/audit-trail")
+async def get_incident_audit_trail(incident_id: str, user: dict = Depends(get_current_user)):
+    incident = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return await audit_service.get_entity_audit_trail(
+        "incident", incident_id, organization_id=user.get("organization_id"),
+    )
+
+
 @router.post("/worker-report", status_code=201)
 async def create_worker_incident_report(
     body: WorkerIncidentCreate,

@@ -157,7 +157,7 @@ export function ShiftTravelExpenseCard({
 
   return (
     <section
-      className="rounded-2xl border bg-cc-surface p-4 shadow-sm"
+      className="rounded-2xl border bg-card p-4 shadow-sm"
       style={{ borderColor: BORDER }}
       data-tutorial="shift-travel-mileage"
     >

@@ -255,7 +255,7 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
                 className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold"
                 style={{
                   borderColor: expiryUrgency === "critical" ? "#FECACA" : expiryUrgency === "warn" ? "#FDE68A" : BORDER,
-                  background: expiryUrgency === "critical" ? "#FEF2F2" : expiryUrgency === "warn" ? "#FFFBEB" : "#F8F8FE",
+                  background: expiryUrgency === "critical" ? "#FEF2F2" : expiryUrgency === "warn" ? "#FFFBEB" : "#F4EDE6",
                   color: expiryUrgency === "critical" ? "#DC2626" : expiryUrgency === "warn" ? "#92400E" : MUTED,
                 }}
               >
@@ -506,7 +506,7 @@ function GoalSelector({
         const title = goal.title || goal.description || translateParams("client.goalFallback", { number: String(index + 1) });
         const note = notes[goal.id];
         return (
-          <div key={goal.id} className="rounded-lg border" style={{ borderColor: isSelected ? PLUM : "#EEEAFB" }}>
+          <div key={goal.id} className="rounded-lg border" style={{ borderColor: isSelected ? PLUM : "#EDE3FC" }}>
             <button
               type="button"
               onClick={() => onToggle(goal)}
@@ -531,7 +531,7 @@ function GoalSelector({
               </span>
             </button>
             {isSelected && (
-              <div className="border-t px-3 pb-3 pt-2 space-y-2" style={{ borderColor: "#EEEAFB" }}>
+              <div className="border-t px-3 pb-3 pt-2 space-y-2" style={{ borderColor: "#EDE3FC" }}>
                 {(["evidence_provided", "outcome", "observation"] as const).map((field) => (
                   <div key={field}>
                     <label className="block text-[11px] font-black uppercase tracking-wider mb-1" style={{ color: MUTED }}>
@@ -545,7 +545,7 @@ function GoalSelector({
                       value={note?.[field] || ""}
                       onChange={(e) => onNoteChange(goal.id, field, e.target.value)}
                       rows={2}
-                      className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#3730A3]"
+                      className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#E8457A]"
                       style={{ borderColor: "var(--cc-border)", color: TEXT }}
                       placeholder={
                         field === "evidence_provided"
@@ -673,7 +673,7 @@ function InlineSessionComposer({
       }}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EDE3FC" }}>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="hidden" style={{ color: MUTED }}>
@@ -682,8 +682,8 @@ function InlineSessionComposer({
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E5E7EB" : "#A7F3D0",
-                background: ended ? "#F8F8FE" : "#ECFDF5",
+                borderColor: ended ? "#E8E8EA" : "#A7F3D0",
+                background: ended ? "#F4EDE6" : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
@@ -707,7 +707,7 @@ function InlineSessionComposer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
+            className="rounded-full p-2 transition hover:bg-[#F4EDE6]"
             style={{ color: MUTED }}
             aria-label={translate("client.session.closeComposer")}
           >
@@ -718,7 +718,7 @@ function InlineSessionComposer({
 
       {/* Step tabs — only visible after session ended */}
       {ended && (
-        <div className="shrink-0 flex gap-1 border-b px-4 py-2" style={{ borderColor: "#EEEAFB" }}>
+        <div className="shrink-0 flex gap-1 border-b px-4 py-2" style={{ borderColor: "#EDE3FC" }}>
           {STEPS.map((step) => (
             <button
               key={step.key}
@@ -739,7 +739,7 @@ function InlineSessionComposer({
       {/* Step: record (always shown while recording; also accessible after end) */}
       {composerStep === "record" && (
         <>
-          <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EDE3FC" }}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                 <Languages size={15} />
@@ -813,7 +813,7 @@ function InlineSessionComposer({
                     placeholder={translate("client.session.generatedNotePlaceholder")}
                     value={generated}
                     onChange={(event) => onGeneratedChange(event.target.value)}
-                    className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+                    className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
                 </div>
@@ -828,7 +828,7 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EDE3FC" }}>
             {ended ? (
               <div className="space-y-2">
                 {translatedFromLang && (
@@ -906,7 +906,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F4EDE6]"
                     style={{ color: PLUM }}
                     aria-label={translate("client.session.attachFile")}
                   >
@@ -915,7 +915,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F4EDE6]"
                     style={{ color: PLUM }}
                     aria-label={translate("client.session.addPhotoEvidence")}
                   >
@@ -934,7 +934,7 @@ function InlineSessionComposer({
               </div>
             )}
             {!ended && attachmentName && (
-              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F8F8FE] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
+              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F4EDE6] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
                 <Paperclip size={12} className="mr-1 shrink-0" />
                 <span className="truncate">{attachmentName}</span>
               </p>
@@ -957,7 +957,7 @@ function InlineSessionComposer({
               {ended && (
                 <div
                   className="space-y-4 rounded-xl border p-4"
-                  style={{ borderColor: "#EEEAFB", background: "var(--cc-soft)" }}
+                  style={{ borderColor: "#EDE3FC", background: "var(--cc-soft)" }}
                 >
                   {composerGoals && composerGoals.length > 0 && (
                     <div>
@@ -1006,7 +1006,7 @@ function InlineSessionComposer({
                       onChange={(event) => onOutcomeChange?.(event.target.value)}
                       placeholder={translate("client.session.sessionOutcomePlaceholder")}
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -1021,7 +1021,7 @@ function InlineSessionComposer({
                       onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
                       placeholder={translate("client.session.participantChoicePlaceholder")}
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -1036,7 +1036,7 @@ function InlineSessionComposer({
                       onChange={(event) => onRecommendationsChange?.(event.target.value)}
                       placeholder={translate("client.session.recommendationsPlaceholder")}
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -1068,7 +1068,7 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EDE3FC" }}>
             <button
               type="button"
               onClick={() => setComposerStep("record")}
@@ -1121,14 +1121,14 @@ function InlineSessionComposer({
                   value={choiceControl}
                   onChange={(e) => onChoiceControlChange(e.target.value)}
                   rows={5}
-                  className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+                  className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
                   style={{ borderColor: BORDER, color: TEXT }}
                   placeholder={translate("client.session.choiceControlPlaceholder")}
                 />
               </div>
             </div>
           </div>
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EDE3FC" }}>
             <button type="button" onClick={() => setComposerStep("goals")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
               {translate("client.session.back")}
             </button>
@@ -1316,7 +1316,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
+            className="rounded-full p-2 transition hover:bg-[#F4EDE6]"
             style={{ color: MUTED }}
             aria-label={translate("client.incident.closeForm")}
           >
@@ -1368,7 +1368,7 @@ function IncidentReportModal({
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder={translate("client.incident.titlePlaceholder")}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1394,7 +1394,7 @@ function IncidentReportModal({
               onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
               placeholder={translate("client.incident.descriptionPlaceholder")}
               rows={4}
-              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
+              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#E8457A]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1494,7 +1494,7 @@ function IncidentReportModal({
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
                 placeholder={translate("client.incident.locationPlaceholder")}
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1504,7 +1504,7 @@ function IncidentReportModal({
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
                 placeholder={translate("client.incident.immediateActionsPlaceholder")}
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1565,7 +1565,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
           {translate("client.viewAll")}
         </button>
       </div>
-      <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+      <div className="divide-y" style={{ borderColor: "#EDE3FC" }}>
         {recent.map((inc, idx) => {
           const sev = String(inc.severity || "medium");
           const incDate = inc.incident_date ? (() => { try { return formatDistanceToNow(parseISO(String(inc.incident_date)), { addSuffix: true }); } catch { return ""; } })() : "";
@@ -2025,7 +2025,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setActiveTab("notes")}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#F8F8FE]"
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#F4EDE6]"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             <Plus size={15} />
@@ -2202,7 +2202,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             <textarea
               value={noteText}
               onChange={(event) => setNoteText(event.target.value)}
-              className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#3730A3]"
+              className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#E8457A]"
               style={{ borderColor: BORDER, color: TEXT }}
               placeholder={translate("client.notePlaceholder")}
             />

@@ -8,17 +8,13 @@ from fastapi import HTTPException, Request, status
 
 
 COORDINATOR_ROLES = {"support_coordinator"}
-SCOPED_ROLES = {"support_worker", "allied_health"}
+SCOPED_ROLES = {"support_worker"}
 EXECUTIVE_ROLES = {"managing_director"}
 VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES
 
 SUPPORT_WORKER_PARTICIPANT_FIELDS = (
     "assigned_worker_id",
     "support_worker_id",
-)
-ALLIED_HEALTH_PARTICIPANT_FIELDS = (
-    "allied_health_id",
-    "clinician_id",
 )
 COMMON_PARTICIPANT_FIELDS = (
     "owner_user_id",
@@ -28,11 +24,6 @@ COMMON_PARTICIPANT_FIELDS = (
 SUPPORT_WORKER_SESSION_FIELDS = (
     "worker_id",
     "support_worker_id",
-)
-ALLIED_HEALTH_SESSION_FIELDS = (
-    "practitioner_id",
-    "allied_health_id",
-    "clinician_id",
 )
 COMMON_SESSION_FIELDS = (
     "owner_user_id",
@@ -115,10 +106,6 @@ def is_support_worker(user: Optional[dict]) -> bool:
     return get_user_role(user) == "support_worker"
 
 
-def is_allied_health(user: Optional[dict]) -> bool:
-    return get_user_role(user) == "allied_health"
-
-
 def is_managing_director(user: Optional[dict]) -> bool:
     return get_user_role(user) == "managing_director"
 
@@ -133,11 +120,6 @@ def _direct_assignment_fields_for_user(user: Optional[dict], is_session: bool) -
     if is_support_worker(user):
         return (
             *(SUPPORT_WORKER_SESSION_FIELDS if is_session else SUPPORT_WORKER_PARTICIPANT_FIELDS),
-            *(COMMON_SESSION_FIELDS if is_session else COMMON_PARTICIPANT_FIELDS),
-        )
-    if is_allied_health(user):
-        return (
-            *(ALLIED_HEALTH_SESSION_FIELDS if is_session else ALLIED_HEALTH_PARTICIPANT_FIELDS),
             *(COMMON_SESSION_FIELDS if is_session else COMMON_PARTICIPANT_FIELDS),
         )
     return ()
@@ -161,14 +143,6 @@ def record_assigned_to_user(row: dict, user: Optional[dict], *, is_session: bool
         )
         return uid in set(_iter_row_values(row, assignment_fields))
 
-    if is_allied_health(user):
-        clinical_fields = (
-            "_clinical_assignment_user_ids",
-            "_assignment_user_ids",
-            "_assigned_user_ids",
-        )
-        return uid in set(_iter_row_values(row, clinical_fields))
-
     return False
 
 
@@ -181,7 +155,7 @@ def can_access_participant(row: dict, user: Optional[dict]) -> bool:
         return False
     if has_org_wide_access(user):
         return record_belongs_to_user_org(row, user)
-    if is_support_worker(user) or is_allied_health(user):
+    if is_support_worker(user):
         return record_assigned_to_user(row, user)
     return False
 
@@ -263,10 +237,6 @@ def owner_payload(user: Optional[dict]) -> dict:
     if is_support_worker(user) and uid:
         payload["assigned_worker_id"] = uid
         payload["worker_id"] = uid
-    if is_allied_health(user) and uid:
-        payload["allied_health_id"] = uid
-        payload["clinician_id"] = uid
-        payload["practitioner_id"] = uid
     return payload
 
 

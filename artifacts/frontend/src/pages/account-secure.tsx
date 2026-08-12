@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -47,12 +47,12 @@ export default function AccountSecure() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F8F8FE]">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F4EDE6]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
           <CareCliQLogo size={54} />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6A6A77]">
             {translate("accountSecure.brandSecurity")}
           </span>
         </div>
@@ -61,17 +61,17 @@ export default function AccountSecure() {
           {complete ? (
             <div className="text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-              <h1 className="mt-4 text-2xl font-black" style={{ color: PLUM }}>
+              <h1 className="mt-4 text-2xl font-black" style={{ color: "var(--cc-text)" }}>
                 {translate("accountSecure.successTitle")}
               </h1>
-              <p className="mt-2 text-sm text-[#6B7280]">
+              <p className="mt-2 text-sm text-[#6A6A77]">
                 {translate("accountSecure.successDesc")}
               </p>
               <button
                 type="button"
                 onClick={() => navigate("/login")}
                 className="mt-6 h-12 w-full rounded-2xl text-white text-[15px] font-black"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {translate("accountSecure.goToSignIn")}
               </button>
@@ -80,15 +80,15 @@ export default function AccountSecure() {
             <>
               <div className="mb-6 flex items-center gap-3 rounded-2xl border bg-[#FFF7F9] p-4" style={{ borderColor: "rgba(190,24,93,0.25)" }}>
                 <ShieldAlert className="h-6 w-6 shrink-0" style={{ color: CORAL }} />
-                <p className="text-sm font-medium text-[#111827]">
+                <p className="text-sm font-medium text-[#1A1A2E]">
                   {translate("accountSecure.alert")}
                 </p>
               </div>
 
-              <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
+              <h1 className="text-[26px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
                 {translate("accountSecure.title")}
               </h1>
-              <p className="mt-2 text-sm text-[#6B7280]">
+              <p className="mt-2 text-sm text-[#6A6A77]">
                 {translate("accountSecure.description")}
               </p>
 
@@ -97,7 +97,7 @@ export default function AccountSecure() {
                 onClick={() => void handleSecureAccount()}
                 disabled={busy || !token}
                 className="mt-8 h-14 w-full rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {busy ? (
                   <>
@@ -124,10 +124,10 @@ export default function AccountSecure() {
       </div>
 
       <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20" style={{ background: PLUM }} />
+        <div className="absolute inset-0 opacity-20" style={{ background: "var(--cc-text)" }} />
         <div className="relative z-10 max-w-lg rounded-[2rem] border border-white/30 bg-white/70 p-8 backdrop-blur-md">
-          <h2 className="text-xl font-black text-[#111827]">{translate("accountSecure.whatNext")}</h2>
-          <ul className="mt-4 space-y-3 text-sm text-[#6B7280]">
+          <h2 className="text-xl font-black text-[#1A1A2E]">{translate("accountSecure.whatNext")}</h2>
+          <ul className="mt-4 space-y-3 text-sm text-[#6A6A77]">
             <li>{translate("accountSecure.step1")}</li>
             <li>{translate("accountSecure.step2")}</li>
             <li>{translate("accountSecure.step3")}</li>

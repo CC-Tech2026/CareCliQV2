@@ -890,14 +890,34 @@ async def update_incident(
             )
         )
 
+    lean_payload = _strip_unsupported_incident_fields(payload)
+
     try:
-        result = (
-            supabase
-            .table(TABLE)
-            .update(payload)
-            .eq("id", incident_id)
-            .execute()
-        )
+        try:
+            result = (
+                supabase
+                .table(TABLE)
+                .update(lean_payload)
+                .eq("id", incident_id)
+                .execute()
+            )
+        except Exception as exc:
+            if not _is_missing_column_error(exc):
+                raise
+            # Same lean-schema fallback as _insert_incident_payload.
+            fallback = {
+                k: v
+                for k, v in lean_payload.items()
+                if k not in {"photo_urls", "photo_metadata", "shift_id", "escalate"}
+            }
+            logger.warning("Incident update retry without shift/photo columns: %s", exc)
+            result = (
+                supabase
+                .table(TABLE)
+                .update(fallback)
+                .eq("id", incident_id)
+                .execute()
+            )
 
         rows = _safe_rows(result.data)
 

@@ -1,39 +1,77 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
+import jsPDF from "jspdf";
 import {
   getComplianceCentreOverview,
   getComplianceCentreStaff,
   getComplianceCentreParticipants,
   getComplianceCentreIncidents,
   sendBulkReminders,
+  getCoordinatorAiDetectedPatterns,
+  dismissCoordinatorPattern,
+  type ComplianceCentreOverview,
   type ComplianceStaffRow,
   type ComplianceParticipantRow,
+  type AiDetectedPattern,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { downloadBlob } from "@/lib/download-file";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useReAuth } from "@/hooks/useReAuth";
 import { AuditPackPanel } from "@/pages/audit-pack";
+import { FormPanel } from "@/components/FormPanel";
+import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditTrailEntry } from "@/services/incidentService";
+import { Card } from "@/components/ui/card";
+import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Download, AlertTriangle, ShieldAlert, ShieldCheck, Users, HeartHandshake,
   ListChecks, FileX, Search, BarChart3, Flag,
   FileCheck2, Info, ArrowRight, Eye, FilePlus, FileText, List,
   ArrowDownCircle, CircleCheck, LayoutDashboard, Loader2, Inbox,
+  MoreVertical, RefreshCw, Printer, Share2, ExternalLink, Clock, Sparkles,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "var(--cc-plum)";
-const CORAL  = "var(--cc-coral)";
-const TEXT   = "var(--cc-text)";
-const MUTED  = "var(--cc-muted)";
-const BORDER = "var(--cc-border)";
-const SOFT   = "var(--cc-soft)";
-// Solid colors sampled from the CareCliQ logo mark — no gradients.
-const LOGO_PINK = "#E94B8C";
-const LOGO_PURPLE = "#6B3FA0";
+const PLUM     = "var(--cc-plum)";
+const CORAL    = "var(--cc-coral)";
+const TEXT     = "var(--cc-text)";
+const MUTED    = "var(--cc-muted)";
+const BORDER   = "var(--cc-border)";
+const SOFT     = "var(--cc-soft)";
+const SUCCESS  = "var(--cc-status-success)";
+const WARNING  = "var(--cc-status-warning)";
+// Real red — deliberately not var(--cc-coral)/var(--cc-status-critical): those are the
+// brand's destructive-action colour, while this signals NDIS compliance/safety severity,
+// which stays a literal traffic-light red regardless of brand palette (see ComplianceCentre widget).
+const CRITICAL = "#DC2626";
 
 function scoreColor(score: number) {
-  return score >= 85 ? "#16A34A" : score >= 60 ? "#D97706" : "#DC2626";
+  return score >= 85 ? SUCCESS : score >= 60 ? WARNING : CRITICAL;
+}
+
+/** Same thresholds as scoreColor, expressed as a KpiCard tone. */
+function scoreTone(score: number): StatTone {
+  return score >= 85 ? "success" : score >= 60 ? "warning" : "danger";
+}
+
+function initialsOf(name: string) {
+  return name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
+}
+
+function Avatar({ name, size = 30 }: { name: string; size?: number }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-black"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.36), background: "var(--cc-active-bg)", color: PLUM }}
+    >
+      {initialsOf(name)}
+    </span>
+  );
 }
 
 function credentialTypeLabels(translate: (key: string) => string): Record<string, string> {
@@ -49,39 +87,16 @@ function credentialTypeLabels(translate: (key: string) => string): Record<string
   };
 }
 
-// ── Stat strip (single flat container, not a repeated card grid) ────────────
-type Stat = { label: string; value: string | number; sub?: string; color?: string; icon: React.ReactNode };
-function StatStrip({ stats }: { stats: Stat[] }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border bg-white px-5 py-3" style={{ borderColor: BORDER }}>
-      {stats.map((s, i) => (
-        <div key={s.label} className="flex items-center gap-6">
-          {i > 0 && <div className="h-7 w-px hidden sm:block" style={{ background: BORDER }} />}
-          <div className="flex items-center gap-2">
-            <span className="shrink-0" style={{ color: MUTED }}>{s.icon}</span>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>{s.label}</p>
-              <p className="text-lg font-black leading-tight mt-0.5" style={{ color: s.color ?? TEXT }}>
-                {s.value}{s.sub && <span className="ml-1.5 text-[10px] font-medium" style={{ color: MUTED }}>{s.sub}</span>}
-              </p>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Filter chip row ───────────────────────────────────────────────────────────
 function FilterChip({ label, active, icon, onClick }: { label: string; active: boolean; icon: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold transition-colors whitespace-nowrap"
       style={active
-        ? { background: "rgba(55,48,163,0.08)", border: `1px solid ${PLUM}`, color: PLUM }
-        : { background: "#fff", border: `1px solid ${BORDER}`, color: MUTED }}
+        ? { background: "var(--cc-plum-soft)", border: `1px solid ${PLUM}`, color: PLUM }
+        : { background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}
     >
       {icon} {label}
     </button>
@@ -90,8 +105,8 @@ function FilterChip({ label, active, icon, onClick }: { label: string; active: b
 
 function LoadingBlock({ label }: { label: string }) {
   return (
-    <div className="py-16 flex flex-col items-center justify-center gap-2">
-      <Loader2 size={22} className="animate-spin" style={{ color: LOGO_PURPLE }} />
+    <div className="py-20 flex flex-col items-center justify-center gap-2">
+      <Loader2 size={22} className="animate-spin" style={{ color: PLUM }} />
       <p className="text-[12px] font-medium" style={{ color: MUTED }}>{label}</p>
     </div>
   );
@@ -99,9 +114,9 @@ function LoadingBlock({ label }: { label: string }) {
 
 function EmptyState({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div className="py-10 flex flex-col items-center justify-center gap-2 text-center">
-      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(107,63,160,0.08)" }}>
-        <Inbox size={18} style={{ color: LOGO_PURPLE }} />
+    <div className="py-14 flex flex-col items-center justify-center gap-2 text-center">
+      <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "var(--cc-plum-soft)" }}>
+        <Inbox size={19} style={{ color: PLUM }} />
       </div>
       <p className="text-[13px] font-bold" style={{ color: TEXT }}>{label}</p>
       {sub && <p className="text-[11px] max-w-xs" style={{ color: MUTED }}>{sub}</p>}
@@ -111,17 +126,153 @@ function EmptyState({ label, sub }: { label: string; sub?: string }) {
 
 function StatusBadge({ label, tone }: { label: string; tone: "gn" | "am" | "rd" | "pu" | "gy" }) {
   const map: Record<string, { bg: string; color: string }> = {
-    gn: { bg: "rgba(22,163,74,0.1)", color: "#16A34A" },
-    am: { bg: "rgba(217,119,6,0.1)", color: "#D97706" },
-    rd: { bg: "rgba(220,38,38,0.1)", color: "#DC2626" },
-    pu: { bg: "rgba(55,48,163,0.08)", color: PLUM },
+    gn: { bg: "var(--cc-status-success-bg)", color: SUCCESS },
+    am: { bg: "var(--cc-status-warning-bg)", color: WARNING },
+    rd: { bg: "rgba(220,38,38,0.1)", color: CRITICAL },
+    pu: { bg: "var(--cc-plum-soft)", color: PLUM },
     gy: { bg: SOFT, color: MUTED },
   };
   const c = map[tone];
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.color }}>
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: c.bg, color: c.color }}>
       {label}
     </span>
+  );
+}
+
+// ── Actions menu (⋮) ─────────────────────────────────────────────────────────
+/**
+ * "Export" generates a simple one-page summary PDF from the KPIs already
+ * loaded for the header (score, session bands, open incidents, common issues)
+ * — not a per-tab detailed report. If a richer export (e.g. full staff/
+ * participant table dumps, one PDF per tab) is wanted, that's a follow-up,
+ * not guessed at here.
+ */
+function exportComplianceSummaryPDF(overview: ComplianceCentreOverview | undefined) {
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margin = 18;
+  let y = margin;
+
+  pdf.setFontSize(16);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor("#1A1A2E");
+  pdf.text("CareCliQ Compliance Summary", margin, y);
+  y += 7;
+
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor("#6A6A77");
+  pdf.text(`Generated ${new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}`, margin, y);
+  y += 10;
+
+  if (!overview) {
+    pdf.setTextColor("#1A1A2E");
+    pdf.text("No compliance data was loaded yet — open the Overview tab first.", margin, y);
+    pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+    return;
+  }
+
+  const rows: [string, string][] = [
+    ["Overall score", `${Math.round(overview.kpis.overall_score)}%`],
+    ["Compliant sessions", String(overview.kpis.compliant_sessions)],
+    ["At-risk sessions", String(overview.kpis.at_risk_sessions)],
+    ["Open incidents", String(overview.kpis.open_incidents)],
+  ];
+  pdf.setFontSize(11);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor("#1A1A2E");
+  pdf.text("Overview KPIs", margin, y);
+  y += 6;
+  pdf.setFontSize(10);
+  pdf.setFont("helvetica", "normal");
+  rows.forEach(([label, value]) => {
+    pdf.setTextColor("#6A6A77");
+    pdf.text(label, margin, y);
+    pdf.setTextColor("#1A1A2E");
+    pdf.setFont("helvetica", "bold");
+    pdf.text(value, margin + 60, y);
+    pdf.setFont("helvetica", "normal");
+    y += 6;
+  });
+  y += 4;
+
+  if (overview.common_issues.length > 0) {
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor("#1A1A2E");
+    pdf.text("Most common issues", margin, y);
+    y += 6;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    overview.common_issues.forEach((issue) => {
+      pdf.setTextColor("#1A1A2E");
+      pdf.text(`${issue.label} — ${issue.count} session(s), ${issue.pct}%`, margin, y);
+      y += 6;
+    });
+  }
+
+  pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function ComplianceActionsMenu({ overview }: { overview: ComplianceCentreOverview | undefined }) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["compliance-centre"] });
+      toast({ title: translate("compliance.centre.actions.refreshed") });
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: translate("compliance.centre.actions.linkCopied") });
+    } catch {
+      toast({ variant: "destructive", title: translate("compliance.centre.actions.linkCopyFailed") });
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={translate("compliance.centre.actions.menuLabel")}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
+          style={{ color: TEXT }}
+        >
+          <MoreVertical size={18} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[200px]">
+        <DropdownMenuItem onClick={() => exportComplianceSummaryPDF(overview)}>
+          <Download size={16} /> {translate("compliance.centre.actions.export")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleRefresh} disabled={refreshing}>
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> {translate("compliance.centre.actions.refresh")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => window.print()}>
+          <Printer size={16} /> {translate("compliance.centre.actions.print")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare}>
+          <Share2 size={16} /> {translate("compliance.centre.actions.share")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/compliance?tab=audit_pack" className="flex items-center gap-2">
+            <ExternalLink size={16} /> {translate("compliance.centre.actions.goToAuditPack")}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -162,51 +313,100 @@ export default function Compliance() {
   };
 
   const overallScore = headerOverview?.kpis.overall_score;
+  const scoreArcColor = overallScore != null ? scoreColor(overallScore) : PLUM;
+  const scoreCirc = 2 * Math.PI * 20;
+
+  const urgentCount = headerOverview?.urgent_actions.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-3 pb-8">
-      <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: LOGO_PURPLE }}>
-        <div className="relative w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(255,255,255,0.16)" }}>
-          <ShieldCheck size={22} className="text-white" />
-          {(headerOverview?.urgent_actions.length ?? 0) > 0 && (
-            <span
-              className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
-              style={{ background: LOGO_PINK, borderColor: LOGO_PURPLE }}
-              title={translateParams(
-                headerOverview!.urgent_actions.length !== 1 ? "compliance.centre.overview.urgentActionPlural" : "compliance.centre.overview.urgentAction",
-                { count: String(headerOverview!.urgent_actions.length) },
-              )}
-            />
-          )}
+    <div className="flex flex-col gap-5 pb-10">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+            {translate("compliance.page.eyebrow")}
+          </p>
+          <h1 className="mt-1 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
+          <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
         </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-black tracking-tight text-white">{translate("compliance.page.title")}</h1>
-          <p className="text-[12px] font-medium mt-0.5" style={{ color: "rgba(255,255,255,0.82)" }}>{translate("compliance.centre.subtitle")}</p>
-        </div>
-        {overallScore != null && (
-          <div className="hidden sm:flex flex-col items-end shrink-0 pl-4" style={{ borderLeft: "1px solid rgba(255,255,255,0.25)" }}>
-            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.7)" }}>
-              {translate("compliance.centre.overview.statOverallScore")}
-            </span>
-            <span className="text-2xl font-black text-white leading-tight">{Math.round(overallScore)}</span>
-          </div>
+        <div className="flex items-start gap-2 shrink-0">
+        {(overallScore != null || urgentCount > 0) && (
+          <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border border-[var(--cc-border)] shadow-sm px-5 py-3">
+            {urgentCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(220,38,38,0.1)" }}>
+                  <ShieldAlert size={15} style={{ color: CRITICAL }} />
+                </span>
+                <span className="text-[12px] font-bold" style={{ color: CRITICAL }}>
+                  {translateParams(
+                    urgentCount !== 1 ? "compliance.centre.overview.urgentActionPlural" : "compliance.centre.overview.urgentAction",
+                    { count: String(urgentCount) },
+                  )}
+                </span>
+              </div>
+            )}
+            {overallScore != null && (
+              <div className="flex items-center gap-2.5">
+                <div className="relative w-10 h-10 shrink-0">
+                  <svg width="40" height="40" viewBox="0 0 48 48" className="-rotate-90">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke={SOFT} strokeWidth="5" />
+                    <circle
+                      cx="24" cy="24" r="20" fill="none" stroke={scoreArcColor} strokeWidth="5"
+                      strokeDasharray={scoreCirc} strokeDashoffset={scoreCirc * (1 - overallScore / 100)} strokeLinecap="round"
+                      className="transition-all duration-700"
+                    />
+                  </svg>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>
+                    {translate("compliance.centre.overview.statOverallScore")}
+                  </span>
+                  <span className="text-lg font-black leading-tight mt-0.5" style={{ color: scoreArcColor }}>{Math.round(overallScore)}</span>
+                </div>
+              </div>
+            )}
+          </Card>
         )}
+          <ComplianceActionsMenu overview={headerOverview} />
+        </div>
       </div>
 
-      <div className="flex gap-1 rounded-xl p-1 flex-wrap" style={{ background: SOFT }}>
+      <div
+        role="tablist"
+        className="flex w-full max-w-full gap-5 overflow-x-auto scrollbar-none border-b"
+        style={{ borderColor: BORDER }}
+      >
         {SUB_TABS.map((tab) => {
-          const Icon = TAB_ICONS[tab];
           const active = activeTab === tab;
+          const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
           return (
             <button
               key={tab}
               type="button"
+              role="tab"
+              aria-selected={active ? "true" : "false"}
               onClick={() => setActiveTab(tab)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-bold transition-colors"
-              style={active ? { background: LOGO_PURPLE, color: "#fff" } : { background: "transparent", color: MUTED }}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                e.preventDefault();
+                const idx = SUB_TABS.indexOf(tab);
+                const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
+                setActiveTab(SUB_TABS[next]);
+              }}
+              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
             >
-              <Icon size={14} />
               {tabLabels[tab]}
+              {badge > 0 && (
+                <span
+                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                  style={{ background: CRITICAL }}
+                >
+                  {badge}
+                </span>
+              )}
+              {active && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
+              )}
             </button>
           );
         })}
@@ -216,7 +416,7 @@ export default function Compliance() {
       {activeTab === "staff" && <StaffPanel />}
       {activeTab === "participants" && <ParticipantsPanel />}
       {activeTab === "incidents" && <IncidentsPanel />}
-      {activeTab === "audit_pack" && <AuditPackPanel />}
+      {activeTab === "audit_pack" && <AuditPackPanel embedded />}
     </div>
   );
 }
@@ -229,24 +429,26 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   const bands = data?.bands ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
   const avg = data?.kpis.overall_score ?? 0;
   const arcColor = scoreColor(avg);
-  const circ = 2 * Math.PI * 34;
+  const circ = 2 * Math.PI * 42;
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
-    <div className="space-y-3">
-      <StatStrip stats={[
-        { label: translate("compliance.centre.overview.statOverallScore"), value: Math.round(avg), sub: translate("compliance.centre.overview.statOverallScoreSub"), color: arcColor, icon: <BarChart3 size={13} /> },
-        { label: translate("compliance.centre.overview.statCompliantSessions"), value: bands.compliant, sub: translate("compliance.centre.overview.statCompliantSub"), color: "#16A34A", icon: <CircleCheck size={13} /> },
-        { label: translate("compliance.centre.overview.statAtRiskSessions"), value: bands.at_risk, sub: translate("compliance.centre.overview.statAtRiskSub"), color: "#D97706", icon: <AlertTriangle size={13} /> },
-        { label: translate("compliance.centre.overview.statOpenIncidents"), value: data?.kpis.open_incidents ?? 0, sub: translate("compliance.centre.overview.statOpenIncidentsSub"), color: "#DC2626", icon: <ShieldAlert size={13} /> },
-      ]} />
+    <div className="space-y-5">
+      <KpiGrid>
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
+      </KpiGrid>
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
-        <div className="rounded-xl p-3.5 flex items-start gap-3" style={{ background: "rgba(190,24,93,0.06)", border: "1px solid rgba(190,24,93,0.25)" }}>
-          <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color: CORAL }} />
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+            <AlertTriangle size={17} style={{ color: CRITICAL }} />
+          </span>
           <div className="min-w-0">
-            <p className="text-[13px] font-bold mb-1.5" style={{ color: CORAL }}>
+            <p className="text-[13px] font-bold mb-2" style={{ color: CRITICAL }}>
               {translateParams(
                 data!.urgent_actions.length !== 1 ? "compliance.centre.overview.urgentActionPlural" : "compliance.centre.overview.urgentAction",
                 { count: String(data!.urgent_actions.length) },
@@ -256,8 +458,8 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               {data!.urgent_actions.map((a, i) => (
                 <Link key={i} href={a.link}>
                   <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80"
-                    style={{ background: a.severity === "critical" ? "rgba(220,38,38,0.1)" : "rgba(217,119,6,0.1)", color: a.severity === "critical" ? "#DC2626" : "#D97706" }}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer hover:opacity-80 bg-white"
+                    style={{ color: a.severity === "critical" ? CRITICAL : WARNING }}
                   >
                     {a.type === "incident" ? <ShieldAlert size={11} /> : a.type === "credential" ? <FileText size={11} /> : <FileX size={11} />}
                     {a.label}{a.detail ? ` · ${a.detail}` : ""}
@@ -266,35 +468,35 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               ))}
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-3.5" style={{ borderColor: BORDER }}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.bandsTitle")}</p>
-          <p className="text-[11px] mb-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.bandsSubtitle")}</p>
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16 shrink-0">
-              <svg width="64" height="64" viewBox="0 0 80 80" className="-rotate-90">
-                <circle cx="40" cy="40" r="34" fill="none" stroke={SOFT} strokeWidth="8" />
+          <p className="text-[11px] mb-4" style={{ color: MUTED }}>{translate("compliance.centre.overview.bandsSubtitle")}</p>
+          <div className="flex items-center gap-5">
+            <div className="relative w-24 h-24 shrink-0">
+              <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+                <circle cx="48" cy="48" r="42" fill="none" stroke={SOFT} strokeWidth="9" />
                 <circle
-                  cx="40" cy="40" r="34" fill="none" stroke={arcColor} strokeWidth="8"
+                  cx="48" cy="48" r="42" fill="none" stroke={arcColor} strokeWidth="9"
                   strokeDasharray={circ} strokeDashoffset={circ * (1 - avg / 100)} strokeLinecap="round"
                   className="transition-all duration-700"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-base font-black" style={{ color: TEXT }}>{Math.round(avg)}</span>
+                <span className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-stat)" }}>{Math.round(avg)}</span>
               </div>
             </div>
-            <div className="flex-1 space-y-1">
+            <div className="flex-1 space-y-2.5">
               {[
-                { label: translate("compliance.centre.overview.bandCompliant"), count: bands.compliant, color: "#16A34A" },
-                { label: translate("compliance.centre.overview.bandAtRisk"), count: bands.at_risk, color: "#D97706" },
-                { label: translate("compliance.centre.overview.bandNonCompliant"), count: bands.non_compliant, color: "#DC2626" },
+                { label: translate("compliance.centre.overview.bandCompliant"), count: bands.compliant, color: SUCCESS },
+                { label: translate("compliance.centre.overview.bandAtRisk"), count: bands.at_risk, color: WARNING },
+                { label: translate("compliance.centre.overview.bandNonCompliant"), count: bands.non_compliant, color: CRITICAL },
               ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between text-[12px] py-0.5">
-                  <span className="flex items-center gap-1.5" style={{ color: TEXT }}>
+                <div key={row.label} className="flex items-center justify-between text-[12px] rounded-xl px-3 py-2" style={{ background: SOFT }}>
+                  <span className="flex items-center gap-2" style={{ color: TEXT }}>
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} /> {row.label}
                   </span>
                   <span className="font-black" style={{ color: row.color }}>{row.count}</span>
@@ -302,50 +504,57 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               ))}
             </div>
           </div>
-        </div>
+        </Card>
 
-        <div className="rounded-xl border bg-white p-3.5" style={{ borderColor: BORDER }}>
-          <div className="flex items-center gap-1.5">
-            <ListChecks size={14} style={{ color: MUTED }} />
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
+              <ListChecks size={14} style={{ color: MUTED }} />
+            </span>
             <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.issuesTitle")}</p>
           </div>
-          <p className="text-[11px] mb-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.issuesSubtitle")}</p>
+          <p className="text-[11px] mb-3 mt-1" style={{ color: MUTED }}>{translate("compliance.centre.overview.issuesSubtitle")}</p>
           {(data?.common_issues.length ?? 0) === 0 ? (
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-green-50/50 border border-green-100 text-[#16A34A]">
-              <CircleCheck size={14} /> <span className="text-[12px] font-bold">{translate("compliance.centre.overview.noIssues")}</span>
+            <div className="flex items-center gap-2 rounded-xl px-3.5 py-3" style={{ background: "var(--cc-status-success-bg)", color: SUCCESS }}>
+              <CircleCheck size={16} /> <span className="text-[12px] font-bold">{translate("compliance.centre.overview.noIssues")}</span>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {data!.common_issues.map((issue) => (
-                <div key={issue.rule_code} className="space-y-0.5">
+                <div key={issue.rule_code} className="space-y-1">
                   <div className="flex justify-between text-[12px]">
                     <span className="font-semibold truncate max-w-[70%]" style={{ color: TEXT }}>{issue.label}</span>
-                    <span className="font-bold" style={{ color: issue.pct >= 50 ? "#DC2626" : "#D97706" }}>
+                    <span className="font-bold" style={{ color: issue.pct >= 50 ? CRITICAL : WARNING }}>
                       {translateParams(issue.count !== 1 ? "compliance.centre.overview.issueSessionCountPlural" : "compliance.centre.overview.issueSessionCount", { count: String(issue.count) })}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: SOFT }}>
-                    <div className="h-full rounded-full" style={{ width: `${issue.pct}%`, background: issue.pct >= 50 ? "#DC2626" : "#D97706" }} />
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: SOFT }}>
+                    <div className="h-full rounded-full" style={{ width: `${issue.pct}%`, background: issue.pct >= 50 ? CRITICAL : WARNING }} />
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-3.5" style={{ borderColor: BORDER }}>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Users size={14} style={{ color: MUTED }} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
+              <Users size={14} style={{ color: MUTED }} />
+            </span>
             <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.staffSnapshotTitle")}</p>
           </div>
-          <div className="divide-y" style={{ borderColor: BORDER }}>
+          <div className="space-y-1">
             {(data?.staff_snapshot.length ?? 0) === 0 && <p className="text-[12px] py-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.noStaffData")}</p>}
             {data?.staff_snapshot.map((w) => (
-              <div key={w.user_id} className="flex items-center justify-between py-2 text-[12px]">
-                <span className="font-semibold" style={{ color: TEXT }}>{w.full_name}</span>
-                <div className="flex items-center gap-2">
+              <div key={w.user_id} className="flex items-center justify-between gap-2 py-2 px-2.5 rounded-xl text-[12px] hover:bg-[var(--cc-soft)] transition-colors">
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Avatar name={w.full_name} size={28} />
+                  <span className="font-semibold truncate" style={{ color: TEXT }}>{w.full_name}</span>
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
                   {w.avg_score != null && <span className="font-black" style={{ color: scoreColor(w.avg_score) }}>{w.avg_score}</span>}
                   {w.rp_flag
                     ? <StatusBadge label={translate("compliance.centre.status.rpFlag")} tone="rd" />
@@ -356,22 +565,27 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => onNavigateTab("staff")} className="mt-1.5 flex items-center gap-1 text-[12px] font-bold hover:opacity-70" style={{ color: PLUM }}>
+          <button type="button" onClick={() => onNavigateTab("staff")} className="mt-2 flex items-center gap-1 text-[12px] font-bold hover:opacity-70" style={{ color: PLUM }}>
             <ArrowRight size={13} /> {translate("compliance.centre.overview.viewAllStaff")}
           </button>
-        </div>
+        </Card>
 
-        <div className="rounded-xl border bg-white p-3.5" style={{ borderColor: BORDER }}>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <HeartHandshake size={14} style={{ color: MUTED }} />
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
+              <HeartHandshake size={14} style={{ color: MUTED }} />
+            </span>
             <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.participantSnapshotTitle")}</p>
           </div>
-          <div className="divide-y" style={{ borderColor: BORDER }}>
+          <div className="space-y-1">
             {(data?.participant_snapshot.length ?? 0) === 0 && <p className="text-[12px] py-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.noParticipantData")}</p>}
             {data?.participant_snapshot.map((p) => (
-              <div key={p.participant_id} className="flex items-center justify-between py-2 text-[12px]">
-                <span className="font-semibold" style={{ color: TEXT }}>{p.full_name}</span>
-                <div className="flex items-center gap-2">
+              <div key={p.participant_id} className="flex items-center justify-between gap-2 py-2 px-2.5 rounded-xl text-[12px] hover:bg-[var(--cc-soft)] transition-colors">
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Avatar name={p.full_name} size={28} />
+                  <span className="font-semibold truncate" style={{ color: TEXT }}>{p.full_name}</span>
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
                   {p.note_quality != null && <span className="font-black" style={{ color: scoreColor(p.note_quality) }}>{p.note_quality}</span>}
                   {p.agreement_unsigned
                     ? <StatusBadge label={translate("compliance.centre.status.unsigned")} tone="rd" />
@@ -382,12 +596,74 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => onNavigateTab("participants")} className="mt-1.5 flex items-center gap-1 text-[12px] font-bold hover:opacity-70" style={{ color: PLUM }}>
+          <button type="button" onClick={() => onNavigateTab("participants")} className="mt-2 flex items-center gap-1 text-[12px] font-bold hover:opacity-70" style={{ color: PLUM }}>
             <ArrowRight size={13} /> {translate("compliance.centre.overview.viewAllParticipants")}
           </button>
-        </div>
+        </Card>
       </div>
+
+      <AiPatternsSection />
     </div>
+  );
+}
+
+function AiPatternsSection() {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["coordinator-ai-patterns"], queryFn: getCoordinatorAiDetectedPatterns });
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+
+  async function handleDismiss(id: string) {
+    setDismissingId(id);
+    try {
+      await dismissCoordinatorPattern(id);
+      await queryClient.invalidateQueries({ queryKey: ["coordinator-ai-patterns"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.overview.aiPatternDismissFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setDismissingId(null);
+    }
+  }
+
+  const patterns = data?.patterns ?? [];
+
+  return (
+    <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: "var(--cc-plum-soft)" }}>
+          <Sparkles size={14} style={{ color: PLUM }} />
+        </span>
+        <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.aiPatternsTitle")}</p>
+      </div>
+      <p className="text-[11px] mb-3" style={{ color: MUTED }}>{translate("compliance.centre.overview.aiPatternsSubtitle")}</p>
+      {isLoading ? (
+        <LoadingBlock label={translate("common.loading")} />
+      ) : patterns.length === 0 ? (
+        <p className="text-[12px] py-2" style={{ color: MUTED }}>{translate("compliance.centre.overview.aiPatternsEmpty")}</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {patterns.map((p: AiDetectedPattern) => {
+            const sevColor = p.severity === "high" ? CRITICAL : p.severity === "low" ? PLUM : WARNING;
+            return (
+              <div key={p.id} className="rounded-xl p-3.5 border-l-4" style={{ background: SOFT, borderColor: sevColor }}>
+                <p className="text-[12px] font-bold mb-1" style={{ color: TEXT }}>{p.title}</p>
+                <p className="text-[11px] mb-2.5" style={{ color: MUTED }}>{p.message}</p>
+                <button
+                  type="button"
+                  disabled={dismissingId === p.id}
+                  onClick={() => handleDismiss(p.id)}
+                  className="text-[11px] font-bold px-3 py-1 rounded-full disabled:opacity-50 bg-white"
+                  style={{ color: MUTED, border: `1px solid ${BORDER}` }}
+                >
+                  {dismissingId === p.id ? translate("compliance.centre.overview.aiPatternDismissing") : translate("compliance.centre.overview.aiPatternDismiss")}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -445,13 +721,13 @@ function StaffPanel() {
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
-    <div className="space-y-3">
-      <StatStrip stats={[
-        { label: translate("compliance.centre.staff.statTotalWorkers"), value: data?.kpis.total_workers ?? 0, icon: <Users size={13} /> },
-        { label: translate("compliance.centre.staff.statFullyCompliant"), value: data?.kpis.fully_compliant ?? 0, color: "#16A34A", icon: <CircleCheck size={13} /> },
-        { label: translate("compliance.centre.staff.statExpiringCredentials"), value: data?.kpis.expiring_credentials ?? 0, color: "#D97706", icon: <AlertTriangle size={13} /> },
-        { label: translate("compliance.centre.staff.statActionRequired"), value: data?.kpis.action_required ?? 0, color: "#DC2626", icon: <ShieldAlert size={13} /> },
-      ]} />
+    <div className="space-y-5">
+      <KpiGrid>
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
+      </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
         <FilterChip label={translate("compliance.centre.staff.filterAll")} icon={<List size={12} />} active={filter === "all"} onClick={() => setFilter("all")} />
@@ -459,7 +735,7 @@ function StaffPanel() {
         <FilterChip label={translate("compliance.centre.staff.filterAction")} icon={<ShieldAlert size={12} />} active={filter === "action"} onClick={() => setFilter("action")} />
         <FilterChip label={translate("compliance.centre.staff.filterCompliant")} icon={<CircleCheck size={12} />} active={filter === "compliant"} onClick={() => setFilter("compliant")} />
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 bg-white" style={{ borderColor: BORDER }}>
             <Search size={13} style={{ color: MUTED }} />
             <input
               value={search}
@@ -469,50 +745,57 @@ function StaffPanel() {
               style={{ color: TEXT }}
             />
           </div>
-          <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold" style={{ borderColor: BORDER, color: MUTED }}>
+          <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold bg-white" style={{ borderColor: BORDER, color: MUTED }}>
             <Download size={13} /> {translate("compliance.centre.staff.export")}
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[13px]">
+          <table className="w-full table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
             <thead>
-              <tr className="border-b" style={{ borderColor: BORDER, background: SOFT }}>
-                <th className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colWorker")}</th>
+              <tr style={{ background: TEXT }}>
+                <th className="w-48 px-4 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colWorker")}</th>
                 {Object.entries(credLabels).map(([key, label]) => (
-                  <th key={key} className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{label}</th>
+                  <th key={key} className="w-[84px] px-1.5 h-11 text-center text-[9px] font-bold uppercase tracking-wide leading-tight text-white">{label}</th>
                 ))}
-                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colAvgScore")}</th>
-                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{translate("compliance.centre.staff.colStatus")}</th>
+                <th className="w-[76px] px-2 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colAvgScore")}</th>
+                <th className="w-24 px-2 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{translate("compliance.centre.staff.colStatus")}</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((w) => (
-                <tr key={w.user_id}>
-                  <td className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{ color: TEXT }}>{w.full_name}</td>
+              {filtered.map((w, idx) => (
+                <tr key={w.user_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
+                  <td className="px-4 py-3">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={w.full_name} size={26} />
+                      <span className="font-semibold truncate" style={{ color: TEXT }}>{w.full_name}</span>
+                    </span>
+                  </td>
                   {Object.keys(credLabels).map((key) => {
                     const c = w.credentials[key];
-                    if (!c) return <td key={key} className="px-3 py-2.5 text-[11px]" style={{ color: MUTED }}>—</td>;
+                    if (!c) return <td key={key} className="px-1.5 py-3 text-center text-[11px]" style={{ color: MUTED }}>N/A</td>;
                     const icon = c.status === "valid"
-                      ? <ShieldCheck size={14} style={{ color: "#16A34A" }} />
+                      ? <ShieldCheck size={13} className="shrink-0" style={{ color: SUCCESS }} />
                       : c.status === "expiring"
-                        ? <AlertTriangle size={14} style={{ color: "#D97706" }} />
-                        : <ShieldAlert size={14} style={{ color: "#DC2626" }} />;
+                        ? <AlertTriangle size={13} className="shrink-0" style={{ color: WARNING }} />
+                        : <ShieldAlert size={13} className="shrink-0" style={{ color: CRITICAL }} />;
+                    const expiry = c.expiry_date ? String(c.expiry_date).slice(0, 10) : "";
+                    const [y, m, d] = expiry ? expiry.split("-") : [];
                     return (
-                      <td key={key} className="px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
+                      <td key={key} className="px-1.5 py-3">
+                        <div className="flex items-center justify-center gap-1">
                           {icon}
-                          <span className="text-[10px]" style={{ color: MUTED }}>{c.expiry_date ? String(c.expiry_date).slice(0, 10) : ""}</span>
+                          {expiry && <span className="text-[9px] whitespace-nowrap" style={{ color: MUTED }}>{d}/{m}/{y.slice(2)}</span>}
                         </div>
                       </td>
                     );
                   })}
-                  <td className="px-3 py-2.5">
-                    {w.avg_score != null ? <span className="font-black" style={{ color: scoreColor(w.avg_score) }}>{w.avg_score}</span> : <span style={{ color: MUTED }}>—</span>}
+                  <td className="px-2 py-3">
+                    {w.avg_score != null ? <span className="font-black" style={{ color: scoreColor(w.avg_score) }}>{w.avg_score}</span> : <span style={{ color: MUTED }}>N/A</span>}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-2 py-3">
                     {w.rp_flag
                       ? <StatusBadge label={translate("compliance.centre.status.rpFlagOpen")} tone="rd" />
                       : w.groups.includes("expiring")
@@ -527,27 +810,29 @@ function StaffPanel() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {expiringSoon && (
-        <div className="rounded-xl p-3.5 flex items-start gap-3" style={{ background: "rgba(217,119,6,0.06)", border: "1px solid rgba(217,119,6,0.25)" }}>
-          <Info size={16} className="shrink-0 mt-0.5" style={{ color: "#D97706" }} />
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(217,119,6,0.06)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(217,119,6,0.12)" }}>
+            <Info size={16} style={{ color: WARNING }} />
+          </span>
           <div>
             <p className="text-[13px] font-bold mb-0.5" style={{ color: "#92400E" }}>{translate("compliance.centre.staff.reminderTitle")}</p>
-            <p className="text-[12px] mb-1.5" style={{ color: "#854D0B" }}>
+            <p className="text-[12px] mb-2" style={{ color: "#854D0B" }}>
               {translateParams("compliance.centre.staff.reminderBody", { name: expiringSoon.full_name })}
             </p>
             <button
               type="button"
               disabled={sendingId === expiringSoon.user_id}
               onClick={() => handleSendReminder(expiringSoon)}
-              className="h-8 px-3 rounded-lg text-[12px] font-bold text-white disabled:opacity-50"
-              style={{ background: "#D97706" }}
+              className="h-8 px-4 rounded-full text-[12px] font-bold text-white disabled:opacity-50"
+              style={{ background: WARNING }}
             >
               {sendingId === expiringSoon.user_id ? translate("compliance.centre.staff.sending") : translate("compliance.centre.staff.sendReminder")}
             </button>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -588,13 +873,13 @@ function ParticipantsPanel() {
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
   return (
-    <div className="space-y-3">
-      <StatStrip stats={[
-        { label: translate("compliance.centre.participants.statParticipants"), value: data?.kpis.total_participants ?? 0, icon: <HeartHandshake size={13} /> },
-        { label: translate("compliance.centre.participants.statAgreementsSigned"), value: data?.kpis.agreements_signed ?? 0, color: "#16A34A", icon: <FileCheck2 size={13} /> },
-        { label: translate("compliance.centre.participants.statAvgNoteQuality"), value: data?.kpis.avg_note_quality ?? 0, color: scoreColor(data?.kpis.avg_note_quality ?? 0), icon: <BarChart3 size={13} /> },
-        { label: translate("compliance.centre.participants.statOpenFlags"), value: data?.kpis.open_flags ?? 0, color: "#DC2626", icon: <Flag size={13} /> },
-      ]} />
+    <div className="space-y-5">
+      <KpiGrid>
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
+      </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
         <FilterChip label={translate("compliance.centre.participants.filterAll")} icon={<List size={12} />} active={filter === "all"} onClick={() => setFilter("all")} />
@@ -605,23 +890,23 @@ function ParticipantsPanel() {
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value as "30" | "90" | "180")}
           title="Date range"
-          className="ml-auto text-[12px] rounded-lg border px-3 py-1.5"
+          className="ml-auto text-[12px] rounded-full border px-3.5 py-2 bg-white"
           style={{ borderColor: BORDER, color: TEXT }}
         >
           <option value="30">{translate("compliance.centre.participants.range30")}</option>
           <option value="90">{translate("compliance.centre.participants.range90")}</option>
           <option value="180">{translate("compliance.centre.participants.range180")}</option>
         </select>
-        <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold" style={{ borderColor: BORDER, color: MUTED }}>
+        <button type="button" onClick={exportCsv} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-[12px] font-semibold bg-white" style={{ borderColor: BORDER, color: MUTED }}>
           <Download size={13} /> {translate("compliance.centre.participants.export")}
         </button>
       </div>
 
-      <div className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr className="border-b" style={{ borderColor: BORDER, background: SOFT }}>
+              <tr style={{ background: TEXT }}>
                 {[
                   translate("compliance.centre.participants.colParticipant"),
                   translate("compliance.centre.participants.colPlanStatus"),
@@ -632,44 +917,49 @@ function ParticipantsPanel() {
                   translate("compliance.centre.participants.colWorker"),
                   translate("compliance.centre.participants.colStatus"),
                 ].map((h) => (
-                  <th key={h} className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{h}</th>
+                  <th key={h} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((p) => (
-                <tr key={p.participant_id}>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <p className="font-semibold" style={{ color: TEXT }}>{p.full_name}</p>
-                    <p className="text-[10px]" style={{ color: MUTED }}>{translate("compliance.centre.participants.ndisNumberPrefix")} · {p.ndis_number ?? "—"}</p>
+              {filtered.map((p, idx) => (
+                <tr key={p.participant_id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <span className="flex items-center gap-2.5">
+                      <Avatar name={p.full_name} size={26} />
+                      <span className="min-w-0">
+                        <p className="font-semibold" style={{ color: TEXT }}>{p.full_name}</p>
+                        <p className="text-[10px]" style={{ color: MUTED }}>{translate("compliance.centre.participants.ndisNumberPrefix")} · {p.ndis_number ?? "N/A"}</p>
+                      </span>
+                    </span>
                   </td>
-                  <td className="px-3 py-2.5"><StatusBadge label={p.plan_status} tone="pu" /></td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3"><StatusBadge label={p.plan_status} tone="pu" /></td>
+                  <td className="px-3 py-3">
                     {p.agreement_status === "signed"
                       ? <StatusBadge label={translate("compliance.centre.status.signed")} tone="gn" />
                       : p.agreement_status === "expired"
                         ? <StatusBadge label={translate("compliance.centre.status.expired")} tone="am" />
                         : <StatusBadge label={translate("compliance.centre.status.unsigned")} tone="rd" />}
                   </td>
-                  <td className="px-3 py-2.5 font-semibold" style={{ color: TEXT }}>{p.sessions_count}</td>
-                  <td className="px-3 py-2.5">
-                    {p.avg_note_quality != null ? <span className="font-black" style={{ color: scoreColor(p.avg_note_quality) }}>{p.avg_note_quality}</span> : <span style={{ color: MUTED }}>—</span>}
+                  <td className="px-3 py-3 font-semibold" style={{ color: TEXT }}>{p.sessions_count}</td>
+                  <td className="px-3 py-3">
+                    {p.avg_note_quality != null ? <span className="font-black" style={{ color: scoreColor(p.avg_note_quality) }}>{p.avg_note_quality}</span> : <span style={{ color: MUTED }}>N/A</span>}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     {p.flags.length === 0
                       ? <span className="text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.participants.flagsNone")}</span>
                       : (
                         <div className="flex gap-1 flex-wrap">
                           {p.flags.map((f) => (
-                            <span key={f} className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: f === "rp" ? "rgba(220,38,38,0.1)" : "rgba(217,119,6,0.1)", color: f === "rp" ? "#DC2626" : "#D97706" }}>
+                            <span key={f} className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: f === "rp" ? "rgba(220,38,38,0.1)" : "rgba(217,119,6,0.1)", color: f === "rp" ? CRITICAL : WARNING }}>
                               {f === "rp" ? translate("compliance.centre.participants.flagRp") : f === "agreement" ? translate("compliance.centre.participants.flagAgreement") : translate("compliance.centre.participants.flagGoal")}
                             </span>
                           ))}
                         </div>
                       )}
                   </td>
-                  <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{p.worker_name}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{p.worker_name}</td>
+                  <td className="px-3 py-3">
                     {p.flags.length > 0
                       ? <StatusBadge label={translate("compliance.centre.status.actionRequired")} tone="rd" />
                       : <StatusBadge label={translate("compliance.centre.status.compliant")} tone="gn" />}
@@ -682,25 +972,220 @@ function ParticipantsPanel() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {unsignedExample && (
-        <div className="rounded-xl p-3.5 flex items-start gap-3" style={{ background: "rgba(190,24,93,0.06)", border: "1px solid rgba(190,24,93,0.25)" }}>
-          <ShieldAlert size={16} className="shrink-0 mt-0.5" style={{ color: CORAL }} />
+        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+            <ShieldAlert size={16} style={{ color: CRITICAL }} />
+          </span>
           <div>
-            <p className="text-[13px] font-bold mb-0.5" style={{ color: CORAL }}>{translateParams("compliance.centre.participants.agreementBannerTitle", { name: unsignedExample.full_name })}</p>
-            <p className="text-[12px] mb-1.5" style={{ color: TEXT }}>
+            <p className="text-[13px] font-bold mb-0.5" style={{ color: CRITICAL }}>{translateParams("compliance.centre.participants.agreementBannerTitle", { name: unsignedExample.full_name })}</p>
+            <p className="text-[12px] mb-2" style={{ color: TEXT }}>
               {translate("compliance.centre.participants.agreementBannerBody")}
             </p>
             <Link href={`/patients/${unsignedExample.participant_id}`}>
-              <span className="inline-flex h-8 px-3 items-center rounded-lg text-[12px] font-bold text-white cursor-pointer" style={{ background: CORAL }}>
+              <span className="inline-flex h-8 px-4 items-center rounded-full text-[12px] font-bold text-white cursor-pointer" style={{ background: "var(--cc-cta)" }}>
                 {translate("compliance.centre.participants.viewParticipant")}
               </span>
             </Link>
           </div>
-        </div>
+        </Card>
       )}
     </div>
+  );
+}
+
+// ── Incident status control ──────────────────────────────────────────────────
+const INCIDENT_STATUSES = ["reported", "under_investigation", "resolved", "closed"] as const;
+
+function incidentStatusLabel(translate: (key: string) => string, status: string) {
+  const map: Record<string, string> = {
+    reported: translate("compliance.centre.incidents.statusReported"),
+    under_investigation: translate("compliance.centre.incidents.statusUnderInvestigation"),
+    resolved: translate("compliance.centre.incidents.statusResolved"),
+    closed: translate("compliance.centre.incidents.statusClosed"),
+  };
+  return map[status] ?? status.replace(/_/g, " ");
+}
+
+/** Turns a raw audit action_type ("incident.created") into readable text ("Incident created"). No per-value i18n key exists for these since they're arbitrary system strings. */
+function formatAuditAction(actionType: string) {
+  const label = actionType.split(".").pop() ?? actionType;
+  const spaced = label.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+interface IncidentDetail {
+  id: string;
+  title?: string;
+  description?: string;
+  incident_type?: string;
+  severity?: string;
+  status?: string;
+  incident_date?: string;
+  reference_number?: string;
+  ndis_reportable?: boolean;
+  ndis_reported_at?: string | null;
+  participant_name?: string;
+}
+
+function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onClose: () => void }) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { requireReAuth, modal: reauthModal } = useReAuth();
+  const [busy, setBusy] = useState(false);
+
+  const { data: incident, isLoading } = useQuery({
+    queryKey: ["incident-detail", incidentId],
+    queryFn: () => getIncident<IncidentDetail>(incidentId),
+  });
+  const { data: trail, isLoading: trailLoading } = useQuery({
+    queryKey: ["incident-audit-trail", incidentId],
+    queryFn: () => getIncidentAuditTrail(incidentId),
+  });
+
+  async function refetchAll() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["incident-detail", incidentId] }),
+      queryClient.invalidateQueries({ queryKey: ["incident-audit-trail", incidentId] }),
+      queryClient.invalidateQueries({ queryKey: ["compliance-centre", "incidents"] }),
+    ]);
+  }
+
+  async function handleStatusChange(status: string) {
+    if (status === incident?.status || busy) return;
+    setBusy(true);
+    try {
+      await requireReAuth(() => updateIncident(incidentId, { status }));
+      await refetchAll();
+      toast({ title: translate("compliance.centre.incidents.statusUpdated") });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.incidents.statusUpdateFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleFileNdisReport() {
+    setBusy(true);
+    try {
+      await requireReAuth(() => updateIncident(incidentId, { ndis_reported_at: new Date().toISOString() }));
+      await refetchAll();
+      toast({ title: translate("compliance.centre.incidents.ndisReportFiled") });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("compliance.centre.incidents.ndisReportFailed"), description: err instanceof Error ? err.message : "" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {reauthModal}
+      <FormPanel
+        isOpen
+        onClose={onClose}
+        showLogo={false}
+        title={incident?.reference_number ? `${translate("compliance.centre.incidents.drawerTitlePrefix")} ${incident.reference_number}` : translate("compliance.centre.incidents.drawerTitlePrefix")}
+        subtitle={incident?.participant_name}
+      >
+        {isLoading ? (
+          <LoadingBlock label={translate("common.loading")} />
+        ) : !incident ? (
+          <EmptyState label={translate("compliance.centre.incidents.noIncidents")} />
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: MUTED }}>{translate("compliance.centre.incidents.colDescription")}</p>
+              <p className="text-[13px]" style={{ color: TEXT }}>{incident.description || "—"}</p>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>{translate("compliance.centre.incidents.colStatus")}</p>
+              <div className="flex flex-wrap gap-2">
+                {INCIDENT_STATUSES.map((s) => {
+                  const active = incident.status === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleStatusChange(s)}
+                      className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors disabled:opacity-50"
+                      style={active ? { background: PLUM, color: "#fff" } : { background: SOFT, color: MUTED }}
+                    >
+                      {incidentStatusLabel(translate, s)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {incident.ndis_reportable && (
+              <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "rgba(220,38,38,0.05)" }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(220,38,38,0.12)" }}>
+                  <ShieldAlert size={16} style={{ color: CRITICAL }} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold mb-0.5" style={{ color: CRITICAL }}>{translate("compliance.centre.incidents.ndisReportableBannerTitle")}</p>
+                  {incident.ndis_reported_at ? (
+                    <p className="text-[12px]" style={{ color: TEXT }}>
+                      {translate("compliance.centre.incidents.ndisReportedOn")} {new Date(incident.ndis_reported_at).toLocaleString()}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[12px] mb-2" style={{ color: TEXT }}>{translate("compliance.centre.incidents.ndisReportableBannerBody")}</p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={handleFileNdisReport}
+                        className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full text-[12px] font-bold text-white disabled:opacity-50"
+                        style={{ background: CRITICAL }}
+                      >
+                        <FileCheck2 size={13} /> {translate("compliance.centre.incidents.fileNdisReport")}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>{translate("compliance.centre.incidents.auditTrailTitle")}</p>
+              {trailLoading ? (
+                <LoadingBlock label={translate("common.loading")} />
+              ) : !trail || trail.length === 0 ? (
+                <p className="text-[12px]" style={{ color: MUTED }}>{translate("compliance.centre.incidents.auditTrailEmpty")}</p>
+              ) : (
+                <ul className="space-y-3">
+                  {trail.map((entry: IncidentAuditTrailEntry) => (
+                    <li key={entry.id} className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
+                        <Clock size={12} style={{ color: PLUM }} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold" style={{ color: TEXT }}>{formatAuditAction(entry.action_type)}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>
+                          {entry.actor_name} · {new Date(entry.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <Link href={`/incident/${incidentId}`}>
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-bold cursor-pointer" style={{ color: PLUM }}>
+                <ExternalLink size={13} /> {translate("compliance.centre.incidents.viewReport")}
+              </span>
+            </Link>
+          </div>
+        )}
+      </FormPanel>
+    </>
   );
 }
 
@@ -708,6 +1193,7 @@ function ParticipantsPanel() {
 function IncidentsPanel() {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "incidents"], queryFn: getComplianceCentreIncidents });
+  const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -715,7 +1201,7 @@ function IncidentsPanel() {
     if (incident.status !== "closed" && incident.incident_type === "restrictive_practice") {
       return (
         <Link href={`/incident-new?participant_id=${incident.id}&type=restrictive_practice`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer" style={{ color: "#DC2626" }}>
+          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: CRITICAL, background: "rgba(220,38,38,0.08)" }}>
             <FilePlus size={13} /> {translate("compliance.centre.incidents.fileReport")}
           </span>
         </Link>
@@ -724,7 +1210,7 @@ function IncidentsPanel() {
     if (incident.status === "closed") {
       return (
         <Link href={`/incident/${incident.id}`}>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer" style={{ color: PLUM }}>
+          <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
             <FileText size={13} /> {translate("compliance.centre.incidents.viewReport")}
           </span>
         </Link>
@@ -732,7 +1218,7 @@ function IncidentsPanel() {
     }
     return (
       <Link href={`/incident/${incident.id}`}>
-        <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer" style={{ color: PLUM }}>
+        <span className="inline-flex items-center gap-1 text-[12px] font-bold cursor-pointer px-2.5 py-1 rounded-full" style={{ color: PLUM, background: "var(--cc-plum-soft)" }}>
           <Eye size={13} /> {translate("compliance.centre.incidents.review")}
         </span>
       </Link>
@@ -740,18 +1226,18 @@ function IncidentsPanel() {
   }
 
   return (
-    <div className="space-y-3">
-      <StatStrip stats={[
-        { label: translate("compliance.centre.incidents.statOpen"), value: data?.kpis.open_incidents ?? 0, color: "#DC2626", icon: <Flag size={13} /> },
-        { label: translate("compliance.centre.incidents.statRpFlags"), value: data?.kpis.rp_flags ?? 0, color: "#DC2626", icon: <ShieldAlert size={13} /> },
-        { label: translate("compliance.centre.incidents.statResolvedThisMonth"), value: data?.kpis.resolved_this_month ?? 0, color: "#16A34A", icon: <CircleCheck size={13} /> },
-      ]} />
+    <div className="space-y-5">
+      <KpiGrid>
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
+      </KpiGrid>
 
-      <div className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr className="border-b" style={{ borderColor: BORDER, background: SOFT }}>
+              <tr style={{ background: TEXT }}>
                 {[
                   translate("compliance.centre.incidents.colDate"),
                   translate("compliance.centre.incidents.colWorker"),
@@ -760,37 +1246,70 @@ function IncidentsPanel() {
                   translate("compliance.centre.incidents.colDescription"),
                   translate("compliance.centre.incidents.colStatus"),
                   translate("compliance.centre.incidents.colAction"),
-                ].map((h) => (
-                  <th key={h} className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: MUTED }}>{h}</th>
+                  "",
+                ].map((h, i) => (
+                  <th key={h || `h${i}`} className="px-3 h-11 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-white">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: BORDER }}>
-              {(data?.incidents ?? []).map((inc) => (
-                <tr key={inc.id}>
-                  <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{String(inc.incident_date).slice(0, 10)}</td>
-                  <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.worker_name}</td>
-                  <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.participant_name}</td>
-                  <td className="px-3 py-2.5">
+              {(data?.incidents ?? []).map((inc, idx) => (
+                <tr key={inc.id} className="h-12 transition-colors hover:bg-[var(--cc-soft)]" style={idx % 2 === 1 ? { background: "rgba(124,58,237,0.03)" } : undefined}>
+                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{String(inc.incident_date).slice(0, 10)}</td>
+                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.worker_name}</td>
+                  <td className="px-3 py-3 text-[12px] whitespace-nowrap" style={{ color: TEXT }}>{inc.participant_name}</td>
+                  <td className="px-3 py-3">
                     <StatusBadge
                       label={inc.incident_type === "restrictive_practice" ? translate("compliance.centre.incidents.restrictivePractice") : inc.incident_type.replace(/_/g, " ")}
                       tone={inc.ndis_reportable ? "rd" : "am"}
                     />
                   </td>
-                  <td className="px-3 py-2.5 text-[12px] max-w-[220px] truncate" style={{ color: MUTED }} title={inc.description}>{inc.description}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3 text-[12px] max-w-[220px] truncate" style={{ color: MUTED }} title={inc.description}>{inc.description}</td>
+                  <td className="px-3 py-3">
                     <StatusBadge label={inc.status.replace(/_/g, " ")} tone={inc.status === "closed" ? "gn" : inc.status === "under_investigation" ? "am" : "rd"} />
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">{actionFor(inc)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">{actionFor(inc)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={translate("compliance.centre.actions.menuLabel")}
+                          className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--cc-soft)]"
+                          style={{ color: MUTED }}
+                        >
+                          <MoreVertical size={15} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
+                          <Eye size={15} /> {translate("compliance.centre.incidents.kebabReviewStatus")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setOpenIncidentId(inc.id)}>
+                          <Clock size={15} /> {translate("compliance.centre.incidents.kebabAuditTrail")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href={`/incident/${inc.id}`} className="flex items-center gap-2">
+                            <ExternalLink size={15} /> {translate("compliance.centre.incidents.kebabOpenReport")}
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
                 </tr>
               ))}
               {(data?.incidents.length ?? 0) === 0 && (
-                <tr><td colSpan={7}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
+                <tr><td colSpan={8}><EmptyState label={translate("compliance.centre.incidents.noIncidents")} /></td></tr>
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
+
+      {openIncidentId && (
+        <IncidentDetailDrawer incidentId={openIncidentId} onClose={() => setOpenIncidentId(null)} />
+      )}
     </div>
   );
 }

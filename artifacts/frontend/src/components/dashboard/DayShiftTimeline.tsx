@@ -86,7 +86,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
                         {shiftInitials(shift.participant_name)}
                       </div>
                       {index < ordered.length - 1 && (
-                        <div className="mt-1 h-8 w-px" style={{ background: "#E5E7EB" }} />
+                        <div className="mt-1 h-8 w-px" style={{ background: "#E8E8EA" }} />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">

@@ -10,7 +10,6 @@ const ROLE_KEY: Record<string, string> = {
   support_worker: "hub.role.supportWorker",
   support_coordinator: "hub.role.supportCoordinator",
   managing_director: "hub.role.managingDirector",
-  allied_health: "hub.role.alliedHealth",
   admin: "hub.role.admin",
 };
 
@@ -18,7 +17,6 @@ const ROLE_CTA_KEY: Record<string, { label: string; href: string }> = {
   support_worker: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   support_coordinator: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   managing_director: { label: "hub.header.cta.executive", href: "/md/executive" },
-  allied_health: { label: "hub.header.cta.caseload", href: "/patients" },
   admin: { label: "hub.header.cta.dashboard", href: "/dashboard" },
 };
 
@@ -71,7 +69,7 @@ export function HubHeader() {
       />
       <span
         className="pointer-events-none absolute top-8 right-32 h-16 w-16 rounded-full opacity-[0.08]"
-        style={{ background: "#BE185D" }}
+        style={{ background: "#7C3AED" }}
       />
       <span
         className="pointer-events-none absolute bottom-6 -left-6 h-24 w-24 rounded-full opacity-[0.08]"
@@ -102,7 +100,7 @@ export function HubHeader() {
         <button
           onClick={() => navigate(cta.href)}
           className="mt-6 flex items-center gap-2 rounded-full px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
-          style={{ background: "#FFFFFF", color: "#3730A3" }}
+          style={{ background: "#FFFFFF", color: "#E8457A" }}
         >
           {translate(cta.label)}
           <ArrowRight size={13} strokeWidth={2.5} />

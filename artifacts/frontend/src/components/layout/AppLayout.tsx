@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, Accessibility, HelpCircle,
+  Sun, Moon, Search, Car, HelpCircle, Plus,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -14,11 +14,14 @@ import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/wo
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
+import { AutoBreadcrumb } from "@/components/layout/AutoBreadcrumb";
+import { RightRail } from "@/components/layout/RightRail";
+import { FloatingAiAssistant } from "@/components/layout/FloatingAiAssistant";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isWorkerMobileShiftDetailPath } from "@/lib/worker-shift-routes";
+import { isWorkerMobileShiftDetailPath, workerMobileShiftBackHref } from "@/lib/worker-shift-routes";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -37,7 +40,7 @@ const TEXT   = "var(--cc-text)";
 const BORDER = "var(--cc-border)";
 const ACTIVE = "var(--cc-active-bg)";
 
-type NavRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
+type NavRole = "support_coordinator" | "support_worker" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties };
 
 interface NavItem {
@@ -55,34 +58,21 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
   support_coordinator: [
     { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
     {
-      group: "People & Care",
+      group: "Daily Operations",
       items: [
-        { href: "/team",               label: "Team",         icon: Users        },
-        { href: "/patients",           label: "Participants", icon: UserRound    },
+        { href: "/patients",              label: "Participants",       icon: UserRound    },
+        { href: "/team",                  label: "Workers",               icon: Users        },
+        { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
+        { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
+        { href: "/billing",               label: "Invoices",           icon: CreditCard   },
+        { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
     },
     {
-      group: "Quality & Safety",
+      group: "Settings & Help",
       items: [
-        { href: "/compliance", label: "Compliance", icon: ShieldCheck   },
-      ],
-    },
-    {
-      group: "Operations",
-      items: [
-        { href: "/coordinator/rostering",          label: "Rostering",          icon: CalendarDays },
-        // { href: "/coordinator/travel",             label: "Travel Expenses",    icon: Car          },
-        { href: "/coordinator/live",               label: "Live Monitoring",    icon: Radio        },
-        { href: "/coordinator/monitor",            label: "Long Shift Monitor", icon: Activity     },
-        { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
-        { href: "/billing",                        label: "Invoices",           icon: CreditCard   },
-      ],
-    },
-    {
-      group: "Resources",
-      items: [
-        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
-        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
+        { href: "/toolkit",     label: "Toolkit",    icon: Wrench        },
+        { href: "/worker/help", label: "Help",       icon: HelpCircle    },
       ],
     },
   ],
@@ -91,21 +81,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "My Work",
       items: [
-        { href: "/my-shifts",         label: "My Shifts",         icon: Clock         },
-        // { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
-        { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
-        { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
-        // { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
+        { href: "/my-shifts",           label: "My Shifts",   icon: Clock     },
+        { href: "/worker/availability",  label: "Availability", icon: UserCheck },
+        { href: "/my-clients",          label: "My Clients",  icon: UserRound },
       ],
     },
-    // {
-    //   group: "Development",
-    //   items: [
-    //     { href: "/worker/travel",       label: "Travel Expenses", icon: Car         },
-    //     { href: "/worker/performance",  label: "Performance",     icon: BarChart2   },
-    //     { href: "/worker/training",     label: "Training",        icon: GraduationCap },
-    //   ],
-    // },
     {
       group: "Safety & Resources",
       items: [
@@ -113,40 +93,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
         { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
         { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
-        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
-      ],
-    },
-  ],
-  allied_health: [
-    { items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
-    {
-      group: "Clinical",
-      items: [
-        { href: "/patients", label: "Caseload",  icon: UserRound    },
-        { href: "/sessions", label: "Sessions",  icon: CalendarDays },
-      ],
-    },
-    {
-      group: "Quality",
-      items: [
-        { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-        { href: "/reports",   label: "Reports",   icon: FileBarChart2 },
-      ],
-    },
-    {
-      group: "Admin",
-      items: [
-        { href: "/billing",     label: "Invoices",    icon: CreditCard },
-        { href: "/credentials", label: "Credentials", icon: BadgeCheck },
-        { href: "/toolkit",     label: "Toolkit",     icon: Wrench     },
-      ],
-    },
-    {
-      group: "Account",
-      items: [
-        { href: "/worker/profile",  label: "My Profile",    icon: UserRound     },
-        { href: "/worker/security", label: "Security",      icon: LockKeyhole   },
-        { href: "/accessibility",   label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -162,33 +108,22 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/md/onboarding", label: "Onboarding", icon: GraduationCap},
       ],
     },
-    {
-      group: "Account",
-      items: [
-        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
-      ],
-    },
   ],
 };
 
 // ── Topbar quick-nav tabs (shown when sidebar is collapsed) ───────────────────
 const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
-    { href: "/team",                  label: "Team",        icon: Users           },
-    { href: "/patients",              label: "Participants", icon: UserRound      },
-    { href: "/compliance",            label: "Compliance",  icon: ShieldCheck     },
-    { href: "/coordinator/rostering", label: "Rostering",   icon: CalendarDays    },
+    { href: "/patients",              label: "Participants",       icon: UserRound    },
+    { href: "/team",                  label: "Workers",               icon: Users        },
+    { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
+    { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
   ],
   support_worker: [
-    { href: "/dashboard",    label: "Dashboard",  icon: LayoutDashboard },
-    { href: "/my-shifts",    label: "My Shifts",  icon: Clock           },
-    { href: "/my-clients",   label: "My Clients", icon: UserRound       },
-    { href: "/my-compliance",label: "Compliance", icon: ShieldCheck     },
-  ],
-  allied_health: [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/patients",  label: "Caseload",  icon: UserRound       },
-    { href: "/sessions",  label: "Sessions",  icon: CalendarDays    },
+    { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
+    { href: "/my-shifts",     label: "My Shifts",  icon: Clock           },
+    { href: "/my-clients",    label: "My Clients", icon: UserRound       },
+    { href: "/my-compliance", label: "Compliance", icon: ShieldCheck     },
   ],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
@@ -200,25 +135,17 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
 const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
-    { href: "/dashboard",  label: "Home",      icon: LayoutDashboard },
-    { href: "/team",       label: "Team",      icon: Users           },
-    { href: "/patients",   label: "People",    icon: UserRound       },
-    { href: "/compliance", label: "Compliance",icon: ShieldCheck     },
-    { href: "/billing",    label: "Invoices",  icon: CreditCard      },
+    { href: "/dashboard",             label: "Home",       icon: LayoutDashboard },
+    { href: "/patients",              label: "Participants", icon: UserRound      },
+    { href: "/coordinator/rostering", label: "Schedule",   icon: CalendarDays    },
+    { href: "/compliance",            label: "Quality",    icon: ShieldCheck     },
+    { href: "/billing",               label: "Invoices",   icon: CreditCard      },
   ],
   support_worker: [
     { href: "/dashboard",    label: "Home",      icon: LayoutDashboard },
     { href: "/my-shifts",    label: "Shifts",    icon: Clock           },
     { href: "/my-clients",   label: "Clients",   icon: UserRound       },
-    // { href: "/tasks",        label: "Tasks",     icon: ClipboardList   },
     { href: "/my-compliance",label: "Compliance",icon: ShieldCheck     },
-  ],
-  allied_health: [
-    { href: "/dashboard",   label: "Home",     icon: LayoutDashboard },
-    { href: "/patients",    label: "Caseload", icon: UserRound       },
-    { href: "/sessions",    label: "Sessions", icon: CalendarDays    },
-    { href: "/reports",     label: "Reports",  icon: FileBarChart2   },
-    { href: "/credentials", label: "Creds",    icon: BadgeCheck      },
   ],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
@@ -230,9 +157,21 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
 };
 
 function isActive(location: string, href: string) {
-  // /patients also matches the legacy /participants route — kept as an explicit
-  // alias since it doesn't fit the plain prefix check below.
+  // Legacy route alias: /patients matches /participants
   if (href === "/patients" && location.startsWith("/participants")) return true;
+  // Schedule: all coordinator scheduling sub-routes roll up to /coordinator/rostering
+  if (href === "/coordinator/rostering" &&
+    (location.startsWith("/coordinator/live") ||
+     location.startsWith("/coordinator/monitor") ||
+     location.startsWith("/coordinator/shift-verification") ||
+     location.startsWith("/coordinator/travel") ||
+     location.startsWith("/approvals"))) return true;
+  // Quality & Compliance: incidents and audit-pack roll up to /compliance
+  if (href === "/compliance" &&
+    (location.startsWith("/incidents") ||
+     location.startsWith("/audit-pack"))) return true;
+  // Team: credentials roll up to /team
+  if (href === "/team" && location.startsWith("/credentials")) return true;
   return location === href || location.startsWith(href + "/");
 }
 
@@ -240,21 +179,103 @@ function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
-// ── Quick-jump search ─────────────────────────────────────────────────────────
-function GlobalSearch({ sections, translate }: { sections: NavSection[]; translate: (key: string) => string }) {
+// ── Searchable platform catalogue (role-scoped) ─────────────────────────────
+type SearchEntry = {
+  label: string;
+  description: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+  group: "pages" | "features" | "settings";
+  roles: NavRole[];
+};
+
+const ALL_ROLES: NavRole[] = ["support_coordinator", "support_worker", "managing_director"];
+
+const SEARCH_CATALOGUE: SearchEntry[] = [
+  // ── Pages ─────────────────────────────────────────────────────────────────
+  { label: "Dashboard",           description: "Overview & key metrics",                   href: "/dashboard",                       icon: LayoutDashboard, group: "pages",    roles: ["support_coordinator", "support_worker"] },
+  { label: "Hub",                 description: "Managing Director overview",               href: "/hub",                             icon: LayoutDashboard, group: "pages",    roles: ["managing_director"] },
+  { label: "Participants",        description: "Profiles, plans & NDIS goals",            href: "/patients",                        icon: UserRound,       group: "pages",    roles: ["support_coordinator"] },
+  { label: "Team",                description: "Support workers & staff management",       href: "/team",                            icon: Users,           group: "pages",    roles: ["support_coordinator"] },
+  { label: "Schedule",            description: "Roster, availability & shift management",  href: "/coordinator/rostering",           icon: CalendarDays,    group: "pages",    roles: ["support_coordinator"] },
+  { label: "Quality & Compliance",description: "Audit readiness & compliance tracking",    href: "/compliance",                      icon: ShieldCheck,     group: "pages",    roles: ["support_coordinator"] },
+  { label: "Invoices & Billing",  description: "NDIS invoicing & revenue reports",         href: "/billing",                         icon: CreditCard,      group: "pages",    roles: ["support_coordinator"] },
+  { label: "Reports",             description: "Session analytics & export",              href: "/reports",                         icon: FileBarChart2,   group: "pages",    roles: ["support_coordinator"] },
+  { label: "My Shifts",           description: "Your scheduled & active shifts",          href: "/my-shifts",                       icon: Clock,           group: "pages",    roles: ["support_worker"] },
+  { label: "My Clients",          description: "Your assigned participants",              href: "/my-clients",                      icon: UserRound,       group: "pages",    roles: ["support_worker"] },
+  { label: "My Availability",     description: "Set working hours & blackout dates",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
+  { label: "My Compliance",       description: "Your training & credential status",       href: "/my-compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["support_worker"] },
+  { label: "Credentials",         description: "Manage certifications & licences",        href: "/credentials",                     icon: BadgeCheck,      group: "pages",    roles: ["support_worker"] },
+  { label: "Incidents",           description: "Incident reports & history",              href: "/incidents",                       icon: AlertTriangle,   group: "pages",    roles: ["support_coordinator", "support_worker"] },
+  { label: "Toolkit",             description: "Resources & reference materials",         href: "/toolkit",                         icon: Wrench,          group: "pages",    roles: ["support_coordinator", "support_worker"] },
+  { label: "Executive Dashboard", description: "Organisation-wide performance",           href: "/md/executive",                    icon: BarChart2,       group: "pages",    roles: ["managing_director"] },
+  { label: "Staff Overview",      description: "All workers, compliance & credentials",   href: "/md/staff",                        icon: UserCheck,       group: "pages",    roles: ["managing_director"] },
+  { label: "MD Compliance",       description: "Compliance metrics & risk reporting",     href: "/md/compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["managing_director"] },
+  { label: "Financial",           description: "Revenue, billing & budget overview",      href: "/md/financial",                    icon: DollarSign,      group: "pages",    roles: ["managing_director"] },
+  { label: "Onboarding",          description: "Worker & participant onboarding flows",   href: "/md/onboarding",                   icon: GraduationCap,   group: "pages",    roles: ["managing_director"] },
+  // ── Features & deep links ─────────────────────────────────────────────────
+  { label: "Live Monitor",        description: "Real-time shift & clock-in monitoring",    href: "/coordinator/rostering",           icon: Radio,           group: "features", roles: ["support_coordinator"] },
+  { label: "Shift Verification",  description: "Verify completed shifts before billing",   href: "/coordinator/shift-verification",  icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
+  { label: "Audit Pack",          description: "NDIS audit documentation & export",        href: "/audit-pack",                      icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
+  { label: "Worker Availability", description: "Team availability calendar & blackouts",  href: "/coordinator/rostering",           icon: UserCheck,       group: "features", roles: ["support_coordinator"] },
+  { label: "Create Shift",        description: "Assign a new shift to a worker",          href: "/coordinator/rostering",           icon: Plus,            group: "features", roles: ["support_coordinator"] },
+  { label: "Bulk Shifts",         description: "Create recurring shifts in bulk",          href: "/coordinator/rostering",           icon: CalendarDays,    group: "features", roles: ["support_coordinator"] },
+  { label: "NDIS Goals",          description: "Participant goals & progress tracking",    href: "/patients",                        icon: Target,          group: "features", roles: ["support_coordinator"] },
+  { label: "Credential Alerts",   description: "Expiring worker certifications",          href: "/compliance",                      icon: BadgeCheck,      group: "features", roles: ["support_coordinator"] },
+  { label: "AI Pattern Detection",description: "AI-detected compliance & risk patterns",   href: "/compliance",                      icon: Activity,        group: "features", roles: ["support_coordinator"] },
+  { label: "Report Incident",     description: "Log a new incident or near-miss",         href: "/incidents/new",                   icon: AlertTriangle,   group: "features", roles: ["support_coordinator", "support_worker"] },
+  { label: "Help & Support",      description: "FAQs, guides & contact support",          href: "/worker/help",                     icon: HelpCircle,      group: "features", roles: ["support_worker"] },
+  // ── Settings ──────────────────────────────────────────────────────────────
+  { label: "Settings",            description: "Account, notifications & preferences",    href: "/settings",                        icon: Settings,        group: "settings", roles: ALL_ROLES },
+  { label: "Profile Settings",    description: "Name, email & personal details",          href: "/settings",                        icon: UserRound,       group: "settings", roles: ALL_ROLES },
+  { label: "Accessibility",       description: "Font size, contrast & display options",   href: "/settings",                        icon: Settings,        group: "settings", roles: ALL_ROLES },
+  { label: "Notification Settings",description: "Alert preferences & reminder config",    href: "/settings",                        icon: Settings,        group: "settings", roles: ALL_ROLES },
+];
+
+const SEARCH_QUICK_ACCESS: Record<NavRole, string[]> = {
+  support_coordinator: ["/dashboard", "/patients", "/coordinator/rostering", "/compliance", "/incidents/new"],
+  support_worker:      ["/dashboard", "/my-shifts", "/my-clients", "/my-compliance", "/incidents/new"],
+  managing_director:   ["/hub", "/md/executive", "/md/financial", "/md/compliance"],
+};
+
+const SEARCH_GROUP_LABELS: Record<string, string> = { pages: "Pages", features: "Features", settings: "Settings" };
+
+// ── Global command-palette search ────────────────────────────────────────────
+function GlobalSearch({ userRole }: { userRole: NavRole | undefined }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [, navigate] = useLocation();
-  const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
-  const allItems = sections.flatMap((s) => s.items);
 
-  const results = query.trim().length > 0
-    ? allItems.filter((item) => {
-        const label = navLabelForHref(item.href, item.label, translate);
-        return label.toLowerCase().includes(query.toLowerCase());
-      }).slice(0, 6)
-    : [];
+  const role = (userRole ?? "support_worker") as NavRole;
+
+  const allowed = useMemo(
+    () => SEARCH_CATALOGUE.filter((e) => e.roles.includes(role)),
+    [role],
+  );
+
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return allowed
+      .filter((e) => e.label.toLowerCase().includes(q) || e.description.toLowerCase().includes(q))
+      .slice(0, 9);
+  }, [query, allowed]);
+
+  const quickAccess = useMemo(() => {
+    const hrefs = SEARCH_QUICK_ACCESS[role] ?? [];
+    return allowed.filter((e) => hrefs.includes(e.href)).slice(0, 5);
+  }, [role, allowed]);
+
+  const showResults    = focused && query.trim().length > 0 && results.length > 0;
+  const showQuickAccess = focused && query.trim() === "";
+
+  const grouped = useMemo(() => {
+    const map: Partial<Record<string, SearchEntry[]>> = {};
+    for (const r of results) {
+      (map[r.group] ??= []).push(r);
+    }
+    return map;
+  }, [results]);
 
   function handleSelect(href: string) {
     navigate(href);
@@ -263,52 +284,87 @@ function GlobalSearch({ sections, translate }: { sections: NavSection[]; transla
   }
 
   return (
-    <div className="relative">
+    <div className="relative flex-1 max-w-md">
       <div
-        className="flex items-center gap-2 h-8 px-3 rounded-full transition-all duration-200"
+        className="flex items-center gap-2 h-9 px-3.5 rounded-xl transition-all duration-200"
         style={{
-          border: `1px solid ${focused ? "var(--cc-plum)" : "var(--cc-border)"}`,
-          background: focused ? "var(--cc-bg)" : "color-mix(in srgb, var(--cc-soft) 70%, transparent)",
-          boxShadow: focused ? "0 0 0 3px rgba(55,48,163,0.08)" : "none",
-          width: focused ? 200 : 160,
+          border: `1px solid ${focused ? "var(--cc-coral)" : "rgba(0,0,0,0.11)"}`,
+          background: "#fff",
+          boxShadow: focused ? "0 0 0 3px var(--cc-coral-soft)" : "0 1px 3px rgba(0,0,0,0.06)",
         }}
       >
-        <Search size={12} strokeWidth={2.5} style={{ color: MUTED, flexShrink: 0 }} />
+        <Search size={13} strokeWidth={2.5} style={{ color: focused ? CORAL : MUTED, flexShrink: 0, transition: "color 150ms" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => { setFocused(false); setQuery(""); }, 160)}
-          placeholder={translate("common.quickJump")}
-          className="flex-1 bg-transparent text-[12px] outline-none min-w-0"
+          onBlur={() => setTimeout(() => { setFocused(false); setQuery(""); }, 180)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { setFocused(false); setQuery(""); }
+            if (e.key === "Enter" && results.length > 0) handleSelect(results[0].href);
+          }}
+          placeholder="Search pages, features, settings..."
+          className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
           style={{ color: TEXT }}
         />
         {focused && (
-          <kbd className="text-[9px] font-bold px-1 py-0.5 rounded shrink-0" style={{ background: "var(--cc-soft)", color: MUTED }}>
+          <kbd className="text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0" style={{ background: "var(--cc-soft)", color: MUTED, borderColor: BORDER }}>
             ESC
           </kbd>
         )}
       </div>
-      {results.length > 0 && focused && (
+
+      {(showResults || showQuickAccess) && (
         <div
-          className="absolute top-full mt-1.5 left-0 z-50 rounded-xl border shadow-xl py-1 overflow-hidden min-w-[200px]"
-          style={{ background: "var(--cc-bg)", borderColor: "var(--cc-border)" }}
+          className="absolute top-full mt-2 left-0 z-50 rounded-xl border shadow-lg overflow-hidden"
+          style={{ background: "var(--cc-bg)", borderColor: "var(--cc-border)", minWidth: 360, maxWidth: 480, width: "max-content" }}
         >
-          {results.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.href}
-                type="button"
-                onMouseDown={() => handleSelect(item.href)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left transition-colors hover:bg-[var(--cc-soft)]"
-                style={{ color: TEXT }}
-              >
-                <Icon size={14} strokeWidth={2} style={{ color: MUTED }} />
-                {navLabelForHref(item.href, item.label, translate)}
-              </button>
-            );
-          })}
+          {showQuickAccess && (
+            <>
+              <p className="px-3 pt-3 pb-1 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Quick access</p>
+              {quickAccess.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button key={`qa-${entry.href}-${entry.label}`} type="button" onMouseDown={() => handleSelect(entry.href)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[var(--cc-soft)]">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--cc-soft)" }}>
+                      <Icon size={14} strokeWidth={1.8} style={{ color: CORAL }} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: TEXT }}>{entry.label}</p>
+                      <p className="text-[11px] truncate" style={{ color: MUTED }}>{entry.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+              <div className="h-px mx-3 mt-1 mb-2" style={{ background: BORDER }} />
+              <p className="px-3 pb-2.5 text-[11px]" style={{ color: MUTED }}>Type to search across {allowed.length} items\u2026</p>
+            </>
+          )}
+
+          {showResults && Object.entries(grouped).map(([group, items]) => (
+            <div key={group}>
+              <p className="px-3 pt-3 pb-1 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+                {SEARCH_GROUP_LABELS[group] ?? group}
+              </p>
+              {items!.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button key={`${entry.href}-${entry.label}`} type="button" onMouseDown={() => handleSelect(entry.href)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[var(--cc-soft)]">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--cc-soft)" }}>
+                      <Icon size={14} strokeWidth={1.8} style={{ color: CORAL }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: TEXT }}>{entry.label}</p>
+                      <p className="text-[11px] truncate" style={{ color: MUTED }}>{entry.description}</p>
+                    </div>
+                    <ChevronRight size={13} style={{ color: MUTED, flexShrink: 0 }} />
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -320,12 +376,14 @@ function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
+  isDark, toggleTheme,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; displayName: string; displayRole: string; initials: string;
   onNav?: () => void; onLogout: () => void;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
+  isDark: boolean; toggleTheme: () => void;
 }) {
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
@@ -334,10 +392,10 @@ function SidebarContents({
 
   return (
     <div className="flex flex-col h-full select-none overflow-hidden">
-      {/* Logo row */}
+      {/* Logo row — top of sidebar for both desktop and mobile drawer */}
       <div
-        className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
-        style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-plum)" }}
+        className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-5")}
+        style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}
       >
         <Link
           href="/dashboard"
@@ -345,26 +403,39 @@ function SidebarContents({
           aria-label={translate("layout.aria.goToDashboard")}
           title={translate("nav.home")}
           className={cn(
-            "flex items-center rounded-xl transition-all hover:bg-[var(--cc-soft)] active:opacity-75",
+            "flex items-center rounded-lg transition-all hover:bg-white/8 active:opacity-70",
             compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
           )}
         >
-          {compact ? <CareCliQLogoSm /> : <CareCliQLogo compact={false} />}
+          {compact ? (
+            <span
+              className="font-extrabold tracking-[-0.03em] leading-none select-none"
+              style={{ fontFamily: "var(--app-font-display)", fontSize: 17 }}
+            >
+              <span style={{ color: "rgba(255,255,255,0.9)" }}>C</span><span style={{ color: PLUM }}>Q</span>
+            </span>
+          ) : (
+            <span
+              className="font-extrabold tracking-[-0.03em] leading-none select-none"
+              style={{ fontFamily: "var(--app-font-display)", fontSize: 22 }}
+            >
+              <span style={{ color: "rgba(255,255,255,0.92)" }}>Care</span><span style={{ color: PLUM }}>CliQ</span>
+            </span>
+          )}
         </Link>
       </div>
 
       {/* Nav */}
-      <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-4", compact ? "px-2" : "px-2")}>
+      <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-2", compact ? "px-1.5" : "px-2")}>
         {sections.map((section, si) => (
-          <div key={si} className={si > 0 ? "mt-5" : ""}>
+          <div key={si} className={si > 0 ? "mt-4" : ""}>
             {section.group && !compact && (
-              <p className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.14em] flex items-center gap-2" style={{ color: MUTED }}>
-                <span className="w-px h-3 rounded-full shrink-0" style={{ background: BORDER }} />
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-50" style={{ color: TEXT }}>
                 {groupLabelForName(section.group, translate)}
               </p>
             )}
             {section.group && compact && si > 0 && (
-              <div className="h-px mx-2 mb-3" style={{ background: BORDER }} />
+              <div className="h-px mx-2 mb-2 opacity-30" style={{ background: BORDER }} />
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
@@ -372,7 +443,6 @@ function SidebarContents({
                 const Icon = item.icon;
                 const label = navLabelForHref(item.href, item.label, translate);
                 const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
-                const isIncident   = item.href === "/incidents";
                 const hasAlert     = alertCount > 0 && isCompliance;
                 return (
                   <Link
@@ -384,29 +454,22 @@ function SidebarContents({
                   >
                     <div
                       className={cn(
-                        "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
-                        compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                        "flex items-center h-10 text-[13px] transition-all duration-150 cursor-pointer rounded-xl",
+                        compact ? "w-10 justify-center mx-auto" : "gap-2.5 px-3",
+                        !active && "hover:bg-white/8",
                       )}
                       style={{
-                        background: active
-                          ? PLUM
-                          : isIncident && !compact
-                            ? "rgba(190,24,93,0.06)"
-                            : "transparent",
-                        color: active ? "#fff" : isIncident ? CORAL : MUTED,
-                        fontWeight: active ? 700 : isIncident ? 600 : 500,
+                        background: active ? CORAL : undefined,
+                        color: active ? "#fff" : TEXT,
+                        fontWeight: active ? 600 : 500,
                       }}
                     >
-                      <Icon
-                        size={18}
-                        strokeWidth={active ? 2.5 : isIncident ? 2.5 : 2}
-                        style={{ color: active ? "#fff" : isIncident ? CORAL : MUTED }}
-                      />
+                      <Icon size={17} strokeWidth={active ? 2.2 : 1.8} style={{ color: active ? "#fff" : MUTED }} />
                       {!compact && <span className="flex-1 truncate">{label}</span>}
                       {!compact && hasAlert && (
                         <span
-                          className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center"
-                          style={{ background: active ? "rgba(255,255,255,0.25)" : CORAL, color: "#fff" }}
+                          className="ml-auto min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
+                          style={{ background: active ? "rgba(255,255,255,0.3)" : CORAL, color: "#fff" }}
                         >
                           {alertCount}
                         </span>
@@ -420,21 +483,21 @@ function SidebarContents({
         ))}
 
         {/* Settings */}
-        <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${BORDER}` }}>
+        <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${BORDER}` }}>
           <Link href="/settings" onClick={onNav} title={compact ? translate("common.settings") : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
             <div
               className={cn(
-                "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
-                compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                "flex items-center h-10 text-[13px] transition-all duration-150 cursor-pointer rounded-xl",
+                compact ? "w-10 justify-center mx-auto" : "gap-2.5 px-3",
+                !isActive(location, "/settings") && "hover:bg-white/8",
               )}
               style={{
-                background: isActive(location, "/settings") ? PLUM : "transparent",
-                color: isActive(location, "/settings") ? "#fff" : MUTED,
-                fontWeight: isActive(location, "/settings") ? 700 : 500,
+                background: isActive(location, "/settings") ? CORAL : undefined,
+                color: isActive(location, "/settings") ? "#fff" : TEXT,
+                fontWeight: isActive(location, "/settings") ? 600 : 500,
               }}
             >
-              <Settings size={18} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
-                style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
+              <Settings size={17} strokeWidth={isActive(location, "/settings") ? 2.2 : 1.8} style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
               {!compact && <span>{translate("common.settings")}</span>}
             </div>
           </Link>
@@ -446,14 +509,14 @@ function SidebarContents({
         <div className="px-3 pb-2 shrink-0">
           <Link href="/incidents/new" onClick={onNav}>
             <div
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-black transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98]"
               style={{
-                background: "rgba(190,24,93,0.09)",
+                background: "var(--cc-coral-soft)",
                 color: CORAL,
-                border: "1.5px solid rgba(190,24,93,0.18)",
+                border: "1px solid var(--cc-coral-ring)",
               }}
             >
-              <AlertTriangle size={14} strokeWidth={2.5} />
+              <AlertTriangle size={13} strokeWidth={2.2} />
               <span>{translate("nav.reportIncident")}</span>
             </div>
           </Link>
@@ -461,12 +524,12 @@ function SidebarContents({
       )}
 
       {/* User footer */}
-      <div className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")} style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")} style={{ borderTop: `1px solid ${BORDER}`, background: "color-mix(in srgb, var(--cc-soft) 80%, transparent)" }}>
         {compact ? (
           <div className="relative mx-auto w-fit">
             <div
               className="h-10 w-10 rounded-full flex items-center justify-center text-[12px] font-black"
-              style={{ background: PLUM, color: "#fff" }}
+              style={{ background: CORAL, color: "#fff" }}
               title={displayName}
             >
               {initials}
@@ -475,7 +538,7 @@ function SidebarContents({
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
               style={{
-                background: alertCount > 0 ? "#BE185D" : "#16A34A",
+                background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
                 borderColor: "var(--cc-bg)",
               }}
               title={alertCount > 0
@@ -489,14 +552,14 @@ function SidebarContents({
             <div className="relative shrink-0">
               <div
                 className="h-9 w-9 rounded-full flex items-center justify-center text-[12px] font-black"
-                style={{ background: PLUM, color: "#fff" }}
+                style={{ background: CORAL, color: "#fff" }}
               >
                 {initials}
               </div>
               <div
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
                 style={{
-                  background: alertCount > 0 ? "#BE185D" : "#16A34A",
+                  background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
                   borderColor: "var(--cc-bg)",
                 }}
                 title={alertCount > 0
@@ -521,7 +584,7 @@ function SidebarContents({
 }
 
 // ── App layout ────────────────────────────────────────────────────────────────
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, rightRail }: { children: React.ReactNode; rightRail?: React.ReactNode }) {
   const [location] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -562,6 +625,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isMobile      = useIsMobile();
   const hideWorkerMobileBottomNav =
     isWorker && isMobile && isWorkerMobileShiftDetailPath(location);
+  const hideWorkerMobileTopNav =
+    isWorker && isMobile && location.includes("/message-office");
 
   const toggleCollapse = () => {
     const next = isExpanded; // if currently expanded → pin collapsed; if collapsed → pin open
@@ -572,7 +637,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sharedProps = {
     location, collapsed, alertCount, displayName, displayRole, initials,
-    onLogout: logout, translate, translateParams,
+    onLogout: logout, translate, translateParams, isDark, toggleTheme,
   };
 
   // Short role label for pill
@@ -580,64 +645,166 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex w-full overflow-hidden h-dvh" style={{ color: TEXT, background: "var(--cc-bg)" }}>
-      {/* Desktop sidebar */}
+      {/* ── Desktop sidebar — full-height left rail ── */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
-        style={{ width: isExpanded ? 220 : 64, borderRight: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
+        style={{color: TEXT,                                                                                                                                                                                                  
+                                                                                                                                                                                                          width: isExpanded ? 220 : 64,
+          borderRight: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--cc-sidebar-bg)",
+          "--cc-text":       "rgba(255,255,255,0.88)",
+          "--cc-muted":      "rgba(255,255,255,0.46)",
+          "--cc-border":     "rgba(255,255,255,0.09)",
+          "--cc-soft":       "rgba(255,255,255,0.06)",
+          "--cc-coral-soft": "rgba(110,121,194,0.22)",
+          "--cc-coral-ring": "rgba(110,121,194,0.42)",
+        } as React.CSSProperties}
         onMouseEnter={() => collapsed && setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
       >
         <SidebarContents {...sharedProps} collapsed={!isExpanded} isDrawer={false} />
 
-        {/* Collapse handle — sits on the right border, always visible */}
+        {/* Collapse handle — coloured tab sticking out from the sidebar edge */}
         <button
           type="button"
           onClick={toggleCollapse}
           title={isExpanded ? translate("layout.sidebar.collapse") : translate("layout.sidebar.expand")}
-          className="absolute z-10 flex items-center justify-center transition-all duration-150 hover:scale-105 group"
+          className="absolute z-10 flex flex-col items-center justify-center gap-0.5 transition-all duration-150 hover:brightness-110 active:scale-95"
           style={{
-            right: -7,
+            right: -18,
             top: "50%",
             transform: "translateY(-50%)",
-            width: 14,
-            height: 44,
-            borderRadius: 7,
-            background: "var(--cc-bg)",
-            border: `1px solid ${BORDER}`,
-            boxShadow: "0 1px 6px rgba(0,0,0,0.07)",
-            color: MUTED,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cc-plum)";
-            (e.currentTarget as HTMLButtonElement).style.color = "var(--cc-plum)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER;
-            (e.currentTarget as HTMLButtonElement).style.color = MUTED;
+            width: 18,
+            height: 52,
+            borderRadius: "0 8px 8px 0",
+            background: CORAL,
+            boxShadow: "3px 0 10px rgba(110,121,194,0.4)",
+            color: "#fff",
           }}
         >
           {isExpanded
-            ? <ChevronLeft  size={9} strokeWidth={3} />
-            : <ChevronRight size={9} strokeWidth={3} />
+            ? <ChevronLeft  size={11} strokeWidth={2.5} />
+            : <ChevronRight size={11} strokeWidth={2.5} />
           }
         </button>
       </aside>
 
+      {/* ── Right column: desktop topbar + content ── */}
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+      {/* ── Desktop topbar — spans right column only ── */}
+      <header
+        className="hidden md:flex h-14 shrink-0 items-stretch select-none relative"
+        style={{
+          borderBottom: `1px solid ${BORDER}`,
+          background: "var(--cc-bg)",
+          boxShadow: "0 1px 0 var(--cc-border)",
+          zIndex: 20,
+        }}
+      >
+        {/* Brand accent gradient line at very top */}
+        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: `linear-gradient(90deg, ${CORAL} 0%, ${PLUM} 100%)`, opacity: 0.85 }} />
+
+        {/* ── Role badge + breadcrumb ── */}
+        <div className="flex items-center gap-3 px-5 shrink min-w-0 max-w-[480px]">
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] select-none shrink-0 border"
+            style={{ background: "var(--cc-coral-soft)", color: CORAL, borderColor: "var(--cc-coral-ring)" }}
+          >
+            {rolePill}
+          </div>
+          <div className="min-w-0 overflow-hidden [&_nav]:mb-0 [&_nav]:flex-nowrap">
+            <AutoBreadcrumb />
+          </div>
+        </div>
+
+        {/* ── Center zone: search (always visible) + quick-nav pills when collapsed ── */}
+        <div className="flex items-center flex-1 gap-3 px-4 min-w-0">
+          <GlobalSearch userRole={userRole} />
+          {collapsed && (
+            <div className="hidden lg:flex items-center gap-0.5 overflow-x-hidden scrollbar-none shrink-0">
+              {topbarQuicknav.map((item) => {
+                const active = isActive(location, item.href);
+                const Icon = item.icon;
+                const label = navLabelForHref(item.href, item.label, translate);
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] whitespace-nowrap transition-all duration-150 cursor-pointer"
+                      style={{
+                        background: active ? CORAL : "transparent",
+                        color: active ? "#fff" : MUTED,
+                        fontWeight: active ? 600 : 500,
+                      }}
+                    >
+                      <Icon size={13} strokeWidth={active ? 2.2 : 1.8} style={{ color: active ? "#fff" : MUTED }} />
+                      <span>{label}</span>
+                      {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
+                        <span
+                          className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
+                          style={{ background: active ? "rgba(255,255,255,0.3)" : CORAL, color: "#fff" }}
+                        >
+                          {alertCount}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Subtle inset divider — before right zone */}
+        <div className="w-px self-stretch my-3 shrink-0 opacity-50" style={{ background: BORDER }} />
+
+        {/* ── Right zone: notifications + profile ── */}
+        <div className="flex items-center gap-1.5 px-4 shrink-0">
+          {/* Theme toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
+            aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
+            className="h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-150 hover:bg-black/8 hover:text-[var(--cc-coral)]"
+            style={{ color: MUTED }}
+          >
+            {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+          </button>
+
+          {!isWorker
+            ? <NotificationBell onClick={() => setNotifOpen(true)} />
+            : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
+          }
+
+          {/* Profile */}
+          <ProfileDropdown
+            displayName={displayName}
+            displayRole={displayRole}
+            initials={initials}
+            userRole={userRole}
+            onLogout={logout}
+          />
+        </div>
+      </header>
+
+      {/* Content row */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Main content canvas */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         <div className="flex-1 flex flex-col min-h-0 bg-cc-surface overflow-hidden relative">
 
           {/* ── Mobile header ─────────────────────────────────────────────── */}
+          {!hideWorkerMobileTopNav && (
           <header
             className="md:hidden safe-header-mobile flex items-center justify-between px-4 shrink-0 z-10"
             style={{ borderBottom: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
           >
             {hideWorkerMobileBottomNav ? (
               <Link
-                href="/my-shifts"
+                href={workerMobileShiftBackHref(location)}
                 className="flex h-9 w-9 items-center justify-center rounded-full border active:opacity-75 transition-opacity"
                 style={{ borderColor: BORDER }}
-                aria-label={translate("shift.briefing.backToList")}
+                aria-label={location.includes("/message-office") ? translate("shift.during.backToShift") : translate("shift.briefing.backToList")}
               >
                 <ArrowLeft size={17} style={{ color: TEXT }} />
               </Link>
@@ -685,149 +852,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </header>
-
-          {/* ── Desktop topbar ─────────────────────────────────────────────── */}
-          <header
-            className="hidden md:flex h-14 items-center shrink-0 select-none"
-            style={{
-              borderBottom: `1px solid ${BORDER}`,
-              borderTop: "3px solid var(--cc-plum)",
-              background: "var(--cc-bg)",
-            }}
-          >
-            {/* ── Left zone — role pill ── */}
-            <div className="flex items-center px-4 shrink-0">
-              <div
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] select-none"
-                style={{ background: PLUM, color: "#fff" }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 shrink-0" />
-                {rolePill}
-              </div>
-            </div>
-
-            {/* ── Center zone: pill tabs (collapsed) or page label (expanded) ── */}
-            {collapsed ? (
-              <div className="flex items-center flex-1 gap-0.5 overflow-x-hidden scrollbar-none px-1">
-                {topbarQuicknav.map((item) => {
-                  const active = isActive(location, item.href);
-                  const Icon = item.icon;
-                  const label = navLabelForHref(item.href, item.label, translate);
-                  return (
-                    <Link key={item.href} href={item.href}>
-                      <div
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
-                        style={{
-                          background: active ? PLUM : "transparent",
-                          color: active ? "#fff" : MUTED,
-                          fontWeight: active ? 700 : 500,
-                        }}
-                      >
-                        <Icon size={13} strokeWidth={active ? 2.5 : 2} style={{ color: active ? "#fff" : MUTED }} />
-                        <span>{label}</span>
-                        {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
-                          <span
-                            className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                            style={{ background: CORAL }}
-                          >
-                            {alertCount}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-                <div className="w-px h-4 mx-1 shrink-0" style={{ background: BORDER }} />
-                <Link href="/settings">
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
-                    style={{
-                      background: isActive(location, "/settings") ? PLUM : "transparent",
-                      color: isActive(location, "/settings") ? "#fff" : MUTED,
-                      fontWeight: isActive(location, "/settings") ? 700 : 500,
-                    }}
-                  >
-                    <Settings size={13} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
-                      style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
-                    <span>{translate("common.settings")}</span>
-                  </div>
-                </Link>
-              </div>
-            ) : (
-              /* Expanded: page title */
-              <div className="flex items-center flex-1 px-3">
-                {pageLabel && (
-                  <p
-                    className="text-[15px] font-black tracking-tight"
-                    style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
-                  >
-                    {pageLabel}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* ── Right zone: search + actions ── */}
-            <div className="flex items-center gap-2 px-4 shrink-0">
-              {/* Search */}
-              <GlobalSearch sections={navSections} translate={translate} />
-
-              {/* Compliance alert button — pulses when actions are pending */}
-              {alertCount > 0 && (
-                <Link href={topbarAlertHref}>
-                  <button
-                    type="button"
-                    aria-label={translateParams("layout.compliance.needAttention", { count: String(alertCount) })}
-                    className="relative flex items-center gap-1.5 px-3 h-8 rounded-full text-[12px] font-bold transition-all hover:opacity-90 whitespace-nowrap"
-                    style={{ background: "var(--cc-alert-bg)", color: CORAL, border: "1px solid rgba(190,24,93,0.18)" }}
-                  >
-                    <AlertTriangle size={13} strokeWidth={2.5} />
-                    <span className="font-black">{alertCount}</span>
-                    <span className="hidden xl:inline">
-                      {alertCount !== 1 ? translate("layout.compliance.actions") : translate("layout.compliance.action")}
-                    </span>
-                  </button>
-                </Link>
-              )}
-
-              {/* Notification bell */}
-              <div
-                className="relative h-8 w-8 rounded-xl border flex items-center justify-center"
-                style={{ borderColor: BORDER }}
-              >
-                {!isWorker
-                  ? <NotificationBell onClick={() => setNotifOpen(true)} />
-                  : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
-                }
-              </div>
-
-              {/* Theme toggle */}
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
-                aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
-                className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
-              </button>
-
-              {/* Profile */}
-              <ProfileDropdown
-                displayName={displayName}
-                displayRole={displayRole}
-                initials={initials}
-                userRole={userRole}
-                onLogout={logout}
-              />
-            </div>
-          </header>
+          )}
 
           {isWorker && <NotificationRealtimeBridge />}
           {isWorker && <NotificationBannerStack />}
 
-          {/* Page content */}
+        {/* Page content */}
           <main
             className={cn(
               "flex-1 overflow-y-auto md:py-5",
@@ -836,6 +866,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 : "px-4 py-4 safe-scroll-bottom",
             )}
           >
+            <div className="md:hidden">
+              <AutoBreadcrumb />
+            </div>
             {children}
           </main>
 
@@ -855,6 +888,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
+      {rightRail && <RightRail>{rightRail}</RightRail>}
+      </div>      </div>
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
       {!hideWorkerMobileBottomNav && (
       <nav
@@ -871,7 +906,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className="flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-2 relative transition-colors min-h-[60px]"
-              style={{ color: active ? PLUM : MUTED }}
+              style={{ color: active ? CORAL : MUTED }}
             >
               {/* Active indicator — top pill */}
               <div
@@ -879,7 +914,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 style={{
                   width: active ? 32 : 0,
                   height: 3,
-                  background: PLUM,
+                  background: CORAL,
                   opacity: active ? 1 : 0,
                 }}
               />
@@ -920,7 +955,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           "md:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 ease-out",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
         )}
-        style={{ borderRight: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
+        style={{ borderRight: `1px solid rgba(255,255,255,0.06)`, background: "var(--cc-sidebar-bg)" }}
       >
         <div className="absolute top-3 right-3 z-10">
           <button
@@ -936,6 +971,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <SidebarContents {...sharedProps} isDrawer collapsed={false} onNav={() => setDrawerOpen(false)} />
       </aside>
+
+      <FloatingAiAssistant />
     </div>
   );
 }

@@ -160,7 +160,7 @@ export default function MyShiftBriefing() {
       className="flex min-h-[calc(100vh-4rem)] flex-col bg-cc-bg"
       data-tutorial="briefing-page"
     >
-      <header className="shrink-0 border-b border-cc-border bg-cc-surface">
+      <header className="shrink-0 border-b border-cc-border bg-card">
         <div className="w-full px-4 pb-4 pt-3">
           <Link
             href="/my-shifts"
@@ -173,7 +173,7 @@ export default function MyShiftBriefing() {
           <div className="flex items-start gap-3">
             <span
               className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${PLUM} 0%, #5B21B6 100%)` }}
+              style={{ background: PLUM }}
             >
               <ClipboardList size={18} aria-hidden />
             </span>
@@ -216,7 +216,7 @@ export default function MyShiftBriefing() {
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-cc-border bg-cc-surface/95 px-4 py-4 backdrop-blur-sm">
+      <footer className="shrink-0 border-t border-cc-border bg-card/95 px-4 py-4 backdrop-blur-sm">
         <div className="w-full space-y-2">
           {!scrolledToBottom && (
             <p className="text-center text-[12px] font-medium text-cc-muted">
@@ -257,7 +257,7 @@ function BriefingCard({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm">
       <div
         className={cn(
           "flex items-center gap-2.5 border-b border-cc-border px-4 py-3",
@@ -267,7 +267,7 @@ function BriefingCard({
         <span
           className={cn(
             "grid h-7 w-7 place-items-center rounded-lg text-cc-plum",
-            accent ? "bg-cc-surface ring-1 ring-cc-border" : "bg-cc-surface shadow-sm",
+            accent ? "bg-card ring-1 ring-cc-border" : "bg-card shadow-sm",
           )}
         >
           <Icon size={14} aria-hidden />
@@ -405,7 +405,7 @@ function EmergencyContactsCard({
                     {contact.role}
                   </span>
                 </span>
-                <span className="shrink-0 rounded-lg bg-cc-surface px-2.5 py-1 text-[13px] font-bold text-cc-coral ring-1 ring-cc-border group-hover:ring-cc-plum">
+                <span className="shrink-0 rounded-lg bg-card px-2.5 py-1 text-[13px] font-bold text-cc-coral ring-1 ring-cc-border group-hover:ring-cc-plum">
                   {contact.phone}
                 </span>
               </a>

@@ -10,7 +10,7 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 
 function formatHours(secs?: number | null) {
-  if (secs == null) return "—";
+  if (secs == null) return "N/A";
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -43,7 +43,7 @@ export function LongShiftActivitySummary({ sessionId, refreshKey = 0 }: Props) {
 
   return (
     <section
-      className="rounded-2xl border bg-cc-surface p-4"
+      className="rounded-2xl border bg-card p-4"
       style={{ borderColor: BORDER }}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -51,7 +51,7 @@ export function LongShiftActivitySummary({ sessionId, refreshKey = 0 }: Props) {
         <h3 className="text-sm font-black" style={{ color: PLUM }}>Shift activity</h3>
         {summary.offline && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-            <WifiOff size={10} /> Offline — gap timer paused
+            <WifiOff size={10} /> Offline: gap timer paused
           </span>
         )}
       </div>

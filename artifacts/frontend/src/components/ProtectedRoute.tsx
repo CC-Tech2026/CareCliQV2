@@ -23,7 +23,6 @@ interface ProtectedRouteProps {
 const ROLE_LABEL_KEYS: Record<UserRole, string> = {
   support_coordinator: "protected.role.supportCoordinator",
   support_worker: "protected.role.supportWorker",
-  allied_health: "protected.role.alliedHealth",
   managing_director: "protected.role.managingDirector",
 };
 
@@ -59,7 +58,7 @@ export function ProtectedRoute({
   const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/worker/profile", "/settings"];
   const isProfileGatePath = profileGatePaths.some((path) => location === path || location.startsWith(path + "/"));
   const needsRoleProfile =
-    (user.role === "support_worker" || user.role === "allied_health") &&
+    user.role === "support_worker" &&
     (user.profile_completed === false || user.role_specific_profile_completed === false);
 
   if (needsRoleProfile && !isProfileGatePath) {

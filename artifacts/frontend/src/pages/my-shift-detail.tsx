@@ -22,7 +22,6 @@ import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import { SessionTimeline } from "@/components/shifts/SessionTimeline";
 import { ShiftProgressStepper } from "@/components/shifts/ShiftProgressStepper";
 import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
-import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
 import { ShiftTravelExpenseCard, type MileageDraftState } from "@/components/shifts/ShiftTravelExpenseCard";
 import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpenseCard";
@@ -31,21 +30,18 @@ import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
 import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
-import { CheckInPromptModal } from "@/components/shifts/CheckInPromptModal";
+import { LongShiftCheckInForm } from "@/components/shifts/LongShiftCheckInForm";
 import { useLongShiftCheckin } from "@/hooks/useLongShiftCheckin";
 import {
   markSessionHeartbeat,
   markSessionOffline,
-  submitLongShiftCheckin,
-  type CheckinStatus,
+  submitLongShiftCheckInForm,
 } from "@/services/longShiftService";
+import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
 import { RiskAcknowledgementLoadingOverlay } from "@/components/shifts/RiskAcknowledgementLoadingOverlay";
-import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
-import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
-import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
 import {
   cacheParticipantContext,
   loadCachedParticipantContext,
@@ -112,12 +108,11 @@ import {
   shiftHasRiskAlerts,
   shiftInitials,
   shiftNeedsRiskAck,
-  shiftNeedsBriefing,
-  shiftBriefingHref,
   taskFeedSummary,
   timerAnchorIso,
 } from "@/lib/shift-utils";
 import { markTaskNa, type NaReason } from "@/lib/shift-validation";
+import { scrollToShiftValidationTarget, scrollToMobileShiftTask } from "@/lib/shift-end-focus";
 import { unlockPageInteraction } from "@/lib/unlock-page-interaction";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { WorkerMobileShiftView } from "@/components/worker-mobile/WorkerMobileShiftView";
@@ -271,6 +266,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [locationOpen, setLocationOpen] = useState(false);
   const [ackChecked, setAckChecked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [endValidating, setEndValidating] = useState(false);
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
@@ -341,13 +337,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   useEffect(() => {
     if (id) void recordShiftViewed(id).catch(() => undefined);
   }, [id]);
-
-  useEffect(() => {
-    if (!shift) return;
-    if (shiftNeedsBriefing(shift) && !isTutorialDemo) {
-      window.location.replace(shiftBriefingHref(id));
-    }
-  }, [shift, id, isTutorialDemo]);
 
   useEffect(() => {
     if (!shift) return;
@@ -623,7 +612,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   };
 
   const handleClockIn = () => {
-    if (!shift) return;
+    if (!shift || busy !== null) return;
     if (shift.requires_safety_ack) {
       toast({
         title: "Safety card required",
@@ -725,7 +714,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   };
 
   const handleEndShift = async () => {
-    if (!shift) return;
+    if (!shift || busy === "end") return;
     if (isTutorialDemo) {
       setEndShiftOpen(false);
       setValidationOpen(false);
@@ -767,41 +756,75 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
-  const handleAttemptEndShift = () => {
-    if (!shift) return;
-    setForceEndPending(false);
+  const focusMandatoryTasks = (taskId?: string | null) => {
+    scrollToShiftValidationTarget({
+      taskId,
+      onBeforeScroll: () => {
+        setTasksOpen(true);
+        if (taskId) setFocusTaskId(taskId);
+      },
+    });
+  };
 
-    if (isTutorialDemo) {
-      setMandatoryAlertOpen(false);
-      setValidationOpen(true);
-      tutorial?.setFlowModalBlocking(true);
-      if (tutorial?.activeStep?.key === "end_shift") {
-        void tutorial.nextStep();
+  const handleAttemptEndShift = async (): Promise<boolean> => {
+    if (!shift || endValidating || busy !== null) return false;
+    setEndValidating(true);
+    try {
+      setForceEndPending(false);
+
+      if (isTutorialDemo) {
+        setMandatoryAlertOpen(false);
+        setValidationOpen(true);
+        tutorial?.setFlowModalBlocking(true);
+        if (tutorial?.activeStep?.key === "end_shift") {
+          void tutorial.nextStep();
+        }
+        return false;
       }
-      return;
-    }
 
-    const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
-    if (hasIncompleteMandatoryTasks(activeTasks)) {
-      setValidationOpen(false);
-      setMandatoryAlertOpen(true);
-      return;
+      const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
+      if (hasIncompleteMandatoryTasks(activeTasks)) {
+        const incomplete = incompleteMandatoryTasks(activeTasks);
+        setValidationOpen(false);
+        setMandatoryAlertOpen(!isMobile);
+        const firstTaskId = incomplete[0]?.task_id;
+        if (isMobile && firstTaskId) {
+          scrollToMobileShiftTask(firstTaskId);
+        } else {
+          focusMandatoryTasks(firstTaskId);
+        }
+        toast({
+          title: translate("tasks.mandatoryIncomplete"),
+          description: translate("validation.desc"),
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      setMandatoryAlertOpen(false);
+      if (isMobile) {
+        return true;
+      }
+      setValidationOpen(true);
+      return false;
+    } finally {
+      setEndValidating(false);
     }
-    setMandatoryAlertOpen(false);
-    setValidationOpen(true);
   };
 
   const handleValidationAddEvidence = (taskId: string) => {
     setValidationOpen(false);
-    setFocusTaskId(taskId);
-    setTasksOpen(true);
-    requestAnimationFrame(() => {
-      document.getElementById("shift-task-checklist")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToShiftValidationTarget({
+      taskId,
+      onBeforeScroll: () => {
+        setFocusTaskId(taskId);
+        setTasksOpen(true);
+      },
     });
   };
 
   const handleMarkTaskNa = async (taskId: string, reason: NaReason) => {
-    if (!shift) return;
+    if (!shift || busy !== null) return;
     const now = new Date().toISOString();
     const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
     const next = activeTasks.map((task) =>
@@ -842,6 +865,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       return;
     }
     setValidationOpen(open);
+    if (!open) {
+      tutorial?.setFlowModalBlocking(false);
+    }
   };
 
   const handleSignatureOpenChange = (open: boolean) => {
@@ -849,6 +875,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       return;
     }
     setSignatureOpen(open);
+    if (!open) {
+      tutorial?.setFlowModalBlocking(false);
+    }
   };
 
   const handleValidationEndShift = () => {
@@ -868,11 +897,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
     const incomplete = incompleteMandatoryTasks(activeTasks);
     setMandatoryAlertOpen(false);
-    setTasksOpen(true);
-    if (incomplete[0]?.task_id) setFocusTaskId(incomplete[0].task_id);
-    requestAnimationFrame(() => {
-      document.getElementById("shift-task-checklist")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    focusMandatoryTasks(incomplete[0]?.task_id);
   };
 
   const handleEndAnywayFromMandatory = () => {
@@ -1005,7 +1030,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       onClockIn={handleClockIn}
       onStartSession={handleStartSession}
       onRequestClockOut={() => setClockOutOpen(true)}
-      onAttemptEndShift={handleAttemptEndShift}
+      onAttemptEndShift={() => void handleAttemptEndShift()}
+      endValidating={endValidating}
       focusTaskId={focusTaskId}
       mandatoryAlertOpen={mandatoryAlertOpen}
       incompleteMandatory={incompleteMandatory}
@@ -1097,7 +1123,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#BE185D] hover:bg-[#d92854]"
+              className="bg-[#7C3AED] hover:bg-[#d92854]"
               onClick={(event) => {
                 event.preventDefault();
                 setEndShiftOpen(false);
@@ -1177,7 +1203,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           participantFirstName={participantFirstName}
           onClockIn={handleClockIn}
           onAutoStartSession={handleMobileAutoStartSession}
+          onAttemptEndShift={() => void handleAttemptEndShift()}
           onShiftComplete={handleEndShift}
+          endValidating={endValidating}
+          focusMobileTaskId={focusTaskId}
           ackChecked={ackChecked}
           setAckChecked={setAckChecked}
           onRequestAcknowledge={() => setAckConfirmOpen(true)}
@@ -1221,7 +1250,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           onBreak={longShiftBreak.onBreak}
           breakElapsed={longShiftBreak.breakElapsed}
           onEndShift={isSessionActive ? handleAttemptEndShift : undefined}
-          endShiftBusy={busy === "end"}
+          endShiftBusy={endValidating || busy === "end"}
         />
         {workflow}
       </div>
@@ -1273,6 +1302,7 @@ function ShiftWorkflow({
   onStartSession,
   onRequestClockOut,
   onAttemptEndShift,
+  endValidating = false,
   focusTaskId,
   mandatoryAlertOpen,
   incompleteMandatory,
@@ -1325,7 +1355,8 @@ function ShiftWorkflow({
   onClockIn: () => void;
   onStartSession: () => void;
   onRequestClockOut: () => void;
-  onAttemptEndShift: () => void;
+  onAttemptEndShift: () => void | Promise<boolean>;
+  endValidating?: boolean;
   focusTaskId?: string | null;
   mandatoryAlertOpen: boolean;
   incompleteMandatory: ShiftTask[];
@@ -1338,6 +1369,7 @@ function ShiftWorkflow({
   longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
 }) {
   const { translate } = useAccessibility();
+  const { toast } = useToast();
   const tutorial = useWorkerTutorialOptional();
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
@@ -1417,10 +1449,20 @@ function ShiftWorkflow({
 
   useEffect(() => {
     if (!isSessionActive || !checklistSessionId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkin") === "pending") {
+      setCheckinPromptOpen(true);
+      return;
+    }
     if (longShiftCheckin.checkinOverdue && longShiftCheckin.canSubmitRoutine) {
       setCheckinPromptOpen(true);
     }
-  }, [isSessionActive, checklistSessionId, longShiftCheckin.checkinOverdue, longShiftCheckin.canSubmitRoutine]);
+  }, [
+    isSessionActive,
+    checklistSessionId,
+    longShiftCheckin.checkinOverdue,
+    longShiftCheckin.canSubmitRoutine,
+  ]);
 
   useEffect(() => {
     if (!checklistSessionId || !isSessionActive) return;
@@ -1438,16 +1480,30 @@ function ShiftWorkflow({
     };
   }, [checklistSessionId, isSessionActive]);
 
-  const handlePromptCheckin = async (status: CheckinStatus) => {
-    if (!checklistSessionId) return;
+  const handlePromptCheckin = async (form: LongShiftCheckInFormData) => {
+    if (!checklistSessionId || checkinBusy) return;
     setCheckinBusy(true);
     try {
-      await submitLongShiftCheckin(checklistSessionId, {
-        status,
+      const result = await submitLongShiftCheckInForm(checklistSessionId, form, {
         prompt_triggered_at: new Date().toISOString(),
       });
       setCheckinPromptOpen(false);
       await longShiftCheckin.refresh();
+      if (result.status === "INCIDENT_REPORTED") {
+        toast({
+          title: "Incident noted",
+          description: "Please complete an incident report in your shift notes.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Check-in recorded" });
+      }
+    } catch (err) {
+      toast({
+        title: "Check-in failed",
+        description: (err as Error).message || "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setCheckinBusy(false);
     }
@@ -1483,10 +1539,10 @@ function ShiftWorkflow({
     : null;
 
   const timerLabel = longShiftBreak?.onBreak
-    ? "On break — billing paused"
+    ? "On break: billing paused"
     : isSessionActive
-      ? "Session active — documenting"
-      : "At location — tap Start Session";
+      ? "Session active, documenting"
+      : "At location. Tap Start Session";
 
   const timerBg = longShiftBreak?.onBreak
     ? "var(--cc-status-warning-bg)"
@@ -1565,7 +1621,7 @@ function ShiftWorkflow({
       <section
         id="shift-task-checklist"
         data-tutorial="shift-task-checklist"
-        className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm"
+        className="overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm"
       >
         {sessionFocus ? (
           <div className="flex w-full items-center justify-between bg-cc-soft px-4 py-3.5">
@@ -1580,7 +1636,7 @@ function ShiftWorkflow({
                 "rounded-full border px-2.5 py-1 text-[10px] font-black",
                 feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-cc-border bg-cc-surface text-cc-plum",
+                  : "border-cc-border bg-card text-cc-plum",
               )}
             >
               {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
@@ -1604,7 +1660,7 @@ function ShiftWorkflow({
                   "rounded-full border px-2.5 py-1 text-[10px] font-black",
                   feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-cc-border bg-cc-surface text-cc-plum",
+                    : "border-cc-border bg-card text-cc-plum",
                 )}
               >
                 {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
@@ -1637,7 +1693,7 @@ function ShiftWorkflow({
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border-2 bg-cc-surface shadow-sm transition-[border-color] duration-300 ease-in-out"
+        className="overflow-hidden rounded-2xl border-2 bg-card shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
         data-tutorial="shift-header"
       >
@@ -1670,7 +1726,7 @@ function ShiftWorkflow({
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
-                {durationLabel ? ` — ${durationLabel} scheduled` : ""}
+                {durationLabel ? `, ${durationLabel} scheduled` : ""}
               </p>
               {shift.participant_address && (
                 <p className="mt-1 flex items-start gap-1.5 text-sm font-medium" style={{ color: MUTED }}>
@@ -1768,7 +1824,7 @@ function ShiftWorkflow({
           ) : (
             <>
               <MapPin size={18} className="mr-2 inline" />
-              Clock In — I&apos;ve Arrived
+              Clock In: I&apos;ve Arrived
             </>
           )}
         </Button>
@@ -1805,27 +1861,28 @@ function ShiftWorkflow({
               sessionElapsed={elapsed}
               breakControl={longShiftBreak}
               initialCheckinStatus={shift.checkin_status}
+              tasks={activeTasks}
             />
           )}
-          <CheckInPromptModal
+          <LongShiftCheckInForm
             open={checkinPromptOpen}
             onClose={() => setCheckinPromptOpen(false)}
-            onSubmit={(status) => void handlePromptCheckin(status)}
+            onSubmit={(data) => void handlePromptCheckin(data)}
             busy={checkinBusy}
-            gapMinutes={longShiftCheckin.checkinOverdue ? 90 : undefined}
+            tasks={activeTasks}
           />
           <Button
             type="button"
             className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"
             style={{ background: CORAL }}
-            disabled={busy !== null}
+            disabled={busy !== null || endValidating}
             data-tutorial="end-shift"
             onClick={(event) => {
               event.stopPropagation();
               onAttemptEndShift();
             }}
           >
-            {busy === "end" ? (
+            {endValidating || busy === "end" ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <>
@@ -1837,7 +1894,7 @@ function ShiftWorkflow({
           {mandatoryAlertOpen && incompleteMandatory.length > 0 && (
             <MandatoryTasksAlert
               tasks={incompleteMandatory}
-              busy={busy === "end"}
+              busy={endValidating || busy === "end"}
               onBackToTasks={onBackToMandatoryTasks}
               onEndAnyway={onEndAnywayFromMandatory}
             />
@@ -1873,35 +1930,12 @@ function ShiftWorkflow({
         />
       )}
 
-      <ParticipantProfileCard
-        profile={displayProfile}
-        fallbackName={shift.participant_name}
-        open={profileOpen}
-        onToggle={() => setProfileOpen(!profileOpen)}
-      />
-
-      <ParticipantPreferencesCard
-        preferences={displayPreferences}
-        open={preferencesOpen}
-        onToggle={() => setPreferencesOpen(!preferencesOpen)}
-      />
-
-      <ParticipantContextPanel
-        context={displayContext}
-        participantFirstName={participantFirstName}
-        syncedAt={contextSyncedAt}
-        open={contextOpen}
-        onToggle={() => setContextOpen(!contextOpen)}
-      />
-
       <SupportInstructionsAccordion
         instructions={shift.support_instructions}
         open={supportOpen}
         onToggle={() => setSupportOpen(!supportOpen)}
         sectionId="shift-support-instructions"
       />
-
-      <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
 
       {goalLinkedTaskFeedSection}
 

@@ -89,7 +89,7 @@ function RequestCard({ request }: { request: ScheduleRequest }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-card p-4" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-black capitalize" style={{ color: TEXT }}>{translate(TYPE_KEYS[request.request_type])}</p>
@@ -137,7 +137,7 @@ function DayPicker({ selected, onChange }: { selected: number[]; onChange: (days
 
 function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border bg-cc-surface p-4 space-y-3" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-card p-4 space-y-3" style={{ borderColor: BORDER }}>
       <h2 className="text-sm font-black" style={{ color: TEXT }}>{title}</h2>
       {children}
     </div>
@@ -273,7 +273,7 @@ export default function WorkerScheduleRequests() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`rounded-full px-3 py-2 text-[11px] font-black ${tab === id ? "bg-cc-surface shadow-sm" : ""}`}
+            className={`rounded-full px-3 py-2 text-[11px] font-black ${tab === id ? "bg-card shadow-sm" : ""}`}
           >
             {translate(key)}
           </button>
@@ -339,7 +339,7 @@ export default function WorkerScheduleRequests() {
               <option value="">{translate("scheduleRequests.selectShift")}</option>
               {(shiftsData?.shifts ?? []).map((s: WorkerShift) => (
                 <option key={s.id} value={s.id}>
-                  {s.participant_name} — {s.scheduled_start ? format(parseISO(s.scheduled_start), "EEE d MMM h:mm a") : s.id}
+                  {s.participant_name} · {s.scheduled_start ? format(parseISO(s.scheduled_start), "EEE d MMM h:mm a") : s.id}
                 </option>
               ))}
             </select>
@@ -378,7 +378,7 @@ export default function WorkerScheduleRequests() {
             <RequestCard key={r.id} request={r} />
           ))}
           {!isLoading && !requests.length && (
-            <p className="rounded-2xl border bg-cc-surface p-6 text-center text-sm" style={{ borderColor: BORDER, color: MUTED }}>
+            <p className="rounded-2xl border bg-card p-6 text-center text-sm" style={{ borderColor: BORDER, color: MUTED }}>
               {translate("scheduleRequests.empty")}
             </p>
           )}

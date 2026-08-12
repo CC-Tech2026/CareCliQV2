@@ -1,5 +1,17 @@
 import { detectRestrictivePracticeHit } from "./rp-detector";
 
+export {
+  MOOD_OPTIONS,
+  buildLongShiftCheckinNote,
+  isCheckinSessionNote,
+  mapLongShiftCheckinStatus,
+  moodEmoji,
+  moodLabel,
+  type LongShiftCheckInFormData,
+  type LongShiftCheckinStatus,
+  type ParticipantMood,
+} from "./long-shift-checkin";
+
 export type ComplianceRuleStatus = "pass" | "warn" | "fail" | "info";
 
 export type ComplianceRuleResult = {
@@ -130,8 +142,10 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
   }
   rules.push({
     id: 3, name: "Minimum word count", weight: 6,
-    status: briefNotes.length === 0 ? "pass" : "warn",
-    message: briefNotes.length === 0 ? "All notes meet minimum length." : `${briefNotes.length} note(s) too brief.`,
+    status: textNotes.length === 0 ? "warn" : briefNotes.length === 0 ? "pass" : "warn",
+    message: textNotes.length === 0
+      ? "No notes recorded yet."
+      : briefNotes.length === 0 ? "All notes meet minimum length." : `${briefNotes.length} note(s) too brief.`,
   });
 
   const firstName = participantFirstName?.trim();
@@ -147,8 +161,10 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
   const vagueNotes = textNotes.filter((n) => !hasSpecificObservation(n.content));
   rules.push({
     id: 5, name: "Specific observations", weight: 6,
-    status: vagueNotes.length === 0 || textNotes.length === 0 ? "pass" : "warn",
-    message: vagueNotes.length === 0 ? "Notes include specific observations." : "Add a specific observation — what exactly happened?",
+    status: textNotes.length === 0 ? "warn" : vagueNotes.length === 0 ? "pass" : "warn",
+    message: textNotes.length === 0
+      ? "No notes recorded yet — document what happened."
+      : vagueNotes.length === 0 ? "Notes include specific observations." : "Add a specific observation — what exactly happened?",
   });
 
   rules.push({ id: 6, name: "Worker credentialed", weight: 10, status: "pass", message: "Checked at clock-in." });
@@ -229,6 +245,25 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
   });
 
   rules.push({ id: 12, name: "Plan budget alignment", weight: 5, status: "pass", message: "Support type matches active NDIS plan." });
+
+  const activeTasks = tasks.filter((t) => !t.marked_na);
+  const completedTasks = activeTasks.filter((t) => t.completed);
+  const taskStatus: ComplianceRuleStatus =
+    activeTasks.length === 0
+      ? "pass"
+      : completedTasks.length === activeTasks.length
+        ? "pass"
+        : completedTasks.length === 0
+          ? "fail"
+          : "warn";
+  rules.push({
+    id: 13, name: "Task completion", weight: 15,
+    status: taskStatus,
+    message: activeTasks.length === 0
+      ? "No tasks assigned for this shift."
+      : `${completedTasks.length}/${activeTasks.length} shift task(s) completed.`,
+    actionLabel: taskStatus === "pass" ? undefined : "Complete remaining tasks",
+  });
 
   const totalWeight = rules.reduce((s, r) => s + r.weight, 0);
   const earned = rules.reduce((s, r) => {
