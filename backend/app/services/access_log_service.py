@@ -17,6 +17,40 @@ from .supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 
 
+async def log_participant_reads_bulk(
+    participant_ids: list[str],
+    *,
+    user_id: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    purpose: str = "Provision of NDIS Supports",
+    action: str = "READ",
+    organization_id: Optional[str] = None,
+) -> None:
+    """Append access log rows for a participant list view (single insert)."""
+    ids = [str(pid) for pid in participant_ids if pid]
+    if not ids:
+        return
+    try:
+        supabase = get_supabase_admin()
+        rows: list[dict] = []
+        for participant_id in ids:
+            row: dict = {
+                "participant_id": participant_id,
+                "action": action,
+                "purpose": purpose,
+            }
+            if user_id:
+                row["user_id"] = user_id
+            if ip_address:
+                row["ip_address"] = ip_address
+            if organization_id:
+                row["organization_id"] = organization_id
+            rows.append(row)
+        supabase.table("access_logs").insert(rows).execute()
+    except Exception as exc:
+        logger.warning("access_log_service.log_participant_reads_bulk failed (non-fatal): %s", exc)
+
+
 async def log_participant_read(
     participant_id: str,
     *,

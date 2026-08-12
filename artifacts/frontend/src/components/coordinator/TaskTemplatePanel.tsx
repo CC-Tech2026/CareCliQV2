@@ -99,7 +99,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         priority: form.priority,
         linked_goal_id: form.linked_goal_id || goal?.id || null,
         status: "active" as const,
-        evidence_required: "optional" as const,
+        evidence_required: "none" as const,
         is_mandatory: false,
       };
       return template

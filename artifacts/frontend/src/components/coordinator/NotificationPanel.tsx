@@ -114,7 +114,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: alerts = [], isLoading } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 15000 });
+  const { data: alerts = [], isLoading } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 45_000 });
 
   const filteredAlerts = useMemo(() => {
     let result = alerts;
@@ -283,7 +283,7 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: alerts = [] } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80, unread_only: true }), refetchInterval: 30000, enabled: !!user });
+  const { data: alerts = [] } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80, unread_only: true }), refetchInterval: 60_000, enabled: !!user });
 
   const unread = alerts.length;
 

@@ -777,6 +777,24 @@ export type LiveShift = {
   alerts: Array<{ id: string; alert_type: string; message: string; severity: string }>;
   live_status: "green" | "yellow" | "red";
   elapsed_minutes: number;
+  engagement?: {
+    session_id?: string | null;
+    duration_secs?: number;
+    current_gap_secs?: number;
+    engagement_status?: "GREEN" | "AMBER" | "RED";
+    checkins_completed?: number;
+    checkins_required?: number;
+    next_checkin_due_secs?: number | null;
+    break_logged?: boolean;
+    on_break?: boolean;
+    break_started_at?: string | null;
+    break_elapsed_secs?: number;
+    break_compliant?: boolean;
+    engagement_score?: number | null;
+    last_activity_type?: string | null;
+    last_activity_at?: string | null;
+    is_long_shift?: boolean;
+  };
 };
 
 export type CoordinatorAlert = {
@@ -911,7 +929,7 @@ export type TaskTemplate = {
   organization_id?: string;
   name: string;
   description?: string | null;
-  evidence_required: "photo" | "voice" | "text" | "photo+voice" | "optional";
+  evidence_required: "none" | "photo" | "notes" | "photo_and_notes" | "voice" | "photo_and_voice";
   is_mandatory: boolean;
   estimated_duration_minutes?: number | null;
   is_custom?: boolean;
@@ -944,6 +962,20 @@ export type GoalProgressResponse = {
   sessions: Array<{ id: string; session_date: string; status: string; compliance_score?: number; notes?: string }>;
   evidence_count: number;
 };
+
+/** List goals needing coordinator review for missing support_category */
+export function getGoalsReviewQueue() {
+  return jsonFetch<Array<{
+    id: string;
+    participant_id: string;
+    participant_name?: string | null;
+    name: string;
+    goal_area?: string | null;
+    plan_id?: string | null;
+    status: string;
+    created_at?: string | null;
+  }>>("/api/coordinator/goals/review-queue");
+}
 
 /** List NDIS goals (optionally filtered by participant) */
 export function getNdisGoals(params?: { participant_id?: string; status?: string }) {
@@ -1191,5 +1223,243 @@ export function confirmShiftVerification(shiftId: string, priceItemCode: string)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ price_item_code: priceItemCode }),
     }
+  );
+}
+
+// ── Plan Meetings ─────────────────────────────────────────────────────────────
+
+export type PlanMeetingType =
+  | "plan_review"
+  | "initial_setup"
+  | "check_in"
+  | "incident_followup"
+  | "goal_review";
+
+export type PlanMeetingSuggestionsStatus = "pending_review" | "reviewed" | "applied";
+
+export type SuggestedGoal = {
+  name: string;
+  description: string;
+  goal_area: string;
+  support_category: string;
+  success_criteria: string;
+  reasoning: string;
+};
+
+export type SuggestedTask = {
+  template_id: string | null;
+  template_name: string;
+  link_to_goal_name: string | null;
+  shift_type: string;
+  requirement_level: "mandatory" | "optional";
+  customised_notes: string;
+  reasoning: string;
+};
+
+export type PlanMeetingSuggestions = {
+  suggested_goals: SuggestedGoal[];
+  suggested_tasks: SuggestedTask[];
+  flags: string[];
+};
+
+export type PlanMeeting = {
+  id: string;
+  participant_id: string;
+  coordinator_id: string;
+  meeting_date: string;
+  meeting_type: PlanMeetingType;
+  attendees: string[];
+  conversation_notes?: string | null;
+  participant_priorities?: string | null;
+  coordinator_observations?: string | null;
+  agreed_outcomes?: string | null;
+  ai_suggestions_raw?: PlanMeetingSuggestions | null;
+  suggestions_accepted?: Record<string, unknown> | null;
+  suggestions_status: PlanMeetingSuggestionsStatus;
+  ai_generated_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+  /** "legacy" = text-notes meeting, "session" = recorded two-stage-pipeline meeting */
+  source?: "legacy" | "session";
+};
+
+export type RecordMeetingPayload = {
+  participant_id: string;
+  meeting_date: string;
+  meeting_type: PlanMeetingType;
+  attendees: string[];
+  conversation_notes?: string;
+  participant_priorities?: string;
+  coordinator_observations?: string;
+  agreed_outcomes?: string;
+};
+
+export function recordPlanMeeting(payload: RecordMeetingPayload) {
+  return jsonFetch<{ meeting: PlanMeeting }>("/api/coordinator/plan-meetings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listPlanMeetings(participantId: string) {
+  return jsonFetch<{ meetings: PlanMeeting[] }>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/plan-meetings`,
+  );
+}
+
+export function getPlanMeeting(meetingId: string) {
+  return jsonFetch<{ meeting: PlanMeeting }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}`,
+  );
+}
+
+export function triggerPlanMeetingAiReview(meetingId: string) {
+  return jsonFetch<{ meeting_id: string; suggestions: PlanMeetingSuggestions }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}/ai-review`,
+    { method: "POST" },
+  );
+}
+
+/** Goal payload accepted by the apply endpoint when applying two-stage-pipeline drafts (session-based). */
+export type ExtractedGoalPayload = {
+  goal_text: string;
+  support_category?: string | null;
+};
+
+/** Task payload accepted by the apply endpoint when applying two-stage-pipeline drafts (session-based). */
+export type ExtractedTaskPayload = {
+  task_text: string;
+  requirement_level: "mandatory" | "optional";
+  linked_goal_text?: string | null;
+};
+
+/**
+ * `meetingId` may be a legacy `participant_plan_meetings` id or a
+ * `plan_meeting_sessions` id — the backend resolves either transparently.
+ */
+export function applyPlanMeetingSuggestions(
+  meetingId: string,
+  acceptedGoals: (SuggestedGoal | ExtractedGoalPayload)[],
+  acceptedTasks: (SuggestedTask | ExtractedTaskPayload)[],
+) {
+  return jsonFetch<{ goals_created: number; tasks_created: number; meeting_id: string }>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(meetingId)}/apply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accepted_goals: acceptedGoals, accepted_tasks: acceptedTasks }),
+    },
+  );
+}
+
+export function getPendingPlanMeetings() {
+  return jsonFetch<{ pending: PlanMeeting[]; count: number }>(
+    "/api/coordinator/plan-meetings/pending",
+  );
+}
+
+export function transcribePlanMeetingAudio(audioBlob: Blob): Promise<{ transcript: string }> {
+  const form = new FormData();
+  form.append("audio_file", audioBlob, "recording.webm");
+  return jsonFetch<{ transcript: string }>("/api/coordinator/plan-meetings/transcribe", {
+    method: "POST",
+    body: form,
+  });
+}
+
+// ── Two-Stage Pipeline Functions ───────────────────────────────────────────────
+
+export type MeetingSessionResponse = {
+  session_id: string;
+  created_at: string;
+};
+
+export function createMeetingSession(
+  meetingType: PlanMeetingType = "check_in",
+  meetingDate?: string,
+  conversationContext?: Record<string, any>,
+  participantId?: string,
+): Promise<MeetingSessionResponse> {
+  return jsonFetch<MeetingSessionResponse>("/api/coordinator/plan-meetings/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      meeting_type: meetingType,
+      meeting_date: meetingDate,
+      conversation_context: conversationContext,
+      participant_id: participantId, // Optional: if participant already selected in UI
+    }),
+  });
+}
+
+export type ResolvedSpeaker = {
+  speaker_label: string;
+  resolved_name: string;
+  role: "coordinator" | "participant" | "other";
+  confidence: "confirmed" | "likely" | "uncertain";
+};
+
+export type Stage1ResolutionResult = {
+  session_id: string;
+  raw_transcript: Array<{ segment_id?: string; speaker_label?: string; text: string; start?: string }>;
+  clean_transcript: Array<{ segment_id?: string; speaker_name?: string; text: string; start?: string }>;
+  resolved_names: Record<string, { name: string; confidence: string }>;
+  segment_ids: Array<{ segment_id: string; speaker_name: string; text: string }>;
+  participant_id: string | null;
+  flags: Array<{ flag_type?: string; severity?: string; description: string }>;
+  stage_1_status: string;
+};
+
+export function transcribeAndResolveNames(
+  sessionId: string,
+  audioBlob: Blob,
+  coordinatorName?: string,
+  participantName?: string,
+  others?: string[],
+): Promise<Stage1ResolutionResult> {
+  const form = new FormData();
+  form.append("audio_file", audioBlob, "recording.webm");
+  if (coordinatorName) form.append("coordinator_name", coordinatorName);
+  if (participantName) form.append("participant_name", participantName);
+  if (others && others.length > 0) form.append("others", JSON.stringify(others));
+
+  return jsonFetch<Stage1ResolutionResult>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(sessionId)}/transcribe-and-resolve`,
+    {
+      method: "POST",
+      body: form,
+    },
+  );
+}
+
+export type ExtractedGoal = {
+  goal_text: string;
+  support_category: string;
+  source_segment_ids: string[];
+  confidence: number;
+};
+
+export type ExtractedTask = {
+  task_text: string;
+  linked_goal_index?: number;
+  requirement_level: "mandatory" | "optional";
+  source_segment_ids: string[];
+  confidence: number;
+};
+
+export type Stage2ExtractionResult = {
+  session_id: string;
+  goals: ExtractedGoal[];
+  tasks: ExtractedTask[];
+  attention_flags: Array<{ flag_type: string; severity: string; description: string }>;
+  extraction_metadata: { completed_at: string };
+  stage_2_status: string;
+};
+
+export function extractGoalsAndTasks(sessionId: string): Promise<Stage2ExtractionResult> {
+  return jsonFetch<Stage2ExtractionResult>(
+    `/api/coordinator/plan-meetings/${encodeURIComponent(sessionId)}/extract-goals-tasks`,
+    { method: "POST" },
   );
 }

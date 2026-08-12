@@ -1,0 +1,233 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "group": "Health Check",
+    "roles": ["coordinator", "worker"],
+    "description": "API health check — tested on every iteration"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "group": "Setup",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Login once during setup to obtain auth token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "group": "Auth",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Current authenticated user profile"
+  },
+  {
+    "method": "GET",
+    "path": "/api/participants",
+    "group": "Participants",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "List participants for the organisation"
+  },
+  {
+    "method": "GET",
+    "path": "/api/participants/dashboard-stats",
+    "group": "Participants",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Dashboard statistics for visible participants"
+  },
+  {
+    "method": "GET",
+    "path": "/api/participants/{participant_id}",
+    "group": "Participants",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Single participant detail (uses first participant from list)"
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/coordinator",
+    "group": "Dashboard",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Coordinator dashboard aggregate data"
+  },
+  {
+    "method": "GET",
+    "path": "/api/coordinator/team",
+    "group": "Coordinator",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Coordinator team roster"
+  },
+  {
+    "method": "GET",
+    "path": "/api/coordinator/shifts",
+    "group": "Coordinator",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Shifts visible to coordinator"
+  },
+  {
+    "method": "GET",
+    "path": "/api/coordinator/compliance-overview",
+    "group": "Coordinator",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Organisation compliance overview"
+  },
+  {
+    "method": "GET",
+    "path": "/api/coordinator/notifications",
+    "group": "Coordinator",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Coordinator notification feed"
+  },
+  {
+    "method": "GET",
+    "path": "/api/coordinator/goals",
+    "group": "Coordinator",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Goals across coordinator caseload"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents",
+    "group": "Incidents",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Incident list (org scope)"
+  },
+  {
+    "method": "GET",
+    "path": "/api/reports/compliance-overview",
+    "group": "Reports",
+    "roles": ["coordinator"],
+    "requiresCredentials": true,
+    "description": "Compliance report summary"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/my-clients",
+    "group": "Worker",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Assigned clients for support worker"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/my-clients/{participant_id}",
+    "group": "Worker",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Client detail for assigned participant"
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/worker",
+    "group": "Dashboard",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Worker dashboard aggregate data"
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/worker-landing",
+    "group": "Dashboard",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Worker landing dashboard"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/shifts",
+    "group": "Worker Shifts",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Shifts for authenticated worker"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/shifts/counts",
+    "group": "Worker Shifts",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Per-filter shift counts"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/shifts/{shift_id}",
+    "group": "Worker Shifts",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Shift detail (uses first available shift)"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/my-compliance",
+    "group": "Worker",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Worker-scoped compliance summary"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/performance-dashboard",
+    "group": "Worker Performance",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Worker performance metrics"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/feedback/unread-count",
+    "group": "Worker Performance",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Unread shift feedback count"
+  },
+  {
+    "method": "GET",
+    "path": "/api/worker/training/certifications",
+    "group": "Worker Training",
+    "roles": ["worker"],
+    "requiresCredentials": true,
+    "description": "Worker certification records"
+  },
+  {
+    "method": "GET",
+    "path": "/api/alerts",
+    "group": "Alerts",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Alert list for current user"
+  },
+  {
+    "method": "GET",
+    "path": "/api/alerts/unread",
+    "group": "Alerts",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Unread alerts for current user"
+  },
+  {
+    "method": "GET",
+    "path": "/api/sessions/recent",
+    "group": "Sessions",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Recent sessions visible to user"
+  },
+  {
+    "method": "GET",
+    "path": "/api/compliance/rules",
+    "group": "Compliance",
+    "roles": ["coordinator", "worker"],
+    "requiresCredentials": true,
+    "description": "Compliance rules catalog"
+  }
+]

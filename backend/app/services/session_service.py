@@ -15,7 +15,11 @@ from ..core.access import (
     get_user_role,
     get_user_id,
     get_user_organization_id,
+    has_org_wide_access,
+    is_support_worker,
     owner_payload,
+    record_assigned_to_user,
+    record_belongs_to_user_org,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +122,247 @@ def _annotate_session_from_participant(
     if not annotated.get("organization_id") and participant.get("organization_id"):
         annotated["_access_organization_id"] = participant.get("organization_id")
     return annotated
+
+
+async def _filter_sessions_for_user(
+    sessions: List[Dict[str, Any]],
+    current_user: Optional[dict],
+) -> List[Dict[str, Any]]:
+    """Filter session rows without loading the full participant catalog."""
+    if not current_user:
+        return []
+
+    if has_org_wide_access(current_user):
+        return [
+            session
+            for session in sessions
+            if record_belongs_to_user_org(session, current_user)
+        ]
+
+    accessible: List[Dict[str, Any]] = []
+    needs_participant: List[Dict[str, Any]] = []
+
+    for session in sessions:
+        if not record_belongs_to_user_org(session, current_user):
+            continue
+        if record_assigned_to_user(session, current_user, is_session=True):
+            accessible.append(session)
+        elif not is_support_worker(current_user):
+            needs_participant.append(session)
+
+    if not needs_participant:
+        return accessible
+
+    from . import participant_service
+
+    patient_ids = list({
+        str(session.get("patient_id") or session.get("participant_id"))
+        for session in needs_participant
+        if session.get("patient_id") or session.get("participant_id")
+    })
+    stub_map = await participant_service.get_participant_access_stubs(
+        current_user,
+        patient_ids,
+    )
+
+    for session in needs_participant:
+        patient_id = str(session.get("patient_id") or session.get("participant_id") or "")
+        participant = stub_map.get(patient_id)
+        scoped_session = _annotate_session_from_participant(session, participant)
+        if _can_access_legacy_session(scoped_session, current_user, participant):
+            accessible.append(session)
+
+    return accessible
+
+
+_DASHBOARD_SESSION_COLUMNS = (
+    "id, organization_id, patient_id, worker_id, "
+    "owner_user_id, created_by, session_date, session_type, duration_minutes, status, "
+    "compliance_score, translation_status, compliance_input_text, translated_english_note, notes"
+)
+
+
+async def _get_dashboard_sessions_legacy_fallback(
+    supabase,
+    current_user: Optional[dict],
+    *,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Fallback for legacy sessions missing organization_id.
+
+    Some live databases contain older session rows that are linked to participants in
+    the current org but do not have `sessions.organization_id` populated. The primary
+    dashboard query filters by `organization_id`, which makes those rows disappear.
+    This fallback rehydrates dashboard sessions from the user's accessible participants.
+    """
+    from . import participant_service
+
+    participants = await participant_service.get_participants_list_light(current_user)
+    participant_map = {
+        str(row.get("id")): row
+        for row in participants
+        if isinstance(row, dict) and row.get("id")
+    }
+    participant_ids = list(participant_map.keys())
+    if not participant_ids:
+        return []
+
+    recovered_map: Dict[str, Dict[str, Any]] = {}
+
+    def _merge_rows(rows: List[Dict[str, Any]]) -> None:
+        for session in rows:
+            if not isinstance(session, dict):
+                continue
+            session_id = str(session.get("id") or "")
+            if session_id and session_id not in recovered_map:
+                recovered_map[session_id] = session
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(_DASHBOARD_SESSION_COLUMNS)
+            .in_("patient_id", participant_ids)
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        _merge_rows(_safe_rows(result.data))
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Dashboard legacy session fallback failed closed on patient_id: %s", exc)
+        else:
+            raise
+
+    recovered: List[Dict[str, Any]] = []
+    for session in recovered_map.values():
+        patient_id = str(session.get("patient_id") or session.get("participant_id") or "")
+        participant = participant_map.get(patient_id)
+        if not participant:
+            continue
+        scoped_session = _annotate_session_from_participant(session, participant)
+        if _can_access_legacy_session(scoped_session, current_user, participant):
+            recovered.append(session)
+    return recovered
+
+
+async def get_sessions_for_dashboard(
+    limit: int = 200,
+    current_user: Optional[dict] = None,
+) -> List[Dict[str, Any]]:
+    """Lightweight session rows for dashboard aggregation (no full participant load)."""
+    org_id = _user_org_or_none(current_user)
+    if not org_id:
+        return []
+
+    supabase = get_supabase_admin()
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(_DASHBOARD_SESSION_COLUMNS)
+            .eq("organization_id", org_id)
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Dashboard session query failed closed: %s", exc)
+            return []
+        raise
+
+    raw_sessions = _safe_rows(result.data)
+    if has_org_wide_access(current_user):
+        # Coordinators and MDs already have org-wide visibility, so keep the
+        # dashboard path aligned to the org-scoped query result directly.
+        sessions = raw_sessions
+    else:
+        sessions = await _filter_sessions_for_user(raw_sessions, current_user)
+
+    if not sessions:
+        sessions = await _get_dashboard_sessions_legacy_fallback(
+            supabase,
+            current_user,
+            limit=limit,
+        )
+    if not sessions:
+        return []
+
+    patient_ids = list({
+        str(s.get("patient_id") or s.get("participant_id"))
+        for s in sessions
+        if s.get("patient_id") or s.get("participant_id")
+    })
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
+
+    output: List[Dict[str, Any]] = []
+    for session in sessions:
+        row = _normalize(session)
+        patient_info = name_map.get(
+            str(session.get("patient_id") or session.get("participant_id") or ""),
+            {},
+        )
+        row["participants"] = {
+            "full_name": patient_info.get("full_name", ""),
+            "ndis_number": patient_info.get("ndis_number", ""),
+        }
+        output.append(row)
+    return output
+
+
+async def get_worker_sessions_grouped(
+    participant_ids: List[str],
+    worker_user_id: str,
+    current_user: Optional[dict] = None,
+    *,
+    limit: int = 500,
+    per_participant: int = 50,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Batch-fetch a worker's own sessions across participants (my-clients list)."""
+    org_id = _user_org_or_none(current_user)
+    if not org_id or not worker_user_id:
+        return {}
+
+    ids = list({str(pid) for pid in participant_ids if pid})
+    if not ids:
+        return {}
+
+    supabase = get_supabase_admin()
+    worker_id = str(worker_user_id)
+    owner_keys = {worker_id}
+    grouped: Dict[str, List[Dict[str, Any]]] = {pid: [] for pid in ids}
+
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(_DASHBOARD_SESSION_COLUMNS)
+            .eq("organization_id", org_id)
+            .in_("patient_id", ids)
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning("Worker client session batch query failed closed: %s", exc)
+            return grouped
+        raise
+
+    for row in _safe_rows(result.data):
+        pid = str(row.get("patient_id") or row.get("participant_id") or "")
+        if pid not in grouped:
+            continue
+        if len(grouped[pid]) >= per_participant:
+            continue
+        if str(row.get("worker_id") or "") not in owner_keys and str(
+            row.get("support_worker_id") or ""
+        ) not in owner_keys and str(row.get("owner_user_id") or "") not in owner_keys and str(
+            row.get("created_by") or ""
+        ) not in owner_keys:
+            continue
+        grouped[pid].append(_normalize(row))
+
+    return grouped
 
 
 def _fetch_patient_name_map(
@@ -505,41 +750,12 @@ async def get_all_sessions(
 
     name_map = _fetch_patient_name_map(supabase, patient_ids)
 
-    participant_access_map: Dict[str, Dict[str, Any]] = {}
-
-    from . import participant_service
-
-    participants = await participant_service.get_all_participants(
-        current_user
-    )
-
-    participant_access_map = {
-        str(p["id"]): p
-        for p in participants
-        if p.get("id")
-    }
+    accessible_sessions = await _filter_sessions_for_user(sessions, current_user)
 
     output: List[Dict[str, Any]] = []
 
-    for session in sessions:
-        patient = (
-            participant_access_map.get(
-                str(session.get("patient_id", ""))
-            )
-            if current_user
-            else None
-        )
-
-        scoped_session = _annotate_session_from_participant(session, patient)
-
-        if not _can_access_legacy_session(
-            scoped_session,
-            current_user,
-            patient,
-        ):
-            continue
-
-        row = _normalize(scoped_session)
+    for session in accessible_sessions:
+        row = _normalize(session)
 
         patient_info = name_map.get(
             str(session.get("patient_id", "")),
@@ -811,21 +1027,10 @@ async def get_recent_sessions(
 
     output: List[Dict[str, Any]] = []
 
-    from . import participant_service
-    participants = await participant_service.get_all_participants(current_user)
-    participant_access_map = {
-        str(p["id"]): p
-        for p in participants
-        if p.get("id")
-    }
+    accessible_sessions = await _filter_sessions_for_user(sessions, current_user)
 
-    for session in sessions:
-        participant = participant_access_map.get(str(session.get("patient_id", "")))
-        scoped_session = _annotate_session_from_participant(session, participant)
-        if not _can_access_legacy_session(scoped_session, current_user, participant):
-            continue
-
-        row = _normalize(scoped_session)
+    for session in accessible_sessions:
+        row = _normalize(session)
 
         patient = name_map.get(
             str(session.get("patient_id", "")),

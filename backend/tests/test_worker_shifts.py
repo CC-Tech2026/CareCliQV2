@@ -40,14 +40,16 @@ def _sample_shift(**overrides):
     return base
 
 
-def test_default_tasks_has_five_categories():
-    assert len(shift_service.DEFAULT_SHIFT_TASKS) == 6
-    labels = {t["label"] for t in shift_service.DEFAULT_SHIFT_TASKS}
-    assert "Personal Hygiene / Showering" in labels
+def test_fallback_tasks_shape():
+    """FALLBACK_SHIFT_TASKS is used when participant_task_templates returns no rows."""
+    assert len(shift_service.FALLBACK_SHIFT_TASKS) == 6
+    labels = {t["label"] for t in shift_service.FALLBACK_SHIFT_TASKS}
+    assert "Personal Hygiene" in labels
     assert "Documentation / Notes" in labels
     assert "Health & Wellness Check" in labels
-    mandatory = [t for t in shift_service.DEFAULT_SHIFT_TASKS if t.get("mandatory")]
-    assert len(mandatory) == 4
+    # Health & Wellness is now mandatory (coordinators need post-therapy observations)
+    mandatory = [t for t in shift_service.FALLBACK_SHIFT_TASKS if t.get("mandatory")]
+    assert len(mandatory) == 5
 
 
 def test_matches_filter_today():
@@ -217,7 +219,7 @@ def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard, _mock_v
             "status": "in_progress",
             "clocked_in_at": datetime.now(timezone.utc).isoformat(),
             "session_id": None,
-            "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS),
+            "tasks": copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS),
         }]
     )
 
@@ -246,7 +248,7 @@ def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_v
     mock_admin.return_value.table.return_value = table
     table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[shift])
     table.update.return_value.eq.return_value.execute.return_value = MagicMock(
-        data=[{**shift, "status": "in_progress", "clocked_in_at": datetime.now(timezone.utc).isoformat(), "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)}]
+        data=[{**shift, "status": "in_progress", "clocked_in_at": datetime.now(timezone.utc).isoformat(), "tasks": copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)}]
     )
 
     result = shift_service.clock_in_shift(
@@ -280,7 +282,7 @@ def test_clock_in_rejects_completed(mock_get):
 @patch("backend.app.services.shift_service.get_shift_by_id")
 @patch("backend.app.services.shift_service.update_shift_tasks")
 def test_add_custom_shift_task(mock_update, mock_get):
-    mock_get.return_value = _sample_shift(tasks=copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS))
+    mock_get.return_value = _sample_shift(tasks=copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS))
     mock_update.return_value = {"id": "shift-1", "tasks": []}
 
     shift_service.add_custom_shift_task("shift-1", "worker-1", "org-1", "Laundry")
@@ -300,9 +302,9 @@ def test_delete_custom_shift_task(mock_update, mock_get, mock_purge):
         "completed": False,
         "order": 6,
     }
-    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS) + [custom]
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS) + [custom]
     mock_get.return_value = _sample_shift(tasks=tasks, session_id="sess-1")
-    mock_update.return_value = {"id": "shift-1", "tasks": shift_service.DEFAULT_SHIFT_TASKS}
+    mock_update.return_value = {"id": "shift-1", "tasks": shift_service.FALLBACK_SHIFT_TASKS}
 
     shift_service.delete_custom_shift_task("shift-1", "worker-1", "org-1", "custom_abc123")
 
@@ -313,7 +315,7 @@ def test_delete_custom_shift_task(mock_update, mock_get, mock_purge):
 
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_delete_custom_shift_task_rejects_default(mock_get):
-    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     mock_get.return_value = _sample_shift(tasks=tasks)
 
     with pytest.raises(ValueError, match="Only custom tasks"):
@@ -442,7 +444,7 @@ def test_start_session_by_id_updates_start_time(mock_admin, mock_get_shift, _moc
 
 
 def test_mandatory_tasks_complete():
-    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     assert shift_service._mandatory_tasks_complete(tasks) is False
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
@@ -453,7 +455,7 @@ def test_mandatory_tasks_complete():
 
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
-    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     tasks[0]["completed"] = True
     mock_get.return_value = _sample_shift(tasks=tasks)
     with pytest.raises(ValueError, match="Mandatory task"):
@@ -465,7 +467,7 @@ def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_end_shift_completes_shift(mock_get, mock_admin, mock_session, _mock_signature):
-    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
@@ -828,7 +830,7 @@ def test_clock_in_with_gps_verification(mock_admin, _mock_coords, _mock_ack, _mo
             "clocked_in_at": datetime.now(timezone.utc).isoformat(),
             "clock_in_method": "gps",
             "clock_in_verified": True,
-            "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS),
+            "tasks": copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS),
         }]
     )
 

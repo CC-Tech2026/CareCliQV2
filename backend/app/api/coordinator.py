@@ -21,6 +21,10 @@ from ..services.pattern_detection_service import (
     run_pattern_detection_for_org,
 )
 from ..services import participant_service, session_service, shift_service
+from ..services.funding_service import (
+    normalize_goal_support_category,
+    require_active_plan_for_participant,
+)
 from ..services.credential_verification_service import (
     get_shift_credential_requirements,
     verify_worker_credentials,
@@ -47,6 +51,13 @@ def _require_coordinator(user: dict) -> str:
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     return org_id
+
+
+async def _ensure_participant_active_plan(participant_id: str) -> dict[str, Any]:
+    try:
+        return await require_active_plan_for_participant(participant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 def _date_part(value: Any) -> str:
@@ -426,7 +437,7 @@ async def worker_stats(current_user: dict = Depends(get_current_user)):
     """Per-worker aggregated stats: sessions, compliance, drafts, flagged."""
     org_id = _require_coordinator(current_user)
     members = await _team(org_id, coordinator_user=current_user)
-    all_sessions = await session_service.get_all_sessions(2000, current_user)
+    all_sessions = await session_service.get_sessions_for_dashboard(2000, current_user)
 
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
 
@@ -1415,6 +1426,8 @@ async def assign_shift(
             status_code=500,
             detail=f"Participant lookup failed: {exc}"
         )
+
+    await _ensure_participant_active_plan(body.participant_id)
     
     # Check worker credentials
     shift_type = _normalize_shift_type(body.shift_type)
@@ -2199,6 +2212,8 @@ async def create_unassigned_shift(
         raise HTTPException(status_code=404, detail="Participant not found")
     participant = p_resp.data[0]
 
+    await _ensure_participant_active_plan(body.participant_id)
+
     try:
         s_dt = parse_shift_datetime(body.scheduled_start)
         e_dt = (
@@ -2514,6 +2529,55 @@ def _elapsed_minutes(dt_str: str | None) -> float:
     return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 60)
 
 
+def _fetch_live_shifts_raw(
+    supabase,
+    org_id: str,
+    window_start: str,
+) -> list[dict[str, Any]]:
+    full_columns = (
+        "id, organization_id, worker_id, participant_id, participant_name, "
+        "shift_type, scheduled_start, scheduled_end, status, "
+        "clocked_in_at, clocked_out_at, duration_minutes, "
+        "session_id, visit_notes, coordinator_notes, special_instructions, "
+        "emergency_flagged, emergency_flagged_at, emergency_note, "
+        "created_at, updated_at"
+    )
+    legacy_columns = (
+        "id, organization_id, worker_id, participant_id, participant_name, "
+        "scheduled_start, scheduled_end, status, "
+        "clocked_in_at, clocked_out_at, duration_minutes, "
+        "session_id, visit_notes, coordinator_notes, "
+        "created_at, updated_at"
+    )
+
+    def _run(select_columns: str):
+        return (
+            supabase.table("shifts")
+            .select(select_columns)
+            .eq("organization_id", org_id)
+            .in_("status", ["in_progress", "clocked_in", "scheduled"])
+            .gte("scheduled_start", window_start)
+            .order("scheduled_start")
+            .execute()
+        )
+
+    try:
+        resp = _run(full_columns)
+        return [r for r in (resp.data or []) if isinstance(r, dict)]
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            raise
+        resp = _run(legacy_columns)
+        rows = [r for r in (resp.data or []) if isinstance(r, dict)]
+        for row in rows:
+            row.setdefault("shift_type", "standard_support")
+            row.setdefault("special_instructions", None)
+            row.setdefault("emergency_flagged", False)
+            row.setdefault("emergency_flagged_at", None)
+            row.setdefault("emergency_note", None)
+        return rows
+
+
 def _shift_live_status(shift: dict, task_counts: dict, alerts: list[dict]) -> str:
     """Derive green/yellow/red status for a live shift."""
     elapsed = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
@@ -2548,21 +2612,7 @@ async def get_live_shifts(
     window_start = (now - timedelta(hours=12)).isoformat()
 
     try:
-        resp = (
-            supabase.table("shifts")
-            .select("id, organization_id, worker_id, participant_id, participant_name, "
-                    "shift_type, scheduled_start, scheduled_end, status, "
-                    "clocked_in_at, clocked_out_at, duration_minutes, "
-                    "session_id, visit_notes, coordinator_notes, special_instructions, "
-                    "emergency_flagged, emergency_flagged_at, emergency_note, "
-                    "created_at, updated_at")
-            .eq("organization_id", org_id)
-            .in_("status", ["in_progress", "clocked_in", "scheduled"])
-            .gte("scheduled_start", window_start)
-            .order("scheduled_start")
-            .execute()
-        )
-        shifts_raw = resp.data or []
+        shifts_raw = _fetch_live_shifts_raw(supabase, org_id, window_start)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Live shifts fetch failed: {exc}")
 
@@ -2655,6 +2705,26 @@ async def get_live_shifts(
                     pass
 
     # Build response
+    session_map: dict[str, dict] = {}
+    session_ids = [str(s.get("session_id")) for s in shifts_raw if s.get("session_id")]
+    if session_ids:
+        try:
+            sresp = (
+                supabase.table("sessions")
+                .select(
+                    "id, last_activity_at, max_gap_secs, checkin_count, "
+                    "break_duration_secs, engagement_score, is_long_shift"
+                )
+                .in_("id", session_ids)
+                .execute()
+            )
+            for row in sresp.data or []:
+                session_map[str(row["id"])] = row
+        except Exception:
+            pass
+
+    from ..services.long_shift_service import build_live_shift_engagement
+
     result = []
     for shift in shifts_raw:
         sid = shift["id"]
@@ -2662,7 +2732,15 @@ async def get_live_shifts(
         worker = worker_map.get(worker_id, {}) if worker_id else {}
         task_counts = task_counts_map.get(sid, {"total": 0, "completed": 0})
         shift_alerts = alerts_map.get(sid, [])
+        session = session_map.get(str(shift.get("session_id") or ""), {})
+        engagement = build_live_shift_engagement(shift, session if session else None)
         live_status = _shift_live_status(shift, task_counts, shift_alerts)
+        if engagement.get("is_long_shift"):
+            gap_status = str(engagement.get("engagement_status") or "GREEN").lower()
+            if gap_status == "red":
+                live_status = "red"
+            elif gap_status == "amber" and live_status == "green":
+                live_status = "yellow"
         elapsed_mins = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
 
         result.append({
@@ -2673,6 +2751,7 @@ async def get_live_shifts(
             "alerts": shift_alerts,
             "live_status": live_status,
             "elapsed_minutes": round(elapsed_mins, 1),
+            "engagement": engagement,
         })
 
     return result
@@ -2921,6 +3000,42 @@ class NdisGoalBody(BaseModel):
     plan_id: Optional[str] = None
 
 
+@router.get("/goals/review-queue")
+async def list_goals_missing_support_category(
+    current_user: dict = Depends(get_current_user),
+):
+    """Goals that still need a support_category after backfill (CARECLIQV2-329)."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("ndis_goals")
+            .select("id, participant_id, name, goal_area, plan_id, status, created_at, patients(full_name)")
+            .eq("organization_id", org_id)
+            .is_("support_category", "null")
+            .eq("status", "active")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = resp.data or []
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            patient = row.get("patients") or {}
+            out.append({
+                "id": row.get("id"),
+                "participant_id": row.get("participant_id"),
+                "participant_name": patient.get("full_name") if isinstance(patient, dict) else None,
+                "name": row.get("name"),
+                "goal_area": row.get("goal_area"),
+                "plan_id": row.get("plan_id"),
+                "status": row.get("status"),
+                "created_at": row.get("created_at"),
+            })
+        return out
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Goal review queue failed: {exc}")
+
+
 @router.get("/goals")
 async def list_coordinator_goals(
     participant_id: Optional[str] = Query(default=None),
@@ -2950,6 +3065,13 @@ async def create_ndis_goal(
     """Create a new NDIS goal for a participant."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    support_category = normalize_goal_support_category(body.support_category)
+    if not support_category:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="support_category is required and must be a valid NDIS funding line.",
+        )
+    await _ensure_participant_active_plan(body.participant_id)
     now = datetime.now(timezone.utc).isoformat()
     payload: dict[str, Any] = {
         "participant_id": body.participant_id,
@@ -2957,7 +3079,7 @@ async def create_ndis_goal(
         "created_by": get_user_id(current_user),
         "name": body.name,
         "goal_area": body.goal_area,
-        "support_category": body.support_category,
+        "support_category": support_category,
         "description": body.description,
         "target_date": body.target_date,
         "why_it_matters": body.why_it_matters or body.success_criteria,
@@ -2984,11 +3106,17 @@ async def update_ndis_goal(
     """Update an existing NDIS goal."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    support_category = normalize_goal_support_category(body.support_category)
+    if not support_category:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="support_category is required and must be a valid NDIS funding line.",
+        )
     now = datetime.now(timezone.utc).isoformat()
     update: dict[str, Any] = {
         "name": body.name,
         "goal_area": body.goal_area,
-        "support_category": body.support_category,
+        "support_category": support_category,
         "description": body.description,
         "target_date": body.target_date,
         "why_it_matters": body.why_it_matters or body.success_criteria,
@@ -3081,7 +3209,7 @@ async def get_goal_progress(
 class TaskTemplateBody(BaseModel):
     name: str
     description: Optional[str] = None
-    evidence_required: str = "optional"
+    evidence_required: str = "none"  # canonical: none, photo, notes, photo_and_notes, voice, photo_and_voice
     is_mandatory: bool = False
     estimated_duration_minutes: Optional[int] = None
     sort_order: int = 0
@@ -3105,31 +3233,37 @@ async def list_task_templates(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """List task templates for a participant (default + custom)."""
+    """List task templates for a participant: org-level system defaults + participant-specific."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
-    default_tasks = [
-        {"id": f"default_{i}", "name": name, "description": desc, "is_custom": False, "is_mandatory": True, "evidence_required": "optional", "sort_order": i}
-        for i, (name, desc) in enumerate([
-            ("Personal Hygiene", "Assist with personal hygiene and grooming"),
-            ("Meal Prep", "Prepare and/or assist with meals"),
-            ("Medication", "Administer and document medications"),
-            ("Community Access", "Support community participation activities"),
-            ("Documentation", "Complete required documentation for the shift"),
-        ])
-    ]
     try:
+        # System defaults seeded by migration 088 (is_custom=FALSE, participant_id IS NULL)
+        sys_resp = (
+            supabase.table("participant_task_templates")
+            .select("*")
+            .eq("organization_id", org_id)
+            .eq("is_custom", False)
+            .is_("participant_id", "null")
+            .eq("status", "active")
+            .order("sort_order")
+            .execute()
+        )
+        # Participant-specific templates (coordinator-authored custom ones)
+        # Note: query uses status (canonical, migration 067). is_active is DEPRECATED;
+        # kept in sync via trigger in migration 087 until coordinator.py callers are updated.
         custom_resp = (
             supabase.table("participant_task_templates")
             .select("*")
             .eq("participant_id", participant_id)
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("status", "active")
             .order("sort_order")
             .execute()
         )
-        custom = custom_resp.data or []
-        return {"default_tasks": default_tasks, "custom_tasks": custom}
+        return {
+            "system_tasks": sys_resp.data or [],
+            "custom_tasks": custom_resp.data or [],
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task templates fetch failed: {exc}")
 
@@ -3364,6 +3498,7 @@ async def create_participant_task(
     """Create a new task instance for a participant under a goal."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    await _ensure_participant_active_plan(participant_id)
     now = datetime.now(timezone.utc).isoformat()
     
     # Verify goal exists if provided
@@ -3537,3 +3672,92 @@ async def delete_participant_task(
         supabase.table("participant_tasks").delete().eq("id", task_id).eq("organization_id", org_id).execute()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task deletion failed: {exc}")
+
+
+# ── Check 16 — Long shift live monitor ────────────────────────────────────────
+
+
+@router.get("/monitor/live")
+async def get_long_shift_monitor_live(
+    current_user: dict = Depends(get_current_user),
+):
+    """Long-shift engagement dashboard data (poll every 30s)."""
+    _require_coordinator(current_user)
+    shifts = await get_live_shifts(current_user)
+    long_shifts = []
+    green = amber = red = 0
+    scores: list[int] = []
+
+    for shift in shifts:
+        eng = shift.get("engagement") or {}
+        if not eng.get("is_long_shift"):
+            continue
+        status = str(eng.get("engagement_status") or "GREEN")
+        if status == "GREEN":
+            green += 1
+        elif status == "AMBER":
+            amber += 1
+        else:
+            red += 1
+        score = eng.get("engagement_score")
+        if score is not None:
+            scores.append(int(score))
+        long_shifts.append({
+            "session_id": eng.get("session_id"),
+            "shift_id": shift.get("id"),
+            "worker_name": shift.get("worker_name"),
+            "participant_name": shift.get("participant_name"),
+            "started_at": shift.get("clocked_in_at"),
+            "duration_secs": eng.get("duration_secs"),
+            "current_gap_secs": eng.get("current_gap_secs"),
+            "status": status,
+            "checkins_completed": eng.get("checkins_completed"),
+            "checkins_required": eng.get("checkins_required"),
+            "next_checkin_due_secs": eng.get("next_checkin_due_secs"),
+            "break_logged": eng.get("break_logged"),
+            "break_compliant": eng.get("break_compliant"),
+            "engagement_score": eng.get("engagement_score"),
+            "coordinator_alerted": any(
+                a.get("alert_type", "").startswith("long_shift_gap")
+                for a in (shift.get("alerts") or [])
+            ),
+            "last_activity_type": eng.get("last_activity_type"),
+            "last_activity_at": eng.get("last_activity_at"),
+        })
+
+    return {
+        "active_long_shifts": long_shifts,
+        "summary": {
+            "total_active": len(long_shifts),
+            "green_count": green,
+            "amber_count": amber,
+            "red_count": red,
+            "avg_engagement_score": round(sum(scores) / len(scores)) if scores else None,
+        },
+    }
+
+
+@router.get("/monitor/engagement-summary")
+async def get_engagement_summary(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Engagement score distribution for coordinator dashboard heatmap."""
+    org_id = _require_coordinator(current_user)
+    from ..services.long_shift_service import get_engagement_summary
+
+    return get_engagement_summary(org_id, start_date=start_date, end_date=end_date)
+
+
+@router.get("/audit-pack/engagement")
+async def get_audit_engagement_pack(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Check 16 audit pack sections: engagement log, KPI, billable reconciliation."""
+    org_id = _require_coordinator(current_user)
+    from ..services.long_shift_service import get_audit_engagement_pack
+
+    return get_audit_engagement_pack(org_id, start_date=start_date, end_date=end_date)

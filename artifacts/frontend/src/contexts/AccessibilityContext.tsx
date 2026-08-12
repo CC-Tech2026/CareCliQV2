@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,7 +20,11 @@ import {
   type FontSize,
   type ThemeMode,
 } from "@/services/accessibilityService";
-import { applyThemeModeImmediate } from "@/lib/theme-apply";
+import {
+  applyThemeModeImmediate,
+  getStoredThemeMode,
+  THEME_STORAGE_KEY,
+} from "@/lib/theme-apply";
 
 type AccessibilityContextValue = {
   prefs: AccessibilityPreferences | null;
@@ -35,6 +40,8 @@ type AccessibilityContextValue = {
 };
 
 const AccessibilityContext = createContext<AccessibilityContextValue | null>(null);
+
+const THEME_PERSIST_DEBOUNCE_MS = 5000;
 
 const FONT_SCALE: Record<FontSize, string> = {
   small: "0.9",
@@ -70,20 +77,24 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<AccessibilityPreferences | null>(null);
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [loading, setLoading] = useState(true);
+  const themePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingThemeRef = useRef<ThemeMode | null>(null);
 
   useEffect(() => {
     let active = true;
     
-    // Set default preferences immediately
+    // Boot from localStorage so theme matches pre-React paint (see theme-apply.ts).
+    const bootTheme = getStoredThemeMode();
     const defaults: AccessibilityPreferences = {
       font_size: "default",
-      theme_mode: "system",
+      theme_mode: bootTheme,
       high_contrast: false,
       dyslexia_font: false,
       device_id: deviceId,
     };
     setPrefs(defaults);
     applyDocumentClasses(defaults, "en");
+    applyThemeModeImmediate(bootTheme);
     
     // Only fetch from backend if authenticated
     if (!isAuthenticated) {
@@ -131,6 +142,32 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     [deviceId, language],
   );
 
+  const scheduleThemePersist = useCallback(
+    (theme_mode: ThemeMode) => {
+      pendingThemeRef.current = theme_mode;
+      if (themePersistTimerRef.current) clearTimeout(themePersistTimerRef.current);
+      themePersistTimerRef.current = setTimeout(() => {
+        themePersistTimerRef.current = null;
+        const mode = pendingThemeRef.current;
+        pendingThemeRef.current = null;
+        if (mode) void persist({ theme_mode: mode }).catch(() => undefined);
+      }, THEME_PERSIST_DEBOUNCE_MS);
+    },
+    [persist],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (themePersistTimerRef.current) {
+        clearTimeout(themePersistTimerRef.current);
+        themePersistTimerRef.current = null;
+      }
+      const mode = pendingThemeRef.current;
+      pendingThemeRef.current = null;
+      if (mode) void persist({ theme_mode: mode }).catch(() => undefined);
+    };
+  }, [persist]);
+
   const applyPrefsPatch = useCallback(
     (patch: Partial<AccessibilityPreferences>) => {
       setPrefs((prev) => {
@@ -154,6 +191,11 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const setThemeMode = useCallback(
     (theme_mode: ThemeMode) => {
       applyThemeModeImmediate(theme_mode);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme_mode);
+      } catch {
+        /* noop */
+      }
       setPrefs((prev) => {
         const next: AccessibilityPreferences = prev
           ? { ...prev, theme_mode }
@@ -166,9 +208,9 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
             };
         return next;
       });
-      void persist({ theme_mode }).catch(() => undefined);
+      if (isAuthenticated) scheduleThemePersist(theme_mode);
     },
-    [deviceId, persist],
+    [deviceId, isAuthenticated, scheduleThemePersist],
   );
 
   const value = useMemo<AccessibilityContextValue>(
@@ -202,7 +244,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
 
   return (
     <AccessibilityContext.Provider value={value}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="carecliq-theme" disableTransitionOnChange>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey={THEME_STORAGE_KEY} disableTransitionOnChange>
         <ThemeSync themeMode={prefs?.theme_mode} />
         {children}
       </ThemeProvider>

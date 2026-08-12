@@ -15,8 +15,8 @@ export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }:
   const { translate } = useAccessibility();
 
   return (
-    <section className="overflow-hidden rounded-2xl border-2 border-red-200 bg-red-50/60 p-4 shadow-sm">
-      <p className="flex items-center gap-2 text-sm font-black text-red-700">
+    <section className="overflow-hidden rounded-2xl border-2 border-red-200 bg-red-50 p-4 shadow-sm dark:border-red-500/30 dark:bg-red-500/10">
+      <p className="flex items-center gap-2 text-sm font-black text-red-700 dark:text-red-300">
         <AlertTriangle size={18} className="shrink-0" />
         {translate("tasks.mandatoryIncomplete")}
       </p>
@@ -25,9 +25,9 @@ export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }:
         {tasks.map((task) => (
           <li
             key={task.task_id}
-            className="flex items-center gap-2.5 text-sm font-bold text-red-800"
+            className="flex items-center gap-2.5 text-sm font-bold text-red-800 dark:text-red-200"
           >
-            <X size={16} className="shrink-0 text-red-600" strokeWidth={3} />
+            <X size={16} className="shrink-0 text-red-600 dark:text-red-300" strokeWidth={3} />
             <span>{task.label}</span>
           </li>
         ))}
@@ -44,7 +44,7 @@ export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }:
         </Button>
         <Button
           variant="outline"
-          className="touch-target h-12 shrink-0 rounded-2xl border-2 px-4 text-sm font-black"
+          className="touch-target h-12 shrink-0 rounded-2xl border-2 bg-transparent px-4 text-sm font-black dark:bg-transparent"
           style={{ borderColor: CORAL, color: CORAL }}
           disabled={busy}
           onClick={onEndAnyway}

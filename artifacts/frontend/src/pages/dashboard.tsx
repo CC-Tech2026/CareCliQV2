@@ -8,6 +8,7 @@ import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendCha
 import { DashboardActionItems } from "@/components/dashboard/DashboardActionItems";
 import { DashboardComplianceAlerts } from "@/components/dashboard/DashboardComplianceAlerts";
 import { DashboardShiftsWidget } from "@/components/dashboard/DashboardShiftsWidget";
+import { PlanMeetingsPendingBanner } from "@/components/dashboard/PlanMeetingsPendingBanner";
 import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
 import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
@@ -944,9 +945,6 @@ function WorkerDashboardView({
 
   const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
   const complianceDetail = complianceQuery.data;
@@ -1109,6 +1107,9 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
         ))}
       </div>
 
+      {/* Plan meetings pending AI review */}
+      <PlanMeetingsPendingBanner />
+
       {/* Action hub — tabbed inline panel */}
       <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
         <CoordinatorActionHub data={data} />
@@ -1145,16 +1146,10 @@ export default function Dashboard() {
   const workerQuery = useOrgQuery(["dashboard", "worker"], {
     queryFn: getWorkerDashboard,
     enabled: isWorker,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const workerLandingQuery = useOrgQuery(["dashboard", "worker-landing"], {
     queryFn: getWorkerLandingDashboard,
     enabled: isWorker,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
   });
   const coordinatorQuery = useOrgQuery(["dashboard", "coordinator"], {
     queryFn: getCoordinatorDashboard,

@@ -1,0 +1,7 @@
+# Raw k6 output (regenerated each run)
+summary-raw.json
+metrics-raw.ndjson
+
+# Latest reports are tracked optionally — uncomment to ignore:
+# report.html
+# report.json

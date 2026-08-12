@@ -23,6 +23,7 @@ A production-grade, multi-tenant clinical management platform built for Australi
 15. [Generated API Client](#generated-api-client)
 16. [Known Constraints & Workarounds](#known-constraints--workarounds)
 17. [Database Migrations](#database-migrations)
+18. [Performance Testing](#performance-testing)
 
 ---
 
@@ -475,3 +476,30 @@ Key migrations that must be applied for all features:
 | Gendered Body Map | `ALTER TABLE patients ADD COLUMN biological_sex` |
 | RBAC | Create `organizations`, `organization_members`, `invitations` tables |
 | Goals | Create `patient_goals` table |
+
+---
+
+## Performance Testing
+
+Load tests use [k6](https://k6.io/) with **Coordinator + Worker** role scenarios and auto-generated HTML/JSON reports.
+
+**Full setup and user guide:** [`performance/README.md`](performance/README.md)
+
+### Quick start
+
+```bash
+# 1. Add K6_* credentials to .env (see .env.example)
+
+# 2. Verify login
+docker compose run --rm --entrypoint node k6 /app/performance/scripts/verify-auth.js
+
+# 3. Run test (~2 min)
+docker compose run --rm k6
+
+# 4. Open report
+xdg-open performance/reports/report.html
+```
+
+Key env vars: `K6_BASE_URL`, `K6_ENV`, `K6_COORDINATOR_EMAIL`, `K6_COORDINATOR_PASSWORD`, `K6_WORKER_EMAIL`, `K6_WORKER_PASSWORD`.
+
+---

@@ -146,14 +146,14 @@ export function NotificationBannerStack() {
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
 
-  const { data } = useOrgQuery(["notification-banners", orgId], {
+  const { data } = useOrgQuery(["notification-banners"], {
     queryFn: () => fetchNotifications({ banners_only: true }),
-    refetchInterval: isSupabaseRealtimeConfigured() ? false : 30_000,
+    refetchInterval: isSupabaseRealtimeConfigured() ? false : 60_000,
     enabled: !!user && user.role === "support_worker",
   });
 
   const banners = (data?.notifications ?? []).filter(isActiveBanner);
-  const bannersQueryKey = [orgId, "notification-banners", orgId] as const;
+  const bannersQueryKey = [orgId, "notification-banners"] as const;
   const [hiddenBannerIds, setHiddenBannerIds] = useState<Set<string>>(() => new Set());
 
   const hideBannerNow = useCallback(

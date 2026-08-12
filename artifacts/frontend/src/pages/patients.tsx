@@ -41,6 +41,12 @@ import {
   Archive,
   X,
   CalendarClock,
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -51,6 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
+import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import {
@@ -935,7 +942,7 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "shift_context" | "restricted";
+type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "plan_meetings" | "shift_context" | "restricted";
 
 function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
@@ -964,6 +971,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   });
 
   const qc = useQueryClient();
+
+  // UI state — collapsible header + inline shift detail
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
 
   // Assign Shift — coordinator only
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -998,7 +1009,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
-    onError: () => toastFn({ title: "Failed to create goal", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to create goal", variant: "destructive" }),
   });
 
   const editGoalMut = useMutation({
@@ -1008,7 +1019,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null); setEditingGoal(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
-    onError: () => toastFn({ title: "Failed to update goal", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to update goal", variant: "destructive" }),
   });
 
   const archiveGoalMut = useMutation({
@@ -1031,7 +1042,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setCreateMode(null);
       setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false);
     },
-    onError: () => toastFn({ title: "Failed to create task", variant: "destructive" }),
+    onError: (err: Error) => toastFn({ title: err.message || "Failed to create task", variant: "destructive" }),
   });
 
   const deleteTaskMut = useMutation({
@@ -1263,6 +1274,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       : [{ id: "goals" as const, label: translate("patients.tab.goals"), shortLabel: "Goals", icon: Target }]),
     { id: "sessions"    as const, label: "Shift History", shortLabel: "Shifts",    icon: CalendarDays },
     { id: "compliance"  as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Plan Meetings", shortLabel: "Meetings", icon: MessageSquare }] : []),
     ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), shortLabel: "Context", icon: Users }] : []),
     ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", shortLabel: "Clinical", icon: Lock }] : []),
   ];
@@ -1318,37 +1330,52 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
             />
           </div>
+          {/* Header collapse toggle */}
+          <button
+            type="button"
+            onClick={() => setHeaderCollapsed(c => !c)}
+            className="h-7 w-7 rounded-full flex items-center justify-center transition-colors shrink-0 ml-1"
+            style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}
+            title={headerCollapsed ? "Show stats" : "Hide stats"}
+          >
+            {headerCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          </button>
         </div>
 
-        {/* Stat cards — 2×2 on mobile, 4 across on desktop */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3 mt-3">
-          {metricCards.map((metric) => {
-            const Icon = metric.icon;
-            return (
-              <div key={metric.label} className={`rounded-xl border px-3 py-2.5 ${metric.tone}`}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                  <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
-                </div>
-                <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
-              </div>
-            );
-          })}
-        </div>
+        {/* Collapsible body — stat cards + mobile action buttons */}
+        {!headerCollapsed && (
+          <>
+            {/* Stat cards — 2×2 on mobile, 4 across on desktop */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3 mt-3">
+              {metricCards.map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <div key={metric.label} className={`rounded-xl border px-3 py-2.5 ${metric.tone}`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                      <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
+                    </div>
+                    <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
+                  </div>
+                );
+              })}
+            </div>
 
-        {/* Action buttons — mobile: below stat cards */}
-        <div className="flex sm:hidden flex-wrap items-center gap-2 mb-3">
-          <EditParticipantPanel
-            participant={participant}
-            hasPlan={hasPlan}
-            onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
-          />
-          <SetupPlanPanel
-            participantId={id}
-            budget={budget}
-            onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
-          />
-        </div>
+            {/* Action buttons — mobile: below stat cards */}
+            <div className="flex sm:hidden flex-wrap items-center gap-2 mb-3">
+              <EditParticipantPanel
+                participant={participant}
+                hasPlan={hasPlan}
+                onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
+              />
+              <SetupPlanPanel
+                participantId={id}
+                budget={budget}
+                onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
+              />
+            </div>
+          </>
+        )}
 
         {/* Tab bar */}
         <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none scroll-px-3">
@@ -1358,7 +1385,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSelectedSession(null); }}
                 className={`flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 min-h-[44px] ${
                   active
                     ? "border-[#3730A3] text-[#3730A3]"
@@ -1638,6 +1665,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           const activeGoals = ndisGoals.filter((g) => g.status === "active");
           const doneGoals   = ndisGoals.filter((g) => g.status !== "active");
+          const goalsNeedingCategory = activeGoals.filter((g) => !g.support_category);
 
           const startEditGoal = (goal: NdisGoal) => {
             setEditingGoal(goal);
@@ -1889,7 +1917,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <button type="button" onClick={cancelGoalForm}
                   className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
                 <button type="button"
-                  disabled={!goalTitle.trim() || createGoalMut.isPending || editGoalMut.isPending}
+                  disabled={!goalTitle.trim() || !goalSupportCategory || createGoalMut.isPending || editGoalMut.isPending}
                   onClick={() => {
                     const descHtml = goalDescriptionRef.current?.textContent?.trim()
                       ? (goalDescriptionRef.current.innerHTML || null)
@@ -2255,6 +2283,32 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {(createMode === "goal" || createMode === "edit_goal") && goalFormContent}
               {createMode === "tasks" && taskFormContent}
 
+              {/* Goals missing support category — coordinator review */}
+              {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 space-y-2">
+                  <p className="text-[12px] font-bold text-amber-900">
+                    {goalsNeedingCategory.length} goal{goalsNeedingCategory.length !== 1 ? "s" : ""} need a support category
+                  </p>
+                  <p className="text-[11px] text-amber-800">
+                    Link each goal to a funded NDIS budget line so billing and reporting stay accurate.
+                  </p>
+                  <div className="space-y-1.5">
+                    {goalsNeedingCategory.map((goal) => (
+                      <div key={goal.id} className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-3 py-2">
+                        <span className="text-[12px] font-semibold text-[#111827] truncate">{goal.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEditGoal(goal)}
+                          className="shrink-0 text-[11px] font-bold text-amber-900 underline-offset-2 hover:underline"
+                        >
+                          Assign category
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Loading */}
               {ndisGoalsQuery.isLoading && (
                 <div className="flex items-center gap-2 py-4 text-[13px] text-[#6B7280]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
@@ -2291,6 +2345,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               {areaStyle.label}
                             </span>
                             <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            {!goal.support_category && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                Needs category
+                              </span>
+                            )}
                             {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
                           </div>
                           {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
@@ -2533,49 +2592,185 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <p className="text-[13px] font-semibold text-[#111827]">No shifts yet</p>
                 <p className="text-[11px] text-[#6B7280] mt-1">Shifts with this participant will appear here.</p>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {sessions.map((session) => (
-                  <Link key={session.id} href={`/sessions/${session.id}`}>
-                    <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors cursor-pointer">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
-                            {(session.session_type || "session").replace(/_/g, " ")}
-                          </p>
-                          <p className="text-[11px] text-[#6B7280] mt-0.5">
-                            {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
+            ) : selectedSession ? (
+              /* ── Split-pane: compact list + inline detail ── */
+              <div className="flex gap-3 items-start">
+                {/* Left: compact session list — hidden on mobile when detail is open */}
+                <div className="hidden sm:flex w-[195px] shrink-0 flex-col gap-1.5 max-h-[520px] overflow-y-auto">
+                  {sessions.map((session) => {
+                    const isActive = selectedSession.id === session.id;
+                    return (
+                      <button
+                        key={session.id}
+                        type="button"
+                        onClick={() => setSelectedSession(session)}
+                        className="w-full text-left rounded-xl px-3 py-2.5 border transition-colors"
+                        style={{
+                          background: isActive ? "var(--cc-active-bg)" : "white",
+                          borderColor: isActive ? "rgba(55,48,163,0.2)" : "rgba(221,214,254,0.5)",
+                          boxShadow: isActive ? "inset 3px 0 0 var(--cc-plum)" : "none",
+                        }}
+                      >
+                        <p className="text-[12px] font-bold text-[#111827] capitalize truncate">
+                          {(session.session_type || "session").replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[10px] text-[#6B7280] mt-0.5">{safeFormat(session.session_date)}</p>
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                           {session.compliance_score != null && (
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
+                            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-black ${complianceTone(session.compliance_score)}`}>
                               {session.compliance_score}%
                             </span>
                           )}
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold capitalize ${statusBadge(session.status || "")}`}>
                             {session.status || "draft"}
                           </span>
                         </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right: shift detail panel */}
+                <div className="flex-1 min-w-0 rounded-xl border border-purple-100/60 bg-white overflow-hidden">
+                  {/* Detail header */}
+                  <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: "1px solid var(--cc-border)" }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {/* Mobile back button */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSession(null)}
+                        className="sm:hidden flex items-center gap-1 text-[12px] font-bold shrink-0"
+                        style={{ color: "var(--cc-plum)" }}
+                      >
+                        <ChevronLeft size={14} /> Back
+                      </button>
+                      <CalendarDays className="hidden sm:block h-3.5 w-3.5 text-[#3730A3] shrink-0" />
+                      <p className="text-[13px] font-black text-[#111827] capitalize truncate">
+                        {(selectedSession.session_type || "Session").replace(/_/g, " ")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={`/sessions/${selectedSession.id}`}
+                        className="flex items-center gap-1 text-[11px] font-bold hover:underline"
+                        style={{ color: "var(--cc-plum)" }}
+                      >
+                        <ExternalLink size={11} /> Full details
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSession(null)}
+                        aria-label="Close shift detail"
+                        className="hidden sm:flex h-6 w-6 rounded-full items-center justify-center hover:bg-purple-50 text-[#6B7280]"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Detail body */}
+                  <div className="p-4 space-y-3">
+                    {/* Date + Duration */}
+                    <div className="flex gap-2">
+                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280]">Date</p>
+                        <p className="text-[13px] font-bold text-[#111827] mt-0.5">{safeFormat(selectedSession.session_date)}</p>
                       </div>
-                      {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                        <p className="mt-1.5 text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">
-                          {session.translated_english_note || session.compliance_input_text || session.notes}
-                        </p>
-                      )}
-                      {(session.original_language_input || session.translated_english_note) && (
-                        <div className="mt-2">
-                          <TranslationAuditView
-                            originalLanguageInput={session.original_language_input ?? undefined}
-                            translatedEnglishNote={session.translated_english_note ?? undefined}
-                            translationMetadata={session.translation_metadata ?? null}
-                            translationStatus={session.translation_status ?? undefined}
-                            translationProvider={session.translation_provider ?? undefined}
-                          />
+                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280]">Duration</p>
+                        <p className="text-[13px] font-bold text-[#111827] mt-0.5">{selectedSession.duration_minutes || 0} min</p>
+                      </div>
+                    </div>
+
+                    {/* Status + Compliance */}
+                    <div className="flex gap-2">
+                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Status</p>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(selectedSession.status || "")}`}>
+                          {selectedSession.status || "draft"}
+                        </span>
+                      </div>
+                      {selectedSession.compliance_score != null && (
+                        <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2 flex-1">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Compliance</p>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(selectedSession.compliance_score)}`}>
+                            {selectedSession.compliance_score}%
+                          </span>
                         </div>
                       )}
                     </div>
-                  </Link>
+
+                    {/* Notes */}
+                    {(selectedSession.translated_english_note || selectedSession.compliance_input_text || selectedSession.notes) && (
+                      <div className="rounded-lg border border-purple-100/60 bg-[#F8F8FE] px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1.5">Notes</p>
+                        <p className="text-[12px] text-[#111827] leading-relaxed">
+                          {selectedSession.translated_english_note || selectedSession.compliance_input_text || selectedSession.notes}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Translation audit */}
+                    {(selectedSession.original_language_input || selectedSession.translated_english_note) && (
+                      <TranslationAuditView
+                        originalLanguageInput={selectedSession.original_language_input ?? undefined}
+                        translatedEnglishNote={selectedSession.translated_english_note ?? undefined}
+                        translationMetadata={selectedSession.translation_metadata ?? null}
+                        translationStatus={selectedSession.translation_status ?? undefined}
+                        translationProvider={selectedSession.translation_provider ?? undefined}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ── Full-width list (no session selected) ── */
+              <div className="space-y-2">
+                {sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => setSelectedSession(session)}
+                    className="w-full text-left rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
+                          {(session.session_type || "session").replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[11px] text-[#6B7280] mt-0.5">
+                          {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {session.compliance_score != null && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
+                            {session.compliance_score}%
+                          </span>
+                        )}
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                          {session.status || "draft"}
+                        </span>
+                        <ChevronRight size={14} className="text-[#6B7280] opacity-40 shrink-0" />
+                      </div>
+                    </div>
+                    {(session.translated_english_note || session.compliance_input_text || session.notes) && (
+                      <p className="mt-1.5 text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">
+                        {session.translated_english_note || session.compliance_input_text || session.notes}
+                      </p>
+                    )}
+                    {(session.original_language_input || session.translated_english_note) && (
+                      <div className="mt-2">
+                        <TranslationAuditView
+                          originalLanguageInput={session.original_language_input ?? undefined}
+                          translatedEnglishNote={session.translated_english_note ?? undefined}
+                          translationMetadata={session.translation_metadata ?? null}
+                          translationStatus={session.translation_status ?? undefined}
+                          translationProvider={session.translation_provider ?? undefined}
+                        />
+                      </div>
+                    )}
+                  </button>
                 ))}
               </div>
             )}
@@ -2639,6 +2834,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 })}
               </div>
             )}
+          </section>
+        )}
+
+        {/* PLAN MEETINGS TAB — coordinator only */}
+        {activeTab === "plan_meetings" && isCoordinator && (
+          <section className="space-y-3">
+            <PlanMeetingCapture participantId={id} />
           </section>
         )}
 
@@ -2745,6 +2947,7 @@ export default function Patients() {
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Deep-link support: "Back to Participant" from session/shift detail pages
   // passes ?id=<participantId>&tab=<tab> so the coordinator lands back on the
@@ -2786,9 +2989,36 @@ export default function Patients() {
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[330px] shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden`}
+        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
         style={{ background: "var(--cc-bg)", border: showMobileDetail ? "none" : "1px solid var(--cc-border)" }}
       >
+        {sidebarCollapsed ? (
+          /* ── Collapsed rail — desktop only ── */
+          <div className="hidden lg:flex flex-col items-center pt-3 gap-3 px-1">
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(false)}
+              aria-label="Expand participant list"
+              className="h-8 w-8 rounded-xl flex items-center justify-center transition-colors"
+              style={{ background: "var(--cc-active-bg)", color: "var(--cc-plum)" }}
+              title="Expand list"
+            >
+              <ChevronRight size={16} />
+            </button>
+            {selectedId && (() => {
+              const p = (participants ?? []).find((p: any) => p.id === selectedId);
+              if (!p) return null;
+              const inits = (p.full_name as string).split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[11px] font-black"
+                  style={{ background: "var(--cc-plum)" }}
+                >{inits}</div>
+              );
+            })()}
+          </div>
+        ) : (
+          <>
         {/* Panel header */}
         <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: "1px solid var(--cc-border)" }}>
 
@@ -2807,12 +3037,25 @@ export default function Patients() {
                 </span>
               )}
             </div>
-            <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-xl text-[12px]">
-                <UserPlus className="h-3.5 w-3.5" />
-                {translate("patients.add")}
-              </Button>
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <Link href="/participants/new">
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-xl text-[12px]">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  {translate("patients.add")}
+                </Button>
+              </Link>
+              {/* Collapse sidebar — desktop only */}
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="Collapse participant list"
+                className="hidden lg:flex h-7 w-7 rounded-lg items-center justify-center transition-colors"
+                style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}
+                title="Collapse list"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
           </div>
 
           {/* Search */}
@@ -2974,6 +3217,8 @@ export default function Patients() {
             })
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* ── Right panel — participant detail ──────────────────────────── */}

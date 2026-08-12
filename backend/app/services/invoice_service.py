@@ -534,18 +534,15 @@ def assemble_invoice_data(
 
 def render_invoice_pdf(invoice_data: Dict[str, Any]) -> bytes:
     """
-    Render the Jinja2 invoice template to PDF using WeasyPrint.
+    Render the Jinja2 invoice template to PDF.
 
-    Falls back gracefully if WeasyPrint is not available in the current
-    environment (e.g. local Windows without GTK).
+    Tries WeasyPrint first (preferred, production-grade).
+    Falls back to xhtml2pdf on environments without GTK (e.g. local Windows).
     """
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
-        from weasyprint import HTML, CSS
     except ImportError as exc:
-        raise InvoiceGenerationError(
-            f"PDF rendering requires jinja2 and weasyprint: {exc}"
-        )
+        raise InvoiceGenerationError(f"PDF rendering requires jinja2: {exc}")
 
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATES_DIR)),
@@ -554,5 +551,24 @@ def render_invoice_pdf(invoice_data: Dict[str, Any]) -> bytes:
     template = env.get_template("invoice.html")
     html_str = template.render(**invoice_data)
 
-    pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
-    return pdf_bytes
+    # Try WeasyPrint (Linux / production with GTK/Pango available)
+    try:
+        from weasyprint import HTML
+        return HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
+    except Exception:
+        pass
+
+    # Fall back to xhtml2pdf (pure-Python, works on Windows without GTK)
+    try:
+        import io
+        from xhtml2pdf import pisa
+        buf = io.BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buf)
+        if not result.err:
+            return buf.getvalue()
+    except ImportError:
+        pass
+
+    raise InvoiceGenerationError(
+        "PDF rendering failed: install weasyprint (Linux) or xhtml2pdf (Windows)."
+    )

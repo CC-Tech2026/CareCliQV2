@@ -4,7 +4,7 @@ import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-import { CareCliQLogoSVG } from "@/components/CareCliQLogoSVG";
+import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
@@ -65,8 +65,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-14 items-center justify-between">
 
             {/* LEFT — logo + org */}
-            <div className="flex items-center gap-4">
-              <CareCliQLogoSVG size={70} />
+            <div className="flex items-center gap-3">
+              <CareCliQLogo size={48} />
               <div
                 className="hidden h-5 w-px sm:block"
                 style={{ background: BORDER }}

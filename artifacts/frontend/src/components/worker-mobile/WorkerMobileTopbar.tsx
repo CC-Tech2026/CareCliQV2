@@ -9,6 +9,8 @@ type Props = {
   visualState: ShiftVisualState;
   phase?: Phase;
   elapsed?: string;
+  onBreak?: boolean;
+  breakElapsed?: string;
   showEnd?: boolean;
   onEnd?: () => void;
   endBusy?: boolean;
@@ -20,6 +22,8 @@ export function WorkerMobileTopbar({
   visualState,
   phase = "session",
   elapsed,
+  onBreak = false,
+  breakElapsed,
   showEnd,
   onEnd,
   endBusy,
@@ -31,16 +35,21 @@ export function WorkerMobileTopbar({
       ? "Review & submit"
       : phase === "completed"
         ? "Notes submitted"
-        : visualState === "session_active"
-          ? "Session active · timer running"
-          : visualState === "clocked_in"
-            ? "Clocked in · timer running"
-            : null;
+        : onBreak
+          ? "On break · billing paused"
+          : visualState === "session_active"
+            ? "Session active · timer running"
+            : visualState === "clocked_in"
+              ? "Clocked in · timer running"
+              : null;
+
+  const timerDisplay = onBreak && breakElapsed ? breakElapsed : elapsed;
+  const timerColor = onBreak ? "#B45309" : WM.amber;
 
   return (
     <header
       className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5"
-      style={{ borderColor: WM.border, background: WM.surface }}
+      style={{ borderColor: WM.border, background: onBreak ? "rgba(217, 119, 6, 0.1)" : WM.surface }}
     >
       {onBack && (
         <button
@@ -59,19 +68,29 @@ export function WorkerMobileTopbar({
           {participantName}
         </p>
         {subtitle && (
-          <p className="truncate text-[11px] font-medium" style={{ color: WM.muted }}>
+          <p
+            className="truncate text-[11px] font-medium"
+            style={{ color: onBreak ? "#B45309" : WM.muted }}
+          >
             {subtitle}
           </p>
         )}
       </div>
 
-      {isLive && elapsed && phase === "session" && (
-        <span
-          className="shrink-0 font-mono text-[13px] font-semibold tabular-nums"
-          style={{ color: WM.amber }}
-        >
-          {elapsed}
-        </span>
+      {isLive && timerDisplay && phase === "session" && (
+        <div className="shrink-0 text-right">
+          <span
+            className="font-mono text-[13px] font-semibold tabular-nums"
+            style={{ color: timerColor }}
+          >
+            {timerDisplay}
+          </span>
+          {onBreak && elapsed && (
+            <p className="text-[10px] font-medium tabular-nums" style={{ color: WM.muted }}>
+              Session {elapsed}
+            </p>
+          )}
+        </div>
       )}
 
       {phase === "review" && elapsed && (
@@ -82,16 +101,6 @@ export function WorkerMobileTopbar({
           {elapsed}
         </span>
       )}
-
-      {/* {isLive && phase === "session" && (
-        <div
-          className="flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase tracking-wide text-white"
-          style={{ background: WM.green }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-white" />
-          Live
-        </div>
-      )} */}
 
       {showEnd && onEnd && (
         <button

@@ -1,4 +1,5 @@
 import { jsonFetch } from "@/services/http";
+import type { ActiveBreakStatus, CheckinWindowStatus } from "@/services/longShiftService";
 
 export type ShiftVisualState = "scheduled" | "clocked_in" | "session_active" | "completed";
 
@@ -208,6 +209,8 @@ export type WorkerShift = {
   briefing_complete?: boolean;
   requires_briefing?: boolean;
   special_instructions?: string | null;
+  break_status?: ActiveBreakStatus;
+  checkin_status?: CheckinWindowStatus;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";

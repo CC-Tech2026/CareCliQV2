@@ -4,6 +4,7 @@ import { Link, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
+import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
 import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
   ArrowLeft,
@@ -28,6 +29,16 @@ import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpense
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
+import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
+import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
+import { CheckInPromptModal } from "@/components/shifts/CheckInPromptModal";
+import { useLongShiftCheckin } from "@/hooks/useLongShiftCheckin";
+import {
+  markSessionHeartbeat,
+  markSessionOffline,
+  submitLongShiftCheckin,
+  type CheckinStatus,
+} from "@/services/longShiftService";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
@@ -558,6 +569,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     active: timerActive,
   });
 
+  const breakSessionId =
+    isTutorialDemo && displayVisualState === "session_active"
+      ? TUTORIAL_SESSION_ID
+      : shift?.session_id ?? null;
+  const longShiftBreak = useLongShiftBreak(
+    displayVisualState === "session_active" ? breakSessionId : null,
+    {
+      shiftId: shift?.id,
+      initialStatus: shift?.break_status,
+    },
+  );
+
   const invalidateShifts = () => {
     invalidate();
   };
@@ -992,6 +1015,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       sessionFocus={isSessionActive}
       mileageDraftRef={mileageDraftRef}
       clockedInAt={effectiveClockedInAt}
+      longShiftBreak={longShiftBreak}
     />
   );
 
@@ -1160,6 +1184,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           safetyOpen={safetyOpen}
           setSafetyOpen={setSafetyOpen}
           isTutorialDemo={isTutorialDemo}
+          longShiftBreak={longShiftBreak}
           submissionComplete={mobileSubmitDone}
           mileageDraftRef={mileageDraftRef}
         />
@@ -1193,6 +1218,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           visualState={displayVisualState}
           participantName={shift.participant_name}
           elapsed={elapsed}
+          onBreak={longShiftBreak.onBreak}
+          breakElapsed={longShiftBreak.breakElapsed}
           onEndShift={isSessionActive ? handleAttemptEndShift : undefined}
           endShiftBusy={busy === "end"}
         />
@@ -1255,6 +1282,7 @@ function ShiftWorkflow({
   sessionFocus = false,
   mileageDraftRef,
   clockedInAt = null,
+  longShiftBreak,
 }: {
   shift: WorkerShift;
   displayProfile?: ParticipantProfile;
@@ -1307,6 +1335,7 @@ function ShiftWorkflow({
   sessionFocus?: boolean;
   mileageDraftRef: MutableRefObject<MileageDraftState>;
   clockedInAt?: string | null;
+  longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
 }) {
   const { translate } = useAccessibility();
   const tutorial = useWorkerTutorialOptional();
@@ -1375,6 +1404,55 @@ function ShiftWorkflow({
   const checklistSessionId =
     isTutorialDemo && isSessionActive ? TUTORIAL_SESSION_ID : shift.session_id;
 
+  const [checkinPromptOpen, setCheckinPromptOpen] = useState(false);
+  const [checkinBusy, setCheckinBusy] = useState(false);
+  const longShiftCheckin = useLongShiftCheckin(
+    isSessionActive ? checklistSessionId : null,
+    {
+      shiftId: shift.id,
+      initialStatus: shift.checkin_status,
+      onBreak: longShiftBreak?.onBreak,
+    },
+  );
+
+  useEffect(() => {
+    if (!isSessionActive || !checklistSessionId) return;
+    if (longShiftCheckin.checkinOverdue && longShiftCheckin.canSubmitRoutine) {
+      setCheckinPromptOpen(true);
+    }
+  }, [isSessionActive, checklistSessionId, longShiftCheckin.checkinOverdue, longShiftCheckin.canSubmitRoutine]);
+
+  useEffect(() => {
+    if (!checklistSessionId || !isSessionActive) return;
+    const onOffline = () => {
+      void markSessionOffline(checklistSessionId);
+    };
+    const onOnline = () => {
+      void markSessionHeartbeat(checklistSessionId);
+    };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [checklistSessionId, isSessionActive]);
+
+  const handlePromptCheckin = async (status: CheckinStatus) => {
+    if (!checklistSessionId) return;
+    setCheckinBusy(true);
+    try {
+      await submitLongShiftCheckin(checklistSessionId, {
+        status,
+        prompt_triggered_at: new Date().toISOString(),
+      });
+      setCheckinPromptOpen(false);
+      await longShiftCheckin.refresh();
+    } finally {
+      setCheckinBusy(false);
+    }
+  };
+
   const { notes: complianceNotes } = useGoalLinkedTaskComplianceNotes(
     isSessionActive ? checklistSessionId : null,
     activeTasks,
@@ -1404,14 +1482,32 @@ function ShiftWorkflow({
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
     : null;
 
-  const timerLabel = isSessionActive
-    ? "Session active — documenting"
-    : "At location — tap Start Session";
+  const timerLabel = longShiftBreak?.onBreak
+    ? "On break — billing paused"
+    : isSessionActive
+      ? "Session active — documenting"
+      : "At location — tap Start Session";
 
-  const timerBg = isSessionActive ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
-  const timerText = isSessionActive ? "text-emerald-700" : "text-amber-700";
-  const timerDot = isSessionActive ? "bg-emerald-500" : "bg-amber-500";
-  const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
+  const timerBg = longShiftBreak?.onBreak
+    ? "var(--cc-status-warning-bg)"
+    : isSessionActive
+      ? "var(--cc-status-success-bg)"
+      : "var(--cc-status-warning-bg)";
+  const timerText = longShiftBreak?.onBreak
+    ? "text-amber-800"
+    : isSessionActive
+      ? "text-emerald-700"
+      : "text-amber-700";
+  const timerDot = longShiftBreak?.onBreak
+    ? "bg-amber-500 animate-pulse"
+    : isSessionActive
+      ? "bg-emerald-500"
+      : "bg-amber-500";
+  const timerMono = longShiftBreak?.onBreak
+    ? "text-amber-700"
+    : isSessionActive
+      ? "text-emerald-600"
+      : "text-amber-600";
 
   const taskFeedProgress = isSessionActive && (
     <div className="mb-4">
@@ -1570,7 +1666,7 @@ function ShiftWorkflow({
                 <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase", tagStyle)}>
                   {serviceTag}
                 </span>
-                <ShiftStatusBadge visualState={visualState} className="ml-auto" />
+                <ShiftStatusBadge visualState={visualState} onBreak={longShiftBreak?.onBreak} className="ml-auto" />
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
@@ -1608,34 +1704,27 @@ function ShiftWorkflow({
 
           {(isClockedIn || isSessionActive) && (
             <div
-              className="mt-4 flex items-center justify-between rounded-xl px-3 py-2"
+              className={cn(
+                "mt-4 rounded-xl px-3 py-2",
+                longShiftBreak?.onBreak ? "space-y-2" : "flex items-center justify-between",
+              )}
               style={{ background: timerBg }}
             >
               <span className={cn("flex items-center gap-2 text-xs font-bold", timerText)}>
                 <span className={cn("h-2 w-2 rounded-full", timerDot)} />
                 {timerLabel}
               </span>
-              <div className="flex items-center gap-3">
+              {longShiftBreak?.onBreak ? (
+                <BreakStatusBanner
+                  variant="card"
+                  breakElapsed={longShiftBreak.breakElapsed}
+                  sessionElapsed={elapsed}
+                />
+              ) : (
                 <span className={cn("font-mono text-sm font-black", timerMono)}>
                   {elapsed}
                 </span>
-                {/* {isSessionActive && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 rounded-full border-0 px-3 text-xs font-black text-white"
-                    style={{ background: CORAL }}
-                    disabled={busy !== null}
-                    data-tutorial="end-shift"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAttemptEndShift();
-                    }}
-                  >
-                    End Shift
-                  </Button>
-                )} */}
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -1708,6 +1797,23 @@ function ShiftWorkflow({
 
       {isSessionActive && (
         <div className="space-y-3">
+          {checklistSessionId && longShiftBreak && (
+            <LongShiftEngagementPanel
+              sessionId={checklistSessionId}
+              shiftId={shift.id}
+              clockedInAt={shift.clocked_in_at}
+              sessionElapsed={elapsed}
+              breakControl={longShiftBreak}
+              initialCheckinStatus={shift.checkin_status}
+            />
+          )}
+          <CheckInPromptModal
+            open={checkinPromptOpen}
+            onClose={() => setCheckinPromptOpen(false)}
+            onSubmit={(status) => void handlePromptCheckin(status)}
+            busy={checkinBusy}
+            gapMinutes={longShiftCheckin.checkinOverdue ? 90 : undefined}
+          />
           <Button
             type="button"
             className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"

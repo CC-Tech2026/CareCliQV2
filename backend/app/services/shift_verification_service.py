@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from ..core.timezone import parse_shift_datetime
 from . import ndis_pricing_service
-from .funding_service import get_plan_for_participant
+from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 
@@ -441,6 +441,18 @@ async def verify_shift(
     supabase.table("plan_budgets").update({"used_amount": new_used}).eq(
         "id", matching_budget["id"]
     ).execute()
+
+    if verification and verification.get("id"):
+        record_verified_shift_budget_usage(
+            plan_id=str(plan["id"]),
+            shift_verification_id=str(verification["id"]),
+            session_id=str(session.get("id")) if session and session.get("id") else None,
+            category=category,
+            amount=billed_amount,
+            hourly_rate=hourly_rate,
+            duration_minutes=int(round(actual_minutes)),
+            price_item_code=str(price.get("item_code") or price_item_code),
+        )
 
     return {
         "verification": verification,

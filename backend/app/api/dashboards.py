@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.access import (
+    get_coordinator_team_ids,
     get_user_id,
     get_user_organization_id,
     is_coordinator_role,
@@ -157,7 +158,56 @@ def _average_score(sessions: list[dict]) -> int:
     return round(sum(scores) / len(scores))
 
 
-async def _team_members(org_id: str) -> list[dict]:
+def _row_id_set(row: dict, *fields: str) -> set[str]:
+    values: set[str] = set()
+    for field in fields:
+        raw = row.get(field)
+        if isinstance(raw, (list, tuple, set)):
+            for item in raw:
+                if item is not None and str(item).strip():
+                    values.add(str(item).strip())
+        elif raw is not None and str(raw).strip():
+            values.add(str(raw).strip())
+    return values
+
+
+def _filter_participants_by_worker_ids(participants: list[dict], worker_ids: set[str]) -> list[dict]:
+    if not worker_ids:
+        return []
+    return [
+        participant
+        for participant in participants
+        if _row_id_set(
+            participant,
+            "assigned_worker_id",
+            "support_worker_id",
+            "owner_user_id",
+            "created_by",
+            "_support_assignment_user_ids",
+            "_assignment_user_ids",
+            "_assigned_user_ids",
+        ) & worker_ids
+    ]
+
+
+def _filter_sessions_by_worker_ids(sessions: list[dict], worker_ids: set[str]) -> list[dict]:
+    if not worker_ids:
+        return []
+    return [
+        session
+        for session in sessions
+        if _row_id_set(
+            session,
+            "worker_id",
+            "support_worker_id",
+            "owner_user_id",
+            "created_by",
+            "user_id",
+        ) & worker_ids
+    ]
+
+
+async def _team_members(org_id: str, scoped_user_ids: set[str] | None = None) -> list[dict]:
     supabase = get_supabase_admin()
     try:
         memberships = (
@@ -171,6 +221,8 @@ async def _team_members(org_id: str) -> list[dict]:
         return []
 
     rows = [row for row in memberships.data or [] if isinstance(row, dict)]
+    if scoped_user_ids is not None:
+        rows = [row for row in rows if str(row.get("user_id") or "") in scoped_user_ids]
     user_ids = [row.get("user_id") for row in rows if row.get("user_id")]
     profiles_by_id: dict[str, dict] = {}
     if user_ids:
@@ -209,8 +261,8 @@ async def worker_dashboard(current_user: dict = Depends(get_current_user)):
     if not is_support_worker(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker dashboard access required.")
 
-    participants = await participant_service.get_all_participants(current_user)
-    sessions = await session_service.get_all_sessions(500, current_user)
+    participants = await participant_service.get_participants_list_light(current_user)
+    sessions = await session_service.get_sessions_for_dashboard(200, current_user)
     sessions_by_participant: dict[str, list[dict]] = defaultdict(list)
     for session in sessions:
         participant_id = str(session.get("participant_id") or session.get("patient_id") or "")
@@ -296,8 +348,17 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    participants = await participant_service.get_all_participants(current_user)
-    sessions = await session_service.get_all_sessions(1000, current_user)
+    participants = await participant_service.get_participants_list_light(current_user)
+    sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+    supabase = get_supabase_admin()
+    team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+    participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
+    sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
+    team_participant_ids = {
+        str(participant.get("id"))
+        for participant in participants
+        if participant.get("id")
+    }
     today = _today_iso()
     week_ago = (date.today() - timedelta(days=7)).isoformat()
     month_start = date.today().replace(day=1).isoformat()
@@ -315,7 +376,7 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
     for session in sessions:
         status_key = _score_status(session.get("compliance_score"))
         team_compliance_breakdown[status_key] = team_compliance_breakdown.get(status_key, 0) + 1
-    team = await _team_members(org_id)
+    team = await _team_members(org_id, team_worker_ids)
     active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
 
     worker_scores: dict[str, list[float]] = defaultdict(list)
@@ -352,7 +413,11 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
 
     try:
         incident_rows = await incident_service.get_all_incidents(1000, org_id=org_id, current_user=current_user)
-        incidents_this_month = [row for row in incident_rows if _date_part(row.get("incident_date")) >= month_start]
+        incidents_this_month = [
+            row for row in incident_rows
+            if _date_part(row.get("incident_date")) >= month_start
+            and str(row.get("participant_id") or "") in team_participant_ids
+        ]
     except Exception:
         incidents_this_month = []
 
@@ -415,8 +480,8 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    participants = await participant_service.get_all_participants(current_user)
-    sessions = await session_service.get_all_sessions(1000, current_user)
+    participants = await participant_service.get_participants_list_light(current_user)
+    sessions = await session_service.get_sessions_for_dashboard(400, current_user)
     team = await _team_members(org_id)
 
     today = _today_iso()
@@ -615,7 +680,7 @@ async def compliance_trend(current_user: dict = Depends(get_current_user)):
     if not (is_coordinator_role(current_user) or is_managing_director(current_user)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or Managing Director access required.")
 
-    sessions = await session_service.get_all_sessions(2000, current_user)
+    sessions = await session_service.get_sessions_for_dashboard(800, current_user)
 
     from datetime import timedelta
     cutoff = (date.today() - timedelta(days=90)).isoformat()

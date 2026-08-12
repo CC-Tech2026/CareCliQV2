@@ -11,6 +11,7 @@ import {
   getCoordinatorWorkerStats,
   getCoordinatorFlaggedSessions,
 } from "@/services/coordinatorService";
+import { getAuditEngagementPack } from "@/services/longShiftService";
 import { Button } from "@/components/ui/button";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -35,7 +36,7 @@ function TrendIcon({ score }: { score?: number | null }) {
   return <TrendingDown size={14} color="#DC2626" />;
 }
 
-type ExportTab = "summary" | "workers" | "flagged";
+type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
 export default function AuditPack() {
   const { translate, translateParams } = useAccessibility();
@@ -45,6 +46,7 @@ export default function AuditPack() {
   const flags      = useOrgQuery(["coordinator", "rp-flags"],             { queryFn: getCoordinatorRpFlags });
   const workers    = useOrgQuery(["coordinator", "worker-stats"],          { queryFn: getCoordinatorWorkerStats });
   const flagged    = useOrgQuery(["coordinator", "flagged-sessions"],      { queryFn: getCoordinatorFlaggedSessions });
+  const engagement = useOrgQuery(["coordinator", "audit-engagement"],      { queryFn: () => getAuditEngagementPack() });
 
   const handleExport = useCallback(() => {
     const report = {
@@ -59,6 +61,10 @@ export default function AuditPack() {
             non_compliant: compliance.data.non_compliant,
           }
         : null,
+      engagement_compliance_kpi: engagement.data?.engagement_compliance_kpi ?? null,
+      long_shift_engagement_log: engagement.data?.long_shift_engagement_log ?? [],
+      check16_compliance_row: engagement.data?.check16_compliance_row ?? null,
+      billable_reconciliation: engagement.data?.billable_reconciliation ?? [],
       worker_performance: (workers.data || []).map((w) => ({
         name: w.full_name,
         role: w.role,
@@ -78,10 +84,11 @@ export default function AuditPack() {
     a.download = `carecliq-audit-pack-${format(new Date(), "yyyy-MM-dd")}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [compliance.data, workers.data, flags.data, flagged.data]);
+  }, [compliance.data, workers.data, flags.data, flagged.data, engagement.data]);
 
   const tabs: { key: ExportTab; label: string }[] = useMemo(() => [
     { key: "summary",  label: translate("auditPack.tab.summary") },
+    { key: "engagement", label: "Long shift (Check 16)" },
     { key: "workers",  label: translate("auditPack.tab.workers") },
     { key: "flagged",  label: translate("auditPack.tab.flagged") },
   ], [translate]);
@@ -201,6 +208,86 @@ export default function AuditPack() {
             </div>
           )}
         </section>
+      )}
+
+      {activeTab === "engagement" && (
+        <div className="space-y-4">
+          {engagement.isLoading ? (
+            <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
+          ) : engagement.data ? (
+            <>
+              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+                <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
+                  Engagement compliance (Check 16)
+                </h2>
+                <p className="mt-1 text-xs" style={{ color: MUTED }}>
+                  {engagement.data.engagement_compliance_kpi.description}
+                </p>
+                <p className="mt-3 text-3xl font-black" style={{ color: PLUM }}>
+                  {engagement.data.engagement_compliance_kpi.pass_rate_pct}%
+                </p>
+                <p className="text-xs font-bold" style={{ color: MUTED }}>
+                  {engagement.data.engagement_compliance_kpi.passed_check16} of{" "}
+                  {engagement.data.engagement_compliance_kpi.total_long_shifts} long shifts passed
+                </p>
+                <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
+                  <p className="font-bold" style={{ color: TEXT }}>
+                    {engagement.data.check16_compliance_row.name} ({engagement.data.check16_compliance_row.rule})
+                  </p>
+                  <p style={{ color: MUTED }}>
+                    Period result: {engagement.data.check16_compliance_row.period_result} ·{" "}
+                    {engagement.data.check16_compliance_row.sessions_flagged} sessions flagged
+                  </p>
+                </div>
+              </section>
+
+              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+                <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
+                  Section 3a — Long shift engagement log
+                </h2>
+                <div className="mt-3 space-y-2">
+                  {engagement.data.long_shift_engagement_log.map((row) => (
+                    <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
+                      <p className="font-bold" style={{ color: TEXT }}>
+                        {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
+                      </p>
+                      <p style={{ color: MUTED }}>
+                        {row.shift_duration_hours}h · Check-ins {row.checkins_completed}/{row.checkins_required} ·
+                        Max gap {row.max_activity_gap_mins}m · Break {row.break_duration_mins}m · Score {row.engagement_score}
+                      </p>
+                    </div>
+                  ))}
+                  {!engagement.data.long_shift_engagement_log.length && (
+                    <p style={{ color: MUTED }}>No long shifts in this period.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+                <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
+                  Billable vs billed hours
+                </h2>
+                <div className="mt-3 space-y-2">
+                  {engagement.data.billable_reconciliation.map((row) => (
+                    <div
+                      key={row.session_id}
+                      className={`rounded-xl border p-3 text-xs ${row.flagged ? "border-amber-300 bg-amber-50" : ""}`}
+                      style={{ borderColor: row.flagged ? undefined : BORDER }}
+                    >
+                      <p className="font-bold" style={{ color: TEXT }}>{row.participant_name || "Participant"}</p>
+                      <p style={{ color: MUTED }}>
+                        Billed {row.billed_hours ?? "—"}h · Billable {row.billable_hours ?? "—"}h · Break {row.break_hours ?? 0}h
+                        {row.flagged ? " · discrepancy flagged" : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <p className="text-sm text-red-600">{translate("auditPack.loadError")}</p>
+          )}
+        </div>
       )}
 
       {/* ── Worker performance tab ── */}

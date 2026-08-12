@@ -22,9 +22,9 @@ export function useWorkerNotificationPresenter() {
   const orgId = user?.organizationId ?? "__no_org__";
   const seededRef = useRef(false);
 
-  const { data } = useOrgQuery(["notification-banners", orgId], {
+  const { data } = useOrgQuery(["notification-banners"], {
     queryFn: () => fetchNotifications({ banners_only: true }),
-    refetchInterval: isSupabaseRealtimeConfigured() ? false : 30_000,
+    refetchInterval: isSupabaseRealtimeConfigured() ? false : 60_000,
     enabled: !!user && user.role === "support_worker",
   });
 
