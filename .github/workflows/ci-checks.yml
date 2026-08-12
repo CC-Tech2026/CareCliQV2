@@ -1,0 +1,67 @@
+name: CI Checks
+
+on:
+  pull_request:
+    branches: [develop, staging, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend test suite (full)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.26"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies (uv sync — exact versions from uv.lock)
+        run: uv sync --locked
+
+      - name: Run full backend test suite
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:54321' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'test-key' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'test-anon-key' }}
+          SUPABASE_REGION_CHECK: disabled
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'test-secret-32-chars-minimum-pad' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-ant-test' }}
+        run: |
+          uv run python -m unittest discover -s backend/tests -p "test_*.py" -v
+
+  typecheck:
+    name: Workspace typecheck (frontend, mobile, api-server, scripts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack (pins pnpm to package.json's packageManager version)
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Typecheck all workspace projects
+        run: corepack pnpm run typecheck
