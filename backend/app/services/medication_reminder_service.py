@@ -53,6 +53,32 @@ async def _notify_coordinators_medication_alert(
     return sent
 
 
+def _upsert_dose_reminders(shift_id: str, checklist: list[dict[str, Any]]) -> None:
+    """One row per still-upcoming scheduled dose in this shift's checklist (Medication Safety
+    Addendum step 4) — separate from the overdue escalation below, which stays as the safety
+    net for when this proactive reminder fails to prevent a missed dose. Upserted on every
+    pass (medication_dose_reminders_unique) so repeated evaluation is idempotent."""
+    rows = [
+        {
+            "medication_id": item["medication_id"],
+            "shift_id": shift_id,
+            "scheduled_time": item["scheduled_time"],
+        }
+        for item in checklist
+        if item.get("due_status") == "upcoming"
+    ]
+    if not rows:
+        return
+    try:
+        get_supabase_admin().table("medication_dose_reminders").upsert(
+            rows, on_conflict="medication_id,shift_id,scheduled_time",
+        ).execute()
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return
+        logger.warning("Dose reminder row upsert failed for shift %s: %s", shift_id, exc)
+
+
 async def evaluate_shift_medication_reminders(shift: dict[str, Any]) -> int:
     """Escalate overdue, unlogged scheduled doses for one active shift."""
     if shift.get("status") not in ("in_progress", "clocked_in") and not shift.get("clocked_in_at"):
@@ -67,6 +93,8 @@ async def evaluate_shift_medication_reminders(shift: dict[str, Any]) -> int:
     except Exception as exc:
         logger.warning("Medication checklist eval failed for shift %s: %s", shift_id, exc)
         return 0
+
+    _upsert_dose_reminders(shift_id, checklist)
 
     sent = 0
     for item in checklist:
@@ -110,3 +138,73 @@ async def run_medication_reminder_pass() -> int:
         except Exception as exc:
             logger.warning("Medication reminder eval failed for %s: %s", shift.get("id"), exc)
     return total
+
+
+async def send_pending_dose_reminders() -> int:
+    """Proactive pre-dose nudge (Medication Safety Addendum step 4) — pushes to the assigned
+    worker's device lead_minutes before a scheduled dose, catching it before it's due rather
+    than after it's missed. Does not replace run_medication_reminder_pass above, which still
+    fires if the dose passes with nothing logged regardless; this just reduces how often that
+    escalation needs to trigger at all.
+
+    Filtered to a generous upper bound in the query (scheduled_time <= now + 60min covers any
+    realistic lead_minutes) then precisely per-row in Python, since PostgREST can't express
+    "scheduled_time - this row's own lead_minutes <= now" as a single filter."""
+    now = datetime.now(timezone.utc)
+    try:
+        result = (
+            get_supabase_admin()
+            .table("medication_dose_reminders")
+            .select("id, medication_id, shift_id, scheduled_time, lead_minutes, "
+                     "medications(name), shifts(worker_id, organization_id)")
+            .is_("reminder_sent_at", "null")
+            .lte("scheduled_time", (now + timedelta(minutes=60)).isoformat())
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return 0
+        logger.warning("Dose reminder query failed: %s", exc)
+        return 0
+
+    sent = 0
+    for row in rows:
+        scheduled_dt = datetime.fromisoformat(str(row["scheduled_time"]).replace("Z", "+00:00"))
+        lead_minutes = row.get("lead_minutes") or 15
+        if scheduled_dt - timedelta(minutes=lead_minutes) > now:
+            continue
+
+        shift = row.get("shifts") or {}
+        worker_id = shift.get("worker_id")
+        org_id = shift.get("organization_id")
+        medication_name = (row.get("medications") or {}).get("name") or "Medication"
+        if not worker_id or not org_id:
+            continue
+
+        try:
+            outcome = await notify_worker(
+                user_id=worker_id,
+                org_id=org_id,
+                event="medication_dose_reminder",
+                title=f"Upcoming dose: {medication_name}",
+                message=f"{medication_name} is due at {row['scheduled_time']}.",
+                reference_key=f"dose_reminder:{row['id']}",
+                severity="low",
+                shift_id=row.get("shift_id"),
+                alert_type="medication_dose_upcoming",
+            )
+            if outcome.get("in_app") or outcome.get("email") or outcome.get("push"):
+                sent += 1
+        except Exception as exc:
+            logger.warning("Dose reminder notify failed for %s: %s", row.get("id"), exc)
+            continue
+
+        try:
+            get_supabase_admin().table("medication_dose_reminders").update(
+                {"reminder_sent_at": now.isoformat()}
+            ).eq("id", row["id"]).execute()
+        except Exception as exc:
+            logger.warning("Dose reminder stamp failed for %s: %s", row.get("id"), exc)
+
+    return sent

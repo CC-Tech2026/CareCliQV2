@@ -87,18 +87,14 @@ export function ParticipantPlanTab({
               </div>
             </div>
           )}
-          {/* Category breakdown — core supports only */}
+          {/* Category breakdown — every category with a budget, so this reconciles with the
+              Total/Remaining rollup above (which sums across all categories, not just core). */}
           {hasCategoryBudgets && (() => {
-            const coreItems = categoryBudgets.filter(
-              (item) =>
-                item.category?.toLowerCase().startsWith("core") ||
-                item.category_label?.toLowerCase().includes("core"),
-            );
-            if (coreItems.length === 0) return null;
+            if (categoryBudgets.length === 0) return null;
             return (
             <div className="space-y-2">
               <p className="text-[10px] font-black uppercase tracking-wider text-[#6A6A77]">{translate("patients.budget.byCategory")}</p>
-              {coreItems.map((item) => (
+              {categoryBudgets.map((item) => (
                 <div
                   key={item.category || item.category_label}
                   className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}

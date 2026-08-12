@@ -291,7 +291,7 @@ function compareScheduledStart(a: ShiftWindowFields, b: ShiftWindowFields): numb
 }
 
 /** The one shift that should show Directions / Call / Clock In on My Shifts today. */
-export function getPrimaryTodayShiftId(shifts: ShiftWindowFields[], now = new Date()): string | null {
+export function getPrimaryTodayShiftId(shifts: (ShiftWindowFields & { id: string })[], now = new Date()): string | null {
   const today = shifts.filter((s) => isShiftToday(s) && s.status !== "cancelled");
 
   const active = today.find(

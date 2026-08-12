@@ -7,6 +7,7 @@ CRUD for what's prescribed, so a coordinator can maintain a participant's medica
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -188,6 +189,8 @@ class MedicationVerifyBody(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     prn_max_per_day: Optional[int] = None
+    is_high_risk: Optional[bool] = None
+    high_risk_category: Optional[str] = None
     verification_notes: Optional[str] = None
 
 
@@ -223,6 +226,46 @@ async def reject_medication(
 ):
     org_id = _require_verifier(current_user)
     return medication_service.reject_medication(medication_id, org_id, get_user_id(current_user), body.reason)
+
+
+class MedicationCorrectionBody(BaseModel):
+    error_subtype: str
+    notes: Optional[str] = None
+
+
+@router.post("/medications/{medication_id}/administrations/{administration_id}/correct", status_code=201)
+async def file_medication_correction(
+    medication_id: str,
+    administration_id: str,
+    body: MedicationCorrectionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Late-discovery correction — filed by whoever found the error (a coordinator reviewing
+    the record, another worker on a later shift), not the administering worker. Never edits
+    the original entry: inserts a new row with outcome=administration_error and
+    corrects_administration_id pointing at it, exactly like every other correction on this
+    ledger. administered_by stays the original worker's — error_discovered_by/at capture who
+    found it and when, kept separate from who actually gave the dose."""
+    org_id = _require_coordinator(current_user)
+    medication = medication_service.get_medication(medication_id, org_id)
+    original = medication_service.get_administration(administration_id, org_id)
+    if str(original.get("medication_id")) != str(medication_id):
+        raise HTTPException(status_code=422, detail="administration_id does not belong to this medication.")
+    return medication_service.create_administration(
+        medication=medication,
+        shift={"id": original.get("shift_id")},
+        organization_id=org_id,
+        administered_by=original.get("administered_by"),
+        action="administration_error",
+        scheduled_time=original.get("scheduled_time"),
+        administered_time=original.get("administered_time"),
+        dose_given=None,
+        notes=body.notes,
+        error_subtype=body.error_subtype,
+        corrects_administration_id=administration_id,
+        error_discovered_at=datetime.now(timezone.utc).isoformat(),
+        error_discovered_by=get_user_id(current_user),
+    )
 
 
 @router.get("/medications/{medication_id}/status-history")

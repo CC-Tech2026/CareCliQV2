@@ -18,10 +18,16 @@ import {
   type Medication,
   type MedicationDocument,
   type MedicationFrequencyType,
+  type MedicationHighRiskCategory,
   type MedicationRoute,
 } from "@/services/medicationService";
 
 const ROUTES: MedicationRoute[] = ["oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"];
+
+const HIGH_RISK_CATEGORIES: MedicationHighRiskCategory[] = [
+  "anti_infective", "potassium_electrolyte", "insulin",
+  "narcotic_opioid", "chemotherapy", "anticoagulant", "other",
+];
 
 const STATUS_STYLE: Record<Medication["status"], { bg: string; text: string }> = {
   draft: { bg: "#F1F5F9", text: "#64748B" },
@@ -623,6 +629,8 @@ function VerifyMedicationSheet({
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
   const [fields, setFields] = useState<DraftForm>(EMPTY_DRAFT);
+  const [isHighRisk, setIsHighRisk] = useState(false);
+  const [highRiskCategory, setHighRiskCategory] = useState<MedicationHighRiskCategory>("other");
   const [docs, setDocs] = useState<MedicationDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -641,6 +649,8 @@ function VerifyMedicationSheet({
       end_date: medication.end_date ?? "",
       prn_max_per_day: medication.prn_max_per_day != null ? String(medication.prn_max_per_day) : "",
     });
+    setIsHighRisk(!!medication.is_high_risk);
+    setHighRiskCategory(medication.high_risk_category ?? "other");
     setNotes("");
     setLoadingDocs(true);
     getMedicationDocuments(medication.id)
@@ -667,6 +677,8 @@ function VerifyMedicationSheet({
         start_date: fields.start_date || null,
         end_date: fields.end_date || null,
         prn_max_per_day: fields.prn_max_per_day ? Number(fields.prn_max_per_day) : null,
+        is_high_risk: isHighRisk,
+        high_risk_category: isHighRisk ? highRiskCategory : null,
         verification_notes: notes || null,
       });
       toast({ title: translate("participants.medications.verified") });
@@ -750,6 +762,30 @@ function VerifyMedicationSheet({
               <LabeledInput label={translate("participants.medications.prescriberContact")} value={fields.prescriber_contact} onChange={(v) => setFields((d) => ({ ...d, prescriber_contact: v }))} />
               <LabeledInput label={translate("participants.medications.startDate")} type="date" value={fields.start_date} onChange={(v) => setFields((d) => ({ ...d, start_date: v }))} />
               <LabeledInput label={translate("participants.medications.endDate")} type="date" value={fields.end_date} onChange={(v) => setFields((d) => ({ ...d, end_date: v }))} />
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-cc-border p-3">
+              <label className="flex items-center gap-2 text-[13px] font-bold text-cc-text">
+                <input
+                  type="checkbox"
+                  checked={isHighRisk}
+                  onChange={(e) => setIsHighRisk(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                {translate("participants.medications.highRisk")}
+              </label>
+              {isHighRisk && (
+                <select
+                  className="cc-field h-9 w-full rounded-md px-2 text-sm"
+                  value={highRiskCategory}
+                  onChange={(e) => setHighRiskCategory(e.target.value as MedicationHighRiskCategory)}
+                >
+                  {HIGH_RISK_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{translate(`participants.medications.highRiskCategory.${c}`)}</option>
+                  ))}
+                </select>
+              )}
+              <p className="text-[11px] text-cc-muted">{translate("participants.medications.highRiskHint")}</p>
             </div>
 
             <div className="space-y-1">

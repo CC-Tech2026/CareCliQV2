@@ -1,19 +1,26 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock3, FileText, GitCommitHorizontal, Pill, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingBlock, EmptyState, StatusBadge } from "@/pages/compliance";
 import {
+  fileMedicationCorrection,
   getCoordinatorMedications,
   getMedicationAuditTimeline,
   getMedicationReviewItems,
   getParticipantReliabilityFlags,
   type MedicationAdministrationRecord,
+  type MedicationErrorSubtype,
   type MedicationStatus,
   type OrgMedication,
 } from "@/services/medicationService";
+
+const ERROR_SUBTYPES: MedicationErrorSubtype[] = ["wrong_medication", "wrong_dose", "wrong_participant", "wrong_route", "other"];
 
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
@@ -36,6 +43,7 @@ const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["outcome"], { bg
   refused: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   missed: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   withheld: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  administration_error: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
 };
 
 export function MedicationRegisterPanel() {
@@ -126,6 +134,7 @@ export function MedicationRegisterPanel() {
                   </p>
                   <StatusBadge label={translate(`participants.medications.status.${med.status}`)} tone={STATUS_TONE[med.status]} />
                   {med.is_prn && <StatusBadge label={translate("participants.medications.prn")} tone="pu" />}
+                  {med.is_high_risk && <StatusBadge label={translate("compliance.centre.medications.highRiskBadge")} tone="rd" />}
                 </div>
                 <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
                   {med.participant_name || translate("common.participant")}
@@ -142,9 +151,26 @@ export function MedicationRegisterPanel() {
   );
 }
 
-function AdministrationEventCard({ admin }: { admin: MedicationAdministrationRecord }) {
+function AdministrationEventCard({ admin, medicationId }: { admin: MedicationAdministrationRecord; medicationId: string }) {
   const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const style = ADMIN_STATUS_STYLE[admin.outcome];
+  const [correcting, setCorrecting] = useState(false);
+  const [errorSubtype, setErrorSubtype] = useState<MedicationErrorSubtype>("other");
+  const [notes, setNotes] = useState("");
+
+  const correctionMutation = useMutation({
+    mutationFn: () => fileMedicationCorrection(medicationId, admin.id, { error_subtype: errorSubtype, notes: notes || undefined }),
+    onSuccess: () => {
+      toast({ title: translate("compliance.centre.medications.correctionSubmitted") });
+      void qc.invalidateQueries({ queryKey: ["compliance-centre", "medication-audit-timeline", medicationId] });
+      setCorrecting(false);
+      setNotes("");
+    },
+    onError: (err: Error) => toast({ title: translate("common.error"), description: err.message, variant: "destructive" }),
+  });
+
   return (
     <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between gap-2">
@@ -177,7 +203,78 @@ function AdministrationEventCard({ admin }: { admin: MedicationAdministrationRec
           <span className="font-bold">{translate("compliance.centre.medications.effect")}:</span> {admin.prn_effect_observed}
         </p>
       )}
+      {admin.outcome === "administration_error" && (
+        <div className="mt-1.5 space-y-1 rounded-lg border p-2" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>
+          {admin.error_subtype && (
+            <p className="text-[12px] font-bold" style={{ color: "#DC2626" }}>
+              {translate(`compliance.centre.medications.errorSubtype.${admin.error_subtype}`)}
+            </p>
+          )}
+          {admin.corrects_administration_id && (
+            <p className="text-[11px]" style={{ color: MUTED }}>
+              {translate("compliance.centre.medications.discoveredLate")}
+              {admin.error_discovered_at ? ` — ${new Date(admin.error_discovered_at).toLocaleString()}` : ""}. {translate("compliance.centre.medications.correctsEntry")}.
+            </p>
+          )}
+        </div>
+      )}
+      {admin.verification_photo_url && (
+        <a
+          href={admin.verification_photo_url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1.5 inline-block text-[11px] font-bold underline"
+          style={{ color: PLUM }}
+        >
+          {translate("compliance.centre.medications.viewVerificationPhoto")}
+        </a>
+      )}
       {admin.notes && <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{admin.notes}</p>}
+
+      {admin.outcome !== "administration_error" && (
+        correcting ? (
+          <div className="mt-2 space-y-2 rounded-lg border p-2" style={{ borderColor: BORDER }}>
+            <p className="text-[11px]" style={{ color: MUTED }}>{translate("compliance.centre.medications.fileCorrectionHint")}</p>
+            <select
+              className="cc-field h-8 w-full rounded-md px-2 text-xs"
+              value={errorSubtype}
+              onChange={(e) => setErrorSubtype(e.target.value as MedicationErrorSubtype)}
+            >
+              {ERROR_SUBTYPES.map((s) => (
+                <option key={s} value={s}>{translate(`compliance.centre.medications.errorSubtype.${s}`)}</option>
+              ))}
+            </select>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={errorSubtype === "other" ? translate("participants.medications.verificationNotesPlaceholder") : undefined}
+              className="h-8 text-xs"
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={correctionMutation.isPending || (errorSubtype === "other" && !notes.trim())}
+                onClick={() => correctionMutation.mutate()}
+              >
+                {translate("compliance.centre.medications.fileCorrection")}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setCorrecting(false)}>
+                {translate("common.cancel")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCorrecting(true)}
+            className="mt-1.5 text-[11px] font-bold underline"
+            style={{ color: MUTED }}
+          >
+            {translate("compliance.centre.medications.fileCorrection")}
+          </button>
+        )
+      )}
     </div>
   );
 }
@@ -219,7 +316,7 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
               <div className="space-y-2">
                 {data.timeline.map((event, idx) => {
                   if (event.event_type === "administration") {
-                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} />;
+                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} medicationId={data.medication.id} />;
                   }
                   if (event.event_type === "document_uploaded") {
                     const doc = event.document;

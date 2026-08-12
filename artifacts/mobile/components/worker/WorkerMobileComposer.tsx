@@ -26,7 +26,7 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
-import { syncSessionNotes, translateNoteToEnglish, transcribeSessionAudio } from "@/lib/worker-api";
+import { syncSessionNotes, translateNoteToEnglish, transcribeSessionAudio, uploadSessionAttachment } from "@/lib/worker-api";
 import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
 const LANGUAGE_OPTIONS = [
@@ -289,6 +289,7 @@ export function WorkerMobileComposer({
     content: string,
     noteType: SessionNoteType = "text",
     fileName?: string,
+    attachmentUrls?: string[],
   ) => {
     if (!sessionId || !content.trim() || disabled) return;
 
@@ -306,6 +307,7 @@ export function WorkerMobileComposer({
       auto_saved_at: now,
       note_type: noteType,
       file_name: fileName,
+      attachment_urls: attachmentUrls,
       synced: false,
     };
 
@@ -406,10 +408,43 @@ export function WorkerMobileComposer({
     }
   };
 
+  const uploadAndSaveAttachment = async (
+    asset: { uri: string; fileName?: string | null; mimeType?: string | null },
+    noteType: SessionNoteType,
+    fallbackName: string,
+  ) => {
+    if (!sessionId) return;
+    const name = buildAttachmentFileName({
+      participantName,
+      taskTitle: taskLabel,
+      originalName: asset.fileName ?? fallbackName,
+    });
+    setSubmitting(true);
+    try {
+      const uploaded = await uploadSessionAttachment(sessionId, {
+        uri: asset.uri,
+        name,
+        type: asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream"),
+      });
+      await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
+    } catch (err) {
+      Alert.alert(
+        "Upload failed",
+        err instanceof Error ? err.message : "Could not upload the attachment. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAttach = async () => {
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before attaching a file.");
+      return;
+    }
+    if (!isOnline) {
+      Alert.alert("You're offline", "Attachments need a connection to upload. Try again once you're back online.");
       return;
     }
     try {
@@ -419,12 +454,7 @@ export function WorkerMobileComposer({
       });
       const asset = result.canceled ? null : result.assets[0];
       if (asset) {
-        const name = buildAttachmentFileName({
-          participantName,
-          taskTitle: taskLabel,
-          originalName: asset.fileName ?? "attachment.jpg",
-        });
-        await saveNote(`[Attachment: ${name}]`, "file", name);
+        await uploadAndSaveAttachment(asset, "file", "attachment.jpg");
       }
     } catch (err) {
       Alert.alert(
@@ -438,6 +468,10 @@ export function WorkerMobileComposer({
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before taking a photo note.");
+      return;
+    }
+    if (!isOnline) {
+      Alert.alert("You're offline", "Photos need a connection to upload. Try again once you're back online.");
       return;
     }
     try {
@@ -457,12 +491,7 @@ export function WorkerMobileComposer({
       });
       const asset = result.canceled ? null : result.assets[0];
       if (asset) {
-        const name = buildAttachmentFileName({
-          participantName,
-          taskTitle: taskLabel,
-          originalName: asset.fileName ?? "photo.jpg",
-        });
-        await saveNote(`[Attachment: ${name}]`, "photo", name);
+        await uploadAndSaveAttachment(asset, "photo", "photo.jpg");
       }
     } catch (err) {
       Alert.alert(

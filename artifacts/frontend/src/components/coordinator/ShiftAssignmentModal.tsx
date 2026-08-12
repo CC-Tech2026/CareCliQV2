@@ -33,8 +33,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent,
-} from "@/components/ui/dialog";
+  Sheet, SheetContent, SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
@@ -324,21 +324,22 @@ export function ShiftAssignmentModal({
     : translate("coordinator.shiftAssign.credentialsValid");
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-lg rounded-2xl p-0 overflow-hidden gap-0"
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg flex flex-col p-0 gap-0"
         style={{ borderColor: BORDER }}
       >
         {/* Header */}
-        <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.shiftAssign.title")}</h2>
+        <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <SheetTitle className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.shiftAssign.title")}</SheetTitle>
           <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
             {translate("coordinator.shiftAssign.subtitle")}
           </p>
         </div>
 
         {/* Scrollable body */}
-        <div className="max-h-[68vh] overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {/* Worker */}
           <div className="space-y-2">
             <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
@@ -681,7 +682,7 @@ export function ShiftAssignmentModal({
 
         {/* Footer */}
         <div
-          className="flex items-center justify-end gap-3 px-6 py-4"
+          className="flex items-center justify-end gap-3 px-6 py-4 shrink-0"
           style={{ borderTop: `1px solid ${BORDER}` }}
         >
           <Button
@@ -711,7 +712,7 @@ export function ShiftAssignmentModal({
             )}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

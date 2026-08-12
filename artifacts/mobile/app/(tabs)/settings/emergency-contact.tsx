@@ -31,8 +31,11 @@ function parseEmergency(raw: WorkerEmergencyContact | string | null | undefined)
         };
       }
     } catch {
-      return { name: raw, phone: "", relationship: "" };
+      // fall through to the string fallback below
     }
+    // Either JSON.parse threw, or it parsed to something that wasn't an object
+    // (e.g. a bare number/string) — treat the original string as the name either way.
+    return { name: raw, phone: "", relationship: "" };
   }
   return {
     name: raw.name ?? "",

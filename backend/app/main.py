@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
+from .middleware.security_headers import SecurityHeadersMiddleware
 from .services import migration_state
 from .services.email_queue import start_email_queue, stop_email_queue
 from .services.notification_scheduler import start_notification_scheduler, stop_notification_scheduler
@@ -194,6 +195,7 @@ app.add_middleware(
 # CCQ-104: attach organisation_id to every request from the JWT claim.
 # Runs after CORS so preflight OPTIONS requests pass through unaffected.
 app.add_middleware(OrgContextMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")

@@ -21,6 +21,7 @@ from ..services import (
     evidence_upload_service,
     funding_service,
     goals_service,
+    medication_document_service,
     medication_service,
     participant_service,
     session_service,
@@ -782,16 +783,55 @@ async def worker_shift_medication_checklist(shift_id: str, current_user: dict = 
     return {"checklist": medication_service.build_shift_medication_checklist(shift, org_id)}
 
 
+@router.post("/shifts/{shift_id}/medications/{medication_id}/verification-photo", status_code=status.HTTP_201_CREATED)
+async def worker_upload_medication_verification_photo(
+    shift_id: str,
+    medication_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Store the point-of-administration photo required for a high-risk medication before the
+    administration outcome can be submitted (Medication Safety Addendum step 3). Returns the
+    stored file's URL — pass it as verification_photo_url on the administration POST."""
+    _require_worker(current_user)
+    shift = _require_shift_owner(shift_id, current_user)
+    org_id = get_user_organization_id(current_user)
+    medication = medication_service.get_medication(medication_id, org_id)
+    if str(medication.get("participant_id")) != str(shift.get("participant_id")):
+        raise HTTPException(status_code=422, detail="Medication does not belong to this shift's participant.")
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=422, detail="File is empty.")
+    result = await medication_document_service.upload_document(
+        medication["participant_id"],
+        org_id,
+        get_user_id(current_user),
+        file_bytes=contents,
+        filename=file.filename or "verification-photo",
+        content_type=file.content_type or "",
+        document_type="verification_photo",
+        medication_id=medication_id,
+        skip_extraction=True,
+    )
+    return {"url": result["document"]["file_url"]}
+
+
 class MedicationAdministrationBody(BaseModel):
     scheduled_time: Optional[str] = None
     administered_time: Optional[str] = None
-    action: Literal["given", "refused", "missed", "withheld"]
+    action: Literal["given", "refused", "missed", "withheld", "administration_error"]
     reason_code: Optional[str] = None
     directed_by: Optional[str] = None
     dose_given: Optional[str] = None
     notes: Optional[str] = None
     prn_reason: Optional[str] = None
     voice_captured: bool = False
+    error_subtype: Optional[str] = None
+    verification_photo_url: Optional[str] = None
+    # Late-discovery correction only: references the original given_*/administration_error row
+    # this one corrects. Left null for an immediate self-reported error (that's a standalone row).
+    corrects_administration_id: Optional[str] = None
+    error_discovered_at: Optional[str] = None
 
 
 @router.post("/shifts/{shift_id}/medications/{medication_id}/administrations", status_code=status.HTTP_201_CREATED)
@@ -803,7 +843,9 @@ async def worker_log_medication_administration(
 ):
     """Log a scheduled-dose or PRN administration event during a shift (append-only ledger).
     given_on_time/given_late/given_early is classified automatically from the timestamps —
-    the worker only picks the base action (given/refused/missed/withheld)."""
+    the worker only picks the base action (given/refused/missed/withheld/administration_error).
+    Pass corrects_administration_id to log a late-discovered error against someone else's
+    earlier entry instead of your own in-the-moment one — the original row is never edited."""
     _require_worker(current_user)
     shift = _require_shift_owner(shift_id, current_user)
     org_id = get_user_organization_id(current_user)
@@ -811,6 +853,10 @@ async def worker_log_medication_administration(
     medication = medication_service.get_medication(medication_id, org_id)
     if str(medication.get("participant_id")) != str(shift.get("participant_id")):
         raise HTTPException(status_code=422, detail="Medication does not belong to this shift's participant.")
+    if body.corrects_administration_id:
+        original = medication_service.get_administration(body.corrects_administration_id, org_id)
+        if str(original.get("medication_id")) != str(medication_id) or str(original.get("shift_id")) != str(shift_id):
+            raise HTTPException(status_code=422, detail="corrects_administration_id must reference an administration for this same medication and shift.")
     return medication_service.create_administration(
         medication=medication,
         shift=shift,
@@ -825,6 +871,11 @@ async def worker_log_medication_administration(
         notes=body.notes,
         prn_reason=body.prn_reason,
         voice_captured=body.voice_captured,
+        error_subtype=body.error_subtype,
+        verification_photo_url=body.verification_photo_url,
+        corrects_administration_id=body.corrects_administration_id,
+        error_discovered_at=body.error_discovered_at,
+        error_discovered_by=worker_id if body.corrects_administration_id else None,
     )
 
 
