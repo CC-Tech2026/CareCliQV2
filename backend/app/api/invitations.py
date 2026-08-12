@@ -29,7 +29,7 @@ from ..services.supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
-COORDINATOR_ROLES = frozenset({"support_coordinator"})
+COORDINATOR_ROLES = frozenset({"support_coordinator", "managing_director"})
 VALID_INVITE_ROLES = ("support_worker", "support_coordinator")
 
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
@@ -45,6 +45,7 @@ _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
 class InviteCreateRequest(BaseModel):
     email: str
     role: str = "support_worker"
+    onboarding_id: str | None = None
 
 
 class InviteAcceptRequest(BaseModel):
@@ -105,7 +106,7 @@ async def create_invite(
     """Create an invitation for a new staff member (support coordinator only)."""
     user_role = current_user.get("role", "")
     if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Only support coordinators can send invitations")
+        raise HTTPException(status_code=403, detail="Only support coordinators and managing directors can send invitations")
     require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
@@ -120,6 +121,17 @@ async def create_invite(
             status_code=400,
             detail=f"Invalid role. Must be one of: {', '.join(VALID_INVITE_ROLES)}",
         )
+
+    if body.onboarding_id:
+        if user_role != "managing_director":
+            raise HTTPException(status_code=403, detail="Only managing directors can send new-hire login invites.")
+        from ..services import employee_onboarding_service as onboarding_svc
+        hire = onboarding_svc.get_hire(body.onboarding_id, org_id)
+        if hire["status"] != "signed":
+            raise HTTPException(
+                status_code=409,
+                detail="This hire's offer letter and service agreement must be signed by both sides before sending the login invite.",
+            )
 
     token = secrets.token_hex(32)
     expires_at = (_now_utc() + timedelta(days=7)).isoformat()
@@ -157,12 +169,19 @@ async def create_invite(
             "token": token,
             "short_code": short_code,
             "expires_at": expires_at,
+            "onboarding_id": body.onboarding_id,
         }).execute()
 
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to create invitation")
 
         invite = result.data[0]
+
+        if body.onboarding_id:
+            supabase.table("employee_onboarding").update({
+                "status": "invited",
+                "invitation_id": invite["id"],
+            }).eq("id", body.onboarding_id).execute()
         invite_url = f"/accept-invite?token={token}"
         full_invite_url = f"{settings.frontend_base_url.rstrip('/')}{invite_url}"
         organization_name = None
@@ -728,7 +747,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # ------------------------------------------------------------------
     result = (
         supabase.table("invitations")
-        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by")
+        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by, onboarding_id")
         .eq("token", token)
         .execute()
     )
@@ -822,6 +841,17 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         }).eq("id", invite["id"]).execute()
     except Exception as e:
         logger.warning("accept_invite mark-accepted error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
+    # 5b. If this invite came from a signed new-hire record, hand off its
+    #     offer letter / service agreement onto the new worker's profile.
+    # ------------------------------------------------------------------
+    if invite.get("onboarding_id"):
+        try:
+            from ..services import employee_onboarding_service as onboarding_svc
+            onboarding_svc.migrate_documents_to_worker(invite["onboarding_id"], user_id, org_id)
+        except Exception as e:
+            logger.warning("accept_invite onboarding document handoff error (non-critical): %s", e)
 
     # ------------------------------------------------------------------
     # 6. Issue access token — invitee is immediately signed in

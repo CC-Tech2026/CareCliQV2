@@ -158,6 +158,114 @@ def send_invitation_email(
     send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
 
 
+def queue_onboarding_sign_email(
+    *,
+    to_email: str,
+    full_name: str,
+    sign_url: str,
+    organization_name: str | None,
+    document_titles: list[str],
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"onboarding-sign:{to_email}",
+        send=lambda: _send_onboarding_sign_email_safe(
+            to_email=to_email,
+            full_name=full_name,
+            sign_url=sign_url,
+            organization_name=organization_name,
+            document_titles=document_titles,
+        ),
+    )
+
+
+def _send_onboarding_sign_email_safe(
+    *,
+    to_email: str,
+    full_name: str,
+    sign_url: str,
+    organization_name: str | None,
+    document_titles: list[str],
+) -> None:
+    try:
+        send_onboarding_sign_email(
+            to_email=to_email,
+            full_name=full_name,
+            sign_url=sign_url,
+            organization_name=organization_name,
+            document_titles=document_titles,
+        )
+    except Exception as exc:
+        logger.error("Onboarding sign-request email failed for %s: %s", to_email, exc)
+
+
+def send_onboarding_sign_email(
+    *,
+    to_email: str,
+    full_name: str,
+    sign_url: str,
+    organization_name: str | None,
+    document_titles: list[str],
+) -> None:
+    org_label = organization_name or "CareCliQ"
+    subject = f"Your offer from {org_label} — please review and sign"
+    doc_list = "\n".join(f"  - {title}" for title in document_titles) or "  - Onboarding documents"
+    text_body = (
+        f"Hi {full_name},\n\n"
+        f"Your offer letter and service agreement from {org_label} are ready for your review and signature:\n"
+        f"{doc_list}\n\n"
+        f"Review and sign here:\n{sign_url}\n\n"
+        "Once you've signed, you'll receive a separate invite to set up your CareCliQ login."
+    )
+    html_body = _build_onboarding_sign_html(
+        full_name=full_name,
+        sign_url=sign_url,
+        organization_name=org_label,
+        document_titles=document_titles,
+    )
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+
+
+def _build_onboarding_sign_html(
+    *,
+    full_name: str,
+    sign_url: str,
+    organization_name: str,
+    document_titles: list[str],
+) -> str:
+    safe_name = escape(full_name)
+    safe_org = escape(organization_name)
+    safe_url = escape(sign_url, quote=True)
+    doc_items = "".join(
+        f'<li style="margin:0 0 6px;">{escape(title)}</li>' for title in document_titles
+    ) or '<li style="margin:0 0 6px;">Onboarding documents</li>'
+    return f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">Your offer from {safe_org}</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Hi {safe_name}, please review and sign the following before we get you set up:
+        </p>
+        <ul style="font-size:15px;line-height:1.6;margin:0 0 24px;padding-left:20px;color:#1E1640;">
+          {doc_items}
+        </ul>
+        <a href="{safe_url}" style="display:inline-block;background:#F03060;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
+          Review &amp; sign
+        </a>
+        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:24px 0 0;">
+          Once you've signed, you'll receive a separate email with an invite to set up your CareCliQ login.
+          If the button does not work, copy this URL into your browser:<br>
+          <span style="word-break:break-all;">{safe_url}</span>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
+
 def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
     if not settings.email_enabled:
         logger.info("Email disabled; skipping outbound email to %s", to_email)

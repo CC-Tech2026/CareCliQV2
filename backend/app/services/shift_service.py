@@ -1160,7 +1160,8 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
         "medications, medical_alerts, current_conditions, "
         "case_manager_name, case_manager_phone, likes_dislikes, sensory_preferences, "
         "cultural_preferences, preferred_activities, communication_guidance, "
-        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes"
+        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes, "
+        "gp_name, gp_phone, gp_practice"
     )
     try:
         resp = (
@@ -1202,6 +1203,11 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
             "case_manager": {
                 "name": row.get("case_manager_name"),
                 "phone": row.get("case_manager_phone"),
+            },
+            "gp": {
+                "name": row.get("gp_name"),
+                "phone": row.get("gp_phone"),
+                "practice": row.get("gp_practice"),
             },
             "primary_disability": row.get("primary_disability"),
             "medications": row.get("medications"),

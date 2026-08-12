@@ -30,9 +30,11 @@ app.use(cors());
 
 const PYTHON_BACKEND = "http://localhost:8000";
 
-// Routes served locally by this gateway (backed by the Replit database).
-// Everything else under /api is proxied to the Python backend.
-const LOCAL_PREFIXES = ["/api/settings", "/api/healthz"];
+// Routes served locally by this gateway. Everything else under /api is
+// proxied to the Python backend (including /api/settings — practitioner
+// settings live in Supabase via backend/app/api/settings.py, not a separate
+// database).
+const LOCAL_PREFIXES = ["/api/healthz"];
 
 const isLocalPath = (path: string): boolean =>
   LOCAL_PREFIXES.some(

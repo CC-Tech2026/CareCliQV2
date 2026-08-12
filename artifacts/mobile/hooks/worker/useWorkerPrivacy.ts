@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useAuth } from "@/context/AuthContext";
 import {
   getPrivacyOverview,
   listPrivacyPolicyVersions,
@@ -11,18 +12,22 @@ import {
 const PRIVACY_KEY = ["worker", "privacy"] as const;
 
 export function usePrivacyOverview() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...PRIVACY_KEY, "overview"],
     queryFn: getPrivacyOverview,
     staleTime: 30_000,
+    enabled: isAuthenticated,
   });
 }
 
 export function usePrivacyPolicyVersions() {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: [...PRIVACY_KEY, "policy-versions"],
     queryFn: listPrivacyPolicyVersions,
     staleTime: 60_000,
+    enabled: isAuthenticated,
   });
 }
 

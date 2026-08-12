@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useOffline } from "@/context/OfflineContext";
 import { useT } from "@/context/PreferencesContext";
 import { useWorkerShiftsInfinite } from "@/hooks/worker/useWorkerShifts";
@@ -55,6 +56,7 @@ function ShiftSkeleton() {
 
 export default function MyShiftsScreen() {
   const colors = useColors();
+  const isDark = colors.scheme === "dark";
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -168,7 +170,7 @@ export default function MyShiftsScreen() {
         <Feather name="chevron-right" size={15} color={colors.primary} />
       </Pressable>
 
-      <View style={[styles.segmentTrack, { backgroundColor: colors.soft }]}>
+      <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
         {(
           [
             ["today", t("shifts.filter.today")],
@@ -181,14 +183,17 @@ export default function MyShiftsScreen() {
             <Pressable
               key={key}
               onPress={() => setSegment(key)}
-              style={[styles.segmentBtn, active && { backgroundColor: colors.primary }]}
+              style={[
+                styles.segmentBtn,
+                { backgroundColor: active ? colors.primary : colors.soft },
+              ]}
             >
               <Text
                 style={[
                   styles.segmentText,
                   {
-                    color: active ? "#FFFFFF" : colors.primary,
-                    fontFamily: "Inter_600SemiBold",
+                    color: active ? colors.primaryForeground : colors.mutedForeground,
+                    fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
                   },
                 ]}
               >
@@ -279,7 +284,7 @@ export default function MyShiftsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { padding: 16, gap: 12 },
-  listHeader: { gap: 12, marginBottom: 4 },
+  listHeader: { gap: 12 },
   availBanner: {
     borderRadius: 12,
     paddingVertical: 11,
@@ -291,15 +296,15 @@ const styles = StyleSheet.create({
   availBannerText: { flex: 1, fontSize: 12.5 },
   segmentTrack: {
     flexDirection: "row",
-    borderRadius: 999,
-    padding: 3,
+    gap: 3,
   },
   segmentBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   segmentText: { fontSize: 12 },
   skeleton: {

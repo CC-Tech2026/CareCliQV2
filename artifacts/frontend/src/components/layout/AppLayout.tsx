@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus,
+  Sun, Moon, Search, Car, HelpCircle, Plus, UserPlus,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -91,10 +91,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Safety & Resources",
       items: [
-        { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
-        { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
-        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
-        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
+        { href: "/my-compliance",   label: "My Compliance", icon: ShieldCheck   },
+        { href: "/worker/training", label: "Training",      icon: GraduationCap },
+        { href: "/incidents",       label: "Incidents",     icon: AlertTriangle },
+        { href: "/credentials",     label: "Credentials",   icon: BadgeCheck    },
+        { href: "/toolkit",         label: "Toolkit",       icon: Wrench        },
       ],
     },
   ],
@@ -105,6 +106,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/md/executive",  label: "Executive",  icon: BarChart2    },
         { href: "/md/staff",      label: "Staff",      icon: UserCheck    },
+        { href: "/onboard-employee", label: "Onboard Employee", icon: UserPlus },
         { href: "/md/compliance", label: "Compliance", icon: ShieldCheck  },
         { href: "/md/financial",  label: "Financial",  icon: DollarSign   },
         { href: "/md/onboarding", label: "Onboarding", icon: GraduationCap},
@@ -192,6 +194,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Hub",                 description: "Managing Director overview",               href: "/hub",                             icon: LayoutDashboard, group: "pages",    roles: ["managing_director"] },
   { label: "Participants",        description: "Profiles, plans & NDIS goals",            href: "/patients",                        icon: UserRound,       group: "pages",    roles: ["support_coordinator"] },
   { label: "Team",                description: "Support workers & staff management",       href: "/team",                            icon: Users,           group: "pages",    roles: ["support_coordinator"] },
+  { label: "Onboard Employee",    description: "New hires: offer, agreement, sign & invite", href: "/onboard-employee",              icon: UserPlus,        group: "pages",    roles: ["managing_director"] },
   { label: "Schedule",            description: "Roster, availability & shift management",  href: "/coordinator/rostering",           icon: CalendarDays,    group: "pages",    roles: ["support_coordinator"] },
   { label: "Quality & Compliance",description: "Audit readiness & compliance tracking",    href: "/compliance",                      icon: ShieldCheck,     group: "pages",    roles: ["support_coordinator"] },
   { label: "Invoices & Billing",  description: "NDIS invoicing & revenue reports",         href: "/billing",                         icon: CreditCard,      group: "pages",    roles: ["support_coordinator"] },
@@ -200,6 +203,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "My Clients",          description: "Your assigned participants",              href: "/my-clients",                      icon: UserRound,       group: "pages",    roles: ["support_worker"] },
   { label: "My Availability",     description: "Set working hours & blackout dates",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
   { label: "My Compliance",       description: "Your training & credential status",       href: "/my-compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["support_worker"] },
+  { label: "Training",            description: "Assigned training modules & certifications", href: "/worker/training",              icon: GraduationCap,   group: "pages",    roles: ["support_worker"] },
   { label: "Credentials",         description: "Manage certifications & licences",        href: "/credentials",                     icon: BadgeCheck,      group: "pages",    roles: ["support_worker"] },
   { label: "Incidents",           description: "Incident reports & history",              href: "/incidents",                       icon: AlertTriangle,   group: "pages",    roles: ["support_coordinator", "support_worker"] },
   { label: "Toolkit",             description: "Resources & reference materials",         href: "/toolkit",                         icon: Wrench,          group: "pages",    roles: ["support_coordinator", "support_worker"] },
@@ -619,6 +623,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   );
   const incidentOpenCount = incidentStats?.open ?? 0;
   const isWorker    = userRole === "support_worker";
+  // Quill chatbox is scoped to coordinators and managing directors only.
+  const showQuillAssistant = userRole === "support_coordinator" || userRole === "managing_director";
   const topbarAlertHref =
     userRole === "support_worker"    ? "/my-compliance" :
     userRole === "managing_director" ? "/md/compliance"  :
@@ -984,7 +990,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
         <SidebarContents {...sharedProps} isDrawer collapsed={false} onNav={() => setDrawerOpen(false)} />
       </aside>
 
-      <FloatingAiAssistant />
+      {showQuillAssistant && <FloatingAiAssistant />}
     </div>
   );
 }

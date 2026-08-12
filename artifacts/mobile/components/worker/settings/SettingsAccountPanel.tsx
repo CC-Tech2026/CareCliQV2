@@ -120,15 +120,17 @@ export function SettingsAccountPanel({ bottomInset = 24 }: Props) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const credentialsQuery = useQuery({
     queryKey: ["credentials", "me"],
     queryFn: listMyCredentials,
+    enabled: isAuthenticated,
   });
   const profileQuery = useQuery({
     queryKey: ["users", "me"],
     queryFn: getWorkerProfile,
+    enabled: isAuthenticated,
   });
 
   const credentials = credentialsQuery.data ?? [];
@@ -233,12 +235,6 @@ export function SettingsAccountPanel({ bottomInset = 24 }: Props) {
             icon="edit-3"
             label={t("settings.signature.label")}
             onPress={() => router.push("/(tabs)/settings/signature" as never)}
-            showDivider
-          />
-          <DetailRow
-            icon="briefcase"
-            label={t("settings.practitioner.label")}
-            onPress={() => router.push("/(tabs)/settings/practitioner" as never)}
             showDivider={false}
           />
         </View>

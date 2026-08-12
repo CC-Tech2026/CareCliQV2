@@ -28,6 +28,10 @@ NOTIFICATION_EVENTS = (
     "task_reminder",
     "safety_alert",
     "invite_request",
+    "training_recommended",
+    "training_completion_review",
+    "medication_alert",
+    "incident_notification_alert",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -42,6 +46,10 @@ EVENT_ALERT_TYPES = {
     "task_reminder": "task_reminder",
     "safety_alert": "safety_alert",
     "invite_request": "invite_request",
+    "training_recommended": "training_recommended",
+    "training_completion_review": "training_completion_review",
+    "medication_alert": "medication_alert",
+    "incident_notification_alert": "incident_notification_alert",
 }
 
 

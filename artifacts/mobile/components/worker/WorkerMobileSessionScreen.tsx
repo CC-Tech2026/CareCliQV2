@@ -15,6 +15,8 @@ import { WorkerMobileComposer } from "@/components/worker/WorkerMobileComposer";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
 import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
+import { WorkerMobileMedicationChecklist } from "@/components/worker/WorkerMobileMedicationChecklist";
+import { WorkerMobilePrnMedications } from "@/components/worker/WorkerMobilePrnMedications";
 import { WorkerMobileTaskList } from "@/components/worker/WorkerMobileTaskList";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
@@ -263,6 +265,9 @@ export function WorkerMobileSessionScreen({
             disabled={disabled || busy}
           />
         </View>
+
+        <WorkerMobileMedicationChecklist shiftId={shiftId} disabled={disabled || busy} />
+        <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled || busy} />
 
         {(localSessionNotes.length > 0 || compliance.score > 0) && (
           <View style={styles.scoreWrap}>

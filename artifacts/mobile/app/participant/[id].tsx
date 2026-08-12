@@ -202,14 +202,6 @@ export default function ParticipantDetailScreen() {
     .slice(0, 2)
     .toUpperCase();
 
-  const budgetPct =
-    participant.total_budget && participant.total_budget > 0
-      ? Math.min(
-          ((participant.used_budget ?? 0) / participant.total_budget) * 100,
-          100
-        )
-      : null;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View
@@ -263,32 +255,6 @@ export default function ParticipantDetailScreen() {
           <Text style={[styles.heroNdis, { fontFamily: "Inter_400Regular" }]}>
             NDIS {participant.ndis_number}
           </Text>
-          <View
-            style={[
-              styles.planStatusBadge,
-              {
-                backgroundColor:
-                  participant.plan_status === "active"
-                    ? "#22C55E30"
-                    : colors.destructive + "30",
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.planStatusText,
-                {
-                  color:
-                    participant.plan_status === "active"
-                      ? "#22C55E"
-                      : colors.destructive,
-                  fontFamily: "Inter_600SemiBold",
-                },
-              ]}
-            >
-              {participant.plan_status.toUpperCase()}
-            </Text>
-          </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -298,91 +264,14 @@ export default function ParticipantDetailScreen() {
               { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
             ]}
           >
-            Plan Overview
+            Details
           </Text>
-          <InfoRow label="Plan Start" value={formatDate(participant.plan_start_date)} />
-          <InfoRow label="Plan End" value={formatDate(participant.plan_end_date)} />
           {participant.primary_disability && (
             <InfoRow label="Primary Disability" value={participant.primary_disability} />
           )}
           {participant.email && <InfoRow label="Email" value={participant.email} />}
           {participant.phone && <InfoRow label="Phone" value={participant.phone} />}
         </View>
-
-        {budgetPct !== null && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text
-              style={[
-                styles.cardTitle,
-                { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
-              ]}
-            >
-              NDIS Budget
-            </Text>
-            <View style={styles.budgetNumbers}>
-              <View>
-                <Text
-                  style={[
-                    styles.budgetAmount,
-                    { color: colors.foreground, fontFamily: "Inter_700Bold" },
-                  ]}
-                >
-                  ${(participant.used_budget ?? 0).toLocaleString("en-AU")}
-                </Text>
-                <Text
-                  style={[
-                    styles.budgetLabel,
-                    { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-                  ]}
-                >
-                  Used
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text
-                  style={[
-                    styles.budgetAmount,
-                    { color: colors.foreground, fontFamily: "Inter_700Bold" },
-                  ]}
-                >
-                  ${(participant.total_budget ?? 0).toLocaleString("en-AU")}
-                </Text>
-                <Text
-                  style={[
-                    styles.budgetLabel,
-                    { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-                  ]}
-                >
-                  Total
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.budgetBarBg, { backgroundColor: colors.muted }]}>
-              <View
-                style={[
-                  styles.budgetBarFill,
-                  {
-                    width: `${budgetPct}%`,
-                    backgroundColor:
-                      budgetPct > 90
-                        ? colors.destructive
-                        : budgetPct > 70
-                        ? colors.warning
-                        : "#22C55E",
-                  },
-                ]}
-              />
-            </View>
-            <Text
-              style={[
-                styles.budgetPct,
-                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-              ]}
-            >
-              {Math.round(budgetPct)}% of annual plan used
-            </Text>
-          </View>
-        )}
 
         {goals.length > 0 && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -540,13 +429,6 @@ const styles = StyleSheet.create({
   heroInitials: { fontSize: 26, color: "#FFFFFF" },
   heroName: { fontSize: 22, color: "#FFFFFF" },
   heroNdis: { fontSize: 14, color: "rgba(255,255,255,0.65)" },
-  planStatusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 4,
-  },
-  planStatusText: { fontSize: 12, letterSpacing: 0.5 },
   card: {
     margin: 16,
     marginBottom: 0,
@@ -571,15 +453,6 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: 13 },
   infoValue: { fontSize: 13 },
-  budgetNumbers: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  budgetAmount: { fontSize: 20 },
-  budgetLabel: { fontSize: 12, marginTop: 2 },
-  budgetBarBg: { height: 8, borderRadius: 4, overflow: "hidden" },
-  budgetBarFill: { height: "100%", borderRadius: 4 },
-  budgetPct: { fontSize: 12 },
   goalsList: { gap: 12 },
   goalItem: { gap: 6 },
   goalHeader: {

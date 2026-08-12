@@ -5,10 +5,12 @@ import {
   getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
   getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
   getParticipantBillingPeriods, getParticipantCurrentBillingPeriod, planManagementTypeLabel,
+  getTaskTemplates,
   type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
-  type BillingPeriod,
+  type BillingPeriod, type TaskTemplate as DbTaskTemplate, type TaskTemplatesResponse,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
+import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -47,6 +49,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  LayoutTemplate,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -62,6 +65,8 @@ import { ParticipantComplianceTab } from "@/components/participants/ParticipantC
 import { ParticipantPlanMeetingsTab } from "@/components/participants/ParticipantPlanMeetingsTab";
 import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
 import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
+import { ParticipantMedicationsPanel } from "@/components/participants/ParticipantMedicationsPanel";
+import { ParticipantClinicalRecordEditor } from "@/components/participants/ParticipantClinicalRecordEditor";
 import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
 import { safeFormat, money, statusBadge, complianceTone, normalizeGoalTitle } from "@/lib/participant-format";
@@ -91,232 +96,43 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 // ---------------------------------------------------------------------------
-// Template Presets
+// Template Presets (backed by participant_task_templates via getTaskTemplates)
 // ---------------------------------------------------------------------------
 
-type TaskTemplate = {
-  label: string;
-  category: ParticipantTask["category"];
-  shift_type: ParticipantTask["shift_type"];
-  priority: ParticipantTask["priority"];
-  evidence_required: ParticipantTask["evidence_required"];
-  is_mandatory: boolean;
-  description: string;
-  outcome_tip?: string;
+// The task-creation form only offers these category/evidence options; DB templates
+// (seeded with a richer vocabulary, e.g. "meal_prep", "voice") are normalized down
+// to the closest valid form option so the select never ends up on a hidden value.
+type TaskFormCategory = "personal_care" | "medication" | "domestic_assistance" | "community_access" | "transport" | "other";
+type TaskFormEvidence = "none" | "photo" | "notes" | "photo_and_notes";
+
+const TASK_FORM_CATEGORY_MAP: Record<string, TaskFormCategory> = {
+  personal_care: "personal_care",
+  meal_prep: "personal_care",
+  medication: "medication",
+  health_wellness: "personal_care",
+  domestic_assistance: "domestic_assistance",
+  community_access: "community_access",
+  transport: "transport",
+  documentation: "other",
 };
 
-const SHIFT_SYSTEM_TASK_TEMPLATES: Record<string, TaskTemplate> = {
-  personal_hygiene: {
-    label: "Personal Hygiene",
-    category: "personal_care",
-    shift_type: "morning",
-    priority: "high",
-    evidence_required: "none",
-    is_mandatory: true,
-    description: "Support participant with showering, grooming, and dressing. Observe and note level of independence.",
-    outcome_tip: "Participant completed hygiene routine with appropriate support.",
-  },
-  meal_prep: {
-    label: "Meal Preparation",
-    category: "personal_care",
-    shift_type: "morning",
-    priority: "high",
-    evidence_required: "notes",
-    is_mandatory: true,
-    description: "Support participant to prepare or assist with meal. Record what was eaten and any dietary concerns.",
-    outcome_tip: "Meals prepared safely with participant involvement where possible.",
-  },
-  medication: {
-    label: "Medication Administration",
-    category: "medication",
-    shift_type: "morning",
-    priority: "high",
-    evidence_required: "photo_and_notes",
-    is_mandatory: true,
-    description: "Administer medication per dosette box or medication chart. Photo the administration. Record time, dosage, and participant response. Escalate any refusals or reactions immediately.",
-    outcome_tip: "Medications taken as prescribed with no adverse reactions noted.",
-  },
-  health_wellness: {
-    label: "Health & Wellness Check",
-    category: "personal_care",
-    shift_type: "morning",
-    priority: "high",
-    evidence_required: "notes",
-    is_mandatory: true,
-    description: "Observe and record participant's physical and emotional wellbeing at the start of shift: mood, sleep quality, any pain or discomfort, skin integrity, appetite, and hydration.",
-    outcome_tip: "Participant wellbeing observed and any concerns documented.",
-  },
-  community_access: {
-    label: "Community Access",
-    category: "community_access",
-    shift_type: "afternoon",
-    priority: "medium",
-    evidence_required: "notes",
-    is_mandatory: false,
-    description: "Support participant to access community activities. Record destination, duration, participation level, and any notable interactions.",
-    outcome_tip: "Participant engaged in community activity with support as needed.",
-  },
-  documentation: {
-    label: "Documentation & Notes",
-    category: "personal_care",
-    shift_type: "anytime",
-    priority: "high",
-    evidence_required: "notes",
-    is_mandatory: true,
-    description: "Record factual, observable shift summary. Include: participant mood, activities completed, any incidents or concerns, and goals progress if relevant.",
-    outcome_tip: "Progress notes capture what was done and participant response.",
-  },
+const TASK_FORM_EVIDENCE_MAP: Record<string, TaskFormEvidence> = {
+  none: "none",
+  photo: "photo",
+  notes: "notes",
+  photo_and_notes: "photo_and_notes",
+  voice: "notes",
+  photo_and_voice: "photo_and_notes",
 };
 
-const GOAL_AREA_TASK_PRESETS: Record<string, TaskTemplate[]> = {
-  daily_living: [
-    {
-      label: "Personal Care Routine",
-      category: "personal_care",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "notes",
-      is_mandatory: true,
-      description: "Support participant with daily personal care activities including hygiene, dressing, and grooming to promote independence.",
-    },
-    {
-      label: "Meal Preparation Support",
-      category: "personal_care",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "notes",
-      is_mandatory: true,
-      description: "Assist with meal planning and preparation, ensuring nutritional needs are met and participant involvement is maximized.",
-    },
-    {
-      label: "Medication Management",
-      category: "medication",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "photo_and_notes",
-      is_mandatory: true,
-      description: "Administer prescribed medications safely and document administration with evidence of compliance.",
-    },
-    {
-      label: "Health Monitoring",
-      category: "personal_care",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "notes",
-      is_mandatory: true,
-      description: "Regular health checks including vital signs observation and wellbeing assessment as per medical requirements.",
-    },
-  ],
-  community: [
-    {
-      label: "Community Access Planning",
-      category: "community_access",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Plan and facilitate access to community activities, events, and social venues aligned with participant interests.",
-    },
-    {
-      label: "Transport Support",
-      category: "transport",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Provide transport assistance to community outings, appointments, and social activities as required.",
-    },
-    {
-      label: "Social Interaction Facilitation",
-      category: "community_access",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Support participant to engage in social activities, community events, and peer interaction to build relationships.",
-    },
-  ],
-  health: [
-    {
-      label: "Health Observation & Reporting",
-      category: "personal_care",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "notes",
-      is_mandatory: true,
-      description: "Observe and document participant health status, any changes, symptoms, or concerns for medical review.",
-    },
-    {
-      label: "Wellness Monitoring",
-      category: "personal_care",
-      shift_type: "morning",
-      priority: "high",
-      evidence_required: "notes",
-      is_mandatory: true,
-      description: "Regular monitoring of physical and mental wellbeing, including mood, energy levels, pain, and overall health status.",
-    },
-    {
-      label: "Medical Appointment Support",
-      category: "personal_care",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Accompany and support participant to medical appointments, ensuring accurate communication and follow-up.",
-    },
-  ],
-  social: [
-    {
-      label: "Social Engagement Activities",
-      category: "community_access",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Facilitate social engagement through visits, activities, or interactions that promote social connection and wellbeing.",
-    },
-    {
-      label: "Communication Support",
-      category: "community_access",
-      shift_type: "anytime",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Support participant communication with family, friends, and community through phone, video, or in-person visits.",
-    },
-  ],
-  employment: [
-    {
-      label: "Employment Preparation",
-      category: "community_access",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Support participant in job search, interview preparation, resume development, or workplace integration tasks.",
-    },
-    {
-      label: "Work Support & Coaching",
-      category: "community_access",
-      shift_type: "afternoon",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Provide on-the-job coaching, workplace adaptation support, and task guidance to ensure employment success.",
-    },
-  ],
-  other: [
-    {
-      label: "General Support Task",
-      category: "personal_care",
-      shift_type: "anytime",
-      priority: "medium",
-      evidence_required: "notes",
-      is_mandatory: false,
-      description: "Custom support task tailored to participant needs and goals.",
-    },
-  ],
-};
+function normalizeTemplateCategory(category?: string | null): TaskFormCategory {
+  return (category && TASK_FORM_CATEGORY_MAP[category]) || "personal_care";
+}
+
+function normalizeTemplateEvidence(evidence?: string | null): TaskFormEvidence {
+  return (evidence && TASK_FORM_EVIDENCE_MAP[evidence]) || "none";
+}
+
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -1188,6 +1004,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   });
   const participantTasks = participantTasksQuery.data ?? [];
 
+  const taskTemplatesQuery = useOrgQuery<TaskTemplatesResponse>(["participant", id, "task-templates"], {
+    queryFn: () => getTaskTemplates(id),
+    enabled: isCoordinator,
+  });
+  const taskTemplates = [...(taskTemplatesQuery.data?.system_tasks ?? []), ...(taskTemplatesQuery.data?.custom_tasks ?? [])];
+  const [templatesGoalId, setTemplatesGoalId] = useState<string | null>(null);
+
   const [progressGoalId, setProgressGoalId] = useState<string | null>(null);
   const goalProgressQuery = useOrgQuery<GoalProgressResponse>(
     ["goal-progress", progressGoalId ?? "__none__"],
@@ -1302,7 +1125,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       setRestrictedDraft({
         restricted_behavioural_notes: restrictedQuery.data.restricted_behavioural_notes ?? "",
         behaviour_support_plan: restrictedQuery.data.behaviour_support_plan ?? "",
-        medications: restrictedQuery.data.medications ?? "",
         medical_alerts: restrictedQuery.data.medical_alerts ?? "",
       });
     }
@@ -1362,15 +1184,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
   const [taskAiSuggestions, setTaskAiSuggestions] = useState<{ names: string[]; instructions: string[]; category: string | null; priority: string | null } | null>(null);
   const [taskAiLoading, setTaskAiLoading] = useState(false);
-  const [appliedTemplate, setAppliedTemplate] = useState<TaskTemplate | null>(null);
+  const [appliedTemplate, setAppliedTemplate] = useState<DbTaskTemplate | null>(null);
 
-  const applyTaskTemplate = (template: TaskTemplate) => {
-    setTaskTitle(template.label);
-    setTaskInstructions(template.description);
-    setTaskCategory((template.category as any) || "personal_care");
-    setTaskShiftType((template.shift_type as any) || "morning");
+  const applyTaskTemplate = (template: DbTaskTemplate) => {
+    setTaskTitle(template.name);
+    setTaskInstructions(template.description || "");
+    setTaskCategory(normalizeTemplateCategory(template.category));
+    setTaskShiftType((template.primary_shift_type as any) || "morning");
     setTaskPriority((template.priority as any) || "medium");
-    setTaskEvidenceRequired((template.evidence_required as any) || "none");
+    setTaskEvidenceRequired(normalizeTemplateEvidence(template.evidence_required));
     setIsMandatory(template.is_mandatory);
     setTaskTitleAiApplied(true);
     setTaskInstructionsAiApplied(true);
@@ -1867,11 +1689,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               </div>
 
-              {/* Goal-area task suggestions hint */}
+              {/* Goal task linkage hint */}
               {goalCategory && (
                 <div className="text-[10px] text-[#6A6A77] bg-purple-50 rounded-lg p-3 border border-purple-100">
-                  <p className="font-semibold text-purple-700 mb-1">Common tasks for this goal area:</p>
-                  <p className="text-purple-600">{GOAL_AREA_TASK_PRESETS[goalCategory]?.map(t => t.label).join(", ") || "No templates available"}</p>
+                  <p className="text-purple-600">
+                    Once this goal is created, you can add tasks and link them to it from the goal's "Add task" action.
+                  </p>
                 </div>
               )}
 
@@ -2090,36 +1913,47 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <div className="space-y-2">
                   <p className="text-[10px] text-[#6A6A77]">Or start with a system task template:</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {Object.values(SHIFT_SYSTEM_TASK_TEMPLATES).map(template => (
-                      <button
-                        key={template.label}
-                        type="button"
-                        onClick={() => applyTaskTemplate(template)}
-                        className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
-                      >
-                        {template.label}
-                      </button>
-                    ))}
+                    {taskTemplatesQuery.isLoading ? (
+                      <p className="text-[10px] text-[#9CA3AF]">Loading templates…</p>
+                    ) : (taskTemplatesQuery.data?.system_tasks ?? []).length === 0 ? (
+                      <p className="text-[10px] text-[#9CA3AF]">No system templates configured</p>
+                    ) : (
+                      (taskTemplatesQuery.data?.system_tasks ?? []).map(template => (
+                        <button
+                          key={template.id}
+                          type="button"
+                          onClick={() => applyTaskTemplate(template)}
+                          className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                        >
+                          {template.name}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {/* Goal-area templates (conditional) */}
+                {/* Goal-linked templates (conditional) */}
                 {linkedGoalId && (
                   <div className="space-y-2 border-t border-blue-200 pt-2">
-                    <p className="text-[10px] text-[#6A6A77]">Or use a preset for this goal area:</p>
+                    <p className="text-[10px] text-[#6A6A77]">Or use a template linked to this goal:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(() => {
-                        const linkedGoal = goals.find(g => g.id === linkedGoalId);
-                        const goalArea = linkedGoal?.goal_area || 'daily_living';
-                        const templates = GOAL_AREA_TASK_PRESETS[goalArea] || [];
+                        const templates = taskTemplates.filter(t => t.linked_goal_id === linkedGoalId);
+                        if (templates.length === 0) {
+                          return (
+                            <p className="text-[10px] text-[#9CA3AF]">
+                              No templates linked to this goal yet — manage templates in Task Templates.
+                            </p>
+                          );
+                        }
                         return templates.map(template => (
                           <button
-                            key={template.label}
+                            key={template.id}
                             type="button"
                             onClick={() => applyTaskTemplate(template)}
                             className="rounded-full border border-purple-300 bg-white px-3 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition-colors"
                           >
-                            {template.label}
+                            {template.name}
                           </button>
                         ));
                       })()}
@@ -2268,7 +2102,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   }`}
                 />
                 {taskInstructionsAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
-                {appliedTemplate?.outcome_tip && <p className="text-[10px] text-emerald-600 flex items-center gap-1 pt-1"><CheckCircle2 size={12} /> {appliedTemplate.outcome_tip}</p>}
+                {appliedTemplate && <p className="text-[10px] text-emerald-600 flex items-center gap-1 pt-1"><CheckCircle2 size={12} /> Applied from template: {appliedTemplate.name}</p>}
               </div>
 
               {/* ACTION BUTTONS */}
@@ -2279,7 +2113,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   onClick={() => createTaskMut.mutate({
                     name: taskTitle.trim(),
                     description: taskInstructions || null,
-                    goal_id: null,
+                    goal_id: linkedGoalId,
                     is_mandatory: isMandatory,
                     shift_type: taskShiftType,
                     category: taskCategory,
@@ -2309,11 +2143,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalSupportCategory(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false); }}
                     className="h-9 px-3 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
                     + Goal
-                  </button>
-                  <button type="button"
-                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-                    className="h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
-                    + Task
                   </button>
                   <button type="button" onClick={() => setShiftModalOpen(true)}
                     className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
@@ -2423,8 +2252,25 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                           className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="View progress">
                           <BarChart2 size={14} className={progressGoalId === goal.id ? "text-[#E8457A]" : "text-[#6A6A77]"} />
                         </button>
+                        <button type="button"
+                          onClick={() => setTemplatesGoalId((prev) => prev === goal.id ? null : goal.id)}
+                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="Manage task templates">
+                          <LayoutTemplate size={14} className={templatesGoalId === goal.id ? "text-[#E8457A]" : "text-[#6A6A77]"} />
+                        </button>
                       </div>
                     </div>
+
+                    {/* Task template management for this goal */}
+                    {templatesGoalId === goal.id && (
+                      <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
+                        <TaskTemplatePanel
+                          participantId={id}
+                          goal={goal}
+                          templates={taskTemplates}
+                          onTemplatesChanged={() => taskTemplatesQuery.refetch()}
+                        />
+                      </div>
+                    )}
 
                     {/* Progress panel */}
                     {progressGoalId === goal.id && (
@@ -2591,8 +2437,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           <ParticipantSessionsTab
             sessions={sessions}
             isLoading={sessionsQuery.isLoading}
-            isCoordinator={isCoordinator}
-            onAssignShift={() => setShiftModalOpen(true)}
             sessionPanelId={sessionPanelId}
             onSessionPanelIdChange={setSessionPanelId}
           />
@@ -2650,13 +2494,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <ParticipantShiftContextTab participantId={id} />
             )}
             {careProfileSection === "clinical" && (
-              <ParticipantRestrictedTab
-                isLoading={restrictedQuery.isLoading}
-                draft={restrictedDraft}
-                onDraftChange={setRestrictedDraft}
-                onSave={() => saveRestricted.mutate()}
-                isSaving={saveRestricted.isPending}
-              />
+              <div className="space-y-3">
+                <ParticipantMedicationsPanel participantId={id} />
+                <ParticipantClinicalRecordEditor participantId={id} />
+                <ParticipantRestrictedTab
+                  isLoading={restrictedQuery.isLoading}
+                  draft={restrictedDraft}
+                  onDraftChange={setRestrictedDraft}
+                  onSave={() => saveRestricted.mutate()}
+                  isSaving={saveRestricted.isPending}
+                />
+              </div>
             )}
           </div>
         )}

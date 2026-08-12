@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
@@ -179,10 +179,14 @@ def _cors_origins() -> list[str]:
     frontend = os.getenv("FRONTEND_URL", "*").strip()
     return [frontend] if frontend else ["*"]
 
+def _cors_origin_regex() -> str | None:
+    """Matches Cloudflare Pages preview subdomains, e.g. abc123.carecliq-dev.pages.dev"""
+    return os.getenv("CORS_ORIGIN_REGEX", r"https://[a-z0-9-]+\.carecliq-dev\.pages\.dev").strip() or None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
+    allow_origin_regex=_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -193,6 +197,7 @@ app.add_middleware(OrgContextMiddleware)
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
+app.include_router(medications.router, prefix="/api")
 app.include_router(billing_periods.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
@@ -206,6 +211,7 @@ app.include_router(incidents.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
+app.include_router(chatbox.router, prefix="/api")
 # worker_scheduling must register before worker — /worker/shifts/calendar must not match /shifts/{shift_id}
 app.include_router(worker_scheduling.router, prefix="/api")
 app.include_router(worker_performance.router, prefix="/api")
@@ -231,6 +237,8 @@ app.include_router(ndis_tasks.router, prefix="/api")
 app.include_router(budget_ledger.router)  # Uses internal /api/ledger prefix
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
+from .api import employee_onboarding as employee_onboarding_api
+app.include_router(employee_onboarding_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

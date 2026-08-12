@@ -21,6 +21,7 @@ from ..services import (
     evidence_upload_service,
     funding_service,
     goals_service,
+    medication_service,
     participant_service,
     session_service,
     shift_service,
@@ -55,14 +56,6 @@ class WorkerSessionCreate(BaseModel):
     goal_progress_notes: list[GoalProgressNote] = Field(default_factory=list)
     # SCRUM-227: participant choice & control narrative
     participant_choice_control: Optional[str] = None
-
-
-class WorkerNoteCreate(BaseModel):
-    notes: str = Field(min_length=1)
-    session_date: date = Field(default_factory=date.today)
-    session_type: str = "progress_note"
-    duration_minutes: int = Field(default=1, ge=1)
-    goals_addressed: list[str] = Field(default_factory=list)
 
 
 class ShiftTaskItem(BaseModel):
@@ -688,40 +681,6 @@ async def create_my_client_session(
     return _session_payload(session)
 
 
-@router.post("/my-clients/{participant_id}/notes", status_code=status.HTTP_201_CREATED)
-async def create_my_client_note(
-    participant_id: str,
-    body: WorkerNoteCreate,
-    current_user: dict = Depends(get_current_user),
-):
-    await _assigned_participant(participant_id, current_user)
-    _require_worker_ready_for_sessions(current_user)
-    payload = SessionCreate(
-        participant_id=participant_id,
-        session_date=body.session_date,
-        duration_minutes=body.duration_minutes,
-        session_type=body.session_type,
-        notes=body.notes,
-        goals_addressed=body.goals_addressed,
-        status="completed",
-    )
-    try:
-        session = await session_service.create_session(payload, current_user)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except PermissionError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
-    await audit_service.log_action(
-        action_type="worker.note.created",
-        entity_type="session",
-        entity_id=session.get("id", ""),
-        user_id=get_user_id(current_user),
-        organization_id=get_user_organization_id(current_user),
-        after_state={"participant_id": participant_id, "session_type": body.session_type},
-    )
-    return _session_payload(session)
-
-
 @router.get("/shifts")
 async def worker_shifts(
     filter: str = Query(default="today", alias="filter"),
@@ -800,6 +759,96 @@ async def worker_shift_participant_profile(shift_id: str, current_user: dict = D
     if not payload:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return payload
+
+
+def _require_shift_owner(shift_id: str, current_user: dict) -> dict:
+    """Load a shift row and confirm it belongs to the authenticated worker's org/assignment."""
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    if str(shift.get("worker_id") or "") != str(worker_id) or str(shift.get("organization_id") or "") != str(org_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this shift.")
+    return shift
+
+
+@router.get("/shifts/{shift_id}/medication-checklist")
+async def worker_shift_medication_checklist(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Scheduled medication doses due within this shift's window (Medication Management v1)."""
+    _require_worker(current_user)
+    shift = _require_shift_owner(shift_id, current_user)
+    org_id = get_user_organization_id(current_user)
+    return {"checklist": medication_service.build_shift_medication_checklist(shift, org_id)}
+
+
+class MedicationAdministrationBody(BaseModel):
+    scheduled_time: Optional[str] = None
+    status: Literal["given", "refused", "missed", "withheld"]
+    dose_given: Optional[str] = None
+    notes: Optional[str] = None
+    prn_reason: Optional[str] = None
+    voice_captured: bool = False
+
+
+@router.post("/shifts/{shift_id}/medications/{medication_id}/administrations", status_code=status.HTTP_201_CREATED)
+async def worker_log_medication_administration(
+    shift_id: str,
+    medication_id: str,
+    body: MedicationAdministrationBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log a scheduled-dose or PRN administration event during a shift (append-only ledger)."""
+    _require_worker(current_user)
+    shift = _require_shift_owner(shift_id, current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_id = get_user_id(current_user)
+    medication = medication_service.get_medication(medication_id, org_id)
+    if str(medication.get("participant_id")) != str(shift.get("participant_id")):
+        raise HTTPException(status_code=422, detail="Medication does not belong to this shift's participant.")
+    return medication_service.create_administration(
+        medication=medication,
+        shift=shift,
+        organization_id=org_id,
+        administered_by=worker_id,
+        status=body.status,
+        scheduled_time=body.scheduled_time,
+        dose_given=body.dose_given,
+        notes=body.notes,
+        prn_reason=body.prn_reason,
+        voice_captured=body.voice_captured,
+    )
+
+
+@router.get("/shifts/{shift_id}/prn-medications")
+async def worker_shift_prn_medications(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Active PRN medications for this shift's participant, plus doses awaiting an effect note."""
+    _require_worker(current_user)
+    shift = _require_shift_owner(shift_id, current_user)
+    org_id = get_user_organization_id(current_user)
+    return medication_service.build_shift_prn_medications(shift, org_id)
+
+
+class MedicationEffectBody(BaseModel):
+    effect_observed: str
+    voice_captured: bool = False
+
+
+@router.patch("/medication-administrations/{administration_id}/effect")
+async def worker_log_prn_effect(
+    administration_id: str,
+    body: MedicationEffectBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Follow-up: record the observed effect of an already-logged PRN dose."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    return medication_service.record_prn_effect(
+        administration_id,
+        org_id,
+        body.effect_observed,
+        body.voice_captured,
+    )
 
 
 @router.get("/shifts/{shift_id}/participant-preferences")

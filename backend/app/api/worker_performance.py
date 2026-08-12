@@ -196,6 +196,7 @@ class MarkCompleteBody(BaseModel):
     module_id: str
     completed_at: date
     note: Optional[str] = None
+    acknowledged: bool = False
 
 
 @router.post("/training/complete", status_code=201)
@@ -210,6 +211,21 @@ async def worker_mark_training_complete(
         body.module_id,
         body.completed_at,
         body.note,
+        body.acknowledged,
+    )
+
+
+@router.post("/training/{module_id}/start", status_code=201)
+async def worker_start_training(
+    module_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log that the worker opened this assigned training module (start timestamp for the audit trail)."""
+    _require_worker(current_user)
+    return worker_training_service.start_training_module(
+        get_user_id(current_user),
+        get_user_organization_id(current_user),
+        module_id,
     )
 
 
@@ -244,3 +260,14 @@ async def worker_training_requests(current_user: dict = Depends(get_current_user
 async def worker_training_history(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
     return {"history": worker_training_service.list_training_history(get_user_id(current_user))}
+
+
+@router.get("/training/recommendations")
+async def worker_training_recommendations(current_user: dict = Depends(get_current_user)):
+    """Training modules a coordinator has specifically assigned to this worker."""
+    _require_worker(current_user)
+    recs = worker_training_service.list_worker_recommendations(
+        get_user_id(current_user),
+        get_user_organization_id(current_user),
+    )
+    return {"recommendations": recs}

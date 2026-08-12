@@ -64,15 +64,6 @@ export default function ClientDetailHubScreen() {
           </Pressable>
           <View style={styles.secondaryActions}>
             <Pressable
-              onPress={() => router.push(`/client/${id}/notes` as never)}
-              style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <Feather name="edit-3" size={15} color={colors.primary} />
-              <Text style={[styles.actionText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                Add note
-              </Text>
-            </Pressable>
-            <Pressable
               onPress={() => router.push("/incidents" as never)}
               style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: "#FECACA" }]}
             >
@@ -96,16 +87,10 @@ export default function ClientDetailHubScreen() {
             onPress={() => router.push(`/client/${id}/plan` as never)}
           />
           <ClientNavRow
-            icon="calendar"
-            label="Sessions"
-            subtitle={`${data.sessions.length} record${data.sessions.length === 1 ? "" : "s"}`}
-            onPress={() => router.push(`/client/${id}/sessions` as never)}
-          />
-          <ClientNavRow
             icon="file-text"
-            label="Notes"
-            subtitle={`${data.notes.length} note${data.notes.length === 1 ? "" : "s"}`}
-            onPress={() => router.push(`/client/${id}/notes` as never)}
+            label="Shift Notes"
+            subtitle={`${data.sessions.length + data.notes.length} record${data.sessions.length + data.notes.length === 1 ? "" : "s"}`}
+            onPress={() => router.push(`/client/${id}/shift-notes` as never)}
           />
           <ClientNavRow
             icon="shield"

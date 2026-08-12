@@ -6,9 +6,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { FontFamily } from "@/constants/typography";
 
 type Props = {
-  title: string;
+  title?: string;
   subtitle?: string;
   showSignOut?: boolean;
 };
@@ -21,7 +22,9 @@ export function WorkerPageSubheader({ title, subtitle, showSignOut = false }: Pr
 
   return (
     <View style={[styles.wrap, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-      <Text style={[styles.title, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{title}</Text>
+      {title ? (
+        <Text style={[styles.title, { color: colors.primary, fontFamily: FontFamily.h1 }]}>{title}</Text>
+      ) : null}
       {subtitle ? (
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
           {subtitle}

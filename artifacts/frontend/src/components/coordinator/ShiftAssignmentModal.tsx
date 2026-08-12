@@ -173,6 +173,12 @@ export function ShiftAssignmentModal({
   const user = auth?.user;
   const orgId = user?.organizationId ?? "__no_org__";
 
+  // Hard gate: a worker who hasn't finished onboarding, or who has overdue
+  // mandatory training, can't be rostered yet.
+  const assignableWorkers = workers.filter((w) => w.onboarding_completed !== false && !w.training_overdue);
+  const onboardingPendingCount = workers.filter((w) => w.onboarding_completed === false).length;
+  const trainingOverdueCount = workers.filter((w) => w.onboarding_completed !== false && w.training_overdue).length;
+
   const [selectedWorkerId,      setSelectedWorkerId]      = useState(worker?.id ?? "");
   const [selectedParticipantId, setSelectedParticipantId] = useState(initialParticipantId ?? "");
   const [scheduledStart,        setScheduledStart]        = useState("");
@@ -377,7 +383,7 @@ export function ShiftAssignmentModal({
                     label: translate("coordinator.shiftAssign.unassigned"),
                     keywords: translate("coordinator.shiftAssign.unassigned"),
                   },
-                  ...workers.map((w) => ({
+                  ...assignableWorkers.map((w) => ({
                     value: w.id,
                     label: w.full_name,
                     keywords: `${w.full_name} ${w.avg_compliance != null ? w.avg_compliance.toFixed(0) : ""}`,
@@ -392,7 +398,7 @@ export function ShiftAssignmentModal({
                       </span>
                     );
                   }
-                  const w = workers.find((worker) => worker.id === selected.value);
+                  const w = assignableWorkers.find((worker) => worker.id === selected.value);
                   return (
                     <span className="flex items-center gap-2">
                       <User2 size={12} />
@@ -414,7 +420,7 @@ export function ShiftAssignmentModal({
                       </span>
                     );
                   }
-                  const w = workers.find((worker) => worker.id === option.value);
+                  const w = assignableWorkers.find((worker) => worker.id === option.value);
                   return (
                     <span className="flex items-center gap-2">
                       <User2 size={12} />
@@ -428,6 +434,20 @@ export function ShiftAssignmentModal({
                   );
                 }}
               />
+            )}
+            {onboardingPendingCount > 0 && (
+              <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
+                {onboardingPendingCount === 1
+                  ? translate("coordinator.shiftAssign.onboardingPendingOne")
+                  : translateParams("coordinator.shiftAssign.onboardingPendingMany", { count: String(onboardingPendingCount) })}
+              </p>
+            )}
+            {trainingOverdueCount > 0 && (
+              <p className="mt-1.5 text-[11px]" style={{ color: "var(--cc-status-warning)" }}>
+                {trainingOverdueCount === 1
+                  ? translate("coordinator.shiftAssign.trainingOverdueOne")
+                  : translateParams("coordinator.shiftAssign.trainingOverdueMany", { count: String(trainingOverdueCount) })}
+              </p>
             )}
           </div>
 

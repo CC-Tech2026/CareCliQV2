@@ -6,7 +6,6 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 export type RestrictedClinicalDraft = {
   restricted_behavioural_notes: string;
   behaviour_support_plan: string;
-  medications: string;
   medical_alerts: string;
 };
 
@@ -21,8 +20,7 @@ interface ParticipantRestrictedTabProps {
 const FIELDS = [
   { key: "restricted_behavioural_notes" as const, label: "Behavioural Notes (Restricted)", placeholder: "Document restricted behavioural observations and incidents…" },
   { key: "behaviour_support_plan"       as const, label: "Behaviour Support Plan",         placeholder: "Summarise the participant's current behaviour support plan…" },
-  { key: "medications"                  as const, label: "Medications",                    placeholder: "Current medications, dosages, and administration notes…" },
-  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Known allergies, contraindications, emergency protocols…" },
+  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Contraindications, emergency protocols, and other alerts not covered by allergies…" },
 ];
 
 /** "Clinical Records" facet of the participant Detail archetype — coordinator only. */

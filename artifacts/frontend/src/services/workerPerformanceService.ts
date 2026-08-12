@@ -228,10 +228,17 @@ export function markTrainingComplete(payload: {
   module_id: string;
   completed_at: string;
   note?: string;
+  acknowledged: boolean;
 }) {
   return jsonFetch("/api/worker/training/complete", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function startTrainingModule(moduleId: string) {
+  return jsonFetch<{ started_at: string | null }>(`/api/worker/training/${moduleId}/start`, {
+    method: "POST",
   });
 }
 
@@ -252,6 +259,19 @@ export function getTrainingRequests() {
 
 export function getTrainingHistory() {
   return jsonFetch<{ history: Array<Record<string, unknown>> }>("/api/worker/training/history");
+}
+
+export type TrainingRecommendation = {
+  id: string;
+  training_module_id: string;
+  title: string;
+  recommended_at: string;
+  due_at?: string | null;
+  started_at?: string | null;
+};
+
+export function getTrainingRecommendations() {
+  return jsonFetch<{ recommendations: TrainingRecommendation[] }>("/api/worker/training/recommendations");
 }
 
 export function submitCoordinatorShiftFeedback(

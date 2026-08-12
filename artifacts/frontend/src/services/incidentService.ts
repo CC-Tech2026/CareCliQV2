@@ -116,6 +116,84 @@ export function getIncidentsByParticipant<T = unknown>(participantId: string) {
   return jsonFetch<T>(`/api/incidents/participant/${participantId}`);
 }
 
+export interface WitnessItem {
+  name: string;
+  contact?: string;
+  relationship?: string;
+}
+
+export function overrideIncidentReportable<T = unknown>(
+  incidentId: string,
+  payload: { is_reportable: boolean; reason: string },
+) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/override-reportable`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface SubjectOfAllegationPayload {
+  subject_type: "worker" | "participant" | "other";
+  subject_user_id?: string;
+  subject_name?: string;
+  subject_role?: string;
+  notes?: string;
+}
+
+export interface SubjectOfAllegationRecord extends SubjectOfAllegationPayload {
+  id: string;
+  incident_id: string;
+  created_at: string;
+}
+
+export function createSubjectOfAllegation<T = unknown>(
+  incidentId: string,
+  payload: SubjectOfAllegationPayload,
+) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/subject-of-allegation`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listSubjectOfAllegation(incidentId: string) {
+  return jsonFetch<{ records: SubjectOfAllegationRecord[] }>(
+    `/api/incidents/${incidentId}/subject-of-allegation`,
+  );
+}
+
+export function assignIncidentInvestigator<T = unknown>(incidentId: string, investigatorUserId: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/assign-investigator`, {
+    method: "POST",
+    body: JSON.stringify({ investigator_user_id: investigatorUserId }),
+  });
+}
+
+export interface InterviewPayload {
+  interviewee_name: string;
+  interviewee_type: "worker" | "participant" | "witness" | "other";
+  interviewee_user_id?: string;
+  interviewed_at?: string;
+  notes?: string;
+}
+
+export interface InterviewRecord extends InterviewPayload {
+  id: string;
+  incident_id: string;
+  created_at: string;
+}
+
+export function createIncidentInterview<T = unknown>(incidentId: string, payload: InterviewPayload) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/interviews`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listIncidentInterviews(incidentId: string) {
+  return jsonFetch<{ records: InterviewRecord[] }>(`/api/incidents/${incidentId}/interviews`);
+}
+
 export interface IncidentAuditTrailEntry {
   id: string;
   action_type: string;

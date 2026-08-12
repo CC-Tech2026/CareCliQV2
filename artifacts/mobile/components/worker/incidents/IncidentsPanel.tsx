@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -206,12 +207,17 @@ function IncidentCard({
   );
 }
 
-export function IncidentsPanel() {
+type Props = {
+  contentBottomPad?: number;
+};
+
+export function IncidentsPanel({ contentBottomPad }: Props = {}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useT();
   const isDark = colors.scheme === "dark";
+  const { isAuthenticated } = useAuth();
 
   const [search, setSearch] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("all");
@@ -226,11 +232,13 @@ export function IncidentsPanel() {
       const result = await listIncidents();
       return Array.isArray(result) ? result : (result as { items?: IncidentSummary[] }).items ?? [];
     },
+    enabled: isAuthenticated,
   });
 
   const { data: stats } = useQuery({
     queryKey: ["incident-stats"],
     queryFn: getIncidentStats,
+    enabled: isAuthenticated,
   });
 
   const filtered = useMemo(() => {
@@ -363,7 +371,7 @@ export function IncidentsPanel() {
       <FlatList
         data={visibleIncidents}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.list, { paddingBottom: contentBottomPad ?? insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}

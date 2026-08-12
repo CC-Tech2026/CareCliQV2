@@ -3,6 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,19 +13,40 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SettingsSection } from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
 import { WORKER_FAQ_FALLBACK } from "@/content/worker-faq-fallback";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
   getKnownIssues,
+  getSupportConfig,
   searchFaq,
   type FaqArticle,
   type KnownIssue,
+  type SupportConfig,
 } from "@/lib/help-api";
 
-type Tab = "faq" | "issues";
+type Tab = "faq" | "issues" | "contact";
+
+function isWithinBusinessHours(config: SupportConfig | null): boolean {
+  if (!config?.business_hours_json) return true;
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-AU", {
+      timeZone: config.business_hours_json.timezone || "Australia/Adelaide",
+      weekday: "short",
+      hour: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "12");
+    const isWeekday = !["Sat", "Sun"].includes(weekday);
+    return isWeekday && hour >= 9 && hour < 17;
+  } catch {
+    return true;
+  }
+}
 
 export default function WorkerHelpScreen() {
   const t = useT();
@@ -32,7 +54,8 @@ export default function WorkerHelpScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
 
-  const initialTab: Tab = params.tab === "issues" ? "issues" : "faq";
+  const initialTab: Tab =
+    params.tab === "issues" ? "issues" : params.tab === "contact" ? "contact" : "faq";
 
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
@@ -40,12 +63,28 @@ export default function WorkerHelpScreen() {
   const [issues, setIssues] = useState<KnownIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+  const [supportConfig, setSupportConfig] = useState<SupportConfig | null>(null);
+  const [contactLoading, setContactLoading] = useState(true);
 
   useEffect(() => {
-    if (params.tab === "issues" || params.tab === "faq") {
+    if (params.tab === "issues" || params.tab === "faq" || params.tab === "contact") {
       setTab(params.tab);
     }
   }, [params.tab]);
+
+  useEffect(() => {
+    let active = true;
+    getSupportConfig()
+      .catch(() => null)
+      .then((cfg) => {
+        if (!active) return;
+        setSupportConfig(cfg);
+        setContactLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -72,10 +111,15 @@ export default function WorkerHelpScreen() {
     });
   }, [faq, query]);
 
-  const tabs: { id: Tab; labelKey: "help.tab.faq" | "help.tab.issues" }[] = [
+  const tabs: { id: Tab; labelKey: "help.tab.faq" | "help.tab.issues" | "help.tab.contact" }[] = [
     { id: "faq", labelKey: "help.tab.faq" },
     { id: "issues", labelKey: "help.tab.issues" },
+    { id: "contact", labelKey: "help.tab.contact" },
   ];
+
+  const inHours = isWithinBusinessHours(supportConfig);
+  const supportPhone = supportConfig?.support_phone?.trim() || "";
+  const supportEmail = supportConfig?.support_email?.trim() || "support@carecliq.com.au";
 
   return (
     <SettingsSubScreen showBottomNav={false} title={t("help.title")}>
@@ -84,8 +128,12 @@ export default function WorkerHelpScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <SettingsSection title={t("help.title")} description={t("help.subtitle")} icon="help-circle">
-          <View style={styles.tabs}>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("help.subtitle")}
+        </Text>
+
+        <View style={styles.section}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
             {tabs.map((item) => {
               const active = tab === item.id;
               return (
@@ -94,15 +142,13 @@ export default function WorkerHelpScreen() {
                   onPress={() => setTab(item.id)}
                   style={[
                     styles.tab,
-                    {
-                      backgroundColor: active ? colors.primary : colors.soft,
-                    },
+                    { backgroundColor: active ? colors.card : colors.soft },
                   ]}
                 >
                   <Text
                     style={{
-                      color: active ? "#FFFFFF" : colors.mutedForeground,
-                      fontFamily: "Inter_700Bold",
+                      color: active ? colors.primary : colors.mutedForeground,
+                      fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
                       fontSize: 12,
                     }}
                   >
@@ -111,8 +157,8 @@ export default function WorkerHelpScreen() {
                 </Pressable>
               );
             })}
-          </View>
-
+          </ScrollView>
+          <View style={[styles.tabPanel, { backgroundColor: colors.card }]}>
           {loading ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
@@ -241,7 +287,54 @@ export default function WorkerHelpScreen() {
               )}
             </View>
           ) : null}
-        </SettingsSection>
+
+          {tab === "contact" ? (
+            contactLoading ? (
+              <View style={styles.loading}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <View style={styles.contactWrap}>
+                {!inHours ? (
+                  <View style={[styles.notice, { backgroundColor: colors.statusProgressBg }]}>
+                    <Text style={{ color: colors.warning, fontFamily: "Inter_500Medium", fontSize: 13, lineHeight: 18 }}>
+                      {supportConfig?.outside_hours_message || t("help.chat.outsideHours")}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={[styles.card, styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.articleTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                    {t("help.chat.fallbackTitle")}
+                  </Text>
+
+                  {supportPhone ? (
+                    <Pressable
+                      onPress={() => void Linking.openURL(`tel:${supportPhone.replace(/\s/g, "")}`)}
+                      style={[styles.contactBtn, { borderColor: colors.border }]}
+                    >
+                      <Feather name="phone" size={16} color={colors.primary} />
+                      <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                        {t("help.chat.callNow", { phone: supportPhone })}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+
+                  <Pressable
+                    onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+                    style={[styles.contactBtn, { borderColor: colors.border }]}
+                  >
+                    <Feather name="mail" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                      {supportEmail}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )
+          ) : null}
+          </View>
+        </View>
       </ScrollView>
     </SettingsSubScreen>
   );
@@ -249,12 +342,16 @@ export default function WorkerHelpScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  tabs: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  subtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  section: { gap: 0 },
+  tabs: { flexDirection: "row", gap: 3 },
   tab: {
-    borderRadius: 999,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
+  tabPanel: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14, borderTopRightRadius: 14, padding: 12 },
   loading: { paddingVertical: 40, alignItems: "center" },
   faqWrap: { gap: 12 },
   searchRow: {
@@ -289,4 +386,17 @@ const styles = StyleSheet.create({
   articleBody: { fontSize: 14, lineHeight: 21 },
   issuesWrap: { gap: 12 },
   emptyIssues: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 14 },
+  contactWrap: { gap: 12 },
+  notice: { borderRadius: 14, padding: 14 },
+  contactCard: { padding: 14, gap: 8 },
+  contactBtn: {
+    marginTop: 4,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
 });

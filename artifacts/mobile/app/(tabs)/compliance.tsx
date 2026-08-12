@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,10 +13,11 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ComplianceIncidentsSection } from "@/components/worker/compliance/ComplianceIncidentsSection";
+import { IncidentsPanel } from "@/components/worker/incidents/IncidentsPanel";
 import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceScoreRing";
 import { ComplianceSessionHistoryItem } from "@/components/worker/compliance/ComplianceSessionHistoryItem";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useT } from "@/context/PreferencesContext";
 import {
@@ -24,7 +26,7 @@ import {
 } from "@/hooks/worker/useWorkerCompliance";
 import { useWorkerComplianceDetail } from "@/hooks/worker/useWorkerComplianceDetail";
 import { useColors } from "@/hooks/useColors";
-import type { WorkerCompliance, WorkerComplianceSession } from "@/lib/worker-api";
+import type { WorkerCompliance, WorkerComplianceRuleResult, WorkerComplianceSession } from "@/lib/worker-api";
 
 type Segment = "overview" | "incidents";
 
@@ -57,8 +59,104 @@ function trendLabel(value: string, index: number, total: number, t: ReturnType<t
   return date.toLocaleDateString("en-AU", { day: "numeric" });
 }
 
+function RuleStatusIcon({ status, colors }: { status: string; colors: ReturnType<typeof useColors> }) {
+  if (status === "pass") return <Feather name="check-circle" size={15} color={colors.success} />;
+  if (status === "warning") return <Feather name="alert-triangle" size={15} color={colors.warning} />;
+  if (status === "fail") return <Feather name="x-circle" size={15} color={colors.destructive} />;
+  return <Feather name="circle" size={15} color={colors.mutedForeground} />;
+}
+
+function RuleRow({ rule, colors, showExplanation }: { rule: WorkerComplianceRuleResult; colors: ReturnType<typeof useColors>; showExplanation: boolean }) {
+  const explanation = rule.explanation || rule.message;
+  return (
+    <View style={styles.ruleRow}>
+      <RuleStatusIcon status={rule.status} colors={colors} />
+      <View style={styles.ruleCopy}>
+        <Text style={[styles.ruleLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          {rule.label}
+        </Text>
+        {showExplanation && explanation ? (
+          <Text style={[styles.ruleExplanation, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {explanation}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function RuleBreakdownSection({
+  rules,
+  failedRules,
+  colors,
+  t,
+}: {
+  rules: WorkerComplianceRuleResult[];
+  failedRules: WorkerComplianceRuleResult[];
+  colors: ReturnType<typeof useColors>;
+  t: ReturnType<typeof useT>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const passed = rules.filter((r) => r.status === "pass").length;
+
+  if (rules.length === 0) return null;
+
+  return (
+    <View style={[styles.rulesCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {failedRules.length > 0 ? (
+        <View style={styles.attentionBlock}>
+          <Text style={[styles.attentionTitle, { color: colors.destructive, fontFamily: "Inter_700Bold" }]}>
+            {t("compliance.needsAttentionTitle")}
+          </Text>
+          {failedRules.map((rule) => (
+            <RuleRow key={rule.rule} rule={rule} colors={colors} showExplanation />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.attentionBlock}>
+          <View style={styles.allGoodRow}>
+            <Feather name="check-circle" size={16} color={colors.success} />
+            <Text style={[styles.allGoodText, { color: colors.success, fontFamily: "Inter_600SemiBold" }]}>
+              {t("compliance.status.compliant")}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <Pressable
+        onPress={() => setExpanded((e) => !e)}
+        style={[styles.rulesToggle, { borderTopColor: colors.border }]}
+      >
+        <Text style={[styles.sectionTitle, styles.rulesToggleTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          {t("compliance.rulesTitle")}
+        </Text>
+        <View style={styles.rulesToggleRight}>
+          <Text style={[styles.rulesToggleCount, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            {t("compliance.checksPassed", { passed: String(passed), total: String(rules.length) })}
+          </Text>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.allRulesBlock}>
+          {rules.map((rule) => (
+            <RuleRow
+              key={rule.rule}
+              rule={rule}
+              colors={colors}
+              showExplanation={rule.status === "fail" || rule.status === "warning"}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function ComplianceTabScreen() {
   const colors = useColors();
+  const isDark = colors.scheme === "dark";
   const insets = useSafeAreaInsets();
   const t = useT();
   const loadingMoreRef = useRef(false);
@@ -90,6 +188,8 @@ export default function ComplianceTabScreen() {
   const loading = isLoading || detailLoading || (sessionsLoading && sessions.length === 0);
   const latest = overview?.latest_session ?? sessions[0];
   const trend = detail?.trend ?? [];
+  const rules = detail?.rules ?? [];
+  const failedRules = detail?.failed_rules ?? [];
   const latestScore = latest?.compliance_score ?? overview?.average_score ?? 0;
   const latestStatus =
     (latest?.compliance_status as WorkerCompliance["status"] | undefined) ?? overview?.status;
@@ -168,6 +268,8 @@ export default function ComplianceTabScreen() {
         </View>
       </View>
 
+      <RuleBreakdownSection rules={rules} failedRules={failedRules} colors={colors} t={t} />
+
       {trend.length > 0 ? (
         <View style={[styles.trendCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -229,7 +331,7 @@ export default function ComplianceTabScreen() {
       <WorkerMobileHeader title={t("nav.compliance")} />
 
       <View style={styles.segmentWrap}>
-        <View style={[styles.segmentTrack, { backgroundColor: colors.soft }]}>
+        <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
           {(
             [
               ["overview", t("compliance.segment.overview")],
@@ -241,14 +343,17 @@ export default function ComplianceTabScreen() {
               <Pressable
                 key={key}
                 onPress={() => setSegment(key)}
-                style={[styles.segmentBtn, active && { backgroundColor: colors.primary }]}
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: active ? colors.primary : colors.soft },
+                ]}
               >
                 <Text
                   style={[
                     styles.segmentText,
                     {
-                      color: active ? "#FFFFFF" : colors.primary,
-                      fontFamily: "Inter_600SemiBold",
+                      color: active ? colors.primaryForeground : colors.mutedForeground,
+                      fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
                     },
                   ]}
                 >
@@ -261,7 +366,7 @@ export default function ComplianceTabScreen() {
       </View>
 
       {segment === "incidents" ? (
-        <ComplianceIncidentsSection contentBottomPad={bottomPad} />
+        <IncidentsPanel contentBottomPad={bottomPad} />
       ) : loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
@@ -313,18 +418,18 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   error: { fontSize: 14, padding: 24, textAlign: "center" },
-  segmentWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  segmentWrap: { paddingHorizontal: 16, paddingTop: 16 },
   segmentTrack: {
     flexDirection: "row",
-    borderRadius: 999,
-    padding: 3,
+    gap: 3,
   },
   segmentBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   segmentText: { fontSize: 12 },
   list: { paddingHorizontal: 16, paddingTop: 4 },
@@ -359,6 +464,35 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 16 },
   statLabel: { fontSize: 10, textAlign: "center" },
+  rulesCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  attentionBlock: { padding: 12, gap: 10 },
+  attentionTitle: {
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  allGoodRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  allGoodText: { fontSize: 13 },
+  ruleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  ruleCopy: { flex: 1, gap: 2 },
+  ruleLabel: { fontSize: 13, lineHeight: 18 },
+  ruleExplanation: { fontSize: 12, lineHeight: 17 },
+  rulesToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  rulesToggleTitle: { marginBottom: 0 },
+  rulesToggleRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rulesToggleCount: { fontSize: 11 },
+  allRulesBlock: { paddingHorizontal: 12, paddingBottom: 12, gap: 10 },
   trendCard: {
     borderWidth: 1,
     borderRadius: 12,
