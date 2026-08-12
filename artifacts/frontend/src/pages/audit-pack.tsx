@@ -38,7 +38,9 @@ function TrendIcon({ score }: { score?: number | null }) {
 
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
-export default function AuditPack() {
+/** Rendered both at the standalone /audit-pack route and as a Compliance
+ * Centre sub-tab — kept as one component so the two never drift apart. */
+export function AuditPackPanel() {
   const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
 
@@ -121,43 +123,48 @@ export default function AuditPack() {
   ], [translate, compliance.data, flags.data, flagged.data]);
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-3 pb-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="hidden" style={{ color: CORAL }}>{translate("common.coordinator")}</p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("auditPack.title")}</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
+          <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
         </div>
         <Button
           onClick={handleExport}
-          className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
           style={{ background: PLUM }}
         >
           <Download size={15} /> {translate("auditPack.export")}
         </Button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-4">
-        {statCards.map(({ icon: Icon, label, value, colour }) => (
-          <section key={label} className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-            <Icon size={20} style={{ color: colour }} />
-            <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{value}</p>
-            <p className="text-sm font-bold" style={{ color: MUTED }}>{label}</p>
-          </section>
+      {/* Stat strip */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border bg-white px-5 py-3" style={{ borderColor: BORDER }}>
+        {statCards.map(({ icon: Icon, label, value, colour }, i) => (
+          <div key={label} className="flex items-center gap-6">
+            {i > 0 && <div className="h-7 w-px hidden sm:block" style={{ background: BORDER }} />}
+            <div className="flex items-center gap-2">
+              <Icon size={16} style={{ color: colour }} className="shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>{label}</p>
+                <p className="text-lg font-black leading-tight mt-0.5" style={{ color: TEXT }}>{value}</p>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* Compliance status strip */}
       {compliance.data && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {[
             { label: translate("auditPack.compliant"), count: compliance.data.compliant, bg: "#DCFCE7", colour: "#16A34A" },
             { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, bg: "#FEF3C7", colour: "#D97706" },
             { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, bg: "#FEE2E2", colour: "#DC2626" },
           ].map(({ label, count, bg, colour }) => (
-            <div key={label} className="rounded-xl p-4 text-center" style={{ background: bg }}>
+            <div key={label} className="rounded-xl p-3 text-center" style={{ background: bg }}>
               <p className="text-2xl font-black" style={{ color: colour }}>{count}</p>
               <p className="text-xs font-bold mt-0.5" style={{ color: colour }}>{label}</p>
             </div>
@@ -384,4 +391,8 @@ export default function AuditPack() {
       )}
     </div>
   );
+}
+
+export default function AuditPack() {
+  return <AuditPackPanel />;
 }
