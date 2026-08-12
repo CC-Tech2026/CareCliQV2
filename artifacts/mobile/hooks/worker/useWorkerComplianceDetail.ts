@@ -9,7 +9,7 @@ export function useWorkerComplianceDetail(days: 7 | 30 = 7) {
     queryKey: ["worker", "compliance-detail", days],
     queryFn: () => getWorkerComplianceDetail(days),
     staleTime: 30_000,
-    refetchOnFocus: true,
+    refetchOnWindowFocus: true,
     enabled: isAuthenticated,
   });
 }

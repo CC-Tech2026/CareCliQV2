@@ -14,7 +14,6 @@ import { SecurityCardScrollList } from "@/components/worker/security/SecurityCar
 import {
   SettingsLoadingRow,
   SettingsPanelCard,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
@@ -116,13 +115,8 @@ export function SecuritySessionsPanel() {
 
   return (
     <>
-      <SettingsSection
-        title={t("security.activeSessions")}
-        description={t("security.sessionsHint")}
-        icon="lock"
-      >
-        <SettingsPanelCard>
-          {isLoading ? (
+      <SettingsPanelCard>
+        {isLoading ? (
             <SettingsLoadingRow label={t("common.loading")} />
           ) : (
             <>
@@ -178,7 +172,6 @@ export function SecuritySessionsPanel() {
             </>
           )}
         </SettingsPanelCard>
-      </SettingsSection>
 
       <Modal visible={renameTarget !== null} transparent animationType="fade" onRequestClose={closeRename}>
         <Pressable style={styles.modalBackdrop} onPress={closeRename}>

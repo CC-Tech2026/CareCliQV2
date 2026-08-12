@@ -119,22 +119,6 @@ function RootLayoutNav() {
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
       <Stack.Screen
-        name="worker/contact"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
-        name="worker/privacy-policy"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
-        name="worker/data-permissions"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
-        name="worker/consent"
-        options={{ headerShown: false, animation: "slide_from_right" }}
-      />
-      <Stack.Screen
         name="worker/credentials/add"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />

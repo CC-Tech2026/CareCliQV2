@@ -179,10 +179,14 @@ def _cors_origins() -> list[str]:
     frontend = os.getenv("FRONTEND_URL", "*").strip()
     return [frontend] if frontend else ["*"]
 
+def _cors_origin_regex() -> str | None:
+    """Matches Cloudflare Pages preview subdomains, e.g. abc123.carecliq-dev.pages.dev"""
+    return os.getenv("CORS_ORIGIN_REGEX", r"https://[a-z0-9-]+\.carecliq-dev\.pages\.dev").strip() or None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
+    allow_origin_regex=_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -231,6 +235,8 @@ app.include_router(ndis_tasks.router, prefix="/api")
 app.include_router(budget_ledger.router)  # Uses internal /api/ledger prefix
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
+from .api import employee_onboarding as employee_onboarding_api
+app.include_router(employee_onboarding_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

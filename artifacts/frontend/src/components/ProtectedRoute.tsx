@@ -1,7 +1,7 @@
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
-import { saveAuthRestoreContext } from "@/lib/auth-session";
+import { isVoluntaryLogoutInProgress, saveAuthRestoreContext } from "@/lib/auth-session";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 interface ProtectedRouteProps {
@@ -47,7 +47,9 @@ export function ProtectedRoute({
    * Not logged in
    */
   if (!isAuthenticated || !user) {
-    saveAuthRestoreContext(`${location}${window.location.search || ""}`);
+    if (!isVoluntaryLogoutInProgress()) {
+      saveAuthRestoreContext(`${location}${window.location.search || ""}`);
+    }
     return <Redirect to="/login" />;
   }
 

@@ -834,28 +834,39 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
 
 function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] }) {
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Sessions</h2>
-        <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: SOFT, color: PLUM }}>
-          {sessions.length} total
+    <section className="rounded-xl border bg-white overflow-hidden xl:self-start" style={{ borderColor: BORDER }}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER }}>
+        <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Today's sessions</h2>
+        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black" style={{ background: SOFT, color: PLUM }}>
+          {sessions.length}
         </span>
       </div>
-      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-3">
         {sessions.length === 0 && (
-          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-            No sessions are scheduled for today.
-          </p>
+          <div className="flex flex-col items-center py-6 text-center">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full" style={{ background: SOFT }}>
+              <CalendarDays size={20} style={{ color: MUTED }} />
+            </div>
+            <p className="text-sm font-black" style={{ color: TEXT }}>No sessions today</p>
+            <p className="mt-1 max-w-[200px] text-xs font-medium" style={{ color: MUTED }}>
+              Your team has a clear schedule. Plan ahead for the week.
+            </p>
+            <Link href="/coordinator/rostering">
+              <span className="mt-3 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-black transition hover:opacity-80" style={{ background: "var(--cc-active-bg)", color: PLUM }}>
+                Open schedule <ArrowRight size={10} />
+              </span>
+            </Link>
+          </div>
         )}
         {sessions.slice(0, 8).map((session) => (
-          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EDE3FC" }}>
+          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: BORDER }}>
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: "var(--cc-text)" }}>
               {initials(session.participant_name)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black" style={{ color: TEXT }}>{session.participant_name || "Participant"}</p>
               <p className="truncate text-xs font-medium capitalize" style={{ color: MUTED }}>
-                {(session.session_type || "session").replace("_", " ")} - {sessionTime(session.session_date)}
+                {(session.session_type || "session").replace("_", " ")} · {sessionTime(session.session_date)}
               </p>
             </div>
             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black capitalize ${statusTone(session.compliance_status)}`}>
@@ -864,6 +875,15 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
           </div>
         ))}
       </div>
+      {sessions.length > 0 && (
+        <div className="border-t px-5 py-3 text-center" style={{ borderColor: BORDER }}>
+          <Link href="/sessions">
+            <span className="text-[12px] font-black transition hover:opacity-75" style={{ color: PLUM }}>
+              View all sessions →
+            </span>
+          </Link>
+        </div>
+      )}
     </section>
   );
 }
@@ -879,14 +899,17 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
       }}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
+        <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Most common issues</h2>
         <Link href="/compliance" className="text-xs font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>View full report</Link>
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {issues.length === 0 && (
-          <p className="rounded-lg px-4 py-3 text-sm font-medium" style={{ background: DS.BACKGROUND.section, color: MUTED }}>
-            No recurring failed compliance rules have been recorded.
-          </p>
+          <div className="flex items-center gap-3 rounded-lg px-4 py-3" style={{ background: DS.BACKGROUND.section }}>
+            <CheckCircle2 size={18} className="shrink-0" style={{ color: "var(--cc-status-success)" }} />
+            <p className="text-sm font-medium" style={{ color: MUTED }}>
+              No recurring compliance issues across your team. Keep it up.
+            </p>
+          </div>
         )}
         {issues.map((issue, index) => (
           <div key={issue.issue} className="grid grid-cols-[150px_1fr_32px] items-center gap-3 text-sm">
@@ -1057,18 +1080,23 @@ function WorkerDashboardView({
 
 
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
+  const { user } = useAuth();
+  const firstName = (user?.full_name || "there").split(" ")[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
   const teamParticipants   = data.team_participants ?? data.participants ?? 0;
   const sessionsThisWeek   = data.sessions_this_week ?? data.todays_sessions.length;
   const incidentsThisMonth = data.incidents_this_month ?? (data.incident_alerts ?? []).length;
   const workersAtRisk      = data.workers_needing_support ?? data.workers_needing_attention.length;
   const score              = Math.max(0, Math.min(100, data.team_compliance_score || 0));
 
-  const metrics: Array<{ label: string; value: string | number; tone: StatTone; href: string; icon: React.ReactElement<{ size?: number }> }> = [
-    { label: "Participants",    value: teamParticipants,        tone: "neutral",                                                   href: "/patients",   icon: <Users /> },
-    { label: "Sessions / week", value: sessionsThisWeek,        tone: "neutral",                                                   href: "/sessions",   icon: <CalendarDays /> },
-    { label: "Compliance",      value: `${Math.round(score)}%`, tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger", href: "/compliance", icon: <ShieldCheck /> },
-    { label: "Incidents",       value: incidentsThisMonth,      tone: incidentsThisMonth > 0 ? "warning" : "success",               href: "/incidents",  icon: <AlertTriangle /> },
-    { label: "Need support",    value: workersAtRisk,           tone: workersAtRisk > 0 ? "danger" : "success",                    href: "/team",       icon: <HeartHandshake /> },
+  const metrics: Array<{ label: string; value: string | number; sub: string; tone: StatTone; href: string; icon: React.ReactElement<{ size?: number }> }> = [
+    { label: "Participants", value: teamParticipants,        sub: "Active caseload",  tone: "neutral",                                                    href: "/patients",   icon: <Users /> },
+    { label: "Sessions",     value: sessionsThisWeek,        sub: "This week",        tone: "neutral",                                                    href: "/sessions",   icon: <CalendarDays /> },
+    { label: "Compliance",   value: `${Math.round(score)}%`, sub: "Team average",     tone: score >= 85 ? "success" : score >= 60 ? "warning" : "danger", href: "/compliance", icon: <ShieldCheck /> },
+    { label: "Incidents",    value: incidentsThisMonth,      sub: "This month",       tone: incidentsThisMonth > 0 ? "warning" : "success",               href: "/incidents",  icon: <AlertTriangle /> },
+    { label: "Need support", value: workersAtRisk,           sub: "Workers flagged",  tone: workersAtRisk > 0 ? "danger" : "success",                     href: "/team",       icon: <HeartHandshake /> },
   ];
 
   return (
@@ -1077,8 +1105,11 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {format(new Date(), "EEEE, d MMMM yyyy")}
+          </p>
+          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+            {greeting}, {firstName}
           </h1>
           <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
             {"Here's what needs your attention today"}
@@ -1096,7 +1127,7 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       <KpiGrid className="sm:grid-cols-2 lg:grid-cols-5">
         {metrics.map((m, i) => (
           <Link key={i} href={m.href}>
-            <KpiCard label={m.label} value={m.value} tone={m.tone} icon={m.icon} className="cursor-pointer hover:opacity-75 transition-opacity" />
+            <KpiCard label={m.label} value={m.value} sub={m.sub} tone={m.tone} icon={m.icon} className="cursor-pointer transition-shadow hover:shadow-md" />
           </Link>
         ))}
       </KpiGrid>

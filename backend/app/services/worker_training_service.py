@@ -272,6 +272,164 @@ async def review_training_completion(
     return {**row, "status": status, "reviewed_at": now}
 
 
+def create_training_module(
+    organization_id: str,
+    created_by: str,
+    title: str,
+    description: str | None = None,
+    linked_credential_type: str | None = None,
+    requires_certification: bool = False,
+) -> dict[str, Any]:
+    if not title.strip():
+        raise HTTPException(status_code=422, detail="Title is required.")
+    record = {
+        "id": str(uuid4()),
+        "organization_id": organization_id,
+        "title": title.strip(),
+        "description": description,
+        "linked_credential_type": linked_credential_type,
+        "requires_certification": requires_certification,
+        "created_by": created_by,
+        "is_active": True,
+    }
+    try:
+        get_supabase_admin().table("training_modules").insert(record).execute()
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            raise HTTPException(status_code=503, detail="Training service unavailable.") from exc
+        raise
+    record["resources"] = []
+    return record
+
+
+def recommend_training_module(
+    worker_id: str,
+    coordinator_id: str,
+    organization_id: str,
+    training_module_id: str,
+    title: str,
+) -> dict[str, Any]:
+    record = {
+        "id": str(uuid4()),
+        "worker_id": worker_id,
+        "coordinator_id": coordinator_id,
+        "organization_id": organization_id,
+        "training_module_id": training_module_id,
+        "title": title,
+    }
+    try:
+        get_supabase_admin().table("worker_training_recommendations").insert(record).execute()
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            raise HTTPException(status_code=503, detail="Training service unavailable.") from exc
+        raise
+
+    import asyncio
+
+    async def _notify():
+        await notify_worker(
+            user_id=worker_id,
+            org_id=organization_id,
+            event="training_recommended",
+            title="New training assigned",
+            message=f'Your coordinator assigned you training: "{title}".',
+            reference_key=f"training_recommendation:{record['id']}",
+            severity="medium",
+        )
+
+    try:
+        asyncio.get_event_loop().create_task(_notify())
+    except Exception:
+        pass
+    return record
+
+
+def dismiss_training_recommendation(recommendation_id: str, organization_id: str) -> None:
+    get_supabase_admin().table("worker_training_recommendations").update({
+        "dismissed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", recommendation_id).eq("organization_id", organization_id).execute()
+
+
+def list_worker_recommendations(worker_id: str, organization_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("worker_training_recommendations")
+            .select("*")
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .is_("dismissed_at", "null")
+            .order("recommended_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return []
+        raise
+
+
+def list_pending_completions(organization_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("worker_training_completions")
+            .select("*, training_modules(title), users!worker_training_completions_worker_id_fkey(full_name)")
+            .eq("organization_id", organization_id)
+            .eq("status", "awaiting_confirmation")
+            .order("completed_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return []
+        raise
+
+
+def team_training_summary(organization_id: str) -> dict[str, dict[str, int]]:
+    """Per-worker counts: assigned (active recs), completed (confirmed), pending (awaiting review)."""
+    summary: dict[str, dict[str, int]] = {}
+
+    def bump(worker_id: str, key: str):
+        entry = summary.setdefault(str(worker_id), {"assigned": 0, "completed": 0, "pending_review": 0})
+        entry[key] += 1
+
+    try:
+        recs = (
+            get_supabase_admin()
+            .table("worker_training_recommendations")
+            .select("worker_id")
+            .eq("organization_id", organization_id)
+            .is_("dismissed_at", "null")
+            .execute()
+        )
+        for r in recs.data or []:
+            bump(r["worker_id"], "assigned")
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            raise
+
+    try:
+        completions = (
+            get_supabase_admin()
+            .table("worker_training_completions")
+            .select("worker_id, status")
+            .eq("organization_id", organization_id)
+            .execute()
+        )
+        for c in completions.data or []:
+            if c.get("status") == "confirmed":
+                bump(c["worker_id"], "completed")
+            elif c.get("status") == "awaiting_confirmation":
+                bump(c["worker_id"], "pending_review")
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            raise
+
+    return summary
+
+
 async def action_training_request(
     request_id: str,
     coordinator_id: str,

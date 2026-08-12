@@ -6,7 +6,6 @@ import { SecurityTotpQrModal } from "@/components/worker/security/SecurityTotpQr
 import {
   SettingsLoadingRow,
   SettingsPanelCard,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
@@ -105,13 +104,10 @@ export function SecurityMfaPanel() {
 
   return (
     <>
-      <SettingsSection
-        title={t("security.twoFactor")}
-        description={
-          mfaStatus?.enabled ? t("security.twoFactorActive") : t("security.twoFactorInactive")
-        }
-        icon="shield"
-      >
+      <Text style={[styles.statusText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+        {mfaStatus?.enabled ? t("security.twoFactorActive") : t("security.twoFactorInactive")}
+      </Text>
+      <View>
         <SettingsPanelCard>
           {isLoading ? (
             <SettingsLoadingRow label={t("common.loading")} />
@@ -302,7 +298,7 @@ export function SecurityMfaPanel() {
             </View>
           )}
         </SettingsPanelCard>
-      </SettingsSection>
+      </View>
 
       <SecurityTotpQrModal
         visible={qrOpen}
@@ -314,6 +310,7 @@ export function SecurityMfaPanel() {
 }
 
 const styles = StyleSheet.create({
+  statusText: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
   body: { gap: 14 },
   form: { gap: 12 },
   field: { gap: 6 },

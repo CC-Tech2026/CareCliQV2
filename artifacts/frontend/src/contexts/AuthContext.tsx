@@ -4,8 +4,10 @@ import { getDeviceId } from "@/lib/device-id";
 import { apiFetch } from "@/lib/api-fetch";
 import { queryClient, setQueryOrgId } from "@/lib/query-client";
 import {
+  beginVoluntaryLogout,
   captureCurrentRestoreContext,
   clearAuthSessionStorage,
+  endVoluntaryLogout,
   getRememberDevicePreference,
   persistAuthSession,
   readStoredSession,
@@ -150,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     rememberDevice: boolean,
   ): AuthUser => {
+    endVoluntaryLogout();
     const authUser = mapAuthUser(data);
     if (!authUser.organizationId) {
       throw new Error("Organisation not found. Contact your administrator.");
@@ -246,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [finalizeLogin]);
 
   const logout = useCallback(() => {
+    beginVoluntaryLogout();
     customFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     clearSession();
   }, [clearSession]);

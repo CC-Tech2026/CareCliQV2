@@ -190,6 +190,30 @@ export function clearAuthRestoreContext(): void {
   }
 }
 
+/**
+ * A deliberate "Sign out" click should always land back on the default page
+ * (/hub), not silently replay whatever workspace page the user was last on.
+ * This flag suppresses ProtectedRoute's restore-context capture during the
+ * brief render where isAuthenticated flips to false as part of that logout,
+ * so it doesn't immediately re-save the context we just cleared. Only
+ * involuntary sign-outs (401, idle timeout) should leave a restore context
+ * behind for the next login to replay.
+ */
+let voluntaryLogoutInProgress = false;
+
+export function beginVoluntaryLogout(): void {
+  voluntaryLogoutInProgress = true;
+  clearAuthRestoreContext();
+}
+
+export function isVoluntaryLogoutInProgress(): boolean {
+  return voluntaryLogoutInProgress;
+}
+
+export function endVoluntaryLogout(): void {
+  voluntaryLogoutInProgress = false;
+}
+
 export function resolvePostLoginPath(userId: string, defaultPath = "/hub"): string {
   const restore = loadAuthRestoreContext();
   clearAuthRestoreContext();

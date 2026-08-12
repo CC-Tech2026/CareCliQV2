@@ -15,7 +15,6 @@ import {
   SettingsLoadingRow,
   SettingsPanelCard,
   SettingsSaveButton,
-  SettingsSection,
 } from "@/components/worker/settings/settings-ui";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
@@ -109,11 +108,10 @@ export function SettingsCompliancePanel({ bottomInset = 24 }: Props) {
       contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
-      <SettingsSection
-        title={t("settings.compliance.title")}
-        description={t("settings.compliance.subtitle")}
-        icon="shield"
-      >
+      <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {t("settings.compliance.subtitle")}
+      </Text>
+      <View>
         <SettingsPanelCard label={t("settings.compliance.required")}>
           {isLoading ? (
             <SettingsLoadingRow label={t("settings.loading")} />
@@ -235,13 +233,14 @@ export function SettingsCompliancePanel({ bottomInset = 24 }: Props) {
             </SettingsInfoCallout>
           </>
         ) : null}
-      </SettingsSection>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 8 },
+  subtitle: { fontSize: 12, lineHeight: 18, marginBottom: 14 },
   physicalSection: { gap: 12 },
   desc: { fontSize: 12, lineHeight: 18 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

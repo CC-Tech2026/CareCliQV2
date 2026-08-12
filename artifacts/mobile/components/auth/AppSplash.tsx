@@ -11,7 +11,7 @@ import {
 import { Brand } from "@/constants/brand";
 
 /**
- * Branded splash — CareCliQ Purple #4B3F91, centred logo (~96pt wide).
+ * Branded splash — Warm Ivory #FFFEF0 background, centred logo (~96pt wide).
  * Motion: scale 0.92 → 1.0 + fade over 350ms (ease-out); skipped when Reduce Motion is on.
  */
 export function AppSplash() {
@@ -70,7 +70,7 @@ export function AppSplash() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Brand.purple,
+    backgroundColor: Brand.ivory,
     alignItems: "center",
     justifyContent: "center",
   },
