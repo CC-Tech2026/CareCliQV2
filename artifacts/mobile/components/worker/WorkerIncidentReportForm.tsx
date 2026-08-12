@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,8 @@ import {
   createWorkerIncident,
   type IncidentPhotoItem,
 } from "@/lib/resource-api";
+import { transcribeSessionAudio } from "@/lib/worker-api";
+import { ActiveVoiceRecording, type VoiceRecordingControls } from "@/components/worker/WorkerMobileComposer";
 
 const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?: string }> = {
   verbal: {
@@ -38,6 +40,8 @@ const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?
     worker_actions: "Secured the area and documented visible damage.",
   },
 };
+
+const STEP_COUNT = 5;
 
 type PhotoDraft = IncidentPhotoItem & { preview: string };
 
@@ -56,6 +60,80 @@ type Props = {
   onCancel?: () => void;
 };
 
+/** Text field with a mic button that records, transcribes via the shared voice pipeline, and appends the result. */
+function DictationField({
+  value,
+  onChange,
+  placeholder,
+  sessionId,
+  minHeight = 84,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  sessionId?: string | null;
+  minHeight?: number;
+}) {
+  const colors = useColors();
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const controlsRef = useRef<VoiceRecordingControls | null>(null);
+  const voiceUnavailable = !sessionId;
+
+  const handleSave = async (_secs: number, uri: string | null) => {
+    setRecording(false);
+    if (!uri || !sessionId) return;
+    setTranscribing(true);
+    try {
+      const { transcript } = await transcribeSessionAudio(sessionId, uri);
+      onChange(value ? `${value.trim()} ${transcript}` : transcript);
+    } catch (err) {
+      Alert.alert("Transcription failed", err instanceof Error ? err.message : "Could not transcribe audio.");
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  return (
+    <View>
+      {recording ? (
+        <ActiveVoiceRecording
+          color={colors.primary}
+          mutedColor={colors.mutedForeground}
+          controlsRef={controlsRef}
+          onEnded={() => setRecording(false)}
+          onSave={handleSave}
+        />
+      ) : (
+        <View style={[styles.dictationRow, { borderColor: colors.border, backgroundColor: colors.card, minHeight }]}>
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            placeholder={placeholder}
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            maxLength={2000}
+            style={[styles.dictationInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+          />
+          <Pressable
+            onPress={() => setRecording(true)}
+            disabled={voiceUnavailable || transcribing}
+            hitSlop={8}
+            style={[styles.micBtn, { opacity: voiceUnavailable || transcribing ? 0.4 : 1 }]}
+          >
+            <Feather name="mic" size={16} color={colors.primary} />
+          </Pressable>
+        </View>
+      )}
+      {transcribing && (
+        <Text style={[styles.transcribingText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          Transcribing…
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export function WorkerIncidentReportForm({
   shiftId,
   participantId,
@@ -72,6 +150,7 @@ export function WorkerIncidentReportForm({
 }: Props) {
   const colors = useColors();
   const t = useT();
+  const [step, setStep] = useState(1);
   const [reportType, setReportType] = useState(initialReportType);
   const [behaviourSubtype, setBehaviourSubtype] = useState(initialBehaviourSubtype);
   const [severity, setSeverity] = useState(initialSeverity);
@@ -79,13 +158,14 @@ export function WorkerIncidentReportForm({
   const [workerActions, setWorkerActions] = useState(initialWorkerActions);
   const [participantPresent, setParticipantPresent] = useState<boolean | null>(null);
   const [participantHarmed, setParticipantHarmed] = useState<"yes" | "no" | "unknown" | "">("");
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationRef, setConfirmationRef] = useState<string | null>(null);
 
   const descLen = description.trim().length;
-  const canSubmit = descLen >= 20 && descLen <= 2000 && !submitting;
-  const counterColor = descLen < 20 || descLen > 2000 ? colors.accent : colors.mutedForeground;
+  const descValid = descLen >= 20 && descLen <= 2000;
+  const counterColor = !descValid ? colors.accent : colors.mutedForeground;
 
   const applyBehaviourSubtype = (subtype: string) => {
     setBehaviourSubtype(subtype);
@@ -126,7 +206,7 @@ export function WorkerIncidentReportForm({
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!descValid || submitting) return;
     setSubmitting(true);
     try {
       const result = await createWorkerIncident({
@@ -225,6 +305,26 @@ export function WorkerIncidentReportForm({
     </Pressable>
   );
 
+  const stepLabels = [
+    t("incidents.form.stepType"),
+    t("incidents.form.stepDetails"),
+    t("incidents.form.stepSafety"),
+    t("incidents.form.stepEvidence"),
+    t("incidents.form.stepReview"),
+  ];
+
+  const stepValid =
+    step === 2 ? descValid : step === 3 ? safetyConfirmed : true;
+
+  const goNext = () => {
+    if (!stepValid) return;
+    setStep((s) => Math.min(STEP_COUNT, s + 1));
+  };
+  const goBack = () => setStep((s) => Math.max(1, s - 1));
+
+  const typeLabel = WORKER_REPORT_TYPES.find((i) => i.value === reportType)?.label ?? reportType;
+  const severityLabel = WORKER_SEVERITIES.find((i) => i.value === severity)?.label ?? severity;
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -232,183 +332,310 @@ export function WorkerIncidentReportForm({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.intro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        {t("incidents.form.intro")}
-      </Text>
-
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.reportType")}
-      </Text>
-      <View style={styles.chipRow}>
-        {WORKER_REPORT_TYPES.map((item) => (
-          <Chip
-            key={item.value}
-            active={reportType === item.value}
-            label={item.label}
-            onPress={() => setReportType(item.value)}
-          />
+      <View style={styles.stepBar}>
+        {stepLabels.map((label, index) => (
+          <View key={label} style={styles.stepItem}>
+            <View
+              style={[
+                styles.stepTrack,
+                { backgroundColor: index + 1 <= step ? colors.primary : colors.border },
+              ]}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.stepLabel,
+                {
+                  color: index + 1 <= step ? colors.primary : colors.mutedForeground,
+                  fontFamily: index + 1 === step ? "Inter_700Bold" : "Inter_500Medium",
+                },
+              ]}
+            >
+              {label}
+            </Text>
+          </View>
         ))}
       </View>
 
-      {reportType === "participant_behaviour" ? (
+      {step === 1 ? (
         <>
+          <Text style={[styles.intro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {t("incidents.form.intro")}
+          </Text>
+
           <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            {t("incidents.form.behaviourType")}
+            {t("incidents.form.reportType")}
           </Text>
           <View style={styles.chipRow}>
-            {BEHAVIOUR_SUBTYPES.map((item) => (
+            {WORKER_REPORT_TYPES.map((item) => (
               <Chip
                 key={item.value}
-                active={behaviourSubtype === item.value}
+                active={reportType === item.value}
                 label={item.label}
-                onPress={() => applyBehaviourSubtype(item.value)}
+                onPress={() => setReportType(item.value)}
+              />
+            ))}
+          </View>
+
+          {reportType === "participant_behaviour" ? (
+            <>
+              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                {t("incidents.form.behaviourType")}
+              </Text>
+              <View style={styles.chipRow}>
+                {BEHAVIOUR_SUBTYPES.map((item) => (
+                  <Chip
+                    key={item.value}
+                    active={behaviourSubtype === item.value}
+                    label={item.label}
+                    onPress={() => applyBehaviourSubtype(item.value)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("incidents.form.severity")}
+          </Text>
+          <View style={styles.severityRow}>
+            {WORKER_SEVERITIES.map((item) => (
+              <Chip
+                key={item.value}
+                flex
+                active={severity === item.value}
+                label={item.label}
+                onPress={() => setSeverity(item.value)}
               />
             ))}
           </View>
         </>
       ) : null}
 
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.severity")}
-      </Text>
-      <View style={styles.severityRow}>
-        {WORKER_SEVERITIES.map((item) => (
-          <Chip
-            key={item.value}
-            flex
-            active={severity === item.value}
-            label={item.label}
-            onPress={() => setSeverity(item.value)}
-          />
-        ))}
-      </View>
-
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.whatHappened")}
-      </Text>
-      <TextInput
-        value={description}
-        onChangeText={setDescription}
-        placeholder={t("incidents.form.whatHappenedPlaceholder")}
-        placeholderTextColor={colors.mutedForeground}
-        multiline
-        maxLength={2000}
-        style={[
-          styles.textArea,
-          {
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            color: colors.foreground,
-            fontFamily: "Inter_400Regular",
-          },
-        ]}
-      />
-      <Text style={[styles.counter, { color: counterColor, fontFamily: "Inter_500Medium" }]}>
-        {descLen}/2000{descLen < 20 ? ` ${t("incidents.form.minChars")}` : ""}
-      </Text>
-
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.actionsTaken")}
-      </Text>
-      <TextInput
-        value={workerActions}
-        onChangeText={setWorkerActions}
-        placeholder={t("incidents.form.actionsPlaceholder")}
-        placeholderTextColor={colors.mutedForeground}
-        multiline
-        maxLength={1000}
-        style={[
-          styles.textArea,
-          {
-            minHeight: 60,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            color: colors.foreground,
-            fontFamily: "Inter_400Regular",
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.participantPresent")}
-      </Text>
-      <View style={styles.chipRow}>
-        <Chip active={participantPresent === true} label={t("common.yes")} onPress={() => setParticipantPresent(true)} />
-        <Chip
-          active={participantPresent === false}
-          label={t("common.no")}
-          onPress={() => {
-            setParticipantPresent(false);
-            setParticipantHarmed("");
-          }}
-        />
-      </View>
-
-      {participantPresent ? (
+      {step === 2 ? (
         <>
           <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            {t("incidents.form.participantHarmed")}
+            {t("incidents.form.whatHappened")}
           </Text>
-          <View style={styles.chipRow}>
-            {(["yes", "no", "unknown"] as const).map((v) => (
-              <Chip
-                key={v}
-                active={participantHarmed === v}
-                label={v === "yes" ? t("common.yes") : v === "no" ? t("common.no") : t("common.unknown")}
-                onPress={() => setParticipantHarmed(v)}
-              />
-            ))}
-          </View>
+          <DictationField
+            value={description}
+            onChange={setDescription}
+            placeholder={t("incidents.form.whatHappenedPlaceholder")}
+            sessionId={sessionId}
+          />
+          <Text style={[styles.counter, { color: counterColor, fontFamily: "Inter_500Medium" }]}>
+            {descLen}/2000{descLen < 20 ? ` ${t("incidents.form.minChars")}` : ""}
+          </Text>
+
+          <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("incidents.form.actionsTaken")}
+          </Text>
+          <DictationField
+            value={workerActions}
+            onChange={setWorkerActions}
+            placeholder={t("incidents.form.actionsPlaceholder")}
+            sessionId={sessionId}
+            minHeight={60}
+          />
         </>
       ) : null}
 
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-        {t("incidents.form.photos")}
-      </Text>
-      <View style={styles.photoRow}>
-        {photos.map((photo, i) => (
-          <View key={i} style={styles.photoWrap}>
-            <Image source={{ uri: photo.preview }} style={styles.photo} />
-            <Pressable
-              onPress={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-              style={styles.photoRemove}
-            >
-              <Feather name="x" size={12} color="#FFFFFF" />
-            </Pressable>
+      {step === 3 ? (
+        <>
+          <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("incidents.form.participantPresent")}
+          </Text>
+          <View style={styles.chipRow}>
+            <Chip active={participantPresent === true} label={t("common.yes")} onPress={() => setParticipantPresent(true)} />
+            <Chip
+              active={participantPresent === false}
+              label={t("common.no")}
+              onPress={() => {
+                setParticipantPresent(false);
+                setParticipantHarmed("");
+              }}
+            />
           </View>
-        ))}
-        {photos.length < 3 ? (
+
+          {participantPresent ? (
+            <>
+              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                {t("incidents.form.participantHarmed")}
+              </Text>
+              <View style={styles.chipRow}>
+                {(["yes", "no", "unknown"] as const).map((v) => (
+                  <Chip
+                    key={v}
+                    active={participantHarmed === v}
+                    label={v === "yes" ? t("common.yes") : v === "no" ? t("common.no") : t("common.unknown")}
+                    onPress={() => setParticipantHarmed(v)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
+
           <Pressable
-            onPress={handleCapturePhoto}
-            style={[styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={() => setSafetyConfirmed((v) => !v)}
+            style={[
+              styles.safetyRow,
+              {
+                borderColor: safetyConfirmed ? colors.primary : colors.border,
+                backgroundColor: safetyConfirmed ? colors.activeBg : colors.card,
+              },
+            ]}
           >
-            <Feather name="camera" size={20} color={colors.mutedForeground} />
+            <View
+              style={[
+                styles.safetyCheckbox,
+                {
+                  borderColor: safetyConfirmed ? colors.primary : colors.border,
+                  backgroundColor: safetyConfirmed ? colors.primary : "transparent",
+                },
+              ]}
+            >
+              {safetyConfirmed ? <Feather name="check" size={12} color="#FFFFFF" /> : null}
+            </View>
+            <Text style={[styles.safetyText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+              {t("incidents.form.safetyConfirm")}
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
+
+      {step === 4 ? (
+        <>
+          <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("incidents.form.photos")}
+          </Text>
+          <View style={styles.photoRow}>
+            {photos.map((photo, i) => (
+              <View key={i} style={styles.photoWrap}>
+                <Image source={{ uri: photo.preview }} style={styles.photo} />
+                <Pressable
+                  onPress={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                  style={styles.photoRemove}
+                >
+                  <Feather name="x" size={12} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ))}
+            {photos.length < 3 ? (
+              <Pressable
+                onPress={handleCapturePhoto}
+                style={[styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.card }]}
+              >
+                <Feather name="camera" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {t("incidents.form.photosHint")}
+          </Text>
+        </>
+      ) : null}
+
+      {step === 5 ? (
+        <>
+          <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("incidents.form.stepReview")}
+          </Text>
+          <View style={[styles.reviewCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <ReviewRow label={t("incidents.form.reportType")} value={typeLabel} colors={colors} />
+            <ReviewRow label={t("incidents.form.severity")} value={severityLabel} colors={colors} />
+            <ReviewRow label={t("incidents.form.whatHappened")} value={description.trim() || "—"} colors={colors} multiline />
+            {workerActions.trim() ? (
+              <ReviewRow label={t("incidents.form.actionsTaken")} value={workerActions.trim()} colors={colors} multiline />
+            ) : null}
+            <ReviewRow
+              label={t("incidents.form.photos")}
+              value={photos.length ? `${photos.length}` : t("common.none")}
+              colors={colors}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={!descValid || submitting}
+            style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: descValid ? 1 : 0.5 }]}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={[styles.submitText, { fontFamily: "Inter_600SemiBold" }]}>
+                {participantName
+                  ? t("incidents.form.submitFor", { name: participantName })
+                  : t("incidents.form.submit")}
+              </Text>
+            )}
+          </Pressable>
+        </>
+      ) : null}
+
+      <View style={styles.navRow}>
+        {step > 1 ? (
+          <Pressable onPress={goBack} style={[styles.navBtn, { borderColor: colors.border }]}>
+            <Text style={[styles.navBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {t("common.back")}
+            </Text>
+          </Pressable>
+        ) : onCancel ? (
+          <Pressable onPress={onCancel} style={[styles.navBtn, { borderColor: colors.border }]}>
+            <Text style={[styles.navBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              {t("common.cancel")}
+            </Text>
+          </Pressable>
+        ) : <View />}
+
+        {step < STEP_COUNT ? (
+          <Pressable
+            onPress={goNext}
+            disabled={!stepValid}
+            style={[styles.navBtnPrimary, { backgroundColor: colors.primary, opacity: stepValid ? 1 : 0.5 }]}
+          >
+            <Text style={[styles.navBtnPrimaryText, { fontFamily: "Inter_600SemiBold" }]}>
+              {t("common.next")}
+            </Text>
           </Pressable>
         ) : null}
       </View>
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={!canSubmit}
-        style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.5 }]}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
-        ) : (
-          <Text style={[styles.submitText, { fontFamily: "Inter_600SemiBold" }]}>
-            {participantName
-              ? t("incidents.form.submitFor", { name: participantName })
-              : t("incidents.form.submit")}
-          </Text>
-        )}
-      </Pressable>
     </ScrollView>
+  );
+}
+
+function ReviewRow({
+  label,
+  value,
+  colors,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useColors>;
+  multiline?: boolean;
+}) {
+  return (
+    <View style={styles.reviewRow}>
+      <Text style={[styles.reviewLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+        {label}
+      </Text>
+      <Text
+        style={[styles.reviewValue, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+        numberOfLines={multiline ? undefined : 1}
+      >
+        {value}
+      </Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 6 },
+  stepBar: { flexDirection: "row", gap: 4, marginBottom: 14 },
+  stepItem: { flex: 1, gap: 4 },
+  stepTrack: { height: 3, borderRadius: 2 },
+  stepLabel: { fontSize: 9, textTransform: "uppercase", letterSpacing: 0.3 },
   intro: { fontSize: 12, marginBottom: 6, lineHeight: 18 },
   label: {
     fontSize: 11,
@@ -427,14 +654,10 @@ const styles = StyleSheet.create({
   },
   chipFlex: { flex: 1, alignItems: "center", paddingHorizontal: 0, paddingVertical: 8 },
   chipText: { fontSize: 12 },
-  textArea: {
-    minHeight: 84,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 13,
-    textAlignVertical: "top",
-  },
+  dictationRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  dictationInput: { flex: 1, fontSize: 13, textAlignVertical: "top" },
+  micBtn: { paddingBottom: 6 },
+  transcribingText: { fontSize: 11, marginTop: 4 },
   counter: { fontSize: 10, textAlign: "right", marginBottom: 8 },
   photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 4 },
   photoWrap: { width: 64, height: 64 },
@@ -456,6 +679,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  hint: { fontSize: 11, marginTop: 8, lineHeight: 16 },
+  safetyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+  },
+  safetyCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  safetyText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  reviewCard: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10, marginTop: 4 },
+  reviewRow: { gap: 2 },
+  reviewLabel: { fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3 },
+  reviewValue: { fontSize: 13, lineHeight: 18 },
+  navRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 18, gap: 10 },
+  navBtn: { flex: 1, height: 44, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  navBtnText: { fontSize: 13 },
+  navBtnPrimary: { flex: 1, height: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  navBtnPrimaryText: { color: "#FFFFFF", fontSize: 13 },
   submitBtn: {
     marginTop: 10,
     height: 46,

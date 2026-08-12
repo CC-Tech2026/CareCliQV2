@@ -1270,6 +1270,8 @@ function IncidentsPanel() {
                 worker_name: inc.worker_name,
                 ndis_reportable: inc.ndis_reportable,
                 ndis_pending: inc.ndis_reportable && inc.status !== "closed",
+                notification_due_at: inc.notification_due_at,
+                overdue: inc.overdue,
                 auto_detected: true,
               }}
               typeLabel={typeLabel(inc.incident_type)}

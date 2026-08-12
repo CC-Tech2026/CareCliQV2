@@ -6,9 +6,11 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
 import {
+  attachMedicationReason,
   getMedicationChecklist,
   logMedicationAdministration,
-  type MedicationAdministrationStatus,
+  MEDICATION_REASON_CODES,
+  type MedicationAdministrationAction,
   type MedicationChecklistItem,
 } from "@/lib/worker-api";
 
@@ -17,14 +19,29 @@ type Props = {
   disabled?: boolean;
 };
 
+const REASON_LABELS: Record<string, string> = {
+  participant_asleep: "Participant was asleep",
+  worker_delayed: "Worker was delayed",
+  participant_off_site: "Participant was off site",
+  participant_requested: "Participant requested it early",
+  schedule_conflict: "Schedule conflict",
+  verbal: "Verbal refusal",
+  behavioural: "Behavioural",
+  communication_device: "Via communication device",
+  clinical_direction: "Clinical direction",
+  other: "Other",
+};
+
 function dueMeta(item: MedicationChecklistItem, colors: ReturnType<typeof useColors>) {
-  const status = item.administration?.status ?? item.due_status;
-  if (status === "given") return { label: "Given", color: colors.success, bg: colors.statusDocumentedBg };
-  if (status === "refused") return { label: "Refused", color: colors.destructive, bg: colors.dangerBg };
-  if (status === "missed") return { label: "Missed", color: colors.destructive, bg: colors.dangerBg };
-  if (status === "withheld") return { label: "Withheld", color: colors.warning, bg: colors.statusProgressBg };
-  if (status === "overdue") return { label: "Overdue", color: colors.destructive, bg: colors.dangerBg };
-  if (status === "due_now") return { label: "Due now", color: colors.primary, bg: colors.statusUpcomingBg };
+  const outcome = item.administration?.outcome ?? item.due_status;
+  if (outcome === "given_on_time") return { label: "Given", color: colors.success, bg: colors.statusDocumentedBg };
+  if (outcome === "given_late") return { label: "Given (late)", color: colors.warning, bg: colors.statusProgressBg };
+  if (outcome === "given_early") return { label: "Given (early)", color: colors.warning, bg: colors.statusProgressBg };
+  if (outcome === "refused") return { label: "Refused", color: colors.destructive, bg: colors.dangerBg };
+  if (outcome === "missed") return { label: "Missed", color: colors.destructive, bg: colors.dangerBg };
+  if (outcome === "withheld") return { label: "Withheld", color: colors.warning, bg: colors.statusProgressBg };
+  if (outcome === "overdue") return { label: "Overdue", color: colors.destructive, bg: colors.dangerBg };
+  if (outcome === "due_now") return { label: "Due now", color: colors.primary, bg: colors.statusUpcomingBg };
   return { label: "Upcoming", color: colors.mutedForeground, bg: colors.soft };
 }
 
@@ -33,7 +50,12 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [activeItem, setActiveItem] = useState<MedicationChecklistItem | null>(null);
+  const [reasonAction, setReasonAction] = useState<MedicationAdministrationAction | null>(null);
+  const [reasonCode, setReasonCode] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  // Set once a "given" submission comes back late/early — the worker didn't choose this in
+  // advance, the server classified it, so the reason step happens as a follow-up.
+  const [followUp, setFollowUp] = useState<{ administrationId: string; outcome: "given_late" | "given_early" } | null>(null);
 
   const { data } = useQuery({
     queryKey: ["worker", "medication-checklist", shiftId],
@@ -44,32 +66,85 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
 
   const checklist = data?.checklist ?? [];
 
+  const reset = () => {
+    setActiveItem(null);
+    setReasonAction(null);
+    setReasonCode(null);
+    setNoteText("");
+    setFollowUp(null);
+  };
+
   const logMutation = useMutation({
-    mutationFn: ({ item, status, notes }: { item: MedicationChecklistItem; status: MedicationAdministrationStatus; notes?: string }) =>
+    mutationFn: ({ item, action, reason_code, notes }: { item: MedicationChecklistItem; action: MedicationAdministrationAction; reason_code?: string; notes?: string }) =>
       logMedicationAdministration(shiftId, item.medication_id, {
         scheduled_time: item.scheduled_time,
-        status,
+        action,
+        reason_code,
         notes: notes || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["worker", "medication-checklist", shiftId] });
+      if (result.outcome === "given_late" || result.outcome === "given_early") {
+        showToast(result.outcome === "given_late" ? "Logged as given, but late — one more step" : "Logged as given, but early — one more step", "success");
+        setReasonAction(null);
+        setReasonCode(null);
+        setNoteText("");
+        setFollowUp({ administrationId: result.id, outcome: result.outcome });
+        return;
+      }
       showToast("Medication logged", "success");
-      setActiveItem(null);
-      setNoteText("");
+      reset();
     },
     onError: (e: Error) => showToast(e.message || "Could not log medication.", "error"),
   });
 
-  const submit = (status: MedicationAdministrationStatus) => {
+  const followUpMutation = useMutation({
+    mutationFn: () => attachMedicationReason(followUp!.administrationId, reasonCode ?? undefined, noteText.trim() || undefined),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["worker", "medication-checklist", shiftId] });
+      showToast("Reason recorded", "success");
+      reset();
+    },
+    onError: (e: Error) => showToast(e.message || "Could not save reason.", "error"),
+  });
+
+  const submitGiven = () => {
     if (!activeItem) return;
-    if (status !== "given" && !noteText.trim()) {
+    logMutation.mutate({ item: activeItem, action: "given" });
+  };
+
+  const pickReasonAction = (action: MedicationAdministrationAction) => {
+    setReasonAction(action);
+    setReasonCode(null);
+    setNoteText("");
+  };
+
+  const submitReasonAction = () => {
+    if (!activeItem || !reasonAction) return;
+    if (!noteText.trim()) {
       showToast("A note is required for this outcome.", "error");
       return;
     }
-    logMutation.mutate({ item: activeItem, status, notes: noteText.trim() || undefined });
+    logMutation.mutate({ item: activeItem, action: reasonAction, reason_code: reasonCode ?? undefined, notes: noteText.trim() });
+  };
+
+  const submitFollowUp = () => {
+    if (!reasonCode && !noteText.trim()) {
+      showToast("Pick a reason or add a note.", "error");
+      return;
+    }
+    followUpMutation.mutate();
   };
 
   if (checklist.length === 0) return null;
+
+  const modalVisible = !!activeItem || !!followUp;
+  const reasonCodes = reasonAction
+    ? MEDICATION_REASON_CODES[reasonAction as Exclude<MedicationAdministrationAction, "given">] ?? []
+    : followUp
+      ? MEDICATION_REASON_CODES[followUp.outcome]
+      : [];
+  const busy = logMutation.isPending || followUpMutation.isPending;
 
   return (
     <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -112,52 +187,128 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
         );
       })}
 
-      <Modal visible={!!activeItem} transparent animationType="fade" onRequestClose={() => setActiveItem(null)}>
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={reset}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {activeItem?.name}
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {activeItem?.dosage ? `${activeItem.dosage} · ` : ""}{activeItem?.route}
-            </Text>
-
-            <Pressable
-              onPress={() => submit("given")}
-              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-              disabled={logMutation.isPending}
-            >
-              <Feather name="check" size={15} color="#FFFFFF" />
-              <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
-            </Pressable>
-
-            <TextInput
-              value={noteText}
-              onChangeText={setNoteText}
-              placeholder="Note (required for refused / missed / withheld)"
-              placeholderTextColor={colors.mutedForeground}
-              multiline
-              style={[styles.noteInput, { borderColor: colors.border, color: colors.foreground }]}
-            />
-
-            <View style={styles.secondaryRow}>
-              {(["refused", "missed", "withheld"] as MedicationAdministrationStatus[]).map((status) => (
+            {followUp ? (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  Why was this dose {followUp.outcome === "given_late" ? "late" : "early"}?
+                </Text>
+                <View style={styles.chipWrap}>
+                  {reasonCodes.map((code) => (
+                    <Pressable
+                      key={code}
+                      onPress={() => setReasonCode(code)}
+                      style={[
+                        styles.chip,
+                        { borderColor: reasonCode === code ? colors.primary : colors.border, backgroundColor: reasonCode === code ? colors.activeBg : "transparent" },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: reasonCode === code ? colors.primary : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        {REASON_LABELS[code] ?? code}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  placeholder="Note (required if reason is 'Other')"
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  style={[styles.noteInput, { borderColor: colors.border, color: colors.foreground }]}
+                />
                 <Pressable
-                  key={status}
-                  onPress={() => submit(status)}
-                  disabled={logMutation.isPending}
-                  style={[styles.secondaryBtn, { borderColor: colors.border }]}
+                  onPress={submitFollowUp}
+                  disabled={busy}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
                 >
-                  <Text style={[styles.secondaryBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                    {status[0].toUpperCase() + status.slice(1)}
-                  </Text>
+                  <Feather name="check" size={15} color="#FFFFFF" />
+                  <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Save reason</Text>
                 </Pressable>
-              ))}
-            </View>
+              </>
+            ) : reasonAction ? (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  {activeItem?.name} — {reasonAction[0].toUpperCase() + reasonAction.slice(1)}
+                </Text>
+                <View style={styles.chipWrap}>
+                  {reasonCodes.map((code) => (
+                    <Pressable
+                      key={code}
+                      onPress={() => setReasonCode(code)}
+                      style={[
+                        styles.chip,
+                        { borderColor: reasonCode === code ? colors.primary : colors.border, backgroundColor: reasonCode === code ? colors.activeBg : "transparent" },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: reasonCode === code ? colors.primary : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        {REASON_LABELS[code] ?? code}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  placeholder="Note (required)"
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  style={[styles.noteInput, { borderColor: colors.border, color: colors.foreground }]}
+                />
+                <Pressable
+                  onPress={submitReasonAction}
+                  disabled={busy}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
+                >
+                  <Feather name="check" size={15} color="#FFFFFF" />
+                  <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm</Text>
+                </Pressable>
+                <Pressable onPress={() => setReasonAction(null)} style={styles.cancelBtn}>
+                  <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Back</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  {activeItem?.name}
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {activeItem?.dosage ? `${activeItem.dosage} · ` : ""}{activeItem?.route}
+                </Text>
 
-            <Pressable onPress={() => setActiveItem(null)} style={styles.cancelBtn}>
-              <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
-            </Pressable>
+                <Pressable
+                  onPress={submitGiven}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
+                  disabled={busy}
+                >
+                  <Feather name="check" size={15} color="#FFFFFF" />
+                  <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
+                </Pressable>
+
+                <View style={styles.secondaryRow}>
+                  {(["refused", "missed", "withheld"] as MedicationAdministrationAction[]).map((action) => (
+                    <Pressable
+                      key={action}
+                      onPress={() => pickReasonAction(action)}
+                      disabled={busy}
+                      style={[styles.secondaryBtn, { borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.secondaryBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        {action[0].toUpperCase() + action.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {!reasonAction && !followUp && (
+              <Pressable onPress={reset} style={styles.cancelBtn}>
+                <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </Modal>
@@ -185,6 +336,9 @@ const styles = StyleSheet.create({
   secondaryRow: { flexDirection: "row", gap: 8 },
   secondaryBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
   secondaryBtnText: { fontSize: 12 },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  chipText: { fontSize: 12 },
   cancelBtn: { alignItems: "center", paddingVertical: 8 },
   cancelBtnText: { fontSize: 13 },
 });

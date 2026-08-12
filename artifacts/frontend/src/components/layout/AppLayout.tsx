@@ -809,7 +809,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Main content canvas */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
-        <div className="flex-1 flex flex-col min-h-0 bg-cc-surface overflow-hidden relative">
+        <div className="flex-1 flex flex-col min-h-0 bg-cc-bg overflow-hidden relative">
 
           {/* ── Mobile header ─────────────────────────────────────────────── */}
           {!hideWorkerMobileTopNav && (

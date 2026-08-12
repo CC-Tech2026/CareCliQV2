@@ -784,7 +784,10 @@ async def worker_shift_medication_checklist(shift_id: str, current_user: dict = 
 
 class MedicationAdministrationBody(BaseModel):
     scheduled_time: Optional[str] = None
-    status: Literal["given", "refused", "missed", "withheld"]
+    administered_time: Optional[str] = None
+    action: Literal["given", "refused", "missed", "withheld"]
+    reason_code: Optional[str] = None
+    directed_by: Optional[str] = None
     dose_given: Optional[str] = None
     notes: Optional[str] = None
     prn_reason: Optional[str] = None
@@ -798,7 +801,9 @@ async def worker_log_medication_administration(
     body: MedicationAdministrationBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Log a scheduled-dose or PRN administration event during a shift (append-only ledger)."""
+    """Log a scheduled-dose or PRN administration event during a shift (append-only ledger).
+    given_on_time/given_late/given_early is classified automatically from the timestamps —
+    the worker only picks the base action (given/refused/missed/withheld)."""
     _require_worker(current_user)
     shift = _require_shift_owner(shift_id, current_user)
     org_id = get_user_organization_id(current_user)
@@ -811,8 +816,11 @@ async def worker_log_medication_administration(
         shift=shift,
         organization_id=org_id,
         administered_by=worker_id,
-        status=body.status,
+        action=body.action,
         scheduled_time=body.scheduled_time,
+        administered_time=body.administered_time,
+        reason_code=body.reason_code,
+        directed_by=body.directed_by,
         dose_given=body.dose_given,
         notes=body.notes,
         prn_reason=body.prn_reason,
@@ -849,6 +857,24 @@ async def worker_log_prn_effect(
         body.effect_observed,
         body.voice_captured,
     )
+
+
+class MedicationReasonBody(BaseModel):
+    reason_code: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/medication-administrations/{administration_id}/reason")
+async def worker_attach_medication_reason(
+    administration_id: str,
+    body: MedicationReasonBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Follow-up: attach a reason to a dose that came back given_late/given_early — the worker
+    couldn't have known that classification in advance of submitting it."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    return medication_service.attach_administration_reason(administration_id, org_id, body.reason_code, body.notes)
 
 
 @router.get("/shifts/{shift_id}/participant-preferences")

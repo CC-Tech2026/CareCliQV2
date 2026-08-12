@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2, Upload,
   Mail, Phone, IdCard, Hourglass, AlertCircle,
-  CalendarDays, LogIn, MessageCircle, ArrowRight,
+  CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -15,13 +15,14 @@ import {
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
 import type { Credential } from "@/services/credentialsService";
+import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const PLUM = "var(--cc-plum)";
@@ -429,6 +430,13 @@ function DetailRow({
 
 function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
   const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+
+  const coachingQuery = useOrgQuery(["worker-medication-coaching-signal", worker.id], {
+    queryFn: () => getWorkerCoachingSignal(worker.id),
+    enabled: worker.role === "support_worker",
+  });
+  const coaching = coachingQuery.data?.signal;
+
   return (
     <div className="space-y-4">
       {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
@@ -453,6 +461,20 @@ function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k
           value={onboardingPending ? translate("team.detail.onboardingPending") : translate("team.detail.onboardingComplete")}
         />
       </div>
+
+      {/* Coaching input, not a compliance flag — deliberately its own card, never mixed
+          into the stat strip or any compliance-facing surface. */}
+      {coaching?.triggered && (
+        <div className="rounded-2xl p-4" style={{ background: SOFT, boxShadow: CARD_SHADOW }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <TrendingUp size={15} style={{ color: PLUM }} />
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: PLUM }}>
+              {translate("team.detail.coachingTitle")}
+            </p>
+          </div>
+          <p className="text-sm" style={{ color: TEXT }}>{coaching.trigger_reason}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -591,13 +613,13 @@ function AddDocumentDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
             <FileText size={18} style={{ color: PLUM }} /> {translate("team.documents.dialogTitle").replace("{name}", worker.full_name)}
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
@@ -639,7 +661,7 @@ function AddDocumentDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
           <Button
             variant="navy"
@@ -648,9 +670,9 @@ function AddDocumentDialog({
           >
             {saveMut.isPending ? translate("common.saving") : translate("team.documents.save")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -910,13 +932,13 @@ function AssignTrainingDialog({
   const pending = createModuleMut.isPending || assignMut.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-2xl" style={{ background: SURFACE }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
             <GraduationCap size={18} style={{ color: PLUM }} /> {translate("team.training.assignTo").replace("{name}", worker.full_name)}
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
         <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
           {(["existing", "new"] as const).map((m) => (
@@ -962,7 +984,7 @@ function AssignTrainingDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
           <Button
             variant="navy"
@@ -971,9 +993,9 @@ function AssignTrainingDialog({
           >
             {pending ? translate("common.saving") : translate("team.training.assign")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 

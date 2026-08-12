@@ -483,6 +483,18 @@ async def get_incident_by_id(
             except Exception:
                 return None
 
+        reporter_id = row.get("user_id")
+        if isinstance(reporter_id, str):
+            try:
+                worker_result = (
+                    supabase.table("users").select("full_name").eq("id", reporter_id).execute()
+                )
+                worker_rows = _safe_rows(worker_result.data)
+                if worker_rows:
+                    row["worker_name"] = str(worker_rows[0].get("full_name") or "")
+            except Exception as exc:
+                logger.warning("Reporting worker lookup failed: %s", exc)
+
         return _enrich(row)
 
     except Exception as exc:

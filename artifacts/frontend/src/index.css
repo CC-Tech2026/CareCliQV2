@@ -217,7 +217,7 @@
   --cc-border:     #E0DDD0;   /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md) */
   /* ── Surfaces ── */
   --cc-bg:         #FCFBF0;   /* Warm Off-White — page canvas */
-  --cc-surface:    #F2EFDE;   /* Ivory — cards/panels lift off the page via shadow, not colour */
+  --cc-surface:    #FFFFFF;   /* Pure white — cards/panels lift off the warm off-white page canvas via colour + shadow */
   --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg */
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */

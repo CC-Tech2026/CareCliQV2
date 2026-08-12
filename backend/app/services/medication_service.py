@@ -1,7 +1,6 @@
-"""Medication management v1 — prescribed medications, the shift-level checklist (scheduled +
-PRN), the append-only administration ledger, escalation, and the org-wide register used by the
-Compliance Centre (Medication Management spec, build order steps 1-6). Outcome linkage (step 7)
-is explicitly deferred post-v1 by the spec itself.
+"""Medication management — prescribed medications, the approval/verification lifecycle, the
+shift-level checklist (scheduled + PRN), the append-only administration ledger with structured
+outcomes and time variance, and the org-wide register used by the Compliance Centre.
 """
 
 from __future__ import annotations
@@ -19,8 +18,31 @@ logger = logging.getLogger(__name__)
 
 ROUTES = {"oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"}
 FREQUENCY_TYPES = {"scheduled", "prn"}
-STATUSES = {"active", "ceased", "on_hold"}
-ADMINISTRATION_STATUSES = {"given", "refused", "missed", "withheld"}
+STATUSES = {"draft", "pending_verification", "active", "rejected", "ceased", "on_hold"}
+
+# The worker picks one of these four base actions when logging a dose. When the action is
+# "given", the final outcome is classified automatically (given_on_time/given_late/
+# given_early) from the logged timestamps against the org's tolerance — not self-typed by
+# the worker under time pressure. The other three actions map straight to their outcome.
+ADMINISTRATION_ACTIONS = {"given", "refused", "missed", "withheld"}
+ADMINISTRATION_OUTCOMES = {"given_on_time", "given_late", "given_early", "refused", "missed", "withheld"}
+GIVEN_OUTCOMES = {"given_on_time", "given_late", "given_early"}
+# Outcomes that always require reason_notes, regardless of which reason_code chip was picked.
+NOTES_REQUIRED_OUTCOMES = {"refused", "missed", "withheld"}
+DEFAULT_TOLERANCE_MINUTES = 30
+
+REASON_CODES: dict[str, set[str]] = {
+    "given_late": {"participant_asleep", "worker_delayed", "participant_off_site", "other"},
+    "given_early": {"participant_requested", "schedule_conflict", "other"},
+    "refused": {"verbal", "behavioural", "communication_device", "other"},
+    "missed": {"participant_asleep", "worker_delayed", "participant_off_site", "other"},
+    "withheld": {"clinical_direction", "other"},
+}
+# Only these statuses may move to "active" via a plain update_medication() PATCH (reactivating
+# an already-verified, on-hold medication). From draft/pending_verification/rejected, "active"
+# is only reachable through verify_medication() — that transition needs a named, timestamped
+# approval, not a silent field edit.
+REACTIVATABLE_STATUSES = {"on_hold"}
 
 # How far before/after the scheduled time a dose counts as "due now" rather than
 # "upcoming"/"overdue" — matches the escalation window described in the spec (default 30 min).
@@ -84,6 +106,7 @@ def create_medication(
     end_date: str | None,
     is_prn: bool,
     prn_max_per_day: int | None,
+    source_document_id: str | None = None,
 ) -> dict[str, Any]:
     if not name.strip():
         raise HTTPException(status_code=422, detail="Medication name is required.")
@@ -106,21 +129,245 @@ def create_medication(
         "scheduled_times": scheduled_times or [],
         "prescriber_name": prescriber_name,
         "prescriber_contact": prescriber_contact,
-        "start_date": start_date,
         "end_date": end_date,
         "is_prn": is_prn,
         "prn_max_per_day": prn_max_per_day,
-        "status": "active",
+        # Submitted, not yet confirmed by a named reviewer against the source document —
+        # it will not appear on any worker's shift checklist until verify_medication() runs.
+        "status": "pending_verification",
+        "source_document_id": source_document_id,
         "created_by": created_by,
         "updated_by": created_by,
     }
+    # start_date is NOT NULL DEFAULT CURRENT_DATE — omit the key entirely when not given so
+    # the DB default applies, rather than sending an explicit null that violates the constraint.
+    if start_date:
+        payload["start_date"] = start_date
     try:
         result = get_supabase_admin().table("medications").insert(payload).execute()
     except Exception as exc:
         if _is_missing_schema(exc):
             raise HTTPException(status_code=503, detail="Medication service unavailable.") from exc
         raise
-    return result.data[0] if result.data else payload
+    medication = result.data[0] if result.data else payload
+    _record_status_change(medication["id"], organization_id, None, "pending_verification", created_by, "Created")
+    return medication
+
+
+def _record_status_change(
+    medication_id: str,
+    organization_id: str,
+    from_status: str | None,
+    to_status: str,
+    changed_by: str,
+    reason: str | None = None,
+) -> None:
+    try:
+        get_supabase_admin().table("medication_status_history").insert({
+            "medication_id": medication_id,
+            "organization_id": organization_id,
+            "from_status": from_status,
+            "to_status": to_status,
+            "changed_by": changed_by,
+            "reason": reason,
+        }).execute()
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.warning("Could not record medication status history for %s: %s", medication_id, exc)
+
+
+def _find_affected_shifts_today(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+    """Shifts for this participant that are currently in progress, or still scheduled to
+    start later today — the set of shifts a mid-shift medication status change needs to
+    reach, per the Shift Content Synchronization spec."""
+    from ..core.timezone import app_day_bounds_utc, app_today
+
+    supabase = get_supabase_admin()
+    _, day_end = app_day_bounds_utc(app_today())
+    shifts: dict[str, dict[str, Any]] = {}
+    try:
+        upcoming = (
+            supabase.table("shifts")
+            .select("id, worker_id, status, scheduled_start")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .gte("scheduled_start", datetime.now(timezone.utc).isoformat())
+            .lt("scheduled_start", day_end)
+            .neq("status", "completed")
+            .execute()
+        )
+        for row in upcoming.data or []:
+            shifts[row["id"]] = row
+        in_progress = (
+            supabase.table("shifts")
+            .select("id, worker_id, status, scheduled_start")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .eq("status", "in_progress")
+            .execute()
+        )
+        for row in in_progress.data or []:
+            shifts[row["id"]] = row
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.warning("Could not look up today's shifts for participant %s: %s", participant_id, exc)
+    return list(shifts.values())
+
+
+# Statuses that must never reach a worker — a transition INTO one of these while a shift is
+# already rostered/in-progress needs an immediate push, not just "the next read excludes it."
+_MID_SHIFT_ALERT_STATUSES = {"on_hold", "rejected", "ceased"}
+
+
+def _propagate_mid_shift_status_change(
+    medication_id: str,
+    participant_id: str,
+    organization_id: str,
+    to_status: str,
+    medication_name: str,
+) -> None:
+    if to_status not in _MID_SHIFT_ALERT_STATUSES or not participant_id:
+        return
+    shifts = _find_affected_shifts_today(participant_id, organization_id)
+    if not shifts:
+        return
+
+    from .shift_content_resolution_service import log_shift_content_resolution
+
+    for shift in shifts:
+        log_shift_content_resolution(
+            shift_id=str(shift.get("id") or ""),
+            participant_id=participant_id,
+            organization_id=organization_id,
+            checkpoint="mid_shift_change",
+            excluded_medications=[{"medication_id": medication_id, "status": to_status}],
+        )
+
+    import asyncio
+
+    from .notification_service import notify_worker
+
+    async def _notify_all() -> None:
+        for shift in shifts:
+            worker_id = shift.get("worker_id")
+            if not worker_id:
+                continue
+            in_progress = shift.get("status") == "in_progress"
+            try:
+                await notify_worker(
+                    user_id=worker_id,
+                    org_id=organization_id,
+                    event="medication_alert",
+                    alert_type="medication_status_changed_mid_shift",
+                    title=f"Medication update: {medication_name}",
+                    message=(
+                        f"{medication_name} is now {to_status.replace('_', ' ')}. "
+                        + (
+                            "It's being removed from your active checklist for this shift."
+                            if in_progress
+                            else "It will not appear on your upcoming shift's checklist."
+                        )
+                    ),
+                    reference_key=f"medication:status_change:{medication_id}:{shift['id']}:{to_status}",
+                    severity="high",
+                    shift_id=str(shift.get("id") or ""),
+                )
+            except Exception:
+                logger.warning("Mid-shift medication status push failed for worker %s", worker_id)
+
+    try:
+        asyncio.get_event_loop().create_task(_notify_all())
+    except Exception:
+        pass
+
+
+def verify_medication(
+    medication_id: str,
+    organization_id: str,
+    verified_by: str,
+    *,
+    corrections: dict[str, Any] | None = None,
+    verification_notes: str | None = None,
+) -> dict[str, Any]:
+    """The named, timestamped confirmation step: a coordinator or managing director reviews
+    the extracted fields against the source document, corrects anything wrong, and confirms —
+    only this moves a medication onto the worker-facing shift checklist."""
+    medication = get_medication(medication_id, organization_id)
+    if medication["status"] != "pending_verification":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only medications pending verification can be verified (current status: {medication['status']}).",
+        )
+
+    updates: dict[str, Any] = {}
+    if corrections:
+        if "route" in corrections and corrections["route"] not in ROUTES:
+            raise HTTPException(status_code=422, detail=f"Invalid route. Must be one of: {', '.join(sorted(ROUTES))}.")
+        updates = {k: v for k, v in corrections.items() if v is not None}
+
+    updates.update({
+        "status": "active",
+        "verified_by": verified_by,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "verification_notes": verification_notes,
+        "updated_by": verified_by,
+    })
+    result = (
+        get_supabase_admin()
+        .table("medications")
+        .update(updates)
+        .eq("id", medication_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**medication, **updates}
+    _record_status_change(medication_id, organization_id, "pending_verification", "active", verified_by, verification_notes)
+    return updated
+
+
+def reject_medication(
+    medication_id: str,
+    organization_id: str,
+    rejected_by: str,
+    reason: str,
+) -> dict[str, Any]:
+    if not reason.strip():
+        raise HTTPException(status_code=422, detail="A reason is required to reject a medication.")
+    medication = get_medication(medication_id, organization_id)
+    if medication["status"] != "pending_verification":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only medications pending verification can be rejected (current status: {medication['status']}).",
+        )
+    result = (
+        get_supabase_admin()
+        .table("medications")
+        .update({"status": "rejected", "rejection_reason": reason.strip(), "updated_by": rejected_by})
+        .eq("id", medication_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**medication, "status": "rejected", "rejection_reason": reason.strip()}
+    _record_status_change(medication_id, organization_id, "pending_verification", "rejected", rejected_by, reason.strip())
+    return updated
+
+
+def list_status_history(medication_id: str, organization_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("medication_status_history")
+            .select("*, users!medication_status_history_changed_by_fkey(full_name)")
+            .eq("medication_id", medication_id)
+            .eq("organization_id", organization_id)
+            .order("changed_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return []
+        raise
 
 
 def update_medication(
@@ -134,7 +381,14 @@ def update_medication(
     if "status" in updates and updates["status"] not in STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(STATUSES))}.")
 
-    get_medication(medication_id, organization_id)  # 404s if not found / wrong org
+    existing = get_medication(medication_id, organization_id)  # 404s if not found / wrong org
+
+    new_status = updates.get("status")
+    if new_status == "active" and existing["status"] not in REACTIVATABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="This medication must go through verification before it can be made active.",
+        )
 
     clean = {k: v for k, v in updates.items() if v is not None}
     if not clean:
@@ -149,7 +403,48 @@ def update_medication(
         .eq("organization_id", organization_id)
         .execute()
     )
+    if new_status and new_status != existing["status"]:
+        _record_status_change(medication_id, organization_id, existing["status"], new_status, updated_by)
+        _propagate_mid_shift_status_change(
+            medication_id, str(existing.get("participant_id") or ""), organization_id, new_status, existing.get("name") or "Medication",
+        )
     return result.data[0] if result.data else clean
+
+
+def get_medication_tolerance_minutes(organization_id: str) -> int:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("organizations")
+            .select("medication_tolerance_minutes")
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return DEFAULT_TOLERANCE_MINUTES
+        raise
+    if resp.data and resp.data[0].get("medication_tolerance_minutes") is not None:
+        return int(resp.data[0]["medication_tolerance_minutes"])
+    return DEFAULT_TOLERANCE_MINUTES
+
+
+def set_medication_tolerance_minutes(organization_id: str, minutes: int) -> int:
+    if minutes < 0 or minutes > 240:
+        raise HTTPException(status_code=422, detail="Tolerance must be between 0 and 240 minutes.")
+    get_supabase_admin().table("organizations").update({"medication_tolerance_minutes": minutes}).eq("organization_id", organization_id).execute()
+    return minutes
+
+
+def classify_given_outcome(scheduled_time: datetime | None, administered_time: datetime, tolerance_minutes: int) -> str:
+    """given_on_time/given_late/given_early — the calculation the system owns, not the worker."""
+    if scheduled_time is None:
+        return "given_on_time"
+    variance = (administered_time - scheduled_time).total_seconds() / 60
+    if abs(variance) <= tolerance_minutes:
+        return "given_on_time"
+    return "given_late" if variance > 0 else "given_early"
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -221,7 +516,7 @@ def build_shift_medication_checklist(shift: dict[str, Any], organization_id: str
             scheduled_iso = scheduled_dt.isoformat()
             logged = logged_by_key.get(f"{med['id']}|{scheduled_iso}")
             if logged:
-                due_status = logged.get("status")
+                due_status = logged.get("outcome")
             elif now < scheduled_dt - window:
                 due_status = "upcoming"
             elif now > scheduled_dt + window:
@@ -248,17 +543,61 @@ def create_administration(
     shift: dict[str, Any],
     organization_id: str,
     administered_by: str,
-    status: str,
+    action: str,
     scheduled_time: str | None,
+    administered_time: str | None = None,
     dose_given: str | None,
     notes: str | None,
+    reason_code: str | None = None,
+    directed_by: str | None = None,
     prn_reason: str | None = None,
     voice_captured: bool = False,
 ) -> dict[str, Any]:
-    if status not in ADMINISTRATION_STATUSES:
-        raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(ADMINISTRATION_STATUSES))}.")
-    if medication.get("is_prn") and status == "given" and not (prn_reason or "").strip():
+    if action not in ADMINISTRATION_ACTIONS:
+        raise HTTPException(status_code=422, detail=f"Invalid action. Must be one of: {', '.join(sorted(ADMINISTRATION_ACTIONS))}.")
+    # Defensive final check: the checklist/PRN screens already only ever show active
+    # medications (queried live), but a worker could still be looking at a stale render
+    # (cache, delayed sync, offline period) when they tap "log dose" — this is what actually
+    # stops the write, not the read-side filtering alone.
+    if medication.get("status") != "active":
+        from .shift_content_resolution_service import log_shift_content_resolution
+        log_shift_content_resolution(
+            shift_id=str(shift.get("id") or ""),
+            participant_id=medication.get("participant_id"),
+            organization_id=organization_id,
+            checkpoint="action_time",
+            excluded_medications=[{"medication_id": medication.get("id"), "status": medication.get("status")}],
+            resolved_for_user_id=administered_by,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This medication is currently {medication.get('status')}, not active. "
+                "It cannot be administered until a coordinator reactivates it."
+            ),
+        )
+    if medication.get("is_prn") and action == "given" and not (prn_reason or "").strip():
         raise HTTPException(status_code=422, detail="A reason is required to log a PRN dose.")
+
+    scheduled_dt = _parse_dt(scheduled_time)
+    administered_dt = _parse_dt(administered_time) or datetime.now(timezone.utc)
+
+    if action == "given":
+        tolerance = get_medication_tolerance_minutes(organization_id)
+        outcome = classify_given_outcome(scheduled_dt, administered_dt, tolerance)
+    else:
+        outcome = action
+
+    if outcome in NOTES_REQUIRED_OUTCOMES and not (notes or "").strip():
+        raise HTTPException(status_code=422, detail=f"A note is required to log this dose as {outcome}.")
+    if reason_code:
+        allowed_codes = REASON_CODES.get(outcome, set())
+        if reason_code not in allowed_codes:
+            raise HTTPException(status_code=422, detail=f"Invalid reason for {outcome}. Must be one of: {', '.join(sorted(allowed_codes))}.")
+        if reason_code == "other" and not (notes or "").strip():
+            raise HTTPException(status_code=422, detail="A note is required when the reason is 'other'.")
+    if outcome == "withheld" and directed_by and reason_code != "clinical_direction":
+        reason_code = "clinical_direction"
 
     payload = {
         "id": str(uuid4()),
@@ -268,7 +607,10 @@ def create_administration(
         "organization_id": organization_id,
         "administered_by": administered_by,
         "scheduled_time": scheduled_time,
-        "status": status,
+        "administered_time": administered_dt.isoformat(),
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "directed_by": directed_by,
         "dose_given": dose_given,
         "notes": notes,
         "prn_reason": prn_reason,
@@ -282,8 +624,18 @@ def create_administration(
         raise
     record = result.data[0] if result.data else payload
 
-    if medication.get("is_prn") and status == "given" and medication.get("prn_max_per_day"):
+    if medication.get("is_prn") and outcome in GIVEN_OUTCOMES and medication.get("prn_max_per_day"):
         _maybe_escalate_prn_max(medication, shift, organization_id)
+
+    from .shift_content_resolution_service import log_shift_content_resolution
+    log_shift_content_resolution(
+        shift_id=str(shift.get("id") or ""),
+        participant_id=medication.get("participant_id"),
+        organization_id=organization_id,
+        checkpoint="action_time",
+        resolved_medication_ids=[medication.get("id")],
+        resolved_for_user_id=administered_by,
+    )
 
     return record
 
@@ -298,7 +650,7 @@ def _maybe_escalate_prn_max(medication: dict[str, Any], shift: dict[str, Any], o
             .table("medication_administrations")
             .select("id", count="exact")
             .eq("medication_id", medication["id"])
-            .eq("status", "given")
+            .in_("outcome", list(GIVEN_OUTCOMES))
             .not_.is_("prn_reason", "null")
             .gte("administered_time", day_start.isoformat())
             .lt("administered_time", day_end.isoformat())
@@ -383,7 +735,7 @@ def build_shift_prn_medications(shift: dict[str, Any], organization_id: str) -> 
 
     counts_by_med: dict[str, int] = {}
     for admin in todays_admins:
-        if admin.get("status") == "given" and admin.get("prn_reason"):
+        if admin.get("outcome") in GIVEN_OUTCOMES and admin.get("prn_reason"):
             counts_by_med[admin["medication_id"]] = counts_by_med.get(admin["medication_id"], 0) + 1
 
     medications = []
@@ -400,7 +752,7 @@ def build_shift_prn_medications(shift: dict[str, Any], organization_id: str) -> 
     pending_effects = [
         admin for admin in todays_admins
         if admin.get("shift_id") == shift_id
-        and admin.get("status") == "given"
+        and admin.get("outcome") in GIVEN_OUTCOMES
         and admin.get("prn_reason")
         and not admin.get("prn_effect_observed")
     ]
@@ -440,6 +792,47 @@ def record_prn_effect(
         .execute()
     )
     return result.data[0] if result.data else {"id": administration_id, "prn_effect_observed": effect_observed}
+
+
+def attach_administration_reason(
+    administration_id: str,
+    organization_id: str,
+    reason_code: str | None,
+    notes: str | None,
+) -> dict[str, Any]:
+    """A worker taps "confirm given" not knowing in advance whether it'll classify as
+    given_on_time or given_late/given_early — that depends on the org's tolerance, computed
+    after the fact. When it comes back late/early, this attaches the reason as a follow-up,
+    the one other narrow exception (alongside prn_effect_observed) to the immutable ledger."""
+    resp = (
+        get_supabase_admin()
+        .table("medication_administrations")
+        .select("id, outcome")
+        .eq("id", administration_id)
+        .eq("organization_id", organization_id)
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Administration record not found.")
+    outcome = rows[0]["outcome"]
+    if outcome not in {"given_late", "given_early"}:
+        raise HTTPException(status_code=422, detail="A reason can only be attached to a given_late or given_early dose.")
+    if reason_code and reason_code not in REASON_CODES.get(outcome, set()):
+        raise HTTPException(status_code=422, detail=f"Invalid reason for {outcome}.")
+    if (not notes or not notes.strip()) and (not reason_code or reason_code == "other"):
+        raise HTTPException(status_code=422, detail="A note is required.")
+
+    result = (
+        get_supabase_admin()
+        .table("medication_administrations")
+        .update({"reason_code": reason_code, "notes": notes})
+        .eq("id", administration_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {"id": administration_id, "reason_code": reason_code, "notes": notes}
 
 
 # ── Compliance Centre Medication Register (build order step 6) ──────────────────────────────
@@ -523,7 +916,7 @@ def list_medication_review_items(organization_id: str) -> dict[str, Any]:
                 .table("medication_administrations")
                 .select("id", count="exact")
                 .eq("medication_id", med["id"])
-                .eq("status", "given")
+                .in_("outcome", list(GIVEN_OUTCOMES))
                 .not_.is_("prn_reason", "null")
                 .gte("administered_time", day_start.isoformat())
                 .lt("administered_time", day_end.isoformat())

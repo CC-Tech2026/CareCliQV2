@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock3, Pill } from "lucide-react";
+import { AlertTriangle, Clock3, FileText, GitCommitHorizontal, Pill, ShieldAlert } from "lucide-react";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { LoadingBlock, EmptyState, StatusBadge } from "@/pages/compliance";
 import {
   getCoordinatorMedications,
-  getMedicationHistory,
+  getMedicationAuditTimeline,
   getMedicationReviewItems,
+  getParticipantReliabilityFlags,
   type MedicationAdministrationRecord,
   type MedicationStatus,
   type OrgMedication,
@@ -20,13 +21,18 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 
 const STATUS_TONE: Record<MedicationStatus, "gn" | "am" | "gy"> = {
+  draft: "gy",
+  pending_verification: "am",
   active: "gn",
+  rejected: "gy",
   on_hold: "am",
   ceased: "gy",
 };
 
-const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["status"], { bg: string; color: string }> = {
-  given: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" },
+const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["outcome"], { bg: string; color: string }> = {
+  given_on_time: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" },
+  given_late: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  given_early: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
   refused: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   missed: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
   withheld: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
@@ -44,12 +50,18 @@ export function MedicationRegisterPanel() {
     queryKey: ["compliance-centre", "medication-review-items"],
     queryFn: getMedicationReviewItems,
   });
+  const { data: reliabilityData } = useQuery({
+    queryKey: ["compliance-centre", "medication-reliability-flags"],
+    queryFn: () => getParticipantReliabilityFlags(),
+  });
 
   const medications = data?.medications ?? [];
   const active = medications.filter((m) => m.status === "active");
   const prnCount = active.filter((m) => m.is_prn).length;
   const endingSoonCount = reviewItems?.ending_soon.length ?? 0;
   const atMaxCount = reviewItems?.prn_at_max.length ?? 0;
+  const triggeredFlags = (reliabilityData?.flags ?? []).filter((f) => f.triggered);
+  const participantNameById = new Map(medications.map((m) => [m.participant_id, m.participant_name]));
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -65,6 +77,27 @@ export function MedicationRegisterPanel() {
             {endingSoonCount > 0 && (
               <p className="font-bold mt-0.5">{translateParams("compliance.centre.medications.endingSoon", { count: String(endingSoonCount) })}</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {triggeredFlags.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--cc-status-danger)" }}>
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: "var(--cc-status-danger-bg)" }}>
+            <ShieldAlert size={16} style={{ color: "var(--cc-status-danger)" }} />
+            <p className="text-xs font-black uppercase tracking-wide" style={{ color: "var(--cc-status-danger)" }}>
+              {translate("compliance.centre.medications.reliabilityFlagsTitle")}
+            </p>
+          </div>
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {triggeredFlags.map((flag) => (
+              <div key={flag.id} className="px-4 py-3">
+                <p className="text-[13px] font-bold" style={{ color: TEXT }}>
+                  {participantNameById.get(flag.scope_id) ?? translate("common.participant")}
+                </p>
+                <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>{flag.trigger_reason}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -109,11 +142,51 @@ export function MedicationRegisterPanel() {
   );
 }
 
+function AdministrationEventCard({ admin }: { admin: MedicationAdministrationRecord }) {
+  const { translate } = useAccessibility();
+  const style = ADMIN_STATUS_STYLE[admin.outcome];
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: style.bg, color: style.color }}>
+          {admin.outcome.replace(/_/g, " ")}
+        </span>
+        <span className="text-[11px]" style={{ color: MUTED }}>
+          {new Date(admin.administered_time).toLocaleString()}
+        </span>
+      </div>
+      {admin.administered_by_name && (
+        <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
+          {translate("compliance.centre.medications.by")} {admin.administered_by_name}
+        </p>
+      )}
+      {admin.variance_minutes != null && admin.variance_minutes !== 0 && (
+        <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+          {admin.variance_minutes > 0
+            ? `${admin.variance_minutes} min after scheduled time`
+            : `${Math.abs(admin.variance_minutes)} min before scheduled time`}
+        </p>
+      )}
+      {admin.prn_reason && (
+        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
+          <span className="font-bold">{translate("participants.medications.prn")}:</span> {admin.prn_reason}
+        </p>
+      )}
+      {admin.prn_effect_observed && (
+        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
+          <span className="font-bold">{translate("compliance.centre.medications.effect")}:</span> {admin.prn_effect_observed}
+        </p>
+      )}
+      {admin.notes && <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{admin.notes}</p>}
+    </div>
+  );
+}
+
 function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: string | null; onClose: () => void }) {
   const { translate } = useAccessibility();
   const { data, isLoading } = useQuery({
-    queryKey: ["compliance-centre", "medication-history", medicationId],
-    queryFn: () => getMedicationHistory(medicationId as string),
+    queryKey: ["compliance-centre", "medication-audit-timeline", medicationId],
+    queryFn: () => getMedicationAuditTimeline(medicationId as string),
     enabled: !!medicationId,
   });
 
@@ -140,40 +213,58 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
               )}
             </div>
 
-            {data.history.length === 0 ? (
+            {data.timeline.length === 0 ? (
               <EmptyState label={translate("compliance.centre.medications.noHistory")} />
             ) : (
               <div className="space-y-2">
-                {data.history.map((admin) => {
-                  const style = ADMIN_STATUS_STYLE[admin.status];
-                  return (
-                    <div key={admin.id} className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: style.bg, color: style.color }}>
-                          {admin.status}
-                        </span>
-                        <span className="text-[11px]" style={{ color: MUTED }}>
-                          {new Date(admin.administered_time).toLocaleString()}
-                        </span>
+                {data.timeline.map((event, idx) => {
+                  if (event.event_type === "administration") {
+                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} />;
+                  }
+                  if (event.event_type === "document_uploaded") {
+                    const doc = event.document;
+                    return (
+                      <div key={`doc-${doc.id}`} className="rounded-xl border p-3 flex items-start gap-2.5" style={{ borderColor: BORDER }}>
+                        <FileText size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[12px] font-bold truncate" style={{ color: TEXT }}>{doc.file_name}</p>
+                            <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
+                              {new Date(event.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+                            {translate(`participants.medications.docType.${doc.document_type}`)}
+                            {doc.superseded_at ? ` · ${translate("participants.medications.superseded")}` : ""}
+                          </p>
+                        </div>
                       </div>
-                      {admin.administered_by_name && (
-                        <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>
-                          {translate("compliance.centre.medications.by")} {admin.administered_by_name}
-                        </p>
-                      )}
-                      {admin.prn_reason && (
-                        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
-                          <span className="font-bold">{translate("participants.medications.prn")}:</span> {admin.prn_reason}
-                        </p>
-                      )}
-                      {admin.prn_effect_observed && (
-                        <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
-                          <span className="font-bold">{translate("compliance.centre.medications.effect")}:</span> {admin.prn_effect_observed}
-                        </p>
-                      )}
-                      {admin.notes && (
-                        <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{admin.notes}</p>
-                      )}
+                    );
+                  }
+                  const change = event.status_change;
+                  return (
+                    <div key={`status-${change.id}`} className="rounded-xl border p-3 flex items-start gap-2.5" style={{ borderColor: BORDER }}>
+                      <GitCommitHorizontal size={16} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                            {change.from_status
+                              ? `${translate(`participants.medications.status.${change.from_status}`)} → ${translate(`participants.medications.status.${change.to_status}`)}`
+                              : translate(`participants.medications.status.${change.to_status}`)}
+                          </p>
+                          <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
+                            {new Date(event.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {change.users?.full_name && (
+                          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+                            {translate("compliance.centre.medications.by")} {change.users.full_name}
+                          </p>
+                        )}
+                        {change.reason && (
+                          <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{change.reason}</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

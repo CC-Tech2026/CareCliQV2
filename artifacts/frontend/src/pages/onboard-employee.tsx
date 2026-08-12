@@ -13,7 +13,7 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   listHires, createHire, getHire, addHireDocument, uploadHireDocumentFile,
   deleteHireDocument, sendForSignature, sendHireInvite,
@@ -338,13 +338,13 @@ export default function OnboardEmployeePage() {
         </div>
       </div>
 
-      <Dialog open={newHireOpen} onOpenChange={setNewHireOpen}>
-        <DialogContent className="sm:max-w-md rounded-lg" style={{ background: SURFACE }}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+      <Sheet open={newHireOpen} onOpenChange={setNewHireOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
               <UserPlus size={18} style={{ color: PLUM }} /> New Hire
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Full name</label>
@@ -371,7 +371,7 @@ export default function OnboardEmployeePage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <SheetFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setNewHireOpen(false)}>Cancel</Button>
             <Button
               variant="navy"
@@ -380,9 +380,9 @@ export default function OnboardEmployeePage() {
             >
               {createMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Create
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </HubLayout>
   );
 }
@@ -620,13 +620,13 @@ function HireDetail({
         </div>
       </div>
 
-      <Dialog open={addDocOpen} onOpenChange={setAddDocOpen}>
-        <DialogContent className="sm:max-w-md rounded-lg" style={{ background: SURFACE }}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+      <Sheet open={addDocOpen} onOpenChange={setAddDocOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
               <FileText size={18} style={{ color: PLUM }} /> Add document
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
@@ -656,14 +656,14 @@ function HireDetail({
               </label>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <SheetFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setAddDocOpen(false)}>Cancel</Button>
             <Button variant="navy" onClick={() => addDocMut.mutate()} disabled={!docTitle.trim() || addDocMut.isPending}>
               {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Save document
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

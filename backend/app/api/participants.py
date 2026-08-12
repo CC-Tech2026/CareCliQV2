@@ -589,6 +589,105 @@ async def get_compliance_history(
     return history
 
 
+@router.get("/{participant_id}/compliance-breakdown")
+async def get_compliance_breakdown(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Compliance is not one blended number — this breaks it into the categories that
+    actually drive it (session documentation, medications, incidents, plan/budget), reusing
+    the same signals the org-wide Compliance Centre already computes per participant
+    (see compliance_centre_participants in api/compliance.py), scoped to a single one."""
+    from ..core.access import get_user_organization_id
+    from ..services.supabase_client import get_supabase_admin
+
+    await _require_participant_access(participant_id, current_user)
+    org_id = str(get_user_organization_id(current_user) or "")
+    supabase = get_supabase_admin()
+
+    # Session documentation
+    from ..services.session_service import get_sessions_by_participant
+    sessions = await get_sessions_by_participant(participant_id, current_user)
+    scored = [float(s["compliance_score"]) for s in sessions if s.get("compliance_score") is not None]
+    avg_score = round(sum(scored) / len(scored), 1) if scored else None
+    if avg_score is None:
+        sessions_status, sessions_detail = "none", "No scored sessions yet."
+    elif avg_score >= 85:
+        sessions_status, sessions_detail = "good", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+    elif avg_score >= 60:
+        sessions_status, sessions_detail = "attention", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+    else:
+        sessions_status, sessions_detail = "critical", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+
+    # Medications
+    from ..services import medication_service
+    medications = medication_service.list_medications(participant_id, str(org_id))
+    pending = [m for m in medications if m.get("status") == "pending_verification"]
+    if pending:
+        med_status, med_detail = "attention", f"{len(pending)} medication(s) awaiting verification."
+    elif not medications:
+        med_status, med_detail = "none", "No medications on file."
+    else:
+        med_status, med_detail = "good", f"{len(medications)} medication(s) on file, all verified."
+
+    # Incidents
+    try:
+        inc_resp = (
+            supabase.table("incidents")
+            .select("id", count="exact")
+            .eq("organization_id", org_id)
+            .eq("participant_id", participant_id)
+            .eq("ndis_reportable", True)
+            .in_("status", ["reported", "under_investigation"])
+            .execute()
+        )
+        open_reportable = inc_resp.count or 0
+    except Exception:
+        open_reportable = 0
+    if open_reportable:
+        incidents_status, incidents_detail = "attention", f"{open_reportable} open NDIS-reportable incident(s)."
+    else:
+        incidents_status, incidents_detail = "good", "No open NDIS-reportable incidents."
+
+    # Plan & budget
+    plan_issues: list[str] = []
+    try:
+        plan_resp = (
+            supabase.table("ndis_plans")
+            .select("agreement_status")
+            .eq("organization_id", org_id)
+            .eq("patient_id", participant_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        plan_rows = plan_resp.data or []
+        agreement_status = plan_rows[0].get("agreement_status") if plan_rows else None
+    except Exception:
+        agreement_status = None
+    if agreement_status and agreement_status != "signed":
+        plan_issues.append("service agreement not signed")
+    try:
+        budget = await funding_service.get_budget_summary(participant_id)
+        overspent = [b["category_label"] for b in budget.get("budgets", []) if b.get("overspent")]
+        if overspent:
+            plan_issues.append(f"{len(overspent)} budget category(ies) overspent")
+    except Exception:
+        pass
+    if plan_issues:
+        plan_status, plan_detail = "attention", "; ".join(plan_issues).capitalize() + "."
+    else:
+        plan_status, plan_detail = "good", "Agreement signed, no budget categories overspent."
+
+    categories = [
+        {"key": "sessions", "label": "Session Documentation", "status": sessions_status, "detail": sessions_detail, "score": avg_score},
+        {"key": "medications", "label": "Medications", "status": med_status, "detail": med_detail},
+        {"key": "incidents", "label": "Incidents", "status": incidents_status, "detail": incidents_detail},
+        {"key": "plan", "label": "Plan & Budget", "status": plan_status, "detail": plan_detail},
+    ]
+    return {"overall_score": avg_score, "categories": categories}
+
+
 # ── Restricted Clinical (Coordinator-only) ────────────────────────────────────
 
 @router.get("/{participant_id}/restricted-clinical")

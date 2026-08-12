@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -320,6 +320,7 @@ def recommend_training_module(
     organization_id: str,
     training_module_id: str,
     title: str,
+    related_incident_id: Optional[str] = None,
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     record = {
@@ -332,6 +333,8 @@ def recommend_training_module(
         "recommended_at": now.isoformat(),
         "due_at": (now + timedelta(days=TRAINING_DEADLINE_DAYS)).isoformat(),
     }
+    if related_incident_id:
+        record["related_incident_id"] = related_incident_id
     try:
         get_supabase_admin().table("worker_training_recommendations").insert(record).execute()
     except Exception as exc:

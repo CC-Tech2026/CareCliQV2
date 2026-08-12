@@ -66,6 +66,7 @@ import { ParticipantPlanMeetingsTab } from "@/components/participants/Participan
 import { ParticipantRestrictedTab, type RestrictedClinicalDraft } from "@/components/participants/ParticipantRestrictedTab";
 import { ParticipantShiftContextTab } from "@/components/participants/ParticipantShiftContextTab";
 import { ParticipantMedicationsPanel } from "@/components/participants/ParticipantMedicationsPanel";
+import { getParticipantMedications } from "@/services/medicationService";
 import { ParticipantClinicalRecordEditor } from "@/components/participants/ParticipantClinicalRecordEditor";
 import { ParticipantSessionsTab } from "@/components/participants/ParticipantSessionsTab";
 import { PlanMeetingCapture } from "@/components/coordinator/PlanMeetingCapture";
@@ -89,12 +90,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 // ---------------------------------------------------------------------------
 // Template Presets (backed by participant_task_templates via getTaskTemplates)
 // ---------------------------------------------------------------------------
@@ -242,6 +243,21 @@ export type ComplianceHistoryItem = {
     created_at?: string;
     checked_at?: string;
   };
+};
+
+export type ComplianceCategoryStatus = "good" | "attention" | "critical" | "none";
+
+export type ComplianceCategory = {
+  key: string;
+  label: string;
+  status: ComplianceCategoryStatus;
+  detail: string;
+  score?: number | null;
+};
+
+export type ComplianceBreakdown = {
+  overall_score: number | null;
+  categories: ComplianceCategory[];
 };
 
 // Helpers moved to @/lib/participant-format (imported at top of file) so extracted
@@ -582,11 +598,11 @@ function EditParticipantPanel({
         <span className="hidden min-[380px]:inline">{translate("common.edit")}</span>
         <span className="min-[380px]:hidden">Edit</span>
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{translate("patients.editTitle")}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{translate("patients.editTitle")}</SheetTitle>
+          </SheetHeader>
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
@@ -595,8 +611,8 @@ function EditParticipantPanel({
             hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -746,11 +762,11 @@ function SetupPlanPanel({
           </>
         )}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</SheetTitle>
+          </SheetHeader>
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -928,7 +944,7 @@ function SetupPlanPanel({
                 </div>
               )}
 
-              <DialogFooter className="gap-2 pt-2">
+              <SheetFooter className="gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
@@ -936,11 +952,11 @@ function SetupPlanPanel({
                   {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {hasPlan ? "Update Plan" : translate("patients.savePlan")}
                 </Button>
-              </DialogFooter>
+              </SheetFooter>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -968,6 +984,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
     queryFn: () => jsonFetch<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
+  const complianceBreakdownQuery = useOrgQuery(["participant", id, "compliance-breakdown"], {
+    queryFn: () => jsonFetch<ComplianceBreakdown>(`/api/participants/${id}/compliance-breakdown`),
+    enabled: isCoordinator,
+  });
   const billingPeriodCurrentQuery = useOrgQuery(["participant", id, "billing-period-current"], {
     queryFn: () => getParticipantCurrentBillingPeriod(id),
     enabled: isCoordinator,
@@ -992,6 +1012,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   });
 
   // Goals & Tasks — coordinator only
+  const orgId = user?.organizationId ?? "__no_org__";
   const ndisGoalsQuery = useOrgQuery<NdisGoal[]>(["participant", id, "ndis-goals"], {
     queryFn: () => getNdisGoals({ participant_id: id }),
     enabled: isCoordinator,
@@ -1020,7 +1041,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const createGoalMut = useMutation({
     mutationFn: (payload: NdisGoalPayload) => createNdisGoal(payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] });
       setCreateMode(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
@@ -1030,7 +1051,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const editGoalMut = useMutation({
     mutationFn: ({ goalId, payload }: { goalId: string; payload: NdisGoalPayload }) => updateNdisGoal(goalId, payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] });
       setCreateMode(null); setEditingGoal(null);
       setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
     },
@@ -1039,13 +1060,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   const archiveGoalMut = useMutation({
     mutationFn: archiveNdisGoal,
-    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] }); },
     onError: () => toastFn({ title: "Failed to archive goal", variant: "destructive" }),
   });
 
   const completeGoalMut = useMutation({
     mutationFn: completeNdisGoal,
-    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "ndis-goals"] }); },
     onError: () => toastFn({ title: "Failed to complete goal", variant: "destructive" }),
   });
 
@@ -1053,7 +1074,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     mutationFn: (payload: Omit<ParticipantTaskPayload, "status">) =>
       createParticipantTask(id, { ...payload, status: "pending" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
+      qc.invalidateQueries({ queryKey: [orgId, "participant", id, "participant-tasks"] });
       setCreateMode(null);
       setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null);
     },
@@ -1062,7 +1083,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   const deleteTaskMut = useMutation({
     mutationFn: deleteParticipantTask,
-    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] }); },
+    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: [orgId, "participant", id, "participant-tasks"] }); },
     onError: () => toastFn({ title: "Failed to delete task", variant: "destructive" }),
   });
 
@@ -1117,6 +1138,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       medications: string | null;
       medical_alerts: string | null;
     }>(`/api/participants/${id}/restricted-clinical`),
+    enabled: isCoordinator,
+  });
+  const pendingMedicationsQuery = useOrgQuery(["participant-medications-pending", id], {
+    queryFn: () => getParticipantMedications(id, "pending_verification"),
     enabled: isCoordinator,
   });
   const [restrictedDraft, setRestrictedDraft] = useState<RestrictedClinicalDraft | null>(null);
@@ -1253,6 +1278,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
     : Math.max(totalBudget - usedBudget, 0);
   const isOverspent = remainingBudget < 0;
+  const pendingMedicationCount = pendingMedicationsQuery.data?.medications.length ?? 0;
+
   const scoredSessions = sessions.filter((session) => session.compliance_score != null);
   const averageCompliance = scoredSessions.length
     ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
@@ -1281,6 +1308,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       value: averageCompliance == null ? translate("patients.noScore") : `${averageCompliance}%`,
       icon: ShieldCheck,
       tone: complianceTone(averageCompliance),
+      linkLabel: pendingMedicationCount > 0
+        ? translateParams("patients.metric.pendingMedications", { count: String(pendingMedicationCount) })
+        : undefined,
+      onLinkClick: () => { setActiveTab("care_profile"); setCareProfileSection("clinical"); },
     },
   ];
 
@@ -1377,6 +1408,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
                     </div>
                     <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
+                    {metric.linkLabel && (
+                      <button
+                        type="button"
+                        onClick={metric.onLinkClick}
+                        className="mt-1 flex items-center gap-0.5 text-[10px] font-bold underline decoration-dotted underline-offset-2 opacity-80 hover:opacity-100"
+                      >
+                        {metric.linkLabel} <ChevronRight className="h-2.5 w-2.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1553,7 +1593,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           const goalFormContent = (
             <div className="space-y-4">
               {/* AI Goal Assistant panel */}
-              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
@@ -1811,7 +1851,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             <div className="space-y-5">
 
               {/* AI TASK ASSISTANT */}
-              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
@@ -2447,6 +2487,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             averageCompliance={averageCompliance}
             isLoading={complianceQuery.isLoading}
             onSelectSession={setSessionPanelId}
+            breakdown={complianceBreakdownQuery.data ?? null}
+            breakdownLoading={complianceBreakdownQuery.isLoading}
           />
         )}
 

@@ -29,6 +29,8 @@ const en = {
   "common.emDash": "—",
   "common.done": "Done",
   "common.loadMore": "Load more",
+  "common.back": "Back",
+  "common.next": "Next",
 
   "nav.home": "Home",
   "nav.shifts": "Shifts",
@@ -133,6 +135,13 @@ const en = {
   "incidents.form.submitFor": "Submit report for {name}",
   "incidents.form.submitted": "Incident report submitted",
   "incidents.form.keepRef": "Keep this reference number for your records.",
+  "incidents.form.stepType": "Type",
+  "incidents.form.stepDetails": "Details",
+  "incidents.form.stepSafety": "Safety",
+  "incidents.form.stepEvidence": "Evidence",
+  "incidents.form.stepReview": "Review",
+  "incidents.form.safetyConfirm": "I have ensured the participant and everyone else involved is safe right now.",
+  "incidents.form.photosHint": "Attach any relevant photos for the record. Optional — you can submit without them.",
 
   "nav.credentials": "Credentials",
   "nav.toolkit": "Toolkit",
