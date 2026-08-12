@@ -29,7 +29,7 @@ ALLOWED_FILE_TYPES = {
     "image/webp": ".webp",
 }
 MAX_FILE_BYTES = 15 * 1024 * 1024
-DOCUMENT_TYPES = {"prescription", "medication_management_plan", "gp_letter", "pharmacy_authority", "other"}
+DOCUMENT_TYPES = {"prescription", "medication_management_plan", "gp_letter", "pharmacy_authority", "verification_photo", "other"}
 
 
 def _is_missing_schema(exc: Exception) -> bool:
@@ -47,9 +47,13 @@ async def upload_document(
     content_type: str,
     document_type: str = "other",
     medication_id: str | None = None,
+    skip_extraction: bool = False,
 ) -> dict[str, Any]:
     """Store the file first, insert the row, then run extraction. Extraction failure is
-    logged and reflected in extraction_status — it never undoes the storage/insert above."""
+    logged and reflected in extraction_status — it never undoes the storage/insert above.
+    skip_extraction is for documents with nothing to OCR (e.g. a high-risk administration
+    verification photo) — the row still exists as a chain-of-custody record, it just never
+    goes through the medication-field extraction pipeline."""
     resolved_type = content_type or mimetypes.guess_type(filename)[0] or ""
     if resolved_type not in ALLOWED_FILE_TYPES:
         raise HTTPException(status_code=422, detail="Document must be a PDF, JPEG, PNG, or WEBP file.")
@@ -80,7 +84,7 @@ async def upload_document(
         "file_type": resolved_type,
         "file_size": len(file_bytes),
         "document_type": document_type,
-        "extraction_status": "pending",
+        "extraction_status": "not_applicable" if skip_extraction else "pending",
         "uploaded_by": uploaded_by,
     }
     try:
@@ -90,6 +94,9 @@ async def upload_document(
             raise HTTPException(status_code=503, detail="Medication document service unavailable.") from exc
         raise
     document = result.data[0] if result.data else record
+
+    if skip_extraction:
+        return {"document": document, "extracted_fields": None}
 
     # The file is safely stored and the row exists at this point regardless of what happens below.
     extracted_fields: dict[str, Any] | None = None

@@ -19,17 +19,32 @@ logger = logging.getLogger(__name__)
 ROUTES = {"oral", "topical", "injection", "inhaled", "sublingual", "rectal", "other"}
 FREQUENCY_TYPES = {"scheduled", "prn"}
 STATUSES = {"draft", "pending_verification", "active", "rejected", "ceased", "on_hold"}
+# APINCH high-alert medicine categories (Medication Safety Standard). is_high_risk can be set
+# manually by the verifier, or defaulted from a reference-list match — the manual flag always
+# wins over any automatic suggestion.
+HIGH_RISK_CATEGORIES = {
+    "anti_infective", "potassium_electrolyte", "insulin",
+    "narcotic_opioid", "chemotherapy", "anticoagulant", "other",
+}
 
-# The worker picks one of these four base actions when logging a dose. When the action is
+# The worker picks one of these five base actions when logging a dose. When the action is
 # "given", the final outcome is classified automatically (given_on_time/given_late/
 # given_early) from the logged timestamps against the org's tolerance — not self-typed by
-# the worker under time pressure. The other three actions map straight to their outcome.
-ADMINISTRATION_ACTIONS = {"given", "refused", "missed", "withheld"}
-ADMINISTRATION_OUTCOMES = {"given_on_time", "given_late", "given_early", "refused", "missed", "withheld"}
+# the worker under time pressure. The other actions map straight to their outcome.
+# "administration_error" is deliberately a direct action, not a correction-only concept: a
+# worker who catches their own mistake mid-administration logs it as one accurate row on the
+# spot. A coordinator or later shift discovering someone else's error still goes through the
+# corrects_administration_id path below — those are materially different events and the data
+# needs to be able to tell them apart.
+ADMINISTRATION_ACTIONS = {"given", "refused", "missed", "withheld", "administration_error"}
+ADMINISTRATION_OUTCOMES = {
+    "given_on_time", "given_late", "given_early", "refused", "missed", "withheld", "administration_error",
+}
 GIVEN_OUTCOMES = {"given_on_time", "given_late", "given_early"}
 # Outcomes that always require reason_notes, regardless of which reason_code chip was picked.
 NOTES_REQUIRED_OUTCOMES = {"refused", "missed", "withheld"}
 DEFAULT_TOLERANCE_MINUTES = 30
+ERROR_SUBTYPES = {"wrong_medication", "wrong_dose", "wrong_participant", "wrong_route", "other"}
 
 REASON_CODES: dict[str, set[str]] = {
     "given_late": {"participant_asleep", "worker_delayed", "participant_off_site", "other"},
@@ -86,6 +101,22 @@ def get_medication(medication_id: str, organization_id: str) -> dict[str, Any]:
     rows = resp.data or []
     if not rows:
         raise HTTPException(status_code=404, detail="Medication not found.")
+    return rows[0]
+
+
+def get_administration(administration_id: str, organization_id: str) -> dict[str, Any]:
+    resp = (
+        get_supabase_admin()
+        .table("medication_administrations")
+        .select("*")
+        .eq("id", administration_id)
+        .eq("organization_id", organization_id)
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Administration record not found.")
     return rows[0]
 
 
@@ -303,6 +334,8 @@ def verify_medication(
     if corrections:
         if "route" in corrections and corrections["route"] not in ROUTES:
             raise HTTPException(status_code=422, detail=f"Invalid route. Must be one of: {', '.join(sorted(ROUTES))}.")
+        if "high_risk_category" in corrections and corrections["high_risk_category"] not in HIGH_RISK_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid high_risk_category. Must be one of: {', '.join(sorted(HIGH_RISK_CATEGORIES))}.")
         updates = {k: v for k, v in corrections.items() if v is not None}
 
     updates.update({
@@ -532,6 +565,8 @@ def build_shift_medication_checklist(shift: dict[str, Any], organization_id: str
                 "scheduled_time": scheduled_iso,
                 "due_status": due_status,
                 "administration": logged,
+                "is_high_risk": bool(med.get("is_high_risk")),
+                "high_risk_category": med.get("high_risk_category"),
             })
     checklist.sort(key=lambda c: c["scheduled_time"])
     return checklist
@@ -552,6 +587,11 @@ def create_administration(
     directed_by: str | None = None,
     prn_reason: str | None = None,
     voice_captured: bool = False,
+    error_subtype: str | None = None,
+    corrects_administration_id: str | None = None,
+    error_discovered_at: str | None = None,
+    error_discovered_by: str | None = None,
+    verification_photo_url: str | None = None,
 ) -> dict[str, Any]:
     if action not in ADMINISTRATION_ACTIONS:
         raise HTTPException(status_code=422, detail=f"Invalid action. Must be one of: {', '.join(sorted(ADMINISTRATION_ACTIONS))}.")
@@ -590,6 +630,16 @@ def create_administration(
 
     if outcome in NOTES_REQUIRED_OUTCOMES and not (notes or "").strip():
         raise HTTPException(status_code=422, detail=f"A note is required to log this dose as {outcome}.")
+    if outcome == "administration_error":
+        if error_subtype not in ERROR_SUBTYPES:
+            raise HTTPException(status_code=422, detail=f"error_subtype is required and must be one of: {', '.join(sorted(ERROR_SUBTYPES))}.")
+        if error_subtype == "other" and not (notes or "").strip():
+            raise HTTPException(status_code=422, detail="A note is required when error_subtype is 'other'.")
+    if medication.get("is_high_risk") and outcome in GIVEN_OUTCOMES and not (verification_photo_url or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="A verification photo is required to log a dose for a high-risk medication.",
+        )
     if reason_code:
         allowed_codes = REASON_CODES.get(outcome, set())
         if reason_code not in allowed_codes:
@@ -615,6 +665,12 @@ def create_administration(
         "notes": notes,
         "prn_reason": prn_reason,
         "voice_captured": voice_captured,
+        "error_subtype": error_subtype if outcome == "administration_error" else None,
+        "corrects_administration_id": corrects_administration_id,
+        "error_discovered_at": error_discovered_at if corrects_administration_id else None,
+        "error_discovered_by": error_discovered_by if corrects_administration_id else None,
+        "verification_photo_url": verification_photo_url,
+        "verification_photo_taken_at": datetime.now(timezone.utc).isoformat() if verification_photo_url else None,
     }
     try:
         result = get_supabase_admin().table("medication_administrations").insert(payload).execute()
@@ -623,6 +679,24 @@ def create_administration(
             raise HTTPException(status_code=503, detail="Medication administration service unavailable.") from exc
         raise
     record = result.data[0] if result.data else payload
+
+    if outcome == "administration_error":
+        # Fire-and-forget, same pattern as _maybe_escalate_prn_max below — the incident
+        # creation must never block or fail the administration write itself.
+        import asyncio
+
+        from .medication_incident_service import create_incident_from_medication_error
+
+        async def _create_incident():
+            try:
+                await create_incident_from_medication_error(record, medication)
+            except Exception as exc:
+                logger.warning("Medication error incident creation failed for administration %s: %s", record.get("id"), exc)
+
+        try:
+            asyncio.get_event_loop().create_task(_create_incident())
+        except Exception:
+            pass
 
     if medication.get("is_prn") and outcome in GIVEN_OUTCOMES and medication.get("prn_max_per_day"):
         _maybe_escalate_prn_max(medication, shift, organization_id)

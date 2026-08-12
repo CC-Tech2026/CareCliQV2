@@ -101,7 +101,7 @@ export default function Billing() {
   const participantsQuery = useGetParticipants();
   const participants = useMemo(() => {
     const raw = participantsQuery.data;
-    if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+    if (Array.isArray(raw)) return raw as unknown as Array<Record<string, unknown>>;
     if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)) {
       return (raw as { data: Array<Record<string, unknown>> }).data;
     }

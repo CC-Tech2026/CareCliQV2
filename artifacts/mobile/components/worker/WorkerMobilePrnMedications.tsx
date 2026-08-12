@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -12,6 +13,7 @@ import {
   logMedicationAdministration,
   logMedicationEffect,
   transcribeSessionAudio,
+  uploadMedicationVerificationPhoto,
   type PrnMedication,
   type PrnPendingEffect,
 } from "@/lib/worker-api";
@@ -104,6 +106,8 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
   const [reason, setReason] = useState("");
   const [doseGiven, setDoseGiven] = useState("");
   const [effectText, setEffectText] = useState("");
+  const [verificationPhotoUrl, setVerificationPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["worker", "prn-medications", shiftId],
@@ -124,6 +128,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
         action: "given",
         prn_reason: reason.trim(),
         dose_given: doseGiven.trim() || undefined,
+        verification_photo_url: verificationPhotoUrl ?? undefined,
       });
     },
     onSuccess: () => {
@@ -132,9 +137,34 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
       setDoseTarget(null);
       setReason("");
       setDoseGiven("");
+      setVerificationPhotoUrl(null);
     },
     onError: (e: Error) => showToast(e.message || "Could not log PRN dose.", "error"),
   });
+
+  const captureVerificationPhoto = async () => {
+    if (!doseTarget) return;
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      showToast("Camera access is required to verify this medication.", "error");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    setUploadingPhoto(true);
+    try {
+      const { url } = await uploadMedicationVerificationPhoto(shiftId, doseTarget.id, {
+        uri: result.assets[0].uri,
+        name: "verification-photo.jpg",
+        type: "image/jpeg",
+      });
+      setVerificationPhotoUrl(url);
+    } catch (e) {
+      showToast((e as Error).message || "Could not upload verification photo.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const effectMutation = useMutation({
     mutationFn: () => {
@@ -193,7 +223,11 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
             </Text>
           </View>
           <Pressable
-            onPress={() => !disabled && setDoseTarget(med)}
+            onPress={() => {
+              if (disabled) return;
+              setDoseTarget(med);
+              setVerificationPhotoUrl(null);
+            }}
             disabled={disabled}
             style={[styles.smallBtn, { backgroundColor: med.at_or_over_max ? colors.destructive : colors.primary }]}
           >
@@ -223,15 +257,35 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
               placeholderTextColor={colors.mutedForeground}
               style={[styles.plainInput, { borderColor: colors.border, color: colors.foreground }]}
             />
-            <Pressable
-              onPress={() => doseMutation.mutate()}
-              disabled={doseMutation.isPending || !reason.trim()}
-              style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: !reason.trim() ? 0.5 : 1 }]}
-            >
-              <Feather name="check" size={15} color="#FFFFFF" />
-              <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
-            </Pressable>
-            <Pressable onPress={() => setDoseTarget(null)} style={styles.cancelBtn}>
+            {doseTarget?.is_high_risk && !verificationPhotoUrl ? (
+              <Pressable
+                onPress={captureVerificationPhoto}
+                disabled={uploadingPhoto}
+                style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: uploadingPhoto ? 0.6 : 1 }]}
+              >
+                <Feather name="camera" size={15} color="#FFFFFF" />
+                <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
+                  {uploadingPhoto ? "Uploading photo…" : "Take verification photo"}
+                </Text>
+              </Pressable>
+            ) : (
+              <>
+                {doseTarget?.is_high_risk && (
+                  <Text style={[styles.warningText, { color: colors.success, fontFamily: "Inter_600SemiBold" }]}>
+                    ✓ Verification photo captured
+                  </Text>
+                )}
+                <Pressable
+                  onPress={() => doseMutation.mutate()}
+                  disabled={doseMutation.isPending || !reason.trim()}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: !reason.trim() ? 0.5 : 1 }]}
+                >
+                  <Feather name="check" size={15} color="#FFFFFF" />
+                  <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
+                </Pressable>
+              </>
+            )}
+            <Pressable onPress={() => { setDoseTarget(null); setVerificationPhotoUrl(null); }} style={styles.cancelBtn}>
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
             </Pressable>
           </View>

@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -9,9 +10,12 @@ import {
   attachMedicationReason,
   getMedicationChecklist,
   logMedicationAdministration,
+  MEDICATION_ERROR_SUBTYPES,
   MEDICATION_REASON_CODES,
+  uploadMedicationVerificationPhoto,
   type MedicationAdministrationAction,
   type MedicationChecklistItem,
+  type MedicationErrorSubtype,
 } from "@/lib/worker-api";
 
 type Props = {
@@ -29,6 +33,14 @@ const REASON_LABELS: Record<string, string> = {
   behavioural: "Behavioural",
   communication_device: "Via communication device",
   clinical_direction: "Clinical direction",
+  other: "Other",
+};
+
+const ERROR_SUBTYPE_LABELS: Record<MedicationErrorSubtype, string> = {
+  wrong_medication: "Wrong medication",
+  wrong_dose: "Wrong dose",
+  wrong_participant: "Wrong participant",
+  wrong_route: "Wrong route",
   other: "Other",
 };
 
@@ -56,6 +68,9 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
   // Set once a "given" submission comes back late/early — the worker didn't choose this in
   // advance, the server classified it, so the reason step happens as a follow-up.
   const [followUp, setFollowUp] = useState<{ administrationId: string; outcome: "given_late" | "given_early" } | null>(null);
+  // High-risk medications require a point-of-administration photo before "given" can submit.
+  const [verificationPhotoUrl, setVerificationPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["worker", "medication-checklist", shiftId],
@@ -72,15 +87,28 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
     setReasonCode(null);
     setNoteText("");
     setFollowUp(null);
+    setVerificationPhotoUrl(null);
+    setUploadingPhoto(false);
   };
 
   const logMutation = useMutation({
-    mutationFn: ({ item, action, reason_code, notes }: { item: MedicationChecklistItem; action: MedicationAdministrationAction; reason_code?: string; notes?: string }) =>
+    mutationFn: ({
+      item, action, reason_code, notes, error_subtype, verification_photo_url,
+    }: {
+      item: MedicationChecklistItem;
+      action: MedicationAdministrationAction;
+      reason_code?: string;
+      notes?: string;
+      error_subtype?: MedicationErrorSubtype;
+      verification_photo_url?: string;
+    }) =>
       logMedicationAdministration(shiftId, item.medication_id, {
         scheduled_time: item.scheduled_time,
         action,
         reason_code,
         notes: notes || undefined,
+        error_subtype,
+        verification_photo_url,
       }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["worker", "medication-checklist", shiftId] });
@@ -110,7 +138,35 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
 
   const submitGiven = () => {
     if (!activeItem) return;
-    logMutation.mutate({ item: activeItem, action: "given" });
+    if (activeItem.is_high_risk && !verificationPhotoUrl) {
+      showToast("Take the verification photo first.", "error");
+      return;
+    }
+    logMutation.mutate({ item: activeItem, action: "given", verification_photo_url: verificationPhotoUrl ?? undefined });
+  };
+
+  const captureVerificationPhoto = async () => {
+    if (!activeItem) return;
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      showToast("Camera access is required to verify this medication.", "error");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    setUploadingPhoto(true);
+    try {
+      const { url } = await uploadMedicationVerificationPhoto(shiftId, activeItem.medication_id, {
+        uri: result.assets[0].uri,
+        name: "verification-photo.jpg",
+        type: "image/jpeg",
+      });
+      setVerificationPhotoUrl(url);
+    } catch (e) {
+      showToast((e as Error).message || "Could not upload verification photo.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const pickReasonAction = (action: MedicationAdministrationAction) => {
@@ -121,6 +177,23 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
 
   const submitReasonAction = () => {
     if (!activeItem || !reasonAction) return;
+    if (reasonAction === "administration_error") {
+      if (!reasonCode) {
+        showToast("Pick what went wrong.", "error");
+        return;
+      }
+      if (reasonCode === "other" && !noteText.trim()) {
+        showToast("A note is required when the reason is 'Other'.", "error");
+        return;
+      }
+      logMutation.mutate({
+        item: activeItem,
+        action: reasonAction,
+        error_subtype: reasonCode as MedicationErrorSubtype,
+        notes: noteText.trim() || undefined,
+      });
+      return;
+    }
     if (!noteText.trim()) {
       showToast("A note is required for this outcome.", "error");
       return;
@@ -140,10 +213,13 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
 
   const modalVisible = !!activeItem || !!followUp;
   const reasonCodes = reasonAction
-    ? MEDICATION_REASON_CODES[reasonAction as Exclude<MedicationAdministrationAction, "given">] ?? []
+    ? reasonAction === "administration_error"
+      ? MEDICATION_ERROR_SUBTYPES
+      : MEDICATION_REASON_CODES[reasonAction as Exclude<MedicationAdministrationAction, "given" | "administration_error">] ?? []
     : followUp
       ? MEDICATION_REASON_CODES[followUp.outcome]
       : [];
+  const reasonLabels: Record<string, string> = reasonAction === "administration_error" ? ERROR_SUBTYPE_LABELS : REASON_LABELS;
   const busy = logMutation.isPending || followUpMutation.isPending;
 
   return (
@@ -231,7 +307,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
             ) : reasonAction ? (
               <>
                 <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  {activeItem?.name} — {reasonAction[0].toUpperCase() + reasonAction.slice(1)}
+                  {activeItem?.name} — {reasonAction === "administration_error" ? "Report an error" : reasonAction[0].toUpperCase() + reasonAction.slice(1)}
                 </Text>
                 <View style={styles.chipWrap}>
                   {reasonCodes.map((code) => (
@@ -244,7 +320,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
                       ]}
                     >
                       <Text style={[styles.chipText, { color: reasonCode === code ? colors.primary : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                        {REASON_LABELS[code] ?? code}
+                        {reasonLabels[code] ?? code}
                       </Text>
                     </Pressable>
                   ))}
@@ -252,7 +328,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
                 <TextInput
                   value={noteText}
                   onChangeText={setNoteText}
-                  placeholder="Note (required)"
+                  placeholder={reasonAction === "administration_error" ? "Note (required if 'Other')" : "Note (required)"}
                   placeholderTextColor={colors.mutedForeground}
                   multiline
                   style={[styles.noteInput, { borderColor: colors.border, color: colors.foreground }]}
@@ -278,14 +354,36 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
                   {activeItem?.dosage ? `${activeItem.dosage} · ` : ""}{activeItem?.route}
                 </Text>
 
-                <Pressable
-                  onPress={submitGiven}
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
-                  disabled={busy}
-                >
-                  <Feather name="check" size={15} color="#FFFFFF" />
-                  <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
-                </Pressable>
+                {activeItem?.is_high_risk && !verificationPhotoUrl ? (
+                  <Pressable
+                    onPress={captureVerificationPhoto}
+                    style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: uploadingPhoto ? 0.6 : 1 }]}
+                    disabled={uploadingPhoto}
+                  >
+                    <Feather name="camera" size={15} color="#FFFFFF" />
+                    <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
+                      {uploadingPhoto ? "Uploading photo…" : "Take verification photo"}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    {activeItem?.is_high_risk && (
+                      <View style={[styles.chip, { alignSelf: "flex-start", borderColor: colors.success }]}>
+                        <Text style={[styles.chipText, { color: colors.success, fontFamily: "Inter_600SemiBold" }]}>
+                          ✓ Verification photo captured
+                        </Text>
+                      </View>
+                    )}
+                    <Pressable
+                      onPress={submitGiven}
+                      style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
+                      disabled={busy}
+                    >
+                      <Feather name="check" size={15} color="#FFFFFF" />
+                      <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>Confirm dose given</Text>
+                    </Pressable>
+                  </>
+                )}
 
                 <View style={styles.secondaryRow}>
                   {(["refused", "missed", "withheld"] as MedicationAdministrationAction[]).map((action) => (
@@ -301,6 +399,15 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
                     </Pressable>
                   ))}
                 </View>
+                <Pressable
+                  onPress={() => pickReasonAction("administration_error")}
+                  disabled={busy}
+                  style={[styles.secondaryBtn, { borderColor: colors.destructive, alignSelf: "stretch" }]}
+                >
+                  <Text style={[styles.secondaryBtnText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+                    Report an administration error
+                  </Text>
+                </Pressable>
               </>
             )}
 

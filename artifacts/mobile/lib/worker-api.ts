@@ -156,6 +156,7 @@ export type SessionNoteRecord = {
   synced?: boolean;
   note_type?: SessionNoteType;
   file_name?: string;
+  attachment_urls?: string[];
 };
 
 export type GoalProgressNote = {
@@ -325,7 +326,11 @@ export function updateShiftTasks(id: string, tasks: ShiftTask[]) {
 
 /** The worker picks one of these four base actions; "given" is then classified automatically
  * into an on-time/late/early outcome by the server, from the logged timestamps. */
-export type MedicationAdministrationAction = "given" | "refused" | "missed" | "withheld";
+export type MedicationAdministrationAction = "given" | "refused" | "missed" | "withheld" | "administration_error";
+export type MedicationErrorSubtype = "wrong_medication" | "wrong_dose" | "wrong_participant" | "wrong_route" | "other";
+export const MEDICATION_ERROR_SUBTYPES: MedicationErrorSubtype[] = [
+  "wrong_medication", "wrong_dose", "wrong_participant", "wrong_route", "other",
+];
 /** What a logged dose actually resolved to — the six outcomes the audit trail records. */
 export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld";
 export type MedicationDueStatus = "upcoming" | "due_now" | "overdue" | MedicationAdministrationOutcome;
@@ -347,6 +352,8 @@ export type MedicationChecklistItem = {
   scheduled_time: string;
   due_status: MedicationDueStatus;
   administration?: { outcome: MedicationAdministrationOutcome; notes?: string | null } | null;
+  is_high_risk?: boolean;
+  high_risk_category?: string | null;
 };
 
 export function getMedicationChecklist(shiftId: string) {
@@ -366,12 +373,39 @@ export function logMedicationAdministration(
     notes?: string;
     prn_reason?: string;
     voice_captured?: boolean;
+    error_subtype?: MedicationErrorSubtype;
+    verification_photo_url?: string;
+    // Late-discovery correction only — references the original entry this one corrects.
+    // Left unset for an immediate self-reported error, which stands as its own row.
+    corrects_administration_id?: string;
+    error_discovered_at?: string;
   },
 ) {
   return workerFetch<{ id: string; outcome: MedicationAdministrationOutcome }>(`/api/worker/shifts/${shiftId}/medications/${medicationId}/administrations`, {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** Point-of-administration photo required before a high-risk medication's "given" outcome can
+ * be submitted. Call this first, then pass the returned url as verification_photo_url. */
+export async function uploadMedicationVerificationPhoto(
+  shiftId: string,
+  medicationId: string,
+  file: { uri: string; name: string; type: string },
+): Promise<{ url: string }> {
+  const formData = new FormData();
+  if (Platform.OS === "web") {
+    const res = await fetch(file.uri);
+    const blob = await res.blob();
+    formData.append("file", blob, file.name);
+  } else {
+    formData.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+  }
+  return workerFetch<{ url: string }>(
+    `/api/worker/shifts/${shiftId}/medications/${medicationId}/verification-photo`,
+    { method: "POST", body: formData },
+  );
 }
 
 export type PrnMedication = {
@@ -383,6 +417,8 @@ export type PrnMedication = {
   prn_max_per_day?: number | null;
   doses_given_today: number;
   at_or_over_max: boolean;
+  is_high_risk?: boolean;
+  high_risk_category?: string | null;
 };
 
 export type PrnPendingEffect = {
@@ -440,6 +476,38 @@ export function syncSessionNotes(sessionId: string, notes: SessionNoteRecord[]) 
       body: JSON.stringify({ notes }),
     },
   );
+}
+
+export type SessionAttachment = {
+  id: string;
+  session_id: string;
+  file_name: string;
+  file_path: string;
+  public_url: string;
+  mime_type: string;
+  size_bytes: number;
+  attachment_type: string;
+};
+
+/** Actually uploads a photo/file to storage (unlike a note's file_name, which is just a
+ * label) — call this before attaching a note so the note's attachment_urls references a
+ * real, retrievable file rather than a placeholder string. */
+export async function uploadSessionAttachment(
+  sessionId: string,
+  file: { uri: string; name: string; type: string },
+): Promise<SessionAttachment> {
+  const formData = new FormData();
+  if (Platform.OS === "web") {
+    const res = await fetch(file.uri);
+    const blob = await res.blob();
+    formData.append("file", blob, file.name);
+  } else {
+    formData.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+  }
+  return workerFetch<SessionAttachment>(`/api/sessions/${sessionId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export async function transcribeSessionAudio(sessionId: string, uri: string) {

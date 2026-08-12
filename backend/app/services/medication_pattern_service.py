@@ -75,12 +75,41 @@ def _latest_calculated_at(signal_type: str, scope_id: str) -> datetime | None:
     return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
 
 
-def _insert_signal(record: dict[str, Any]) -> None:
+def _insert_signal(record: dict[str, Any]) -> dict[str, Any] | None:
     try:
-        get_supabase_admin().table("medication_pattern_signals").insert(record).execute()
+        result = get_supabase_admin().table("medication_pattern_signals").insert(record).execute()
+        return result.data[0] if result.data else record
     except Exception as exc:
         if not _is_missing_schema(exc):
             logger.warning("Could not insert medication pattern signal: %s", exc)
+        return None
+
+
+def _fire_incident_for_refused_missed_signal(signal: dict[str, Any], participant_id: str, medication_id: str | None) -> None:
+    """Fire-and-forget, same pattern as medication_service._maybe_escalate_prn_max — must never
+    block or fail the pattern-calculation pass itself."""
+    import asyncio
+
+    from .medication_incident_service import create_incident_from_pattern_signal
+
+    medication_name = None
+    if medication_id:
+        try:
+            resp = get_supabase_admin().table("medications").select("name").eq("id", medication_id).limit(1).execute()
+            medication_name = (resp.data or [{}])[0].get("name")
+        except Exception as exc:
+            logger.warning("Could not resolve medication name for pattern signal incident: %s", exc)
+
+    async def _create_incident():
+        try:
+            await create_incident_from_pattern_signal(signal, participant_id=participant_id, medication_name=medication_name)
+        except Exception as exc:
+            logger.warning("Pattern-signal incident creation failed for signal %s: %s", signal.get("id"), exc)
+
+    try:
+        asyncio.get_event_loop().create_task(_create_incident())
+    except Exception:
+        pass
 
 
 def calculate_participant_reliability_flags(organization_id: str | None = None) -> int:
@@ -133,12 +162,17 @@ def calculate_participant_reliability_flags(organization_id: str | None = None) 
         for a in admins:
             if a.get("outcome") in ("refused", "missed"):
                 by_medication[a["medication_id"]] = by_medication.get(a["medication_id"], 0) + 1
-        worst_medication_count = max(by_medication.values(), default=0)
-        if worst_medication_count >= PARTICIPANT_REFUSED_MISSED_THRESHOLD:
+        worst_medication_id = max(by_medication, key=by_medication.get) if by_medication else None
+        worst_medication_count = by_medication.get(worst_medication_id, 0) if worst_medication_id else 0
+        # Distinct from the general `triggered` flag above: this is specifically a refused/missed
+        # concentration on one medication, the only condition the incident cross-link (§4) fires
+        # on — a general late/early/missed rate trend is Compliance-Centre-facing only.
+        refused_missed_triggered = worst_medication_count >= PARTICIPANT_REFUSED_MISSED_THRESHOLD
+        if refused_missed_triggered:
             triggered = True
             reasons.append(f"{worst_medication_count} refused/missed doses for the same medication in the last {PARTICIPANT_WINDOW_DAYS} days.")
 
-        _insert_signal({
+        signal = _insert_signal({
             "id": str(uuid4()),
             "signal_type": "participant_reliability",
             "scope_id": participant_id,
@@ -148,9 +182,13 @@ def calculate_participant_reliability_flags(organization_id: str | None = None) 
             "rate_calculated": round(rate, 4),
             "sample_size": sample_size,
             "triggered": triggered,
+            "refused_missed_triggered": refused_missed_triggered,
+            "worst_medication_id": worst_medication_id,
             "trigger_reason": " ".join(reasons) if reasons else None,
         })
         created += 1
+        if refused_missed_triggered and signal:
+            _fire_incident_for_refused_missed_signal(signal, participant_id, worst_medication_id)
     return created
 
 

@@ -1182,7 +1182,7 @@ export default function SignupScreen() {
 
             <Pressable
               onPress={() => setAskOpen(false)}
-              style={({ pressed, hovered }) => [
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
                 styles.askGotItBtn,
                 {
                   borderColor: auth.plum,
@@ -1191,7 +1191,7 @@ export default function SignupScreen() {
                 },
               ]}
             >
-              {({ pressed, hovered }) => (
+              {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
                 <Text
                   style={[
                     styles.askGotItBtnText,

@@ -14,7 +14,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2",
     "express": "^5",
-    "http-proxy-middleware": "^3.0.5",
+    "http-proxy-middleware": "^3.0.7",
     "pino": "^9",
     "pino-http": "^10"
   },
