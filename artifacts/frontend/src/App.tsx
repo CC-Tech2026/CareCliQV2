@@ -13,7 +13,6 @@ import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
 import OnboardEmployeePage from "@/pages/onboard-employee";
-import OnboardParticipantPage from "@/pages/onboard-participant";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
@@ -180,16 +179,10 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── New-hire / new-participant onboarding — Managing Director only ── */}
+      {/* ── New-hire onboarding — Managing Director only ─────────────────── */}
       <Route path="/onboard-employee">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <OnboardEmployeePage />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/onboard-participant">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
-          <OnboardParticipantPage />
         </ProtectedRoute>
       </Route>
 
