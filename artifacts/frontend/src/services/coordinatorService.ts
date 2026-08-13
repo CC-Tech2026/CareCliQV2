@@ -809,6 +809,22 @@ export type LiveShift = {
     last_activity_at?: string | null;
     is_long_shift?: boolean;
   };
+  checklist: Array<{
+    task_id: string;
+    label: string;
+    completed: boolean;
+    documented: boolean;
+    mandatory: boolean;
+    goal_title?: string | null;
+  }>;
+  medications: Array<{
+    medication_id: string;
+    name: string;
+    scheduled_time: string;
+    due_status: string;
+    outcome?: string | null;
+  }>;
+  workflow_stage: "not_clocked_in" | "clocked_in" | "documenting" | "wrapping_up";
 };
 
 export type CoordinatorAlert = {

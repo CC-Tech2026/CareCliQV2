@@ -1221,6 +1221,18 @@ export const en: Dict = {
   "coordinator.live.toast.flagCreated": "Flag created",
   "coordinator.live.toast.flagFailed": "Flag failed",
   "coordinator.live.action.flag": "Flag",
+  "coordinator.live.board.notClockedIn": "Not Clocked In",
+  "coordinator.live.board.clockedIn": "Clocked In",
+  "coordinator.live.board.documenting": "Documenting",
+  "coordinator.live.board.wrappingUp": "Wrapping Up",
+  "coordinator.live.checklist": "Checklist",
+  "coordinator.live.checklist.documented": "Documented",
+  "coordinator.live.checklist.notDocumented": "Not documented",
+  "coordinator.live.checklist.otherTasks": "Other tasks",
+  "coordinator.live.checklist.empty": "No checklist items for this shift.",
+  "coordinator.live.medications": "Medications",
+  "coordinator.live.medications.empty": "No medications scheduled for this shift.",
+  "coordinator.live.summaryLine": "{completed}/{total} tasks · {given}/{scheduled} meds",
 
   // Coordinator: rostering
   "coordinator.rostering.activeNow": "active now",

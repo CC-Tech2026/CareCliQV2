@@ -2642,6 +2642,34 @@ def _fetch_live_shifts_raw(
         return rows
 
 
+def _live_checklist_entry(task: dict) -> dict:
+    """Map a resolved checklist task to the live-monitor board's compact shape."""
+    return {
+        "task_id": task.get("task_id"),
+        "label": task.get("label"),
+        "completed": bool(task.get("completed")),
+        "documented": (
+            shift_service._mandatory_task_satisfied(task)
+            if task.get("mandatory")
+            else bool(task.get("completed"))
+        ),
+        "mandatory": bool(task.get("mandatory")),
+        "goal_title": task.get("goal_title"),
+    }
+
+
+def _shift_workflow_stage(shift: dict, checklist: list[dict]) -> str:
+    """Board-column axis: where a shift sits in its workflow, independent of urgency."""
+    if not shift.get("clocked_in_at"):
+        return "not_clocked_in"
+    has_started_documenting = bool(shift.get("session_id")) or any(t.get("completed") for t in checklist)
+    if not has_started_documenting:
+        return "clocked_in"
+    if checklist and shift_service._mandatory_tasks_complete(checklist):
+        return "wrapping_up"
+    return "documenting"
+
+
 def _shift_live_status(shift: dict, task_counts: dict, alerts: list[dict]) -> str:
     """Derive green/yellow/red status for a live shift."""
     elapsed = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
@@ -2691,26 +2719,26 @@ async def get_live_shifts(
         except Exception:
             pass
 
-    # Fetch task counts per shift
+    # Resolve full checklist + medication checklist per shift (reuses worker-facing logic)
+    from ..services import medication_service
+
     shift_ids = [s["id"] for s in shifts_raw]
+    checklist_map: dict[str, list[dict]] = {}
     task_counts_map: dict[str, dict] = {}
-    if shift_ids:
+    medications_map: dict[str, list[dict]] = {}
+    for shift in shifts_raw:
+        sid = shift["id"]
         try:
-            t_resp = (
-                supabase.table("shift_tasks")
-                .select("shift_id, completed")
-                .in_("shift_id", shift_ids)
-                .execute()
-            )
-            for task in (t_resp.data or []):
-                sid = task.get("shift_id")
-                if sid:
-                    c = task_counts_map.setdefault(sid, {"total": 0, "completed": 0})
-                    c["total"] += 1
-                    if task.get("completed"):
-                        c["completed"] += 1
+            tasks = shift_service._resolve_shift_checklist_tasks(shift, org_id)
         except Exception:
-            pass
+            tasks = []
+        checklist_map[sid] = tasks
+        completed = sum(1 for t in tasks if t.get("completed"))
+        task_counts_map[sid] = {"total": len(tasks), "completed": completed}
+        try:
+            medications_map[sid] = medication_service.build_shift_medication_checklist(shift, org_id)
+        except Exception:
+            medications_map[sid] = []
 
     # Fetch active alerts per shift
     alerts_map: dict[str, list] = {}
@@ -2807,6 +2835,20 @@ async def get_live_shifts(
                 live_status = "yellow"
         elapsed_mins = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
 
+        raw_tasks = checklist_map.get(sid, [])
+        checklist = [_live_checklist_entry(t) for t in raw_tasks]
+        medications = [
+            {
+                "medication_id": m.get("medication_id"),
+                "name": m.get("name"),
+                "scheduled_time": m.get("scheduled_time"),
+                "due_status": m.get("due_status"),
+                "outcome": (m.get("administration") or {}).get("outcome"),
+            }
+            for m in medications_map.get(sid, [])
+        ]
+        workflow_stage = _shift_workflow_stage(shift, raw_tasks)
+
         result.append({
             **shift,
             "worker_name": worker.get("full_name") or shift.get("participant_name") or "Worker",
@@ -2817,6 +2859,9 @@ async def get_live_shifts(
             "live_status": live_status,
             "elapsed_minutes": round(elapsed_mins, 1),
             "engagement": engagement,
+            "checklist": checklist,
+            "medications": medications,
+            "workflow_stage": workflow_stage,
         })
 
     return result
