@@ -4,6 +4,7 @@ offer letter + service agreement, both sides sign, then an invite is sent.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timezone
@@ -279,7 +280,28 @@ def get_hire_by_sign_token(token: str) -> dict[str, Any]:
     return hire
 
 
-def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
+def _document_version_hash(hire_id: str) -> str:
+    """Fingerprints exactly which stored documents (by id + storage path, not
+    just title) are attached at the moment of signing — confirms what was
+    actually accepted, distinct from the acceptance timestamp itself."""
+    docs = (
+        get_supabase_admin()
+        .table("employee_onboarding_documents")
+        .select("id, file_path")
+        .eq("onboarding_id", hire_id)
+        .order("id")
+        .execute()
+    )
+    fingerprint = "|".join(f"{d['id']}:{d.get('file_path') or ''}" for d in (docs.data or []))
+    return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+
+
+def sign_as_worker(
+    token: str,
+    full_name: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> dict[str, Any]:
     resp = (
         get_supabase_admin()
         .table("employee_onboarding")
@@ -300,6 +322,9 @@ def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
         "status": "signed",
         "worker_signed_name": full_name.strip(),
         "worker_signed_at": _now(),
+        "worker_signed_ip": ip_address,
+        "worker_signed_user_agent": user_agent,
+        "worker_signed_document_version_hash": _document_version_hash(hire["id"]),
         "updated_at": _now(),
     }
     result = (

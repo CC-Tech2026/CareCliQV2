@@ -20,7 +20,7 @@ export type EmployeeHire = {
   email: string;
   phone?: string | null;
   role: "support_worker" | "support_coordinator";
-  status: "draft" | "awaiting_signatures" | "signed" | "invited" | "completed";
+  status: "draft" | "awaiting_signatures" | "signed" | "invited" | "completed" | "expired";
   sign_token?: string | null;
   employer_signed_name?: string | null;
   employer_signed_at?: string | null;

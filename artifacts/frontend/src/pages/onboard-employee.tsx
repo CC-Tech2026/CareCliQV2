@@ -33,6 +33,8 @@ const WARNING = "var(--cc-status-warning)";
 const WARNING_BG = "var(--cc-status-warning-bg)";
 const INFO = "var(--cc-status-info)";
 const INFO_BG = "var(--cc-status-info-bg)";
+const DANGER = "var(--cc-status-danger)";
+const DANGER_BG = "var(--cc-status-danger-bg)";
 
 const STATUS_META: Record<EmployeeHire["status"], { label: string; bg: string; color: string }> = {
   draft: { label: "Draft", bg: SOFT, color: MUTED },
@@ -40,6 +42,7 @@ const STATUS_META: Record<EmployeeHire["status"], { label: string; bg: string; c
   signed: { label: "Ready to invite", bg: INFO_BG, color: INFO },
   invited: { label: "Invite sent", bg: SUCCESS_BG, color: SUCCESS },
   completed: { label: "Onboarded", bg: SUCCESS_BG, color: SUCCESS },
+  expired: { label: "Offer expired", bg: DANGER_BG, color: DANGER },
 };
 
 const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = {

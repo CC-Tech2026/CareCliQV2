@@ -5,7 +5,7 @@ signed, sends the account-activation invite.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from ..core.security import get_current_user
 from ..services import employee_onboarding_service as svc
@@ -101,5 +101,7 @@ async def get_hire_for_signing(token: str):
 
 
 @router.post("/sign/{token}")
-async def sign_hire(token: str, body: SignBody):
-    return svc.sign_as_worker(token, body.full_name)
+async def sign_hire(token: str, body: SignBody, request: Request):
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    return svc.sign_as_worker(token, body.full_name, ip_address, user_agent)
