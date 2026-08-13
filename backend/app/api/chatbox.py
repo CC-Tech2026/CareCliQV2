@@ -9,7 +9,7 @@ from ..core.access import get_user_id, get_user_organization_id, is_coordinator_
 from ..core.security import get_current_user
 from ..services import audit_service
 from ..services.chatbox.graph import ask_quill
-from ..services.chatbox.memory import delete_thread, list_threads, load_history
+from ..services.chatbox.memory import delete_all_threads, delete_thread, list_threads, load_history
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chatbox", tags=["chatbox"])
@@ -87,6 +87,23 @@ async def get_threads(current_user: dict = Depends(get_current_user)):
     """List this user's past Quill conversations, most recently updated first."""
     _require_quill_access(current_user)
     return await list_threads(current_user)
+
+
+@router.delete("/threads", status_code=204)
+async def clear_all_threads_route(current_user: dict = Depends(get_current_user)):
+    """Delete every saved conversation for the current user."""
+    _require_quill_access(current_user)
+    await delete_all_threads(current_user)
+    try:
+        await audit_service.log_action(
+            action_type="chatbox.history_cleared",
+            entity_type="chatbox_thread",
+            entity_id="all",
+            user_id=get_user_id(current_user),
+            organization_id=get_user_organization_id(current_user),
+        )
+    except Exception:
+        logger.warning("Failed to write chatbox clear-history audit log")
 
 
 @router.get("/threads/{thread_id}/messages", response_model=list[ThreadMessage])

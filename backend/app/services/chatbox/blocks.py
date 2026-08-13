@@ -6,10 +6,11 @@ wiring), never from the LLM's prose. This is the "safety-critical decisions
 are made by code, not the LLM" principle applied to numbers shown in a table:
 the model narrates, the block data comes straight from the tool's dict.
 
-Block shapes (kept intentionally small — 3 types cover every tool today):
+Block shapes (kept intentionally small — 4 types cover every tool today):
   {"type": "stat", "label": str, "value": number|str, "target": number|None}
   {"type": "table", "title": str, "columns": [str, ...], "rows": [[cell, ...], ...]}
   {"type": "bar_chart", "title": str, "x_key": str, "series": [{"key": str, "label": str}], "data": [dict, ...]}
+  {"type": "download", "title": str, "url": str, "count": int|None}
 """
 
 from datetime import datetime
@@ -142,6 +143,63 @@ def _blocks_for_search(a: dict) -> list[dict]:
         "rows": rows,
     }]
 
+def _blocks_for_participant_count(a: dict) -> list[dict]:
+    return [{
+        "type": "stat",
+        "label": f"Participants ({a.get('scope', 'organisation-wide')})",
+        "value": a.get("participant_count"),
+    }]
+
+
+def _blocks_for_participant_list(a: dict) -> list[dict]:
+    participants = a.get("participants") or []
+    if not participants:
+        return []
+    return [{
+        "type": "table",
+        "title": "Participants",
+        "columns": ["Name"],
+        "rows": [[p.get("full_name")] for p in participants],
+    }]
+
+
+def _blocks_for_active_worker_count(a: dict) -> list[dict]:
+    return [{
+        "type": "stat",
+        "label": f"Active workers ({a.get('scope', 'organisation-wide')})",
+        "value": a.get("active_worker_count"),
+    }]
+
+
+def _blocks_for_active_worker_list(a: dict) -> list[dict]:
+    workers = a.get("workers") or []
+    if not workers:
+        return []
+    return [{
+        "type": "table",
+        "title": "Active workers",
+        "columns": ["Name"],
+        "rows": [[w.get("full_name")] for w in workers],
+    }]
+
+
+def _blocks_for_download(a: dict) -> list[dict]:
+    if not a.get("file_url"):
+        return []
+    return [{
+        "type": "download",
+        "title": a.get("label") or "Download",
+        "url": a["file_url"],
+        "count": a.get("shift_count"),
+    }]
+
+
+def _blocks_for_session_activity(a: dict) -> list[dict]:
+    return [
+        {"type": "stat", "label": f"Sessions today ({a.get('scope', 'organisation-wide')})", "value": a.get("sessions_today")},
+        {"type": "stat", "label": "Sessions this week", "value": a.get("sessions_this_week")},
+    ]
+
 
 _BUILDERS = {
     "get_compliance_snapshot": _blocks_for_compliance_snapshot,
@@ -153,6 +211,15 @@ _BUILDERS = {
     "get_revenue_summary": _blocks_for_revenue_summary,
     "search_session_notes": _blocks_for_search,
     "search_incident_history": _blocks_for_search,
+    "get_participant_count": _blocks_for_participant_count,
+    "get_participant_list": _blocks_for_participant_list,
+    "get_active_worker_count": _blocks_for_active_worker_count,
+    "get_active_worker_list": _blocks_for_active_worker_list,
+    "get_shift_progress_note": _blocks_for_download,
+    "get_participant_progress_notes_zip": _blocks_for_download,
+    "get_worker_progress_notes_zip": _blocks_for_download,
+    "get_all_progress_notes_zip": _blocks_for_download,
+    "get_session_activity": _blocks_for_session_activity,
 }
 
 

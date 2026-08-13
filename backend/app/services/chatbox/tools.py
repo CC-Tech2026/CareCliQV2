@@ -18,6 +18,7 @@ version exists anywhere in the codebase.
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from langchain_core.tools import tool
 
@@ -28,7 +29,15 @@ from ...core.access import (
     is_coordinator_role,
     is_managing_director,
 )
-from .. import audit_service, billing_service, incident_service, participant_service, rag_service, session_service
+from .. import (
+    audit_service,
+    billing_service,
+    incident_service,
+    participant_service,
+    rag_service,
+    session_service,
+    shift_pdf_export_service,
+)
 from ..supabase_client import get_supabase_admin
 from ...api.coordinator import _execute_shift_query_with_legacy_fallback
 from ...api.dashboards import (
@@ -43,6 +52,22 @@ from ...api.dashboards import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _match_by_name(records: list[dict], name: str, name_key: str = "full_name") -> Optional[dict]:
+    """Find the best-matching record by name for tools that take a name
+    instead of an ID — exact case-insensitive match first, then a
+    substring match. Returns None if nothing matches."""
+    needle = (name or "").strip().lower()
+    if not needle:
+        return None
+    for r in records:
+        if (r.get(name_key) or "").strip().lower() == needle:
+            return r
+    for r in records:
+        if needle in (r.get(name_key) or "").strip().lower():
+            return r
+    return None
 
 
 async def _log_tool_call(current_user: dict, thread_id: str, tool_name: str, result: dict) -> None:
@@ -269,6 +294,351 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         return {"scope": scope, "goal_achievement_rate_pct": _goal_achievement_rate(participants)}
 
     @tool
+    async def get_participant_count() -> dict:
+        """Get the total number of participants in the current caseload.
+        Scoped to the whole organisation for a managing director, or to a
+        coordinator's own team's participants. Use this ONLY for a "how
+        many participants" style question. If the question asks WHO the
+        participants are (by name), use get_participant_list instead —
+        do not use this tool for that."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        participants = await participant_service.get_participants_list_light(current_user)
+
+        if is_managing_director(current_user):
+            scope = "organisation-wide"
+        elif is_coordinator_role(current_user):
+            scope = "your team"
+            supabase = get_supabase_admin()
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        return {"scope": scope, "participant_count": len(participants)}
+
+    @tool
+    async def get_participant_list() -> dict:
+        """Get the names of participants in the current caseload. Scoped to
+        the whole organisation for a managing director, or to a
+        coordinator's own team's participants. Use this ONLY for a "who
+        are our participants" / "list our participants" style question —
+        for a plain count, use get_participant_count instead."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        participants = await participant_service.get_participants_list_light(current_user)
+
+        if is_managing_director(current_user):
+            scope = "organisation-wide"
+        elif is_coordinator_role(current_user):
+            scope = "your team"
+            supabase = get_supabase_admin()
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        return {
+            "scope": scope,
+            "participants": [
+                {"full_name": p.get("full_name") or "Participant"} for p in participants
+            ],
+        }
+
+    @tool
+    async def get_active_worker_count() -> dict:
+        """Get the number of currently active support workers. Scoped to
+        the whole organisation for a managing director, or to a
+        coordinator's own team. Use this ONLY for a "how many
+        workers/staff" style question. If the question asks WHO the
+        workers are (by name), use get_active_worker_list instead — do
+        not use this tool for that."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        if is_managing_director(current_user):
+            scope = "organisation-wide"
+            team = await _team_members(org_id)
+        elif is_coordinator_role(current_user):
+            scope = "your team"
+            supabase = get_supabase_admin()
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            team = await _team_members(org_id, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
+        return {"scope": scope, "active_worker_count": len(active_workers)}
+
+    @tool
+    async def get_active_worker_list() -> dict:
+        """Get the names of currently active support workers. Scoped to
+        the whole organisation for a managing director, or to a
+        coordinator's own team. Use this ONLY for a "who are our
+        workers/staff" / "list our workers" style question — for a plain
+        count, use get_active_worker_count instead."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        if is_managing_director(current_user):
+            scope = "organisation-wide"
+            team = await _team_members(org_id)
+        elif is_coordinator_role(current_user):
+            scope = "your team"
+            supabase = get_supabase_admin()
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            team = await _team_members(org_id, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
+        return {
+            "scope": scope,
+            "workers": [
+                {"full_name": w.get("full_name") or "Worker"} for w in active_workers
+            ],
+        }
+
+    @tool
+    async def get_shift_progress_note(participant_name: str, shift_date: str) -> dict:
+        """Get the progress note PDF a support worker wrote for ONE
+        specific completed shift — one participant, one date (YYYY-MM-DD).
+        Use this when the question names one participant and one date. For
+        a date range or "all" notes, use get_participant_progress_notes_zip,
+        get_worker_progress_notes_zip, or get_all_progress_notes_zip
+        instead. Coordinators only see their own team's shifts; managing
+        directors see the whole organisation."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+        if not (is_managing_director(current_user) or is_coordinator_role(current_user)):
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        supabase = get_supabase_admin()
+        team_worker_ids: Optional[set] = None
+        if is_coordinator_role(current_user) and not is_managing_director(current_user):
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+
+        participants = await participant_service.get_participants_list_light(current_user)
+        if team_worker_ids is not None:
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
+        participant = _match_by_name(participants, participant_name)
+        if not participant:
+            return {"error": f"No participant matching '{participant_name}' found."}
+
+        try:
+            rows = _execute_shift_query_with_legacy_fallback(
+                supabase=supabase, org_id=org_id, limit=20,
+                start_date=shift_date, end_date=f"{shift_date}T23:59:59",
+                worker_id=None, status_filter="completed",
+            )
+        except Exception:
+            return {"error": "Could not load shift data right now."}
+
+        matches = [
+            r for r in rows
+            if str(r.get("participant_id")) == str(participant.get("id"))
+            and (team_worker_ids is None or str(r.get("worker_id")) in team_worker_ids)
+        ]
+        if not matches:
+            return {"error": f"No completed shift found for {participant.get('full_name')} on {shift_date}."}
+
+        shift_refs = [(str(r["id"]), str(r["worker_id"])) for r in matches]
+        if len(shift_refs) == 1:
+            shift_id, worker_id = shift_refs[0]
+            try:
+                export = shift_pdf_export_service.create_shift_export(
+                    shift_id, get_user_id(current_user), org_id,
+                    is_coordinator=True, worker_id=worker_id,
+                )
+            except Exception:
+                return {"error": "Could not prepare that download right now."}
+            return {
+                "label": f"Progress note — {participant.get('full_name')} — {shift_date}",
+                "file_url": export.get("file_url"),
+                "shift_count": 1,
+            }
+
+        return shift_pdf_export_service.create_bulk_shift_export(
+            shift_refs, org_id,
+            zip_label=f"Progress notes — {participant.get('full_name')} — {shift_date}",
+        )
+
+    @tool
+    async def get_participant_progress_notes_zip(participant_name: str, date_from: str, date_to: str) -> dict:
+        """Get a ZIP of every progress note (shift PDF) written for ONE
+        participant within a date range. date_from and date_to are
+        required, in YYYY-MM-DD format — if the user hasn't given a range,
+        ask them for one rather than guessing. Coordinators only see their
+        own team's shifts; managing directors see the whole organisation."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+        if not (is_managing_director(current_user) or is_coordinator_role(current_user)):
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        supabase = get_supabase_admin()
+        team_worker_ids: Optional[set] = None
+        if is_coordinator_role(current_user) and not is_managing_director(current_user):
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+
+        participants = await participant_service.get_participants_list_light(current_user)
+        if team_worker_ids is not None:
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
+        participant = _match_by_name(participants, participant_name)
+        if not participant:
+            return {"error": f"No participant matching '{participant_name}' found."}
+
+        try:
+            rows = _execute_shift_query_with_legacy_fallback(
+                supabase=supabase, org_id=org_id, limit=200,
+                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                worker_id=None, status_filter="completed",
+            )
+        except Exception:
+            return {"error": "Could not load shift data right now."}
+
+        matches = [
+            r for r in rows
+            if str(r.get("participant_id")) == str(participant.get("id"))
+            and (team_worker_ids is None or str(r.get("worker_id")) in team_worker_ids)
+        ]
+        if not matches:
+            return {"error": f"No completed shifts found for {participant.get('full_name')} between {date_from} and {date_to}."}
+
+        shift_refs = [(str(r["id"]), str(r["worker_id"])) for r in matches]
+        return shift_pdf_export_service.create_bulk_shift_export(
+            shift_refs, org_id,
+            zip_label=f"Progress notes — {participant.get('full_name')} — {date_from} to {date_to}",
+        )
+
+    @tool
+    async def get_worker_progress_notes_zip(worker_name: str, date_from: str, date_to: str) -> dict:
+        """Get a ZIP of every progress note (shift PDF) written by ONE
+        support worker within a date range. date_from and date_to are
+        required, in YYYY-MM-DD format — if the user hasn't given a range,
+        ask them for one rather than guessing. Coordinators only see
+        workers on their own team; managing directors see the whole
+        organisation."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        supabase = get_supabase_admin()
+        if is_managing_director(current_user):
+            team = await _team_members(org_id)
+        elif is_coordinator_role(current_user):
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            team = await _team_members(org_id, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        worker = _match_by_name(team, worker_name)
+        if not worker:
+            return {"error": f"No worker matching '{worker_name}' found."}
+
+        try:
+            rows = _execute_shift_query_with_legacy_fallback(
+                supabase=supabase, org_id=org_id, limit=200,
+                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                worker_id=str(worker.get("id")), status_filter="completed",
+            )
+        except Exception:
+            return {"error": "Could not load shift data right now."}
+
+        if not rows:
+            return {"error": f"No completed shifts found for {worker.get('full_name')} between {date_from} and {date_to}."}
+
+        shift_refs = [(str(r["id"]), str(worker.get("id"))) for r in rows]
+        return shift_pdf_export_service.create_bulk_shift_export(
+            shift_refs, org_id,
+            zip_label=f"Progress notes — {worker.get('full_name')} — {date_from} to {date_to}",
+        )
+
+    @tool
+    async def get_all_progress_notes_zip(date_from: str, date_to: str) -> dict:
+        """Get a ZIP of every progress note (shift PDF) within a date
+        range, across all participants. date_from and date_to are
+        required, in YYYY-MM-DD format — if the user hasn't given a range,
+        ask them for one rather than guessing. Coordinators get their own
+        team's shifts; managing directors get the whole organisation. This
+        can be a large download — only use it when the user clearly wants
+        everything, not one participant or worker (use the other
+        progress-note tools for those)."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        supabase = get_supabase_admin()
+        team_worker_ids: Optional[set] = None
+        if is_managing_director(current_user):
+            pass
+        elif is_coordinator_role(current_user):
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        try:
+            rows = _execute_shift_query_with_legacy_fallback(
+                supabase=supabase, org_id=org_id, limit=200,
+                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                worker_id=None, status_filter="completed",
+            )
+        except Exception:
+            return {"error": "Could not load shift data right now."}
+
+        if team_worker_ids is not None:
+            rows = [r for r in rows if str(r.get("worker_id")) in team_worker_ids]
+
+        if not rows:
+            return {"error": f"No completed shifts found between {date_from} and {date_to}."}
+
+        shift_refs = [(str(r["id"]), str(r["worker_id"])) for r in rows]
+        return shift_pdf_export_service.create_bulk_shift_export(
+            shift_refs, org_id,
+            zip_label=f"All progress notes — {date_from} to {date_to}",
+        )
+
+    @tool
+    async def get_session_activity() -> dict:
+        """Get recent session activity: how many sessions happened today,
+        and how many this week (last 7 days). Scoped to the whole
+        organisation for a managing director, or to a coordinator's own
+        team. Use this for "sessions today/this week" type questions."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+
+        if is_managing_director(current_user):
+            scope = "organisation-wide"
+        elif is_coordinator_role(current_user):
+            scope = "your team"
+            supabase = get_supabase_admin()
+            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
+        else:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+
+        today = _today_iso()
+        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+        todays_sessions = [s for s in sessions if _date_part(s.get("session_date")) == today]
+        sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
+
+        return {
+            "scope": scope,
+            "sessions_today": len(todays_sessions),
+            "sessions_this_week": len(sessions_this_week),
+        }
+
+    @tool
     async def get_retention_rate() -> dict:
         """Get staff retention rate (percentage of organisation members still
         active). Managing director only — there is no team-scoped retention
@@ -370,6 +740,15 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         get_revenue_summary,
         search_session_notes,
         search_incident_history,
+        get_participant_count,
+        get_participant_list,
+        get_active_worker_count,
+        get_active_worker_list,
+        get_shift_progress_note,
+        get_participant_progress_notes_zip,
+        get_worker_progress_notes_zip,
+        get_all_progress_notes_zip,
+        get_session_activity,
     ]
 
     for t in all_tools:
