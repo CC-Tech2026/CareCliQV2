@@ -1646,6 +1646,7 @@ export type TrainingModule = {
   description?: string | null;
   linked_credential_type?: string | null;
   requires_certification: boolean;
+  auto_assign_on_hire: boolean;
   is_active: boolean;
   resources?: TrainingResource[];
 };
@@ -1657,6 +1658,7 @@ export type TrainingRecommendation = {
   training_module_id: string;
   title: string;
   recommended_at: string;
+  due_at?: string | null;
   dismissed_at?: string | null;
 };
 
@@ -1685,9 +1687,28 @@ export function createTrainingModule(payload: {
   description?: string;
   linked_credential_type?: string;
   requires_certification?: boolean;
+  auto_assign_on_hire?: boolean;
 }) {
   return jsonFetch<TrainingModule>("/api/coordinator/training-modules", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTrainingModule(
+  moduleId: string,
+  payload: Partial<{
+    title: string;
+    description: string | null;
+    linked_credential_type: string | null;
+    requires_certification: boolean;
+    auto_assign_on_hire: boolean;
+    is_active: boolean;
+  }>,
+) {
+  return jsonFetch<TrainingModule>(`/api/coordinator/training-modules/${moduleId}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

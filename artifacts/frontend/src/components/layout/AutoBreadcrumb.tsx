@@ -43,9 +43,6 @@ const PARENT_MAP: Array<{ prefix: string; parentHref: string; parentKey: string 
   { prefix: "/coordinator/travel",     parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
   { prefix: "/approvals",              parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
 
-  // Team children
-  { prefix: "/credentials",            parentHref: "/team",                   parentKey: "nav.team"              },
-
   // Reports children
   { prefix: "/reports/",               parentHref: "/reports",                parentKey: "nav.reports"           },
 
@@ -64,13 +61,14 @@ const WORKER_PREFIXES = [
   "/worker/",
   "/my-shift-",
   "/my-compliance",
+  "/worker-onboarding",
 ];
 
 // ── Level-1 paths — no breadcrumb needed ─────────────────────────────────────
 const TOP_LEVEL_PATHS = [
   "/dashboard", "/team", "/patients", "/participants",
   "/sessions", "/compliance", "/incidents", "/billing",
-  "/reports", "/settings", "/toolkit", "/credentials",
+  "/reports", "/settings", "/toolkit",
   "/coordinator/rostering", "/hub", "/accessibility",
   "/login", "/signup", "/forgot-password", "/reset-password",
   "/verify-email", "/accept-invite", "/account-secure", "/profile-completion",

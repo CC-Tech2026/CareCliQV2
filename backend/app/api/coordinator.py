@@ -1472,7 +1472,17 @@ async def assign_shift(
             detail=f"Worker has invalid credentials: {', '.join(cred_status.missing_credentials)}. "
                    f"Please ensure worker credentials are up to date before assigning shifts."
         )
-    
+
+    # Hard gate: mandatory training must also be current, not just credentials —
+    # a worker cannot be rostered until every mandatory item is green.
+    from ..services import worker_training_service as training
+    if training.is_training_overdue(body.worker_id, org_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Worker has overdue mandatory training. "
+                   "Please ensure mandatory training is completed before assigning shifts."
+        )
+
     # Parse timestamps and calculate duration if needed
     try:
         scheduled_start = parse_shift_datetime(body.scheduled_start)
@@ -3827,6 +3837,16 @@ class TrainingModuleBody(BaseModel):
     description: Optional[str] = None
     linked_credential_type: Optional[str] = None
     requires_certification: bool = False
+    auto_assign_on_hire: bool = False
+
+
+class TrainingModuleUpdateBody(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    linked_credential_type: Optional[str] = None
+    requires_certification: Optional[bool] = None
+    auto_assign_on_hire: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 class TrainingAssignBody(BaseModel):
@@ -3863,6 +3883,23 @@ async def coordinator_create_training_module(
         description=body.description,
         linked_credential_type=body.linked_credential_type,
         requires_certification=body.requires_certification,
+        auto_assign_on_hire=body.auto_assign_on_hire,
+    )
+
+
+@router.patch("/training-modules/{module_id}")
+async def coordinator_update_training_module(
+    module_id: str,
+    body: TrainingModuleUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import worker_training_service as training
+
+    return training.update_training_module(
+        organization_id=org_id,
+        module_id=module_id,
+        updates=body.model_dump(exclude_unset=True),
     )
 
 

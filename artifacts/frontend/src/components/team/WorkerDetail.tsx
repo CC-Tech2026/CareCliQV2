@@ -1,29 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
-  GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2, Upload,
-  Mail, Phone, IdCard, Hourglass, AlertCircle,
+  GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
+  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
+  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
-  getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments,
+  getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments, getWorkerAvailability,
   assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
-import type { Credential } from "@/services/credentialsService";
+import { reviewCredential, type Credential } from "@/services/credentialsService";
+import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
 import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
+import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
@@ -58,6 +66,9 @@ const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
   medication_admin: "Medication Administration",
   drivers_licence: "Driver's Licence",
   police_check: "Police Check",
+  vehicle_registration: "Vehicle Registration",
+  vehicle_insurance: "Vehicle Insurance (Comprehensive)",
+  qualification: "Qualification",
 };
 
 /** A worker is "verified" once every mandatory credential type is on file and valid/expiring (not missing/expired/rejected). */
@@ -74,6 +85,12 @@ function credentialLabel(type: string) {
   return CREDENTIAL_TYPE_LABELS[type] ?? type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Every status tab on this page uses the same three colors for the same meanings — green for
+// complete/good standing, amber for pending/expiring/awaiting review, red for overdue/expired/
+// missing entirely — so a coordinator learns the color language once on Overview and it applies
+// everywhere else. "Pending review" and "Expiring soon" are both amber (same severity tier,
+// distinguished by label, not color); "Not on file" and "Rejected" are both red for the same
+// reason.
 function statusStyle(status: string) {
   switch (status) {
     case "valid":
@@ -83,12 +100,31 @@ function statusStyle(status: string) {
     case "expired":
       return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: AlertTriangle, label: "Expired" };
     case "pending_review":
-      return { bg: "var(--cc-status-info-bg)", color: "var(--cc-status-info)", Icon: Clock3, label: "Pending review" };
+      return { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)", Icon: Clock3, label: "Pending review" };
     case "rejected":
       return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: XCircle, label: "Rejected" };
     default:
-      return { bg: SOFT, color: MUTED, Icon: XCircle, label: "Not on file" };
+      return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: XCircle, label: "Not on file" };
   }
+}
+
+// A recheck is due if the NDIS Commission portal has never been checked, if it's been checked
+// but a while ago (90 days — a separate staleness clock from expiry), or the credential's own
+// expiry is approaching. The 60-day expiry threshold mirrors screening_recheck_service.py's
+// RECHECK_LEAD_DAYS on the backend (backend/app/services/screening_recheck_service.py) so the
+// UI prompt and the backend reminder job agree on when a recheck is actually due.
+const SCREENING_RECHECK_STALE_DAYS = 90;
+const SCREENING_RECHECK_EXPIRY_LEAD_DAYS = 60;
+
+function isScreeningRecheckDue(credential: Credential): boolean {
+  if (!credential.last_checked_against_nwsd) return true;
+  const daysSinceChecked = (Date.now() - new Date(credential.last_checked_against_nwsd).getTime()) / 86_400_000;
+  if (daysSinceChecked > SCREENING_RECHECK_STALE_DAYS) return true;
+  if (credential.expiry_date) {
+    const daysUntilExpiry = (new Date(credential.expiry_date).getTime() - Date.now()) / 86_400_000;
+    if (daysUntilExpiry <= SCREENING_RECHECK_EXPIRY_LEAD_DAYS) return true;
+  }
+  return false;
 }
 
 function complianceColour(score: number | null | undefined): string {
@@ -122,6 +158,38 @@ function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: st
   );
 }
 
+/** Turns a static phone/email row into something you can act on: click the value to call/email
+ * (tel:/mailto:), or copy it without leaving the page. Mirrors ParticipantProfileCard's
+ * conditional-link convention so contact info reads consistently across the app. */
+function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
+  const { toast } = useToast();
+  return (
+    <span className="group inline-flex items-center gap-1">
+      <a
+        href={href}
+        className="inline-flex items-center gap-1.5 hover:underline"
+        style={{ color: "inherit" }}
+      >
+        <Icon size={13} /> {value}
+      </a>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          navigator.clipboard.writeText(value)
+            .then(() => toast({ title: "Copied" }))
+            .catch(() => toast({ title: "Could not copy", variant: "destructive" }));
+        }}
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 rounded p-0.5 transition-opacity hover:bg-black/5"
+        title="Copy"
+        aria-label={`Copy ${value}`}
+      >
+        <Copy size={11} />
+      </button>
+    </span>
+  );
+}
+
 /** Compact radial score ring, matching the Compliance Centre header's ring pattern. Animates
  * from zero on first mount only (not on re-renders) and honours prefers-reduced-motion. */
 function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
@@ -149,41 +217,62 @@ function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
 }
 
 type ReadinessLevel = "good" | "warning" | "danger";
+type TopReason = { level: "warning" | "danger"; label: string } | null;
+
+/** Single source of truth for "what's the one most urgent thing blocking this worker" —
+ * computed once and threaded into the Overview ring, the Credentials tab strip, and the
+ * Training tab strip, so all three name the same reason instead of each recomputing (and
+ * potentially disagreeing on) their own. Priority order matches the Team list's Readiness
+ * column exactly: training overdue (blocks rostering outright) outranks onboarding pending,
+ * which outranks credentials incomplete. */
+function computeTopReason(
+  worker: WorkerStats,
+  credentialsComplete: boolean,
+  credentialsCompleteCount: number,
+  credentialsTotal: number,
+  onboardingPending: boolean,
+  translate: (k: string) => string,
+): TopReason {
+  if (worker.training_overdue) {
+    return { level: "danger", label: "Training overdue" };
+  }
+  if (onboardingPending) {
+    return { level: "warning", label: "Blocked by onboarding" };
+  }
+  if (!credentialsComplete) {
+    return { level: "warning", label: `Blocked by credentials · ${credentialsCompleteCount}/${credentialsTotal}` };
+  }
+  if (worker.flagged_count > 0) {
+    return { level: "danger", label: translateFlagged(worker.flagged_count, translate) };
+  }
+  return null;
+}
 
 /** Unifies the compliance ring + onboarding pill + credentials pill into one "can I roster
  * this person" answer, with a single most-urgent blocking reason and an action to fix it. */
 function ReadinessSummary({
-  worker, credentialsComplete, credentialsCompleteCount, credentialsTotal, onboardingPending, translate, onAction,
+  worker, topReason, credentialsComplete, translate, onAction,
 }: {
   worker: WorkerStats;
+  topReason: TopReason;
   credentialsComplete: boolean;
-  credentialsCompleteCount: number;
-  credentialsTotal: number;
-  onboardingPending: boolean;
   translate: (k: string) => string;
   onAction: () => void;
 }) {
-  let level: ReadinessLevel = "good";
-  let message = translate("team.detail.readyToRoster");
-  let actionLabel: string | null = null;
-
-  if (!credentialsComplete) {
-    level = "warning";
-    message = `${translate("team.detail.credentialsIncomplete")}: ${credentialsCompleteCount}/${credentialsTotal}`;
-    actionLabel = translate("team.detail.completeCredentials");
-  } else if (onboardingPending) {
-    level = "warning";
-    message = translate("team.detail.onboardingPending");
-  } else if (worker.flagged_count > 0) {
-    level = "danger";
-    message = translateFlagged(worker.flagged_count, translate);
-  }
+  // The ring's percentage and a blocking-reason fraction (e.g. credentials 1/8) are two
+  // different measurements — one score, one count — and used to sit side by side with no
+  // stated relationship, reading as if they should match (they don't: 1/8 isn't 68%). The
+  // message now states explicitly that the percentage is the overall readiness score and
+  // names whatever's currently blocking it as a separate, clearly-labelled reason.
+  const level: ReadinessLevel = topReason?.level ?? "good";
+  const actionLabel = !credentialsComplete ? translate("team.detail.completeCredentials") : null;
 
   const levelColor = level === "good" ? "var(--cc-status-success)" : level === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
   const score = worker.avg_compliance;
-  const a11yText = score != null
-    ? `${Math.round(score)}% ${translate("team.col.compliance").toLowerCase()}, ${message}`
-    : message;
+  const message = score != null
+    ? (topReason ? `Readiness ${Math.round(score)}% · ${topReason.label}` : `Readiness ${Math.round(score)}%`)
+    : (topReason?.label ?? translate("team.detail.readyToRoster"));
+  const a11yText = message;
 
   return (
     <div className="flex items-center gap-3 rounded-2xl border px-3 py-2" style={{ background: SURFACE, borderColor: levelColor, boxShadow: CARD_SHADOW }} role="status" aria-label={a11yText}>
@@ -209,9 +298,32 @@ function translateFlagged(count: number, translate: (k: string) => string): stri
   return `${count} ${translate(count === 1 ? "team.detail.flaggedSession" : "team.detail.flaggedSessions")}`;
 }
 
-export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: () => void }) {
+export function WorkerDetail({
+  worker, onBack, initialTab,
+  onAssignShift, onAssignClient, onReminder, onDeactivate, onActivate,
+}: {
+  worker: WorkerStats;
+  onBack: () => void;
+  initialTab?: WorkerDetailTab;
+  /** Quick actions — optional so WorkerDetail can still be used standalone without a coordinator
+   * shell wired up. When provided, they surface directly on the profile so acting on this worker
+   * doesn't require going back to the list first. */
+  onAssignShift?: () => void;
+  onAssignClient?: () => void;
+  onReminder?: () => void;
+  onDeactivate?: () => void;
+  onActivate?: () => void;
+}) {
   const { translate } = useAccessibility();
-  const [tab, setTab] = useState<WorkerDetailTab>("overview");
+  const [tab, setTab] = useState<WorkerDetailTab>(initialTab ?? "overview");
+  const [focusCredentialType, setFocusCredentialType] = useState<string | null>(null);
+
+  // Next Steps rows for missing credentials jump straight to that specific row in the
+  // Credentials tab (scrolled into view + briefly highlighted), not just the tab in general.
+  function jumpToTab(nextTab: WorkerDetailTab, credentialType?: string) {
+    setTab(nextTab);
+    setFocusCredentialType(credentialType ?? null);
+  }
 
   const credentialsQuery = useOrgQuery(["team-credentials"], {
     queryFn: getTeamCredentials,
@@ -230,6 +342,13 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
     const cred = workerCredentials.find((c) => c.credential_type === type);
     return cred && (cred.status === "valid" || cred.status === "expiring");
   }).length;
+  const missingCredentialTypes = REQUIRED_CREDENTIAL_TYPES.filter((type) => {
+    const cred = workerCredentials.find((c) => c.credential_type === type);
+    return !cred || !(cred.status === "valid" || cred.status === "expiring");
+  });
+  const topReason = computeTopReason(
+    worker, credentialsComplete, credentialsCompleteCount, REQUIRED_CREDENTIAL_TYPES.length, onboardingPending, translate,
+  );
   const documentsCount = documentsQuery.data?.length ?? 0;
   const trainingPendingCount = (trainingQuery.data?.recommendations ?? [])
     .filter((r) => !(trainingQuery.data?.history ?? []).some((h) => h.module_id === r.training_module_id)).length;
@@ -255,17 +374,62 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
   ];
   const avatar = avatarColor(worker.full_name || "?");
 
+  const hasQuickActions = onAssignShift || onAssignClient || onReminder || onDeactivate || onActivate;
+
   return (
     <div className="space-y-4">
-      {/* Back */}
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold transition-colors"
-        style={{ color: PLUM }}
-      >
-        <ArrowLeft size={15} /> {translate("team.detail.back")}
-      </button>
+      {/* Back + quick actions */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold transition-colors"
+          style={{ color: PLUM }}
+        >
+          <ArrowLeft size={15} /> {translate("team.detail.back")}
+        </button>
+        {hasQuickActions && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-lg p-2 transition-colors hover:bg-black/5"
+                style={{ color: MUTED }}
+                aria-label={`Actions for ${worker.full_name}`}
+              >
+                <MoreHorizontal size={18} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onAssignShift && (
+                <DropdownMenuItem onClick={onAssignShift}>
+                  <Clock size={13} className="mr-1.5" /> {translate("team.assignShift")}
+                </DropdownMenuItem>
+              )}
+              {onAssignClient && (
+                <DropdownMenuItem onClick={onAssignClient}>
+                  <Link2 size={13} className="mr-1.5" /> {translate("team.assignClient")}
+                </DropdownMenuItem>
+              )}
+              {onReminder && (
+                <DropdownMenuItem onClick={onReminder}>
+                  <Mail size={13} className="mr-1.5" /> {translate("team.reminder")}
+                </DropdownMenuItem>
+              )}
+              {(onDeactivate || onActivate) && <DropdownMenuSeparator />}
+              {onDeactivate && worker.is_active !== false && (
+                <DropdownMenuItem onClick={onDeactivate} className="text-red-600 focus:text-red-600">
+                  <UserX size={13} className="mr-1.5" /> {translate("team.deactivate")}
+                </DropdownMenuItem>
+              )}
+              {onActivate && worker.is_active === false && (
+                <DropdownMenuItem onClick={onActivate} className="text-green-700 focus:text-green-700">
+                  <UserCheck size={13} className="mr-1.5" /> {translate("team.reactivate")}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
 
       {/* Identity + at-a-glance header */}
       <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
@@ -311,21 +475,15 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
               <span className="font-bold" style={{ color: TEXT }}>{worker.employee_id || worker.id.slice(0, 8)}</span>
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs" style={{ color: MUTED }}>
-              {worker.email && (
-                <span className="inline-flex items-center gap-1.5"><Mail size={13} /> {worker.email}</span>
-              )}
-              {worker.phone && (
-                <span className="inline-flex items-center gap-1.5"><Phone size={13} /> {worker.phone}</span>
-              )}
+              {worker.email && <ContactLink icon={Mail} value={worker.email} href={`mailto:${worker.email}`} />}
+              {worker.phone && <ContactLink icon={Phone} value={worker.phone} href={`tel:${worker.phone.replace(/\s/g, "")}`} />}
             </div>
           </div>
           <div className="shrink-0 w-full sm:w-auto">
             <ReadinessSummary
               worker={worker}
+              topReason={topReason}
               credentialsComplete={credentialsComplete}
-              credentialsCompleteCount={credentialsCompleteCount}
-              credentialsTotal={REQUIRED_CREDENTIAL_TYPES.length}
-              onboardingPending={onboardingPending}
               translate={translate}
               onAction={() => setTab("credentials")}
             />
@@ -383,18 +541,33 @@ export function WorkerDetail({ worker, onBack }: { worker: WorkerStats; onBack: 
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
         >
-          {tab === "overview" && <OverviewTab worker={worker} translate={translate} />}
+          {tab === "overview" && (
+            <OverviewTab
+              worker={worker}
+              translate={translate}
+              missingCredentialTypes={missingCredentialTypes}
+              trainingPendingCount={trainingPendingCount}
+              onJumpToTab={jumpToTab}
+            />
+          )}
           {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
           {tab === "credentials" && (
             <CredentialsTab
               credentials={workerCredentials}
               isLoading={credentialsQuery.isLoading}
               credentialsCompleteCount={credentialsCompleteCount}
+              focusCredentialType={focusCredentialType}
+              topReason={topReason}
               translate={translate}
             />
           )}
-          {tab === "availability" && <WorkerAvailabilityPanel worker={worker} />}
-          {tab === "training" && <TrainingTab worker={worker} translate={translate} />}
+          {tab === "availability" && (
+            <div className="space-y-4">
+              <AvailabilitySummaryStrip worker={worker} />
+              <WorkerAvailabilityPanel worker={worker} />
+            </div>
+          )}
+          {tab === "training" && <TrainingTab worker={worker} topReason={topReason} translate={translate} />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -428,7 +601,53 @@ function DetailRow({
   );
 }
 
-function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+const DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Availability + (would-be) SCHADS classification strip, so switching into this tab doesn't
+ * lose the at-a-glance context — same pattern as every other tab's summary strip. Same
+ * worker-availability query key as WorkerAvailabilityPanel below it, so this doesn't trigger a
+ * second network request, just reads the same cached data.
+ *
+ * SCHADS classification (e.g. "SACS Level 2") is intentionally NOT shown here: it does not
+ * exist anywhere in this codebase — no field, no table, no API — same situation as the earlier
+ * "Person Archive" reference. Building an editable classification field with nowhere real to
+ * save it would just be a fake control; this is flagged rather than faked. */
+function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
+  const { data } = useOrgQuery(["worker-availability", worker.id], {
+    queryFn: () => getWorkerAvailability(worker.id),
+  });
+  const a = data?.availability;
+
+  return (
+    <div className="rounded-2xl border px-5 py-4" style={{ background: SOFT, borderColor: BORDER }}>
+      <div className="flex items-center gap-2 mb-1">
+        <Clock size={14} style={{ color: PLUM }} />
+        <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Availability</p>
+      </div>
+      {a ? (
+        <p className="text-sm font-bold" style={{ color: TEXT }}>
+          Available up to {a.max_hours_per_week} hours per week
+          {a.available_days?.length > 0 && ` · ${a.available_days.map((d) => DAY_ABBR[d - 1]).filter(Boolean).join(", ")}`}
+        </p>
+      ) : (
+        <p className="text-sm" style={{ color: MUTED }}>No availability set yet.</p>
+      )}
+      <p className="text-[11px] mt-1.5 italic" style={{ color: MUTED }}>
+        SCHADS classification isn't tracked in CareCliQ yet — this would need a new field before it can show here.
+      </p>
+    </div>
+  );
+}
+
+function OverviewTab({
+  worker, translate, missingCredentialTypes, trainingPendingCount, onJumpToTab,
+}: {
+  worker: WorkerStats;
+  translate: (k: string) => string;
+  missingCredentialTypes: string[];
+  trainingPendingCount: number;
+  onJumpToTab: (tab: WorkerDetailTab, credentialType?: string) => void;
+}) {
   const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
 
   const coachingQuery = useOrgQuery(["worker-medication-coaching-signal", worker.id], {
@@ -437,8 +656,78 @@ function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k
   });
   const coaching = coachingQuery.data?.signal;
 
+  // Discrete checklist step the worker is currently on, not just a pending/complete boolean —
+  // genuinely new information instead of repeating the header's "Onboarding Pending" badge.
+  const onboardingQuery = useOrgQuery(["team-onboarding"], {
+    queryFn: getTeamOnboarding,
+    enabled: onboardingPending,
+  });
+  const workerChecklist = (onboardingQuery.data ?? []).find((row) => String(row.id) === worker.id)
+    ?.onboarding_checklist as Record<string, boolean> | undefined;
+  const currentStepKey = workerChecklist
+    ? CHECKLIST_STEP_ORDER.find((key) => !workerChecklist[key])
+    : undefined;
+  const currentStepLabel = currentStepKey ? CHECKLIST_LABELS[currentStepKey] : undefined;
+
+  const nextSteps: { label: string; onClick?: () => void }[] = [];
+  if (onboardingPending) {
+    nextSteps.push({
+      label: currentStepLabel ? `Onboarding: currently on "${currentStepLabel}"` : "Onboarding checklist not yet complete",
+    });
+  }
+  // One row per missing credential, each linking straight to that credential's row in the
+  // Credentials tab — not one block of text with a single generic "go to tab" arrow.
+  for (const type of missingCredentialTypes) {
+    nextSteps.push({
+      label: credentialLabel(type),
+      onClick: () => onJumpToTab("credentials", type),
+    });
+  }
+  if (worker.training_overdue) {
+    nextSteps.push({ label: "Mandatory training is overdue", onClick: () => onJumpToTab("training") });
+  }
+  if (trainingPendingCount > 0) {
+    nextSteps.push({
+      label: `${trainingPendingCount} training completion${trainingPendingCount !== 1 ? "s" : ""} awaiting your review`,
+      onClick: () => onJumpToTab("training"),
+    });
+  }
+
   return (
     <div className="space-y-4">
+      {/* Concrete, clickable next steps instead of a generic "needs attention" status —
+          each row names the actual gap and jumps straight to where it's fixed. */}
+      {nextSteps.length > 0 ? (
+        <div className="rounded-2xl border divide-y" style={{ borderColor: "var(--cc-status-warning)", background: "var(--cc-status-warning-bg)" }}>
+          <div className="flex items-center gap-2 px-4 py-3">
+            <AlertCircle size={15} style={{ color: "var(--cc-status-warning)" }} />
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>Next steps</p>
+          </div>
+          {nextSteps.map((step) => (
+            step.onClick ? (
+              <button
+                key={step.label}
+                type="button"
+                onClick={step.onClick}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-black/[0.03]"
+              >
+                <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
+                <ArrowRight size={14} className="shrink-0" style={{ color: "var(--cc-status-warning)" }} />
+              </button>
+            ) : (
+              <div key={step.label} className="px-4 py-3">
+                <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
+              </div>
+            )
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border p-4 flex items-center gap-2.5" style={{ borderColor: "var(--cc-status-success)", background: "var(--cc-status-success-bg)" }}>
+          <CheckCircle2 size={16} style={{ color: "var(--cc-status-success)" }} />
+          <p className="text-sm font-bold" style={{ color: "var(--cc-status-success)" }}>Nothing outstanding — fully up to date.</p>
+        </div>
+      )}
+
       {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
       <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
         <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
@@ -454,12 +743,16 @@ function OverviewTab({ worker, translate }: { worker: WorkerStats; translate: (k
           value={worker.preferred_contact_method}
           emptyText={translate("team.detail.contactNotSet")}
         />
-        <DetailRow
-          icon={onboardingPending ? Hourglass : CheckCircle2}
-          tone={onboardingPending ? "warning" : "success"}
-          label={translate("team.detail.onboardingStatus")}
-          value={onboardingPending ? translate("team.detail.onboardingPending") : translate("team.detail.onboardingComplete")}
-        />
+        {/* Never repeats the header badge's "Onboarding Pending" wording — this row exists only
+            to say something the badge doesn't: which specific step they're on. If that step
+            hasn't loaded/isn't known yet, the row is dropped rather than showing the duplicate. */}
+        {onboardingPending
+          ? (currentStepLabel && (
+              <DetailRow icon={Hourglass} tone="warning" label="Current onboarding step" value={currentStepLabel} />
+            ))
+          : (
+            <DetailRow icon={CheckCircle2} tone="success" label={translate("team.detail.onboardingStatus")} value={translate("team.detail.onboardingComplete")} />
+          )}
       </div>
 
       {/* Coaching input, not a compliance flag — deliberately its own card, never mixed
@@ -485,6 +778,7 @@ function documentTypeLabel(type: WorkerOnboardingDocumentType, translate: (k: st
 
 function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -504,6 +798,17 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
 
   return (
     <div className="space-y-4">
+      {/* Summary strip — same pattern as every other tab. No "expiring within 30 days" count:
+          these documents (offer letters, references, correspondence) have no expiry concept in
+          this data model at all, not just none set, so that clause never applies here. */}
+      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: SOFT, color: TEXT }}>
+        <div>
+          <p className="text-lg font-black">{documents.length} document{documents.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs font-bold mt-0.5" style={{ color: MUTED }}>General storage — offer letters, references, correspondence</p>
+        </div>
+        <FileText size={22} style={{ color: MUTED }} />
+      </div>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileText size={16} style={{ color: PLUM }} />
@@ -520,6 +825,9 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
         <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
           <FileText size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.documents.empty")}</p>
+          <Button variant="navy" size="sm" className="mt-4 gap-1.5 rounded-xl" onClick={() => setAddOpen(true)}>
+            <Plus size={13} /> {translate("team.documents.add")}
+          </Button>
         </div>
       )}
 
@@ -540,6 +848,7 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: MUTED }}>
                     {translate("team.documents.uploadedOn")} {safeFormat(doc.created_at)}
+                    {doc.uploaded_by && doc.uploaded_by === user?.id ? " · Uploaded by you" : ""}
                     {doc.notes ? ` · ${doc.notes}` : ""}
                   </p>
                 </div>
@@ -645,19 +954,16 @@ function AddDocumentDialog({
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.file")}</label>
-            <label
-              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs font-semibold cursor-pointer"
-              style={{ borderColor: BORDER, color: MUTED }}
-            >
-              <Upload size={14} />
-              {file ? file.name : translate("team.documents.file")}
-              <input
-                type="file"
-                accept="application/pdf,image/jpeg,image/png"
-                className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
+            {/* Same drag-and-drop widget already built for medication documents
+                (ParticipantMedicationsPanel), reused here instead of a third upload pattern. */}
+            <FileDropzone
+              accept="application/pdf,image/jpeg,image/png"
+              maxSizeBytes={10 * 1024 * 1024}
+              onFile={setFile}
+              onRejected={(reason) => toast({ title: reason, variant: "destructive" })}
+              label={file ? file.name : "Drag a file here, or click to browse"}
+              hint={file ? undefined : "PDF, JPEG or PNG, up to 10MB"}
+            />
           </div>
         </div>
 
@@ -680,48 +986,100 @@ function CredentialsTab({
   credentials,
   isLoading,
   credentialsCompleteCount,
+  focusCredentialType,
+  topReason,
   translate,
 }: {
   credentials: Credential[];
   isLoading: boolean;
   credentialsCompleteCount: number;
+  /** Set when arriving here via a specific Next Steps row (e.g. "Working With Children Check")
+   * rather than the tab in general — scrolls that row into view and briefly highlights it. */
+  focusCredentialType?: string | null;
+  /** Same value shown on Overview — the fact carries over onto this tab's strip instead of
+   * resetting to a locally-recomputed (and possibly different) reason. */
+  topReason: TopReason;
   translate: (k: string) => string;
 }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { requireReAuth, modal } = useReAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
+
   const byType = new Map(credentials.map((c) => [c.credential_type, c]));
   const rows = REQUIRED_CREDENTIAL_TYPES.map((type) => ({ type, credential: byType.get(type) ?? null }));
   const extras = credentials.filter((c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type));
   const total = REQUIRED_CREDENTIAL_TYPES.length;
   const complete = credentialsCompleteCount >= total;
 
+  useEffect(() => {
+    if (!focusCredentialType) return;
+    const el = document.getElementById(`cred-row-${focusCredentialType}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCredentialType]);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: [orgId, "team-credentials"] });
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ credential, status }: { credential: Credential; status: "valid" | "rejected" }) =>
+      requireReAuth(() => reviewCredential(credential.id, { status })),
+    onSuccess: () => { invalidate(); toast({ title: "Credential review saved" }); },
+    onError: (err) => toast({ title: "Review failed", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const recheckMutation = useMutation({
+    mutationFn: (credential: Credential) =>
+      requireReAuth(() => reviewCredential(credential.id, {
+        status: "valid",
+        last_checked_against_nwsd: new Date().toISOString().slice(0, 10),
+      })),
+    onSuccess: () => { invalidate(); toast({ title: "Recorded as rechecked on the NDIS Commission portal" }); },
+    onError: (err) => toast({ title: "Could not record recheck", description: (err as Error).message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>;
   }
 
+  // Strip colour follows the same carried-over topReason as Overview and Training, not a
+  // locally-recomputed complete/incomplete framing — if training overdue outranks credentials
+  // as the true top blocker, this strip says so too instead of quietly disagreeing.
+  const stripLevel: ReadinessLevel = topReason?.level ?? "good";
+  const stripBg = stripLevel === "good" ? "var(--cc-status-success-bg)" : stripLevel === "warning" ? "var(--cc-status-warning-bg)" : "var(--cc-status-danger-bg)";
+  const stripColor = stripLevel === "good" ? "var(--cc-status-success)" : stripLevel === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
+
   return (
     <div className="space-y-4">
-      <div
-        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
-        style={{
-          background: complete ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)",
-          color: complete ? "var(--cc-status-success)" : "var(--cc-status-warning)",
-        }}
-      >
+      {modal}
+      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
         <div>
-          <p className="text-lg font-black">{credentialsCompleteCount} / {total}</p>
+          <p className="text-lg font-black">{credentialsCompleteCount} / {total} complete</p>
           <p className="text-xs font-bold mt-0.5">
-            {complete ? translate("team.detail.credentialsComplete") : translate("team.detail.credentialsIncomplete")}
+            {topReason ? topReason.label : translate("team.detail.credentialsComplete")}
           </p>
         </div>
-        {complete ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+        {stripLevel === "good" ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
       </div>
 
       <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
       {[...rows, ...extras.map((c) => ({ type: c.credential_type, credential: c }))].map(({ type, credential }, i) => {
         const style = statusStyle(credential?.status ?? "missing");
         const { Icon } = style;
+        const reviewable = !!credential && credential.status !== "valid";
+        const canRecheck = !!credential && type === "ndis_screening" && credential.status === "valid";
+        const recheckDue = !!credential && type === "ndis_screening" && isScreeningRecheckDue(credential);
+        const focused = focusCredentialType === type;
         return (
-          <div key={`${type}-${i}`} className="flex items-center gap-3 px-5 py-4">
-            <IconBadge icon={IdCard} color={style.color} bg={style.bg} />
+          <div
+            key={`${type}-${i}`}
+            id={`cred-row-${type}`}
+            className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center transition-colors"
+            style={focused ? { background: "var(--cc-status-info-bg)", boxShadow: "inset 3px 0 0 var(--cc-status-info)" } : undefined}
+          >
+            {/* Status dot + name */}
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.color }} aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold" style={{ color: TEXT }}>{credentialLabel(type)}</p>
               <p className="text-xs mt-0.5" style={{ color: MUTED }}>
@@ -733,13 +1091,49 @@ function CredentialsTab({
                     ].filter(Boolean).join(" · ") || translate("team.detail.onFile")
                   : translate("team.detail.notOnFile")}
               </p>
+              {type === "ndis_screening" && credential && (
+                <p className="text-xs mt-0.5 font-semibold" style={{ color: recheckDue ? "var(--cc-status-warning)" : MUTED }}>
+                  {credential.screening_number ? `Screening #: ${credential.screening_number} · ` : ""}
+                  {credential.last_checked_against_nwsd
+                    ? `Last checked on NDIS Commission portal: ${safeFormat(credential.last_checked_against_nwsd)}`
+                    : "Not yet checked on the NDIS Commission portal"}
+                  {recheckDue ? " · Recheck due" : ""}
+                </p>
+              )}
             </div>
-            <span
-              className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full"
-              style={{ background: style.bg, color: style.color }}
-            >
-              <Icon size={12} /> {style.label}
-            </span>
+            {/* Right-aligned action: expiry date if complete, a status badge if awaiting review
+                or otherwise not simply missing, nothing manufactured if missing entirely — this
+                app doesn't let coordinators upload on a worker's behalf, so no fake "Upload"
+                control pretending that's possible. */}
+            <div className="flex items-center gap-2 shrink-0">
+              {credential?.status === "valid" ? (
+                <span className="text-xs font-semibold" style={{ color: MUTED }}>
+                  {credential.expiry_date ? `Expires ${safeFormat(credential.expiry_date)}` : translate("team.detail.onFile")}
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                  style={{ background: style.bg, color: style.color }}
+                >
+                  <Icon size={12} /> {style.label}
+                </span>
+              )}
+              {reviewable && (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => reviewMutation.mutate({ credential: credential!, status: "valid" })}>
+                    <ShieldCheck className="h-3.5 w-3.5" /> Verify
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-[#7C3AED]" onClick={() => reviewMutation.mutate({ credential: credential!, status: "rejected" })}>
+                    Reject
+                  </Button>
+                </>
+              )}
+              {canRecheck && (
+                <Button variant={recheckDue ? "outline" : "ghost"} size="sm" className="gap-1 text-[#7C3AED]" onClick={() => recheckMutation.mutate(credential!)}>
+                  <ShieldCheck className="h-3.5 w-3.5" /> Mark rechecked
+                </Button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -761,7 +1155,14 @@ function completionStatusStyle(status: string) {
   }
 }
 
-function TrainingTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+function TrainingTab({
+  worker, topReason, translate,
+}: {
+  worker: WorkerStats;
+  /** Same value shown on Overview and Credentials — carried over, not recomputed. */
+  topReason: TopReason;
+  translate: (k: string) => string;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -784,8 +1185,45 @@ function TrainingTab({ worker, translate }: { worker: WorkerStats; translate: (k
   const history = assignmentsQuery.data?.history ?? [];
   const completedModuleIds = new Set(history.map((h) => h.module_id));
 
+  // Overdue first, then soonest-due, then no-due-date last — a coordinator scanning this tab
+  // should see what's overdue immediately, not have to search for it among upcoming modules.
+  const now = Date.now();
+  const inProgress = recommendations
+    .filter((r) => !completedModuleIds.has(r.training_module_id))
+    .map((r) => ({ ...r, overdue: !!r.due_at && new Date(r.due_at).getTime() < now }))
+    .sort((a, b) => {
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      if (a.due_at && b.due_at) return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
+      if (a.due_at) return -1;
+      if (b.due_at) return 1;
+      return 0;
+    });
+  const overdueCount = inProgress.filter((r) => r.overdue).length;
+
+  const totalModuleIds = new Set([...recommendations.map((r) => r.training_module_id), ...history.map((h) => h.module_id)]);
+  const total = totalModuleIds.size;
+  const completeCount = new Set(history.filter((h) => h.status === "confirmed").map((h) => h.module_id)).size;
+
+  // Same carry-over pattern as Credentials — but only overrides the generic "N complete" text
+  // with a training-specific reason if training is genuinely what's overdue here; otherwise
+  // this tab still names its own overdue count rather than showing an unrelated blocker.
+  const stripLevel: ReadinessLevel = overdueCount > 0 ? "danger" : (topReason?.level ?? "good");
+  const stripReason = overdueCount > 0
+    ? `${overdueCount} module${overdueCount !== 1 ? "s" : ""} overdue`
+    : (topReason?.label ?? "All assigned training complete");
+  const stripBg = stripLevel === "good" ? "var(--cc-status-success-bg)" : stripLevel === "warning" ? "var(--cc-status-warning-bg)" : "var(--cc-status-danger-bg)";
+  const stripColor = stripLevel === "good" ? "var(--cc-status-success)" : stripLevel === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
+        <div>
+          <p className="text-lg font-black">{completeCount} / {total} complete</p>
+          <p className="text-xs font-bold mt-0.5">{stripReason}</p>
+        </div>
+        {stripLevel === "good" ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+      </div>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <GraduationCap size={16} style={{ color: PLUM }} />
@@ -805,18 +1243,31 @@ function TrainingTab({ worker, translate }: { worker: WorkerStats; translate: (k
         </div>
       )}
 
-      {recommendations.filter((r) => !completedModuleIds.has(r.training_module_id)).length > 0 && (
+      {inProgress.length > 0 && (
         <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
-          {recommendations.filter((r) => !completedModuleIds.has(r.training_module_id)).map((rec) => (
+          {inProgress.map((rec) => (
             <div key={rec.id} className="flex items-center gap-3 px-5 py-4">
-              <IconBadge icon={GraduationCap} color="var(--cc-status-info)" bg="var(--cc-status-info-bg)" />
+              <IconBadge
+                icon={GraduationCap}
+                color={rec.overdue ? "var(--cc-status-danger)" : "var(--cc-status-info)"}
+                bg={rec.overdue ? "var(--cc-status-danger-bg)" : "var(--cc-status-info-bg)"}
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold" style={{ color: TEXT }}>{rec.title}</p>
-                <p className="text-xs mt-0.5" style={{ color: MUTED }}>{translate("team.training.assignedOn")} {safeFormat(rec.recommended_at)}</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  {translate("team.training.assignedOn")} {safeFormat(rec.recommended_at)}
+                  {rec.due_at ? ` · Due ${safeFormat(rec.due_at)}` : ""}
+                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--cc-status-info-bg)", color: "var(--cc-status-info)" }}>
-                  {translate("team.training.inProgress")}
+                <span
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                  style={{
+                    background: rec.overdue ? "var(--cc-status-danger-bg)" : "var(--cc-status-info-bg)",
+                    color: rec.overdue ? "var(--cc-status-danger)" : "var(--cc-status-info)",
+                  }}
+                >
+                  {rec.overdue ? "Overdue" : translate("team.training.inProgress")}
                 </span>
                 <button
                   onClick={() => dismissMut.mutate(rec.id)}

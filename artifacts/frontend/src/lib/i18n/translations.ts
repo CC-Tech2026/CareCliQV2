@@ -3820,6 +3820,7 @@ export const en: Dict = {
   "md.onboarding.subtitle": "Design programs, manage resources, track progress and approve completions",
   "md.onboarding.tab.overview": "Overview",
   "md.onboarding.tab.builder": "Builder",
+  "md.onboarding.tab.modules": "Training Modules",
   "md.onboarding.tab.resources": "Resources",
   "md.onboarding.tab.approvals": "Approvals",
   "md.onboarding.loadFailed": "Could not load onboarding data",

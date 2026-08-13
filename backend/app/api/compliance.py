@@ -355,7 +355,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
             "type": "credential",
             "label": f"Screening expiring — {wname}",
             "detail": f"{max(days_left, 0)} days" if days_left is not None else "",
-            "link": "/credentials",
+            "link": f"/team?workerId={wid}&tab=credentials" if wid else "/team",
         })
     for r in agr_rows:
         pid = str(r.get("patient_id") or "")

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
+from ..services import worker_financial_service, worker_training_service
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -13,6 +15,7 @@ WORKER_CHECKLIST_DEFAULTS = {
     "complete_profile": False,
     "upload_profile_photo": False,
     "add_credential_wallet_items": False,
+    "complete_mandatory_training": False,
     "review_assigned_clients": False,
     "read_ndis_note_writing_guide": False,
     "acknowledge_note_writing_rules": False,
@@ -25,7 +28,7 @@ def _load_user(user_id: str) -> dict:
         get_supabase_admin()
         .table("users")
         .select(
-            "id, role, email_verified, profile_completed, onboarding_completed, "
+            "id, role, organization_id, email_verified, profile_completed, onboarding_completed, "
             "role_specific_profile_completed, profile_photo_url, onboarding_checklist"
         )
         .eq("id", user_id)
@@ -42,6 +45,13 @@ def _merged_checklist(profile: dict) -> dict:
     checklist["verify_email"] = bool(profile.get("email_verified")) or checklist["verify_email"]
     checklist["complete_profile"] = bool(profile.get("role_specific_profile_completed")) or checklist["complete_profile"]
     checklist["upload_profile_photo"] = bool(profile.get("profile_photo_url")) or checklist["upload_profile_photo"]
+    org_id = profile.get("organization_id")
+    if org_id:
+        try:
+            overdue = worker_training_service.is_training_overdue(profile["id"], org_id)
+            checklist["complete_mandatory_training"] = (not overdue) or checklist["complete_mandatory_training"]
+        except Exception:
+            pass
     return checklist
 
 
@@ -91,6 +101,31 @@ async def complete_my_onboarding(current_user: dict = Depends(get_current_user))
     }
     get_supabase_admin().table("users").update(payload).eq("id", get_user_id(current_user)).execute()
     return {"onboarding_completed": True, "checklist": checklist}
+
+
+class FinancialDetailsBody(BaseModel):
+    bank_account_name: str | None = None
+    bank_bsb: str | None = None
+    bank_account_number: str | None = None
+    super_fund_name: str | None = None
+    super_member_number: str | None = None
+    tax_file_number: str | None = None
+
+
+@router.get("/me/financial-details")
+async def get_my_financial_details(current_user: dict = Depends(get_current_user)):
+    details = worker_financial_service.get_financial_details(get_user_id(current_user))
+    return details or {}
+
+
+@router.put("/me/financial-details")
+async def update_my_financial_details(body: FinancialDetailsBody, current_user: dict = Depends(get_current_user)):
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    return worker_financial_service.upsert_financial_details(
+        get_user_id(current_user), org_id, body.model_dump(),
+    )
 
 
 @router.get("/team")
