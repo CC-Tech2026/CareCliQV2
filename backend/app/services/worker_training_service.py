@@ -288,6 +288,7 @@ def create_training_module(
     description: str | None = None,
     linked_credential_type: str | None = None,
     requires_certification: bool = False,
+    auto_assign_on_hire: bool = False,
 ) -> dict[str, Any]:
     if not title.strip():
         raise HTTPException(status_code=422, detail="Title is required.")
@@ -298,6 +299,7 @@ def create_training_module(
         "description": description,
         "linked_credential_type": linked_credential_type,
         "requires_certification": requires_certification,
+        "auto_assign_on_hire": auto_assign_on_hire,
         "created_by": created_by,
         "is_active": True,
     }
@@ -309,6 +311,82 @@ def create_training_module(
         raise
     record["resources"] = []
     return record
+
+
+def update_training_module(
+    organization_id: str,
+    module_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update.")
+    if "title" in updates:
+        if not (updates["title"] or "").strip():
+            raise HTTPException(status_code=422, detail="Title is required.")
+        updates["title"] = updates["title"].strip()
+    existing = (
+        get_supabase_admin()
+        .table("training_modules")
+        .select("id")
+        .eq("id", module_id)
+        .eq("organization_id", organization_id)
+        .maybe_single()
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Training module not found.")
+    resp = (
+        get_supabase_admin()
+        .table("training_modules")
+        .update(updates)
+        .eq("id", module_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    return (resp.data or [{}])[0]
+
+
+def assign_mandatory_modules_on_hire(
+    worker_id: str,
+    organization_id: str,
+    invited_by: str | None,
+) -> list[dict[str, Any]]:
+    """Auto-assign every module the org has flagged auto_assign_on_hire, at the
+    moment a new hire accepts their invite — so mandatory induction (e.g. NDIS
+    Worker Orientation) doesn't depend on a coordinator remembering to assign
+    it. Reuses recommend_training_module so this gets the same due-date and
+    notification behaviour as an ad-hoc coordinator assignment."""
+    try:
+        result = (
+            get_supabase_admin()
+            .table("training_modules")
+            .select("id, title")
+            .eq("organization_id", organization_id)
+            .eq("auto_assign_on_hire", True)
+            .eq("is_active", True)
+            .execute()
+        )
+        modules = result.data or []
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return []
+        raise
+
+    assigned = []
+    for module in modules:
+        try:
+            assigned.append(
+                recommend_training_module(
+                    worker_id=worker_id,
+                    coordinator_id=invited_by or worker_id,
+                    organization_id=organization_id,
+                    training_module_id=module["id"],
+                    title=module["title"],
+                )
+            )
+        except Exception as exc:
+            logger.warning("Mandatory module auto-assign failed for worker %s module %s: %s", worker_id, module.get("id"), exc)
+    return assigned
 
 
 TRAINING_DEADLINE_DAYS = 7

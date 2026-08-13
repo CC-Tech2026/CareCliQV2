@@ -170,7 +170,7 @@ def _worker_compliance_alerts(user_id: str) -> list[dict[str, Any]]:
             "severity": severity,
             "due_date": row.get("expiry_date"),
             "action_label": "Review Credentials",
-            "action_url": "/credentials",
+            "action_url": "/worker-onboarding",
             "source": "credentials",
         })
 

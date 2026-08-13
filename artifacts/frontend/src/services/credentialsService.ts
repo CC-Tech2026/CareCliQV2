@@ -17,6 +17,8 @@ export type Credential = {
   verified_by?: string | null;
   verified_at?: string | null;
   notes?: string | null;
+  screening_number?: string | null;
+  last_checked_against_nwsd?: string | null;
   created_at?: string;
   updated_at?: string;
   user?: { id: string; full_name?: string; email?: string; role?: string };
@@ -67,7 +69,7 @@ export async function listTeamCredentials(): Promise<Credential[]> {
   return jsonFetch<Credential[]>("/api/credentials/team");
 }
 
-export async function reviewCredential(id: string, payload: { status: string; notes?: string | null }): Promise<Credential> {
+export async function reviewCredential(id: string, payload: { status: string; notes?: string | null; last_checked_against_nwsd?: string | null }): Promise<Credential> {
   return jsonFetch<Credential>(`/api/credentials/${id}/review`, {
     method: "PATCH",
     body: JSON.stringify(payload),

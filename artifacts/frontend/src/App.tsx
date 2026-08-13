@@ -42,7 +42,6 @@ import AuditPack from "@/pages/audit-pack";
 import DesignSystem from "@/pages/design-system";
 import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
-import Credentials from "@/pages/credentials";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import ProfileCompletion from "@/pages/profile-completion";
@@ -54,6 +53,7 @@ import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
+import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
@@ -173,7 +173,13 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── New-hire onboarding — Managing Director only ──────────────────── */}
+      <Route path="/md/onboarding/training">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDOnboardingTrainingPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── New-hire onboarding — Managing Director only ─────────────────── */}
       <Route path="/onboard-employee">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <OnboardEmployeePage />
@@ -332,12 +338,6 @@ function Router() {
       <Route path="/worker-ndis-plan">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerNdisPlan /></AppLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/credentials">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Credentials /></AppLayout>
         </ProtectedRoute>
       </Route>
 

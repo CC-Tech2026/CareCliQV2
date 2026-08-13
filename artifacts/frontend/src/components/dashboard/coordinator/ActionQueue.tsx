@@ -86,7 +86,7 @@ function fromCredentials(alerts: CredentialAlert[]): ActionItem[] {
         ? `Expired ${safeDate(a.expiry_date)}`
         : `Expires in ${d} day${d !== 1 ? "s" : ""} (${safeDate(a.expiry_date)})`,
       actionLabel: "Manage credentials",
-      actionUrl: "/credentials",
+      actionUrl: a.user_id ? `/team?workerId=${a.user_id}&tab=credentials` : "/team",
     };
   });
 }

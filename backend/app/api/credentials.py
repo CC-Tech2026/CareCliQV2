@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
@@ -13,6 +14,20 @@ from ..api.security import require_recent_reauth
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/credentials", tags=["credentials"])
+
+# NDIS Worker Screening check numbers are commonly formatted as WWCXXXXXXXXXXXXX-style
+# alphanumeric IDs. There is no public NDIS Commission API to check a screening number
+# against — this validates the number is *shaped* like a real one, nothing more. It
+# must never be read as confirmation that the NDIS Commission actually cleared the
+# worker; that confirmation only happens when a coordinator manually checks the NDIS
+# Commission portal directly and records it via last_checked_against_nwsd below.
+_SCREENING_NUMBER_RE = re.compile(r"^[A-Za-z0-9-]{6,30}$")
+
+
+def validate_screening_number_format(value: str) -> bool:
+    """True if `value` is shaped like a screening number. Format-only — does not
+    verify the number against the NDIS Worker Screening Database."""
+    return bool(_SCREENING_NUMBER_RE.match(value.strip()))
 
 ALLOWED_FILE_TYPES = {
     "application/pdf": ".pdf",
@@ -31,11 +46,13 @@ class CredentialBody(BaseModel):
     issue_date: str | None = None
     expiry_date: str | None = None
     notes: str | None = None
+    screening_number: str | None = None
 
 
 class CredentialReviewBody(BaseModel):
     status: str
     notes: str | None = None
+    last_checked_against_nwsd: str | None = None
 
 
 def _status_for(expiry_date: str | None, current: str = "pending_review") -> str:
@@ -75,8 +92,15 @@ async def list_my_credentials(current_user: dict = Depends(get_current_user)):
     return [{**row, "status": _status_for(row.get("expiry_date"), row.get("status") or "valid")} for row in rows]
 
 
+def _check_screening_number(body: CredentialBody) -> None:
+    if body.credential_type == "ndis_screening" and body.screening_number:
+        if not validate_screening_number_format(body.screening_number):
+            raise HTTPException(status_code=422, detail="Screening number is not a valid format.")
+
+
 @router.post("/me", status_code=201)
 async def create_my_credential(body: CredentialBody, current_user: dict = Depends(get_current_user)):
+    _check_screening_number(body)
     payload = body.model_dump()
     payload.update(
         {
@@ -98,6 +122,7 @@ async def update_my_credential(
     existing = _get_credential_for_user(credential_id, current_user)
     if existing.get("verified_at") and not is_coordinator_role(current_user):
         raise HTTPException(status_code=403, detail="Reviewed credentials cannot be edited by workers.")
+    _check_screening_number(body)
     payload = body.model_dump(exclude_unset=True)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = (
@@ -183,5 +208,10 @@ async def review_credential(
         "notes": body.notes,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    # Approving the CareCliQ record and confirming clearance on the NDIS Commission
+    # portal directly are two separate facts — only touch last_checked_against_nwsd
+    # when the reviewer actually supplies it, never implicitly from a status change.
+    if body.last_checked_against_nwsd is not None:
+        payload["last_checked_against_nwsd"] = body.last_checked_against_nwsd
     result = get_supabase_admin().table("credentials").update(payload).eq("id", credential_id).execute()
     return result.data[0] if result.data else {**existing, **payload}

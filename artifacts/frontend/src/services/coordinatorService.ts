@@ -809,6 +809,22 @@ export type LiveShift = {
     last_activity_at?: string | null;
     is_long_shift?: boolean;
   };
+  checklist: Array<{
+    task_id: string;
+    label: string;
+    completed: boolean;
+    documented: boolean;
+    mandatory: boolean;
+    goal_title?: string | null;
+  }>;
+  medications: Array<{
+    medication_id: string;
+    name: string;
+    scheduled_time: string;
+    due_status: string;
+    outcome?: string | null;
+  }>;
+  workflow_stage: "not_clocked_in" | "clocked_in" | "documenting" | "wrapping_up";
 };
 
 export type CoordinatorAlert = {
@@ -1646,6 +1662,7 @@ export type TrainingModule = {
   description?: string | null;
   linked_credential_type?: string | null;
   requires_certification: boolean;
+  auto_assign_on_hire: boolean;
   is_active: boolean;
   resources?: TrainingResource[];
 };
@@ -1657,6 +1674,7 @@ export type TrainingRecommendation = {
   training_module_id: string;
   title: string;
   recommended_at: string;
+  due_at?: string | null;
   dismissed_at?: string | null;
 };
 
@@ -1685,9 +1703,28 @@ export function createTrainingModule(payload: {
   description?: string;
   linked_credential_type?: string;
   requires_certification?: boolean;
+  auto_assign_on_hire?: boolean;
 }) {
   return jsonFetch<TrainingModule>("/api/coordinator/training-modules", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTrainingModule(
+  moduleId: string,
+  payload: Partial<{
+    title: string;
+    description: string | null;
+    linked_credential_type: string | null;
+    requires_certification: boolean;
+    auto_assign_on_hire: boolean;
+    is_active: boolean;
+  }>,
+) {
+  return jsonFetch<TrainingModule>(`/api/coordinator/training-modules/${moduleId}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

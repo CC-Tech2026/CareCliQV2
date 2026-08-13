@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -48,6 +49,30 @@ function liveStatusLabel(status: LiveShift["live_status"], translate: (key: stri
   return { ...s, label: translate(s.labelKey) };
 }
 
+const WORKFLOW_COLUMNS: Array<{ id: LiveShift["workflow_stage"]; labelKey: string }> = [
+  { id: "not_clocked_in", labelKey: "coordinator.live.board.notClockedIn" },
+  { id: "clocked_in",     labelKey: "coordinator.live.board.clockedIn" },
+  { id: "documenting",    labelKey: "coordinator.live.board.documenting" },
+  { id: "wrapping_up",    labelKey: "coordinator.live.board.wrappingUp" },
+];
+
+const MED_STATUS_STYLE: Record<string, { bg: string; color: string }> = {
+  given_on_time: { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" },
+  given_late: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  given_early: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  refused: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
+  missed: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
+  withheld: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  administration_error: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
+  overdue: { bg: "var(--cc-status-danger-bg)", color: "#DC2626" },
+  due_now: { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" },
+  upcoming: { bg: SOFT, color: MUTED },
+};
+
+function medsGivenCount(medications: LiveShift["medications"]) {
+  return medications.filter((m) => m.outcome === "given_on_time" || m.outcome === "given_late" || m.outcome === "given_early").length;
+}
+
 // ── Elapsed clock ─────────────────────────────────────────────────────────────
 function useElapsedTimer(startMinutes: number) {
   const [elapsed, setElapsed] = useState(startMinutes);
@@ -71,26 +96,24 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
   );
 }
 
-// ── Task progress bar ──────────────────────────────────────────────────────────
-function TaskBar({ total, completed }: { total: number; completed: number }) {
-  const { translate } = useAccessibility();
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E8E8EA";
+// ── Compact task + medication summary line ─────────────────────────────────────
+function ShiftSummaryLine({ shift }: { shift: LiveShift }) {
+  const { translateParams } = useAccessibility();
+  const { total, completed } = shift.task_counts;
+  const given = medsGivenCount(shift.medications);
+  const scheduled = shift.medications.length;
+  const hasUndocumentedMandatory = shift.checklist.some((t) => t.mandatory && t.completed && !t.documented);
+  const hasMedIssue = shift.medications.some((m) => ["overdue", "missed", "refused", "administration_error"].includes(m.outcome ?? m.due_status));
+  const isAlert = hasUndocumentedMandatory || hasMedIssue;
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <span className="text-[10px] font-medium" style={{ color: MUTED }}>{translate("coordinator.live.tasks")}</span>
-        <span className="text-[10px] font-bold" style={{ color: TEXT }}>
-          {completed}/{total}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: BORDER }}>
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-    </div>
+    <p className="text-[11px] font-semibold" style={{ color: isAlert ? CORAL : MUTED }}>
+      {translateParams("coordinator.live.summaryLine", {
+        completed: String(completed),
+        total: String(total),
+        given: String(given),
+        scheduled: String(scheduled),
+      })}
+    </p>
   );
 }
 
@@ -271,8 +294,81 @@ function ShiftSpecialInstructionsEditor({
   );
 }
 
-// ── Shift detail modal ─────────────────────────────────────────────────────────
-function ShiftDetailModal({
+// ── Checklist section (grouped by goal) ─────────────────────────────────────────
+function ShiftChecklistSection({ checklist }: { checklist: LiveShift["checklist"] }) {
+  const { translate } = useAccessibility();
+  if (checklist.length === 0) {
+    return <p className="text-[12px]" style={{ color: MUTED }}>{translate("coordinator.live.checklist.empty")}</p>;
+  }
+  const groups = new Map<string, LiveShift["checklist"]>();
+  for (const task of checklist) {
+    const key = task.goal_title || translate("coordinator.live.checklist.otherTasks");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(task);
+  }
+  return (
+    <div className="space-y-3">
+      {Array.from(groups.entries()).map(([goalTitle, tasks]) => (
+        <div key={goalTitle}>
+          <p className="text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>{goalTitle}</p>
+          <div className="space-y-1.5">
+            {tasks.map((task) => {
+              const color = !task.completed ? BORDER : task.documented ? "#22C55E" : "#F59E0B";
+              return (
+                <div key={task.task_id} className="flex items-start gap-2 rounded-lg px-2.5 py-1.5" style={{ background: SOFT }}>
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color }} />
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold truncate" style={{ color: TEXT }}>{task.label}</p>
+                    {task.completed && (
+                      <p className="text-[10px] font-semibold" style={{ color }}>
+                        {task.documented ? translate("coordinator.live.checklist.documented") : translate("coordinator.live.checklist.notDocumented")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Medications section ──────────────────────────────────────────────────────────
+function ShiftMedicationsSection({ medications }: { medications: LiveShift["medications"] }) {
+  const { translate } = useAccessibility();
+  if (medications.length === 0) {
+    return <p className="text-[12px]" style={{ color: MUTED }}>{translate("coordinator.live.medications.empty")}</p>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {medications.map((med) => {
+        const statusKey = med.outcome ?? med.due_status;
+        const style = MED_STATUS_STYLE[statusKey] ?? { bg: SOFT, color: MUTED };
+        return (
+          <div key={`${med.medication_id}-${med.scheduled_time}`} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5" style={{ background: SOFT }}>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold truncate" style={{ color: TEXT }}>{med.name}</p>
+              <p className="text-[10px]" style={{ color: MUTED }}>
+                {new Date(med.scheduled_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase shrink-0"
+              style={{ background: style.bg, color: style.color }}
+            >
+              {statusKey.replace(/_/g, " ")}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Shift detail panel (side sheet) ──────────────────────────────────────────────
+function ShiftDetailPanel({
   shift,
   open,
   onClose,
@@ -284,14 +380,14 @@ function ShiftDetailModal({
   const { translate } = useAccessibility();
   const s = liveStatusLabel(shift.live_status, translate);
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg" style={{ borderRadius: 20 }}>
-        <DialogHeader>
-          <DialogTitle className="font-black text-base" style={{ color: TEXT }}>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle className="font-black text-base" style={{ color: TEXT }}>
             {translate("coordinator.live.shiftDetail")}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 mt-4">
           <div
             className="rounded-2xl p-4 flex items-center gap-4"
             style={{ background: s.bg, border: `2px solid ${s.ring}` }}
@@ -335,6 +431,16 @@ function ShiftDetailModal({
             </div>
           </div>
 
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>{translate("coordinator.live.checklist")}</p>
+            <ShiftChecklistSection checklist={shift.checklist} />
+          </div>
+
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>{translate("coordinator.live.medications")}</p>
+            <ShiftMedicationsSection medications={shift.medications} />
+          </div>
+
           {shift.alerts.length > 0 && (
             <div className="space-y-2">
               <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: CORAL }}>{translate("coordinator.live.activeAlerts")}</p>
@@ -361,8 +467,8 @@ function ShiftDetailModal({
           )}
           <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} />
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -474,8 +580,8 @@ function LiveShiftCard({
         )}
       </div>
 
-      {/* Task bar */}
-      <TaskBar total={shift.task_counts.total} completed={shift.task_counts.completed} />
+      {/* Compact task + medication summary */}
+      <ShiftSummaryLine shift={shift} />
 
       {shift.engagement?.is_long_shift && (
         <div className="rounded-lg border px-2.5 py-2 text-[11px]" style={{ borderColor: BORDER, background: SOFT }}>
@@ -934,17 +1040,42 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
       )}
 
       {!isLoading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((shift) => (
-            <LiveShiftCard
-              key={shift.id}
-              shift={shift}
-              onMessage={setMsgShift}
-              onFlag={setFlagShiftState}
-              onEmergency={setEmergShift}
-              onDetail={setDetailShift}
-            />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+          {WORKFLOW_COLUMNS.map((col) => {
+            const columnShifts = filtered.filter((s) => s.workflow_stage === col.id);
+            return (
+              <div key={col.id} className="rounded-2xl" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                <div className="flex items-center justify-between px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: TEXT }}>
+                    {translate(col.labelKey)}
+                  </p>
+                  <span
+                    className="px-2 py-0.5 rounded-full text-[10px] font-black"
+                    style={{ background: "var(--cc-bg)", color: MUTED, border: `1px solid ${BORDER}` }}
+                  >
+                    {columnShifts.length}
+                  </span>
+                </div>
+                <div className="p-2.5 space-y-3 max-h-[70vh] overflow-y-auto">
+                  {columnShifts.length === 0 && (
+                    <p className="text-[11px] text-center py-4" style={{ color: MUTED }}>
+                      {translate("coordinator.live.emptyHint")}
+                    </p>
+                  )}
+                  {columnShifts.map((shift) => (
+                    <LiveShiftCard
+                      key={shift.id}
+                      shift={shift}
+                      onMessage={setMsgShift}
+                      onFlag={setFlagShiftState}
+                      onEmergency={setEmergShift}
+                      onDetail={setDetailShift}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -967,7 +1098,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
         onClose={() => setEmergShift(null)}
       />
       {detailShift && (
-        <ShiftDetailModal
+        <ShiftDetailPanel
           shift={detailShift}
           open={!!detailShift}
           onClose={() => setDetailShift(null)}

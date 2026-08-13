@@ -588,7 +588,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
             const alertBg    = expired ? "rgba(239,68,68,0.08)"  : "rgba(245,158,11,0.08)";
             const alertColor = expired ? DS.STATUS.critical       : DS.STATUS.warning;
             return (
-              <Link key={alert.credential_id ?? idx} href="/credentials">
+              <Link key={alert.credential_id ?? idx} href={alert.user_id ? `/team?workerId=${alert.user_id}&tab=credentials` : "/team"}>
                 <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: alertBg }}>
                     <BadgeCheck size={13} style={{ color: alertColor }} />
@@ -614,7 +614,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
           })}
         </div>
         {alerts.length > 7 && (
-          <Link href="/credentials">
+          <Link href="/team">
             <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
               View all {alerts.length} expiring credentials ?
             </p>
@@ -649,7 +649,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
             </p>
           </div>
         )}
-        <Link href="/credentials">
+        <Link href="/team">
           <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
             Manage credentials <ArrowRight size={12} />
           </span>

@@ -854,6 +854,16 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             logger.warning("accept_invite onboarding document handoff error (non-critical): %s", e)
 
     # ------------------------------------------------------------------
+    # 5c. Auto-assign any mandatory (auto_assign_on_hire) training modules,
+    #     e.g. NDIS Worker Orientation / org induction.
+    # ------------------------------------------------------------------
+    try:
+        from ..services import worker_training_service
+        worker_training_service.assign_mandatory_modules_on_hire(user_id, org_id, invite.get("invited_by"))
+    except Exception as e:
+        logger.warning("accept_invite mandatory training auto-assign error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
     # 6. Issue access token — invitee is immediately signed in
     # ------------------------------------------------------------------
     access_token = create_access_token({

@@ -1,21 +1,113 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, CheckCircle2, Loader2, Save, UserRound } from "lucide-react";
+import { BookOpen, Landmark, Loader2, Save, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { WorkerOnboardingChecklist } from "@/components/onboarding/WorkerOnboardingChecklist";
+import { MyCredentialsCard } from "@/components/onboarding/MyCredentialsCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   completeMyOnboarding,
   getMyOnboarding,
+  getMyFinancialDetails,
+  updateMyFinancialDetails,
   updateMyOnboarding,
   type ChecklistItem,
+  type FinancialDetails,
 } from "@/services/onboardingService";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
+
+function FinancialDetailsCard() {
+  const { toast } = useToast();
+  const [details, setDetails] = useState<FinancialDetails>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getMyFinancialDetails()
+      .then((data) => { if (active) setDetails(data); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  function field(key: keyof FinancialDetails, value: string) {
+    setDetails((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const saved = await updateMyFinancialDetails(details);
+      setDetails(saved);
+      toast({ title: "Financial details saved" });
+    } catch (error) {
+      toast({
+        title: "Could not save financial details",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-[#E8E8EA] bg-white p-5">
+        <Loader2 className="h-5 w-5 animate-spin text-[#E8457A]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#E8E8EA] bg-white p-5">
+      <div className="mb-4 flex items-center gap-2 text-[#1A1A2E]">
+        <Landmark className="h-5 w-5 text-[#E8457A]" />
+        <h2 className="font-black">Bank, super &amp; tax details</h2>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Bank account name</Label>
+          <Input value={details.bank_account_name ?? ""} onChange={(e) => field("bank_account_name", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+        <div>
+          <Label>BSB</Label>
+          <Input value={details.bank_bsb ?? ""} onChange={(e) => field("bank_bsb", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+        <div>
+          <Label>Bank account number</Label>
+          <Input value={details.bank_account_number ?? ""} onChange={(e) => field("bank_account_number", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+        <div>
+          <Label>Superannuation fund</Label>
+          <Input value={details.super_fund_name ?? ""} onChange={(e) => field("super_fund_name", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+        <div>
+          <Label>Super member number</Label>
+          <Input value={details.super_member_number ?? ""} onChange={(e) => field("super_member_number", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+        <div>
+          <Label>Tax File Number</Label>
+          <Input value={details.tax_file_number ?? ""} onChange={(e) => field("tax_file_number", e.target.value)} className="mt-1 rounded-xl" />
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button onClick={save} disabled={saving} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function WorkerOnboarding() {
   const [, navigate] = useLocation();
@@ -114,18 +206,13 @@ export default function WorkerOnboarding() {
           </div>
           <ProfilePhotoUpload currentUrl={user?.profile_photo_url} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Link href="/credentials" className="rounded-2xl border border-[#E8E8EA] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <CheckCircle2 className="h-5 w-5 text-[#E8457A]" />
-            <p className="mt-3 text-sm font-black text-[#1A1A2E]">{translate("onboarding.addCredentials")}</p>
-            <p className="mt-1 text-xs text-[#6A6A77]">{translate("onboarding.addCredentialsHint")}</p>
-          </Link>
-          <Link href="/my-clients" className="rounded-2xl border border-[#E8E8EA] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <BookOpen className="h-5 w-5 text-[#E8457A]" />
-            <p className="mt-3 text-sm font-black text-[#1A1A2E]">{translate("onboarding.reviewClients")}</p>
-            <p className="mt-1 text-xs text-[#6A6A77]">{translate("onboarding.reviewClientsHint")}</p>
-          </Link>
-        </div>
+        <FinancialDetailsCard />
+        <MyCredentialsCard />
+        <Link href="/my-clients" className="block rounded-2xl border border-[#E8E8EA] bg-white p-5 transition hover:bg-[#F8F6FE]">
+          <BookOpen className="h-5 w-5 text-[#E8457A]" />
+          <p className="mt-3 text-sm font-black text-[#1A1A2E]">{translate("onboarding.reviewClients")}</p>
+          <p className="mt-1 text-xs text-[#6A6A77]">{translate("onboarding.reviewClientsHint")}</p>
+        </Link>
       </div>
       <aside className="h-fit rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6A6A77]">{translate("onboarding.progress")}</p>
