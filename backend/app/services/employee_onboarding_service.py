@@ -206,23 +206,6 @@ def delete_document(document_id: str) -> None:
     supabase.table("employee_onboarding_documents").delete().eq("id", document_id).execute()
 
 
-def _organization_name(organization_id: str) -> str | None:
-    try:
-        resp = (
-            get_supabase_admin()
-            .table("organizations")
-            .select("organization_name, name")
-            .eq("organization_id", organization_id)
-            .limit(1)
-            .execute()
-        )
-        if resp.data:
-            return resp.data[0].get("organization_name") or resp.data[0].get("name")
-    except Exception:
-        pass
-    return None
-
-
 def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str, employer_name: str) -> dict[str, Any]:
     hire = get_hire(hire_id, organization_id)
     if hire["status"] not in {"draft"}:
@@ -250,13 +233,17 @@ def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str
     updated = result.data[0] if result.data else {**hire, **update}
 
     from ..core.config import settings
+    from . import organization_branding_service
+    branding = organization_branding_service.get_branding(organization_id)
     sign_url = f"{settings.frontend_base_url.rstrip('/')}/onboarding-sign?token={sign_token}"
     email_delivery = queue_onboarding_sign_email(
         to_email=hire["email"],
         full_name=hire["full_name"],
         sign_url=sign_url,
-        organization_name=_organization_name(organization_id),
+        organization_name=branding.get("display_name"),
         document_titles=[d["title"] for d in docs],
+        logo_url=branding.get("logo_url"),
+        brand_accent_color=branding.get("brand_accent_color"),
     )
     updated["email_delivery"] = email_delivery
     return updated
@@ -334,6 +321,16 @@ def sign_as_worker(
         .eq("id", hire["id"])
         .execute()
     )
+
+    # If this hire originated from the Applicants Board, the signature itself
+    # is what moves the card to Hired — not a separate coordinator action.
+    # No-ops silently if it didn't (an MD-created hire has no applicant row).
+    try:
+        from . import applicant_service
+        applicant_service.mark_applicant_hired_by_onboarding_id(hire["id"])
+    except Exception:
+        logger.warning("Could not mark applicant hired for onboarding %s", hire["id"])
+
     return result.data[0] if result.data else {**hire, **update}
 
 

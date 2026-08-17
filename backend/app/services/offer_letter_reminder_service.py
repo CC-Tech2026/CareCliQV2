@@ -37,21 +37,6 @@ def _is_missing_schema_error(exc: Exception) -> bool:
     return "does not exist" in err or "42703" in err or "pgrst" in err or "could not find" in err
 
 
-def _organization_name(organization_id: str) -> str | None:
-    try:
-        resp = (
-            get_supabase_admin()
-            .table("organizations")
-            .select("organization_name, name")
-            .eq("organization_id", organization_id)
-            .limit(1)
-            .execute()
-        )
-        if resp.data:
-            return resp.data[0].get("organization_name") or resp.data[0].get("name")
-    except Exception:
-        pass
-    return None
 
 
 async def run_offer_letter_reminder_pass() -> dict[str, int]:
@@ -133,12 +118,16 @@ async def run_offer_letter_reminder_pass() -> dict[str, int]:
                     .eq("onboarding_id", hire_id)
                     .execute()
                 )
+                from . import organization_branding_service
+                branding = organization_branding_service.get_branding(org_id)
                 queue_onboarding_sign_email(
                     to_email=row["email"],
                     full_name=row["full_name"],
                     sign_url=sign_url,
-                    organization_name=_organization_name(org_id),
+                    organization_name=branding.get("display_name"),
                     document_titles=[d["title"] for d in (docs.data or [])],
+                    logo_url=branding.get("logo_url"),
+                    brand_accent_color=branding.get("brand_accent_color"),
                 )
                 supabase.table("employee_onboarding").update(
                     {"offer_reminder_sent_at": now.isoformat()}

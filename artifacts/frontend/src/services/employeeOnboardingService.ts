@@ -12,6 +12,17 @@ export type OnboardingDocument = {
   created_at: string;
 };
 
+export type CandidateDocument = {
+  id: string;
+  applicant_id: string;
+  document_type: "resume" | "cover_letter" | "id_document" | "other";
+  title: string;
+  notes?: string | null;
+  file_path?: string | null;
+  file_url?: string | null;
+  created_at: string;
+};
+
 export type EmployeeHire = {
   id: string;
   organization_id: string;
@@ -30,22 +41,14 @@ export type EmployeeHire = {
   created_at: string;
   documents?: OnboardingDocument[];
   email_delivery?: { status?: string; message?: string };
+  resume_summary?: string | null;
+  resume_skills?: string[] | null;
+  resume_experience_years?: string | null;
+  candidate_documents?: CandidateDocument[];
 };
-
-export function listHires() {
-  return jsonFetch<EmployeeHire[]>("/api/employee-onboarding/hires");
-}
 
 export function getHire(hireId: string) {
   return jsonFetch<EmployeeHire>(`/api/employee-onboarding/hires/${encodeURIComponent(hireId)}`);
-}
-
-export function createHire(payload: { full_name: string; email: string; phone?: string; role: string }) {
-  return jsonFetch<EmployeeHire>("/api/employee-onboarding/hires", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
 }
 
 export function addHireDocument(hireId: string, payload: { document_type: string; title: string; notes?: string }) {

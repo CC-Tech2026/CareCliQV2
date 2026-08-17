@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
@@ -184,7 +184,8 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, onboarding_completed"
+                    "preferred_contact_method, phone, onboarding_completed, "
+                    "profile_summary, profile_experience_years"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -199,7 +200,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             profiles_by_id = {}
 
     from ..services import worker_training_service as training
+    from ..services import induction_service
     overdue_map = training.team_training_overdue_map(org_id)
+    induction_map = induction_service.team_induction_incomplete_map(org_id)
 
     output = []
     for row in rows:
@@ -216,7 +219,10 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
             "onboarding_completed": profile.get("onboarding_completed"),
+            "profile_summary": profile.get("profile_summary"),
+            "profile_experience_years": profile.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("user_id")), False),
+            "induction_overdue": induction_map.get(str(row.get("user_id")), False),
         })
     return output
 
@@ -258,7 +264,9 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
         return []
 
     from ..services import worker_training_service as training
+    from ..services import induction_service
     overdue_map = training.team_training_overdue_map(org_id)
+    induction_map = induction_service.team_induction_incomplete_map(org_id)
 
     output = []
     for row in profiles.data or []:
@@ -273,7 +281,10 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "joined_at": None,
             "last_login": row.get("last_login"),
             "onboarding_completed": row.get("onboarding_completed"),
+            "profile_summary": row.get("profile_summary"),
+            "profile_experience_years": row.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("id")), False),
+            "induction_overdue": induction_map.get(str(row.get("id")), False),
         })
     return output
 
@@ -282,6 +293,22 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
 async def team(current_user: dict = Depends(get_current_user)):
     org_id = _require_coordinator(current_user)
     return await _team(org_id, coordinator_user=current_user)
+
+
+@router.get("/workers/pipeline")
+async def worker_pipeline_overview(current_user: dict = Depends(get_current_user)):
+    """Read-only Worker Onboarding Pipeline board — Interview through Active.
+    Reuses the Applicants Board, Hires, credentials, training, and induction
+    data models; never writes anything. Coordinators and MD both get org-wide
+    read access here, same as team.tsx."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    from ..services import worker_pipeline_service
+
+    return worker_pipeline_service.get_pipeline_overview(org_id)
 
 
 @router.get("/all-sessions")
@@ -1481,6 +1508,16 @@ async def assign_shift(
             status_code=400,
             detail="Worker has overdue mandatory training. "
                    "Please ensure mandatory training is completed before assigning shifts."
+        )
+
+    # Same hard gate for mandatory induction — a separate, one-time checklist
+    # from ongoing training, but equally blocking for rostering.
+    from ..services import induction_service
+    if induction_service.is_induction_incomplete(body.worker_id, org_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Worker has incomplete mandatory induction. "
+                   "Please ensure induction is completed before assigning shifts."
         )
 
     # Parse timestamps and calculate duration if needed
@@ -3946,6 +3983,74 @@ async def coordinator_update_training_module(
         module_id=module_id,
         updates=body.model_dump(exclude_unset=True),
     )
+
+
+class InductionItemBody(BaseModel):
+    title: str
+    description: Optional[str] = None
+    content_url: Optional[str] = None
+    is_mandatory: bool = True
+    sort_order: int = 0
+
+
+class InductionItemUpdateBody(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    content_url: Optional[str] = None
+    is_mandatory: Optional[bool] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/induction-items")
+async def coordinator_list_induction_items(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.list_induction_items(org_id)
+
+
+@router.post("/induction-items")
+async def coordinator_create_induction_item(
+    body: InductionItemBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.create_induction_item(
+        organization_id=org_id,
+        created_by=get_user_id(current_user),
+        title=body.title,
+        description=body.description,
+        content_url=body.content_url,
+        is_mandatory=body.is_mandatory,
+        sort_order=body.sort_order,
+    )
+
+
+@router.patch("/induction-items/{item_id}")
+async def coordinator_update_induction_item(
+    item_id: str,
+    body: InductionItemUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.update_induction_item(
+        organization_id=org_id,
+        item_id=item_id,
+        updates=body.model_dump(exclude_unset=True),
+    )
+
+
+@router.get("/workers/{worker_id}/induction")
+async def coordinator_get_worker_induction(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.get_my_induction_progress(worker_id, org_id)
 
 
 @router.get("/team-training-status")

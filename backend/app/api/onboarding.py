@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
-from ..services import worker_financial_service, worker_training_service
+from ..services import induction_service, worker_financial_service, worker_training_service
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -16,6 +18,7 @@ WORKER_CHECKLIST_DEFAULTS = {
     "upload_profile_photo": False,
     "add_credential_wallet_items": False,
     "complete_mandatory_training": False,
+    "complete_induction": False,
     "review_assigned_clients": False,
     "read_ndis_note_writing_guide": False,
     "acknowledge_note_writing_rules": False,
@@ -29,7 +32,7 @@ def _load_user(user_id: str) -> dict:
         .table("users")
         .select(
             "id, role, organization_id, email_verified, profile_completed, onboarding_completed, "
-            "role_specific_profile_completed, profile_photo_url, onboarding_checklist"
+            "role_specific_profile_completed, profile_photo_url, onboarding_checklist, welcome_seen_at"
         )
         .eq("id", user_id)
         .maybe_single()
@@ -50,6 +53,11 @@ def _merged_checklist(profile: dict) -> dict:
         try:
             overdue = worker_training_service.is_training_overdue(profile["id"], org_id)
             checklist["complete_mandatory_training"] = (not overdue) or checklist["complete_mandatory_training"]
+        except Exception:
+            pass
+        try:
+            incomplete = induction_service.is_induction_incomplete(profile["id"], org_id)
+            checklist["complete_induction"] = (not incomplete) or checklist["complete_induction"]
         except Exception:
             pass
     return checklist
@@ -126,6 +134,36 @@ async def update_my_financial_details(body: FinancialDetailsBody, current_user: 
     return worker_financial_service.upsert_financial_details(
         get_user_id(current_user), org_id, body.model_dump(),
     )
+
+
+@router.get("/me/welcome")
+async def get_my_welcome_status(current_user: dict = Depends(get_current_user)):
+    profile = _load_user(get_user_id(current_user))
+    return {"welcome_seen_at": profile.get("welcome_seen_at")}
+
+
+@router.post("/me/welcome-seen")
+async def mark_my_welcome_seen(current_user: dict = Depends(get_current_user)):
+    result = get_supabase_admin().table("users").update(
+        {"welcome_seen_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", get_user_id(current_user)).execute()
+    return {"welcome_seen_at": result.data[0].get("welcome_seen_at") if result.data else None}
+
+
+@router.get("/me/induction")
+async def get_my_induction(current_user: dict = Depends(get_current_user)):
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    return induction_service.get_my_induction_progress(get_user_id(current_user), org_id)
+
+
+@router.post("/me/induction/{item_id}/complete")
+async def complete_my_induction_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    return induction_service.complete_induction_item(get_user_id(current_user), item_id, org_id)
 
 
 @router.get("/team")

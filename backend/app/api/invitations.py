@@ -13,6 +13,7 @@ Flow:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,7 @@ from pydantic import BaseModel
 from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
-from ..services.email_service import queue_invitation_email
+from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,10 @@ class InviteCreateRequest(BaseModel):
 class InviteAcceptRequest(BaseModel):
     full_name: str
     password: str
+
+
+class InviteVerifyCodeRequest(BaseModel):
+    code: str
 
 
 class InviteRequestBody(BaseModel):
@@ -90,6 +95,27 @@ def _now_utc() -> datetime:
 
 def _parse_iso(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _get_valid_invite(supabase, token: str) -> dict:
+    result = (
+        supabase.table("invitations")
+        .select("*")
+        .eq("token", token)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    invite = result.data[0]
+    if invite.get("accepted_at"):
+        raise HTTPException(status_code=410, detail="This invitation has already been accepted")
+    if _parse_iso(invite["expires_at"]) < _now_utc():
+        raise HTTPException(status_code=410, detail="This invitation has expired")
+    return invite
 
 
 # ---------------------------------------------------------------------------
@@ -185,21 +211,16 @@ async def create_invite(
         invite_url = f"/accept-invite?token={token}"
         full_invite_url = f"{settings.frontend_base_url.rstrip('/')}{invite_url}"
         organization_name = None
+        logo_url = None
+        brand_accent_color = None
         try:
-            org_res = (
-                supabase.table("organizations")
-                .select("organization_name, name")
-                .eq("organization_id", org_id)
-                .limit(1)
-                .execute()
-            )
-            if org_res.data:
-                organization_name = (
-                    org_res.data[0].get("organization_name")
-                    or org_res.data[0].get("name")
-                )
+            from ..services import organization_branding_service
+            branding = organization_branding_service.get_branding(org_id)
+            organization_name = branding.get("display_name")
+            logo_url = branding.get("logo_url")
+            brand_accent_color = branding.get("brand_accent_color")
         except Exception as org_error:
-            logger.debug("Could not load organization name for invite email: %s", org_error)
+            logger.debug("Could not load organization branding for invite email: %s", org_error)
 
         email_delivery = queue_invitation_email(
             background_tasks,
@@ -208,6 +229,8 @@ async def create_invite(
             organization_name=organization_name,
             role=body.role,
             short_code=short_code,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         )
         logger.info(
             "Invite created: org=%s email=%s role=%s by=%s email_status=%s",
@@ -582,7 +605,7 @@ async def validate_invite(token: str):
         supabase = get_supabase_admin()
         result = (
             supabase.table("invitations")
-            .select("id, email, role, expires_at, accepted_at, organization_id")
+            .select("id, email, role, expires_at, accepted_at, organization_id, onboarding_id, email_verified_at")
             .eq("token", token)
             .execute()
         )
@@ -621,6 +644,8 @@ async def validate_invite(token: str):
             "organization_id": invite["organization_id"],
             "organization_name": org_name,
             "expires_at": invite["expires_at"],
+            "email_verified": bool(invite.get("email_verified_at")),
+            "requires_email_code": bool(invite.get("onboarding_id")),
         }
 
     except HTTPException:
@@ -628,6 +653,73 @@ async def validate_invite(token: str):
     except Exception as e:
         logger.error("validate_invite error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to validate invitation")
+
+
+@router.post("/{token}/send-code", status_code=201)
+async def send_invite_code(token: str):
+    """Public — email a fresh 6-digit verification code for this invite.
+
+    A second, in-the-moment proof of inbox access before the invitee can set
+    a password, on top of the link itself. Safe to call again for a resend.
+    """
+    supabase = get_supabase_admin()
+    invite = _get_valid_invite(supabase, token)
+
+    if invite.get("email_code_sent_at"):
+        last_sent = _parse_iso(invite["email_code_sent_at"])
+        if _now_utc() - last_sent < timedelta(seconds=30):
+            return {"ok": True, "message": "Code already sent — check your inbox, or wait a moment to resend."}
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    now = _now_utc()
+    supabase.table("invitations").update({
+        "email_code_hash": _hash_code(code),
+        "email_code_expires_at": (now + timedelta(minutes=10)).isoformat(),
+        "email_code_sent_at": now.isoformat(),
+        "email_verified_at": None,
+    }).eq("id", invite["id"]).execute()
+
+    organization_name = None
+    try:
+        org_res = (
+            supabase.table("organizations")
+            .select("organization_name, name")
+            .eq("organization_id", invite["organization_id"])
+            .limit(1)
+            .execute()
+        )
+        if org_res.data:
+            organization_name = org_res.data[0].get("organization_name") or org_res.data[0].get("name")
+    except Exception:
+        pass
+
+    email_delivery = queue_invite_verification_email(
+        to_email=invite["email"],
+        code=code,
+        organization_name=organization_name,
+    )
+    return {"ok": True, "email_delivery": email_delivery}
+
+
+@router.post("/{token}/verify-code")
+async def verify_invite_code(token: str, body: InviteVerifyCodeRequest):
+    """Public — verify the 6-digit code sent via send-code."""
+    supabase = get_supabase_admin()
+    invite = _get_valid_invite(supabase, token)
+
+    code_hash = invite.get("email_code_hash")
+    expires_at = invite.get("email_code_expires_at")
+    if not code_hash or not expires_at:
+        raise HTTPException(status_code=400, detail="No verification code was sent. Request a new code.")
+    if _parse_iso(expires_at) < _now_utc():
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new one.")
+    if _hash_code((body.code or "").strip()) != code_hash:
+        raise HTTPException(status_code=400, detail="Incorrect code. Check your email and try again.")
+
+    supabase.table("invitations").update({
+        "email_verified_at": _now_utc().isoformat(),
+    }).eq("id", invite["id"]).execute()
+    return {"ok": True}
 
 
 @router.get("/members")
@@ -747,7 +839,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # ------------------------------------------------------------------
     result = (
         supabase.table("invitations")
-        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by, onboarding_id")
+        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by, onboarding_id, email_verified_at")
         .eq("token", token)
         .execute()
     )
@@ -761,6 +853,9 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
 
     if _parse_iso(invite["expires_at"]) < _now_utc():
         raise HTTPException(status_code=410, detail="This invitation has expired")
+
+    if invite.get("onboarding_id") and not invite.get("email_verified_at"):
+        raise HTTPException(status_code=403, detail="Please verify your email with the code we sent before continuing.")
 
     email = invite["email"]
     role  = invite["role"]
@@ -852,6 +947,12 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             onboarding_svc.migrate_documents_to_worker(invite["onboarding_id"], user_id, org_id)
         except Exception as e:
             logger.warning("accept_invite onboarding document handoff error (non-critical): %s", e)
+
+        try:
+            from ..services import resume_extraction_service as resume_svc
+            resume_svc.migrate_profile_to_worker(invite["onboarding_id"], user_id, org_id)
+        except Exception as e:
+            logger.warning("accept_invite resume profile handoff error (non-critical): %s", e)
 
     # ------------------------------------------------------------------
     # 5c. Auto-assign any mandatory (auto_assign_on_hire) training modules,

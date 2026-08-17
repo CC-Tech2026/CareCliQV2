@@ -241,6 +241,10 @@ from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 from .api import employee_onboarding as employee_onboarding_api
 app.include_router(employee_onboarding_api.router, prefix="/api")
+from .api import applicants as applicants_api
+app.include_router(applicants_api.router, prefix="/api")
+from .api import organization_branding as organization_branding_api
+app.include_router(organization_branding_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, UserPlus, HeartHandshake, GraduationCap, ChevronRight } from "lucide-react";
+import { GraduationCap, ChevronRight } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -10,19 +10,11 @@ const SOFT   = "var(--cc-soft)";
 const PLUM   = "var(--cc-plum)";
 const SURFACE = "var(--cc-surface)";
 
+// Staff onboarding itself now lives at /md/staff-onboarding (Applicants,
+// Hires, and Credentials/Training/Active oversight in one page). This hub
+// is left with just Training Programs — participant onboarding is owned
+// elsewhere and isn't linked from here.
 const AREAS = [
-  {
-    href: "/onboard-employee",
-    icon: UserPlus,
-    title: "Employee Onboarding",
-    description: "New hires: offer letter, service agreement, signatures, and login invite.",
-  },
-  {
-    href: "/onboard-participant",
-    icon: HeartHandshake,
-    title: "Participant Onboarding",
-    description: "New participant intakes: service agreement, consent form, signatures, and activation.",
-  },
   {
     href: "/md/onboarding/training",
     icon: GraduationCap,
@@ -39,17 +31,10 @@ export default function MDOnboardingPage() {
     <HubLayout>
       <div className="space-y-6 pb-10">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
-            style={{ color: MUTED, background: SOFT }}
-          >
-            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
-          </button>
           <div>
             <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
             <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-              Worker and participant onboarding flows, plus training programs for new starters.
+              Training programs for new starters.
             </p>
           </div>
         </div>

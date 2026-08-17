@@ -77,7 +77,7 @@ def _onboarding_workers(organization_id: str) -> list[dict[str, Any]]:
     return [r for r in (result.data or []) if not r.get("onboarding_completed")]
 
 
-def _credentials_blocked(worker_ids: list[str]) -> set[str]:
+def credentials_blocked(worker_ids: list[str]) -> set[str]:
     if not worker_ids:
         return set()
     try:
@@ -277,7 +277,7 @@ async def run_onboarding_escalation_pass() -> dict[str, int]:
             continue
         worker_ids = [str(w["id"]) for w in workers]
 
-        cred_blocked = _credentials_blocked(worker_ids)
+        cred_blocked = credentials_blocked(worker_ids)
         _upsert_stage_flags(org_id, "credentials", cred_blocked)
         _clear_resolved_stage_flags(org_id, "credentials", cred_blocked)
 

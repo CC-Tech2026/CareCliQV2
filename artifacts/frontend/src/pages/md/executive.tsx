@@ -1,22 +1,45 @@
-﻿import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
-  Users, UserCheck, Activity, ShieldCheck, AlertTriangle,
-  Target, TrendingUp, TrendingDown, Minus, BarChart2, ArrowLeft,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  Activity,
+  Target,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api-fetch";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { apiFetch } from "@/lib/api-fetch";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
-const AMBER = "#F59E0B";
+
+const GREEN = "#0F7B57";
+const AMBER = "#9A5B0A";
+const RED = "#B3261E";
+const BLUE = "#2A5C8A";
+
+const GREEN_SOFT = "#E9F5F0";
+const AMBER_SOFT = "#FBF2E6";
+const RED_SOFT = "#FBEAE9";
+const BLUE_SOFT = "#EAF1F7";
 
 interface MDData {
   active_participants: number;
@@ -28,11 +51,38 @@ interface MDData {
   compliance_target: number;
   incidents_this_month: number;
   goal_achievement_rate: number;
-  workers_at_risk: Array<{ id: string; full_name: string; compliance_score: number; sessions: number }>;
-  org_alerts: Array<{ type: string; severity: string; message: string }>;
-  common_issues: Array<{ issue: string; count: number }>;
-  team_compliance_breakdown: { compliant: number; at_risk: number; non_compliant: number };
-  worker_rankings: Array<{ id: string; full_name: string; compliance_score: number; sessions: number }>;
+
+  workers_at_risk: Array<{
+    id: string;
+    full_name: string;
+    compliance_score: number;
+    sessions: number;
+  }>;
+
+  org_alerts: Array<{
+    type: string;
+    severity: string;
+    message: string;
+  }>;
+
+  common_issues: Array<{
+    issue: string;
+    count: number;
+  }>;
+
+  team_compliance_breakdown: {
+    compliant: number;
+    at_risk: number;
+    non_compliant: number;
+  };
+
+  worker_rankings: Array<{
+    id: string;
+    full_name: string;
+    compliance_score: number;
+    sessions: number;
+  }>;
+
   generated_at: string;
 }
 
@@ -42,37 +92,300 @@ interface TrendPoint {
   session_count: number;
 }
 
-function TrendIcon({ value, target }: { value: number; target: number }) {
-  if (value >= target) return <TrendingUp size={14} strokeWidth={2.5} className="text-emerald-600" />;
-  if (value >= target * 0.9) return <Minus size={14} strokeWidth={2.5} className="text-amber-500" />;
-  return <TrendingDown size={14} strokeWidth={2.5} className="text-red-500" />;
+function formatDate(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
-function KpiCard({
-  label, value, sub, icon: Icon, accent, warn,
+function formatTime(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getHealthState(score: number, target: number) {
+  if (score >= target) {
+    return {
+      label: "Healthy",
+      color: GREEN,
+      soft: GREEN_SOFT,
+      icon: CheckCircle2,
+    };
+  }
+
+  if (score >= target * 0.9) {
+    return {
+      label: "Watch",
+      color: AMBER,
+      soft: AMBER_SOFT,
+      icon: CircleAlert,
+    };
+  }
+
+  return {
+    label: "Requires intervention",
+    color: RED,
+    soft: RED_SOFT,
+    icon: AlertTriangle,
+  };
+}
+
+function SectionEyebrow({
+  children,
+  right,
 }: {
-  label: string; value: string | number; sub?: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  accent?: string; warn?: boolean;
+  children: React.ReactNode;
+  right?: React.ReactNode;
 }) {
-  const color = warn ? "#EF4444" : accent ?? PLUM;
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>{label}</span>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: SOFT, color }}>
-          <Icon size={14} strokeWidth={2.5} />
-        </div>
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <span
+        className="text-[9px] font-black uppercase tracking-[0.18em]"
+        style={{ color: MUTED }}
+      >
+        {children}
+      </span>
+
+      {right}
+    </div>
+  );
+}
+
+function Signal({
+  label,
+  value,
+  detail,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: color }}
+        />
+
+        <span
+          className="truncate text-[9px] font-black uppercase tracking-[0.12em]"
+          style={{ color: MUTED }}
+        >
+          {label}
+        </span>
       </div>
-      <p className="text-2xl font-black leading-none" style={{ color: warn ? "#EF4444" : TEXT }}>{value}</p>
-      {sub && <p className="mt-1 text-[11px] font-medium" style={{ color: warn ? "#EF4444" : MUTED }}>{sub}</p>}
+
+      <p
+        className="mt-2 text-2xl font-black tracking-tight"
+        style={{ color: TEXT }}
+      >
+        {value}
+      </p>
+
+      <p
+        className="mt-1 text-[9px] font-medium"
+        style={{ color: MUTED }}
+      >
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function InterventionItem({
+  severity,
+  title,
+  detail,
+}: {
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+}) {
+  const config =
+    severity === "high"
+      ? {
+          color: RED,
+          background: RED_SOFT,
+        }
+      : severity === "medium"
+        ? {
+            color: AMBER,
+            background: AMBER_SOFT,
+          }
+        : {
+            color: BLUE,
+            background: BLUE_SOFT,
+          };
+
+  return (
+    <div className="group flex items-start gap-3 py-3.5">
+      <div
+        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+        style={{
+          color: config.color,
+          background: config.background,
+        }}
+      >
+        <AlertTriangle size={12} strokeWidth={2.5} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p
+          className="text-[10px] font-bold leading-4"
+          style={{ color: TEXT }}
+        >
+          {title}
+        </p>
+
+        <p
+          className="mt-0.5 text-[9px] leading-4"
+          style={{ color: MUTED }}
+        >
+          {detail}
+        </p>
+      </div>
+
+      <ChevronRight
+        size={12}
+        className="mt-1 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5"
+        style={{ color: TEXT }}
+      />
+    </div>
+  );
+}
+
+function GovernanceMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  status,
+  statusColor,
+}: {
+  icon: React.ComponentType<{
+    size?: number;
+    strokeWidth?: number;
+  }>;
+  label: string;
+  value: string;
+  detail: string;
+  status: string;
+  statusColor: string;
+}) {
+  return (
+    <div className="relative">
+      <div className="mb-4 flex items-center justify-between">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-lg"
+          style={{
+            background: SOFT,
+            color: PLUM,
+          }}
+        >
+          <Icon size={14} strokeWidth={2.4} />
+        </div>
+
+        <span
+          className="text-[9px] font-black uppercase tracking-wide"
+          style={{ color: statusColor }}
+        >
+          {status}
+        </span>
+      </div>
+
+      <p
+        className="text-[9px] font-black uppercase tracking-[0.13em]"
+        style={{ color: MUTED }}
+      >
+        {label}
+      </p>
+
+      <p
+        className="mt-1.5 text-2xl font-black tracking-tight"
+        style={{ color: TEXT }}
+      >
+        {value}
+      </p>
+
+      <p
+        className="mt-1 text-[9px] leading-4"
+        style={{ color: MUTED }}
+      >
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <div
+          className="h-2.5 w-28 animate-pulse rounded"
+          style={{ background: SOFT }}
+        />
+
+        <div
+          className="h-9 w-72 animate-pulse rounded-lg"
+          style={{ background: SOFT }}
+        />
+
+        <div
+          className="h-3 w-96 max-w-full animate-pulse rounded"
+          style={{ background: SOFT }}
+        />
+      </div>
+
+      <div
+        className="h-[390px] animate-pulse rounded-3xl"
+        style={{ background: SOFT }}
+      />
+
+      <div
+        className="h-[340px] animate-pulse rounded-3xl"
+        style={{ background: SOFT }}
+      />
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        {[1, 2, 3].map((item) => (
+          <div
+            key={item}
+            className="h-48 animate-pulse rounded-2xl"
+            style={{ background: SOFT }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
 export default function MDExecutivePage() {
-  const { translate, translateParams } = useAccessibility();
-  const [, navigate] = useLocation();
+  const { translate } = useAccessibility();
+
   const [data, setData] = useState<MDData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,164 +393,993 @@ export default function MDExecutivePage() {
 
   useEffect(() => {
     let cancelled = false;
+
     Promise.all([
-      apiFetch("/api/dashboard/managing-director").then((r) => (r.ok ? r.json() : Promise.reject())),
-      apiFetch("/api/dashboard/compliance-trend").then((r) => (r.ok ? r.json() : { trend: [] })),
+      apiFetch("/api/dashboard/managing-director").then((response) =>
+        response.ok ? response.json() : Promise.reject()
+      ),
+      apiFetch("/api/dashboard/compliance-trend").then((response) =>
+        response.ok ? response.json() : { trend: [] }
+      ),
     ])
-      .then(([md, tr]) => { if (!cancelled) { setData(md); setTrend(tr.trend ?? []); } })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then(([md, trendResponse]) => {
+        if (cancelled) return;
+
+        setData(md);
+        setTrend(trendResponse?.trend ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const chartData = trend
-    .filter((t) => t.avg_score !== null)
-    .slice(-13)
-    .map((t) => ({ week: t.week.replace(/^\d{4}-/, ""), score: t.avg_score }));
+  const chartData = useMemo(() => {
+    return trend
+      .filter((item) => item.avg_score !== null)
+      .slice(-13)
+      .map((item) => ({
+        week: item.week.replace(/^\d{4}-/, ""),
+        score: item.avg_score,
+        sessions: item.session_count,
+      }));
+  }, [trend]);
+
+  const trendChange = useMemo(() => {
+    if (chartData.length < 2) return null;
+
+    const current = Number(chartData[chartData.length - 1].score ?? 0);
+    const previous = Number(chartData[chartData.length - 2].score ?? 0);
+
+    return Math.round((current - previous) * 10) / 10;
+  }, [chartData]);
+
+  const compliantPercentage = useMemo(() => {
+    if (!data) return 0;
+
+    const {
+      compliant,
+      at_risk,
+      non_compliant,
+    } = data.team_compliance_breakdown;
+
+    const total = compliant + at_risk + non_compliant;
+
+    if (!total) return 0;
+
+    return Math.round((compliant / total) * 100);
+  }, [data]);
+
+  const attentionItems = useMemo(() => {
+    if (!data) return [];
+
+    const alerts = data.org_alerts.map((alert, index) => ({
+      id: `alert-${index}`,
+      severity:
+        alert.severity === "high"
+          ? ("high" as const)
+          : alert.severity === "medium"
+            ? ("medium" as const)
+            : ("low" as const),
+      title: alert.message,
+      detail: "Organisation alert",
+    }));
+
+    const workers = data.workers_at_risk.map((worker) => ({
+      id: worker.id,
+      severity:
+        worker.compliance_score < 70
+          ? ("high" as const)
+          : ("medium" as const),
+      title: `${worker.full_name} requires attention`,
+      detail: `${worker.compliance_score}% compliance · ${worker.sessions} sessions`,
+    }));
+
+    return [...alerts, ...workers].slice(0, 6);
+  }, [data]);
+
+  if (loading) {
+    return (
+      <HubLayout>
+        <LoadingState />
+      </HubLayout>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <HubLayout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="max-w-sm text-center">
+            <div
+              className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{
+                background: RED_SOFT,
+                color: RED,
+              }}
+            >
+              <AlertTriangle size={20} strokeWidth={2.5} />
+            </div>
+
+            <h2
+              className="mt-4 text-base font-black"
+              style={{ color: TEXT }}
+            >
+              {translate("md.executive.loadFailed")}
+            </h2>
+
+            <p
+              className="mt-1 text-[11px] leading-5"
+              style={{ color: MUTED }}
+            >
+              We couldn't load the executive overview.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-5 rounded-xl px-4 py-2 text-[10px] font-black text-white"
+              style={{ background: PLUM }}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </HubLayout>
+    );
+  }
+
+  const health = getHealthState(
+    data.compliance_score,
+    data.compliance_target
+  );
+
+  const HealthIcon = health.icon;
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-10">
-        {/* Page header */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
-            style={{ color: MUTED, background: SOFT }}
-          >
-            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
-          </button>
-          <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.executive.title")}</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.executive.subtitle")}</p>
-          </div>
-          <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: AMBER }}>
-            <BarChart2 size={16} strokeWidth={2.5} />
-          </div>
-        </div>
+      <main className="pb-14">
+        {/* ============================================================
+            HEADER
+        ============================================================ */}
+        <header className="mb-9">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className="text-[9px] font-black uppercase tracking-[0.2em]"
+                  style={{ color: PLUM }}
+                >
+                  Executive command centre
+                </span>
 
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl" style={{ background: SOFT }} />)}
-          </div>
-        ) : error || !data ? (
-          <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
-            <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-            <p className="font-black" style={{ color: TEXT }}>{translate("md.executive.loadFailed")}</p>
-          </div>
-        ) : (
-          <>
-            {/* KPI Grid */}
-            <section>
-              <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{translate("md.executive.kpiSection")}</p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <KpiCard label={translate("md.executive.activeParticipants")} value={data.active_participants} icon={Users} accent={PLUM} />
-                <KpiCard label={translate("md.executive.activeStaff")} value={data.active_staff} sub={translateParams("md.executive.retentionSub", { rate: String(data.staff_retention_rate) })} icon={UserCheck} accent="#10B981" />
-                <KpiCard label={translate("md.executive.sessionsWeek")} value={data.sessions_this_week} icon={Activity} accent="#0EA5E9" />
-                <KpiCard
-                  label={translate("md.executive.complianceScore")}
-                  value={`${data.compliance_score}%`}
-                  sub={data.compliance_score < data.compliance_target ? translateParams("md.executive.belowTarget", { target: String(data.compliance_target) }) : translateParams("md.executive.targetMet", { target: String(data.compliance_target) })}
-                  icon={ShieldCheck}
-                  warn={data.compliance_score < data.compliance_target}
+                <span
+                  className="h-1 w-1 rounded-full"
+                  style={{ background: BORDER }}
                 />
-                <KpiCard label={translate("md.executive.incidentsMonth")} value={data.incidents_this_month} icon={AlertTriangle} accent="#F97316" warn={data.incidents_this_month >= 3} />
-                <KpiCard label={translate("md.executive.goalAchievement")} value={`${data.goal_achievement_rate}%`} icon={Target} accent="#10B981" />
-                <KpiCard label={translate("md.executive.supportWorkers")} value={data.support_workers} icon={Users} accent={PLUM} />
-                <KpiCard label={translate("md.executive.workersAtRisk")} value={data.workers_at_risk.length} icon={TrendingDown} warn={data.workers_at_risk.length > 0} />
-              </div>
-            </section>
 
-            {/* Trend Indicators */}
-            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-              <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.trendsTitle")}</h2>
-              <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>{translate("md.executive.trendsSub")}</p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  { label: translate("md.executive.trend.compliance"), value: data.compliance_score, target: data.compliance_target },
-                  { label: translate("md.executive.trend.goals"), value: data.goal_achievement_rate, target: 85 },
-                  { label: translate("md.executive.trend.retention"), value: data.staff_retention_rate, target: 90 },
-                  { label: translate("md.executive.trend.compliantSessions"), value: data.team_compliance_breakdown.compliant > 0 ? Math.round((data.team_compliance_breakdown.compliant / Math.max(data.team_compliance_breakdown.compliant + data.team_compliance_breakdown.at_risk + data.team_compliance_breakdown.non_compliant, 1)) * 100) : 0, target: 80 },
-                ].map(({ label, value, target }) => (
-                  <div key={label} className="flex items-center gap-3 rounded-xl p-3" style={{ background: SOFT }}>
-                    <TrendIcon value={value} target={target} />
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
-                      <p className="text-[14px] font-black" style={{ color: TEXT }}>{value}%</p>
+                <span
+                  className="text-[9px] font-bold"
+                  style={{ color: MUTED }}
+                >
+                  {formatDate(data.generated_at)}
+                </span>
+              </div>
+
+              <h1
+                className="mt-2 text-[28px] font-black tracking-[-0.035em] sm:text-[34px]"
+                style={{ color: TEXT }}
+              >
+                Organisation at a glance.
+              </h1>
+
+              <p
+                className="mt-1 max-w-xl text-[12px] leading-5"
+                style={{ color: MUTED }}
+              >
+                A governance view of compliance, workforce health and
+                service delivery.
+              </p>
+            </div>
+
+            <div className="hidden text-right sm:block">
+              <p
+                className="text-[9px] font-black uppercase tracking-[0.15em]"
+                style={{ color: MUTED }}
+              >
+                Last updated
+              </p>
+
+              <p
+                className="mt-1 text-[10px] font-bold"
+                style={{ color: TEXT }}
+              >
+                {formatTime(data.generated_at)}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        {/* ============================================================
+            ORGANISATION HEALTH + ATTENTION
+        ============================================================ */}
+        <section
+          className="overflow-hidden rounded-[28px] border bg-white"
+          style={{ borderColor: BORDER }}
+        >
+          <div className="grid lg:grid-cols-[minmax(0,1.55fr)_360px]">
+            {/* Organisation health */}
+            <div className="relative min-h-[370px] overflow-hidden p-7 sm:p-9">
+              <div
+                className="pointer-events-none absolute -right-24 -top-24 h-[340px] w-[340px] rounded-full opacity-50 blur-3xl"
+                style={{ background: `${PLUM}16` }}
+              />
+
+              <div className="relative">
+                <SectionEyebrow
+                  right={
+                    <div
+                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5"
+                      style={{
+                        color: health.color,
+                        background: health.soft,
+                      }}
+                    >
+                      <HealthIcon size={11} strokeWidth={2.7} />
+
+                      <span className="text-[9px] font-black">
+                        {health.label}
+                      </span>
                     </div>
+                  }
+                >
+                  Organisation health
+                </SectionEyebrow>
+
+                <div className="mt-8 flex flex-wrap items-end gap-x-5 gap-y-3">
+                  <span
+                    className="text-[78px] font-black leading-[0.8] tracking-[-0.075em] sm:text-[94px]"
+                    style={{ color: TEXT }}
+                  >
+                    {data.compliance_score}%
+                  </span>
+
+                  <div className="mb-1">
+                    <div className="flex items-center gap-1.5">
+                      {trendChange !== null && (
+                        <>
+                          {trendChange >= 0 ? (
+                            <TrendingUp
+                              size={14}
+                              strokeWidth={2.8}
+                              style={{ color: GREEN }}
+                            />
+                          ) : (
+                            <TrendingDown
+                              size={14}
+                              strokeWidth={2.8}
+                              style={{ color: RED }}
+                            />
+                          )}
+
+                          <span
+                            className="text-[11px] font-black"
+                            style={{
+                              color:
+                                trendChange >= 0 ? GREEN : RED,
+                            }}
+                          >
+                            {trendChange >= 0 ? "+" : ""}
+                            {trendChange} pts
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <p
+                      className="mt-1 text-[9px] font-medium"
+                      style={{ color: MUTED }}
+                    >
+                      versus previous period
+                    </p>
                   </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 90-day Compliance Chart */}
-            {chartData.length > 1 && (
-              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.chartTitle")}</h2>
-                <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>{translate("md.executive.chartSub")}</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: MUTED }} />
-                    <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
-                    <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 2" label={{ value: translateParams("md.executive.chartTarget", { target: String(data.compliance_target) }), position: "right", fontSize: 9, fill: AMBER }} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }} formatter={(v: number) => [`${v}%`, translate("md.executive.chartAvgScore")]} />
-                    <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </section>
-            )}
-
-            {/* Org Alerts */}
-            {data.org_alerts.length > 0 && (
-              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.orgAlerts")}</h2>
-                <div className="space-y-2">
-                  {data.org_alerts.map((alert, i) => {
-                    const sev = alert.severity;
-                    const cls = sev === "high" ? "bg-red-50 border-red-200 text-red-700"
-                      : sev === "medium" ? "bg-amber-50 border-amber-200 text-amber-700"
-                      : "bg-blue-50 border-blue-200 text-blue-700";
-                    return (
-                      <div key={i} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${cls}`}>
-                        <AlertTriangle size={12} strokeWidth={2.5} className="mt-0.5 shrink-0" />
-                        {alert.message}
-                      </div>
-                    );
-                  })}
                 </div>
-              </section>
-            )}
 
-            {/* Worker Rankings */}
-            {data.worker_rankings.length > 0 && (
-              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.topWorkers")}</h2>
-                <div className="space-y-2">
-                  {data.worker_rankings.slice(0, 8).map((w, i) => (
-                    <div key={w.id} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ background: i === 0 ? "#F0FDF4" : SOFT }}>
-                      <span className="w-5 text-[11px] font-black text-center" style={{ color: i < 3 ? "#10B981" : MUTED }}>
-                        {i + 1}
-                      </span>
-                      <span className="flex-1 text-[12px] font-semibold" style={{ color: TEXT }}>{w.full_name}</span>
-                      <span className="text-[11px] font-medium" style={{ color: MUTED }}>{translateParams("md.executive.sessionsCount", { count: String(w.sessions) })}</span>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-black"
-                        style={{
-                          background: w.compliance_score >= 85 ? "#D1FAE5" : w.compliance_score >= 70 ? "#FEF3C7" : "#FEE2E2",
-                          color: w.compliance_score >= 85 ? "#065F46" : w.compliance_score >= 70 ? "#92400E" : "#991B1B",
-                        }}
-                      >
-                        {w.compliance_score}%
-                      </span>
-                    </div>
+                <p
+                  className="mt-6 max-w-md text-[11px] leading-5"
+                  style={{ color: MUTED }}
+                >
+                  Organisation-wide compliance is currently{" "}
+                  <strong style={{ color: TEXT }}>
+                    {data.compliance_score >= data.compliance_target
+                      ? "above"
+                      : "below"}
+                  </strong>{" "}
+                  the {data.compliance_target}% governance target.
+                </p>
+
+                {/* Signal strip */}
+                <div
+                  className="mt-9 grid max-w-2xl grid-cols-3 border-y py-5"
+                  style={{ borderColor: BORDER }}
+                >
+                  <Signal
+                    label="Compliance"
+                    value={`${data.compliance_score}%`}
+                    detail={`Target ${data.compliance_target}%`}
+                    color={health.color}
+                  />
+
+                  <Signal
+                    label="Goals"
+                    value={`${data.goal_achievement_rate}%`}
+                    detail="Achievement rate"
+                    color={
+                      data.goal_achievement_rate >= 85
+                        ? GREEN
+                        : AMBER
+                    }
+                  />
+
+                  <Signal
+                    label="Retention"
+                    value={`${data.staff_retention_rate}%`}
+                    detail="Staff retention"
+                    color={
+                      data.staff_retention_rate >= 90
+                        ? GREEN
+                        : AMBER
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Attention rail */}
+            <aside
+              className="border-t p-6 sm:p-7 lg:border-l lg:border-t-0"
+              style={{ borderColor: BORDER }}
+            >
+              <SectionEyebrow
+                right={
+                  attentionItems.length > 0 ? (
+                    <span
+                      className="rounded-full px-2 py-1 text-[8px] font-black"
+                      style={{
+                        background: RED_SOFT,
+                        color: RED,
+                      }}
+                    >
+                      {attentionItems.length} active
+                    </span>
+                  ) : null
+                }
+              >
+                Needs your attention
+              </SectionEyebrow>
+
+              {attentionItems.length === 0 ? (
+                <div className="flex h-[270px] flex-col items-center justify-center text-center">
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-full"
+                    style={{
+                      background: GREEN_SOFT,
+                      color: GREEN,
+                    }}
+                  >
+                    <CheckCircle2 size={19} strokeWidth={2.4} />
+                  </div>
+
+                  <p
+                    className="mt-4 text-[11px] font-black"
+                    style={{ color: TEXT }}
+                  >
+                    Nothing requiring intervention
+                  </p>
+
+                  <p
+                    className="mt-1 max-w-[190px] text-[9px] leading-4"
+                    style={{ color: MUTED }}
+                  >
+                    Your organisation currently has no flagged
+                    executive issues.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: BORDER }}>
+                  {attentionItems.map((item) => (
+                    <InterventionItem
+                      key={item.id}
+                      severity={item.severity}
+                      title={item.title}
+                      detail={item.detail}
+                    />
                   ))}
                 </div>
-              </section>
+              )}
+            </aside>
+          </div>
+        </section>
+
+        {/* ============================================================
+            TREND
+        ============================================================ */}
+        <section className="mt-8">
+          <SectionEyebrow
+            right={
+              chartData.length > 0 ? (
+                <span
+                  className="text-[9px] font-bold"
+                  style={{ color: MUTED }}
+                >
+                  Last 90 days
+                </span>
+              ) : null
+            }
+          >
+            Compliance performance
+          </SectionEyebrow>
+
+          <div
+            className="overflow-hidden rounded-[28px] border bg-white"
+            style={{ borderColor: BORDER }}
+          >
+            <div className="flex flex-wrap items-end justify-between gap-5 px-6 pt-7 sm:px-8">
+              <div>
+                <h2
+                  className="text-xl font-black tracking-tight"
+                  style={{ color: TEXT }}
+                >
+                  Is performance moving in the right direction?
+                </h2>
+
+                <p
+                  className="mt-1 max-w-xl text-[10px] leading-5"
+                  style={{ color: MUTED }}
+                >
+                  Weekly compliance averages provide a high-level
+                  indication of organisational performance over time.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-5">
+                <div>
+                  <p
+                    className="text-[8px] font-black uppercase tracking-[0.14em]"
+                    style={{ color: MUTED }}
+                  >
+                    Current
+                  </p>
+
+                  <p
+                    className="mt-1 text-lg font-black"
+                    style={{ color: TEXT }}
+                  >
+                    {data.compliance_score}%
+                  </p>
+                </div>
+
+                <div
+                  className="h-8 w-px"
+                  style={{ background: BORDER }}
+                />
+
+                <div>
+                  <p
+                    className="text-[8px] font-black uppercase tracking-[0.14em]"
+                    style={{ color: MUTED }}
+                  >
+                    Target
+                  </p>
+
+                  <p
+                    className="mt-1 text-lg font-black"
+                    style={{ color: AMBER }}
+                  >
+                    {data.compliance_target}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {chartData.length > 1 ? (
+              <div className="mt-5 h-[350px] w-full px-2 pb-4 sm:px-5">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={chartData}
+                    margin={{
+                      top: 20,
+                      right: 25,
+                      bottom: 5,
+                      left: -15,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="2 5"
+                      stroke={BORDER}
+                      vertical={false}
+                    />
+
+                    <XAxis
+                      dataKey="week"
+                      tick={{
+                        fontSize: 9,
+                        fill: MUTED,
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <YAxis
+                      domain={[50, 100]}
+                      tick={{
+                        fontSize: 9,
+                        fill: MUTED,
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <ReferenceLine
+                      y={data.compliance_target}
+                      stroke={AMBER}
+                      strokeDasharray="6 5"
+                      label={{
+                        value: `TARGET ${data.compliance_target}%`,
+                        position: "insideTopRight",
+                        fontSize: 8,
+                        fontWeight: 800,
+                        fill: AMBER,
+                      }}
+                    />
+
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: `1px solid ${BORDER}`,
+                        boxShadow:
+                          "0 10px 30px rgba(0,0,0,0.08)",
+                        fontSize: 10,
+                      }}
+                      labelStyle={{
+                        color: TEXT,
+                        fontWeight: 800,
+                      }}
+                      formatter={(value: number) => [
+                        `${value}%`,
+                        "Compliance",
+                      ]}
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      stroke={PLUM}
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{
+                        r: 5,
+                        fill: PLUM,
+                      }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div
+                className="mx-6 my-6 flex h-[280px] items-center justify-center rounded-2xl sm:mx-8"
+                style={{ background: SOFT }}
+              >
+                <div className="text-center">
+                  <Activity
+                    size={20}
+                    className="mx-auto"
+                    style={{ color: MUTED }}
+                  />
+
+                  <p
+                    className="mt-3 text-[11px] font-black"
+                    style={{ color: TEXT }}
+                  >
+                    Building your performance trend
+                  </p>
+
+                  <p
+                    className="mt-1 text-[9px]"
+                    style={{ color: MUTED }}
+                  >
+                    More completed sessions will provide historical
+                    trend data.
+                  </p>
+                </div>
+              </div>
             )}
-          </>
+          </div>
+        </section>
+
+        {/* ============================================================
+            GOVERNANCE SIGNALS
+        ============================================================ */}
+        <section className="mt-8">
+          <SectionEyebrow>
+            Executive signals
+          </SectionEyebrow>
+
+          <div
+            className="grid overflow-hidden rounded-[28px] border bg-white lg:grid-cols-3"
+            style={{ borderColor: BORDER }}
+          >
+            {/* Workforce */}
+            <div className="p-6 sm:p-7 lg:border-r" style={{ borderColor: BORDER }}>
+              <GovernanceMetric
+                icon={Users}
+                label="Workforce"
+                value={String(data.active_staff)}
+                detail={`${data.support_workers} support workers · ${data.staff_retention_rate}% retention`}
+                status={
+                  data.workers_at_risk.length === 0
+                    ? "Stable"
+                    : `${data.workers_at_risk.length} at risk`
+                }
+                statusColor={
+                  data.workers_at_risk.length === 0
+                    ? GREEN
+                    : AMBER
+                }
+              />
+
+              <div className="mt-6">
+                <div
+                  className="h-1.5 overflow-hidden rounded-full"
+                  style={{ background: SOFT }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(
+                        data.staff_retention_rate,
+                        100
+                      )}%`,
+                      background:
+                        data.staff_retention_rate >= 90
+                          ? GREEN
+                          : AMBER,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Service delivery */}
+            <div
+              className="border-t p-6 sm:p-7 lg:border-r lg:border-t-0"
+              style={{ borderColor: BORDER }}
+            >
+              <GovernanceMetric
+                icon={Activity}
+                label="Service delivery"
+                value={String(data.sessions_this_week)}
+                detail={`${data.active_participants} active participants receiving support`}
+                status={`${data.goal_achievement_rate}% goals`}
+                statusColor={
+                  data.goal_achievement_rate >= 85
+                    ? GREEN
+                    : AMBER
+                }
+              />
+
+              <div className="mt-6 flex items-center gap-3">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{
+                    background: BLUE_SOFT,
+                    color: BLUE,
+                  }}
+                >
+                  <Target size={14} strokeWidth={2.4} />
+                </div>
+
+                <div>
+                  <p
+                    className="text-[9px] font-black uppercase tracking-wide"
+                    style={{ color: MUTED }}
+                  >
+                    Goal achievement
+                  </p>
+
+                  <p
+                    className="mt-0.5 text-[11px] font-black"
+                    style={{ color: TEXT }}
+                  >
+                    {data.goal_achievement_rate}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Governance */}
+            <div className="border-t p-6 sm:p-7 lg:border-t-0">
+              <GovernanceMetric
+                icon={ShieldCheck}
+                label="Governance"
+                value={`${compliantPercentage}%`}
+                detail={`${data.incidents_this_month} incidents recorded this month`}
+                status={
+                  data.compliance_score >= data.compliance_target
+                    ? "On target"
+                    : "Below target"
+                }
+                statusColor={
+                  data.compliance_score >= data.compliance_target
+                    ? GREEN
+                    : RED
+                }
+              />
+
+              <div className="mt-6 flex items-center gap-3">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{
+                    background:
+                      data.incidents_this_month >= 3
+                        ? RED_SOFT
+                        : GREEN_SOFT,
+                    color:
+                      data.incidents_this_month >= 3
+                        ? RED
+                        : GREEN,
+                  }}
+                >
+                  <AlertTriangle
+                    size={14}
+                    strokeWidth={2.4}
+                  />
+                </div>
+
+                <div>
+                  <p
+                    className="text-[9px] font-black uppercase tracking-wide"
+                    style={{ color: MUTED }}
+                  >
+                    Incidents
+                  </p>
+
+                  <p
+                    className="mt-0.5 text-[11px] font-black"
+                    style={{ color: TEXT }}
+                  >
+                    {data.incidents_this_month} this month
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================
+            COMPLIANCE DISTRIBUTION
+        ============================================================ */}
+        <section className="mt-8">
+          <SectionEyebrow>
+            Compliance composition
+          </SectionEyebrow>
+
+          <div
+            className="rounded-[28px] border bg-white p-6 sm:p-8"
+            style={{ borderColor: BORDER }}
+          >
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
+              <div className="min-w-[210px]">
+                <p
+                  className="text-4xl font-black tracking-tight"
+                  style={{ color: TEXT }}
+                >
+                  {data.team_compliance_breakdown.compliant +
+                    data.team_compliance_breakdown.at_risk +
+                    data.team_compliance_breakdown.non_compliant}
+                </p>
+
+                <p
+                  className="mt-1 text-[10px] font-medium"
+                  style={{ color: MUTED }}
+                >
+                  monitored compliance records
+                </p>
+              </div>
+
+              <div className="flex-1">
+                <div
+                  className="flex h-4 overflow-hidden rounded-full"
+                  style={{ background: SOFT }}
+                >
+                  {(() => {
+                    const total =
+                      data.team_compliance_breakdown.compliant +
+                      data.team_compliance_breakdown.at_risk +
+                      data.team_compliance_breakdown.non_compliant;
+
+                    if (!total) return null;
+
+                    return (
+                      <>
+                        <div
+                          style={{
+                            width: `${
+                              (data.team_compliance_breakdown.compliant /
+                                total) *
+                              100
+                            }%`,
+                            background: GREEN,
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            width: `${
+                              (data.team_compliance_breakdown.at_risk /
+                                total) *
+                              100
+                            }%`,
+                            background: AMBER,
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            width: `${
+                              (data.team_compliance_breakdown
+                                .non_compliant /
+                                total) *
+                              100
+                            }%`,
+                            background: RED,
+                          }}
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                  <CompositionItem
+                    label="Compliant"
+                    value={
+                      data.team_compliance_breakdown.compliant
+                    }
+                    color={GREEN}
+                  />
+
+                  <CompositionItem
+                    label="At risk"
+                    value={data.team_compliance_breakdown.at_risk}
+                    color={AMBER}
+                  />
+
+                  <CompositionItem
+                    label="Non-compliant"
+                    value={
+                      data.team_compliance_breakdown.non_compliant
+                    }
+                    color={RED}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================
+            COMMON ISSUES
+        ============================================================ */}
+        {data.common_issues.length > 0 && (
+          <section className="mt-8">
+            <SectionEyebrow>
+              Recurring issues
+            </SectionEyebrow>
+
+            <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              {data.common_issues.slice(0, 6).map((issue) => (
+                <div
+                  key={issue.issue}
+                  className="flex items-center gap-3 border-b pb-3"
+                  style={{ borderColor: BORDER }}
+                >
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                    style={{
+                      background: AMBER_SOFT,
+                      color: AMBER,
+                    }}
+                  >
+                    <CircleAlert size={11} strokeWidth={2.5} />
+                  </span>
+
+                  <span
+                    className="min-w-0 flex-1 text-[10px] font-bold"
+                    style={{ color: TEXT }}
+                  >
+                    {issue.issue}
+                  </span>
+
+                  <span
+                    className="text-[10px] font-black"
+                    style={{ color: MUTED }}
+                  >
+                    {issue.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
-      </div>
+
+        {/* Footer */}
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+          <p
+            className="text-[9px] font-medium"
+            style={{ color: MUTED }}
+          >
+            CareCliQ executive governance view
+          </p>
+
+          <div className="flex items-center gap-2">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: health.color }}
+            />
+
+            <span
+              className="text-[9px] font-bold"
+              style={{ color: MUTED }}
+            >
+              {health.label}
+            </span>
+          </div>
+        </footer>
+      </main>
     </HubLayout>
+  );
+}
+
+function CompositionItem({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ background: color }}
+      />
+
+      <span
+        className="text-[10px] font-bold"
+        style={{ color: TEXT }}
+      >
+        {label}
+      </span>
+
+      <span
+        className="ml-auto text-[10px] font-black"
+        style={{ color }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

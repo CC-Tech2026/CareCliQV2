@@ -15,6 +15,7 @@ from .notification_service import (
 )
 from .incident_notification_service import run_incident_notification_pass
 from .medication_pattern_service import run_medication_pattern_pass
+from .applicant_stage_reminder_service import run_applicant_stage_reminder_pass
 from .medication_reminder_service import run_medication_reminder_pass, send_pending_dose_reminders
 from .offer_letter_reminder_service import run_offer_letter_reminder_pass
 from .onboarding_escalation_service import run_onboarding_escalation_pass
@@ -161,7 +162,7 @@ async def run_notification_pass() -> dict[str, int]:
         random_checkin_count, medication_count, incident_notification_count,
         medication_pattern_count, dose_reminder_count, retention_count,
         screening_recheck_count, onboarding_escalation_stats,
-        offer_letter_stats,
+        offer_letter_stats, applicant_stage_reminder_count,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -176,6 +177,7 @@ async def run_notification_pass() -> dict[str, int]:
         run_screening_recheck_pass(),
         run_onboarding_escalation_pass(),
         run_offer_letter_reminder_pass(),
+        run_applicant_stage_reminder_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -193,6 +195,7 @@ async def run_notification_pass() -> dict[str, int]:
         "onboarding_stage_escalations": onboarding_escalation_stats["escalations"],
         "offer_letter_reminders": offer_letter_stats["reminders"],
         "offer_letter_expirations": offer_letter_stats["expirations"],
+        "applicant_stage_reminders": applicant_stage_reminder_count,
     }
 
 

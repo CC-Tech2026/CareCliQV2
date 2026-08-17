@@ -20,6 +20,7 @@ import {
   User,
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { OtpInput } from "@/components/auth/OtpInput";
 import { uploadProfilePhoto } from "@/services/userService";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -253,6 +254,7 @@ interface InviteInfo {
   organization_id?: string;
   organization_name: string | null;
   expires_at: string;
+  requires_email_code?: boolean;
 }
 
 export default function Signup() {
@@ -271,6 +273,12 @@ export default function Signup() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteLoading, setInviteLoading] = useState(Boolean(urlInviteToken));
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [emailCodeVerified, setEmailCodeVerified] = useState(false);
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeError, setEmailCodeError] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
@@ -294,7 +302,7 @@ export default function Signup() {
             typeof detail === "string" ? detail : t("auth.invite.invalidOrExpired"),
           );
         }
-        return r.json() as Promise<Omit<InviteInfo, "token"> & { token?: string }>;
+        return r.json() as Promise<Omit<InviteInfo, "token"> & { token?: string; email_verified?: boolean }>;
       })
       .then((data) => {
         if (cancelled) return;
@@ -305,7 +313,9 @@ export default function Signup() {
           organization_id: data.organization_id,
           organization_name: data.organization_name,
           expires_at: data.expires_at,
+          requires_email_code: data.requires_email_code,
         });
+        setEmailCodeVerified(Boolean(data.email_verified));
         setForm((prev) => ({
           ...prev,
           email: data.email || "",
@@ -325,6 +335,51 @@ export default function Signup() {
       cancelled = true;
     };
   }, [urlInviteToken, t]);
+
+  const needsEmailCode = Boolean(invite?.requires_email_code) && !emailCodeVerified;
+
+  const sendEmailCode = useCallback(async () => {
+    if (!invite?.token) return;
+    setCodeBusy(true);
+    setEmailCodeError(null);
+    try {
+      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/send-code`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("auth.invite.codeSendFailed"));
+      setCodeSent(true);
+      setCodeMessage(data.message || null);
+    } catch (e) {
+      setEmailCodeError(e instanceof Error ? e.message : t("auth.invite.codeSendFailed"));
+    } finally {
+      setCodeBusy(false);
+    }
+  }, [invite?.token, t]);
+
+  useEffect(() => {
+    if (needsEmailCode && !codeSent && !codeBusy) {
+      sendEmailCode();
+    }
+  }, [needsEmailCode, codeSent, codeBusy, sendEmailCode]);
+
+  async function handleVerifyCode() {
+    if (!invite?.token || emailCode.length !== 6 || codeBusy) return;
+    setCodeBusy(true);
+    setEmailCodeError(null);
+    try {
+      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/verify-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: emailCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("auth.invite.codeInvalid"));
+      setEmailCodeVerified(true);
+    } catch (e) {
+      setEmailCodeError(e instanceof Error ? e.message : t("auth.invite.codeInvalid"));
+    } finally {
+      setCodeBusy(false);
+    }
+  }
 
   const updateField = useCallback((f: keyof FormData, v: string) => {
     setForm((p) => ({
@@ -707,6 +762,66 @@ export default function Signup() {
           <a href="/login" className="text-sm font-medium underline underline-offset-2" style={{ color: PLUM }}>
             {t("auth.invite.goToSignIn")}
           </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (invite && needsEmailCode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--auth-shell-bg)] px-4">
+        <div
+          className="w-full max-w-md rounded-3xl p-8 space-y-5 border bg-[var(--auth-form-bg)]"
+          style={{ borderColor: "var(--auth-card-border)" }}
+        >
+          <div className="text-center space-y-1.5">
+            <h2 className="text-xl font-bold" style={{ color: "var(--cc-text)" }}>{t("auth.invite.verifyTitle")}</h2>
+            <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+              {translateParams("auth.invite.verifySubtitle", { email: invite.email })}
+            </p>
+          </div>
+
+          <div>
+            <label id="invite-code-label" className="text-[11px] font-black uppercase tracking-wider mb-3 block" style={{ color: "var(--cc-muted)" }}>
+              {t("auth.invite.verificationCode")}
+            </label>
+            <OtpInput
+              ariaLabelledBy="invite-code-label"
+              value={emailCode}
+              onChange={(v) => { setEmailCode(v); if (emailCodeError) setEmailCodeError(null); }}
+              disabled={codeBusy}
+              error={!!emailCodeError}
+            />
+            {emailCodeError && (
+              <p className="mt-2 text-[12px] font-medium" style={{ color: CORAL }}>{emailCodeError}</p>
+            )}
+            {!emailCodeError && codeMessage && (
+              <p className="mt-2 text-[12px] font-medium" style={{ color: "var(--cc-muted)" }}>{codeMessage}</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleVerifyCode}
+            disabled={codeBusy || emailCode.length !== 6}
+            className="w-full h-12 rounded-xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
+            style={{ background: "var(--cc-cta)" }}
+          >
+            {codeBusy
+              ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.invite.verifying")}</span></>
+              : <><span>{t("auth.invite.verify")}</span><ArrowRight size={16} strokeWidth={2.5} /></>
+            }
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setCodeSent(false); sendEmailCode(); }}
+            disabled={codeBusy}
+            className="w-full text-center text-[13px] font-bold transition-opacity hover:opacity-75 disabled:opacity-40"
+            style={{ color: PLUM }}
+          >
+            {t("auth.invite.resendCode")}
+          </button>
         </div>
       </div>
     );

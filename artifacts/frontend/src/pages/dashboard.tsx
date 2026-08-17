@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
@@ -1200,6 +1200,13 @@ export default function Dashboard() {
     if (coordinatorQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
     if (coordinatorQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(coordinatorQuery.error as Error).message}</div>;
     return <CoordinatorDashboardView data={coordinatorQuery.data as CoordinatorDashboard} />;
+  }
+
+  // Managing directors have their own home at /hub — this generic fallback
+  // view below is not tailored to them, so send them to the real one instead
+  // of showing a page that looks like a second, unrelated "home".
+  if (user?.role === "managing_director") {
+    return <Redirect to="/hub" />;
   }
 
   return <AlliedFallbackDashboard />;

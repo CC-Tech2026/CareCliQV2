@@ -4,17 +4,19 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
-  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck,
+  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
-  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy,
+  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments, getWorkerAvailability,
   assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
+  getWorkerSkills,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
+import { getWorkerInduction } from "@/services/inductionService";
 import { reviewCredential, type Credential } from "@/services/credentialsService";
 import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
 import { getWorkerCoachingSignal } from "@/services/medicationService";
@@ -41,7 +43,7 @@ const SOFT = "var(--cc-soft)";
 const SURFACE = "var(--cc-surface)";
 const CARD_SHADOW = "var(--cc-card-shadow)";
 
-type WorkerDetailTab = "overview" | "documents" | "credentials" | "availability" | "training";
+type WorkerDetailTab = "overview" | "documents" | "credentials" | "availability" | "training" | "induction";
 
 /** Mandatory credential types every worker is expected to have on file. */
 export const REQUIRED_CREDENTIAL_TYPES = [
@@ -503,7 +505,7 @@ export function WorkerDetail({
 
       {/* Tabs */}
       <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
-        {(["overview", "documents", "credentials", "availability", "training"] as WorkerDetailTab[]).map((t) => {
+        {(["overview", "documents", "credentials", "availability", "training", "induction"] as WorkerDetailTab[]).map((t) => {
           const badge = tabBadges[t];
           const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
           const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
@@ -568,6 +570,7 @@ export function WorkerDetail({
             </div>
           )}
           {tab === "training" && <TrainingTab worker={worker} topReason={topReason} translate={translate} />}
+          {tab === "induction" && <InductionTab worker={worker} translate={translate} />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -635,6 +638,46 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
       <p className="text-[11px] mt-1.5 italic" style={{ color: MUTED }}>
         SCHADS classification isn't tracked in CareCliQ yet — this would need a new field before it can show here.
       </p>
+    </div>
+  );
+}
+
+function ProfileCard({ worker }: { worker: WorkerStats }) {
+  const skillsQuery = useOrgQuery(["worker-skills", worker.id], {
+    queryFn: () => getWorkerSkills(worker.id),
+  });
+  const skills = skillsQuery.data ?? [];
+
+  if (!worker.profile_summary && !worker.profile_experience_years && skills.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="flex items-center gap-2">
+        <Sparkles size={14} style={{ color: PLUM }} />
+        <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+      </div>
+      {worker.profile_summary && (
+        <p className="mt-2.5 text-sm leading-relaxed" style={{ color: TEXT }}>{worker.profile_summary}</p>
+      )}
+      {worker.profile_experience_years && (
+        <p className="mt-2 text-xs font-semibold" style={{ color: TEXT }}>{worker.profile_experience_years}</p>
+      )}
+      {skills.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {skills.map((s) => (
+            <span
+              key={s.skill}
+              className="rounded-full px-2.5 py-1 text-[10px] font-bold"
+              style={{ background: s.is_certified ? "var(--cc-status-success-bg)" : SOFT, color: s.is_certified ? "var(--cc-status-success)" : MUTED }}
+              title={s.is_certified ? "Certified" : "Unverified — from resume"}
+            >
+              {s.skill}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -727,6 +770,8 @@ function OverviewTab({
           <p className="text-sm font-bold" style={{ color: "var(--cc-status-success)" }}>Nothing outstanding — fully up to date.</p>
         </div>
       )}
+
+      <ProfileCard worker={worker} />
 
       {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
       <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
@@ -1321,6 +1366,70 @@ function TrainingTab({
       )}
 
       <AssignTrainingDialog open={assignOpen} onOpenChange={setAssignOpen} worker={worker} translate={translate} />
+    </div>
+  );
+}
+
+/** One-time first-day checklist, distinct from ongoing TrainingTab — read-only
+ * here (the worker ticks items off themselves), no assign/dismiss/review
+ * actions since induction has no coordinator-review workflow. */
+function InductionTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+  const progressQuery = useOrgQuery(["worker-induction", worker.id], {
+    queryFn: () => getWorkerInduction(worker.id),
+  });
+
+  const items = [...(progressQuery.data?.items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  const mandatoryTotal = progressQuery.data?.mandatory_total ?? 0;
+  const mandatoryComplete = progressQuery.data?.mandatory_complete ?? 0;
+  const allDone = mandatoryTotal > 0 && mandatoryComplete >= mandatoryTotal;
+  const stripBg = mandatoryTotal === 0 ? SOFT : allDone ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
+  const stripColor = mandatoryTotal === 0 ? MUTED : allDone ? "var(--cc-status-success)" : "var(--cc-status-warning)";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
+        <div>
+          <p className="text-lg font-black">{mandatoryComplete} / {mandatoryTotal} mandatory complete</p>
+          <p className="text-xs font-bold mt-0.5">
+            {mandatoryTotal === 0 ? "No induction items set up yet" : allDone ? "Induction complete" : "Induction in progress"}
+          </p>
+        </div>
+        {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+      </div>
+
+      {progressQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
+
+      {!progressQuery.isLoading && items.length === 0 && (
+        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <ClipboardCheck size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
+          <p className="text-sm font-bold" style={{ color: MUTED }}>No induction items configured for this organisation yet.</p>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 px-5 py-4">
+              <IconBadge
+                icon={ClipboardCheck}
+                color={item.completed_at ? "var(--cc-status-success)" : "var(--cc-status-warning)"}
+                bg={item.completed_at ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)"}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold" style={{ color: TEXT }}>{item.title}</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  {item.completed_at ? "Completed" : item.is_mandatory ? "Mandatory — not yet completed" : "Optional"}
+                </p>
+              </div>
+              {item.completed_at ? (
+                <CheckCircle2 size={16} style={{ color: "var(--cc-status-success)" }} />
+              ) : !item.is_mandatory ? (
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>Optional</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

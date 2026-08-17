@@ -15,7 +15,10 @@ export type TeamMember = {
   phone?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
+  profile_summary?: string | null;
+  profile_experience_years?: string | null;
   training_overdue?: boolean;
+  induction_overdue?: boolean;
 };
 
 export type WorkerStats = TeamMember & {
@@ -120,6 +123,48 @@ export type WorkerClient = {
 
 export function getCoordinatorTeam() {
   return jsonFetch<TeamMember[]>("/api/coordinator/team");
+}
+
+export type PipelinePerson = {
+  id: string;
+  full_name: string;
+  email?: string;
+  role?: string;
+  flag?: "new" | "ok" | "warn" | "complete";
+  // Applicant fields
+  stage?: string;
+  stage_entered_at?: string;
+  // Hire fields
+  status?: string;
+  employer_signed_at?: string | null;
+  // Worker fields
+  joined_at?: string | null;
+  is_active?: boolean;
+};
+
+export type WorkerPipelineOverview = {
+  kpis: {
+    in_pipeline: number;
+    credentials_overdue: number;
+    starting_this_week: number;
+    auto_deactivated_month: number;
+  };
+  columns: {
+    interview: PipelinePerson[];
+    offer_letter: PipelinePerson[];
+    credentials: PipelinePerson[];
+    training: PipelinePerson[];
+    active: PipelinePerson[];
+  };
+  not_proceeding: {
+    rejected_applicants: PipelinePerson[];
+    expired_offers: PipelinePerson[];
+    auto_deactivated_workers: PipelinePerson[];
+  };
+};
+
+export function getWorkerPipelineOverview() {
+  return jsonFetch<WorkerPipelineOverview>("/api/coordinator/workers/pipeline");
 }
 
 export function getCoordinatorWorkerStats() {
@@ -1692,7 +1737,6 @@ export type TrainingCompletion = {
   users?: { full_name: string };
 };
 
-export type TeamTrainingStatus = Record<string, { assigned: number; completed: number; pending_review: number }>;
 
 export function getTrainingModules() {
   return jsonFetch<TrainingModule[]>("/api/coordinator/training-modules");
@@ -1728,10 +1772,6 @@ export function updateTrainingModule(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-}
-
-export function getTeamTrainingStatus() {
-  return jsonFetch<TeamTrainingStatus>("/api/coordinator/team-training-status");
 }
 
 export function getPendingTrainingCompletions() {

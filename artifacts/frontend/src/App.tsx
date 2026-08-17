@@ -12,10 +12,11 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
-import OnboardEmployeePage from "@/pages/onboard-employee";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
+import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -54,6 +55,7 @@ import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
+import StaffOnboardingPage from "@/pages/md/staff-onboarding";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
@@ -74,6 +76,7 @@ import WorkerHelp from "@/pages/worker-help";
 import WorkerShiftHistory from "@/pages/worker-shift-history";
 import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
 import WorkerTraining from "@/pages/worker-training";
+import WorkerInduction from "@/pages/worker-induction";
 import WorkerFeedback from "@/pages/worker-feedback";
 import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
 import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
@@ -91,6 +94,17 @@ const WORKER_ROLES = ["support_worker"] as const;
 
 // Managing Director only
 const MD_ROLES = ["managing_director"] as const;
+
+// Managing directors live in HubLayout everywhere (a distinct shell befitting
+// their org-wide privileges); everyone else uses the standard AppLayout
+// sidebar. Used for shared pages like Settings that both reach.
+function RoleAwareShell({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "managing_director") {
+    return <HubLayout>{children}</HubLayout>;
+  }
+  return <AppLayout>{children}</AppLayout>;
+}
 
 function Router() {
   return (
@@ -179,10 +193,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── New-hire onboarding — Managing Director only ─────────────────── */}
-      <Route path="/onboard-employee">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
-          <OnboardEmployeePage />
+      {/* ── Staff Onboarding — read-only oversight board, coordinators
+             and MD both get org-wide read access ─────────────────────────── */}
+      <Route path="/md/staff-onboarding">
+        <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
+          <StaffOnboardingPage />
         </ProtectedRoute>
       </Route>
 
@@ -246,6 +261,12 @@ function Router() {
       <Route path="/worker/training">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerTraining /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker-induction">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerInduction /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -520,7 +541,7 @@ function Router() {
       {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Settings /></AppLayout>
+          <RoleAwareShell><Settings /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -544,6 +565,7 @@ function App() {
             <OfflineSyncProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <AuthSessionGuards />
+                <WelcomeScreenGate />
                 <Router />
               </WouterRouter>
             </OfflineSyncProvider>

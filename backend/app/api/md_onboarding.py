@@ -406,66 +406,6 @@ async def download_resource(resource_id: str, current_user: dict = Depends(get_c
 
 # ── Assignments ───────────────────────────────────────────────────────────────
 
-class AssignmentCreate(BaseModel):
-    program_id: str
-    user_id: str
-
-
-@router.get("/assignments")
-async def list_assignments(current_user: dict = Depends(get_current_user)):
-    _require_md(current_user)
-    org_id = _require_org(current_user)
-    supabase = get_supabase_admin()
-    assignments = (
-        supabase.table("onboarding_assignments")
-        .select("*")
-        .eq("org_id", org_id)
-        .order("assigned_at", desc=True)
-        .execute()
-    ).data or []
-
-    if not assignments:
-        return []
-
-    assignment_ids = [a["id"] for a in assignments]
-    all_progress = (
-        supabase.table("onboarding_stage_progress")
-        .select("assignment_id, status")
-        .in_("assignment_id", assignment_ids)
-        .execute()
-    ).data or []
-
-    progress_map: dict[str, dict] = {}
-    for p in all_progress:
-        aid = p.get("assignment_id")
-        if not aid:
-            continue
-        if aid not in progress_map:
-            progress_map[aid] = {"total": 0, "done": 0}
-        progress_map[aid]["total"] += 1
-        if p.get("status") in ("approved", "completed"):
-            progress_map[aid]["done"] += 1
-
-    result = []
-    for a in assignments:
-        pdata = progress_map.get(a["id"], {"total": 0, "done": 0})
-        pct = round((pdata["done"] / pdata["total"]) * 100) if pdata["total"] else 0
-        result.append({**a, "completion_pct": pct, "stages_total": pdata["total"], "stages_done": pdata["done"]})
-    return result
-
-
-@router.post("/assignments")
-async def create_assignment(body: AssignmentCreate, current_user: dict = Depends(get_current_user)):
-    _require_md(current_user)
-    org_id = _require_org(current_user)
-    res = get_supabase_admin().table("onboarding_assignments").insert({
-        "program_id": body.program_id,
-        "user_id": body.user_id,
-        "org_id": org_id,
-        "assigned_by": get_user_id(current_user),
-        "status": "active",
-    }).execute()
-    return res.data[0] if res.data else {}
 
 
 # ── Approvals ─────────────────────────────────────────────────────────────────

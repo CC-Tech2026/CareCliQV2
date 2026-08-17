@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from ..core.security import get_current_user
+from ..services import applicant_service, applicant_documents_service
 from ..services import employee_onboarding_service as svc
 from pydantic import BaseModel
 
@@ -25,13 +26,6 @@ def _require_hire_manager(user: dict) -> tuple[str, str]:
     return org_id, user.get("sub")
 
 
-class HireCreateBody(BaseModel):
-    full_name: str
-    email: str
-    phone: str | None = None
-    role: str = "support_worker"
-
-
 class DocumentCreateBody(BaseModel):
     document_type: str
     title: str
@@ -42,23 +36,21 @@ class SignBody(BaseModel):
     full_name: str
 
 
-@router.get("/hires")
-async def list_hires(current_user: dict = Depends(get_current_user)):
-    org_id, _ = _require_hire_manager(current_user)
-    return svc.list_hires(org_id)
-
-
-@router.post("/hires", status_code=201)
-async def create_hire(body: HireCreateBody, current_user: dict = Depends(get_current_user)):
-    org_id, user_id = _require_hire_manager(current_user)
-    return svc.create_hire(org_id, user_id, body.full_name, body.email, body.phone, body.role)
-
-
 @router.get("/hires/{hire_id}")
 async def get_hire(hire_id: str, current_user: dict = Depends(get_current_user)):
     org_id, _ = _require_hire_manager(current_user)
     hire = svc.get_hire(hire_id, org_id)
     hire["documents"] = svc.list_documents(hire_id)
+
+    # If this hire originated from the Applicants Board, surface their resume
+    # profile and intake documents (resume/cover letter/ID) too — otherwise the
+    # panel only shows offer-stage paperwork with nothing else about the candidate.
+    applicant = applicant_service.get_applicant_by_onboarding_id(hire_id, org_id)
+    if applicant:
+        hire["resume_summary"] = applicant.get("resume_summary")
+        hire["resume_skills"] = applicant.get("resume_skills")
+        hire["resume_experience_years"] = applicant.get("resume_experience_years")
+        hire["candidate_documents"] = applicant_documents_service.list_applicant_documents(applicant["id"], org_id)
     return hire
 
 

@@ -27,8 +27,6 @@ ALTER TABLE public.medication_administrations
         END
     ) STORED;
 
--- Backfill outcome from the existing status + variance vs each row's org's tolerance
--- (falling back to 30 if the org row can't be found for some reason).
 UPDATE public.medication_administrations ma
 SET outcome = CASE
     WHEN ma.status != 'given' THEN ma.status
@@ -44,8 +42,6 @@ WHERE ma.outcome IS NULL;
 ALTER TABLE public.medication_administrations
     ALTER COLUMN outcome SET NOT NULL;
 
--- Drop the old status CHECK constraint (introspected, not name-assumed — see 113 for why)
--- before dropping the column itself.
 DO $$
 DECLARE
     existing_constraint TEXT;
@@ -70,18 +66,6 @@ ALTER TABLE public.medication_administrations DROP COLUMN IF EXISTS status;
 ALTER TABLE public.medication_administrations ADD CONSTRAINT medication_administrations_outcome_check
     CHECK (outcome IN ('given_on_time', 'given_late', 'given_early', 'refused', 'missed', 'withheld'));
 
--- Immutability trigger, rebuilt for the new column set (status -> outcome, + reason_code/
--- directed_by/variance_minutes — variance_minutes is a generated column so Postgres computes
--- it itself on every row version and it will never appear as a genuine NEW/OLD difference here).
---
--- Keeps the prn_effect_observed/voice_captured follow-up carve-out from 106, and adds a second,
--- equally narrow one: reason_code/notes may be filled in as a follow-up too. This exists
--- specifically for "given" doses — a worker taps "confirm given" not knowing in advance
--- whether the server will classify it given_on_time or given_late/given_early (that
--- classification depends on the org's tolerance, computed after the fact), so a reason for a
--- late/early dose is necessarily attached in a second step, once the worker sees the outcome.
--- It is NOT a general-purpose edit path — the *transition into* refused/missed/withheld still
--- requires a correction row, same as everything else.
 CREATE OR REPLACE FUNCTION public.medication_administrations_prevent_modify()
 RETURNS TRIGGER AS $$
 BEGIN

@@ -20,6 +20,7 @@ const LABELS: Record<string, string> = {
   upload_profile_photo: "Upload profile photo",
   add_credential_wallet_items: "Add credential wallet items",
   complete_mandatory_training: "Complete mandatory training",
+  complete_induction: "Complete induction",
   review_assigned_clients: "Review assigned clients",
   read_ndis_note_writing_guide: "Read NDIS note-writing guide",
   acknowledge_note_writing_rules: "Acknowledge note-writing rules",

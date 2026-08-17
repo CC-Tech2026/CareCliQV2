@@ -1,38 +1,102 @@
 import { useAuth } from "@/contexts/AuthContext";
+
 import { HubHeader } from "@/components/hub/HubHeader";
 import { WorkspaceLauncher } from "@/components/hub/WorkspaceLauncher";
 import { NewsFeed } from "@/components/hub/NewsFeed";
 import { ComplianceCentre } from "@/components/hub/ComplianceCentre";
 import { StaffCommunity } from "@/components/hub/StaffCommunity";
-import { OrganizationCalendar } from "@/components/hub/OrganizationCalendar";
 import { MDHubView } from "@/components/hub/MDHubView";
 
 export default function HubPage() {
   const { user } = useAuth();
+
   const isMD = user?.role === "managing_director";
 
   return (
-    <div className="grid grid-cols-1 gap-5 pb-12 lg:grid-cols-[240px_1fr_280px] lg:items-start">
+    <div className="pb-14">
+      <div className="mx-auto max-w-[1480px]">
 
-      {/* ── LEFT COLUMN ───────────────────────────────── */}
-      <aside className="space-y-4">
-        <WorkspaceLauncher />
-        {!isMD && <StaffCommunity />}
-      </aside>
+        {/* ─────────────────────────────────────────
+            WELCOME
+        ───────────────────────────────────────── */}
 
-      {/* ── CENTER COLUMN ─────────────────────────────── */}
-      <main className="space-y-5 min-w-0">
         <HubHeader />
-        {isMD && <MDHubView />}
-        <NewsFeed />
-      </main>
 
-      {/* ── RIGHT COLUMN ──────────────────────────────── */}
-      <aside className="space-y-4">
-        <OrganizationCalendar />
-        {!isMD && <ComplianceCentre />}
-      </aside>
 
+        {/* ─────────────────────────────────────────
+            MAIN HUB
+        ───────────────────────────────────────── */}
+
+        {isMD ? (
+          // MD lands directly on their overview — workspace navigation
+          // lives in the sidebar (Hub / MD Workspaces), not duplicated here.
+          <main className="mt-6 min-w-0 space-y-5">
+            <MDHubView />
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+              <NewsFeed />
+              <ComplianceCentre />
+            </div>
+
+            <StaffCommunity />
+          </main>
+        ) : (
+          <div className="mt-6 grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
+
+            {/* ───────── WORKSPACE ───────── */}
+
+            <aside className="min-w-0">
+              <div className="lg:sticky lg:top-24">
+
+                <div
+                  className="overflow-hidden rounded-2xl border bg-cc-surface"
+                  style={{
+                    borderColor: "var(--cc-border)",
+                    boxShadow: "var(--cc-shadow-sm)",
+                  }}
+                >
+
+                  {/* Launcher */}
+
+                  <div className="p-2">
+                    <WorkspaceLauncher />
+                  </div>
+
+                </div>
+
+                {/* Community */}
+
+                <div className="mt-4">
+                  <StaffCommunity />
+                </div>
+
+              </div>
+            </aside>
+
+
+            {/* ───────── MAIN CONTENT ───────── */}
+
+            <main className="min-w-0 space-y-5">
+
+              {/* TODAY / ATTENTION */}
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+
+                {/* News */}
+
+                <NewsFeed />
+
+                {/* Compliance */}
+
+                <ComplianceCentre />
+
+              </div>
+
+            </main>
+
+          </div>
+        )}
+      </div>
     </div>
   );
 }

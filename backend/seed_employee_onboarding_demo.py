@@ -2,7 +2,7 @@
 Seed data for testing the Employee Onboarding flow end to end (spec §4.1):
 - A mandatory "NDIS Worker Orientation" training module flagged auto_assign_on_hire,
   so accepting a new-hire invite live actually auto-assigns it.
-- Four New Hire records (onboard-employee.tsx), one at each pipeline stage:
+- Four New Hire records (worker-pipeline.tsx's Hires flow), one at each pipeline stage:
   draft, draft-with-documents, awaiting_signatures (with a real /onboarding-sign
   link), and signed (ready to invite).
 - One existing worker with an ndis_screening credential expiring inside the
@@ -313,7 +313,7 @@ def main():
     print("MD login: director@sunshine-demo.com / Director123! (run seed_md_user.py first if not already)")
     print("Coordinator: use the existing dev coordinator account.")
     print(f"Dummy account password (Nadia Farrow, Declan Moss): {PASSWORD}")
-    print("\nNext: visit /onboard-employee as the MD to see the four hires at each pipeline stage.")
+    print("\nNext: visit /md/worker-pipeline as the MD to see the four hires at each pipeline stage.")
 
 
 if __name__ == "__main__":
