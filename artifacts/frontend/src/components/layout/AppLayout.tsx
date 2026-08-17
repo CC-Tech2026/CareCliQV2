@@ -25,6 +25,7 @@ import { isWorkerMobileShiftDetailPath, workerMobileShiftBackHref } from "@/lib/
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getIncidentStats } from "@/services/incidentService";
+import { getOrganizationBranding, type OrganizationBranding } from "@/services/organizationBrandingService";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -371,7 +372,7 @@ function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, incidentOpenCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
-  isDark, toggleTheme,
+  isDark, toggleTheme, branding,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; incidentOpenCount: number;
@@ -380,6 +381,7 @@ function SidebarContents({
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
   isDark: boolean; toggleTheme: () => void;
+  branding?: OrganizationBranding;
 }) {
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
@@ -394,16 +396,22 @@ function SidebarContents({
         style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}
       >
         <Link
-          href="/dashboard"
+          href={role === "managing_director" ? "/hub" : "/dashboard"}
           onClick={onNav}
           aria-label={translate("layout.aria.goToDashboard")}
-          title={translate("nav.home")}
+          title={branding?.logo_url ? (branding.display_name || translate("nav.home")) : translate("nav.home")}
           className={cn(
             "flex items-center rounded-lg transition-all hover:bg-white/8 active:opacity-70",
             compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
           )}
         >
-          {compact ? (
+          {branding?.logo_url ? (
+            <img
+              src={branding.logo_url}
+              alt={branding.display_name || ""}
+              className={cn("object-contain", compact ? "h-8 w-8" : "h-8 max-w-[150px]")}
+            />
+          ) : compact ? (
             <span
               className="font-extrabold tracking-[-0.03em] leading-none select-none"
               style={{ fontFamily: "var(--app-font-display)", fontSize: 17 }}
@@ -585,6 +593,12 @@ function SidebarContents({
           </div>
         )}
       </div>
+
+      {branding?.logo_url && !compact && (
+        <p className="shrink-0 pb-2 text-center text-[10px] font-medium" style={{ color: MUTED, opacity: 0.7 }}>
+          Powered by CareCliQ
+        </p>
+      )}
     </div>
   );
 }
@@ -618,6 +632,10 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
     { queryFn: () => getIncidentStats<{ open: number }>(), enabled: isCoordinator },
   );
   const incidentOpenCount = incidentStats?.open ?? 0;
+  const { data: branding } = useOrgQuery<OrganizationBranding>(
+    ["org-branding", "sidebar"],
+    { queryFn: () => getOrganizationBranding(), staleTime: 5 * 60 * 1000 },
+  );
   const isWorker    = userRole === "support_worker";
   // Quill chatbox is scoped to coordinators and managing directors only.
   const showQuillAssistant = userRole === "support_coordinator" || userRole === "managing_director";
@@ -651,7 +669,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
 
   const sharedProps = {
     location, collapsed, alertCount, incidentOpenCount, displayName, displayRole, initials,
-    onLogout: logout, translate, translateParams, isDark, toggleTheme,
+    onLogout: logout, translate, translateParams, isDark, toggleTheme, branding,
   };
 
   // Short role label for pill
@@ -823,7 +841,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
                 <ArrowLeft size={17} style={{ color: TEXT }} />
               </Link>
             ) : (
-              <Link href="/dashboard" className="flex items-center py-1 active:opacity-75 transition-opacity">
+              <Link href={userRole === "managing_director" ? "/hub" : "/dashboard"} className="flex items-center py-1 active:opacity-75 transition-opacity">
                 <CareCliQLogoSm />
               </Link>
             )}

@@ -71,6 +71,13 @@ import {
   type TrustedDevice,
   type UserSession,
 } from "@/services/securityService";
+import {
+  getOrganizationBranding,
+  updateOrganizationBranding,
+  uploadOrganizationLogo,
+  removeOrganizationLogo,
+  type OrganizationBranding,
+} from "@/services/organizationBrandingService";
 
 // ---------------------------------------------------------------------------
 // ABN validation — 11 digits only (optional field)
@@ -83,9 +90,9 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "branding";
 
-const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
@@ -93,6 +100,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
+  { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -847,6 +855,401 @@ function SecuritySection() {
 }
 
 // -----------------------------------------------------------------------------
+// Organisation branding (managing director only) — logo, display name, and
+// accent color used on onboarding-facing emails and the first-login welcome
+// screen. Deliberately scoped to those touchpoints, not a general re-skin.
+// -----------------------------------------------------------------------------
+function OrganizationBrandingSection() {
+  const { toast } = useToast();
+  const { translate } = useAccessibility();
+  const [branding, setBranding] = useState<OrganizationBranding | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [accentColor, setAccentColor] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getOrganizationBranding()
+      .then((data) => {
+        setBranding(data);
+        setDisplayName(data.display_name || "");
+        setAccentColor(data.brand_accent_color || "");
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const updated = await updateOrganizationBranding({
+        display_name: displayName.trim(),
+        brand_accent_color: accentColor.trim(),
+      });
+      setBranding(updated);
+      toast({ title: translate("settings.branding.saved") });
+    } catch (e) {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed"), description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const updated = await uploadOrganizationLogo(file);
+      setBranding(updated);
+      toast({ title: translate("settings.branding.logoUploaded") });
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed"), description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setUploading(true);
+    try {
+      const updated = await removeOrganizationLogo();
+      setBranding(updated);
+    } catch (err) {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed"), description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
+        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingPreferences")}
+      </div>
+    );
+  }
+
+  return (
+    <Section
+      title={translate("settings.branding.title")}
+      description={translate("settings.branding.subtitle")}
+      icon={ImageIcon}
+    >
+      <PanelCard label={translate("settings.branding.logoLabel")}>
+        <div className="flex items-center gap-4">
+          <div
+            className="h-16 w-16 rounded-xl flex items-center justify-center overflow-hidden shrink-0"
+            style={{ background: "var(--cc-soft)", border: "1px solid #EBE5F6" }}
+          >
+            {branding?.logo_url ? (
+              <img src={branding.logo_url} alt="" className="h-full w-full object-contain" />
+            ) : (
+              <ImageIcon className="h-6 w-6" style={{ color: "var(--cc-muted)" }} />
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                {translate("settings.branding.uploadLogo")}
+              </Button>
+              {branding?.logo_url && (
+                <Button size="sm" variant="ghost" onClick={handleRemoveLogo} disabled={uploading}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {translate("settings.branding.removeLogo")}
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{translate("settings.branding.logoHint")}</p>
+            <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={handleLogoChange} />
+          </div>
+        </div>
+      </PanelCard>
+
+      <PanelCard label={translate("settings.branding.identityLabel")}>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="brand-display-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
+              {translate("settings.branding.displayName")}
+            </Label>
+            <Input
+              id="brand-display-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={translate("settings.branding.displayNamePlaceholder")}
+            />
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{translate("settings.branding.displayNameHint")}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="brand-accent-color" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
+              {translate("settings.branding.accentColor")}
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : "#5533cc"}
+                onChange={(e) => setAccentColor(e.target.value)}
+                className="h-9 w-12 rounded-md border cursor-pointer"
+                style={{ borderColor: "#EBE5F6" }}
+                aria-label={translate("settings.branding.accentColor")}
+              />
+              <Input
+                id="brand-accent-color"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                placeholder="#5533CC"
+                className="max-w-[140px]"
+              />
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{translate("settings.branding.accentColorHint")}</p>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 min-w-[110px]">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {translate("common.save")}
+            </Button>
+          </div>
+        </div>
+      </PanelCard>
+
+      <NavLayoutCard />
+    </Section>
+  );
+}
+
+function LayoutPreview({ variant }: { variant: "topbar" | "sidebar" | "bottombar" }) {
+  const PLUM = "var(--cc-plum)";
+  const LINE = "var(--cc-border)";
+  const SURFACE = "var(--cc-surface)";
+  const SOFT = "var(--cc-soft)";
+
+  const headerRow = (
+    <div className="flex h-3.5 shrink-0 items-center gap-1 border-b px-1.5" style={{ borderColor: LINE, background: SURFACE }}>
+      <div className="h-1.5 w-1.5 rounded-sm shrink-0" style={{ background: PLUM }} />
+      <div className="h-1 w-5 rounded-full shrink-0" style={{ background: LINE }} />
+      <div className="ml-auto h-1.5 max-w-[24px] flex-1 rounded-full" style={{ background: SOFT }} />
+      <div className="h-2 w-2 shrink-0 rounded-full" style={{ background: PLUM }} />
+    </div>
+  );
+
+  const bodyLines = (
+    <div className="flex-1 space-y-1 p-1.5">
+      <div className="h-1 w-3/4 rounded-full" style={{ background: LINE }} />
+      <div className="h-1 w-1/2 rounded-full" style={{ background: LINE }} />
+    </div>
+  );
+
+  if (variant === "sidebar") {
+    return (
+      <div className="flex h-16 w-full overflow-hidden rounded-lg border" style={{ borderColor: LINE, background: SURFACE }}>
+        <div className="flex h-full w-4 shrink-0 flex-col items-center gap-1 pt-1.5" style={{ background: PLUM }}>
+          <div className="h-1 w-2 rounded-full bg-white/70" />
+          <div className="h-1 w-2 rounded-full bg-white/40" />
+          <div className="h-1 w-2 rounded-full bg-white/40" />
+        </div>
+        <div className="flex flex-1 flex-col">
+          {headerRow}
+          {bodyLines}
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "bottombar") {
+    return (
+      <div className="relative flex h-16 w-full flex-col overflow-hidden rounded-lg border" style={{ borderColor: LINE, background: SURFACE }}>
+        {headerRow}
+        {bodyLines}
+        <div className="absolute inset-x-0 bottom-1 flex justify-center">
+          <div className="flex items-center gap-1 rounded-full border px-1.5 py-1" style={{ borderColor: LINE, background: SURFACE }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-1 w-3 rounded-full" style={{ background: i === 0 ? PLUM : LINE }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-16 w-full flex-col overflow-hidden rounded-lg border" style={{ borderColor: LINE, background: SURFACE }}>
+      {headerRow}
+      <div className="flex justify-center px-2 pt-1.5">
+        <div className="flex items-center gap-1 rounded-full border px-1.5 py-1" style={{ borderColor: LINE, background: SURFACE }}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-1 w-3 rounded-full" style={{ background: i === 0 ? PLUM : LINE }} />
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 space-y-1 p-1.5">
+        <div className="h-1 w-3/4 rounded-full" style={{ background: LINE }} />
+      </div>
+    </div>
+  );
+}
+
+function NavLayoutCard() {
+  const { prefs, setNavLayout, translate } = useAccessibility();
+  const layout = prefs?.nav_layout ?? "topbar";
+  const [busy, setBusy] = useState(false);
+
+  async function choose(value: "topbar" | "sidebar" | "bottombar") {
+    if (value === layout || busy) return;
+    setBusy(true);
+    try {
+      await setNavLayout(value);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const options: { value: "topbar" | "sidebar" | "bottombar"; label: string }[] = [
+    { value: "topbar", label: translate("settings.branding.layoutTopbar") },
+    { value: "sidebar", label: translate("settings.branding.layoutSidebar") },
+    { value: "bottombar", label: translate("settings.branding.layoutBottombar") },
+  ];
+
+  return (
+    <PanelCard label={translate("settings.branding.layoutLabel")}>
+      <p className="mb-3 text-[11px]" style={{ color: "var(--cc-muted)" }}>{translate("settings.branding.layoutHint")}</p>
+      <div className="grid grid-cols-3 gap-3 max-w-lg">
+        {options.map((opt) => {
+          const selected = layout === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => choose(opt.value)}
+              disabled={busy}
+              className="rounded-xl border p-2 text-left transition-all disabled:opacity-60"
+              style={{
+                borderColor: selected ? "#E8457A" : "var(--cc-border)",
+                boxShadow: selected ? "0 0 0 2px rgba(232,69,122,0.15)" : "none",
+                background: "var(--cc-soft)",
+              }}
+            >
+              <LayoutPreview variant={opt.value} />
+              <div className="mt-2 flex items-center justify-between gap-1.5">
+                <span className="text-[12px] font-bold" style={{ color: selected ? "#E8457A" : "var(--cc-text)" }}>
+                  {opt.label}
+                </span>
+                {selected && (
+                  <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "#E8457A" }} />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <NavColorPicker />
+    </PanelCard>
+  );
+}
+
+// A handful of curated, tested options — not a free-form picker — so every
+// choice stays readable. "Midnight" reuses the same dark navy the
+// worker/coordinator sidebar already uses (--cc-sidebar-bg), for a look
+// that's consistent with the rest of the app rather than a one-off color.
+const NAV_COLOR_PRESETS: { hex: string | null; labelKey: string }[] = [
+  { hex: null, labelKey: "settings.branding.navColorDefault" },
+  { hex: "#E8457A", labelKey: "settings.branding.navColorPink" },
+  { hex: "#6E79C2", labelKey: "settings.branding.navColorPurple" },
+  { hex: "#1A1A18", labelKey: "settings.branding.navColorDark" },
+];
+
+function isDarkHex(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 140;
+}
+
+// Renders the nav exactly as it will actually look with this preset —
+// background AND correctly-contrasted text/active-pill bundled together —
+// so there's nothing to discover after clicking. Mirrors the real
+// Command Deck nav's own contrast logic (see HubLayout.tsx's navText/
+// navActiveBg derivation) so the preview never lies about the result.
+function NavDesignPreview({ hex }: { hex: string | null }) {
+  const bg = hex ?? "var(--cc-surface)";
+  const dark = hex ? isDarkHex(hex) : false;
+  const text = dark ? "rgba(255,255,255,0.85)" : "var(--cc-muted)";
+  const activeBg = dark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
+
+  return (
+    <div
+      className="flex h-11 w-full items-center justify-center gap-1 rounded-full border px-2"
+      style={{ background: bg, borderColor: "var(--cc-border)" }}
+    >
+      <span className="rounded-full px-2 py-1 text-[8px] font-bold whitespace-nowrap" style={{ background: activeBg, color: "#FFFFFF" }}>
+        Dashboard
+      </span>
+      <span className="rounded-full px-2 py-1 text-[8px] font-bold whitespace-nowrap" style={{ color: text }}>
+        Staff
+      </span>
+    </div>
+  );
+}
+
+function NavColorPicker() {
+  const { prefs, setNavColor, translate } = useAccessibility();
+  const current = prefs?.nav_color ?? null;
+  const [busy, setBusy] = useState(false);
+
+  async function apply(hex: string | null) {
+    if (hex === current || busy) return;
+    setBusy(true);
+    try {
+      await setNavColor(hex);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--cc-border)" }}>
+      <p className="mb-1 text-[12px] font-bold" style={{ color: "var(--cc-text)" }}>
+        {translate("settings.branding.navColorLabel")}
+      </p>
+      <p className="mb-3 text-[11px]" style={{ color: "var(--cc-muted)" }}>
+        Each option is a full nav design — background and text are matched for you, so you never end up with unreadable labels.
+      </p>
+      <div className="grid grid-cols-2 gap-3 max-w-md sm:grid-cols-4">
+        {NAV_COLOR_PRESETS.map((preset) => {
+          const selected = current === preset.hex;
+          return (
+            <button
+              key={preset.hex ?? "default"}
+              type="button"
+              onClick={() => apply(preset.hex)}
+              disabled={busy}
+              className="rounded-xl border p-2 text-left transition-all disabled:opacity-60"
+              style={{
+                borderColor: selected ? "#E8457A" : "var(--cc-border)",
+                boxShadow: selected ? "0 0 0 2px rgba(232,69,122,0.15)" : "none",
+                background: "var(--cc-soft)",
+              }}
+              aria-pressed={selected}
+            >
+              <NavDesignPreview hex={preset.hex} />
+              <div className="mt-2 flex items-center justify-between gap-1.5">
+                <span className="text-[11px] font-bold" style={{ color: selected ? "#E8457A" : "var(--cc-text)" }}>
+                  {translate(preset.labelKey)}
+                </span>
+                {selected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "#E8457A" }} />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 
 export default function Settings() {
   const { toast } = useToast();
@@ -854,7 +1257,8 @@ export default function Settings() {
   const { user, token: authToken } = useAuth();
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
-  const visibleNavItems = NAV_ITEMS.filter((item) => !item.coordinatorOnly || isCoordinator);
+  const isMD = user?.role === "managing_director";
+  const visibleNavItems = NAV_ITEMS.filter((item) => (!item.coordinatorOnly || isCoordinator) && (!item.mdOnly || isMD));
 
   const [activeSection, setActiveSection] = useState<SectionId>("account");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
@@ -1942,6 +2346,10 @@ export default function Settings() {
               </p>
             </div>
           </Section>
+        )}
+
+        {activeSection === "branding" && isMD && (
+          <OrganizationBrandingSection />
         )}
 
       </main>

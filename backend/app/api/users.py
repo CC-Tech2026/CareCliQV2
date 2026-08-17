@@ -358,6 +358,9 @@ class AccessibilityPreferencesBody(BaseModel):
     theme_mode: str | None = None
     high_contrast: bool | None = None
     dyslexia_font: bool | None = None
+    nav_layout: str | None = None
+    nav_color: str | None = None
+    nav_color_clear: bool = False
 
 
 class LanguagePreferenceBody(BaseModel):
@@ -392,6 +395,9 @@ async def save_my_accessibility_preferences(
         theme_mode=body.theme_mode,
         high_contrast=body.high_contrast,
         dyslexia_font=body.dyslexia_font,
+        nav_layout=body.nav_layout,
+        nav_color=body.nav_color,
+        nav_color_clear=body.nav_color_clear,
     )
     return {"preferences": prefs}
 

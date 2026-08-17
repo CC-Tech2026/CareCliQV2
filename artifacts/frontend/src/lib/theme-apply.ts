@@ -4,7 +4,7 @@ export const THEME_STORAGE_KEY = "carecliq-theme";
 const LEGACY_THEME_STORAGE_KEY = "cc-theme";
 
 function isThemeMode(value: string | null): value is ThemeMode {
-  return value === "system" || value === "light" || value === "dark";
+  return value === "light" || value === "dark";
 }
 
 /** Read persisted theme preference, migrating legacy cc-theme once if needed. */
@@ -24,15 +24,13 @@ export function getStoredThemeMode(): ThemeMode {
   } catch {
     /* noop */
   }
-  return "system";
+  return "light";
 }
 
 /** Apply dark/light class on <html> synchronously — no wait for React effects or API. */
 export function applyThemeModeImmediate(mode: ThemeMode) {
   const root = document.documentElement;
-  const isDark =
-    mode === "dark" ||
-    (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const isDark = mode === "dark";
 
   root.classList.toggle("dark", isDark);
   root.style.colorScheme = isDark ? "dark" : "light";

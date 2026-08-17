@@ -1,16 +1,16 @@
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import type { ThemeMode } from "@/services/accessibilityService";
 
+// "System" was removed — see accessibilityService.ts's ThemeMode comment.
 const MODES: { id: ThemeMode; icon: typeof Sun; labelKey: string }[] = [
   { id: "light", icon: Sun, labelKey: "accessibility.theme.light" },
   { id: "dark", icon: Moon, labelKey: "accessibility.theme.dark" },
-  { id: "system", icon: Monitor, labelKey: "accessibility.theme.system" },
 ];
 
 export function AuthThemeToggle() {
   const { prefs, setThemeMode, loading, translate } = useAccessibility();
-  const active = prefs?.theme_mode ?? "system";
+  const active = prefs?.theme_mode ?? "light";
 
   return (
     <div
