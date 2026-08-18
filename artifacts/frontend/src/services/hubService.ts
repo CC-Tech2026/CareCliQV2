@@ -10,6 +10,8 @@ export type HubComplianceAlert = {
   affected_staff?: string[];
   action_label: string;
   source?: string;
+  /** "urgent" = needs action today/this week. "exposure" = builds into a future finding if ignored. */
+  category?: "urgent" | "exposure";
 };
 
 export type OrgEvent = {
@@ -51,6 +53,12 @@ export type CommunityItem = {
 
 export async function getHubComplianceAlerts(): Promise<HubComplianceAlert[]> {
   return jsonFetch<HubComplianceAlert[]>("/api/hub/compliance-alerts");
+}
+
+/** Same alert shape as compliance-alerts, scoped to care delivery/participant
+ *  engagement instead of compliance/credentialing — see Operations & Care tab. */
+export async function getCareAlerts(): Promise<HubComplianceAlert[]> {
+  return jsonFetch<HubComplianceAlert[]>("/api/hub/care-alerts");
 }
 
 export async function getOrgEvents(): Promise<OrgEvent[]> {

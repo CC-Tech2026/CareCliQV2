@@ -380,7 +380,7 @@ export default function MDCompliancePage() {
 
   return (
     <HubLayout>
-      <div className="mx-auto max-w-[1400px] space-y-6 pb-12">
+      <div className="space-y-6 pb-12">
         {/* -----------------------------------------------------------
             HEADER
         ------------------------------------------------------------ */}

@@ -236,6 +236,15 @@ export function activateWorker(workerId: string) {
   return jsonFetch<{ worker_id: string; is_active: boolean }>(`/api/coordinator/workers/${workerId}/activate`, { method: "POST" });
 }
 
+/** Sends the worker a real Supabase recovery email so they set their own new
+ *  password — never sets or reveals a password directly. */
+export function sendWorkerPasswordReset(workerId: string) {
+  return jsonFetch<{ worker_id: string; email: string; message: string }>(
+    `/api/coordinator/workers/${workerId}/send-password-reset`,
+    { method: "POST" },
+  );
+}
+
 export function assignWorkerToClient(workerId: string, patientId: string, role = "support_worker") {
   return jsonFetch<{ worker_id: string; patient_id: string }>(`/api/coordinator/workers/${workerId}/assign-client`, {
     method: "POST",

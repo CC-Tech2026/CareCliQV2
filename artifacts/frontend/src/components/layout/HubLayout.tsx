@@ -638,7 +638,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <main className="min-w-0 flex-1 px-0 py-2 lg:px-6">{children}</main>
         </div>
       ) : (
-        <main className={`mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 ${bottombarMode ? "pb-32" : ""}`}>
+        <main className={`mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 ${bottombarMode ? "pb-32" : ""}`}>
           {children}
         </main>
       )}

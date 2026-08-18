@@ -50,6 +50,8 @@ import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import HubPage from "@/pages/hub/HubPage";
 import MDExecutivePage from "@/pages/md/executive";
+import MDSchedulePage from "@/pages/md/schedule";
+import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
@@ -160,6 +162,18 @@ function Router() {
       <Route path="/md/executive">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDExecutivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/schedule">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDSchedulePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/service-delivery">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDServiceDeliveryPage />
         </ProtectedRoute>
       </Route>
 
@@ -417,7 +431,7 @@ function Router() {
       </Route>
 
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>

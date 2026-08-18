@@ -1,18 +1,16 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   AlertTriangle,
   ArrowRight,
-  Users,
   ShieldCheck,
   DollarSign,
-  FileWarning,
   TrendingUp,
   TrendingDown,
-  ChevronRight,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import {
   LineChart,
   Line,
@@ -73,27 +71,20 @@ interface TrendPoint {
   session_count: number;
 }
 
+interface RevenueMonth {
+  month: string;
+  billed: number;
+  paid: number;
+  outstanding: number;
+  count: number;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
 function formatNumber(value: number) {
   return value.toLocaleString("en-AU");
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-function severityLabel(severity: string) {
-  if (severity === "high") return "High priority";
-  if (severity === "medium") return "Review";
-  return "Information";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -312,306 +303,6 @@ function ComplianceCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Alerts                                                                     */
-/* -------------------------------------------------------------------------- */
-
-function AlertsPanel({
-  alerts,
-  onNavigate,
-}: {
-  alerts: MDData["org_alerts"];
-  onNavigate: (path: string) => void;
-}) {
-  if (!alerts.length) {
-    return (
-      <section
-        className="rounded-2xl border"
-        style={{
-          borderColor: BORDER,
-          background: SURFACE,
-        }}
-      >
-        <div className="flex items-center gap-3 px-5 py-5">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{
-              background: "#E9F5F0",
-              color: GREEN,
-            }}
-          >
-            <ShieldCheck size={15} strokeWidth={2} />
-          </div>
-
-          <div>
-            <p
-              className="text-[12px] font-bold"
-              style={{ color: TEXT }}
-            >
-              No organisation alerts
-            </p>
-
-            <p
-              className="mt-0.5 text-[10px]"
-              style={{ color: MUTED }}
-            >
-              Nothing currently requires your attention.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      className="rounded-2xl border"
-      style={{
-        borderColor: BORDER,
-        background: SURFACE,
-      }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <div>
-          <div className="flex items-center gap-2">
-            <FileWarning
-              size={15}
-              strokeWidth={2}
-              style={{ color: AMBER }}
-            />
-
-            <h2
-              className="text-[14px] font-black"
-              style={{ color: TEXT }}
-            >
-              Attention required
-            </h2>
-          </div>
-
-          <p
-            className="mt-1 text-[11px]"
-            style={{ color: MUTED }}
-          >
-            Organisation issues that may need action
-          </p>
-        </div>
-
-        <button
-          onClick={() => onNavigate("/md/compliance")}
-          className="flex items-center gap-1 text-[11px] font-bold"
-          style={{ color: PLUM }}
-        >
-          View all
-          <ArrowRight size={12} />
-        </button>
-      </div>
-
-      <div className="divide-y" style={{ borderColor: BORDER }}>
-        {alerts.slice(0, 4).map((alert, index) => {
-          const high = alert.severity === "high";
-          const medium = alert.severity === "medium";
-
-          const color = high
-            ? RED
-            : medium
-            ? AMBER
-            : BLUE;
-
-          const background = high
-            ? "#FBEAE9"
-            : medium
-            ? "#FBF2E6"
-            : "#EAF1F7";
-
-          return (
-            <button
-              key={`${alert.type}-${index}`}
-              onClick={() => onNavigate("/md/compliance")}
-              className="flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
-            >
-              <div
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background,
-                  color,
-                }}
-              >
-                <AlertTriangle size={13} strokeWidth={2} />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <span
-                  className="text-[9px] font-black uppercase tracking-[0.12em]"
-                  style={{ color }}
-                >
-                  {severityLabel(alert.severity)}
-                </span>
-
-                <p
-                  className="mt-1 text-[12px] font-semibold leading-relaxed"
-                  style={{ color: TEXT }}
-                >
-                  {alert.message}
-                </p>
-              </div>
-
-              <ChevronRight
-                size={14}
-                className="mt-1 shrink-0"
-                style={{ color: MUTED }}
-              />
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Operational health                                                         */
-/* -------------------------------------------------------------------------- */
-
-function OperationalHealth({
-  data,
-  onNavigate,
-}: {
-  data: MDData;
-  onNavigate: (path: string) => void;
-}) {
-  const complianceWarn =
-    data.compliance_score < data.compliance_target;
-
-  return (
-    <section
-      className="rounded-2xl border"
-      style={{
-        borderColor: BORDER,
-        background: SURFACE,
-      }}
-    >
-      <div
-        className="border-b px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <h2
-          className="text-[14px] font-black"
-          style={{ color: TEXT }}
-        >
-          Operational health
-        </h2>
-
-        <p
-          className="mt-1 text-[11px]"
-          style={{ color: MUTED }}
-        >
-          Key organisation signals
-        </p>
-      </div>
-
-      <div className="p-2">
-        <OperationalRow
-          icon={ShieldCheck}
-          label="Compliance"
-          detail={`${data.compliance_score}% organisation score`}
-          color={complianceWarn ? RED : GREEN}
-          background={complianceWarn ? "#FBEAE9" : "#E9F5F0"}
-          onClick={() => onNavigate("/md/compliance")}
-        />
-
-        <OperationalRow
-          icon={Users}
-          label="Staff health"
-          detail={
-            data.workers_at_risk.length
-              ? `${data.workers_at_risk.length} worker${
-                  data.workers_at_risk.length === 1 ? "" : "s"
-                } need attention`
-              : "No workers flagged"
-          }
-          color={data.workers_at_risk.length ? RED : GREEN}
-          background={
-            data.workers_at_risk.length
-              ? "#FBEAE9"
-              : "#E9F5F0"
-          }
-          onClick={() => onNavigate("/md/staff")}
-        />
-
-        <OperationalRow
-          icon={FileWarning}
-          label="Incidents"
-          detail={`${data.incidents_this_month} this month`}
-          color={AMBER}
-          background="#FBF2E6"
-          onClick={() => onNavigate("/quality")}
-        />
-      </div>
-    </section>
-  );
-}
-
-function OperationalRow({
-  icon: Icon,
-  label,
-  detail,
-  color,
-  background,
-  onClick,
-}: {
-  icon: React.ComponentType<{
-    size?: number;
-    strokeWidth?: number;
-  }>;
-  label: string;
-  detail: string;
-  color: string;
-  background: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-cc-soft"
-    >
-      <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-        style={{
-          background,
-          color,
-        }}
-      >
-        <Icon size={14} strokeWidth={2} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p
-          className="text-[11px] font-bold"
-          style={{ color: TEXT }}
-        >
-          {label}
-        </p>
-
-        <p
-          className="mt-0.5 text-[10px]"
-          style={{ color: MUTED }}
-        >
-          {detail}
-        </p>
-      </div>
-
-      <ChevronRight
-        size={13}
-        strokeWidth={2}
-        style={{ color: MUTED }}
-      />
-    </button>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /* Compliance trend                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -763,138 +454,7 @@ function ComplianceTrend({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Staff at risk                                                              */
-/* -------------------------------------------------------------------------- */
-
-function StaffAtRisk({
-  workers,
-  onNavigate,
-}: {
-  workers: MDData["workers_at_risk"];
-  onNavigate: (path: string) => void;
-}) {
-  return (
-    <section
-      className="rounded-2xl border"
-      style={{
-        borderColor: BORDER,
-        background: SURFACE,
-      }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <div>
-          <h2
-            className="text-[14px] font-black"
-            style={{ color: TEXT }}
-          >
-            Staff requiring attention
-          </h2>
-
-          <p
-            className="mt-1 text-[11px]"
-            style={{ color: MUTED }}
-          >
-            Workers with lower compliance performance
-          </p>
-        </div>
-
-        <button
-          onClick={() => onNavigate("/md/staff")}
-          className="flex items-center gap-1 text-[11px] font-bold"
-          style={{ color: PLUM }}
-        >
-          View staff
-          <ArrowRight size={12} />
-        </button>
-      </div>
-
-      {workers.length === 0 ? (
-        <div className="px-5 py-7 text-center">
-          <p
-            className="text-[12px] font-semibold"
-            style={{ color: TEXT }}
-          >
-            No workers currently flagged
-          </p>
-
-          <p
-            className="mt-1 text-[11px]"
-            style={{ color: MUTED }}
-          >
-            Staff compliance is currently within expected
-            ranges.
-          </p>
-        </div>
-      ) : (
-        <div
-          className="divide-y"
-          style={{ borderColor: BORDER }}
-        >
-          {workers.slice(0, 4).map((worker) => (
-            <button
-              key={worker.id}
-              onClick={() => onNavigate("/md/staff")}
-              className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-cc-soft"
-            >
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[9px] font-black"
-                style={{
-                  background: `${PLUM}12`,
-                  color: PLUM,
-                }}
-              >
-                {getInitials(worker.full_name)}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p
-                  className="truncate text-[12px] font-bold"
-                  style={{ color: TEXT }}
-                >
-                  {worker.full_name}
-                </p>
-
-                <p
-                  className="mt-0.5 text-[10px]"
-                  style={{ color: MUTED }}
-                >
-                  {worker.sessions} sessions
-                </p>
-              </div>
-
-              <div className="text-right">
-                <p
-                  className="text-[12px] font-black"
-                  style={{ color: RED }}
-                >
-                  {worker.compliance_score}%
-                </p>
-
-                <p
-                  className="text-[9px]"
-                  style={{ color: MUTED }}
-                >
-                  compliance
-                </p>
-              </div>
-
-              <ChevronRight
-                size={13}
-                style={{ color: MUTED }}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Financial summary                                                          */
+/* Financial summary                                                         */
 /* -------------------------------------------------------------------------- */
 
 function FinancialSummary({
@@ -906,6 +466,7 @@ function FinancialSummary({
     total_billed_cents?: number;
     total_paid_cents?: number;
     invoice_count?: number;
+    monthly?: RevenueMonth[];
   } | null>(null);
 
   useEffect(() => {
@@ -929,6 +490,25 @@ function FinancialSummary({
     totalRevenue > 0
       ? Math.round((totalPaid / totalRevenue) * 100)
       : 0;
+
+  // Baseline comparison: the two most recent months from the same report,
+  // so "collection rate" reads against a prior period instead of standing
+  // alone as a bare percentage.
+  const monthly = rev?.monthly ?? [];
+  const thisMonth = monthly[0];
+  const lastMonth = monthly[1];
+  const lastMonthRate =
+    lastMonth && lastMonth.billed > 0
+      ? Math.round((lastMonth.paid / lastMonth.billed) * 100)
+      : null;
+  const thisMonthRate =
+    thisMonth && thisMonth.billed > 0
+      ? Math.round((thisMonth.paid / thisMonth.billed) * 100)
+      : null;
+  const collectionDelta =
+    thisMonthRate !== null && lastMonthRate !== null
+      ? thisMonthRate - lastMonthRate
+      : null;
 
   return (
     <section
@@ -994,8 +574,13 @@ function FinancialSummary({
         <FinancialMetric
           label="Collection"
           value={`${collectionRate}%`}
-          detail={`${formatNumber(invoices)} invoices`}
+          detail={
+            collectionDelta === null
+              ? `${formatNumber(invoices)} invoices`
+              : `${collectionDelta >= 0 ? "+" : ""}${collectionDelta} pts vs last month`
+          }
           warning={collectionRate < 90}
+          trend={collectionDelta}
         />
       </div>
     </section>
@@ -1007,11 +592,13 @@ function FinancialMetric({
   value,
   detail,
   warning,
+  trend,
 }: {
   label: string;
   value: string;
   detail?: string;
   warning?: boolean;
+  trend?: number | null;
 }) {
   return (
     <div className="px-5 py-4">
@@ -1033,9 +620,12 @@ function FinancialMetric({
 
       {detail && (
         <p
-          className="mt-0.5 text-[10px]"
-          style={{ color: MUTED }}
+          className="mt-0.5 flex items-center gap-1 text-[10px]"
+          style={{ color: trend !== undefined && trend !== null ? (trend >= 0 ? GREEN : RED) : MUTED }}
         >
+          {trend !== undefined && trend !== null ? (
+            trend >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />
+          ) : null}
           {detail}
         </p>
       )}
@@ -1106,6 +696,17 @@ export function MDHubView() {
   if (loading) {
     return (
       <div className="space-y-5">
+        <div className="grid gap-5 xl:grid-cols-2">
+          <div
+            className="h-64 animate-pulse rounded-2xl"
+            style={{ background: SOFT }}
+          />
+          <div
+            className="h-64 animate-pulse rounded-2xl"
+            style={{ background: SOFT }}
+          />
+        </div>
+
         <div
           className="grid overflow-hidden rounded-2xl border sm:grid-cols-2 xl:grid-cols-4"
           style={{ borderColor: BORDER }}
@@ -1121,23 +722,6 @@ export function MDHubView() {
 
         <div
           className="h-52 animate-pulse rounded-2xl"
-          style={{ background: SOFT }}
-        />
-
-        <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-          <div
-            className="h-64 animate-pulse rounded-2xl"
-            style={{ background: SOFT }}
-          />
-
-          <div
-            className="h-64 animate-pulse rounded-2xl"
-            style={{ background: SOFT }}
-          />
-        </div>
-
-        <div
-          className="h-64 animate-pulse rounded-2xl"
           style={{ background: SOFT }}
         />
       </div>
@@ -1185,90 +769,73 @@ export function MDHubView() {
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
 
       {/* ------------------------------------------------------------------ */}
-      {/* Executive metrics                                                  */}
+      {/* Needs action / exposure — the triage list                          */}
       {/* ------------------------------------------------------------------ */}
 
-      <div
-        className="grid overflow-hidden rounded-2xl border sm:grid-cols-2 xl:grid-cols-4"
-        style={{
-          borderColor: BORDER,
-          background: SURFACE,
-        }}
-      >
-        <ExecutiveMetric
-          label="Participants"
-          value={formatNumber(data.active_participants)}
-          detail="Active participants"
-          onClick={() => navigate("/participants")}
-        />
-
-        <ExecutiveMetric
-          label="Active staff"
-          value={formatNumber(data.active_staff)}
-          detail={`${data.staff_retention_rate}% retention`}
-          onClick={() => navigate("/md/staff")}
-        />
-
-        <ExecutiveMetric
-          label="Support visits"
-          value={formatNumber(data.sessions_this_week)}
-          detail="This week"
-          onClick={() => navigate("/schedule")}
-        />
-
-        <ExecutiveMetric
-          label="Goal achievement"
-          value={`${data.goal_achievement_rate}%`}
-          detail="Participant goals"
-        />
-      </div>
+      <GovernanceTriage onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
 
       {/* ------------------------------------------------------------------ */}
-      {/* Compliance                                                         */}
+      {/* How we're tracking — demoted below the triage list                 */}
       {/* ------------------------------------------------------------------ */}
 
-      <ComplianceCard
-        score={data.compliance_score}
-        target={data.compliance_target}
-        onNavigate={navigate}
-      />
+      <div className="space-y-5">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] font-black uppercase tracking-[0.16em]"
+            style={{ color: MUTED }}
+          >
+            How we're tracking
+          </span>
+          <span className="h-px flex-1" style={{ background: BORDER }} />
+        </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Alerts + operational health                                        */}
-      {/* ------------------------------------------------------------------ */}
+        <div
+          className="grid overflow-hidden rounded-2xl border sm:grid-cols-2 xl:grid-cols-4"
+          style={{
+            borderColor: BORDER,
+            background: SURFACE,
+          }}
+        >
+          <ExecutiveMetric
+            label="Participants"
+            value={formatNumber(data.active_participants)}
+            detail="Active participants"
+            onClick={() => navigate("/participants")}
+          />
 
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-        <AlertsPanel
-          alerts={data.org_alerts}
+          <ExecutiveMetric
+            label="Active staff"
+            value={formatNumber(data.active_staff)}
+            detail={`${data.staff_retention_rate}% retention`}
+            onClick={() => navigate("/md/staff")}
+          />
+
+          <ExecutiveMetric
+            label="Support visits"
+            value={formatNumber(data.sessions_this_week)}
+            detail="This week"
+            onClick={() => navigate("/schedule")}
+          />
+
+          <ExecutiveMetric
+            label="Goal achievement"
+            value={`${data.goal_achievement_rate}%`}
+            detail="Participant goals"
+          />
+        </div>
+
+        <ComplianceCard
+          score={data.compliance_score}
+          target={data.compliance_target}
           onNavigate={navigate}
         />
 
-        <OperationalHealth
-          data={data}
-          onNavigate={navigate}
-        />
-      </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Compliance trend                                                   */}
-      {/* ------------------------------------------------------------------ */}
-
-      <ComplianceTrend
-        trend={trend}
-        target={data.compliance_target}
-      />
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Staff + finance                                                    */}
-      {/* ------------------------------------------------------------------ */}
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <StaffAtRisk
-          workers={data.workers_at_risk}
-          onNavigate={navigate}
+        <ComplianceTrend
+          trend={trend}
+          target={data.compliance_target}
         />
 
         <FinancialSummary

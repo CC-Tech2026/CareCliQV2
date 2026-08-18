@@ -14,13 +14,12 @@ export default function HubPage() {
 
   return (
     <div className="pb-14">
-      <div className="mx-auto max-w-[1480px]">
 
-        {/* ─────────────────────────────────────────
-            WELCOME
-        ───────────────────────────────────────── */}
+      {/* ─────────────────────────────────────────
+          WELCOME
+      ───────────────────────────────────────── */}
 
-        <HubHeader />
+      <HubHeader />
 
 
         {/* ─────────────────────────────────────────
@@ -30,15 +29,13 @@ export default function HubPage() {
         {isMD ? (
           // MD lands directly on their overview — workspace navigation
           // lives in the sidebar (Hub / MD Workspaces), not duplicated here.
+          // ComplianceCentre and StaffCommunity are deliberately not repeated
+          // here: MDHubView's triage sections already cover compliance/incident/
+          // invoice alerts (same /api/hub/compliance-alerts source), and a
+          // social "welcome aboard" feed doesn't belong on a governance view.
           <main className="mt-6 min-w-0 space-y-5">
             <MDHubView />
-
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-              <NewsFeed />
-              <ComplianceCentre />
-            </div>
-
-            <StaffCommunity />
+            <NewsFeed />
           </main>
         ) : (
           <div className="mt-6 grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
@@ -96,7 +93,6 @@ export default function HubPage() {
 
           </div>
         )}
-      </div>
     </div>
   );
 }

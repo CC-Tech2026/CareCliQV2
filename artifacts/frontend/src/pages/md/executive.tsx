@@ -2,7 +2,6 @@
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronRight,
   CircleAlert,
   ShieldCheck,
   TrendingDown,
@@ -21,9 +20,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -215,68 +216,6 @@ function Signal({
   );
 }
 
-function InterventionItem({
-  severity,
-  title,
-  detail,
-}: {
-  severity: "high" | "medium" | "low";
-  title: string;
-  detail: string;
-}) {
-  const config =
-    severity === "high"
-      ? {
-          color: RED,
-          background: RED_SOFT,
-        }
-      : severity === "medium"
-        ? {
-            color: AMBER,
-            background: AMBER_SOFT,
-          }
-        : {
-            color: BLUE,
-            background: BLUE_SOFT,
-          };
-
-  return (
-    <div className="group flex items-start gap-3 py-3.5">
-      <div
-        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-        style={{
-          color: config.color,
-          background: config.background,
-        }}
-      >
-        <AlertTriangle size={12} strokeWidth={2.5} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p
-          className="text-[10px] font-bold leading-4"
-          style={{ color: TEXT }}
-        >
-          {title}
-        </p>
-
-        <p
-          className="mt-0.5 text-[9px] leading-4"
-          style={{ color: MUTED }}
-        >
-          {detail}
-        </p>
-      </div>
-
-      <ChevronRight
-        size={12}
-        className="mt-1 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5"
-        style={{ color: TEXT }}
-      />
-    </div>
-  );
-}
-
 function GovernanceMetric({
   icon: Icon,
   label,
@@ -385,6 +324,7 @@ function LoadingState() {
 
 export default function MDExecutivePage() {
   const { translate } = useAccessibility();
+  const [, navigate] = useLocation();
 
   const [data, setData] = useState<MDData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -458,34 +398,6 @@ export default function MDExecutivePage() {
     if (!total) return 0;
 
     return Math.round((compliant / total) * 100);
-  }, [data]);
-
-  const attentionItems = useMemo(() => {
-    if (!data) return [];
-
-    const alerts = data.org_alerts.map((alert, index) => ({
-      id: `alert-${index}`,
-      severity:
-        alert.severity === "high"
-          ? ("high" as const)
-          : alert.severity === "medium"
-            ? ("medium" as const)
-            : ("low" as const),
-      title: alert.message,
-      detail: "Organisation alert",
-    }));
-
-    const workers = data.workers_at_risk.map((worker) => ({
-      id: worker.id,
-      severity:
-        worker.compliance_score < 70
-          ? ("high" as const)
-          : ("medium" as const),
-      title: `${worker.full_name} requires attention`,
-      detail: `${worker.compliance_score}% compliance · ${worker.sessions} sessions`,
-    }));
-
-    return [...alerts, ...workers].slice(0, 6);
   }, [data]);
 
   if (loading) {
@@ -611,13 +523,28 @@ export default function MDExecutivePage() {
         </header>
 
         {/* ============================================================
-            ORGANISATION HEALTH + ATTENTION
+            NEEDS ACTION / EXPOSURE — the triage list
         ============================================================ */}
+        <GovernanceTriage onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
+
+        {/* ============================================================
+            HOW WE'RE TRACKING — demoted below the triage list
+        ============================================================ */}
+        <div className="mt-10 mb-5 flex items-center gap-2">
+          <span
+            className="text-[10px] font-black uppercase tracking-[0.18em]"
+            style={{ color: MUTED }}
+          >
+            How we're tracking
+          </span>
+          <span className="h-px flex-1" style={{ background: BORDER }} />
+        </div>
+
         <section
           className="overflow-hidden rounded-[28px] border bg-white"
           style={{ borderColor: BORDER }}
         >
-          <div className="grid lg:grid-cols-[minmax(0,1.55fr)_360px]">
+          <div>
             {/* Organisation health */}
             <div className="relative min-h-[370px] overflow-hidden p-7 sm:p-9">
               <div
@@ -744,70 +671,6 @@ export default function MDExecutivePage() {
                 </div>
               </div>
             </div>
-
-            {/* Attention rail */}
-            <aside
-              className="border-t p-6 sm:p-7 lg:border-l lg:border-t-0"
-              style={{ borderColor: BORDER }}
-            >
-              <SectionEyebrow
-                right={
-                  attentionItems.length > 0 ? (
-                    <span
-                      className="rounded-full px-2 py-1 text-[8px] font-black"
-                      style={{
-                        background: RED_SOFT,
-                        color: RED,
-                      }}
-                    >
-                      {attentionItems.length} active
-                    </span>
-                  ) : null
-                }
-              >
-                Needs your attention
-              </SectionEyebrow>
-
-              {attentionItems.length === 0 ? (
-                <div className="flex h-[270px] flex-col items-center justify-center text-center">
-                  <div
-                    className="flex h-11 w-11 items-center justify-center rounded-full"
-                    style={{
-                      background: GREEN_SOFT,
-                      color: GREEN,
-                    }}
-                  >
-                    <CheckCircle2 size={19} strokeWidth={2.4} />
-                  </div>
-
-                  <p
-                    className="mt-4 text-[11px] font-black"
-                    style={{ color: TEXT }}
-                  >
-                    Nothing requiring intervention
-                  </p>
-
-                  <p
-                    className="mt-1 max-w-[190px] text-[9px] leading-4"
-                    style={{ color: MUTED }}
-                  >
-                    Your organisation currently has no flagged
-                    executive issues.
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y" style={{ borderColor: BORDER }}>
-                  {attentionItems.map((item) => (
-                    <InterventionItem
-                      key={item.id}
-                      severity={item.severity}
-                      title={item.title}
-                      detail={item.detail}
-                    />
-                  ))}
-                </div>
-              )}
-            </aside>
           </div>
         </section>
 
@@ -1113,7 +976,7 @@ export default function MDExecutivePage() {
                 icon={ShieldCheck}
                 label="Governance"
                 value={`${compliantPercentage}%`}
-                detail={`${data.incidents_this_month} incidents recorded this month`}
+                detail="Share of compliant records — full breakdown below"
                 status={
                   data.compliance_score >= data.compliance_target
                     ? "On target"

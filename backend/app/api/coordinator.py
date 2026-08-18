@@ -714,10 +714,22 @@ async def flagged_sessions(current_user: dict = Depends(get_current_user)):
 
 
 # ── Worker Activation / Deactivation ─────────────────────────────────────────
+# Coordinators and MD both get account-management access here — this is org
+# oversight (who can log in, password resets), not shift-delivery mutation,
+# so it follows the same has_org_wide_access pattern as /workers/pipeline.
+
+def _require_org_account_access(user: dict) -> str:
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return org_id
+
 
 @router.post("/workers/{worker_id}/deactivate")
 async def deactivate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_account_access(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("users").update({"is_active": False}).eq("id", worker_id).eq("organization_id", org_id).execute()
@@ -729,7 +741,7 @@ async def deactivate_worker(worker_id: str, current_user: dict = Depends(get_cur
 
 @router.post("/workers/{worker_id}/activate")
 async def activate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_account_access(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("users").update({"is_active": True}).eq("id", worker_id).eq("organization_id", org_id).execute()
@@ -737,6 +749,56 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
     return {"worker_id": worker_id, "is_active": True}
+
+
+def _send_recovery_email(email: str) -> None:
+    from .auth import _supabase_auth_request
+    from ..core.config import settings
+    import urllib.parse
+
+    redirect_to = f"{settings.frontend_base_url.rstrip('/')}/reset-password"
+    encoded_redirect = urllib.parse.quote(redirect_to, safe="")
+    _supabase_auth_request(
+        f"recover?redirect_to={encoded_redirect}",
+        {"email": email},
+        method="POST",
+    )
+
+
+def _lookup_worker_email(supabase, worker_id: str, org_id: str) -> str:
+    try:
+        row = (
+            supabase.table("users")
+            .select("email")
+            .eq("id", worker_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+
+    email = ((row.data or [None])[0] or {}).get("email")
+    if not email:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+    return email
+
+
+@router.post("/workers/{worker_id}/send-password-reset")
+async def send_worker_password_reset(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """Send the worker a real Supabase recovery email so they set their own new
+    password. Deliberately does not accept or set a password directly here —
+    an admin choosing a worker's login credential is a security posture this
+    app doesn't take on."""
+    org_id = _require_org_account_access(current_user)
+    supabase = get_supabase_admin()
+    email = _lookup_worker_email(supabase, worker_id, org_id)
+    try:
+        _send_recovery_email(email)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not send reset email: {e}")
+
+    return {"worker_id": worker_id, "email": email, "message": "Password reset email sent."}
 
 
 # ── Worker ↔ Client Assignments ───────────────────────────────────────────────
@@ -1044,8 +1106,15 @@ async def coordinator_shifts(
     limit: int = Query(default=500, ge=1, le=2000),
     current_user: dict = Depends(get_current_user),
 ):
-    """List organization shifts for coordinator roster/calendar management."""
-    org_id = _require_coordinator(current_user)
+    """List organization shifts for coordinator roster/calendar management.
+    Read-only — coordinators and MD both get org-wide read access here (MD's
+    Master Schedule view), same pattern as /workers/pipeline. Shift mutation
+    endpoints (assign/create/bulk) stay coordinator-only."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     supabase = get_supabase_admin()
 
     try:

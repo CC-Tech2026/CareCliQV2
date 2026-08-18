@@ -5,11 +5,14 @@ import {
   AlertTriangle,
   Briefcase,
   ChevronRight,
+  KeyRound,
+  Loader2,
   Search,
   Shield,
   Star,
   UserCheck,
   Users,
+  UserX,
   TrendingDown,
   X,
 } from "lucide-react";
@@ -17,8 +20,11 @@ import {
 import { apiFetch } from "@/lib/api-fetch";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useToast } from "@/hooks/use-toast";
 import {
   getWorkerPipelineOverview,
+  deactivateWorker,
+  sendWorkerPasswordReset,
   type WorkerPipelineOverview,
 } from "@/services/coordinatorService";
 
@@ -215,6 +221,7 @@ function SectionHeader({
 
 export default function MDStaffPage() {
   const { translate } = useAccessibility();
+  const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const [data, setData] = useState<MDData | null>(null);
@@ -228,6 +235,35 @@ export default function MDStaffPage() {
   const [search, setSearch] = useState("");
   const [selectedWorker, setSelectedWorker] =
     useState<StaffMember | null>(null);
+  const [accountActionPending, setAccountActionPending] =
+    useState<"reset" | "deactivate" | null>(null);
+
+  async function handleSendPasswordReset(worker: StaffMember) {
+    setAccountActionPending("reset");
+    try {
+      await sendWorkerPasswordReset(worker.id);
+      toast({ title: "Password reset email sent", description: `Sent to ${worker.email ?? worker.full_name}.` });
+    } catch (err) {
+      toast({ title: "Could not send reset email", description: err instanceof Error ? err.message : "Try again shortly.", variant: "destructive" });
+    } finally {
+      setAccountActionPending(null);
+    }
+  }
+
+  async function handleDeactivate(worker: StaffMember) {
+    if (!window.confirm(`Deactivate ${worker.full_name}'s account? They will lose access immediately.`)) return;
+    setAccountActionPending("deactivate");
+    try {
+      await deactivateWorker(worker.id);
+      toast({ title: "Account deactivated", description: `${worker.full_name} can no longer sign in.` });
+      setSelectedWorker(null);
+      setData((prev) => prev ? { ...prev, staff_directory: prev.staff_directory.filter((w) => w.id !== worker.id) } : prev);
+    } catch (err) {
+      toast({ title: "Could not deactivate account", description: err instanceof Error ? err.message : "Try again shortly.", variant: "destructive" });
+    } finally {
+      setAccountActionPending(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -375,7 +411,7 @@ export default function MDStaffPage() {
 
   return (
     <HubLayout>
-      <div className="mx-auto max-w-[1500px] space-y-7 pb-12">
+      <div className="space-y-7 pb-12">
         {/* =========================================================
             HEADER
         ========================================================= */}
@@ -1502,6 +1538,53 @@ export default function MDStaffPage() {
                         </span>
                       </div>
                     )}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <p
+                    className="mb-2 text-[10px] font-black uppercase tracking-wide"
+                    style={{ color: MUTED }}
+                  >
+                    Account management
+                  </p>
+
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      disabled={accountActionPending !== null}
+                      onClick={() => handleSendPasswordReset(selectedWorker)}
+                      className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-cc-soft disabled:opacity-50"
+                      style={{ borderColor: BORDER }}
+                    >
+                      {accountActionPending === "reset" ? (
+                        <Loader2 size={15} className="animate-spin shrink-0" style={{ color: MUTED }} />
+                      ) : (
+                        <KeyRound size={15} className="shrink-0" style={{ color: PLUM }} />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold" style={{ color: TEXT }}>Send password reset email</p>
+                        <p className="text-[10px]" style={{ color: MUTED }}>Sends a secure link so they set a new password themselves.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={accountActionPending !== null}
+                      onClick={() => handleDeactivate(selectedWorker)}
+                      className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-red-50 disabled:opacity-50"
+                      style={{ borderColor: "#E4B9B6" }}
+                    >
+                      {accountActionPending === "deactivate" ? (
+                        <Loader2 size={15} className="animate-spin shrink-0 text-red-600" />
+                      ) : (
+                        <UserX size={15} className="shrink-0 text-red-600" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-red-700">Deactivate account</p>
+                        <p className="text-[10px] text-red-600">Immediately revokes their access. Can be reversed by a coordinator.</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
 
