@@ -28,7 +28,6 @@ import {
   Copy, FileSignature, FileText, ClipboardCheck, Gauge, GripVertical, LayoutGrid, Loader2, Mail, PenLine, Phone,
   Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserPlus, X,
 } from "lucide-react";
-import { HubLayout } from "@/components/layout/HubLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
@@ -1572,7 +1571,7 @@ function PipelineListView({
 
 // ── Page ───────────────────────────────────────────────────────────────
 
-export default function StaffOnboardingPage() {
+export default function StaffOnboardingBoard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -1728,7 +1727,7 @@ export default function StaffOnboardingPage() {
   }
 
   return (
-    <HubLayout>
+    <>
       <div className="space-y-5 pb-10">
         <div className="flex flex-wrap items-center gap-4 border-b pb-4">
           <div>
@@ -1990,6 +1989,6 @@ export default function StaffOnboardingPage() {
         </SheetContent>
       </Sheet>
       {reauthModal}
-    </HubLayout>
+    </>
   );
 }

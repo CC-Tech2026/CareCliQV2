@@ -12,6 +12,7 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
+import OnboardingWorkspace from "@/pages/md/onboarding-workspace";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,7 +56,6 @@ import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
-import StaffOnboardingPage from "@/pages/md/staff-onboarding";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
@@ -193,11 +193,20 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── Staff Onboarding — read-only oversight board, coordinators
-             and MD both get org-wide read access ─────────────────────────── */}
+      {/* ── Staff / Participant Onboarding — both routes render the same
+             OnboardingWorkspace shell so HubLayout mounts once and the
+             Staff/Participants toggle switches without remounting the
+             sidebar. Coordinators and MD both get staff read access;
+             participant onboarding is MD-only. ─────────────────────────── */}
       <Route path="/md/staff-onboarding">
         <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
-          <StaffOnboardingPage />
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/onboard-participant">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <OnboardingWorkspace />
         </ProtectedRoute>
       </Route>
 
