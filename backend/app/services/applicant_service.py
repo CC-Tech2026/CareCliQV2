@@ -83,7 +83,7 @@ def get_applicant_by_onboarding_id(onboarding_id: str, organization_id: str) -> 
         resp = (
             get_supabase_admin()
             .table("applicants")
-            .select("id, resume_summary, resume_skills, resume_experience_years")
+            .select("id, resume_summary, resume_skills, resume_experience_years, credentials_claimed")
             .eq("employee_onboarding_id", onboarding_id)
             .eq("organization_id", organization_id)
             .limit(1)

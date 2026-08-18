@@ -225,6 +225,18 @@ type ProfileSidebarPerson = {
   resumeSummary?: string | null;
   resumeExperienceYears?: string | null;
   resumeSkills?: string[] | null;
+  credentialsClaimed?: { type: string; mentioned_as: string }[] | null;
+};
+
+const CLAIMED_CREDENTIAL_LABELS: Record<string, string> = {
+  ndis_screening: "NDIS Worker Screening",
+  wwcc: "Working with Children Check",
+  code_of_conduct: "Code of Conduct",
+  first_aid: "First Aid",
+  cpr: "CPR",
+  manual_handling: "Manual Handling",
+  infection_control: "Infection Control",
+  medication_admin: "Medication Administration",
 };
 
 function ProfileSidebar({
@@ -235,9 +247,11 @@ function ProfileSidebar({
   notesSlot?: React.ReactNode;
 }) {
   const hasSkills = !!(person.resumeSkills && person.resumeSkills.length > 0);
+  const hasCredentials = !!(person.credentialsClaimed && person.credentialsClaimed.length > 0);
   const hasDocuments = !!(documents && documents.length > 0);
 
   const tabs: { key: string; label: string }[] = [{ key: "profile", label: "Profile" }];
+  if (hasCredentials) tabs.push({ key: "credentials", label: `Credentials (${person.credentialsClaimed!.length})` });
   if (hasSkills) tabs.push({ key: "skills", label: `Skills (${person.resumeSkills!.length})` });
   if (hasDocuments) tabs.push({ key: "documents", label: "Application" });
   if (notesSlot) tabs.push({ key: "notes", label: "Notes" });
@@ -296,6 +310,27 @@ function ProfileSidebar({
               {person.phone && <InfoRow icon={Phone} label="Phone" value={person.phone} />}
               <InfoRow icon={Briefcase} label="Role" value={person.role} />
               <InfoRow icon={CalendarDays} label={person.dateLabel} value={person.dateValue} />
+            </div>
+          </div>
+        )}
+
+        {tab === "credentials" && hasCredentials && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-lg p-2.5" style={{ background: SOFT }}>
+              <ShieldCheck size={13} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+              <p className="text-[10px] leading-relaxed" style={{ color: MUTED }}>
+                Self-reported from their resume, not verified. They'll still need to upload each document for review.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {person.credentialsClaimed!.map((c) => (
+                <div key={c.type} className="rounded-lg border p-2.5" style={{ borderColor: BORDER }}>
+                  <p className="text-[11px] font-bold" style={{ color: TEXT }}>
+                    {CLAIMED_CREDENTIAL_LABELS[c.type] ?? c.type}
+                  </p>
+                  <p className="mt-0.5 text-[10px] italic" style={{ color: MUTED }}>"{c.mentioned_as}"</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -641,6 +676,7 @@ function HireDetail({
                 resumeSummary: hire.resume_summary,
                 resumeExperienceYears: hire.resume_experience_years,
                 resumeSkills: hire.resume_skills,
+                credentialsClaimed: hire.credentials_claimed,
               }}
               documents={hire.candidate_documents}
             />
@@ -1339,6 +1375,7 @@ function ApplicantDetailSheet({
                     resumeSummary: applicant.resume_summary,
                     resumeExperienceYears: applicant.resume_experience_years,
                     resumeSkills: applicant.resume_skills,
+                    credentialsClaimed: applicant.credentials_claimed,
                   }}
                   notesSlot={
                     <div>

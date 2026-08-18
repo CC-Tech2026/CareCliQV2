@@ -19,6 +19,10 @@ export type Applicant = {
   resume_skills?: string[] | null;
   resume_experience_years?: string | null;
   resume_extracted_at?: string | null;
+  /** Self-reported only — normalized against the same credential types the
+   *  real Credentials system uses, but nothing here is verified. The
+   *  candidate/worker still has to upload the actual document later. */
+  credentials_claimed?: { type: string; mentioned_as: string }[] | null;
 };
 
 export function listApplicants() {

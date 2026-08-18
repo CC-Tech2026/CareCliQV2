@@ -44,6 +44,7 @@ export type EmployeeHire = {
   resume_summary?: string | null;
   resume_skills?: string[] | null;
   resume_experience_years?: string | null;
+  credentials_claimed?: { type: string; mentioned_as: string }[] | null;
   candidate_documents?: CandidateDocument[];
 };
 

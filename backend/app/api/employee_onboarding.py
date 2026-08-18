@@ -50,6 +50,7 @@ async def get_hire(hire_id: str, current_user: dict = Depends(get_current_user))
         hire["resume_summary"] = applicant.get("resume_summary")
         hire["resume_skills"] = applicant.get("resume_skills")
         hire["resume_experience_years"] = applicant.get("resume_experience_years")
+        hire["credentials_claimed"] = applicant.get("credentials_claimed")
         hire["candidate_documents"] = applicant_documents_service.list_applicant_documents(applicant["id"], org_id)
     return hire
 
