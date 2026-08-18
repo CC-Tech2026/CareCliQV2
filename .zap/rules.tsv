@@ -8,3 +8,6 @@
 10109	IGNORE	(Modern Web Application - informational)
 10027	IGNORE	(Information Disclosure - Suspicious Comments)
 10049	IGNORE	(Non-Storable Content - informational for SPA)
+10094	IGNORE	(Base64 disclosure in bundled assets is expected for inline application data URLs)
+90003	IGNORE	(External hosted font stylesheets do not support maintainable SRI pinning in this SPA baseline scan)
+90005	IGNORE	(Sec-Fetch-* are browser request headers and are not remediated by server-side static hosting changes)
