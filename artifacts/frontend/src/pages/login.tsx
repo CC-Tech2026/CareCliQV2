@@ -199,41 +199,34 @@ export default function Login() {
         .auth-headline-line { display: block; opacity: 0; animation: headlineLineIn 0.55s ease-out forwards; }
         @keyframes authGlowPulse { 0%,100% { opacity:0.75 } 50% { opacity:1 } }
         .auth-glow { animation: authGlowPulse 9s ease-in-out infinite; }
+        @keyframes authHeroZoom { from { transform: scale(1) } to { transform: scale(1.045) } }
+        .auth-hero-photo { animation: authHeroZoom 22s ease-in-out infinite alternate; }
       ` }} />
 
       {/* -- Mobile-only brand header -------------------------------------- */}
-      <div className="lg:hidden relative overflow-hidden" style={{ background: "var(--auth-marketing-bg)" }}>
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      <div className="lg:hidden relative overflow-hidden">
+        <img
+          src="/auth-hero-login.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
         <div className="relative z-10 px-6 pt-12 pb-9">
           {/* Logo row */}
           <CareCliQLogo size={96} />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "var(--auth-marketing-muted)" }}>
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
             {t("auth.login.marketing.tagline")}
           </p>
 
           {/* Hero copy */}
-          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "90ms" }}>{t("auth.login.marketing.headline2")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "180ms", color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
+            <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-
-          {/* Stats row */}
-          <div className="mt-5 flex items-center gap-4">
-            {[["2,400+", t("auth.login.marketing.statShifts")], ["97%", t("auth.login.marketing.statCompliance")], ["200+", t("auth.login.marketing.statProviders")]].map(([n, l], i) => (
-              <div key={n} className="flex items-center gap-4">
-                {i > 0 && <div className="h-6 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
-                <div>
-                  <p className="text-[16px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
-                  <p className="text-[10px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="mt-3 text-[13px] font-medium leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
+            {t("auth.login.marketing.description")}
+          </p>
 
           {/* Testimonial */}
           <div
@@ -255,13 +248,13 @@ export default function Login() {
                 <div
                   key={a.i}
                   className="h-7 w-7 rounded-full border-2 flex items-center justify-center text-[9px] font-black text-white"
-                  style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
+                  style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
                 >
                   {a.i}
                 </div>
               ))}
             </div>
-            <p className="text-[12px] font-bold" style={{ color: "var(--auth-headline)" }}>
+            <p className="text-[12px] font-bold" style={{ color: "#FFFFFF" }}>
               {t("auth.login.marketing.trustedBy")}
             </p>
           </div>
@@ -489,50 +482,40 @@ export default function Login() {
       </div>
 
       {/* -- Product panel (desktop only) --------------------------------- */}
-      <div
-        className="hidden lg:flex flex-1 flex-col p-12 xl:p-16 overflow-hidden relative"
-        style={{ background: "var(--auth-marketing-bg)" }}
-      >
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      <div className="hidden lg:flex flex-1 flex-col p-12 xl:p-16 overflow-hidden relative">
+        {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
+            scrim, so colours here are hardcoded light values instead of the
+            theme-conditional --auth-* vars — the backdrop is always a dark
+            photo now, regardless of light/dark mode. */}
+        <img
+          src="/auth-hero-login.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
 
-        <div className="relative z-10 flex flex-col justify-between h-full">
-        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "var(--auth-marketing-muted)" }}>
+        <div className="relative z-10 flex max-w-[460px] flex-col justify-between h-full">
+        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
           {t("auth.login.marketing.brandLine")}
         </p>
 
         <div>
-          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "90ms" }}>{t("auth.login.marketing.headline2")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "180ms", color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
+            <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-          <p className="mt-4 text-[14px] font-medium max-w-[340px] leading-relaxed" style={{ color: "var(--auth-marketing-body)" }}>
+          <p className="mt-4 text-[14px] font-medium max-w-[400px] leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
             {t("auth.login.marketing.description")}
           </p>
 
-          <div className="mt-6 flex items-center gap-5">
-            {[["2,400+", t("auth.login.marketing.statShiftsLogged")], ["97%", t("auth.login.marketing.statNdisCompliance")], ["200+", t("auth.login.marketing.statNdisProviders")]].map(([n, l], i) => (
-              <div key={n} className="flex items-center gap-5">
-                {i > 0 && <div className="h-8 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
-                <div>
-                  <p className="text-[20px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
-                  <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8 max-w-[400px] space-y-3">
+          <div className="mt-8 max-w-[420px]">
             <div
-              className="rounded-2xl p-5"
+              className="rounded-2xl p-6"
               style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
-              <Quote size={18} style={{ color: LOGO_PURPLE }} />
-              <p className="mt-3 text-[14px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
+              <Quote size={20} style={{ color: LOGO_PURPLE }} />
+              <p className="mt-3 text-[15px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
                 {t("auth.login.marketing.testimonialQuote")}
               </p>
               <div className="mt-4 flex items-center gap-3">
@@ -552,20 +535,6 @@ export default function Login() {
                 </div>
               </div>
             </div>
-
-            <div className="flex gap-3">
-              {[[t("auth.login.marketing.compliance"),"94%", t("auth.login.marketing.ndisScore")], [t("auth.login.marketing.participants"),"38", t("auth.login.marketing.activePlans")]].map(([label, v, s]) => (
-                <div
-                  key={String(label)}
-                  className="flex-1 rounded-2xl px-4 py-3"
-                  style={{ background: "var(--auth-stat-card-bg)", border: "1px solid var(--auth-stat-card-border)" }}
-                >
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "var(--auth-marketing-muted)" }}>{label}</p>
-                  <p className="text-[24px] font-black mt-0.5" style={{ color: "var(--auth-stat-value)" }}>{v}</p>
-                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{s}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -575,15 +544,15 @@ export default function Login() {
               <div
                 key={a.i}
                 className="h-9 w-9 rounded-full border-2 flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
+                style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
               >
                 {a.i}
               </div>
             ))}
           </div>
           <div>
-            <p className="text-[14px] font-black" style={{ color: "var(--auth-headline)" }}>{t("auth.login.marketing.providersCount")}</p>
-            <p className="text-[12px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
+            <p className="text-[14px] font-black" style={{ color: "#FFFFFF" }}>{t("auth.login.marketing.providersCount")}</p>
+            <p className="text-[12px] font-medium" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
               {t("auth.login.marketing.trustAustralia")}
             </p>
           </div>

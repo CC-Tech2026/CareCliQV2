@@ -868,58 +868,50 @@ export default function Signup() {
         .auth-glow {
           animation: authGlowPulse 9s ease-in-out infinite;
         }
+        @keyframes authHeroZoom {
+          from { transform: scale(1); }
+          to   { transform: scale(1.045); }
+        }
+        .auth-hero-photo {
+          animation: authHeroZoom 22s ease-in-out infinite alternate;
+        }
       `,
         }}
       />
       {/* LEFT */}
-      <div
-        className="hidden md:flex md:w-1/2 relative h-full overflow-hidden flex-col justify-between p-12"
-        style={{ background: "var(--auth-marketing-bg)" }}
-      >
-        {/* Subtle radial glow */}
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12">
+        {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
+            scrim, so colours here are hardcoded light values instead of the
+            theme-conditional --auth-* vars — the backdrop is always a dark
+            photo now, regardless of light/dark mode. */}
+        <img
+          src="/auth-hero-signup.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
 
-        <div className="relative z-10 flex flex-col justify-between h-full">
+        <div className="relative z-10 flex max-w-[440px] flex-col justify-between h-full">
           <div>
             <CareCliQLogo size={96} />
-            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "var(--auth-marketing-muted)" }}>
+            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
               {t("auth.signup.marketing.tagline")}
             </p>
           </div>
 
           <div>
-            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "#FFFFFF" }}>
               <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>
                 {t("auth.signup.marketing.headline1")}
               </span>
-              <span className="auth-headline-line" style={{ animationDelay: "100ms", color: "var(--auth-accent)" }}>
+              <span className="auth-headline-line" style={{ animationDelay: "100ms", color: "#C4B5FD" }}>
                 {t("auth.signup.marketing.headline2")}
               </span>
             </h1>
-            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "var(--auth-marketing-body)" }}>
+            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
               {t("auth.signup.marketing.description")}
             </p>
-
-            <div className="mt-10 flex items-center gap-6">
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>24 hr</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.noteDeadline")}</p>
-              </div>
-              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>100%</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.complianceTracked")}</p>
-              </div>
-              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>AU</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.ndisRegistered")}</p>
-              </div>
-            </div>
 
             {/* Testimonial */}
             <div
@@ -949,14 +941,14 @@ export default function Signup() {
             </div>
           </div>
 
-          <div className="text-[11px] font-bold tracking-wider" style={{ color: "var(--auth-marketing-muted)" }}>
+          <div className="text-[11px] font-bold tracking-wider" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
             {t("auth.signup.marketing.copyright")}
           </div>
         </div>
       </div>
 
       {/* RIGHT */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
+      <div className="w-full md:w-[640px] md:shrink-0 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
@@ -1018,7 +1010,7 @@ export default function Signup() {
                 <button
                   type="submit"
                   disabled={inviteCode.length !== 6 || busy}
-                  className="w-full h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                  className="w-full h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                   style={{ background: PLUM }}
                 >
                   {busy ? <Loader2 className="animate-spin" size={18} /> : null}
@@ -1120,7 +1112,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1128,7 +1120,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!accountDetailsValid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1248,7 +1240,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1256,7 +1248,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!profileValid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1312,7 +1304,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(3)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1321,7 +1313,7 @@ export default function Signup() {
                     type="button"
                     onClick={() => void handleJoinComplete()}
                     disabled={busy}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                     style={{ background: PLUM }}
                   >
                     {busy ? (
@@ -1454,7 +1446,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => navigate("/login")}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1462,7 +1454,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!step1Valid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1494,7 +1486,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1502,7 +1494,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!step2Valid() || busy}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                     style={{ background: PLUM }}
                   >
                     {busy ? (

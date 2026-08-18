@@ -103,7 +103,7 @@ export default function ForgotPassword() {
               <button
                 type="submit"
                 disabled={busy || !email.trim()}
-                className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
+                className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                 style={{ background: "var(--cc-cta)" }}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -118,7 +118,7 @@ export default function ForgotPassword() {
         </p>
       </div>
 
-      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#7C3AED] via-[#9B5DE5] to-[#E8457A]">
+      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12" style={{ background: "#7C3AED" }}>
         <img src="/login_welcome.jpg" alt="CareCliQ workspace" className="max-w-xl w-full rounded-[2rem] shadow-2xl" />
       </div>
     </div>
