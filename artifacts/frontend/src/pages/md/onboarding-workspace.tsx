@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { OnboardingAreaSwitcher } from "@/components/onboarding/OnboardingAreaSwitcher";
 import StaffOnboardingBoard from "@/pages/md/staff-onboarding";
@@ -18,12 +18,17 @@ import ParticipantOnboardingBoard from "@/pages/onboard-participant";
  */
 export default function OnboardingWorkspace() {
   const [location] = useLocation();
+  const search = useSearch();
   const active = location.startsWith("/onboard-participant") ? "participants" : "staff";
+
+  // Hide the toggle while a participant's detail view is open (?intake=...)
+  // — it's a focused drill-down, not a place to jump areas from.
+  const viewingDetail = active === "participants" && new URLSearchParams(search).has("intake");
 
   return (
     <HubLayout>
       <div className="space-y-5">
-        <OnboardingAreaSwitcher active={active} />
+        {!viewingDetail && <OnboardingAreaSwitcher active={active} />}
         {active === "staff" ? <StaffOnboardingBoard /> : <ParticipantOnboardingBoard />}
       </div>
     </HubLayout>

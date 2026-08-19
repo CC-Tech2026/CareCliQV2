@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square,
 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  createMeetingSession, transcribeAndResolveNames,
+  type ConsentGivenBy, type ConsentMethod,
+} from "@/services/coordinatorService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -42,7 +47,7 @@ const NEW_BADGE_TEXT = "#3D5A6C";
  * here persists across a page reload. Wiring to a real API is a separate pass.
  */
 
-type IntakeStatus = "enquiry" | "screening" | "declined" | "meet_greet" | "awaiting_signatures" | "signed" | "active";
+type IntakeStatus = "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet" | "awaiting_signatures" | "signed" | "active";
 
 type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral";
 
@@ -55,7 +60,10 @@ type Intake = {
   source: EnquirySource;
   status: IntakeStatus;
   decline_reason?: string;
+  /** Set when the MD terminates the application because the participant chose not to continue with this provider (distinct from decline, which is the provider saying no). */
+  withdrawn_reason?: string;
   screening_recording_url?: string;
+  meet_greet_recording_url?: string;
   meet_greet_notes?: string;
   plan_start_date?: string;
   plan_end_date?: string;
@@ -81,10 +89,25 @@ function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value.trim());
+}
+
+// Accepts digits, spaces, parentheses, +, - only, with a sane digit count
+// (covers AU mobiles/landlines and most international formats).
+const PHONE_ALLOWED_CHARS = /^[\d\s()+-]+$/;
+function isValidPhone(value: string): boolean {
+  const trimmed = value.trim();
+  const digitCount = trimmed.replace(/\D/g, "").length;
+  return PHONE_ALLOWED_CHARS.test(trimmed) && digitCount >= 8 && digitCount <= 15;
+}
+
 const STATUS_META: Record<IntakeStatus, { label: string; bg: string; color: string }> = {
   enquiry: { label: "New enquiry", bg: SOFT, color: MUTED },
   screening: { label: "Screening", bg: SOFT, color: MUTED },
   declined: { label: "Declined", bg: DANGER_BG, color: DANGER },
+  withdrawn: { label: "Withdrawn", bg: SOFT, color: MUTED },
   meet_greet: { label: "Meet & Greet", bg: INFO_BG, color: INFO },
   awaiting_signatures: { label: "Awaiting signatures", bg: WARNING_BG, color: WARNING },
   signed: { label: "Ready to activate", bg: INFO_BG, color: INFO },
@@ -113,8 +136,8 @@ function stepIndexForStatus(status: IntakeStatus): number {
 }
 
 // The landing page groups participants into these five working columns.
-// Declined intakes have left the pipeline entirely — a dead end, so they
-// don't get a column and aren't shown on the board.
+// Declined and withdrawn intakes have left the pipeline entirely — dead
+// ends, so they don't get a column and aren't shown on the board.
 const BOARD_COLUMNS = [
   { id: "enquiry", label: "Enquiry" },
   { id: "screening", label: "Screening" },
@@ -278,39 +301,54 @@ function ParticipantCard({ intake, onClick }: { intake: Intake; onClick: () => v
   );
 }
 
-/** Vertical stepper used in the detail view's sidebar. */
-function IntakeStepper({ status }: { status: IntakeStatus }) {
-  if (status === "declined") {
+/**
+ * Horizontal stepper at the top of the detail view. Each step is one "page"
+ * of the flow — clicking a reached step (done or current) switches the
+ * single content panel below to that step; steps not reached yet are
+ * disabled since there's nothing to show there.
+ */
+function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeStatus; viewedStep: number; onSelect: (i: number) => void }) {
+  if (status === "declined" || status === "withdrawn") {
+    const meta = STATUS_META[status];
     return (
-      <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: DANGER_BG }}>
-        <XCircle size={16} style={{ color: DANGER }} className="shrink-0" />
-        <p className="text-xs font-bold" style={{ color: DANGER }}>Declined</p>
+      <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: meta.bg }}>
+        <XCircle size={16} style={{ color: meta.color }} className="shrink-0" />
+        <p className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</p>
       </div>
     );
   }
-  const active = stepIndexForStatus(status);
+  const current = stepIndexForStatus(status);
   return (
-    <div>
+    <div className="flex items-start">
       {STEPS.map((s, i) => {
         const Icon = s.icon;
-        const done = i < active;
-        const current = i === active;
+        const done = i < current;
+        const isCurrent = i === current;
+        const reachable = i <= current;
+        const selected = i === viewedStep;
         const last = i === STEPS.length - 1;
         return (
-          <div key={s.key} className="flex gap-3">
-            <div className="flex flex-col items-center">
+          <div key={s.key} className={`flex items-center ${last ? "" : "flex-1"}`}>
+            <button
+              type="button"
+              onClick={() => reachable && onSelect(i)}
+              disabled={!reachable}
+              className="flex flex-col items-center gap-1.5 shrink-0 disabled:cursor-default"
+            >
               <div
-                className="h-7 w-7 rounded-full flex items-center justify-center shrink-0"
+                className="h-10 w-10 rounded-full flex items-center justify-center transition-all"
                 style={{
-                  background: done ? SUCCESS : current ? PLUM : SOFT,
-                  color: done || current ? "#fff" : MUTED,
+                  background: done ? SUCCESS : isCurrent ? PLUM : SOFT,
+                  color: done || isCurrent ? "#fff" : MUTED,
+                  outline: selected ? `2px solid ${PLUM}` : "2px solid transparent",
+                  outlineOffset: 2,
                 }}
               >
-                {done ? <CheckCircle2 size={14} /> : <Icon size={13} />}
+                {done ? <CheckCircle2 size={18} /> : <Icon size={16} />}
               </div>
-              {!last && <div className="w-[2px] flex-1 my-0.5" style={{ background: i < active ? SUCCESS : BORDER, minHeight: 20 }} />}
-            </div>
-            <p className="text-[13px] font-bold pb-5" style={{ color: current ? TEXT : MUTED }}>{s.label}</p>
+              <p className="text-[11px] font-bold whitespace-nowrap" style={{ color: selected || isCurrent ? TEXT : MUTED }}>{s.label}</p>
+            </button>
+            {!last && <div className="h-[2px] flex-1 mx-2" style={{ background: i < current ? SUCCESS : BORDER, marginBottom: 20 }} />}
           </div>
         );
       })}
@@ -325,8 +363,15 @@ export default function ParticipantOnboardingBoard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  // Selected intake lives in the URL (?intake=<id>), same convention as
+  // /team?workerId=...&tab=... elsewhere in the app. This also lets the
+  // shared OnboardingWorkspace shell hide the Staff/Participants toggle
+  // while a detail view is open, without the board needing to know
+  // anything about that shell.
+  const urlSearch = useSearch();
+  const selectedId = new URLSearchParams(urlSearch).get("intake");
+
   const [intakes, setIntakes] = useState<Intake[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
 
@@ -350,7 +395,7 @@ export default function ParticipantOnboardingBoard() {
     setIntakes((prev) => [intake, ...prev]);
     setNewIntakeOpen(false);
     setFullName(""); setNdisNumber(""); setEmail(""); setPhone(""); setSource("online_form");
-    setSelectedId(intake.id);
+    navigate(`/onboard-participant?intake=${intake.id}`);
     toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
   }
 
@@ -362,7 +407,7 @@ export default function ParticipantOnboardingBoard() {
 
   if (selected) {
     return (
-      <IntakeDetail intake={selected} onBack={() => setSelectedId(null)} onUpdate={(patch) => updateIntake(selected.id, patch)} />
+      <IntakeDetail intake={selected} onBack={() => navigate("/onboard-participant")} onUpdate={(patch) => updateIntake(selected.id, patch)} />
     );
   }
 
@@ -451,7 +496,7 @@ export default function ParticipantOnboardingBoard() {
                     <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>Nobody here</p>
                   )}
                   {columnIntakes.map((i) => (
-                    <ParticipantCard key={i.id} intake={i} onClick={() => setSelectedId(i.id)} />
+                    <ParticipantCard key={i.id} intake={i} onClick={() => navigate(`/onboard-participant?intake=${i.id}`)} />
                   ))}
                 </div>
               </div>
@@ -479,12 +524,32 @@ export default function ParticipantOnboardingBoard() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="family@example.com" />
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="family@example.com"
+                aria-invalid={email.length > 0 && !isValidEmail(email)}
+                className={email.length > 0 && !isValidEmail(email) ? "border-red-400 focus-visible:ring-red-400" : undefined}
+              />
+              {email.length > 0 && !isValidEmail(email) && (
+                <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid email address (e.g. name@example.com).</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Phone (optional)</label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0412 345 678" />
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0412 345 678"
+                  aria-invalid={phone.length > 0 && !isValidPhone(phone)}
+                  className={phone.length > 0 && !isValidPhone(phone) ? "border-red-400 focus-visible:ring-red-400" : undefined}
+                />
+                {phone.length > 0 && !isValidPhone(phone) && (
+                  <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid phone number.</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Enquiry source</label>
@@ -505,7 +570,7 @@ export default function ParticipantOnboardingBoard() {
             <Button
               variant="navy"
               onClick={createIntake}
-              disabled={!fullName.trim() || !ndisNumber.trim()}
+              disabled={!fullName.trim() || !ndisNumber.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone))}
             >
               Log enquiry
             </Button>
@@ -525,17 +590,48 @@ function IntakeDetail({
 }) {
   const { toast } = useToast();
   const [declineReason, setDeclineReason] = useState("");
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateReason, setTerminateReason] = useState("");
   const [notes, setNotes] = useState(intake.meet_greet_notes ?? "");
   const [providerName, setProviderName] = useState(intake.provider_signed_name ?? "");
   const [familyName, setFamilyName] = useState(intake.family_signed_name ?? "");
   const [activating, setActivating] = useState(false);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
-  // ── Easy Capture — record the screening call ──────────────────────────
+  // Which step's page is currently shown. Auto-advances to the new current
+  // step whenever an action moves the intake forward; clicking a past step
+  // in the horizontal stepper can still look back without losing this sync.
+  const [viewedStep, setViewedStep] = useState(() => stepIndexForStatus(intake.status));
+  useEffect(() => {
+    setViewedStep(stepIndexForStatus(intake.status));
+  }, [intake.status]);
+
+  const { user } = useAuth();
+
+  // ── Easy Capture — shared by Screening and Meet & Greet, one mic session
+  // at a time, writing into whichever field is passed to startRecording.
+  // Screening is audio-only (local blob, no upload). Meet & Greet uses the
+  // same real, AI-backed pipeline as the coordinator's Easy Capture
+  // elsewhere in the app (createMeetingSession + transcribeAndResolveNames)
+  // — this intake isn't a real participant yet, so the session is created
+  // "unassigned" (participant_id omitted), which the backend already
+  // supports. Goal/task auto-extraction is intentionally skipped — that
+  // writes to a real participant's plan, which doesn't exist pre-activation.
   const [recording, setRecording] = useState(false);
+  const [recordingField, setRecordingField] = useState<"screening_recording_url" | "meet_greet_recording_url" | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
+  const meetingSessionIdRef = useRef<string | null>(null);
+
+  // Consent selection for the real, AI-transcribed Meet & Greet recording —
+  // mirrors the coordinator's Easy Capture, which cannot start recording
+  // without it. The confirmation checkbox itself lives in ConsentPanel,
+  // which only mounts between recordings, so it resets on its own —
+  // "each new recording attempt needs its own consent confirmation".
+  const [consentGivenBy, setConsentGivenBy] = useState<ConsentGivenBy>("participant");
+  const [consentMethod, setConsentMethod] = useState<ConsentMethod>("verbal");
 
   useEffect(() => {
     // Stop the mic and timer if the detail view unmounts mid-recording.
@@ -545,10 +641,46 @@ function IntakeDetail({
     };
   }, []);
 
-  async function startRecording() {
+  async function transcribeMeetGreet(sessionId: string, audioBlob: Blob) {
+    setTranscribing(true);
+    try {
+      const result = await transcribeAndResolveNames(sessionId, audioBlob, user?.full_name, intake.full_name, []);
+      const transcriptText = result.clean_transcript
+        .map((seg) => (seg.speaker_name ? `${seg.speaker_name}: ${seg.text}` : seg.text))
+        .join("\n");
+      if (transcriptText.trim()) {
+        setNotes((prev) => (prev ? `${prev}\n\n${transcriptText}` : transcriptText));
+        toast({ title: "Transcribed", description: "The conversation has been added to your notes." });
+      } else {
+        toast({ title: "Nothing transcribed", description: "No speech was detected in the recording." });
+      }
+    } catch (err: any) {
+      toast({ title: "Transcription failed", description: err?.message ?? "The recording was saved, but couldn't be transcribed.", variant: "destructive" });
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function startRecording(field: "screening_recording_url" | "meet_greet_recording_url") {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       toast({ title: "Voice recording not supported", description: "Please use a different browser or device.", variant: "destructive" });
       return;
+    }
+    if (field === "meet_greet_recording_url") {
+      try {
+        const session = await createMeetingSession(
+          "check_in",
+          new Date().toISOString().slice(0, 10),
+          undefined,
+          undefined, // no participant_id — this intake isn't a real participant yet
+          consentGivenBy,
+          consentMethod,
+        );
+        meetingSessionIdRef.current = session.session_id;
+      } catch (err: any) {
+        toast({ title: "Could not start Easy Capture", description: err?.message ?? "Check the backend is reachable.", variant: "destructive" });
+        return;
+      }
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -562,17 +694,22 @@ function IntakeDetail({
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        const url = URL.createObjectURL(new Blob(chunks, { type: mimeType }));
-        onUpdate({ screening_recording_url: url });
+        const blob = new Blob(chunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        onUpdate({ [field]: url });
+        if (field === "meet_greet_recording_url" && meetingSessionIdRef.current) {
+          transcribeMeetGreet(meetingSessionIdRef.current, blob);
+        }
       };
       recorder.start();
       mediaRecorderRef.current = recorder;
       setElapsedSec(0);
       setRecording(true);
+      setRecordingField(field);
       timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
     } catch (err: any) {
       if (err?.name === "NotAllowedError") {
-        toast({ title: "Microphone access denied", description: "Allow microphone access to record the screening call.", variant: "destructive" });
+        toast({ title: "Microphone access denied", description: "Allow microphone access to record.", variant: "destructive" });
       } else if (err?.name === "NotFoundError") {
         toast({ title: "No microphone found", description: "Connect a microphone to record.", variant: "destructive" });
       } else {
@@ -584,16 +721,36 @@ function IntakeDetail({
   function stopRecording() {
     mediaRecorderRef.current?.stop();
     setRecording(false);
+    setRecordingField(null);
     if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
   }
 
-  function formatElapsed(sec: number) {
-    return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
+  function saveEnquiryDraft() {
+    onUpdate({ decline_reason: declineReason.trim() || undefined });
+    toast({ title: "Draft saved" });
+  }
+
+  // Moves the pipeline pointer back one step. Non-destructive — whatever
+  // was entered on the step being left (notes, signatory names, etc.)
+  // stays intact, so moving forward again doesn't lose anything.
+  function goBack() {
+    const prevStatus: IntakeStatus =
+      intake.status === "screening" ? "enquiry"
+      : intake.status === "meet_greet" ? "screening"
+      : intake.status === "awaiting_signatures" || intake.status === "signed" ? "meet_greet"
+      : intake.status;
+    onUpdate({ status: prevStatus });
+    toast({ title: "Moved back" });
   }
 
   function startScreening() {
     onUpdate({ status: "screening" });
     toast({ title: "Moved to Screening" });
+  }
+
+  function saveScreeningDraft() {
+    onUpdate({ decline_reason: declineReason.trim() || undefined });
+    toast({ title: "Draft saved" });
   }
 
   function accept() {
@@ -607,9 +764,33 @@ function IntakeDetail({
     toast({ title: "Enquiry declined" });
   }
 
+  // Terminate — the participant decided not to continue with this provider.
+  // Distinct from Decline (the provider saying no): available from any
+  // in-progress step, not just Enquiry/Screening.
+  function terminate() {
+    if (!terminateReason.trim()) return;
+    if (recording) stopRecording(); // don't leave the mic hot if terminated mid-recording
+    onUpdate({ status: "withdrawn", withdrawn_reason: terminateReason.trim() });
+    setTerminateOpen(false);
+    toast({ title: "Application terminated", description: `${intake.full_name} chose not to continue with this provider.` });
+  }
+
+  function saveMeetGreetDraft() {
+    onUpdate({ meet_greet_notes: notes.trim() });
+    toast({ title: "Draft saved" });
+  }
+
   function saveMeetGreetAndContinue() {
     onUpdate({ meet_greet_notes: notes.trim(), status: "awaiting_signatures" });
     toast({ title: "Sent for signature", description: "Service agreement is ready for both signatures." });
+  }
+
+  function saveSignatureDraft() {
+    onUpdate({
+      provider_signed_name: providerName.trim() || undefined,
+      family_signed_name: familyName.trim() || undefined,
+    });
+    toast({ title: "Draft saved" });
   }
 
   function markSigned() {
@@ -646,192 +827,311 @@ function IntakeDetail({
         <ArrowLeft size={15} /> Back to enquiries
       </button>
 
+      <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+        <HorizontalStepper status={intake.status} viewedStep={viewedStep} onSelect={setViewedStep} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[1fr_300px] items-start">
-        {/* Main column */}
+        {/* Main column — one step's page at a time */}
         <div className="space-y-5 min-w-0">
-          {/* Enquiry */}
-          {intake.status === "enquiry" && (
+          {intake.status === "declined" || intake.status === "withdrawn" ? (
             <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-                <Mail size={16} style={{ color: PLUM }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>Enquiry</p>
+                <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} />
+                <p className="text-sm font-black" style={{ color: TEXT }}>{STATUS_META[intake.status].label}</p>
               </div>
-              <div className="p-5 space-y-3">
-                <p className="text-xs" style={{ color: MUTED }}>
-                  Logged via {SOURCE_META[intake.source].label.toLowerCase()}. Start screening when you're ready to review this enquiry.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
-                    <ClipboardCheck size={14} /> Start screening
-                  </Button>
-                </div>
-                <div className="pt-2 space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
-                  <div className="flex gap-2">
-                    <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                    <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
-                      <XCircle size={14} /> Decline
-                    </Button>
-                  </div>
+              <div className="p-5">
+                <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: STATUS_META[intake.status].bg }}>
+                  <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} className="shrink-0" />
+                  <p className="text-xs" style={{ color: TEXT }}>
+                    {intake.status === "withdrawn"
+                      ? intake.withdrawn_reason || "The participant chose not to continue with this provider."
+                      : intake.decline_reason || "Declined."}
+                  </p>
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Screening */}
-          {intake.status !== "enquiry" && (
-            <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-                <ClipboardCheck size={16} style={{ color: PLUM }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>Screening</p>
-              </div>
-              <div className="p-5 space-y-3">
-                {intake.status === "screening" && (
-                  <>
-                    <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center"
-                          style={{ background: recording ? DANGER_BG : "var(--cc-bg)", color: recording ? DANGER : PLUM }}
-                        >
-                          <Mic size={15} />
+          ) : (
+            <>
+              {/* Enquiry */}
+              {viewedStep === 0 && (
+                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                  <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+                    <Mail size={16} style={{ color: PLUM }} />
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Enquiry</p>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {intake.status === "enquiry" ? (
+                      <>
+                        <p className="text-xs" style={{ color: MUTED }}>
+                          Logged via {SOURCE_META[intake.source].label.toLowerCase()}. Start screening when you're ready to review this enquiry.
+                        </p>
+                        <div className="pt-2 space-y-1.5">
+                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <div className="flex gap-2">
+                            <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                              <XCircle size={14} /> Decline
+                            </Button>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-black" style={{ color: TEXT }}>Easy Capture</p>
-                          <p className="text-[11px] flex items-center gap-1.5" style={{ color: MUTED }}>
-                            {recording && <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: DANGER }} />}
-                            {recording
-                              ? `Recording… ${formatElapsed(elapsedSec)}`
-                              : intake.screening_recording_url ? "Screening call recorded" : "Record the screening call"}
-                          </p>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <Button variant="outline" className="rounded-lg" onClick={saveEnquiryDraft}>
+                            Save Draft
+                          </Button>
+                          <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
+                            Next <ClipboardCheck size={14} />
+                          </Button>
                         </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                        <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                        <p className="text-xs font-bold" style={{ color: SUCCESS }}>
+                          Logged via {SOURCE_META[intake.source].label.toLowerCase()}. Passed to screening.
+                        </p>
                       </div>
-                      {!recording ? (
-                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" onClick={startRecording}>
-                          <Mic size={13} /> {intake.screening_recording_url ? "Re-record" : "Record"}
-                        </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Screening */}
+              {viewedStep === 1 && (
+                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                  <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+                    <ClipboardCheck size={16} style={{ color: PLUM }} />
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Screening</p>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {intake.status === "screening" ? (
+                      <>
+                        <EasyCaptureBlock
+                          label="Screening call"
+                          recordingUrl={intake.screening_recording_url}
+                          isRecording={recording && recordingField === "screening_recording_url"}
+                          elapsedSec={elapsedSec}
+                          onStart={() => startRecording("screening_recording_url")}
+                          onStop={stopRecording}
+                        />
+                        <p className="text-xs" style={{ color: MUTED }}>Can this organisation take this participant on?</p>
+                        <div className="pt-2 space-y-1.5">
+                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <div className="flex gap-2">
+                            <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                              <XCircle size={14} /> Decline
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between gap-2 pt-1">
+                          <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                            <ArrowLeft size={14} /> Back
+                          </Button>
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="rounded-lg" onClick={saveScreeningDraft}>
+                              Save Draft
+                            </Button>
+                            <Button variant="navy" className="gap-2 rounded-lg" onClick={accept}>
+                              Next <CheckCircle2 size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                          <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                          <p className="text-xs font-bold" style={{ color: SUCCESS }}>Passed screening.</p>
+                        </div>
+                        {intake.screening_recording_url && (
+                          <audio controls src={intake.screening_recording_url} className="w-full h-9" />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Meet & Greet */}
+              {viewedStep === 2 && (
+                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER}}>
+                  <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+                    <Mic size={16} style={{ color: PLUM }} />
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Meet &amp; Greet</p>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {intake.status === "meet_greet" ? (
+                      recording && recordingField === "meet_greet_recording_url" ? (
+                        <EasyCaptureBlock
+                          label="Meet & greet"
+                          recordingUrl={intake.meet_greet_recording_url}
+                          isRecording
+                          elapsedSec={elapsedSec}
+                          onStart={() => {}}
+                          onStop={stopRecording}
+                          transcribesToNotes
+                        />
                       ) : (
-                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" style={{ color: DANGER }} onClick={stopRecording}>
-                          <Square size={13} /> Stop
-                        </Button>
-                      )}
-                    </div>
-                    {intake.screening_recording_url && !recording && (
-                      <audio controls src={intake.screening_recording_url} className="w-full h-9" />
+                        <>
+                          <ConsentPanel
+                            consentGivenBy={consentGivenBy}
+                            onConsentGivenByChange={setConsentGivenBy}
+                            consentMethod={consentMethod}
+                            onConsentMethodChange={setConsentMethod}
+                            onConfirm={() => startRecording("meet_greet_recording_url")}
+                          />
+                          {intake.meet_greet_recording_url && (
+                            <audio controls src={intake.meet_greet_recording_url} className="w-full h-9" />
+                          )}
+                          {transcribing && (
+                            <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+                              <Loader2 size={13} className="animate-spin" /> Transcribing the conversation…
+                            </div>
+                          )}
+                        </>
+                      )
+                    ) : (
+                      intake.meet_greet_recording_url && (
+                        <audio controls src={intake.meet_greet_recording_url} className="w-full h-9" />
+                      )
                     )}
-                    <p className="text-xs" style={{ color: MUTED }}>Can this organisation take this participant on?</p>
-                    <div className="flex gap-2">
-                      <Button variant="navy" className="gap-2 rounded-lg" onClick={accept}>
-                        <CheckCircle2 size={14} /> Yes, proceed
+                    <p className="text-xs" style={{ color: MUTED }}>Key notes from the meet &amp; greet.</p>
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Key notes from the meet & greet…"
+                      className="min-h-[100px]"
+                      disabled={intake.status !== "meet_greet"}
+                    />
+                    {intake.status === "meet_greet" && (
+                      <div className="flex justify-between gap-2">
+                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                          <ArrowLeft size={14} /> Back
+                        </Button>
+                        <div className="flex gap-2">
+                          <Button variant="outline" className="rounded-lg" onClick={saveMeetGreetDraft}>
+                            Save Draft
+                          </Button>
+                          <Button variant="navy" className="gap-2 rounded-lg" onClick={saveMeetGreetAndContinue}>
+                            Next <Send size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Service Agreement / Signatures */}
+              {viewedStep === 3 && (
+                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                  <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+                    <FileSignature size={16} style={{ color: PLUM }} />
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {intake.status === "awaiting_signatures" ? (
+                      <>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Provider signatory</label>
+                            <Input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Your full name" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Participant / guardian signatory</label>
+                            <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Their full name" />
+                          </div>
+                        </div>
+                        {signLink && (
+                          <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                            <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
+                            <p className="text-xs flex-1" style={{ color: TEXT }}>Consent form and service agreement sent to {intake.email || "the family"}.</p>
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-2">
+                          <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                            <ArrowLeft size={14} /> Back
+                          </Button>
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="rounded-lg" onClick={saveSignatureDraft}>
+                              Save Draft
+                            </Button>
+                            <Button variant="navy" className="gap-2 rounded-lg" onClick={markSigned} disabled={!providerName.trim() || !familyName.trim()}>
+                              Next <PenLine size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <SignatureCard label="Provider" signedName={intake.provider_signed_name} signedAt={intake.provider_signed_at} pendingLabel="Not yet signed" />
+                        <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} pendingLabel="Not yet signed" />
+                      </div>
+                    )}
+
+                    {intake.status === "signed" && (
+                      <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
+                        {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
                       </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Active */}
+              {viewedStep === 4 && (
+                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                  <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+                    <ShieldCheck size={16} style={{ color: PLUM }} />
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Active</p>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                      <Users size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                      <p className="text-xs" style={{ color: TEXT }}>
+                        {intake.full_name.split(" ")[0]} is active and now appears on the Coordinator's dashboard for scheduling and support planning.
+                      </p>
                     </div>
-                    <div className="pt-2 space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                  </div>
+                </div>
+              )}
+
+              {/* Terminate application — available from any in-progress step, not just
+                  Enquiry/Screening. Distinct from Decline: this is the participant's own
+                  choice not to continue, not the provider turning them away. */}
+              {intake.status !== "active" && (
+                <div className="rounded-lg border p-4" style={{ background: SOFT, borderColor: BORDER }}>
+                  {!terminateOpen ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTerminateOpen(true)}
+                      className="gap-1.5 rounded-lg"
+                      style={{ color: DANGER, borderColor: DANGER }}
+                    >
+                      <XCircle size={13} /> Terminate application
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs font-black" style={{ color: DANGER }}>Terminate this application?</p>
+                      <p className="text-[11px]" style={{ color: MUTED }}>
+                        Use this if the participant has decided not to continue with this provider. Ends the pipeline immediately from any stage.
+                      </p>
+                      <Input value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} placeholder="e.g. Chose a different provider" />
                       <div className="flex gap-2">
-                        <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                        <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
-                          <XCircle size={14} /> Decline
+                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { setTerminateOpen(false); setTerminateReason(""); }}>
+                          Cancel
+                        </Button>
+                        <Button variant="outline" size="sm" className="rounded-lg" style={{ color: DANGER }} onClick={terminate} disabled={!terminateReason.trim()}>
+                          <XCircle size={13} className="mr-1.5" /> Confirm termination
                         </Button>
                       </div>
                     </div>
-                  </>
-                )}
-                {intake.status === "declined" && (
-                  <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: DANGER_BG }}>
-                    <XCircle size={16} style={{ color: DANGER }} className="shrink-0" />
-                    <p className="text-xs" style={{ color: TEXT }}>{intake.decline_reason || "Declined."}</p>
-                  </div>
-                )}
-                {stepIndexForStatus(intake.status) > 1 && (
-                  <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
-                    <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
-                    <p className="text-xs font-bold" style={{ color: SUCCESS }}>Passed screening.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Meet & Greet */}
-          {stepIndexForStatus(intake.status) >= 2 && intake.status !== "declined" && (
-            <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER}}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-                <Mic size={16} style={{ color: PLUM }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>Meet &amp; Greet</p>
-              </div>
-              <div className="p-5 space-y-3">
-                <p className="text-xs" style={{ color: MUTED }}>Key notes from the meet &amp; greet.</p>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Key notes from the meet & greet…"
-                  className="min-h-[100px]"
-                  disabled={intake.status !== "meet_greet"}
-                />
-                {intake.status === "meet_greet" && (
-                  <Button variant="navy" className="gap-2 rounded-lg" onClick={saveMeetGreetAndContinue}>
-                    <Send size={14} /> Send service agreement for signature
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Service Agreement / Signatures */}
-          {stepIndexForStatus(intake.status) >= 3 && intake.status !== "declined" && (
-            <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-                <FileSignature size={16} style={{ color: PLUM }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
-              </div>
-              <div className="p-5 space-y-3">
-                {intake.status === "awaiting_signatures" && (
-                  <>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Provider signatory</label>
-                        <Input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Your full name" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Participant / guardian signatory</label>
-                        <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Their full name" />
-                      </div>
-                    </div>
-                    {signLink && (
-                      <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
-                        <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
-                        <p className="text-xs flex-1" style={{ color: TEXT }}>Consent form and service agreement sent to {intake.email || "the family"}.</p>
-                      </div>
-                    )}
-                    <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={markSigned} disabled={!providerName.trim() || !familyName.trim()}>
-                      <PenLine size={14} /> Mark as signed
-                    </Button>
-                  </>
-                )}
-
-                {intake.status !== "awaiting_signatures" && (
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <SignatureCard label="Provider" signedName={intake.provider_signed_name} signedAt={intake.provider_signed_at} pendingLabel="Not yet signed" />
-                    <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} pendingLabel="Not yet signed" />
-                  </div>
-                )}
-
-                {intake.status === "signed" && (
-                  <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
-                    {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {intake.status === "active" && (
-            <div className="flex items-center gap-2.5 rounded-lg p-4 border" style={{ background: SUCCESS_BG, borderColor: BORDER }}>
-              <Users size={16} style={{ color: SUCCESS }} className="shrink-0" />
-              <p className="text-xs" style={{ color: TEXT }}>
-                {intake.full_name.split(" ")[0]} is active and now appears on the Coordinator's dashboard for scheduling and support planning.
-              </p>
-            </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -852,7 +1152,7 @@ function IntakeDetail({
             </div>
           </div>
 
-          {intake.status !== "enquiry" && intake.status !== "declined" && intake.status !== "active" && (
+          {intake.status !== "enquiry" && intake.status !== "declined" && intake.status !== "withdrawn" && intake.status !== "active" && (
             <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
               <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Board card note</label>
               <Input
@@ -866,13 +1166,136 @@ function IntakeDetail({
             </div>
           )}
 
-          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <p className="text-[10px] font-black uppercase tracking-wide mb-4" style={{ color: MUTED }}>Progress</p>
-            <IntakeStepper status={intake.status} />
-          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function formatElapsed(sec: number): string {
+  return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
+}
+
+function ConsentPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 h-9 rounded-full text-[12px] font-bold transition-all"
+      style={active ? { background: PLUM, color: "#fff" } : { background: SURFACE, color: TEXT, border: `1px solid ${BORDER}` }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * Consent gate before the real, AI-transcribed Meet & Greet recording —
+ * same requirement as the coordinator's Easy Capture: recording cannot
+ * start without explicit, confirmed consent.
+ */
+function ConsentPanel({
+  consentGivenBy, onConsentGivenByChange, consentMethod, onConsentMethodChange, onConfirm,
+}: {
+  consentGivenBy: ConsentGivenBy;
+  onConsentGivenByChange: (v: ConsentGivenBy) => void;
+  consentMethod: ConsentMethod;
+  onConsentMethodChange: (v: ConsentMethod) => void;
+  onConfirm: () => void;
+}) {
+  // Local, not lifted to the parent — this panel only mounts between
+  // recording attempts, so remounting it naturally resets the checkbox,
+  // which is exactly "each new attempt needs its own consent confirmation".
+  const [checked, setChecked] = useState(false);
+  const consentGivenByLabel = consentGivenBy === "participant" ? "the participant" : consentGivenBy === "nominee" ? "their nominee" : "their guardian";
+  return (
+    <div className="rounded-lg p-4 space-y-3" style={{ background: SOFT }}>
+      <div className="flex items-start gap-2.5">
+        <ShieldCheck size={16} style={{ color: PLUM }} className="shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-black" style={{ color: TEXT }}>Consent required</p>
+          <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>Recording cannot start without explicit consent.</p>
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Consent given by</p>
+        <div className="flex gap-1.5">
+          <ConsentPill label="Participant" active={consentGivenBy === "participant"} onClick={() => onConsentGivenByChange("participant")} />
+          <ConsentPill label="Nominee" active={consentGivenBy === "nominee"} onClick={() => onConsentGivenByChange("nominee")} />
+          <ConsentPill label="Guardian" active={consentGivenBy === "guardian"} onClick={() => onConsentGivenByChange("guardian")} />
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Method</p>
+        <div className="flex gap-1.5">
+          <ConsentPill label="Verbal" active={consentMethod === "verbal"} onClick={() => onConsentMethodChange("verbal")} />
+          <ConsentPill label="Written" active={consentMethod === "written"} onClick={() => onConsentMethodChange("written")} />
+        </div>
+      </div>
+      <label className="flex items-start gap-2 rounded-lg p-3 cursor-pointer" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+        <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded shrink-0" />
+        <span className="text-[11px]" style={{ color: TEXT }}>
+          I confirm <strong>{consentGivenByLabel}</strong> has been informed the conversation will be recorded and has given {consentMethod} consent.
+        </span>
+      </label>
+      <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={onConfirm} disabled={!checked}>
+        <Mic size={14} /> Confirm consent &amp; record
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Easy Capture record/stop/playback control, shared by the Screening and
+ * Meet & Greet steps — each records into its own field on the intake, but
+ * only one recording can be in progress at a time (single mic session).
+ */
+function EasyCaptureBlock({
+  label, recordingUrl, isRecording, elapsedSec, onStart, onStop, transcribesToNotes,
+}: {
+  label: string;
+  recordingUrl?: string;
+  isRecording: boolean;
+  elapsedSec: number;
+  onStart: () => void;
+  onStop: () => void;
+  /** When true, shows that speech is being converted into the notes field live while recording. */
+  transcribesToNotes?: boolean;
+}) {
+  return (
+    <>
+      <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center"
+            style={{ background: isRecording ? DANGER_BG : "var(--cc-bg)", color: isRecording ? DANGER : PLUM }}
+          >
+            <Mic size={15} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-black" style={{ color: TEXT }}>Easy Capture</p>
+            <p className="text-[11px] flex items-center gap-1.5" style={{ color: MUTED }}>
+              {isRecording && <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: DANGER }} />}
+              {isRecording
+                ? `${transcribesToNotes ? "Recording & converting to notes" : "Recording"}… ${formatElapsed(elapsedSec)}`
+                : recordingUrl ? `${label} recorded` : `Record the ${label.toLowerCase()}`}
+            </p>
+          </div>
+        </div>
+        {!isRecording ? (
+          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" onClick={onStart}>
+            <Mic size={13} /> {recordingUrl ? "Re-record" : "Record"}
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" style={{ color: DANGER }} onClick={onStop}>
+            <Square size={13} /> Stop
+          </Button>
+        )}
+      </div>
+      {recordingUrl && !isRecording && (
+        <audio controls src={recordingUrl} className="w-full h-9" />
+      )}
+    </>
   );
 }
 

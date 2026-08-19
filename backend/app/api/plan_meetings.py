@@ -8,7 +8,7 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
 from ..services.plan_meeting_service import (
@@ -91,10 +91,13 @@ class PreFilledNames(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _require_coordinator(current_user: dict) -> None:
-    if not is_coordinator_role(current_user):
+    # Org-wide access = support_coordinator or managing_director, matching
+    # /md/staff-onboarding's access pattern — MDs need this for Easy Capture
+    # during participant onboarding (Meet & Greet), not just coordinators.
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only support coordinators can access plan meetings.",
+            detail="Only support coordinators or managing directors can access plan meetings.",
         )
 
 
