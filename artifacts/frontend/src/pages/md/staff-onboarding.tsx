@@ -766,7 +766,12 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
       }}
       className="group relative select-none rounded-2xl border bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="cursor-grab active:cursor-grabbing" {...listeners} {...attributes}>
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        onClick={onOpen}
+        {...listeners}
+        {...attributes}
+      >
         <div className="flex items-start gap-3 pr-5">
           <Avatar name={applicant.full_name} size={36} color={accent} />
           <div className="min-w-0 flex-1">
@@ -786,16 +791,6 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
         )}
       </div>
       <div className="absolute right-2.5 top-2.5 flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
-        {onOpen && (
-          <button
-            onClick={onOpen}
-            aria-label={`View ${applicant.full_name}`}
-            title="View details"
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/5"
-          >
-            <FileText size={13} style={{ color: MUTED }} />
-          </button>
-        )}
         {onReject && (
           <button
             onClick={onReject}
@@ -901,6 +896,7 @@ function StaticColumn({ label, count, color, children }: { label: string; count:
 function offerLetterMeta(hire: PipelinePerson): { meta: string; attention: boolean } {
   const meta = hire.status === "awaiting_signatures" ? "Awaiting signature"
     : hire.status === "signed" ? "Signed, ready to invite"
+    : hire.status === "invited" ? "Invite sent, awaiting login"
     : "Offer drafted";
   return { meta, attention: hire.status === "awaiting_signatures" };
 }
@@ -1164,7 +1160,6 @@ function ApplicantDetailSheet({
   if (applicant.stage === "applied") stageOptions.push({ value: "interview", label: "Move to Interview" });
   if (applicant.stage === "interview") stageOptions.push({ value: "applied", label: "Move back to Applied" });
   if (isHireManager) stageOptions.push({ value: "offer_extended", label: "Extend Offer" });
-  const [stageMenuOpen, setStageMenuOpen] = useState(false);
 
   const presentApplicantDocTypes = new Set(documents.map((d) => d.document_type));
   const readinessCategories: ReadinessCategory[] = [
@@ -1248,29 +1243,24 @@ function ApplicantDetailSheet({
             <div className="mt-5 flex items-center justify-between gap-3">
               <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Hiring Process</p>
               {stageOptions.length > 0 && (
-                <div className="relative">
-                  <button
-                    onClick={() => setStageMenuOpen((v) => !v)}
-                    disabled={movePending}
-                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black text-white disabled:opacity-60"
-                    style={{ background: PLUM }}
-                  >
-                    {movePending ? <Loader2 size={12} className="animate-spin" /> : null} Move Stage <ChevronDown size={12} />
-                  </button>
-                  {stageMenuOpen && (
-                    <div className="absolute right-0 top-[calc(100%+6px)] z-10 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-lg" style={{ borderColor: BORDER }}>
-                      {stageOptions.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => { setStageMenuOpen(false); onMoveStage(opt.value); }}
-                          className="flex w-full items-center px-3 py-2 text-left text-[12px] font-semibold hover:bg-black/[0.03]"
-                          style={{ color: TEXT }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div className="flex items-center gap-2">
+                  {stageOptions.map((opt) => {
+                    const goingBack = APPLICANT_STAGE_STEPS.findIndex((s) => s.key === opt.value)
+                      < APPLICANT_STAGE_STEPS.findIndex((s) => s.key === applicant.stage);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => onMoveStage(opt.value)}
+                        disabled={movePending}
+                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black disabled:opacity-60"
+                        style={goingBack
+                          ? { background: SOFT, color: MUTED }
+                          : { background: PLUM, color: "#fff" }}
+                      >
+                        {movePending ? <Loader2 size={12} className="animate-spin" /> : null} {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

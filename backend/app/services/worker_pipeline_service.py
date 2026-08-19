@@ -6,7 +6,12 @@ Training, Active) stages into a single view. Every column here reads from
 an existing data model rather than a new one:
 
 - Interview          -> applicant_service (Applicants Board)
-- Offer letter        -> employee_onboarding_service (signature flow)
+- Offer letter        -> employee_onboarding_service (signature flow). Stays here
+                         through "invited" too (invitations.py sets that status the
+                         moment the login invite is sent) — a candidate isn't a real
+                         worker yet at that point (no public.users row exists), so
+                         they'd otherwise vanish from every column until they
+                         actually accept the invite and log in.
 - Credentials         -> onboarding_escalation_service.credentials_blocked,
                          the same mandatory-credential check used for the
                          rostering gate and the 3-day/14-day escalation.
@@ -30,7 +35,7 @@ from . import onboarding_escalation_service as escalation
 from . import worker_training_service as training
 from .supabase_client import get_supabase_admin
 
-OFFER_LETTER_STATUSES = ("draft", "awaiting_signatures", "signed")
+OFFER_LETTER_STATUSES = ("draft", "awaiting_signatures", "signed", "invited")
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
