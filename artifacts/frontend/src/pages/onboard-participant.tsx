@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
-  MapPin, User, FileText,
+  MapPin, User, FileText, Trash2, Plus,
 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -63,7 +63,6 @@ type Intake = {
   decline_reason?: string;
   /** Set when the MD terminates the application because the participant chose not to continue with this provider (distinct from decline, which is the provider saying no). */
   withdrawn_reason?: string;
-  screening_recording_url?: string;
   meet_greet_recording_url?: string;
   meet_greet_notes?: string;
   /** The physically-signed service agreement, uploaded as evidence. Local blob URL for now — no backend storage yet. */
@@ -252,7 +251,7 @@ function badgeForIntake(intake: Intake): { icon?: typeof Clock3; label: string; 
     return null;
   }
   if (column === "meet_greet") {
-    return intake.screening_recording_url ? { icon: Mic, label: "Easy Capture ready", color: CRITICAL, bg: CRITICAL_BG } : null;
+    return intake.meet_greet_recording_url ? { icon: Mic, label: "Easy Capture ready", color: CRITICAL, bg: CRITICAL_BG } : null;
   }
   if (column === "service_agreement") {
     return intake.status === "awaiting_signatures" ? { label: "Awaiting sign", color: SUCCESS, bg: SUCCESS_BG } : null;
@@ -683,6 +682,33 @@ function IntakeDetail({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
+  // Intake form: read-only by default (showing whatever's saved), only
+  // switches to editable fields once "Edit" is clicked. Cancelling drops
+  // the draft and reverts to what was saved before.
+  const [intakeFormEditing, setIntakeFormEditing] = useState(false);
+  const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
+  function updateIntakeFormDraft(patch: Partial<WebIntakeForm>) {
+    setIntakeFormDraft((prev) => ({ ...prev, ...patch }));
+  }
+  function startEditingIntakeForm() {
+    setIntakeFormDraft(intake.web_intake ?? {});
+    setIntakeFormEditing(true);
+  }
+  function cancelEditingIntakeForm() {
+    setIntakeFormDraft(intake.web_intake ?? {});
+    setIntakeFormEditing(false);
+  }
+  function saveIntakeForm() {
+    const payload: WebIntakeForm = {
+      ...intakeFormDraft,
+      submitted_at: intake.web_intake?.submitted_at ?? new Date().toISOString(),
+      submitted_by: intakeFormDraft.submitted_by || "Provider",
+    };
+    onUpdate({ web_intake: payload });
+    setIntakeFormEditing(false);
+    toast({ title: "Intake form saved" });
+  }
+
   // Which step's page is currently shown. Auto-advances to the new current
   // step whenever an action moves the intake forward; clicking a past step
   // in the horizontal stepper can still look back without losing this sync.
@@ -695,15 +721,14 @@ function IntakeDetail({
 
   // ── Easy Capture — shared by Screening and Meet & Greet, one mic session
   // at a time, writing into whichever field is passed to startRecording.
-  // Screening is audio-only (local blob, no upload). Meet & Greet uses the
-  // same real, AI-backed pipeline as the coordinator's Easy Capture
-  // elsewhere in the app (createMeetingSession + transcribeAndResolveNames)
-  // — this intake isn't a real participant yet, so the session is created
-  // "unassigned" (participant_id omitted), which the backend already
-  // supports. Goal/task auto-extraction is intentionally skipped — that
-  // writes to a real participant's plan, which doesn't exist pre-activation.
+  // Meet & Greet only — uses the same real, AI-backed pipeline as the
+  // coordinator's Easy Capture elsewhere in the app (createMeetingSession +
+  // transcribeAndResolveNames) — this intake isn't a real participant yet,
+  // so the session is created "unassigned" (participant_id omitted), which
+  // the backend already supports. Goal/task auto-extraction is
+  // intentionally skipped — that writes to a real participant's plan,
+  // which doesn't exist pre-activation.
   const [recording, setRecording] = useState(false);
-  const [recordingField, setRecordingField] = useState<"screening_recording_url" | "meet_greet_recording_url" | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -746,26 +771,24 @@ function IntakeDetail({
     }
   }
 
-  async function startRecording(field: "screening_recording_url" | "meet_greet_recording_url") {
+  async function startRecording() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       toast({ title: "Voice recording not supported", description: "Please use a different browser or device.", variant: "destructive" });
       return;
     }
-    if (field === "meet_greet_recording_url") {
-      try {
-        const session = await createMeetingSession(
-          "check_in",
-          new Date().toISOString().slice(0, 10),
-          undefined,
-          undefined, // no participant_id — this intake isn't a real participant yet
-          consentGivenBy,
-          consentMethod,
-        );
-        meetingSessionIdRef.current = session.session_id;
-      } catch (err: any) {
-        toast({ title: "Could not start Easy Capture", description: err?.message ?? "Check the backend is reachable.", variant: "destructive" });
-        return;
-      }
+    try {
+      const session = await createMeetingSession(
+        "check_in",
+        new Date().toISOString().slice(0, 10),
+        undefined,
+        undefined, // no participant_id — this intake isn't a real participant yet
+        consentGivenBy,
+        consentMethod,
+      );
+      meetingSessionIdRef.current = session.session_id;
+    } catch (err: any) {
+      toast({ title: "Could not start Easy Capture", description: err?.message ?? "Check the backend is reachable.", variant: "destructive" });
+      return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -781,8 +804,8 @@ function IntakeDetail({
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
-        onUpdate({ [field]: url });
-        if (field === "meet_greet_recording_url" && meetingSessionIdRef.current) {
+        onUpdate({ meet_greet_recording_url: url });
+        if (meetingSessionIdRef.current) {
           transcribeMeetGreet(meetingSessionIdRef.current, blob);
         }
       };
@@ -790,7 +813,6 @@ function IntakeDetail({
       mediaRecorderRef.current = recorder;
       setElapsedSec(0);
       setRecording(true);
-      setRecordingField(field);
       timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
     } catch (err: any) {
       if (err?.name === "NotAllowedError") {
@@ -806,7 +828,6 @@ function IntakeDetail({
   function stopRecording() {
     mediaRecorderRef.current?.stop();
     setRecording(false);
-    setRecordingField(null);
     if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
   }
 
@@ -955,7 +976,15 @@ function IntakeDetail({
                   </div>
 
                   <div className="p-5 space-y-3">
-                    {intake.web_intake && <IntakeFormView intake={intake} />}
+                    <IntakeFormBlock
+                      intake={intake}
+                      draft={intakeFormDraft}
+                      onChange={updateIntakeFormDraft}
+                      editing={intakeFormEditing}
+                      onEdit={startEditingIntakeForm}
+                      onCancel={cancelEditingIntakeForm}
+                      onSave={saveIntakeForm}
+                    />
 
                     {intake.status === "enquiry" ? (
                       <>
@@ -1007,14 +1036,6 @@ function IntakeDetail({
                   <div className="p-5 space-y-3">
                     {intake.status === "screening" ? (
                       <>
-                        <EasyCaptureBlock
-                          label="Screening call"
-                          recordingUrl={intake.screening_recording_url}
-                          isRecording={recording && recordingField === "screening_recording_url"}
-                          elapsedSec={elapsedSec}
-                          onStart={() => startRecording("screening_recording_url")}
-                          onStop={stopRecording}
-                        />
                         <p className="text-xs" style={{ color: MUTED }}>Can this organisation take this participant on?</p>
                         <div className="pt-2 space-y-1.5">
                           <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
@@ -1040,15 +1061,10 @@ function IntakeDetail({
                         </div>
                       </>
                     ) : (
-                      <>
-                        <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
-                          <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
-                          <p className="text-xs font-bold" style={{ color: SUCCESS }}>Passed screening.</p>
-                        </div>
-                        {intake.screening_recording_url && (
-                          <audio controls src={intake.screening_recording_url} className="w-full h-9" />
-                        )}
-                      </>
+                      <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                        <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                        <p className="text-xs font-bold" style={{ color: SUCCESS }}>Passed screening.</p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1063,7 +1079,7 @@ function IntakeDetail({
                   </div>
                   <div className="p-5 space-y-3">
                     {intake.status === "meet_greet" ? (
-                      recording && recordingField === "meet_greet_recording_url" ? (
+                      recording ? (
                         <EasyCaptureBlock
                           label="Meet & greet"
                           recordingUrl={intake.meet_greet_recording_url}
@@ -1080,7 +1096,7 @@ function IntakeDetail({
                             onConsentGivenByChange={setConsentGivenBy}
                             consentMethod={consentMethod}
                             onConsentMethodChange={setConsentMethod}
-                            onConfirm={() => startRecording("meet_greet_recording_url")}
+                            onConfirm={startRecording}
                           />
                           {intake.meet_greet_recording_url && (
                             <audio controls src={intake.meet_greet_recording_url} className="w-full h-9" />
@@ -1132,6 +1148,39 @@ function IntakeDetail({
                     <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
                   </div>
                   <div className="p-5 space-y-3">
+                    <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-bg)", color: PLUM }}>
+                          <Upload size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
+                          <p className="text-[11px] truncate" style={{ color: MUTED }}>
+                            {intake.signed_document_name || "Upload the physically-signed service agreement"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {intake.signed_document_url && (
+                          <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
+                        )}
+                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
+                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload"}
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadSignedDocument(file);
+                        e.target.value = "";
+                      }}
+                    />
+
                     {intake.status === "awaiting_signatures" ? (
                       <>
                         <div className="grid sm:grid-cols-2 gap-3">
@@ -1170,39 +1219,6 @@ function IntakeDetail({
                         <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} pendingLabel="Not yet signed" />
                       </div>
                     )}
-
-                    <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-bg)", color: PLUM }}>
-                          <Upload size={15} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
-                          <p className="text-[11px] truncate" style={{ color: MUTED }}>
-                            {intake.signed_document_name || "Upload the physically-signed service agreement"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {intake.signed_document_url && (
-                          <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
-                        )}
-                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
-                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload"}
-                        </Button>
-                      </div>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/pdf,image/jpeg,image/png"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadSignedDocument(file);
-                        e.target.value = "";
-                      }}
-                    />
 
                     {intake.status === "signed" && (
                       <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
@@ -1383,19 +1399,6 @@ function formatDate(iso?: string): string | undefined {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function DetailField({ label, value, icon: Icon }: { label: string; value?: string | null; icon?: typeof Mail }) {
-  if (!value) return null;
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
-      <p className="text-sm font-bold flex items-center gap-1.5 mt-0.5" style={{ color: TEXT }}>
-        {Icon && <Icon size={13} style={{ color: MUTED }} className="shrink-0" />}
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function IntakeFormSection({ icon: Icon, title, children }: { icon: typeof Mail; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
@@ -1408,128 +1411,218 @@ function IntakeFormSection({ icon: Icon, title, children }: { icon: typeof Mail;
   );
 }
 
-/** Read-only view of a participant's submitted web intake form. */
-function IntakeFormView({ intake }: { intake: Intake }) {
-  const w = intake.web_intake;
-  if (!w) {
+
+/**
+ * Dual-mode field: read-only text when `editing` is false (hides itself if
+ * empty, same as the old display-only view), an input when true.
+ */
+function Field({
+  label, value, onChange, editing, placeholder, type, icon: Icon,
+}: {
+  label: string;
+  value?: string;
+  onChange?: (v: string) => void;
+  editing: boolean;
+  placeholder?: string;
+  type?: string;
+  icon?: typeof Mail;
+}) {
+  if (!editing) {
+    if (!value) return null;
     return (
-      <div className="rounded-lg border p-8 text-center" style={{ background: SURFACE, borderColor: BORDER }}>
-        <p className="text-sm font-bold" style={{ color: MUTED }}>No digital intake form on file for this enquiry.</p>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        <p className="text-sm font-bold flex items-center gap-1.5 mt-0.5" style={{ color: TEXT }}>
+          {Icon && <Icon size={13} style={{ color: MUTED }} className="shrink-0" />}
+          {value}
+        </p>
       </div>
     );
   }
-  const hasAddress = w.street_address || w.suburb || w.state || w.postcode;
-  const hasNdis = intake.ndis_number || w.plan_status || w.plan_start || w.plan_end;
-  const hasPlanManager = w.plan_manager_name || w.plan_manager_org;
-  const hasKin = w.next_of_kin && w.next_of_kin.length > 0;
-  const hasReferral = w.referral_source || w.referral_date || (w.presenting_needs && w.presenting_needs.length > 0) || w.notes;
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</label>
+      <Input type={type} value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} className="h-9 text-sm" />
+    </div>
+  );
+}
+
+/**
+ * Participant intake form — read-only by default (whatever's saved on
+ * intake.web_intake), switches to editable fields only once "Edit" is
+ * clicked. Same field set whether it arrived via the web referral form or
+ * the provider fills it in themselves.
+ */
+function IntakeFormBlock({
+  intake, draft, onChange, editing, onEdit, onCancel, onSave,
+}: {
+  intake: Intake;
+  draft: Partial<WebIntakeForm>;
+  onChange: (patch: Partial<WebIntakeForm>) => void;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const kin = draft.next_of_kin ?? [];
+  const hasAnyData = Object.keys(intake.web_intake ?? {}).length > 0;
+
+  function updateKin(index: number, patch: Partial<NextOfKinEntry>) {
+    const next = kin.map((k, i) => (i === index ? { ...k, ...patch } : k));
+    onChange({ next_of_kin: next });
+  }
+  function addKin() {
+    onChange({ next_of_kin: [...kin, { name: "" }] });
+  }
+  function removeKin(index: number) {
+    onChange({ next_of_kin: kin.filter((_, i) => i !== index) });
+  }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: CRITICAL_BG }}>
+      <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: intake.web_intake?.submitted_at ? CRITICAL_BG : SOFT }}>
         <div className="flex items-center gap-2.5">
-          <FileText size={16} style={{ color: CRITICAL }} />
-          <p className="text-sm font-bold" style={{ color: CRITICAL }}>
-            Digital intake form submitted {formatDate(w.submitted_at)}
+          <FileText size={16} style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }} />
+          <p className="text-sm font-bold" style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }}>
+            {intake.web_intake?.submitted_at
+              ? `Digital intake form submitted ${formatDate(intake.web_intake.submitted_at)}`
+              : "No intake form on file yet"}
           </p>
         </div>
-        {w.submitted_by && (
-          <span className="text-[11px] font-black px-3 py-1 rounded-full" style={{ background: SURFACE, color: CRITICAL, border: `1px solid ${CRITICAL}` }}>
-            Submitted by {w.submitted_by}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {intake.web_intake?.submitted_by && (
+            <span className="text-[11px] font-black px-3 py-1 rounded-full" style={{ background: SURFACE, color: CRITICAL, border: `1px solid ${CRITICAL}` }}>
+              Submitted by {intake.web_intake.submitted_by}
+            </span>
+          )}
+          {!editing ? (
+            <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={onEdit}>
+              <PenLine size={13} /> {hasAnyData ? "Edit" : "Fill in intake form"}
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
+              <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave}>
+                <CheckCircle2 size={13} /> Save
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <IntakeFormSection icon={User} title="Patient details">
-        <div className="grid sm:grid-cols-3 gap-3">
-          <DetailField label="Given name" value={w.given_name} />
-          <DetailField label="Surname" value={w.surname} />
-          <DetailField label="Preferred name" value={w.preferred_name} />
-        </div>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <DetailField label="Pronouns" value={w.pronouns} />
-          <DetailField label="Gender" value={w.gender} />
-          <DetailField label="Date of birth" value={formatDate(w.date_of_birth)} />
-        </div>
-        <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
-          <DetailField label="Contact email" value={intake.email} icon={Mail} />
-          <DetailField label="Contact phone" value={intake.phone} icon={PhoneCall} />
-        </div>
-      </IntakeFormSection>
-
-      {hasAddress && (
-        <IntakeFormSection icon={MapPin} title="Address">
-          <div className="grid sm:grid-cols-3 gap-3">
-            <DetailField label="Street address" value={w.street_address} />
-            <DetailField label="Suburb" value={w.suburb} />
-            <DetailField label="State" value={w.state} />
-          </div>
-          <DetailField label="Postcode" value={w.postcode} />
-        </IntakeFormSection>
-      )}
-
-      {hasNdis && (
-        <IntakeFormSection icon={ClipboardCheck} title="NDIS">
-          <div className="grid sm:grid-cols-4 gap-3">
-            <DetailField label="NDIS number" value={intake.ndis_number} />
-            <DetailField label="Plan status" value={w.plan_status} />
-            <DetailField label="Plan start" value={formatDate(w.plan_start)} />
-            <DetailField label="Plan end" value={formatDate(w.plan_end)} />
-          </div>
-        </IntakeFormSection>
-      )}
-
-      {hasPlanManager && (
-        <IntakeFormSection icon={FileSignature} title="Plan manager">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <DetailField label="Name" value={w.plan_manager_name} />
-            <DetailField label="Organisation" value={w.plan_manager_org} />
-          </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <DetailField label="Phone" value={w.plan_manager_phone} icon={PhoneCall} />
-            <DetailField label="Email" value={w.plan_manager_email} icon={Mail} />
-          </div>
-        </IntakeFormSection>
-      )}
-
-      {hasKin && (
-        <IntakeFormSection icon={Users} title="Next of kin">
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {w.next_of_kin!.map((kin, i) => (
-              <div key={i} className="grid sm:grid-cols-4 gap-3 py-3 first:pt-0 last:pb-0">
-                <DetailField label="Name" value={kin.name} />
-                <DetailField label="Relationship" value={kin.relationship} />
-                <DetailField label="Phone" value={kin.phone} icon={PhoneCall} />
-                <DetailField label="Email" value={kin.email} icon={Mail} />
-              </div>
-            ))}
-          </div>
-        </IntakeFormSection>
-      )}
-
-      {hasReferral && (
-        <IntakeFormSection icon={Send} title="Referral details">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <DetailField label="Referral source" value={w.referral_source} />
-            <DetailField label="Referral date" value={formatDate(w.referral_date)} />
-          </div>
-          {w.presenting_needs && w.presenting_needs.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Presenting needs</p>
-              <div className="flex flex-wrap gap-1.5">
-                {w.presenting_needs.map((need) => (
-                  <span key={need} className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: SOFT, color: TEXT }}>{need}</span>
-                ))}
-              </div>
+      {!editing && !hasAnyData ? null : (
+        <>
+          <IntakeFormSection icon={User} title="Patient details">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Given name" value={draft.given_name} onChange={(v) => onChange({ given_name: v })} placeholder="Given name" />
+              <Field editing={editing} label="Surname" value={draft.surname} onChange={(v) => onChange({ surname: v })} placeholder="Surname" />
+              <Field editing={editing} label="Preferred name" value={draft.preferred_name} onChange={(v) => onChange({ preferred_name: v })} placeholder="Preferred name" />
             </div>
-          )}
-          {w.notes && (
-            <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
-              <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Notes</p>
-              <p className="text-sm" style={{ color: TEXT }}>{w.notes}</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Pronouns" value={draft.pronouns} onChange={(v) => onChange({ pronouns: v })} placeholder="e.g. She/her" />
+              <Field editing={editing} label="Gender" value={draft.gender} onChange={(v) => onChange({ gender: v })} placeholder="Gender" />
+              <Field editing={editing} label="Date of birth" type="date" value={draft.date_of_birth} onChange={(v) => onChange({ date_of_birth: v })} />
             </div>
+            <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
+              <Field editing={false} label="Contact email" value={intake.email} icon={Mail} />
+              <Field editing={false} label="Contact phone" value={intake.phone} icon={PhoneCall} />
+            </div>
+          </IntakeFormSection>
+
+          <IntakeFormSection icon={MapPin} title="Address">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Street address" value={draft.street_address} onChange={(v) => onChange({ street_address: v })} />
+              <Field editing={editing} label="Suburb" value={draft.suburb} onChange={(v) => onChange({ suburb: v })} />
+              <Field editing={editing} label="State" value={draft.state} onChange={(v) => onChange({ state: v })} />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Postcode" value={draft.postcode} onChange={(v) => onChange({ postcode: v })} />
+            </div>
+          </IntakeFormSection>
+
+          <IntakeFormSection icon={ClipboardCheck} title="NDIS plan">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Plan status" value={draft.plan_status} onChange={(v) => onChange({ plan_status: v })} placeholder="e.g. Active plan" />
+              <Field editing={editing} label="Plan start" type="date" value={draft.plan_start} onChange={(v) => onChange({ plan_start: v })} />
+              <Field editing={editing} label="Plan end" type="date" value={draft.plan_end} onChange={(v) => onChange({ plan_end: v })} />
+            </div>
+          </IntakeFormSection>
+
+          <IntakeFormSection icon={FileSignature} title="Plan manager">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field editing={editing} label="Name" value={draft.plan_manager_name} onChange={(v) => onChange({ plan_manager_name: v })} />
+              <Field editing={editing} label="Organisation" value={draft.plan_manager_org} onChange={(v) => onChange({ plan_manager_org: v })} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field editing={editing} label="Phone" value={draft.plan_manager_phone} onChange={(v) => onChange({ plan_manager_phone: v })} />
+              <Field editing={editing} label="Email" value={draft.plan_manager_email} onChange={(v) => onChange({ plan_manager_email: v })} />
+            </div>
+          </IntakeFormSection>
+
+          {(editing || kin.length > 0) && (
+            <IntakeFormSection icon={Users} title="Next of kin">
+              <div className="space-y-3">
+                {kin.length === 0 && (
+                  <p className="text-xs" style={{ color: MUTED }}>No next of kin added yet.</p>
+                )}
+                {editing
+                  ? kin.map((entry, i) => (
+                    <div key={i} className="grid sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end">
+                      <Field editing label="Name" value={entry.name} onChange={(v) => updateKin(i, { name: v })} />
+                      <Field editing label="Relationship" value={entry.relationship} onChange={(v) => updateKin(i, { relationship: v })} />
+                      <Field editing label="Phone" value={entry.phone} onChange={(v) => updateKin(i, { phone: v })} />
+                      <Field editing label="Email" value={entry.email} onChange={(v) => updateKin(i, { email: v })} />
+                      <Button variant="outline" size="sm" className="rounded-lg shrink-0" onClick={() => removeKin(i)} aria-label="Remove next of kin">
+                        <Trash2 size={13} style={{ color: DANGER }} />
+                      </Button>
+                    </div>
+                  ))
+                  : (
+                    <div className="divide-y" style={{ borderColor: BORDER }}>
+                      {kin.map((entry, i) => (
+                        <div key={i} className="grid sm:grid-cols-4 gap-3 py-3 first:pt-0 last:pb-0">
+                          <Field editing={false} label="Name" value={entry.name} />
+                          <Field editing={false} label="Relationship" value={entry.relationship} />
+                          <Field editing={false} label="Phone" value={entry.phone} icon={PhoneCall} />
+                          <Field editing={false} label="Email" value={entry.email} icon={Mail} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                {editing && (
+                  <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={addKin}>
+                    <Plus size={13} /> Add next of kin
+                  </Button>
+                )}
+              </div>
+            </IntakeFormSection>
           )}
-        </IntakeFormSection>
+
+          <IntakeFormSection icon={Send} title="Referral details">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field editing={editing} label="Referral source" value={draft.referral_source} onChange={(v) => onChange({ referral_source: v })} placeholder="e.g. Web referral portal" />
+              <Field editing={editing} label="Referral date" type="date" value={draft.referral_date} onChange={(v) => onChange({ referral_date: v })} />
+            </div>
+            <Field
+              editing={editing}
+              label="Presenting needs (comma separated)"
+              value={(draft.presenting_needs ?? []).join(", ")}
+              onChange={(v) => onChange({ presenting_needs: v.split(",").map((s) => s.trim()).filter(Boolean) })}
+              placeholder="e.g. Personal care, Community access"
+            />
+            {editing ? (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Notes</label>
+                <Textarea value={draft.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} className="min-h-[80px] text-sm" placeholder="Any context worth capturing…" />
+              </div>
+            ) : draft.notes ? (
+              <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Notes</p>
+                <p className="text-sm" style={{ color: TEXT }}>{draft.notes}</p>
+              </div>
+            ) : null}
+          </IntakeFormSection>
+        </>
       )}
     </div>
   );
