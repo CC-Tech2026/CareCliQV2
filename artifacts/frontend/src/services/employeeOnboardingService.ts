@@ -96,6 +96,10 @@ export type SignPreview = {
   employer_signed_at?: string | null;
   worker_signed_name?: string | null;
   worker_signed_at?: string | null;
+  /** Document contents (including file URLs) are withheld until the email
+   *  code is verified — this is the flag to check before assuming
+   *  `documents` has anything in it. */
+  email_verified: boolean;
   documents: OnboardingDocument[];
 };
 
@@ -120,4 +124,22 @@ export function signHire(token: string, fullName: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ full_name: fullName }),
   });
+}
+
+export function sendSigningCode(token: string) {
+  return jsonFetch<{ ok: boolean; message?: string }>(
+    `/api/employee-onboarding/sign/${encodeURIComponent(token)}/send-code`,
+    { method: "POST" },
+  );
+}
+
+export function verifySigningCode(token: string, code: string) {
+  return jsonFetch<{ ok: boolean }>(
+    `/api/employee-onboarding/sign/${encodeURIComponent(token)}/verify-code`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    },
+  );
 }

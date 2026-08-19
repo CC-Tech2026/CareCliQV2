@@ -36,6 +36,10 @@ class SignBody(BaseModel):
     full_name: str
 
 
+class VerifyCodeBody(BaseModel):
+    code: str
+
+
 @router.get("/hires/{hire_id}")
 async def get_hire(hire_id: str, current_user: dict = Depends(get_current_user)):
     org_id, _ = _require_hire_manager(current_user)
@@ -91,6 +95,20 @@ async def send_for_signature(hire_id: str, current_user: dict = Depends(get_curr
 @router.get("/sign/{token}")
 async def get_hire_for_signing(token: str):
     return svc.get_hire_by_sign_token(token)
+
+
+@router.post("/sign/{token}/send-code", status_code=201)
+async def send_signing_code(token: str):
+    """Public — email a fresh 6-digit code proving inbox access before the
+    offer documents (and the ability to sign) unlock. Safe to call again
+    for a resend."""
+    return svc.send_signing_code(token)
+
+
+@router.post("/sign/{token}/verify-code")
+async def verify_signing_code(token: str, body: VerifyCodeBody):
+    """Public — verify the 6-digit code sent via send-code."""
+    return svc.verify_signing_code(token, body.code)
 
 
 @router.post("/sign/{token}")

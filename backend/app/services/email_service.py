@@ -205,6 +205,73 @@ def send_invitation_email(
     )
 
 
+def queue_signing_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"signing-code:{to_email}",
+        send=lambda: _send_signing_verification_email_safe(
+            to_email=to_email,
+            code=code,
+            organization_name=organization_name,
+        ),
+    )
+
+
+def _send_signing_verification_email_safe(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    try:
+        send_signing_verification_email(to_email=to_email, code=code, organization_name=organization_name)
+    except Exception as exc:
+        logger.error("Signing verification email failed for %s: %s", to_email, exc)
+
+
+def send_signing_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    org_label = organization_name or "CareCliQ"
+    subject = f"Your verification code to view your offer: {code}"
+    text_body = (
+        f"Before you can view and sign your offer documents from {org_label}, "
+        f"we need to confirm this is really your inbox.\n\n"
+        f"Your verification code is:\n\n"
+        f"    {code}\n\n"
+        "This code expires in 10 minutes. If you didn't request this, you can ignore this email."
+    )
+    safe_org = escape(org_label)
+    safe_code = escape(code)
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">Verify your email</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Before you can view and sign your offer documents from {safe_org}, enter this code to confirm it's really you:
+        </p>
+        <p style="font-size:32px;font-weight:800;letter-spacing:0.16em;color:#1E1640;margin:0 0 18px;">{safe_code}</p>
+        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:0;">
+          This code expires in 10 minutes. If you didn't request this, you can ignore this email.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+
+
 def queue_invite_verification_email(
     *,
     to_email: str,
