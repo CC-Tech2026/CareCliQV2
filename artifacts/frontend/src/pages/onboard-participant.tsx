@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
-  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square,
+  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
+  MapPin, User, FileText,
 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +66,9 @@ type Intake = {
   screening_recording_url?: string;
   meet_greet_recording_url?: string;
   meet_greet_notes?: string;
+  /** The physically-signed service agreement, uploaded as evidence. Local blob URL for now — no backend storage yet. */
+  signed_document_url?: string;
+  signed_document_name?: string;
   plan_start_date?: string;
   plan_end_date?: string;
   total_budget?: string;
@@ -76,6 +80,42 @@ type Intake = {
   board_subtitle?: string;
   activated_at?: string;
   created_at: string;
+  /** Present when this enquiry came in through the public web referral form. */
+  web_intake?: WebIntakeForm;
+};
+
+type NextOfKinEntry = {
+  name: string;
+  relationship?: string;
+  phone?: string;
+  email?: string;
+};
+
+type WebIntakeForm = {
+  submitted_at: string;
+  submitted_by?: string;
+  given_name?: string;
+  surname?: string;
+  preferred_name?: string;
+  pronouns?: string;
+  gender?: string;
+  date_of_birth?: string;
+  street_address?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  plan_status?: string;
+  plan_start?: string;
+  plan_end?: string;
+  plan_manager_name?: string;
+  plan_manager_org?: string;
+  plan_manager_phone?: string;
+  plan_manager_email?: string;
+  next_of_kin?: NextOfKinEntry[];
+  referral_source?: string;
+  referral_date?: string;
+  presenting_needs?: string[];
+  notes?: string;
 };
 
 const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> = {
@@ -356,7 +396,51 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
   );
 }
 
-let nextId = 1;
+let nextId = 2;
+
+// One seeded dummy enquiry so the board isn't empty on first load — local
+// state only, same as everything else here, so it resets on page reload.
+const SEED_INTAKES: Intake[] = [
+  {
+    id: "1",
+    full_name: "Sam Rivera",
+    ndis_number: "430987621",
+    email: "sam.rivera@email.com",
+    phone: "0412 344 187",
+    source: "online_form",
+    status: "enquiry",
+    created_at: new Date().toISOString(),
+    web_intake: {
+      submitted_at: new Date().toISOString(),
+      submitted_by: "Family",
+      given_name: "Sam",
+      surname: "Rivera",
+      preferred_name: "Sam",
+      pronouns: "They/them",
+      gender: "Non-binary",
+      date_of_birth: "1998-03-14",
+      street_address: "42 Rosewood Drive",
+      suburb: "Ringwood",
+      state: "VIC",
+      postcode: "3134",
+      plan_status: "Active plan",
+      plan_start: "2026-02-01",
+      plan_end: "2027-01-31",
+      plan_manager_name: "Rachel Owens",
+      plan_manager_org: "Compass Plan Management",
+      plan_manager_phone: "1300 889 200",
+      plan_manager_email: "rachel.owens@compasspm.com.au",
+      next_of_kin: [
+        { name: "Claire Rivera", relationship: "Mother", phone: "0413 778 291", email: "claire.rivera@email.com" },
+        { name: "Derek Rivera", relationship: "Father", phone: "0404 112 835" },
+      ],
+      referral_source: "Web referral portal",
+      referral_date: new Date().toISOString().slice(0, 10),
+      presenting_needs: ["Personal care", "Community access"],
+      notes: "Sam's family is seeking support for personal care and community access. They recently transitioned out of a school-based setting and this is their first NDIS-funded provider engagement.",
+    },
+  },
+];
 
 export default function ParticipantOnboardingBoard() {
   const { translate } = useAccessibility();
@@ -371,7 +455,7 @@ export default function ParticipantOnboardingBoard() {
   const urlSearch = useSearch();
   const selectedId = new URLSearchParams(urlSearch).get("intake");
 
-  const [intakes, setIntakes] = useState<Intake[]>([]);
+  const [intakes, setIntakes] = useState<Intake[]>(SEED_INTAKES);
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
 
@@ -442,7 +526,7 @@ export default function ParticipantOnboardingBoard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => comingSoon("The public referral form")}
+              onClick={() => navigate("/participant-referral")}
               className="text-[12px] font-black transition-colors hover:opacity-80 flex items-center gap-1"
               style={{ color: PLUM }}
             >
@@ -596,6 +680,7 @@ function IntakeDetail({
   const [providerName, setProviderName] = useState(intake.provider_signed_name ?? "");
   const [familyName, setFamilyName] = useState(intake.family_signed_name ?? "");
   const [activating, setActivating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
   // Which step's page is currently shown. Auto-advances to the new current
@@ -793,6 +878,14 @@ function IntakeDetail({
     toast({ title: "Draft saved" });
   }
 
+  // Local blob URL for now — no document storage backend for participant
+  // onboarding yet, same constraint as the rest of this page.
+  function uploadSignedDocument(file: File) {
+    const url = URL.createObjectURL(file);
+    onUpdate({ signed_document_url: url, signed_document_name: file.name });
+    toast({ title: "Document uploaded", description: file.name });
+  }
+
   function markSigned() {
     if (!providerName.trim() || !familyName.trim()) return;
     const now = new Date().toISOString();
@@ -860,7 +953,10 @@ function IntakeDetail({
                     <Mail size={16} style={{ color: PLUM }} />
                     <p className="text-sm font-black" style={{ color: TEXT }}>Enquiry</p>
                   </div>
+
                   <div className="p-5 space-y-3">
+                    {intake.web_intake && <IntakeFormView intake={intake} />}
+
                     {intake.status === "enquiry" ? (
                       <>
                         <p className="text-xs" style={{ color: MUTED }}>
@@ -875,13 +971,18 @@ function IntakeDetail({
                             </Button>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-1">
-                          <Button variant="outline" className="rounded-lg" onClick={saveEnquiryDraft}>
-                            Save Draft
+                        <div className="flex justify-between gap-2 pt-1">
+                          <Button variant="outline" className="gap-2 rounded-lg" onClick={onBack}>
+                            <ArrowLeft size={14} /> Back
                           </Button>
-                          <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
-                            Next <ClipboardCheck size={14} />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="rounded-lg" onClick={saveEnquiryDraft}>
+                              Save Draft
+                            </Button>
+                            <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
+                              Next <ClipboardCheck size={14} />
+                            </Button>
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -1070,6 +1171,39 @@ function IntakeDetail({
                       </div>
                     )}
 
+                    <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-bg)", color: PLUM }}>
+                          <Upload size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
+                          <p className="text-[11px] truncate" style={{ color: MUTED }}>
+                            {intake.signed_document_name || "Upload the physically-signed service agreement"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {intake.signed_document_url && (
+                          <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
+                        )}
+                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
+                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload"}
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadSignedDocument(file);
+                        e.target.value = "";
+                      }}
+                    />
+
                     {intake.status === "signed" && (
                       <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
                         {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
@@ -1105,16 +1239,15 @@ function IntakeDetail({
                   {!terminateOpen ? (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => setTerminateOpen(true)}
-                      className="gap-1.5 rounded-lg"
-                      style={{ color: DANGER, borderColor: DANGER }}
+                      className="gap-1.5 rounded-lg hover:bg-transparent hover:opacity-80"
+                      style={{ color: "#DC2626" }}
                     >
                       <XCircle size={13} /> Terminate application
                     </Button>
                   ) : (
                     <div className="space-y-2">
-                      <p className="text-xs font-black" style={{ color: DANGER }}>Terminate this application?</p>
                       <p className="text-[11px]" style={{ color: MUTED }}>
                         Use this if the participant has decided not to continue with this provider. Ends the pipeline immediately from any stage.
                       </p>
@@ -1241,6 +1374,163 @@ function ConsentPanel({
       <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={onConfirm} disabled={!checked}>
         <Mic size={14} /> Confirm consent &amp; record
       </Button>
+    </div>
+  );
+}
+
+function formatDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function DetailField({ label, value, icon: Icon }: { label: string; value?: string | null; icon?: typeof Mail }) {
+  if (!value) return null;
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+      <p className="text-sm font-bold flex items-center gap-1.5 mt-0.5" style={{ color: TEXT }}>
+        {Icon && <Icon size={13} style={{ color: MUTED }} className="shrink-0" />}
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function IntakeFormSection({ icon: Icon, title, children }: { icon: typeof Mail; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+      <div className="flex items-center gap-2 pb-3 mb-3 border-b" style={{ borderColor: BORDER }}>
+        <Icon size={15} style={{ color: PLUM }} />
+        <p className="text-xs font-black uppercase tracking-wide" style={{ color: TEXT }}>{title}</p>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+/** Read-only view of a participant's submitted web intake form. */
+function IntakeFormView({ intake }: { intake: Intake }) {
+  const w = intake.web_intake;
+  if (!w) {
+    return (
+      <div className="rounded-lg border p-8 text-center" style={{ background: SURFACE, borderColor: BORDER }}>
+        <p className="text-sm font-bold" style={{ color: MUTED }}>No digital intake form on file for this enquiry.</p>
+      </div>
+    );
+  }
+  const hasAddress = w.street_address || w.suburb || w.state || w.postcode;
+  const hasNdis = intake.ndis_number || w.plan_status || w.plan_start || w.plan_end;
+  const hasPlanManager = w.plan_manager_name || w.plan_manager_org;
+  const hasKin = w.next_of_kin && w.next_of_kin.length > 0;
+  const hasReferral = w.referral_source || w.referral_date || (w.presenting_needs && w.presenting_needs.length > 0) || w.notes;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: CRITICAL_BG }}>
+        <div className="flex items-center gap-2.5">
+          <FileText size={16} style={{ color: CRITICAL }} />
+          <p className="text-sm font-bold" style={{ color: CRITICAL }}>
+            Digital intake form submitted {formatDate(w.submitted_at)}
+          </p>
+        </div>
+        {w.submitted_by && (
+          <span className="text-[11px] font-black px-3 py-1 rounded-full" style={{ background: SURFACE, color: CRITICAL, border: `1px solid ${CRITICAL}` }}>
+            Submitted by {w.submitted_by}
+          </span>
+        )}
+      </div>
+
+      <IntakeFormSection icon={User} title="Patient details">
+        <div className="grid sm:grid-cols-3 gap-3">
+          <DetailField label="Given name" value={w.given_name} />
+          <DetailField label="Surname" value={w.surname} />
+          <DetailField label="Preferred name" value={w.preferred_name} />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <DetailField label="Pronouns" value={w.pronouns} />
+          <DetailField label="Gender" value={w.gender} />
+          <DetailField label="Date of birth" value={formatDate(w.date_of_birth)} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
+          <DetailField label="Contact email" value={intake.email} icon={Mail} />
+          <DetailField label="Contact phone" value={intake.phone} icon={PhoneCall} />
+        </div>
+      </IntakeFormSection>
+
+      {hasAddress && (
+        <IntakeFormSection icon={MapPin} title="Address">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <DetailField label="Street address" value={w.street_address} />
+            <DetailField label="Suburb" value={w.suburb} />
+            <DetailField label="State" value={w.state} />
+          </div>
+          <DetailField label="Postcode" value={w.postcode} />
+        </IntakeFormSection>
+      )}
+
+      {hasNdis && (
+        <IntakeFormSection icon={ClipboardCheck} title="NDIS">
+          <div className="grid sm:grid-cols-4 gap-3">
+            <DetailField label="NDIS number" value={intake.ndis_number} />
+            <DetailField label="Plan status" value={w.plan_status} />
+            <DetailField label="Plan start" value={formatDate(w.plan_start)} />
+            <DetailField label="Plan end" value={formatDate(w.plan_end)} />
+          </div>
+        </IntakeFormSection>
+      )}
+
+      {hasPlanManager && (
+        <IntakeFormSection icon={FileSignature} title="Plan manager">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <DetailField label="Name" value={w.plan_manager_name} />
+            <DetailField label="Organisation" value={w.plan_manager_org} />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <DetailField label="Phone" value={w.plan_manager_phone} icon={PhoneCall} />
+            <DetailField label="Email" value={w.plan_manager_email} icon={Mail} />
+          </div>
+        </IntakeFormSection>
+      )}
+
+      {hasKin && (
+        <IntakeFormSection icon={Users} title="Next of kin">
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {w.next_of_kin!.map((kin, i) => (
+              <div key={i} className="grid sm:grid-cols-4 gap-3 py-3 first:pt-0 last:pb-0">
+                <DetailField label="Name" value={kin.name} />
+                <DetailField label="Relationship" value={kin.relationship} />
+                <DetailField label="Phone" value={kin.phone} icon={PhoneCall} />
+                <DetailField label="Email" value={kin.email} icon={Mail} />
+              </div>
+            ))}
+          </div>
+        </IntakeFormSection>
+      )}
+
+      {hasReferral && (
+        <IntakeFormSection icon={Send} title="Referral details">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <DetailField label="Referral source" value={w.referral_source} />
+            <DetailField label="Referral date" value={formatDate(w.referral_date)} />
+          </div>
+          {w.presenting_needs && w.presenting_needs.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Presenting needs</p>
+              <div className="flex flex-wrap gap-1.5">
+                {w.presenting_needs.map((need) => (
+                  <span key={need} className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: SOFT, color: TEXT }}>{need}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {w.notes && (
+            <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
+              <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Notes</p>
+              <p className="text-sm" style={{ color: TEXT }}>{w.notes}</p>
+            </div>
+          )}
+        </IntakeFormSection>
+      )}
     </div>
   );
 }

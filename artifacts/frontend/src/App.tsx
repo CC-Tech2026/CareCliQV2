@@ -12,6 +12,7 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
+import ParticipantReferralPage from "@/pages/participant-referral";
 import OnboardingWorkspace from "@/pages/md/onboarding-workspace";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
@@ -118,6 +119,7 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/onboarding-sign" component={OnboardingSignPage} />
+      <Route path="/participant-referral" component={ParticipantReferralPage} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
