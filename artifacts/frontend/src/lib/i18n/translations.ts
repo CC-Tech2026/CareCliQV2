@@ -2238,6 +2238,7 @@ export const en: Dict = {
   "settings.privacy.subtitle": "What CareCliQ holds about you, and your rights to export or delete it.",
   "settings.nav.notifications": "Notifications",
   "settings.nav.team": "Team",
+  "settings.nav.billing": "Billing",
   "settings.nav.branding": "Branding",
   "settings.branding.title": "Organisation branding",
   "settings.branding.subtitle": "Your logo and name on offer/invite emails and the first-login welcome screen — the rest of CareCliQ keeps its own design.",

@@ -40,6 +40,9 @@ import {
   AlertTriangle,
   Accessibility as AccessibilityIcon,
   Shield,
+  CreditCard,
+  Sparkles,
+  Receipt,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -94,7 +97,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "branding";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
@@ -105,6 +108,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "privacy",       labelKey: "settings.nav.privacy",           icon: Shield      },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
+  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
 ];
 
@@ -1293,6 +1297,130 @@ function NavColorPicker() {
   );
 }
 
+// -----------------------------------------------------------------------------
+// Billing & Subscription — UI PREVIEW ONLY. No payment provider or subscription
+// backend exists yet; every control here is inert (local state / disabled),
+// built to show what the section could look like once that backend lands.
+// -----------------------------------------------------------------------------
+
+function PreviewBadge() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
+      style={{ background: "var(--cc-amber-tint)", color: "var(--cc-amber)" }}
+    >
+      <Sparkles className="h-3 w-3" /> Preview
+    </span>
+  );
+}
+
+const PLAN_OPTIONS = [
+  { id: "starter", name: "Starter", price: "$0", cadence: "/mo", seats: "Up to 5 staff", blurb: "Core rostering and compliance for small teams." },
+  { id: "growth", name: "Growth", price: "$149", cadence: "/mo", seats: "Up to 25 staff", blurb: "Full Master Schedule, MD portal, and priority support." },
+  { id: "enterprise", name: "Enterprise", price: "Custom", cadence: "", seats: "Unlimited staff", blurb: "Dedicated onboarding, custom integrations, SLA." },
+] as const;
+
+function BillingSection() {
+  const { toast } = useToast();
+  const [selectedPlan, setSelectedPlan] = useState<(typeof PLAN_OPTIONS)[number]["id"]>("growth");
+
+  function notConnected() {
+    toast({ title: "Not connected yet", description: "This is a design preview — no payment provider is wired up." });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="pb-1">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>Billing &amp; Subscription</h2>
+          <PreviewBadge />
+        </div>
+        <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
+          A look at how plan management could work. Nothing here is connected to a real payment provider yet.
+        </p>
+      </div>
+
+      <PanelCard label="Current plan">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {PLAN_OPTIONS.map((plan) => {
+            const selected = selectedPlan === plan.id;
+            return (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => setSelectedPlan(plan.id)}
+                className="rounded-xl border p-4 text-left transition-all"
+                style={{
+                  borderColor: selected ? "var(--cc-plum)" : "var(--cc-border)",
+                  boxShadow: selected ? "0 0 0 2px var(--cc-plum-ring)" : "none",
+                  background: "var(--cc-soft)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-black" style={{ color: "var(--cc-text)" }}>{plan.name}</span>
+                  {selected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-plum)" }} />}
+                </div>
+                <p className="mt-1.5 text-[20px] font-black" style={{ color: "var(--cc-text)" }}>
+                  {plan.price}<span className="text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>{plan.cadence}</span>
+                </p>
+                <p className="mt-1 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{plan.seats}</p>
+                <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>{plan.blurb}</p>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl px-4 py-3" style={{ background: "var(--cc-soft)" }}>
+          <div>
+            <p className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>Staff seats used</p>
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>18 of 25 seats</p>
+          </div>
+          <div className="h-2 w-32 overflow-hidden rounded-full" style={{ background: "var(--cc-border)" }}>
+            <div className="h-full rounded-full" style={{ width: "72%", background: "var(--cc-plum)" }} />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button size="sm" onClick={notConnected} className="gap-1.5">Save plan selection</Button>
+        </div>
+      </PanelCard>
+
+      <PanelCard label="Payment method">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-14 items-center justify-center rounded-lg" style={{ background: "var(--cc-soft)" }}>
+              <CreditCard className="h-5 w-5" style={{ color: "var(--cc-muted)" }} />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>No payment method on file</p>
+              <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Add a card to keep your subscription active.</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={notConnected}>Add payment method</Button>
+        </div>
+      </PanelCard>
+
+      <PanelCard label="Invoice history">
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+          <Receipt className="h-6 w-6" style={{ color: "var(--cc-muted)" }} />
+          <p className="text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>No invoices yet</p>
+          <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Invoices will appear here once billing is connected.</p>
+        </div>
+      </PanelCard>
+
+      <PanelCard label="Danger zone">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>Cancel subscription</p>
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Your organisation loses access to paid features at the end of the billing period.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={notConnected} className="border-red-200 text-red-700 hover:bg-red-50">Cancel subscription</Button>
+        </div>
+      </PanelCard>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+
 export default function Settings() {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
@@ -2342,7 +2470,7 @@ export default function Settings() {
             description={translate("settings.privacy.subtitle")}
             icon={Shield}
           >
-            <WorkerPrivacy showHeader={false} />
+            <WorkerPrivacy showHeader={false} onManageSubscription={isMD ? () => setActiveSection("billing") : undefined} />
           </Section>
         )}
 
@@ -2515,6 +2643,10 @@ export default function Settings() {
               </p>
             </div>
           </Section>
+        )}
+
+        {activeSection === "billing" && isMD && (
+          <BillingSection />
         )}
 
         {activeSection === "branding" && isMD && (
