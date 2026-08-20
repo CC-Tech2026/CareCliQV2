@@ -11,9 +11,10 @@ Endpoints:
   GET    /api/assignments/workers        — list workers in the org (coordinator only)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from pydantic import BaseModel
+from ..core.access import has_org_wide_access
 from ..core.security import get_current_user, get_optional_user
 from ..services.supabase_client import get_supabase_admin
 from ..services import migration_state as _ms
@@ -163,24 +164,30 @@ async def list_org_workers(user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_assignments(user: dict = Depends(get_current_user)):
+async def list_assignments(
+    worker_id: Optional[str] = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
     """List assignments.
 
-    Coordinators see all active assignments in their org.
-    Workers see only their own assignments.
+    Coordinators and managing directors see all active assignments in their
+    org (optionally narrowed to one worker via ?worker_id=, e.g. the staff
+    profile "participants" view). Workers see only their own assignments.
     """
     if _ms.practitioner_allocations_table_missing:
         return []
     supabase = get_supabase_admin()
-    role   = user.get("role", "")
     org_id = user.get("organization_id")
     uid    = user.get("sub")
+    org_wide = has_org_wide_access(user)
 
     try:
         q = supabase.table(TABLE).select("*").eq("is_active", "true")
-        if role in _COORDINATOR_ROLES:
+        if org_wide:
             if org_id:
                 q = q.eq("organization_id", org_id)
+            if worker_id:
+                q = q.eq("user_id", worker_id)
         else:
             q = q.eq("user_id", uid)
         result = q.execute()

@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
 from ..services.supabase_client import get_supabase_admin
@@ -178,8 +178,8 @@ async def upload_my_credential_file(
 
 @router.get("/team")
 async def list_team_credentials(current_user: dict = Depends(get_current_user)):
-    if not is_coordinator_role(current_user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can view team credentials.")
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(current_user)
     result = get_supabase_admin().table("credentials").select("*").eq("organization_id", org_id).execute()
     return [

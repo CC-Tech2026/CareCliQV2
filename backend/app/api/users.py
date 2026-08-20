@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from pydantic import BaseModel, Field
 
 from ..api.security import require_recent_reauth
-from ..core.access import get_user_id, get_user_organization_id
+from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..services.password_policy import validate_password_policy
 from ..services.notification_service import (
@@ -202,6 +202,11 @@ async def change_my_password(
     body: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
 ):
+    if is_support_worker(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Support workers can't change their own password. Ask your coordinator or managing director to send you a reset link.",
+        )
     if body.new_password != body.confirm_password:
         raise HTTPException(status_code=422, detail="Passwords do not match.")
     policy_error = validate_password_policy(body.new_password)

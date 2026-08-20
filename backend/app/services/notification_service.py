@@ -550,6 +550,32 @@ async def notify_coordinator_message(
     )
 
 
+async def notify_password_reset_requested(
+    *,
+    org_id: str,
+    worker_id: str,
+    worker_name: str,
+) -> None:
+    """A support worker can't change their own password (org policy) — this
+    tells every coordinator/MD in the org that one has asked for a reset link,
+    so an admin can act via the existing send-password-reset action."""
+    title = "Password reset requested"
+    message = f"{worker_name or 'A staff member'} requested a password reset. Send them a reset link from their staff profile."
+    action_url = f"{settings.frontend_base_url.rstrip('/')}/team?worker_id={worker_id}"
+    for coordinator_id in _org_coordinator_user_ids(org_id):
+        await notify_worker(
+            user_id=coordinator_id,
+            org_id=org_id,
+            event="coordinator_message",
+            title=title,
+            message=message,
+            reference_key=f"password_reset_request:{worker_id}:{int(datetime.now(timezone.utc).timestamp())}",
+            severity="medium",
+            action_url=action_url,
+            email_subject=title,
+        )
+
+
 def _org_coordinator_user_ids(org_id: str) -> list[str]:
     try:
         result = (

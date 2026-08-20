@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..services import induction_service, worker_financial_service, worker_training_service
 from ..services.supabase_client import get_supabase_admin
@@ -168,8 +168,8 @@ async def complete_my_induction_item(item_id: str, current_user: dict = Depends(
 
 @router.get("/team")
 async def get_team_onboarding(current_user: dict = Depends(get_current_user)):
-    if not is_coordinator_role(current_user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can view team onboarding.")
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         return []

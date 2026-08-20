@@ -77,6 +77,14 @@ export async function changePassword(payload: {
   });
 }
 
+/** Support workers can't change their own password (org policy) — this notifies
+ * their coordinators/MD, who can send a reset link from the worker's staff profile. */
+export async function requestPasswordReset(): Promise<{ message: string }> {
+  return jsonFetch("/api/worker/account/request-password-reset", {
+    method: "POST",
+  });
+}
+
 export async function getNotificationPreferences(deviceId: string): Promise<{
   device_id: string;
   preferences: NotificationPreferences;

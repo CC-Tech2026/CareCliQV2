@@ -32,7 +32,7 @@ from ..services.compliance_evidence_service import get_evidence_metadata, list_s
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
-from ..services.notification_service import notify_office_worker_message
+from ..services.notification_service import notify_office_worker_message, notify_password_reset_requested
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -196,6 +196,23 @@ class UploadEvidenceBody(BaseModel):
 def _require_worker(user: dict) -> None:
     if not is_support_worker(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
+
+
+@router.post("/account/request-password-reset")
+async def request_password_reset(current_user: dict = Depends(get_current_user)):
+    """Support workers can't change their own password (org policy) — this
+    notifies their coordinators/MD, who can send a reset link from the
+    worker's staff profile (see coordinator.py's send-password-reset)."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    await notify_password_reset_requested(
+        org_id=org_id,
+        worker_id=get_user_id(current_user),
+        worker_name=current_user.get("full_name") or current_user.get("email") or "",
+    )
+    return {"message": "Your coordinator has been notified and will send you a reset link."}
 
 
 def _require_worker_ready_for_sessions(user: dict) -> None:

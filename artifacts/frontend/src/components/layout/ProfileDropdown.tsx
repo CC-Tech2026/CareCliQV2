@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProfileDropdownProps {
   displayName: string;
@@ -33,6 +34,7 @@ export function ProfileDropdown({
   onLogout,
 }: ProfileDropdownProps) {
   const { translate } = useAccessibility();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const isWorker = userRole === "support_worker";
 
@@ -52,14 +54,18 @@ export function ProfileDropdown({
             </p>
           </div>
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shrink-0 border-2 transition-all"
+            className="w-10 h-10 overflow-hidden rounded-full flex items-center justify-center text-xs font-black shrink-0 border-2 transition-all"
             style={{
               background: DS.BACKGROUND.section,
               color: DS.BRAND.primary,
               borderColor: open ? DS.BRAND.primary : DS.BORDER.light,
             }}
           >
-            {initials}
+            {user?.profile_photo_url ? (
+              <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials
+            )}
           </div>
         </button>
       </DropdownMenuTrigger>

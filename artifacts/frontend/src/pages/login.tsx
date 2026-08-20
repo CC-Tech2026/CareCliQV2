@@ -186,10 +186,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex flex-col lg:flex-row font-sans bg-[var(--auth-shell-bg)] text-cc-text">
-      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
-        <AuthThemeToggle />
-      </div>
+    <div className="relative min-h-[100dvh] w-full flex flex-col lg:h-[100dvh] lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden lg:p-6 font-sans bg-[var(--auth-shell-bg)] lg:bg-[#7C3AED] text-cc-text">
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes authEnter    { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
         @keyframes fieldShake   { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
@@ -201,6 +198,8 @@ export default function Login() {
         .auth-glow { animation: authGlowPulse 9s ease-in-out infinite; }
         @keyframes authHeroZoom { from { transform: scale(1) } to { transform: scale(1.045) } }
         .auth-hero-photo { animation: authHeroZoom 22s ease-in-out infinite alternate; }
+        .auth-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .auth-scroll-hide::-webkit-scrollbar { display: none; }
       ` }} />
 
       {/* -- Mobile-only brand header -------------------------------------- */}
@@ -261,11 +260,15 @@ export default function Login() {
         </div>
       </div>
 
-      {/* -- Form panel --------------------------------------------------- */}
+      {/* -- Form panel (left, desktop) ------------------------------------ */}
       <div
-        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10 bg-[var(--auth-form-bg)]"
-        style={{ borderRight: "1px solid var(--cc-border)", animation: "panelIn 0.38s ease-out" }}
+        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[600px] lg:min-h-0 lg:shrink-0 rounded-t-[28px] lg:rounded-[28px] -mt-5 lg:mt-0 relative z-10 overflow-hidden bg-[var(--auth-form-bg)]"
+        style={{ border: "1px solid var(--auth-card-border)", boxShadow: "var(--cc-shadow-lg)", animation: "panelIn 0.38s ease-out" }}
       >
+        <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+          <AuthThemeToggle />
+        </div>
+
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
           <CareCliQLogo size={120} />
@@ -277,7 +280,7 @@ export default function Login() {
         </div>
 
         {/* Form body */}
-        <div className="flex flex-1 items-center justify-center px-4 sm:px-8 md:px-10 lg:px-12 py-8 lg:py-10">
+        <div className="auth-scroll-hide flex flex-1 items-center justify-center overflow-y-auto px-4 sm:px-8 md:px-10 lg:px-12 py-8 lg:py-10">
           <div className="w-full max-w-[480px]">
 
             <div className="mb-7">
@@ -481,8 +484,8 @@ export default function Login() {
         </div>
       </div>
 
-      {/* -- Product panel (desktop only) --------------------------------- */}
-      <div className="hidden lg:flex flex-1 flex-col p-12 xl:p-16 overflow-hidden relative">
+      {/* -- Product panel (photo, right, desktop only) --------------------- */}
+      <div className="hidden lg:flex flex-1 lg:min-h-0 flex-col p-12 xl:p-16 overflow-hidden relative lg:rounded-[28px]">
         {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
             scrim, so colours here are hardcoded light values instead of the
             theme-conditional --auth-* vars — the backdrop is always a dark

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids, has_org_wide_access
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
@@ -20,7 +20,7 @@ from ..services.pattern_detection_service import (
     get_active_patterns,
     run_pattern_detection_for_org,
 )
-from ..services import participant_service, session_service, shift_service
+from ..services import participant_service, privacy_service, session_service, shift_service
 from ..services.funding_service import (
     normalize_goal_support_category,
     require_active_plan_for_participant,
@@ -47,6 +47,19 @@ router = APIRouter(prefix="/coordinator", tags=["coordinator"])
 def _require_coordinator(user: dict) -> str:
     if not is_coordinator_role(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support coordinator access required.")
+    org_id = get_user_organization_id(user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return org_id
+
+
+# Same org_id-or-403 shape as _require_coordinator, but for read-only worker-detail
+# endpoints the managing director should also see (staff profile tabs) - mutations
+# on these same resources stay _require_coordinator-only, matching the read/write
+# split already established for /workers/pipeline and account-management actions.
+def _require_org_read(user: dict) -> str:
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
@@ -471,9 +484,16 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
 
 @router.get("/worker-stats")
 async def worker_stats(current_user: dict = Depends(get_current_user)):
-    """Per-worker aggregated stats: sessions, compliance, drafts, flagged."""
-    org_id = _require_coordinator(current_user)
-    members = await _team(org_id, coordinator_user=current_user)
+    """Per-worker aggregated stats: sessions, compliance, drafts, flagged.
+
+    Coordinators get their own team-scoped list (unchanged). A managing
+    director isn't anyone's assigned coordinator, so passing their own user
+    through as coordinator_user would resolve to zero linked workers once
+    coordinator_id rollout is complete - MD gets the unscoped org-wide list
+    instead (coordinator_user=None skips the team-scoping filter entirely).
+    """
+    org_id = _require_org_read(current_user)
+    members = await _team(org_id, coordinator_user=current_user if is_coordinator_role(current_user) else None)
     all_sessions = await session_service.get_sessions_for_dashboard(2000, current_user)
 
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
@@ -749,6 +769,23 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
     return {"worker_id": worker_id, "is_active": True}
+
+
+@router.post("/workers/{worker_id}/delete-account")
+async def delete_worker_account(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """MD-only - removing a staff member's account is a step up from
+    deactivation (which both coordinators and MD can do), so it's gated to
+    the managing director specifically. Queues the same pending deletion
+    request record self-service deletion uses, for manual processing."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    email = _lookup_worker_email(get_supabase_admin(), worker_id, org_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+    return privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
 
 
 def _send_recovery_email(email: str) -> None:
@@ -2483,7 +2520,7 @@ async def get_worker_availability(
     current_user: dict = Depends(get_current_user),
 ):
     """Get availability settings and blackout dates for a worker."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         avail = (
@@ -2562,7 +2599,7 @@ async def get_worker_skills(
     current_user: dict = Depends(get_current_user),
 ):
     """Get certified skills for a worker."""
-    _require_coordinator(current_user)
+    _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         resp = (
@@ -2628,6 +2665,40 @@ async def remove_worker_skill(
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Skill delete failed: {exc}")
+
+
+# ── Worker shift history & performance (read-only, coordinator/MD) ────────────
+# Reuses the exact same worker_id/organization_id-scoped service functions the
+# support worker's own self-service endpoints call (backend/app/api/worker_performance.py)
+# rather than re-deriving the shift/compliance logic — this is a second, org-facing
+# door onto the same data, not a new source of truth.
+
+@router.get("/workers/{worker_id}/shift-history")
+async def coordinator_worker_shift_history(
+    worker_id: str,
+    participant_id: list[str] | None = Query(default=None),
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    return worker_shift_history_service.list_completed_shifts(
+        worker_id, org_id,
+        participant_ids=participant_id, date_from=date_from, date_to=date_to,
+    )
+
+
+@router.get("/workers/{worker_id}/performance-dashboard")
+async def coordinator_worker_performance_dashboard(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    from ..services import worker_performance_dashboard_service
+
+    return worker_performance_dashboard_service.get_performance_dashboard(worker_id, org_id)
 
 
 # ── Participant required skills ───────────────────────────────────────────────
@@ -3054,6 +3125,21 @@ async def get_shift_messages(
         return conversation_service.get_conversation_messages(str(conv_id), user_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Messages fetch failed: {exc}") from exc
+
+
+@router.get("/shifts/{shift_id}/detail")
+async def coordinator_shift_detail(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full single-shift drill-down for Master Schedule (tasks, notes, clock
+    in/out, risk acknowledgement, messages) - org-wide read for coordinator
+    and MD alike, same access shape as the /shifts list endpoint."""
+    org_id = _require_org_read(current_user)
+    detail = shift_service.get_shift_detail_for_org(shift_id, org_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return detail
 
 
 # ── POST /shifts/{id}/flag ────────────────────────────────────────────────────
@@ -4116,7 +4202,7 @@ async def coordinator_update_induction_item(
 
 @router.get("/workers/{worker_id}/induction")
 async def coordinator_get_worker_induction(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import induction_service
 
     return induction_service.get_my_induction_progress(worker_id, org_id)
@@ -4162,7 +4248,7 @@ async def coordinator_list_worker_training(
     worker_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     recommendations = training.list_worker_recommendations(worker_id, org_id)
@@ -4208,7 +4294,7 @@ async def coordinator_list_worker_onboarding_documents(
     worker_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_onboarding_documents_service as onboarding_docs
 
     return onboarding_docs.list_worker_documents(worker_id, org_id)

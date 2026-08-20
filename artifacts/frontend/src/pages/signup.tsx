@@ -831,13 +831,7 @@ export default function Signup() {
   const showFooter = isJoin ? step < 5 : step < 3;
 
   return (
-    <div
-      className="relative h-screen w-screen flex overflow-hidden bg-[var(--auth-shell-bg)] text-cc-text"
-      style={{ animation: "authPageEnter 0.3s ease-out" }}
-    >
-      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
-        <AuthThemeToggle />
-      </div>
+    <div className="relative h-screen w-screen flex overflow-hidden md:gap-6 md:p-6 bg-[var(--auth-shell-bg)] md:bg-[#7C3AED] text-cc-text">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -875,11 +869,13 @@ export default function Signup() {
         .auth-hero-photo {
           animation: authHeroZoom 22s ease-in-out infinite alternate;
         }
+        .auth-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .auth-scroll-hide::-webkit-scrollbar { display: none; }
       `,
         }}
       />
       {/* LEFT */}
-      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12">
+      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 md:rounded-[28px]">
         {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
             scrim, so colours here are hardcoded light values instead of the
             theme-conditional --auth-* vars — the backdrop is always a dark
@@ -948,7 +944,10 @@ export default function Signup() {
       </div>
 
       {/* RIGHT */}
-      <div className="w-full md:w-[640px] md:shrink-0 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
+      <div className="auth-scroll-hide relative w-full md:w-[600px] md:shrink-0 flex items-center justify-center overflow-y-auto p-4 sm:p-8 md:p-12 lg:px-16 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
+        <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+          <AuthThemeToggle />
+        </div>
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (

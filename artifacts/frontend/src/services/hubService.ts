@@ -61,6 +61,12 @@ export async function getCareAlerts(): Promise<HubComplianceAlert[]> {
   return jsonFetch<HubComplianceAlert[]>("/api/hub/care-alerts");
 }
 
+/** Same alert shape again, scoped to "who's stuck" in the staff onboarding
+ *  pipeline — applicants, unsigned offers, pending invites, blocked workers. */
+export async function getOnboardingAlerts(): Promise<HubComplianceAlert[]> {
+  return jsonFetch<HubComplianceAlert[]>("/api/hub/onboarding-alerts");
+}
+
 export async function getOrgEvents(): Promise<OrgEvent[]> {
   return jsonFetch<OrgEvent[]>("/api/hub/org-events");
 }

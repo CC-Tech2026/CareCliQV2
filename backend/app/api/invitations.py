@@ -207,6 +207,9 @@ async def create_invite(
             supabase.table("employee_onboarding").update({
                 "status": "invited",
                 "invitation_id": invite["id"],
+                "invited_at": _now_utc().isoformat(),
+                "invite_reminder_sent_at": None,
+                "invite_expired_notified_at": None,
             }).eq("id", body.onboarding_id).execute()
         invite_url = f"/accept-invite?token={token}"
         full_invite_url = f"{settings.frontend_base_url.rstrip('/')}{invite_url}"

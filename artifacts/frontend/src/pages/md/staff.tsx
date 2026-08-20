@@ -2,18 +2,13 @@
 import { useLocation } from "wouter";
 import {
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   AlertTriangle,
   Briefcase,
   ChevronRight,
-  KeyRound,
-  Loader2,
   Search,
-  Shield,
-  Star,
-  UserCheck,
   Users,
-  UserX,
-  TrendingDown,
   X,
 } from "lucide-react";
 
@@ -23,10 +18,15 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   getWorkerPipelineOverview,
+  getCoordinatorWorkerStats,
   deactivateWorker,
+  deleteWorkerAccount,
   sendWorkerPasswordReset,
   type WorkerPipelineOverview,
+  type WorkerStats,
 } from "@/services/coordinatorService";
+import { WorkerDetail } from "@/components/team/WorkerDetail";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -227,16 +227,19 @@ export default function MDStaffPage() {
   const [data, setData] = useState<MDData | null>(null);
   const [pipeline, setPipeline] =
     useState<WorkerPipelineOverview | null>(null);
+  const [workerStats, setWorkerStats] = useState<WorkerStats[] | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "compliance" | "participants" | "sessions">("compliance");
+  const [sortAsc, setSortAsc] = useState(false);
   const [selectedWorker, setSelectedWorker] =
     useState<StaffMember | null>(null);
   const [accountActionPending, setAccountActionPending] =
-    useState<"reset" | "deactivate" | null>(null);
+    useState<"reset" | "deactivate" | "delete" | null>(null);
 
   async function handleSendPasswordReset(worker: StaffMember) {
     setAccountActionPending("reset");
@@ -260,6 +263,20 @@ export default function MDStaffPage() {
       setData((prev) => prev ? { ...prev, staff_directory: prev.staff_directory.filter((w) => w.id !== worker.id) } : prev);
     } catch (err) {
       toast({ title: "Could not deactivate account", description: err instanceof Error ? err.message : "Try again shortly.", variant: "destructive" });
+    } finally {
+      setAccountActionPending(null);
+    }
+  }
+
+  async function handleDeleteAccount(worker: StaffMember) {
+    if (!window.confirm(`Remove ${worker.full_name}'s account? This queues it for removal and can't be undone once processed.`)) return;
+    setAccountActionPending("delete");
+    try {
+      await deleteWorkerAccount(worker.id);
+      toast({ title: "Account removal requested", description: `${worker.full_name}'s account has been queued for removal.` });
+      setSelectedWorker(null);
+    } catch (err) {
+      toast({ title: "Could not queue account removal", description: err instanceof Error ? err.message : "Try again shortly.", variant: "destructive" });
     } finally {
       setAccountActionPending(null);
     }
@@ -309,7 +326,28 @@ export default function MDStaffPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    // Richer per-worker record (credentials, training, availability, shift
+    // history, participants...) than the dashboard's summary directory rows -
+    // fetched once for the whole org so opening a profile is instant, not a
+    // second round-trip per click.
+    getCoordinatorWorkerStats()
+      .then((result) => {
+        if (!cancelled) setWorkerStats(result);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const allStaff = data?.staff_directory ?? [];
+  const selectedWorkerStats = selectedWorker
+    ? workerStats?.find((w) => w.id === selectedWorker.id) ?? null
+    : null;
 
   const stats = useMemo(() => {
     const active = allStaff.filter((worker) => worker.compliance_score > 0);
@@ -394,14 +432,30 @@ export default function MDStaffPage() {
     });
   }, [allStaff, filter, search]);
 
-  const topPerformers = useMemo(() => {
-    return [...allStaff]
-      .filter((worker) => worker.compliance_score > 0)
-      .sort(
-        (a, b) => b.compliance_score - a.compliance_score,
-      )
-      .slice(0, 3);
-  }, [allStaff]);
+  // Sortable by clicking a column header - the old separate "Leading performers"
+  // cards duplicated exactly this (top-3 by compliance) as its own section;
+  // sorting the real list in place does the same job without a second,
+  // redundant block above the directory the page is actually named after.
+  const sortedFiltered = useMemo(() => {
+    const dir = sortAsc ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return a.full_name.localeCompare(b.full_name) * dir;
+        case "participants":
+          return (a.participant_count - b.participant_count) * dir;
+        case "sessions":
+          return (a.sessions - b.sessions) * dir;
+        default:
+          return (a.compliance_score - b.compliance_score) * dir;
+      }
+    });
+  }, [filtered, sortKey, sortAsc]);
+
+  function handleSort(key: typeof sortKey) {
+    if (key === sortKey) setSortAsc((v) => !v);
+    else { setSortKey(key); setSortAsc(key === "name"); }
+  }
 
   const pipelineActive =
     !!pipeline &&
@@ -498,403 +552,40 @@ export default function MDStaffPage() {
                 WORKFORCE SNAPSHOT
             ===================================================== */}
 
-            <section
-              className="overflow-hidden rounded-2xl border bg-white"
-              style={{ borderColor: BORDER }}
-            >
-              <div
-                className="border-b px-5 py-4"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Workforce snapshot"
-                  title="How is the organisation performing?"
-                  description="A leadership view of the people layer, without turning this page into another KPI dashboard."
-                />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+                <p className="text-[30px] font-black leading-none" style={{ color: PLUM }}>{data.active_staff}</p>
+                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Active staff ({data.support_workers} support workers)</p>
               </div>
 
-              <div className="grid divide-y sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
-                <div className="p-5">
-                  <Metric
-                    label="Active staff"
-                    value={data.active_staff}
-                    sub="people"
-                    accent={PLUM}
-                  />
-
-                  <div className="mt-4 flex items-center gap-2">
-                    <Users size={12} style={{ color: MUTED }} />
-
-                    <span
-                      className="text-[10px] font-medium"
-                      style={{ color: MUTED }}
-                    >
-                      {data.support_workers} support workers
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <Metric
-                    label="Average compliance"
-                    value={`${stats.average}%`}
-                    sub="across scored staff"
-                    accent={getScoreColor(stats.average)}
-                  />
-
-                  <div className="mt-4">
-                    <ScoreBar score={stats.average} />
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <Metric
-                    label="Retention"
-                    value={`${data.staff_retention_rate}%`}
-                    sub="staff retained"
-                    accent="#0F7B57"
-                  />
-
-                  <div className="mt-4 flex items-center gap-2">
-                    <UserCheck
-                      size={12}
-                      style={{ color: "#0F7B57" }}
-                    />
-
-                    <span
-                      className="text-[10px] font-medium"
-                      style={{ color: MUTED }}
-                    >
-                      Workforce stability
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <Metric
-                    label="Needs attention"
-                    value={stats.atRisk.length}
-                    sub="below 85%"
-                    accent={
-                      stats.atRisk.length > 0
-                        ? "#B3261E"
-                        : "#0F7B57"
-                    }
-                  />
-
-                  <div className="mt-4 flex items-center gap-2">
-                    {stats.atRisk.length > 0 ? (
-                      <TrendingDown
-                        size={12}
-                        className="text-red-600"
-                      />
-                    ) : (
-                      <Shield
-                        size={12}
-                        className="text-emerald-600"
-                      />
-                    )}
-
-                    <span
-                      className="text-[10px] font-medium"
-                      style={{ color: MUTED }}
-                    >
-                      {stats.atRisk.length > 0
-                        ? "Leadership follow-up recommended"
-                        : "No immediate workforce risk"}
-                    </span>
-                  </div>
-                </div>
+              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+                <p className="text-[30px] font-black leading-none" style={{ color: getScoreColor(stats.average) }}>{stats.average}%</p>
+                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Average compliance</p>
               </div>
-            </section>
 
-            {/* =====================================================
-                RISK + PERFORMANCE
-            ===================================================== */}
+              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+                <p className="text-[30px] font-black leading-none" style={{ color: "#0F7B57" }}>{data.staff_retention_rate}%</p>
+                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Retention</p>
+              </div>
 
-            <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-              {/* Performance distribution */}
-              <section
-                className="rounded-2xl border bg-white p-5"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Performance health"
-                  title="Workforce performance distribution"
-                  description="See where your workforce sits against the organisation's compliance expectations."
-                />
-
-                <div className="mt-6">
-                  <div className="flex h-4 overflow-hidden rounded-full bg-slate-100">
-                    {distribution.strong > 0 && (
-                      <div
-                        style={{
-                          flex: distribution.strong,
-                          background: "#0F7B57",
-                        }}
-                      />
-                    )}
-
-                    {distribution.onTrack > 0 && (
-                      <div
-                        style={{
-                          flex: distribution.onTrack,
-                          background: "#2A5C8A",
-                        }}
-                      />
-                    )}
-
-                    {distribution.attention > 0 && (
-                      <div
-                        style={{
-                          flex: distribution.attention,
-                          background: "#9A5B0A",
-                        }}
-                      />
-                    )}
-
-                    {distribution.risk > 0 && (
-                      <div
-                        style={{
-                          flex: distribution.risk,
-                          background: "#B3261E",
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  <div className="mt-5 grid gap-4 sm:grid-cols-4">
-                    {[
-                      {
-                        label: "Strong",
-                        count: distribution.strong,
-                        color: "#0F7B57",
-                      },
-                      {
-                        label: "On track",
-                        count: distribution.onTrack,
-                        color: "#2A5C8A",
-                      },
-                      {
-                        label: "Attention",
-                        count: distribution.attention,
-                        color: "#9A5B0A",
-                      },
-                      {
-                        label: "Risk",
-                        count: distribution.risk,
-                        color: "#B3261E",
-                      },
-                    ].map((item) => (
-                      <div key={item.label}>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ background: item.color }}
-                          />
-
-                          <span
-                            className="text-[10px] font-black uppercase tracking-[0.12em]"
-                            style={{ color: MUTED }}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-
-                        <p
-                          className="mt-1 text-xl font-black"
-                          style={{ color: TEXT }}
-                        >
-                          {item.count}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              {/* Risk panel */}
-              <section
-                className="rounded-2xl border p-5"
-                style={{
-                  borderColor:
-                    stats.atRisk.length > 0
-                      ? "#E4B9B6"
-                      : BORDER,
-                  background:
-                    stats.atRisk.length > 0
-                      ? "#FBEAE9"
-                      : "#fff",
+              <button
+                onClick={() => {
+                  if (stats.atRisk.length === 0) return;
+                  setFilter("at_risk");
+                  document.getElementById("staff-directory")?.scrollIntoView({ behavior: "smooth" });
                 }}
+                className="rounded-2xl border bg-white p-5 text-left transition-colors hover:bg-cc-soft"
+                style={{ borderColor: BORDER }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p
-                      className="text-[9px] font-black uppercase tracking-[0.18em]"
-                      style={{
-                        color:
-                          stats.atRisk.length > 0
-                            ? "#B3261E"
-                            : MUTED,
-                      }}
-                    >
-                      Leadership attention
-                    </p>
-
-                    <h2
-                      className="mt-1 text-[16px] font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {stats.atRisk.length > 0
-                        ? `${stats.atRisk.length} staff need review`
-                        : "Workforce is stable"}
-                    </h2>
-                  </div>
-
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        stats.atRisk.length > 0
-                          ? "#FBEAE9"
-                          : "#E9F5F0",
-                      color:
-                        stats.atRisk.length > 0
-                          ? "#B3261E"
-                          : "#0F7B57",
-                    }}
-                  >
-                    {stats.atRisk.length > 0 ? (
-                      <AlertTriangle
-                        size={16}
-                        strokeWidth={2.5}
-                      />
-                    ) : (
-                      <Shield
-                        size={16}
-                        strokeWidth={2.5}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                <p
-                  className="mt-4 text-[11px] font-medium leading-relaxed"
-                  style={{ color: MUTED }}
-                >
-                  {stats.atRisk.length > 0
-                    ? "Workers below the 85% compliance threshold may require coaching, documentation support or a workload review."
-                    : "No workers are currently below the 85% compliance threshold."}
-                </p>
-
-                {stats.atRisk.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setFilter("at_risk");
-                      document
-                        .getElementById("staff-directory")
-                        ?.scrollIntoView({
-                          behavior: "smooth",
-                        });
-                    }}
-                    className="mt-5 inline-flex items-center gap-1.5 text-[10px] font-black"
-                    style={{ color: "#B3261E" }}
-                  >
-                    Review at-risk staff
-                    <ArrowRight size={11} strokeWidth={2.5} />
-                  </button>
-                )}
-              </section>
+                <p className="text-[30px] font-black leading-none" style={{ color: stats.atRisk.length > 0 ? "#B3261E" : "#0F7B57" }}>{stats.atRisk.length}</p>
+                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Needs attention (below 85%)</p>
+              </button>
             </div>
 
             {/* =====================================================
-                TOP PERFORMERS
-            ===================================================== */}
-
-            {topPerformers.length > 0 && (
-              <section>
-                <SectionHeader
-                  eyebrow="Recognition"
-                  title="Leading performers"
-                  description="Recognise the workers consistently demonstrating strong compliance performance."
-                />
-
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  {topPerformers.map((worker, index) => (
-                    <button
-                      key={worker.id}
-                      onClick={() => setSelectedWorker(worker)}
-                      className="group rounded-2xl border bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"
-                      style={{ borderColor: BORDER }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-[11px] font-black"
-                            style={{
-                              background:
-                                index === 0
-                                  ? "#FBF2E6"
-                                  : SOFT,
-                              color:
-                                index === 0
-                                  ? "#9A5B0A"
-                                  : PLUM,
-                            }}
-                          >
-                            {initials(worker.full_name)}
-                          </div>
-
-                          <div>
-                            <p
-                              className="text-[12px] font-black"
-                              style={{ color: TEXT }}
-                            >
-                              {worker.full_name}
-                            </p>
-
-                            <p
-                              className="mt-0.5 text-[10px] font-medium"
-                              style={{ color: MUTED }}
-                            >
-                              {worker.sessions} sessions
-                            </p>
-                          </div>
-                        </div>
-
-                        <Star
-                          size={14}
-                          strokeWidth={2.5}
-                          className="text-amber-500"
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <ScoreBar
-                          score={worker.compliance_score}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <StatusBadge
-                          score={worker.compliance_score}
-                          translate={translate}
-                        />
-
-                        <ChevronRight
-                          size={13}
-                          className="transition group-hover:translate-x-0.5"
-                          style={{ color: MUTED }}
-                        />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* =====================================================
-                STAFF DIRECTORY
+                STAFF DIRECTORY - leads the page, right after the KPI
+                snapshot: this is the "directory" page, so the actual list
+                of staff shouldn't be buried below analytics sections.
             ===================================================== */}
 
             <section id="staff-directory">
@@ -1014,26 +705,30 @@ export default function MDStaffPage() {
                           background: SOFT,
                         }}
                       >
-                        {[
-                          "Staff member",
-                          "Compliance",
-                          "Participants",
-                          "Sessions",
-                          "Status",
-                          "",
-                        ].map((heading, index) => (
-                          <span
-                            key={`${heading}-${index}`}
-                            className="text-[9px] font-black uppercase tracking-[0.14em]"
-                            style={{ color: MUTED }}
+                        {([
+                          ["Staff member", "name"],
+                          ["Compliance", "compliance"],
+                          ["Participants", "participants"],
+                          ["Sessions", "sessions"],
+                          ["Status", null],
+                          ["", null],
+                        ] as [string, typeof sortKey | null][]).map(([heading, key]) => (
+                          <button
+                            key={heading}
+                            type="button"
+                            disabled={!key}
+                            onClick={() => key && handleSort(key)}
+                            className="flex items-center gap-1 text-left text-[9px] font-black uppercase tracking-[0.14em] disabled:cursor-default"
+                            style={{ color: key && sortKey === key ? PLUM : MUTED }}
                           >
                             {heading}
-                          </span>
+                            {key && sortKey === key && (sortAsc ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+                          </button>
                         ))}
                       </div>
 
                       <div>
-                        {filtered.map((worker) => (
+                        {sortedFiltered.map((worker) => (
                           <button
                             key={worker.id}
                             onClick={() =>
@@ -1118,7 +813,7 @@ export default function MDStaffPage() {
 
                     {/* Mobile cards */}
                     <div className="divide-y md:hidden">
-                      {filtered.map((worker) => (
+                      {sortedFiltered.map((worker) => (
                         <button
                           key={worker.id}
                           onClick={() =>
@@ -1202,6 +897,58 @@ export default function MDStaffPage() {
             </section>
 
             {/* =====================================================
+                PERFORMANCE DISTRIBUTION - secondary analytics, now below
+                the actual directory rather than blocking access to it.
+            ===================================================== */}
+
+            <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+              <SectionHeader
+                eyebrow="Performance health"
+                title="Workforce performance distribution"
+              />
+
+              <div className="mt-5">
+                <div className="flex h-4 overflow-hidden rounded-full bg-slate-100">
+                  {distribution.strong > 0 && <div style={{ flex: distribution.strong, background: "#0F7B57" }} />}
+                  {distribution.onTrack > 0 && <div style={{ flex: distribution.onTrack, background: "#2A5C8A" }} />}
+                  {distribution.attention > 0 && <div style={{ flex: distribution.attention, background: "#9A5B0A" }} />}
+                  {distribution.risk > 0 && <div style={{ flex: distribution.risk, background: "#B3261E" }} />}
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-4">
+                  {[
+                    { label: "Strong", count: distribution.strong, color: "#0F7B57" },
+                    { label: "On track", count: distribution.onTrack, color: "#2A5C8A" },
+                    { label: "Attention", count: distribution.attention, color: "#9A5B0A" },
+                    { label: "Risk", count: distribution.risk, color: "#B3261E" },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+                        <span className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{item.label}</span>
+                      </div>
+                      <p className="mt-1 text-xl font-black" style={{ color: TEXT }}>{item.count}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {stats.atRisk.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setFilter("at_risk");
+                      document.getElementById("staff-directory")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="mt-5 inline-flex items-center gap-1.5 text-[10px] font-black"
+                    style={{ color: "#B3261E" }}
+                  >
+                    Review at-risk staff
+                    <ArrowRight size={11} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* =====================================================
                 HIRING PIPELINE
             ===================================================== */}
 
@@ -1213,7 +960,6 @@ export default function MDStaffPage() {
                 <SectionHeader
                   eyebrow="Workforce growth"
                   title="Hiring & onboarding"
-                  description="Keep recruitment activity connected to the workforce already operating in the organisation."
                 />
 
                 <button
@@ -1236,99 +982,29 @@ export default function MDStaffPage() {
 
               {pipelineActive && pipeline ? (
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: SOFT }}
-                  >
-                    <p
-                      className="text-2xl font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {pipeline.kpis.in_pipeline}
-                    </p>
-
-                    <p
-                      className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Candidates in pipeline
-                    </p>
+                  <div className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+                    <p className="text-2xl font-black" style={{ color: TEXT }}>{pipeline.kpis.in_pipeline}</p>
+                    <p className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Candidates in pipeline</p>
                   </div>
 
-                  <div
-                    className="rounded-xl p-4"
-                    style={{
-                      background:
-                        pipeline.kpis.credentials_overdue >
-                        0
-                          ? "#FFF7ED"
-                          : SOFT,
-                    }}
-                  >
-                    <p
-                      className="text-2xl font-black"
-                      style={{
-                        color:
-                          pipeline.kpis
-                            .credentials_overdue > 0
-                            ? "#9A5B0A"
-                            : TEXT,
-                      }}
-                    >
+                  <div className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+                    <p className="text-2xl font-black" style={{ color: pipeline.kpis.credentials_overdue > 0 ? "#9A5B0A" : TEXT }}>
                       {pipeline.kpis.credentials_overdue}
                     </p>
-
-                    <p
-                      className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Credentials overdue
-                    </p>
+                    <p className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Credentials overdue</p>
                   </div>
 
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: SOFT }}
-                  >
-                    <p
-                      className="text-2xl font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {pipeline.kpis.starting_this_week}
-                    </p>
-
-                    <p
-                      className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Starting this week
-                    </p>
+                  <div className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+                    <p className="text-2xl font-black" style={{ color: TEXT }}>{pipeline.kpis.starting_this_week}</p>
+                    <p className="mt-1 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Starting this week</p>
                   </div>
                 </div>
               ) : (
-                <div
-                  className="mt-5 flex flex-col items-center rounded-xl p-8 text-center"
-                  style={{ background: SOFT }}
-                >
-                  <Briefcase
-                    size={22}
-                    className="mb-2"
-                    style={{ color: MUTED }}
-                  />
-
-                  <p
-                    className="text-[12px] font-black"
-                    style={{ color: TEXT }}
-                  >
-                    No active recruitment activity
-                  </p>
-
-                  <p
-                    className="mt-1 max-w-md text-[10px] font-medium"
-                    style={{ color: MUTED }}
-                  >
-                    Candidates and onboarding tasks will appear
-                    here as your workforce grows.
+                <div className="mt-5 flex flex-col items-center rounded-xl border p-8 text-center" style={{ borderColor: BORDER }}>
+                  <Briefcase size={22} className="mb-2" style={{ color: MUTED }} />
+                  <p className="text-[12px] font-black" style={{ color: TEXT }}>No active recruitment activity</p>
+                  <p className="mt-1 max-w-md text-[10px] font-medium" style={{ color: MUTED }}>
+                    Candidates and onboarding tasks will appear here as your workforce grows.
                   </p>
                 </div>
               )}
@@ -1340,289 +1016,27 @@ export default function MDStaffPage() {
             WORKER DETAIL DRAWER
         ========================================================= */}
 
-        {selectedWorker && (
-          <div className="fixed inset-0 z-50">
-            <button
-              aria-label="Close staff profile"
-              onClick={() => setSelectedWorker(null)}
-              className="absolute inset-0 cursor-default bg-black/20 backdrop-blur-[1px]"
-            />
-
-            <aside
-              className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l bg-white shadow-2xl"
-              style={{ borderColor: BORDER }}
-            >
-              <div
-                className="flex items-center justify-between border-b px-5 py-4"
-                style={{ borderColor: BORDER }}
-              >
-                <div>
-                  <p
-                    className="text-[9px] font-black uppercase tracking-[0.16em]"
-                    style={{ color: PLUM }}
-                  >
-                    Staff profile
-                  </p>
-
-                  <h2
-                    className="mt-1 text-[16px] font-black"
-                    style={{ color: TEXT }}
-                  >
-                    Workforce detail
-                  </h2>
+        <Sheet open={!!selectedWorker} onOpenChange={(open) => { if (!open) setSelectedWorker(null); }}>
+          <SheetContent side="right" className="w-full overflow-y-auto p-6 sm:max-w-4xl" style={{ background: "var(--cc-bg)" }}>
+            {selectedWorker && (
+              selectedWorkerStats ? (
+                <WorkerDetail
+                  worker={selectedWorkerStats}
+                  onBack={() => setSelectedWorker(null)}
+                  onSendPasswordReset={() => handleSendPasswordReset(selectedWorker)}
+                  onDeactivate={() => handleDeactivate(selectedWorker)}
+                  onDeleteAccount={() => handleDeleteAccount(selectedWorker)}
+                />
+              ) : (
+                <div className="space-y-4 pt-2">
+                  <div className="h-16 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                  <div className="h-40 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                  <div className="h-40 animate-pulse rounded-2xl" style={{ background: SOFT }} />
                 </div>
-
-                <button
-                  onClick={() => setSelectedWorker(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{
-                    background: SOFT,
-                    color: MUTED,
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-5">
-                <div className="flex items-center gap-4">
-                  <div
-                    className="flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-black"
-                    style={{
-                      background: SOFT,
-                      color: PLUM,
-                    }}
-                  >
-                    {initials(selectedWorker.full_name)}
-                  </div>
-
-                  <div className="min-w-0">
-                    <h3
-                      className="text-lg font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {selectedWorker.full_name}
-                    </h3>
-
-                    <p
-                      className="mt-0.5 text-[11px] font-medium capitalize"
-                      style={{ color: MUTED }}
-                    >
-                      {selectedWorker.role?.replace(
-                        /_/g,
-                        " ",
-                      ) || "Support worker"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <StatusBadge
-                    score={selectedWorker.compliance_score}
-                    translate={translate}
-                  />
-
-                  <div className="mt-3">
-                    <ScoreBar
-                      score={selectedWorker.compliance_score}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-7 grid grid-cols-2 gap-3">
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: SOFT }}
-                  >
-                    <p
-                      className="text-[9px] font-black uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Participants
-                    </p>
-
-                    <p
-                      className="mt-1 text-xl font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {selectedWorker.participant_count}
-                    </p>
-                  </div>
-
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: SOFT }}
-                  >
-                    <p
-                      className="text-[9px] font-black uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Sessions
-                    </p>
-
-                    <p
-                      className="mt-1 text-xl font-black"
-                      style={{ color: TEXT }}
-                    >
-                      {selectedWorker.sessions}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-7">
-                  <p
-                    className="mb-3 text-[9px] font-black uppercase tracking-[0.16em]"
-                    style={{ color: MUTED }}
-                  >
-                    Workforce information
-                  </p>
-
-                  <div
-                    className="divide-y rounded-xl border"
-                    style={{ borderColor: BORDER }}
-                  >
-                    {selectedWorker.email && (
-                      <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <span
-                          className="text-[10px] font-medium"
-                          style={{ color: MUTED }}
-                        >
-                          Email
-                        </span>
-
-                        <span
-                          className="max-w-[220px] truncate text-right text-[10px] font-bold"
-                          style={{ color: TEXT }}
-                        >
-                          {selectedWorker.email}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedWorker.joined_at && (
-                      <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <span
-                          className="text-[10px] font-medium"
-                          style={{ color: MUTED }}
-                        >
-                          Joined
-                        </span>
-
-                        <span
-                          className="text-right text-[10px] font-bold"
-                          style={{ color: TEXT }}
-                        >
-                          {new Date(
-                            selectedWorker.joined_at,
-                          ).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedWorker.last_login && (
-                      <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <span
-                          className="text-[10px] font-medium"
-                          style={{ color: MUTED }}
-                        >
-                          Last login
-                        </span>
-
-                        <span
-                          className="text-right text-[10px] font-bold"
-                          style={{ color: TEXT }}
-                        >
-                          {new Date(
-                            selectedWorker.last_login,
-                          ).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <p
-                    className="mb-2 text-[10px] font-black uppercase tracking-wide"
-                    style={{ color: MUTED }}
-                  >
-                    Account management
-                  </p>
-
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      disabled={accountActionPending !== null}
-                      onClick={() => handleSendPasswordReset(selectedWorker)}
-                      className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-cc-soft disabled:opacity-50"
-                      style={{ borderColor: BORDER }}
-                    >
-                      {accountActionPending === "reset" ? (
-                        <Loader2 size={15} className="animate-spin shrink-0" style={{ color: MUTED }} />
-                      ) : (
-                        <KeyRound size={15} className="shrink-0" style={{ color: PLUM }} />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold" style={{ color: TEXT }}>Send password reset email</p>
-                        <p className="text-[10px]" style={{ color: MUTED }}>Sends a secure link so they set a new password themselves.</p>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={accountActionPending !== null}
-                      onClick={() => handleDeactivate(selectedWorker)}
-                      className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-red-50 disabled:opacity-50"
-                      style={{ borderColor: "#E4B9B6" }}
-                    >
-                      {accountActionPending === "deactivate" ? (
-                        <Loader2 size={15} className="animate-spin shrink-0 text-red-600" />
-                      ) : (
-                        <UserX size={15} className="shrink-0 text-red-600" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-red-700">Deactivate account</p>
-                        <p className="text-[10px] text-red-600">Immediately revokes their access. Can be reversed by a coordinator.</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {selectedWorker.compliance_score < 85 &&
-                  selectedWorker.compliance_score > 0 && (
-                    <div
-                      className="mt-6 rounded-xl border p-4"
-                      style={{
-                        borderColor: "#E4B9B6",
-                        background: "#FBEAE9",
-                      }}
-                    >
-                      <div className="flex gap-3">
-                        <AlertTriangle
-                          size={15}
-                          className="mt-0.5 shrink-0 text-red-600"
-                        />
-
-                        <div>
-                          <p className="text-[11px] font-black text-red-700">
-                            Performance review recommended
-                          </p>
-
-                          <p className="mt-1 text-[10px] font-medium leading-relaxed text-red-600">
-                            This worker is currently below the
-                            organisation's 85% compliance
-                            threshold. Consider reviewing
-                            documentation quality and support
-                            needs.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-              </div>
-            </aside>
-          </div>
-        )}
+              )
+            )}
+          </SheetContent>
+        </Sheet>
       </div>
     </HubLayout>
   );

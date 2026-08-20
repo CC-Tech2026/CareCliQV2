@@ -560,7 +560,7 @@ export default function Team() {
       {pendingTrainingCount > 0 && (
         <div
           className="flex items-center gap-3 rounded-2xl px-4 py-3"
-          style={{ background: "linear-gradient(90deg, var(--cc-status-info-bg), transparent)", border: `1px solid var(--cc-border)` }}
+          style={{ background: "var(--cc-status-info-bg)", border: `1px solid var(--cc-border)` }}
         >
           <span className="flex items-center justify-center h-9 w-9 rounded-full shrink-0" style={{ background: "var(--cc-status-info-bg)", color: "var(--cc-status-info)" }}>
             <GraduationCap size={16} />
