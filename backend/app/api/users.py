@@ -17,13 +17,18 @@ from ..services.notification_service import (
     NOTIFICATION_EVENTS,
     default_notification_preferences,
 )
-from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}
 MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024
+PROFILE_PHOTOS_BUCKET = "profile-photos"
+# Short-lived on purpose — this signed URL is recomputed on every profile read
+# rather than persisted, so a long expiry buys nothing but larger blast radius
+# if a URL is ever captured (browser history, logs, a shared screenshot).
+PROFILE_PHOTO_SIGNED_URL_SECONDS = 60 * 60 * 24
 
 PREFERRED_CONTACT_METHODS = ("phone_call", "sms", "in_app_message")
 
@@ -49,7 +54,14 @@ def _select_profile(user_id: str) -> dict:
     )
     if not result or not result.data:
         raise HTTPException(status_code=404, detail="User profile not found")
-    return result.data
+    profile = dict(result.data)
+    # profile-photos is a private bucket — never trust a stored profile_photo_url
+    # (stale public link or expired signature); always regenerate from
+    # profile_photo_path on read.
+    profile["profile_photo_url"] = signed_storage_url(
+        PROFILE_PHOTOS_BUCKET, profile.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+    )
+    return profile
 
 
 def _membership_for_user(user_id: str, org_id: str | None) -> dict:
@@ -320,26 +332,23 @@ async def upload_my_profile_photo(
     path = f"{org_id}/{user_id}/avatar-{uuid4().hex}{ext}"
     supabase = get_supabase_admin()
     try:
-        supabase.storage.from_("profile-photos").upload(
+        supabase.storage.from_(PROFILE_PHOTOS_BUCKET).upload(
             path,
             raw,
             {"content-type": content_type, "upsert": "true"},
         )
-        public_url = supabase.storage.from_("profile-photos").get_public_url(path)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Profile photo storage is not configured: {exc}",
         )
 
-    result = (
-        supabase.table("users")
-        .update({"profile_photo_path": path, "profile_photo_url": public_url})
-        .eq("id", user_id)
-        .execute()
-    )
-    profile = result.data[0] if result.data else _select_profile(user_id)
-    return {"profile_photo_path": path, "profile_photo_url": profile.get("profile_photo_url") or public_url}
+    # profile_photo_url is intentionally not stored — profile-photos is a private
+    # bucket, so the URL must be a freshly-signed one generated at read time, never
+    # a persisted link that can outlive its signature.
+    supabase.table("users").update({"profile_photo_path": path, "profile_photo_url": None}).eq("id", user_id).execute()
+    signed_url = signed_storage_url(PROFILE_PHOTOS_BUCKET, path, PROFILE_PHOTO_SIGNED_URL_SECONDS)
+    return {"profile_photo_path": path, "profile_photo_url": signed_url}
 
 
 @router.delete("/me/photo", status_code=204)

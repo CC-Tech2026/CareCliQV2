@@ -13,7 +13,9 @@ import urllib.request
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status, Depends
 from pydantic import BaseModel, Field, model_validator
 from ..core.config import settings
-from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
+
+PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
 from ..services import email_service
 from ..services import device_security_service as dss
@@ -340,14 +342,19 @@ async def _get_user_profile(user_id: str) -> dict:
             .select(
                 "role, full_name, account_type, onboarding_complete, organization_id, "
                 "email_verified, profile_completed, onboarding_completed, "
-                "role_specific_profile_completed, profile_photo_url"
+                "role_specific_profile_completed, profile_photo_url, profile_photo_path"
             )
             .eq("id", user_id)
             .maybe_single()
             .execute()
         )
         if result is not None and result.data:
-            return result.data
+            # profile-photos is a private bucket — never trust a stored profile_photo_url
+            # (stale public link or expired signature); always regenerate from
+            # profile_photo_path on read.
+            data = dict(result.data)
+            data["profile_photo_url"] = signed_storage_url(PROFILE_PHOTOS_BUCKET, data.get("profile_photo_path"))
+            return data
         if result is not None and result.data is None:
             # Row simply doesn't exist yet — return empty dict
             return {}

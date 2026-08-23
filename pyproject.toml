@@ -43,6 +43,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+# Real-Postgres RLS integration tests (backend/tests/integration/), gated behind
+# INTEGRATION_REAL_DB=1 — not needed for the regular mocked test suite.
+test-integration = ["psycopg[binary]>=3.1"]
 storage-s3 = ["boto3>=1.34.0"]
 storage-azure = ["azure-storage-blob>=12.19.0"]
 storage-all = ["boto3>=1.34.0", "azure-storage-blob>=12.19.0"]

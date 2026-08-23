@@ -8,7 +8,9 @@ from pydantic import BaseModel
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..services import induction_service, worker_financial_service, worker_training_service
-from ..services.supabase_client import get_supabase_admin
+from ..services.supabase_client import get_supabase_admin, signed_storage_url
+
+PROFILE_PHOTOS_BUCKET = "profile-photos"
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -176,8 +178,13 @@ async def get_team_onboarding(current_user: dict = Depends(get_current_user)):
     result = (
         get_supabase_admin()
         .table("users")
-        .select("id, full_name, email, role, onboarding_completed, onboarding_checklist, profile_photo_url")
+        .select("id, full_name, email, role, onboarding_completed, onboarding_checklist, profile_photo_path")
         .eq("organization_id", org_id)
         .execute()
     )
-    return result.data or []
+    rows = []
+    for row in (result.data or []):
+        row = dict(row)
+        row["profile_photo_url"] = signed_storage_url(PROFILE_PHOTOS_BUCKET, row.pop("profile_photo_path", None))
+        rows.append(row)
+    return rows

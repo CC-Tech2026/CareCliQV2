@@ -49,6 +49,18 @@ function saveCache(settings: PractitionerSettingsFull): void {
   }
 }
 
+/** Call on logout — this cache is a single fixed key shared by every user of the
+ * device, so a stale entry would otherwise render the previous user's name,
+ * credentials, signature, and business details for a moment after the next
+ * person logs in. */
+export function clearCachedSettings(): void {
+  try {
+    localStorage.removeItem(SETTINGS_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function useSettings(): {
   settings: PractitionerSettingsFull | null;
   isLoading: boolean;

@@ -17,6 +17,26 @@ import {
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
 import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
 import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
+import { clearCachedSettings } from "@/lib/use-settings";
+import { clearSignature } from "@/lib/signature-store";
+import { clearAllSessionNoteStorage } from "@/lib/session-notes-storage";
+import { deleteTaskEvidenceDb } from "@/lib/task-evidence-storage";
+import { deleteShiftOfflineDb } from "@/lib/shift-offline-queue";
+
+/** Every on-device cache that isn't already covered by queryClient.clear() or
+ * clearAuthSessionStorage() — settings/signature caches keyed by a single fixed
+ * localStorage key shared by every user of the device, plus the offline-sync
+ * IndexedDB stores and session-note drafts, none of which are namespaced by user
+ * or org. Without this, a different account logging in on the same device could
+ * still see — and offline-sync could still resubmit under the new session — the
+ * previous user's cached data. */
+function clearDeviceLocalCaches(): void {
+  clearCachedSettings();
+  clearSignature();
+  clearAllSessionNoteStorage();
+  void deleteTaskEvidenceDb();
+  void deleteShiftOfflineDb();
+}
 
 export type UserRole = "support_coordinator" | "support_worker" | "managing_director";
 export type AccountType = "independent_worker" | "small_provider";
@@ -139,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAppliedSupabaseSession();
     clearPresentedNotifications();
     clearAuthSessionStorage();
+    clearDeviceLocalCaches();
     queryClient.clear();
     setToken(null);
     setUser(null);

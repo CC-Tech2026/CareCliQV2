@@ -14,7 +14,7 @@ Run:
 from __future__ import annotations
 
 import uuid
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch, call
 import pytest
 
 # ── Shared fixtures ────────────────────────────────────────────────────────────
@@ -247,3 +247,56 @@ class TestTwoOrgReportBleedPrevention:
             f"CCQ-108 regression: revenue report for Org A returned {simulated_report_total}, expected {org_a_total}"
         assert simulated_report_total != combined_total, \
             "CCQ-108 regression: Org B invoice total leaked into Org A revenue report"
+
+
+# ── Compliance Centre overview: cross-org rule-result leak (regression) ───────
+
+def _chainable_table_mock(data):
+    """A MagicMock that accepts any chained filter call and returns `data` from execute()."""
+    chain = MagicMock()
+    chain.select.return_value = chain
+    chain.eq.return_value = chain
+    chain.in_.return_value = chain
+    chain.gte.return_value = chain
+    chain.lte.return_value = chain
+    chain.order.return_value = chain
+    chain.limit.return_value = chain
+    chain.is_.return_value = chain
+    chain.not_ = chain
+    chain.execute.return_value = MagicMock(data=data)
+    return chain
+
+
+class TestComplianceCommonIssuesIsolation:
+    """The Compliance Centre 'common issues' panel must never aggregate another
+    org's compliance_rule_results. That table has no organization_id column, so
+    isolation depends entirely on the sessions!inner(organization_id) embedded-join
+    filter added in compliance.py — this is a regression test for that fix."""
+
+    def test_common_issues_excludes_other_org_rule_results(self):
+        from backend.app.api import compliance
+
+        rule_result_rows = [
+            {"rule_id": "RULE_A_ONLY", "status": "fail", "checked_at": "2026-06-01T00:00:00",
+             "sessions": {"organization_id": ORG_A}},
+            {"rule_id": "RULE_A_ONLY", "status": "fail", "checked_at": "2026-06-02T00:00:00",
+             "sessions": {"organization_id": ORG_A}},
+            {"rule_id": "RULE_B_ONLY", "status": "fail", "checked_at": "2026-06-01T00:00:00",
+             "sessions": {"organization_id": ORG_B}},
+            {"rule_id": "RULE_B_ONLY", "status": "warning", "checked_at": "2026-06-02T00:00:00",
+             "sessions": {"organization_id": ORG_B}},
+        ]
+
+        table_chains = {"compliance_rule_results": _chainable_table_mock(rule_result_rows)}
+        mock_supabase = MagicMock()
+        mock_supabase.table.side_effect = lambda name: table_chains.setdefault(name, _chainable_table_mock([]))
+
+        with patch.object(compliance, "get_supabase_admin", return_value=mock_supabase), \
+             patch.object(compliance.incident_service, "get_incident_stats", new=AsyncMock(return_value={})):
+            import asyncio
+            result = asyncio.run(compliance.compliance_centre_overview(current_user=USER_A))
+
+        issue_codes = {issue["rule_code"] for issue in result["common_issues"]}
+        assert "RULE_A_ONLY" in issue_codes, "Org A's own rule failures must still surface"
+        assert "RULE_B_ONLY" not in issue_codes, \
+            "CCQ regression: Org B's compliance_rule_results leaked into Org A's common issues panel"

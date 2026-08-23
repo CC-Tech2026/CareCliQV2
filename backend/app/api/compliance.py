@@ -243,13 +243,15 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     try:
         rr_resp = (
             supabase.table("compliance_rule_results")
-            .select("rule_id, status, checked_at")
+            .select("rule_id, status, checked_at, sessions!inner(organization_id)")
             .in_("status", ["fail", "warning"])
             .gte("checked_at", since)
             .execute()
         )
         counts: dict[str, int] = {}
         for r in (rr_resp.data or []):
+            if (r.get("sessions") or {}).get("organization_id") != org_id:
+                continue
             code = r.get("rule_id")
             if code:
                 counts[code] = counts.get(code, 0) + 1

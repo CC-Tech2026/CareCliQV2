@@ -35,6 +35,23 @@ class Settings(BaseSettings):
         os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000")),
     )
     secret_key: str = os.environ.get("SESSION_SECRET", "changeme-in-production")
+
+    @field_validator("secret_key")
+    @classmethod
+    def _require_real_secret_key(cls, v):
+        # Every application JWT — including the organization_id claim that
+        # OrgContextMiddleware trusts absolutely for tenant isolation — is signed
+        # with this key. An unset, default, or short value means anyone who can
+        # compute an HS256 signature can forge a token for any organisation, so
+        # this must fail loudly at startup rather than silently accept a weak key.
+        if not v or v == "changeme-in-production" or len(v) < 32:
+            raise ValueError(
+                "SESSION_SECRET is missing, using the placeholder default, or too short "
+                "(need 32+ chars). Set a real generated value, e.g.: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+        return v
+
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
     reauth_token_expire_minutes: int = int(os.environ.get("REAUTH_TOKEN_EXPIRE_MINUTES", "10") or 10)
