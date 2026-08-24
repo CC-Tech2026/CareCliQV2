@@ -190,6 +190,7 @@ def _worker_stage_blocked_alerts(org_id: str, now: datetime) -> list[dict[str, A
                 .table("users")
                 .select("id, full_name, email")
                 .in_("id", worker_ids)
+                .eq("organization_id", org_id)
                 .execute()
                 .data
                 or []

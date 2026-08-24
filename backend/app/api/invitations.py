@@ -753,6 +753,7 @@ async def list_members(current_user: dict = Depends(get_current_user)):
                 supabase.table("users")
                 .select("id, full_name, email")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             user_map = {u["id"]: u for u in (users_res.data or [])}

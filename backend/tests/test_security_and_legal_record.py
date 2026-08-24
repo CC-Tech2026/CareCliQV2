@@ -324,6 +324,7 @@ class AssignmentApiTests(unittest.IsolatedAsyncioTestCase):
 
         profiles.select.return_value = profiles
         profiles.in_.return_value = profiles
+        profiles.eq.return_value = profiles
         profiles.execute.return_value = MagicMock(data=[
             {
                 "id": "worker-1",

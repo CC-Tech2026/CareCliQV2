@@ -1,9 +1,33 @@
 import os
+import sys
 from pathlib import Path
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 _REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
+# Every field below reads via a plain os.environ.get(...) at class-definition
+# time, evaluated once when this module is first imported — that only ever
+# sees real shell-exported variables. pydantic-settings' own `env_file`
+# loading (Config.env_file below) is a *separate* mechanism that only bridges
+# the gap for fields whose Python attribute name matches their env var name
+# case-insensitively (e.g. supabase_url <-> SUPABASE_URL); secret_key's env
+# var is SESSION_SECRET, which doesn't match, so it silently fell through to
+# the hardcoded default in any local run that hadn't manually exported
+# SESSION_SECRET first. Loading .env into the real environment here, before
+# any field default is evaluated, fixes that for every field, not just this
+# one. Production is unaffected — Render injects real env vars directly.
+#
+# Skipped under pytest deliberately: this repo's .env points at the real
+# hosted Supabase project. Several existing tests have unmocked network-call
+# gaps that previously failed safely against an empty SUPABASE_URL default;
+# auto-loading real production credentials here would turn that into tests
+# silently reaching the live database instead. Tests that actually want a
+# real database opt in explicitly via INTEGRATION_REAL_DB (see
+# backend/tests/integration/), never via this file.
+if "pytest" not in sys.modules:
+    load_dotenv(_REPO_ROOT_ENV_FILE)
 
 
 class Settings(BaseSettings):

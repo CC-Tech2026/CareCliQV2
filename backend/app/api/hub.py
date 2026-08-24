@@ -203,6 +203,7 @@ async def get_compliance_alerts(current_user: dict = Depends(get_current_user)):
                     supabase.table("users")
                     .select("id, full_name, email")
                     .in_("id", user_ids)
+                    .eq("organization_id", org_id)
                     .execute()
                 )
                 for u in u_res.data or []:
@@ -758,6 +759,7 @@ async def get_community(current_user: dict = Depends(get_current_user)):
             supabase.table("users")
             .select("id, full_name, email, date_of_birth")
             .in_("id", user_ids)
+            .eq("organization_id", org_id)
             .execute()
         )
         profiles: dict[str, dict] = {

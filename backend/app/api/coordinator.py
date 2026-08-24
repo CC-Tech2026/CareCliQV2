@@ -421,6 +421,7 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
                 supabase.table("users")
                 .select("id, full_name, email, role")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             users_by_id = {

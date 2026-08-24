@@ -231,6 +231,7 @@ async def _team_members(org_id: str, scoped_user_ids: set[str] | None = None) ->
                 supabase.table("users")
                 .select("id, email, full_name, role, is_active, last_login, organization_id")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             profiles_by_id = {

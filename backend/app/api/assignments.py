@@ -73,6 +73,7 @@ def _worker_membership_profiles(org_id: Optional[str]) -> list[dict]:
             supabase.table("users")
             .select("id, full_name, email, role, account_type, is_active")
             .in_("id", user_ids)
+            .eq("organization_id", org_id)
             .execute()
         )
         profiles_by_id = {
