@@ -25,6 +25,7 @@ from ..services import (
     medication_service,
     participant_service,
     session_service,
+    shift_offer_service,
     shift_service,
     travel_expense_service,
 )
@@ -777,6 +778,50 @@ async def worker_shift_participant_profile(shift_id: str, current_user: dict = D
     if not payload:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return payload
+
+
+@router.patch("/shifts/{shift_id}/cannot-attend")
+async def worker_shift_cannot_attend(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Worker-initiated cancellation — vacates the shift back to 'unassigned'
+    and notifies coordinators, the reverse of a coordinator cancelling on the
+    worker (notify_shift_cancelled)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        updated = await shift_offer_service.mark_cannot_attend(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"shift_id": shift_id, "shift": updated}
+
+
+@router.post("/shifts/{shift_id}/offer/accept")
+async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Accept a pending ranked shift offer — assigns the shift to this
+    worker. Never triggered automatically; this is the only path that
+    confirms an offer into an actual assignment."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        updated = await shift_offer_service.accept_offer(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return {"shift_id": shift_id, "shift": updated}
+
+
+@router.post("/shifts/{shift_id}/offer/decline")
+async def worker_shift_offer_decline(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Decline a pending ranked shift offer — auto-advances to the next
+    ranked candidate, or notifies coordinators if none remain."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        await shift_offer_service.decline_offer(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return {"shift_id": shift_id}
 
 
 def _require_shift_owner(shift_id: str, current_user: dict) -> dict:

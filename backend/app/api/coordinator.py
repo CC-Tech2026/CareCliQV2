@@ -37,7 +37,7 @@ from ..services.notification_service import (
     notify_shift_cancelled,
     notify_shift_change,
 )
-from ..services import conversation_service
+from ..services import conversation_service, shift_offer_service, worker_matching_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -1907,6 +1907,22 @@ def _detect_worker_conflicts(
     except Exception:
         pass
 
+    # 4 — Weekly availability-slot preference (worker_weekly_availability_slots) —
+    # the one signal not covered above: a worker can mark a day/time-of-day as
+    # unavailable or preferred independent of blackout dates and shift overlaps.
+    try:
+        slot_status = worker_matching_service.availability_status_for_shift(
+            worker_id, shift_start.isoformat(), shift_end.isoformat()
+        )
+        if slot_status == "unavailable":
+            conflicts.append({
+                "type": "unavailable_slot",
+                "severity": "warning",
+                "message": "Not usually available then",
+            })
+    except Exception:
+        pass
+
     return conflicts
 
 
@@ -2035,8 +2051,9 @@ async def get_available_workers(
     if not s_dt or not e_dt:
         raise HTTPException(status_code=422, detail="Invalid shift_start or shift_end")
 
-    # Fetch all active workers in org
-    team = await _team(org_id)
+    # Fetch this coordinator's own team (falls back to org-wide per _team's own
+    # rollout rules — see _team's docstring), matching worker_stats' scoping.
+    team = await _team(org_id, coordinator_user=current_user if is_coordinator_role(current_user) else None)
     active_workers = [w for w in team if w.get("is_active", True)]
 
     results = []
@@ -2050,15 +2067,26 @@ async def get_available_workers(
         hard = any(i["severity"] == "error" for i in all_issues)
         soft = any(i["severity"] in ("warning", "info") for i in all_issues)
         status = "unavailable" if hard else ("warning" if soft else "available")
+        try:
+            preferred = worker_matching_service.availability_status_for_shift(
+                wid, s_dt.isoformat(), e_dt.isoformat()
+            ) == "preferred"
+        except Exception:
+            preferred = False
         results.append({
             **worker,
             "availability_status": status,
             "conflicts": conflicts,
             "skill_warnings": skill_warnings,
+            "preferred_availability": preferred,
         })
 
     order = {"available": 0, "warning": 1, "unavailable": 2}
-    results.sort(key=lambda w: (order.get(w["availability_status"], 3), (w.get("full_name") or "").lower()))
+    results.sort(key=lambda w: (
+        order.get(w["availability_status"], 3),
+        0 if w["preferred_availability"] else 1,
+        (w.get("full_name") or "").lower(),
+    ))
     return results
 
 
@@ -2212,6 +2240,37 @@ async def unassign_existing_shift(
     )
 
     return {"shift_id": shift_id, "shift": updated, "warning": warning_msg}
+
+
+# ── POST /shifts/{id}/offer ───────────────────────────────────────────────────
+
+class SendShiftOfferBody(BaseModel):
+    worker_id: str
+    candidate_queue: list[str] = []
+
+
+@router.post("/shifts/{shift_id}/offer")
+async def send_shift_offer(
+    shift_id: str,
+    body: SendShiftOfferBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a ranked shift offer instead of assigning directly — the worker
+    must accept before the shift is assigned. `candidate_queue` is the rest
+    of the ranked suggestion list (already computed client-side via
+    get_available_workers), tried in order on decline or timeout."""
+    org_id = _require_coordinator(current_user)
+    try:
+        offer = await shift_offer_service.send_offer(
+            shift_id=shift_id,
+            worker_id=body.worker_id,
+            candidate_queue=body.candidate_queue,
+            offered_by=get_user_id(current_user),
+            org_id=org_id,
+        )
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"shift_id": shift_id, "offer": offer}
 
 
 # ── PUT /shifts/{id}/reassign ─────────────────────────────────────────────────

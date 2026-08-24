@@ -590,7 +590,7 @@ export function deleteShiftCredentialRequirement(requirementId: string) {
 export type AvailabilityStatus = "available" | "warning" | "unavailable";
 
 export type ConflictItem = {
-  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill";
+  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill" | "unavailable_slot";
   severity: "error" | "warning" | "info";
   message: string;
 };
@@ -606,6 +606,7 @@ export type AvailableWorker = WorkerStats & {
   availability_status: AvailabilityStatus;
   conflicts: ConflictItem[];
   skill_warnings: ConflictItem[];
+  preferred_availability: boolean;
 };
 
 export type AssignExistingShiftPayload = {
@@ -715,6 +716,20 @@ export function assignExistingShift(shiftId: string, payload: AssignExistingShif
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    }
+  );
+}
+
+/** Send a ranked shift offer — the worker must accept before it's assigned.
+ * `candidateQueue` is the rest of the ranked suggestion list, tried in order
+ * on decline or timeout. */
+export function sendShiftOffer(shiftId: string, payload: { workerId: string; candidateQueue: string[] }) {
+  return jsonFetch<{ shift_id: string; offer: Record<string, unknown> }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/offer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worker_id: payload.workerId, candidate_queue: payload.candidateQueue }),
     }
   );
 }

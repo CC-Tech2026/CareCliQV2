@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Camera, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { compressImageFile } from "@/lib/task-evidence-storage";
@@ -246,11 +247,9 @@ export function WorkerIncidentReportForm({
         ))}
       </select>
 
-      <Input
-        type="datetime-local"
+      <DateTimePicker
         value={incidentTime}
-        onChange={(e) => setIncidentTime(e.target.value)}
-        className="bg-card"
+        onChange={setIncidentTime}
       />
 
       <div>

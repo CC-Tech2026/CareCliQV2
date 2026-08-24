@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -197,14 +198,11 @@ export default function IncidentNew() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="col-span-2">
               <FieldLabel>{translate("incidents.new.dateTime")} <span className="text-red-500">*</span></FieldLabel>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={form.incident_date}
-                onChange={(e) => set("incident_date", e.target.value)}
-                className="h-10 text-[13px] rounded-xl"
-                style={{ borderColor: BORDER }}
+                onChange={(v) => set("incident_date", v)}
               />
             </div>
             <div className="col-span-2">
