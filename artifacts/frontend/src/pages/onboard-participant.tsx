@@ -3,7 +3,8 @@ import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
-  MapPin, User, FileText, Trash2, Plus,
+  MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
+  SlidersHorizontal, X,
 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,13 +49,33 @@ const NEW_BADGE_TEXT = "#3D5A6C";
  * here persists across a page reload. Wiring to a real API is a separate pass.
  */
 
-type IntakeStatus = "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet" | "awaiting_signatures" | "signed" | "active";
+type IntakeStatus = "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet" | "awaiting_signatures" | "signed" | "active" | "inactive";
 
 type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral";
+
+type ServiceCategory = "aged_care" | "disability";
+
+/** Aged Care is only available to participants aged 65 and over. */
+function calculateAge(dob?: string): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age;
+}
+
+function isAgedCareEligible(dob?: string): boolean {
+  const age = calculateAge(dob);
+  return age !== null && age >= 65;
+}
 
 type Intake = {
   id: string;
   full_name: string;
+  service_category?: ServiceCategory;
   ndis_number: string;
   email: string;
   phone: string;
@@ -78,6 +99,10 @@ type Intake = {
   /** Free-text override for the board card's second line (e.g. "NDIS plan received", "Scheduled 9 Jul, 2:00 PM"). */
   board_subtitle?: string;
   activated_at?: string;
+  /** Set when the MD temporarily suspends service delivery for an active participant (status flips to "inactive"). Required comment explaining why. Cleared on reactivation. */
+  suspended_reason?: string;
+  suspended_at?: string;
+  reactivated_at?: string;
   created_at: string;
   /** Present when this enquiry came in through the public web referral form. */
   web_intake?: WebIntakeForm;
@@ -151,6 +176,7 @@ const STATUS_META: Record<IntakeStatus, { label: string; bg: string; color: stri
   awaiting_signatures: { label: "Awaiting signatures", bg: WARNING_BG, color: WARNING },
   signed: { label: "Ready to activate", bg: INFO_BG, color: INFO },
   active: { label: "Active", bg: SUCCESS_BG, color: SUCCESS },
+  inactive: { label: "Inactive", bg: WARNING_BG, color: WARNING },
 };
 
 // Five-stage journey shown as a stepper in the detail view's sidebar.
@@ -170,6 +196,7 @@ function stepIndexForStatus(status: IntakeStatus): number {
     case "awaiting_signatures": return 3;
     case "signed": return 3;
     case "active": return 4;
+    case "inactive": return 4;
     default: return 0;
   }
 }
@@ -182,7 +209,7 @@ const BOARD_COLUMNS = [
   { id: "screening", label: "Screening" },
   { id: "meet_greet", label: "Meet and greet" },
   { id: "service_agreement", label: "Service agreement" },
-  { id: "active", label: "Active" },
+  { id: "active", label: "Onboarded Participants" },
 ] as const;
 
 type BoardColumnId = (typeof BOARD_COLUMNS)[number]["id"];
@@ -206,15 +233,16 @@ function columnIdForStatus(status: IntakeStatus): BoardColumnId | null {
     case "meet_greet": return "meet_greet";
     case "awaiting_signatures":
     case "signed": return "service_agreement";
-    case "active": return "active";
+    case "active":
+    case "inactive": return "active";
     default: return null;
   }
 }
 
-/** KPI stat tile — same tinted-background + icon-badge pattern as Staff Onboarding's KpiTile. */
-function KpiTile({ label, value, color, bg, icon: Icon }: { label: string; value: number; color: string; bg: string; icon?: typeof Clock3 }) {
-  return (
-    <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>
+/** KPI stat tile — same tinted-background + icon-badge pattern as Staff Onboarding's KpiTile. Selectable when onClick is given: filters the board/list below to matching participants. */
+function KpiTile({ label, value, color, bg, icon: Icon, active, onClick }: { label: string; value: number; color: string; bg: string; icon?: typeof Clock3; active?: boolean; onClick?: () => void }) {
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
         {Icon && (
@@ -224,7 +252,19 @@ function KpiTile({ label, value, color, bg, icon: Icon }: { label: string; value
         )}
       </div>
       <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
-    </div>
+      {active && <div className="mt-3 h-1 w-8 rounded-full" style={{ background: color }} />}
+    </>
+  );
+  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+      style={{ background: bg, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -257,6 +297,7 @@ function badgeForIntake(intake: Intake): { icon?: typeof Clock3; label: string; 
     return intake.status === "awaiting_signatures" ? { label: "Awaiting sign", color: SUCCESS, bg: SUCCESS_BG } : null;
   }
   if (column === "active") {
+    if (intake.status === "inactive") return { icon: XCircle, label: "Suspended", color: WARNING, bg: WARNING_BG };
     return { icon: CheckCircle2, label: "Complete", color: SUCCESS, bg: SUCCESS_BG };
   }
   return null;
@@ -279,6 +320,11 @@ function subtitleForIntake(intake: Intake): string {
         : intake.status === "signed" ? "Signed — ready to activate"
         : "Draft ready";
     case "active":
+      if (intake.status === "inactive") {
+        return intake.suspended_at
+          ? `Suspended ${new Date(intake.suspended_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`
+          : "Suspended";
+      }
       return intake.activated_at
         ? `Onboarded ${new Date(intake.activated_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`
         : "Onboarded";
@@ -395,14 +441,15 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
   );
 }
 
-let nextId = 2;
+let nextId = 4;
 
-// One seeded dummy enquiry so the board isn't empty on first load — local
+// Seeded dummy records so the board isn't empty on first load — local
 // state only, same as everything else here, so it resets on page reload.
 const SEED_INTAKES: Intake[] = [
   {
     id: "1",
     full_name: "Sam Rivera",
+    service_category: "disability",
     ndis_number: "430987621",
     email: "sam.rivera@email.com",
     phone: "0412 344 187",
@@ -439,11 +486,491 @@ const SEED_INTAKES: Intake[] = [
       notes: "Sam's family is seeking support for personal care and community access. They recently transitioned out of a school-based setting and this is their first NDIS-funded provider engagement.",
     },
   },
+  {
+    id: "2",
+    full_name: "Priya Nair",
+    service_category: "disability",
+    ndis_number: "430112298",
+    email: "priya.nair@email.com",
+    phone: "0423 556 710",
+    source: "coordinator_referral",
+    status: "active",
+    created_at: new Date(Date.now() - 46 * 86_400_000).toISOString(),
+    plan_start_date: "2026-01-15",
+    plan_end_date: "2027-01-14",
+    total_budget: "$62,400",
+    provider_signed_name: "Morgan Lee",
+    provider_signed_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+    family_signed_name: "Priya Nair",
+    family_signed_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+    activated_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+    meet_greet_notes: "Priya prefers morning sessions and communicates well with visual schedules. Support worker continuity is a priority for the family.",
+    web_intake: {
+      submitted_at: new Date(Date.now() - 46 * 86_400_000).toISOString(),
+      submitted_by: "Support coordinator",
+      given_name: "Priya",
+      surname: "Nair",
+      preferred_name: "Priya",
+      pronouns: "She/her",
+      gender: "Female",
+      date_of_birth: "2001-07-22",
+      street_address: "18 Kestrel Court",
+      suburb: "Glen Waverley",
+      state: "VIC",
+      postcode: "3150",
+      plan_status: "Active plan",
+      plan_start: "2026-01-15",
+      plan_end: "2027-01-14",
+      plan_manager_name: "Owen Sharpe",
+      plan_manager_org: "ClearPath Plan Management",
+      plan_manager_phone: "1300 442 019",
+      plan_manager_email: "owen.sharpe@clearpathpm.com.au",
+      next_of_kin: [
+        { name: "Anita Nair", relationship: "Mother", phone: "0411 902 774", email: "anita.nair@email.com" },
+      ],
+      referral_source: "Support coordinator referral",
+      referral_date: new Date(Date.now() - 46 * 86_400_000).toISOString().slice(0, 10),
+      presenting_needs: ["Community access", "Daily living skills"],
+      notes: "Priya is transitioning to independent living and wants support building daily living skills alongside community participation.",
+    },
+  },
+  {
+    id: "3",
+    full_name: "Harold Whitfield",
+    service_category: "aged_care",
+    ndis_number: "430775410",
+    email: "harold.whitfield@email.com",
+    phone: "0398 221 043",
+    source: "phone_call",
+    status: "active",
+    created_at: new Date(Date.now() - 61 * 86_400_000).toISOString(),
+    plan_start_date: "2026-02-01",
+    plan_end_date: "2027-01-31",
+    total_budget: "$48,900",
+    provider_signed_name: "Morgan Lee",
+    provider_signed_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    family_signed_name: "Eleanor Whitfield",
+    family_signed_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    activated_at: new Date(Date.now() - 18 * 86_400_000).toISOString(),
+    meet_greet_notes: "Harold lives with his wife Eleanor, who will be his primary point of contact. He values consistency in support workers and has mobility considerations.",
+    web_intake: {
+      submitted_at: new Date(Date.now() - 61 * 86_400_000).toISOString(),
+      submitted_by: "Family",
+      given_name: "Harold",
+      surname: "Whitfield",
+      preferred_name: "Harold",
+      pronouns: "He/him",
+      gender: "Male",
+      date_of_birth: "1954-11-03",
+      street_address: "7 Magnolia Street",
+      suburb: "Camberwell",
+      state: "VIC",
+      postcode: "3124",
+      plan_status: "Active plan",
+      plan_start: "2026-02-01",
+      plan_end: "2027-01-31",
+      plan_manager_name: "Grace Ferreira",
+      plan_manager_org: "Sunrise Plan Management",
+      plan_manager_phone: "1300 664 512",
+      plan_manager_email: "grace.ferreira@sunrisepm.com.au",
+      next_of_kin: [
+        { name: "Eleanor Whitfield", relationship: "Spouse", phone: "0407 663 218", email: "eleanor.whitfield@email.com" },
+      ],
+      referral_source: "Phone enquiry",
+      referral_date: new Date(Date.now() - 61 * 86_400_000).toISOString().slice(0, 10),
+      presenting_needs: ["Personal care", "Home maintenance", "Mobility support"],
+      notes: "Harold requires assistance with personal care and mobility around the home. Eleanor is his primary carer and would like additional in-home respite support.",
+    },
+  },
 ];
+
+// ── List view ─────────────────────────────────────────────────────────
+// Same table layout as Staff Onboarding's PipelineListView — sortable
+// Name/Stage columns, colored stage pill, meta line, click-through row.
+
+type ParticipantListRow = {
+  id: string;
+  name: string;
+  categoryLabel: string;
+  columnId: BoardColumnId;
+  stageLabel: string;
+  color: string;
+  meta: string;
+  onOpen: () => void;
+};
+
+type ListSortKey = "name" | "stage";
+
+function ParticipantListView({
+  rows, sortKey, sortAsc, onSort,
+}: { rows: ParticipantListRow[]; sortKey: ListSortKey; sortAsc: boolean; onSort: (key: ListSortKey) => void }) {
+  function SortHeader({ label, k, className }: { label: string; k: ListSortKey; className?: string }) {
+    const active = sortKey === k;
+    return (
+      <button onClick={() => onSort(k)} className={`flex items-center gap-1 text-left ${className ?? ""}`}>
+        {label}
+        {active && (sortAsc ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
+      </button>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="grid grid-cols-[1fr_120px_140px_1fr_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
+        <SortHeader label="Participant" k="name" />
+        <span className="hidden sm:inline">Category</span>
+        <SortHeader label="Stage" k="stage" />
+        <span className="hidden md:inline">Status</span>
+        <span />
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>Nobody matches the current filters.</p>
+      ) : (
+        <div className="divide-y" style={{ borderColor: BORDER }}>
+          {rows.map((row) => (
+            <div
+              key={row.id}
+              onClick={row.onOpen}
+              className="grid cursor-pointer grid-cols-[1fr_120px_140px_1fr_40px] items-center gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar name={row.name} size={30} color={row.color} />
+                <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{row.name}</p>
+              </div>
+              <p className="hidden truncate text-[11px] font-medium sm:block" style={{ color: MUTED }}>{row.categoryLabel}</p>
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: `${row.color}1F`, color: row.color }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />
+                {row.stageLabel}
+              </span>
+              <p className="hidden truncate text-[11px] font-medium md:block" style={{ color: MUTED }}>{row.meta}</p>
+              <div className="flex justify-end">
+                <ArrowRight size={14} style={{ color: "#B8B4B0" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Dedicated full-page roster of Active participants — reached by clicking
+ * the "Active" column header on the board (a proper page, not just an
+ * in-place filter, since MDs use this as a reference list on its own).
+ */
+function ActiveParticipantsPage({
+  intakes, onBack, onOpen,
+}: { intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const q = search.trim().toLowerCase();
+  const rows = intakes
+    .filter((i) => columnIdForStatus(i.status) === "active")
+    .filter((i) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
+    .filter((i) => categoryFilter === "all" || i.service_category === categoryFilter)
+    .filter((i) => statusFilter === "all" || i.status === statusFilter)
+    .sort((a, b) => (b.activated_at ?? "").localeCompare(a.activated_at ?? ""));
+  const activeTotal = intakes.filter((i) => i.status === "active").length;
+  const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
+
+  // Dummy count for now — no complaints backend exists yet, this is just
+  // a placeholder so the mailbox widget has something to show.
+  const complaintCount = 5;
+
+  return (
+    <div className="space-y-5 pb-10">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+            style={{ color: MUTED, background: SOFT }}
+          >
+            <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participant Onboarding
+          </button>
+          <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Participants</h1>
+          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
+            {activeTotal} active · {inactiveTotal} inactive with this provider.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-[1.25rem] px-5 py-3.5" style={{ background: DANGER_BG }} title="Complaints received from participants">
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: DANGER }}>
+            <Mail size={18} />
+            {complaintCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                style={{ background: DANGER }}
+              >
+                {complaintCount}
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-[22px] font-black leading-none" style={{ color: DANGER }}>{complaintCount}</p>
+            <p className="mt-1.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Participant Complaints</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
+        <div className="relative min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search for the Participant"
+            className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">
+              <X size={13} style={{ color: MUTED }} />
+            </button>
+          )}
+        </div>
+        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
+          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
+            <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="disability">Disability</SelectItem>
+            <SelectItem value="aged_care">Aged Care</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
+          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[150px]">
+            <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="grid grid-cols-[1fr_110px_100px_140px_120px_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
+          <span>Participant</span>
+          <span className="hidden sm:inline">Category</span>
+          <span>Status</span>
+          <span className="hidden md:inline">NDIS number</span>
+          <span>Activated</span>
+          <span />
+        </div>
+        {rows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>No participants match the current filters.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {rows.map((i) => (
+              <div
+                key={i.id}
+                onClick={() => onOpen(i.id)}
+                className="grid cursor-pointer grid-cols-[1fr_110px_100px_140px_120px_40px] items-center gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={i.full_name} size={30} color={i.status === "inactive" ? WARNING : COLUMN_COLOR.active} />
+                  <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{i.full_name}</p>
+                </div>
+                <p className="hidden truncate text-[11px] font-medium sm:block" style={{ color: MUTED }}>
+                  {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
+                </p>
+                <div><StatusBadge status={i.status} /></div>
+                <p className="hidden truncate text-[11px] font-medium md:block" style={{ color: MUTED }}>{i.ndis_number || "—"}</p>
+                <p className="truncate text-[11px] font-medium" style={{ color: MUTED }}>{formatDate(i.activated_at) ?? "—"}</p>
+                <div className="flex justify-end">
+                  <ArrowRight size={14} style={{ color: "#B8B4B0" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Plain participant record — reached from the Active Participants list.
+ * Deliberately has none of IntakeDetail's pipeline chrome (stepper,
+ * decline/terminate actions, board-card note): these participants have
+ * already been through the process, so this is just their profile now.
+ */
+function ParticipantProfilePage({
+  intake, onBack, onUpdate,
+}: {
+  intake: Intake;
+  onBack: () => void;
+  onUpdate: (patch: Partial<Intake>) => void;
+}) {
+  const { toast } = useToast();
+  const [intakeFormEditing, setIntakeFormEditing] = useState(false);
+  const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
+  const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
+
+  // Suspend / Activate — temporarily pauses service delivery without
+  // leaving the pipeline entirely (unlike Terminate). A reason is required
+  // to suspend; reactivating doesn't need one.
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
+
+  function suspend() {
+    if (!suspendReason.trim()) return;
+    onUpdate({ status: "inactive", suspended_reason: suspendReason.trim(), suspended_at: new Date().toISOString() });
+    setSuspendOpen(false);
+    setSuspendReason("");
+    toast({ title: "Services suspended", description: `${intake.full_name.split(" ")[0]}'s status is now Inactive.` });
+  }
+
+  function activate() {
+    onUpdate({ status: "active", reactivated_at: new Date().toISOString() });
+    toast({ title: "Services resumed", description: `${intake.full_name.split(" ")[0]}'s status is now Active.` });
+  }
+
+  function updateIntakeFormDraft(patch: Partial<WebIntakeForm>) {
+    setIntakeFormDraft((prev) => ({ ...prev, ...patch }));
+  }
+  function startEditingIntakeForm() {
+    setIntakeFormDraft(intake.web_intake ?? {});
+    setServiceCategoryDraft(intake.service_category ?? "disability");
+    setIntakeFormEditing(true);
+  }
+  function cancelEditingIntakeForm() {
+    setIntakeFormDraft(intake.web_intake ?? {});
+    setServiceCategoryDraft(intake.service_category ?? "disability");
+    setIntakeFormEditing(false);
+  }
+  function saveIntakeForm() {
+    if (serviceCategoryDraft === "aged_care" && !isAgedCareEligible(intakeFormDraft.date_of_birth)) {
+      toast({ title: "Cannot save", description: "Aged Care requires a date of birth confirming the participant is 65 or over.", variant: "destructive" });
+      return;
+    }
+    const payload: WebIntakeForm = {
+      ...intakeFormDraft,
+      submitted_at: intake.web_intake?.submitted_at ?? new Date().toISOString(),
+      submitted_by: intakeFormDraft.submitted_by || "Provider",
+    };
+    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft });
+    setIntakeFormEditing(false);
+    toast({ title: "Profile updated" });
+  }
+
+  return (
+    <div className="space-y-5 pb-10">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+        style={{ color: MUTED, background: SOFT }}
+      >
+        <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participants
+      </button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 items-start">
+        {/* Sidebar summary */}
+        <div className="space-y-4">
+          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <Avatar name={intake.full_name} size={48} color={intake.status === "inactive" ? WARNING : COLUMN_COLOR.active} />
+            <h2 className="text-lg font-black mt-3" style={{ color: TEXT }}>{intake.full_name}</h2>
+            <div className="mt-1"><StatusBadge status={intake.status} /></div>
+            <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
+              <p className="text-xs" style={{ color: MUTED }}>{intake.service_category === "aged_care" ? "Aged Care" : "Disability"}</p>
+              <p className="text-xs" style={{ color: MUTED }}>NDIS {intake.ndis_number || "—"}</p>
+              {intake.email && <p className="text-xs" style={{ color: MUTED }}>{intake.email}</p>}
+              {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
+              {intake.activated_at && <p className="text-xs" style={{ color: MUTED }}>Active since {formatDate(intake.activated_at)}</p>}
+            </div>
+
+            {intake.status === "inactive" && intake.suspended_reason && (
+              <div className="mt-4 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: WARNING }}>Reason for Suspension</p>
+                <p className="mt-1 text-xs leading-5" style={{ color: TEXT }}>{intake.suspended_reason}</p>
+                {intake.suspended_at && <p className="mt-1.5 text-[10px] font-medium" style={{ color: MUTED }}>Suspended {formatDate(intake.suspended_at)}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Suspend / Activate — pauses or resumes service delivery without
+              leaving the pipeline (distinct from Terminate, which ends it). */}
+          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Service status</label>
+            {intake.status === "inactive" ? (
+              <Button type="button" variant="ghost" className="w-full gap-1.5 rounded-lg border-transparent text-white hover:opacity-90 hover:bg-transparent" style={{ background: SUCCESS }} onClick={activate}>
+                <CheckCircle2 size={13} /> Activate Account
+              </Button>
+            ) : !suspendOpen ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSuspendOpen(true)}
+                className="w-full gap-1.5 rounded-lg border-transparent text-white hover:opacity-90 hover:bg-transparent"
+                style={{ background: "#DC2626" }}
+              >
+                <XCircle size={13} /> Suspend Account
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px]" style={{ color: MUTED }}>
+                  Temporarily pauses service delivery for {intake.full_name.split(" ")[0]}. Their status will show as Inactive until reactivated.
+                </p>
+                <Textarea
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  placeholder="Reason for suspension (required)"
+                  className="text-xs"
+                  rows={3}
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { setSuspendOpen(false); setSuspendReason(""); }}>
+                    Cancel
+                  </Button>
+                  <Button variant="outline" size="sm" className="rounded-lg" style={{ color: DANGER }} onClick={suspend} disabled={!suspendReason.trim()}>
+                    <XCircle size={13} className="mr-1.5" /> Confirm suspension
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Profile details */}
+        <div className="space-y-4">
+          <IntakeFormBlock
+            intake={intake}
+            draft={intakeFormDraft}
+            onChange={updateIntakeFormDraft}
+            editing={intakeFormEditing}
+            onEdit={startEditingIntakeForm}
+            onCancel={cancelEditingIntakeForm}
+            onSave={saveIntakeForm}
+            serviceCategory={serviceCategoryDraft}
+            onServiceCategoryChange={setServiceCategoryDraft}
+            showSubmissionStatus={false}
+          />
+
+          {(intake.plan_start_date || intake.plan_end_date || intake.total_budget || intake.provider_signed_name || intake.family_signed_name) && (
+            <IntakeFormSection icon={FileSignature} title="Service Agreement">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <Field label="Plan start" value={formatDate(intake.plan_start_date)} editing={false} />
+                <Field label="Plan end" value={formatDate(intake.plan_end_date)} editing={false} />
+                <Field label="Total budget" value={intake.total_budget} editing={false} />
+                <Field label="Provider signed by" value={intake.provider_signed_name} editing={false} />
+                <Field label="Family signed by" value={intake.family_signed_name} editing={false} />
+                <Field label="Activated" value={formatDate(intake.activated_at)} editing={false} />
+              </div>
+            </IntakeFormSection>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ParticipantOnboardingBoard() {
   const { translate } = useAccessibility();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { toast } = useToast();
 
   // Selected intake lives in the URL (?intake=<id>), same convention as
@@ -453,31 +980,53 @@ export default function ParticipantOnboardingBoard() {
   // anything about that shell.
   const urlSearch = useSearch();
   const selectedId = new URLSearchParams(urlSearch).get("intake");
+  const profileId = new URLSearchParams(urlSearch).get("profile");
 
   const [intakes, setIntakes] = useState<Intake[]>(SEED_INTAKES);
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
+  const [view, setView] = useState<"kanban" | "list">("kanban");
+  const [activeKpi, setActiveKpi] = useState<"open" | "stuck" | "active" | "signature" | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
+  const [stageFilter, setStageFilter] = useState<"all" | BoardColumnId>("all");
+  const [sortKey, setSortKey] = useState<ListSortKey>("stage");
+  const [sortAsc, setSortAsc] = useState(true);
+
+  function handleSort(key: ListSortKey) {
+    if (key === sortKey) setSortAsc((v) => !v);
+    else { setSortKey(key); setSortAsc(true); }
+  }
 
   const [fullName, setFullName] = useState("");
+  const [serviceCategory, setServiceCategory] = useState<ServiceCategory>("disability");
+  const [dob, setDob] = useState("");
   const [ndisNumber, setNdisNumber] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState<EnquirySource>("online_form");
 
+  const dobAge = calculateAge(dob);
+  const agedCareBlocked = serviceCategory === "aged_care" && dob.trim().length > 0 && !isAgedCareEligible(dob);
+  const agedCareNeedsDob = serviceCategory === "aged_care" && !dob.trim();
+
   function createIntake() {
     const intake: Intake = {
       id: String(nextId++),
       full_name: fullName.trim(),
+      service_category: serviceCategory,
       ndis_number: ndisNumber.trim(),
       email: email.trim(),
       phone: phone.trim(),
       source,
       status: "enquiry",
       created_at: new Date().toISOString(),
+      web_intake: dob.trim()
+        ? { date_of_birth: dob, submitted_by: "Provider", submitted_at: new Date().toISOString() }
+        : undefined,
     };
     setIntakes((prev) => [intake, ...prev]);
     setNewIntakeOpen(false);
-    setFullName(""); setNdisNumber(""); setEmail(""); setPhone(""); setSource("online_form");
+    setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setEmail(""); setPhone(""); setSource("online_form");
     navigate(`/onboard-participant?intake=${intake.id}`);
     toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
   }
@@ -494,20 +1043,85 @@ export default function ParticipantOnboardingBoard() {
     );
   }
 
+  // Reached from the Active Participants list — a plain profile, no
+  // pipeline/stepper chrome, since these participants already went
+  // through the process and this is just their record now.
+  const profileIntake = profileId ? intakes.find((i) => i.id === profileId) ?? null : null;
+
+  if (profileIntake) {
+    return (
+      <ParticipantProfilePage
+        intake={profileIntake}
+        onBack={() => navigate("/onboard-participant/active")}
+        onUpdate={(patch) => updateIntake(profileIntake.id, patch)}
+      />
+    );
+  }
+
+  // Dedicated full-page list, reached by clicking the "Active" column
+  // header on the board — a separate page rather than an in-place filter,
+  // since it's meant as a proper roster view, not a quick glance.
+  if (location === "/onboard-participant/active") {
+    return (
+      <ActiveParticipantsPage
+        intakes={intakes}
+        onBack={() => navigate("/onboard-participant")}
+        onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
+      />
+    );
+  }
+
   const q = search.trim().toLowerCase();
-  const matches = (i: Intake) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q);
+  const matchesSearch = (i: Intake) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q);
+  const matchesKpi = (i: Intake) => {
+    if (activeKpi === "open") return columnIdForStatus(i.status) !== "active" && i.status !== "declined";
+    if (activeKpi === "stuck") return columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7;
+    if (activeKpi === "active") return columnIdForStatus(i.status) === "active";
+    if (activeKpi === "signature") return i.status === "awaiting_signatures";
+    return true;
+  };
+  const matchesCategory = (i: Intake) => categoryFilter === "all" || i.service_category === categoryFilter;
+  const matchesStage = (i: Intake) => stageFilter === "all" || columnIdForStatus(i.status) === stageFilter;
+  const matches = (i: Intake) => matchesSearch(i) && matchesKpi(i) && matchesCategory(i) && matchesStage(i);
+
+  function setKpiFilter(filter: "open" | "stuck" | "active" | "signature") {
+    setActiveKpi((prev) => (prev === filter ? null : filter));
+  }
 
   // KPI strip. "Active participants" and "Ready for signature" mean org-wide
   // counts once a real backend exists — for now they're scoped to what this
   // page knows about locally.
-  const openEnquiries = intakes.filter((i) => i.status !== "active" && i.status !== "declined").length;
-  const stuckCount = intakes.filter((i) => i.status !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7).length;
-  const activeCount = intakes.filter((i) => i.status === "active").length;
+  const openEnquiries = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined").length;
+  const stuckCount = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7).length;
+  const activeCount = intakes.filter((i) => columnIdForStatus(i.status) === "active").length;
   const readyForSignatureCount = intakes.filter((i) => i.status === "awaiting_signatures").length;
 
   function comingSoon(feature: string) {
     toast({ title: "Coming soon", description: `${feature} isn't built yet — it needs its own scoped piece of work.` });
   }
+
+  const COLUMN_ORDER: Record<BoardColumnId, number> = { enquiry: 0, screening: 1, meet_greet: 2, service_agreement: 3, active: 4 };
+  const listRows: ParticipantListRow[] = intakes
+    .filter((i) => matches(i) && columnIdForStatus(i.status) !== null)
+    .map((i): ParticipantListRow => {
+      const columnId = columnIdForStatus(i.status) as BoardColumnId;
+      const col = BOARD_COLUMNS.find((c) => c.id === columnId)!;
+      return {
+        id: i.id,
+        name: i.full_name,
+        categoryLabel: i.service_category === "aged_care" ? "Aged Care" : "Disability",
+        columnId,
+        stageLabel: col.label,
+        color: COLUMN_COLOR[columnId],
+        meta: subtitleForIntake(i),
+        onOpen: () => navigate(`/onboard-participant?intake=${i.id}`),
+      };
+    })
+    .sort((a, b) => {
+      const dir = sortAsc ? 1 : -1;
+      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      return (COLUMN_ORDER[a.columnId] - COLUMN_ORDER[b.columnId]) * dir || a.name.localeCompare(b.name);
+    });
 
   return (
     <>
@@ -541,51 +1155,129 @@ export default function ParticipantOnboardingBoard() {
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiTile label="Open enquiries" value={openEnquiries} color={CRITICAL} bg={CRITICAL_BG} icon={ClipboardCheck} />
-          <KpiTile label="Stuck 7+ days" value={stuckCount} color={WARNING} bg={WARNING_BG} icon={Clock3} />
-          <KpiTile label="Active participants" value={activeCount} color={SUCCESS} bg={SUCCESS_BG} icon={ShieldCheck} />
-          <KpiTile label="Ready for signature" value={readyForSignatureCount} color={INFO} bg={INFO_BG} icon={PenLine} />
+          <KpiTile label="Open enquiries" value={openEnquiries} color={CRITICAL} bg={CRITICAL_BG} icon={ClipboardCheck} active={activeKpi === "open"} onClick={() => setKpiFilter("open")} />
+          <KpiTile label="Stuck 7+ days" value={stuckCount} color={WARNING} bg={WARNING_BG} icon={Clock3} active={activeKpi === "stuck"} onClick={() => setKpiFilter("stuck")} />
+          <KpiTile label="Active participants" value={activeCount} color={SUCCESS} bg={SUCCESS_BG} icon={ShieldCheck} active={activeKpi === "active"} onClick={() => setKpiFilter("active")} />
+          <KpiTile label="Ready for signature" value={readyForSignatureCount} color={INFO} bg={INFO_BG} icon={PenLine} active={activeKpi === "signature"} onClick={() => setKpiFilter("signature")} />
         </div>
 
-        <div className="relative w-full max-w-[260px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="pl-8 h-9 rounded-lg text-sm" />
+        <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
+          <div className="relative min-w-0 flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search for the Participant"
+              className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">
+                <X size={13} style={{ color: MUTED }} />
+              </button>
+            )}
+          </div>
+          <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
+            <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
+              <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="disability">Disability</SelectItem>
+              <SelectItem value="aged_care">Aged Care</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as "all" | BoardColumnId)}>
+            <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
+              <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All stages</SelectItem>
+              {BOARD_COLUMNS.map((col) => (
+                <SelectItem key={col.id} value={col.id}>{col.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(activeKpi || categoryFilter !== "all" || stageFilter !== "all" || search) && (
+            <button
+              onClick={() => { setActiveKpi(null); setCategoryFilter("all"); setStageFilter("all"); setSearch(""); }}
+              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5"
+              style={{ color: MUTED }}
+            >
+              <X size={13} /> Clear
+            </button>
+          )}
+          <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-xl p-1" style={{ background: "#F8F7F4" }}>
+            <button
+              onClick={() => setView("kanban")}
+              aria-pressed={view === "kanban"}
+              title="Board view"
+              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
+              style={{ background: view === "kanban" ? "white" : "transparent", color: view === "kanban" ? PLUM : MUTED, boxShadow: view === "kanban" ? "var(--cc-shadow-sm)" : "none" }}
+            >
+              <LayoutGrid size={13} /> Board
+            </button>
+            <button
+              onClick={() => setView("list")}
+              aria-pressed={view === "list"}
+              title="List view"
+              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
+              style={{ background: view === "list" ? "white" : "transparent", color: view === "list" ? PLUM : MUTED, boxShadow: view === "list" ? "var(--cc-shadow-sm)" : "none" }}
+            >
+              <Rows3 size={13} /> List
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
-          {BOARD_COLUMNS.map((col) => {
-            const columnIntakes = intakes.filter((i) => columnIdForStatus(i.status) === col.id && matches(i));
-            const color = COLUMN_COLOR[col.id];
-            return (
-              <div
-                key={col.id}
-                className="rounded-[1.25rem] border-t-[3px] p-4 flex flex-col gap-3"
-                style={{ background: SOFT, borderTopColor: color }}
-              >
-                <div className="flex items-center justify-between px-0.5 pb-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-                    <p className="text-[13px] font-black" style={{ color: TEXT }}>{col.label}</p>
+        {view === "kanban" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+            {BOARD_COLUMNS.map((col) => {
+              const columnIntakes = intakes.filter((i) => columnIdForStatus(i.status) === col.id && matches(i));
+              const color = COLUMN_COLOR[col.id];
+              return (
+                <div
+                  key={col.id}
+                  className="rounded-[1.25rem] border-t-[3px] p-4 flex flex-col gap-3"
+                  style={{ background: SOFT, borderTopColor: color }}
+                >
+                  <div className="flex items-center justify-between px-0.5 pb-0.5">
+                    {col.id === "active" ? (
+                      <button
+                        onClick={() => navigate("/onboard-participant/active")}
+                        className="flex items-center gap-2 rounded-md transition-opacity hover:opacity-70"
+                        title="View full Participants list"
+                      >
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
+                        <p className="text-[13px] font-black underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{col.label}</p>
+                        <ChevronRight size={12} style={{ color }} />
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
+                        <p className="text-[13px] font-black" style={{ color: TEXT }}>{col.label}</p>
+                      </div>
+                    )}
+                    <span
+                      className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black"
+                      style={{ background: `${color}1F`, color }}
+                    >
+                      {columnIntakes.length}
+                    </span>
                   </div>
-                  <span
-                    className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black"
-                    style={{ background: `${color}1F`, color }}
-                  >
-                    {columnIntakes.length}
-                  </span>
+                  <div className="space-y-2 max-h-[65vh] overflow-y-auto">
+                    {columnIntakes.length === 0 && (
+                      <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>Nobody here</p>
+                    )}
+                    {columnIntakes.map((i) => (
+                      <ParticipantCard key={i.id} intake={i} onClick={() => navigate(`/onboard-participant?intake=${i.id}`)} />
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2 max-h-[65vh] overflow-y-auto">
-                  {columnIntakes.length === 0 && (
-                    <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>Nobody here</p>
-                  )}
-                  {columnIntakes.map((i) => (
-                    <ParticipantCard key={i.id} intake={i} onClick={() => navigate(`/onboard-participant?intake=${i.id}`)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <ParticipantListView rows={listRows} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+        )}
 
       </div>
 
@@ -601,6 +1293,37 @@ export default function ParticipantOnboardingBoard() {
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Full name</label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Sam Rivera" autoFocus />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Service category</label>
+                <Select value={serviceCategory} onValueChange={(v) => setServiceCategory(v as ServiceCategory)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disability">Disability</SelectItem>
+                    <SelectItem value="aged_care">Aged Care</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>
+                  Date of birth {serviceCategory === "aged_care" && <span style={{ color: DANGER }}>*</span>}
+                </label>
+                <Input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  aria-invalid={agedCareBlocked}
+                  className={agedCareBlocked ? "border-red-400 focus-visible:ring-red-400" : undefined}
+                />
+              </div>
+            </div>
+            {serviceCategory === "aged_care" && (
+              <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
+                {agedCareBlocked
+                  ? `Aged Care is only available to participants aged 65 and over${dobAge !== null ? ` — this person is ${dobAge}.` : "."}`
+                  : "Aged Care is only available to participants aged 65 and over — date of birth is required to confirm eligibility."}
+              </p>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>NDIS number</label>
               <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
@@ -653,7 +1376,7 @@ export default function ParticipantOnboardingBoard() {
             <Button
               variant="navy"
               onClick={createIntake}
-              disabled={!fullName.trim() || !ndisNumber.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone))}
+              disabled={!fullName.trim() || !ndisNumber.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked || agedCareNeedsDob}
             >
               Log enquiry
             </Button>
@@ -687,24 +1410,31 @@ function IntakeDetail({
   // the draft and reverts to what was saved before.
   const [intakeFormEditing, setIntakeFormEditing] = useState(false);
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
+  const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
   function updateIntakeFormDraft(patch: Partial<WebIntakeForm>) {
     setIntakeFormDraft((prev) => ({ ...prev, ...patch }));
   }
   function startEditingIntakeForm() {
     setIntakeFormDraft(intake.web_intake ?? {});
+    setServiceCategoryDraft(intake.service_category ?? "disability");
     setIntakeFormEditing(true);
   }
   function cancelEditingIntakeForm() {
     setIntakeFormDraft(intake.web_intake ?? {});
+    setServiceCategoryDraft(intake.service_category ?? "disability");
     setIntakeFormEditing(false);
   }
   function saveIntakeForm() {
+    if (serviceCategoryDraft === "aged_care" && !isAgedCareEligible(intakeFormDraft.date_of_birth)) {
+      toast({ title: "Cannot save", description: "Aged Care requires a date of birth confirming the participant is 65 or over.", variant: "destructive" });
+      return;
+    }
     const payload: WebIntakeForm = {
       ...intakeFormDraft,
       submitted_at: intake.web_intake?.submitted_at ?? new Date().toISOString(),
       submitted_by: intakeFormDraft.submitted_by || "Provider",
     };
-    onUpdate({ web_intake: payload });
+    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft });
     setIntakeFormEditing(false);
     toast({ title: "Intake form saved" });
   }
@@ -917,7 +1647,7 @@ function IntakeDetail({
       family_signed_name: familyName.trim(),
       family_signed_at: now,
     });
-    toast({ title: "Service agreement signed" });
+    toast({ title: "Service agreement" });
   }
 
   function activate() {
@@ -984,6 +1714,8 @@ function IntakeDetail({
                       onEdit={startEditingIntakeForm}
                       onCancel={cancelEditingIntakeForm}
                       onSave={saveIntakeForm}
+                      serviceCategory={serviceCategoryDraft}
+                      onServiceCategoryChange={setServiceCategoryDraft}
                     />
 
                     {intake.status === "enquiry" ? (
@@ -1234,15 +1966,45 @@ function IntakeDetail({
                 <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <ShieldCheck size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Active</p>
+                    <p className="text-sm font-black" style={{ color: TEXT }}>Profile</p>
                   </div>
-                  <div className="p-5">
+                  <div className="p-5 space-y-4">
                     <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
                       <Users size={16} style={{ color: SUCCESS }} className="shrink-0" />
                       <p className="text-xs" style={{ color: TEXT }}>
                         {intake.full_name.split(" ")[0]} is active and now appears on the Coordinator's dashboard for scheduling and support planning.
                       </p>
                     </div>
+
+                    {/* Full intake profile — everything captured across the pipeline
+                        (patient details, address, NDIS, plan manager, next of kin,
+                        referral) so the MD doesn't have to click back to Enquiry
+                        to see what was entered. */}
+                    <IntakeFormBlock
+                      intake={intake}
+                      draft={intakeFormDraft}
+                      onChange={updateIntakeFormDraft}
+                      editing={intakeFormEditing}
+                      onEdit={startEditingIntakeForm}
+                      onCancel={cancelEditingIntakeForm}
+                      onSave={saveIntakeForm}
+                      serviceCategory={serviceCategoryDraft}
+                      onServiceCategoryChange={setServiceCategoryDraft}
+                      showSubmissionStatus={false}
+                    />
+
+                    {(intake.plan_start_date || intake.plan_end_date || intake.total_budget || intake.provider_signed_name || intake.family_signed_name) && (
+                      <IntakeFormSection icon={FileSignature} title="Service Agreement">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          <Field label="Plan start" value={formatDate(intake.plan_start_date)} editing={false} />
+                          <Field label="Plan end" value={formatDate(intake.plan_end_date)} editing={false} />
+                          <Field label="Total budget" value={intake.total_budget} editing={false} />
+                          <Field label="Provider signed by" value={intake.provider_signed_name} editing={false} />
+                          <Field label="Family signed by" value={intake.family_signed_name} editing={false} />
+                          <Field label="Activated" value={formatDate(intake.activated_at)} editing={false} />
+                        </div>
+                      </IntakeFormSection>
+                    )}
                   </div>
                 </div>
               )}
@@ -1250,7 +2012,7 @@ function IntakeDetail({
               {/* Terminate application — available from any in-progress step, not just
                   Enquiry/Screening. Distinct from Decline: this is the participant's own
                   choice not to continue, not the provider turning them away. */}
-              {intake.status !== "active" && (
+              {intake.status !== "active" && intake.status !== "inactive" && (
                 <div className="rounded-lg border p-4" style={{ background: SOFT, borderColor: BORDER }}>
                   {!terminateOpen ? (
                     <Button
@@ -1399,12 +2161,28 @@ function formatDate(iso?: string): string | undefined {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function IntakeFormSection({ icon: Icon, title, children }: { icon: typeof Mail; title: string; children: React.ReactNode }) {
+function IntakeFormSection({
+  icon: Icon, title, children, onEdit, editing,
+}: {
+  icon: typeof Mail;
+  title: string;
+  children: React.ReactNode;
+  /** Per-section Edit trigger (profile views) — omit to render a plain, non-editable section header. */
+  onEdit?: () => void;
+  editing?: boolean;
+}) {
   return (
     <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-      <div className="flex items-center gap-2 pb-3 mb-3 border-b" style={{ borderColor: BORDER }}>
-        <Icon size={15} style={{ color: PLUM }} />
-        <p className="text-xs font-black uppercase tracking-wide" style={{ color: TEXT }}>{title}</p>
+      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <Icon size={15} style={{ color: PLUM }} />
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: TEXT }}>{title}</p>
+        </div>
+        {onEdit && !editing && (
+          <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg h-7 px-2 text-[11px]" onClick={onEdit}>
+            <PenLine size={12} /> Edit
+          </Button>
+        )}
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -1454,7 +2232,8 @@ function Field({
  * the provider fills it in themselves.
  */
 function IntakeFormBlock({
-  intake, draft, onChange, editing, onEdit, onCancel, onSave,
+  intake, draft, onChange, editing, onEdit, onCancel, onSave, serviceCategory, onServiceCategoryChange,
+  showSubmissionStatus = true,
 }: {
   intake: Intake;
   draft: Partial<WebIntakeForm>;
@@ -1463,9 +2242,14 @@ function IntakeFormBlock({
   onEdit: () => void;
   onCancel: () => void;
   onSave: () => void;
+  serviceCategory: ServiceCategory;
+  onServiceCategoryChange: (v: ServiceCategory) => void;
+  /** Hide the "Digital intake form submitted ..." banner + "Submitted by" pill — used on the plain participant profile, where it should read as a person's record, not a pipeline/workflow status. Edit controls still show. */
+  showSubmissionStatus?: boolean;
 }) {
   const kin = draft.next_of_kin ?? [];
   const hasAnyData = Object.keys(intake.web_intake ?? {}).length > 0;
+  const agedCareBlocked = serviceCategory === "aged_care" && !isAgedCareEligible(draft.date_of_birth);
 
   function updateKin(index: number, patch: Partial<NextOfKinEntry>) {
     const next = kin.map((k, i) => (i === index ? { ...k, ...patch } : k));
@@ -1478,50 +2262,96 @@ function IntakeFormBlock({
     onChange({ next_of_kin: kin.filter((_, i) => i !== index) });
   }
 
+  // Profile views (showSubmissionStatus=false) put an Edit trigger in every
+  // section header instead of one shared bar at the top, so it reads as a
+  // person's record, not a form with a workflow-status banner. The pipeline
+  // Enquiry step keeps the original single banner+button.
+  const sectionEditProps = showSubmissionStatus ? {} : { onEdit, editing };
+
   return (
     <div className="space-y-4">
-      <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: intake.web_intake?.submitted_at ? CRITICAL_BG : SOFT }}>
-        <div className="flex items-center gap-2.5">
-          <FileText size={16} style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }} />
-          <p className="text-sm font-bold" style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }}>
-            {intake.web_intake?.submitted_at
-              ? `Digital intake form submitted ${formatDate(intake.web_intake.submitted_at)}`
-              : "No intake form on file yet"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {intake.web_intake?.submitted_by && (
-            <span className="text-[11px] font-black px-3 py-1 rounded-full" style={{ background: SURFACE, color: CRITICAL, border: `1px solid ${CRITICAL}` }}>
-              Submitted by {intake.web_intake.submitted_by}
-            </span>
-          )}
-          {!editing ? (
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={onEdit}>
-              <PenLine size={13} /> {hasAnyData ? "Edit" : "Fill in intake form"}
-            </Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
-              <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave}>
-                <CheckCircle2 size={13} /> Save
+      {showSubmissionStatus && (
+        <div
+          className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap"
+          style={{ background: intake.web_intake?.submitted_at ? CRITICAL_BG : SOFT }}
+        >
+          <div className="flex items-center gap-2.5">
+            <FileText size={16} style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }} />
+            <p className="text-sm font-bold" style={{ color: intake.web_intake?.submitted_at ? CRITICAL : MUTED }}>
+              {intake.web_intake?.submitted_at
+                ? `Digital intake form submitted ${formatDate(intake.web_intake.submitted_at)}`
+                : "No intake form on file yet"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {intake.web_intake?.submitted_by && (
+              <span className="text-[11px] font-black px-3 py-1 rounded-full" style={{ background: SURFACE, color: CRITICAL, border: `1px solid ${CRITICAL}` }}>
+                Submitted by {intake.web_intake.submitted_by}
+              </span>
+            )}
+            {!editing ? (
+              <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={onEdit}>
+                <PenLine size={13} /> {hasAnyData ? "Edit" : "Fill in intake form"}
               </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
+                <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave} disabled={agedCareBlocked}>
+                  <CheckCircle2 size={13} /> Save
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {!showSubmissionStatus && !editing && !hasAnyData && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={onEdit}>
+            <PenLine size={13} /> Fill in intake form
+          </Button>
+        </div>
+      )}
 
       {!editing && !hasAnyData ? null : (
         <>
-          <IntakeFormSection icon={User} title="Patient details">
+          <IntakeFormSection icon={User} title="Patient details" {...sectionEditProps}>
             <div className="grid sm:grid-cols-3 gap-3">
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Service category</label>
+                  <Select value={serviceCategory} onValueChange={(v) => onServiceCategoryChange(v as ServiceCategory)}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="disability">Disability</SelectItem>
+                      <SelectItem value="aged_care">Aged Care</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Field editing={false} label="Service category" value={serviceCategory === "aged_care" ? "Aged Care" : "Disability"} />
+              )}
               <Field editing={editing} label="Given name" value={draft.given_name} onChange={(v) => onChange({ given_name: v })} placeholder="Given name" />
               <Field editing={editing} label="Surname" value={draft.surname} onChange={(v) => onChange({ surname: v })} placeholder="Surname" />
-              <Field editing={editing} label="Preferred name" value={draft.preferred_name} onChange={(v) => onChange({ preferred_name: v })} placeholder="Preferred name" />
             </div>
+            {editing && serviceCategory === "aged_care" && (
+              <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
+                Aged Care is only available to participants aged 65 and over{agedCareBlocked && draft.date_of_birth ? ` — this person is ${calculateAge(draft.date_of_birth)}.` : "."}
+              </p>
+            )}
             <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Preferred name" value={draft.preferred_name} onChange={(v) => onChange({ preferred_name: v })} placeholder="Preferred name" />
               <Field editing={editing} label="Pronouns" value={draft.pronouns} onChange={(v) => onChange({ pronouns: v })} placeholder="e.g. She/her" />
               <Field editing={editing} label="Gender" value={draft.gender} onChange={(v) => onChange({ gender: v })} placeholder="Gender" />
-              <Field editing={editing} label="Date of birth" type="date" value={draft.date_of_birth} onChange={(v) => onChange({ date_of_birth: v })} />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <Field
+                editing={editing}
+                label="Date of birth"
+                type="date"
+                value={draft.date_of_birth}
+                onChange={(v) => onChange({ date_of_birth: v })}
+              />
             </div>
             <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
               <Field editing={false} label="Contact email" value={intake.email} icon={Mail} />
@@ -1529,7 +2359,7 @@ function IntakeFormBlock({
             </div>
           </IntakeFormSection>
 
-          <IntakeFormSection icon={MapPin} title="Address">
+          <IntakeFormSection icon={MapPin} title="Address" {...sectionEditProps}>
             <div className="grid sm:grid-cols-3 gap-3">
               <Field editing={editing} label="Street address" value={draft.street_address} onChange={(v) => onChange({ street_address: v })} />
               <Field editing={editing} label="Suburb" value={draft.suburb} onChange={(v) => onChange({ suburb: v })} />
@@ -1540,7 +2370,7 @@ function IntakeFormBlock({
             </div>
           </IntakeFormSection>
 
-          <IntakeFormSection icon={ClipboardCheck} title="NDIS plan">
+          <IntakeFormSection icon={ClipboardCheck} title="NDIS plan" {...sectionEditProps}>
             <div className="grid sm:grid-cols-3 gap-3">
               <Field editing={editing} label="Plan status" value={draft.plan_status} onChange={(v) => onChange({ plan_status: v })} placeholder="e.g. Active plan" />
               <Field editing={editing} label="Plan start" type="date" value={draft.plan_start} onChange={(v) => onChange({ plan_start: v })} />
@@ -1548,7 +2378,7 @@ function IntakeFormBlock({
             </div>
           </IntakeFormSection>
 
-          <IntakeFormSection icon={FileSignature} title="Plan manager">
+          <IntakeFormSection icon={FileSignature} title="Plan manager" {...sectionEditProps}>
             <div className="grid sm:grid-cols-2 gap-3">
               <Field editing={editing} label="Name" value={draft.plan_manager_name} onChange={(v) => onChange({ plan_manager_name: v })} />
               <Field editing={editing} label="Organisation" value={draft.plan_manager_org} onChange={(v) => onChange({ plan_manager_org: v })} />
@@ -1560,7 +2390,7 @@ function IntakeFormBlock({
           </IntakeFormSection>
 
           {(editing || kin.length > 0) && (
-            <IntakeFormSection icon={Users} title="Next of kin">
+            <IntakeFormSection icon={Users} title="Next of kin" {...sectionEditProps}>
               <div className="space-y-3">
                 {kin.length === 0 && (
                   <p className="text-xs" style={{ color: MUTED }}>No next of kin added yet.</p>
@@ -1598,7 +2428,7 @@ function IntakeFormBlock({
             </IntakeFormSection>
           )}
 
-          <IntakeFormSection icon={Send} title="Referral details">
+          <IntakeFormSection icon={Send} title="Referral details" {...sectionEditProps}>
             <div className="grid sm:grid-cols-2 gap-3">
               <Field editing={editing} label="Referral source" value={draft.referral_source} onChange={(v) => onChange({ referral_source: v })} placeholder="e.g. Web referral portal" />
               <Field editing={editing} label="Referral date" type="date" value={draft.referral_date} onChange={(v) => onChange({ referral_date: v })} />
@@ -1622,6 +2452,15 @@ function IntakeFormBlock({
               </div>
             ) : null}
           </IntakeFormSection>
+
+          {!showSubmissionStatus && editing && (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
+              <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave} disabled={agedCareBlocked}>
+                <CheckCircle2 size={13} /> Save
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

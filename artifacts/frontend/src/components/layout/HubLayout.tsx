@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Users,
   UserPlus,
+  HeartHandshake,
   ShieldCheck,
   AlertTriangle,
   DollarSign,
@@ -53,6 +54,7 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/md/schedule", label: "Master Schedule", icon: CalendarDays },
       { href: "/md/service-delivery", label: "Delivery Quality", icon: ClipboardCheck },
+      { href: "/onboard-participant/active", label: "Participants", icon: HeartHandshake },
     ],
   },
   {
