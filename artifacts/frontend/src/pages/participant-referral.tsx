@@ -18,8 +18,11 @@ const SUCCESS_BG = "var(--cc-status-success-bg)";
 
 const STEPS = ["Participant details", "NDIS & support needs", "Your details", "Review & submit"];
 
+type ServiceCategory = "aged_care" | "disability";
+
 type ReferralForm = {
   fullName: string;
+  serviceCategory: ServiceCategory;
   dob: string;
   phone: string;
   email: string;
@@ -33,10 +36,22 @@ type ReferralForm = {
 };
 
 const EMPTY_FORM: ReferralForm = {
-  fullName: "", dob: "", phone: "", email: "",
+  fullName: "", serviceCategory: "disability", dob: "", phone: "", email: "",
   ndisNumber: "", primaryDisability: "", supportNeeds: "",
   referrerName: "", referrerRelationship: "family", referrerPhone: "", referrerEmail: "",
 };
+
+/** Aged Care is only available to participants aged 65 and over. */
+function calculateAge(dob: string): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age;
+}
 
 /**
  * Public, unauthenticated referral intake form — reached from the
@@ -55,7 +70,9 @@ export default function ParticipantReferralPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const canLeaveStep0 = form.fullName.trim() && form.dob.trim();
+  const age = calculateAge(form.dob);
+  const agedCareBlocked = form.serviceCategory === "aged_care" && form.dob.trim().length > 0 && (age === null || age < 65);
+  const canLeaveStep0 = form.fullName.trim() && form.dob.trim() && !agedCareBlocked;
   const canLeaveStep2 = form.referrerName.trim();
 
   function next() {
@@ -117,8 +134,31 @@ export default function ParticipantReferralPage() {
                 <Input value={form.fullName} onChange={(e) => update("fullName", e.target.value)} placeholder="Jordan Blake" />
               </div>
               <div className="space-y-1.5">
+                <label className="text-xs font-bold" style={{ color: TEXT }}>Which service is this for? <span style={{ color: PLUM }}>*</span></label>
+                <Select value={form.serviceCategory} onValueChange={(v) => update("serviceCategory", v as ServiceCategory)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disability">Disability</SelectItem>
+                    <SelectItem value="aged_care">Aged Care (65+)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <label className="text-xs font-bold" style={{ color: TEXT }}>Date of birth <span style={{ color: PLUM }}>*</span></label>
-                <Input type="date" value={form.dob} onChange={(e) => update("dob", e.target.value)} />
+                <Input
+                  type="date"
+                  value={form.dob}
+                  onChange={(e) => update("dob", e.target.value)}
+                  aria-invalid={agedCareBlocked}
+                  className={agedCareBlocked ? "border-red-400 focus-visible:ring-red-400" : undefined}
+                />
+                {form.serviceCategory === "aged_care" && (
+                  <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? "#DC2626" : MUTED }}>
+                    {agedCareBlocked
+                      ? `Aged Care is only available to participants aged 65 and over${age !== null ? ` — you entered an age of ${age}.` : "."}`
+                      : "Aged Care is only available to participants aged 65 and over."}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold" style={{ color: TEXT }}>Contact phone</label>
@@ -189,6 +229,7 @@ export default function ParticipantReferralPage() {
               <h2 className="text-lg font-black" style={{ color: TEXT }}>Review &amp; submit</h2>
               <div className="rounded-xl p-4 space-y-1.5 text-sm" style={{ background: SOFT }}>
                 <p style={{ color: TEXT }}><strong>{form.fullName || "—"}</strong> · {form.dob || "DOB not provided"}</p>
+                <p style={{ color: MUTED }}>{form.serviceCategory === "aged_care" ? "Aged Care" : "Disability"} service</p>
                 <p style={{ color: MUTED }}>{form.phone || "No phone"} · {form.email || "No email"}</p>
                 {form.ndisNumber && <p style={{ color: MUTED }}>NDIS {form.ndisNumber}</p>}
                 <p style={{ color: MUTED }}>Referred by {form.referrerName || "—"} ({form.referrerRelationship.replace("_", " ")})</p>

@@ -226,6 +226,18 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/onboard-participant/active">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/onboard-participant/complaints">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
       {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>

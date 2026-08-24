@@ -21,9 +21,16 @@ export default function OnboardingWorkspace() {
   const search = useSearch();
   const active = location.startsWith("/onboard-participant") ? "participants" : "staff";
 
-  // Hide the toggle while a participant's detail view is open (?intake=...)
-  // — it's a focused drill-down, not a place to jump areas from.
-  const viewingDetail = active === "participants" && new URLSearchParams(search).has("intake");
+  // Hide the toggle while a participant's detail/profile view is open
+  // (?intake=..., ?profile=...) or the dedicated Active Participants roster
+  // or complaints list is open — all focused drill-downs, not a place to
+  // jump areas from.
+  const viewingDetail =
+    active === "participants" &&
+    (new URLSearchParams(search).has("intake") ||
+      new URLSearchParams(search).has("profile") ||
+      location === "/onboard-participant/active" ||
+      location === "/onboard-participant/complaints");
 
   return (
     <HubLayout>
