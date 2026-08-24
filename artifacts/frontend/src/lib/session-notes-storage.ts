@@ -95,6 +95,28 @@ export function listAllPendingSessionNotes(): Array<{ sessionId: string; note: S
   return rows;
 }
 
+/** Call on logout — removes every draft and every queued-but-unsynced note for
+ * every session on this device, regardless of which session it belongs to.
+ * Without this, a different user logging in on the same device would still see
+ * (and could still resubmit) the previous user's unsynced clinical note content. */
+export function clearAllSessionNoteStorage(): void {
+  if (typeof localStorage === "undefined") return;
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const storageKey = localStorage.key(i);
+    if (storageKey?.startsWith(DRAFT_PREFIX) || storageKey?.startsWith(PENDING_PREFIX)) {
+      keysToRemove.push(storageKey);
+    }
+  }
+  for (const key of keysToRemove) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
 export function estimateNoteBytes(note: SessionNoteRecord): number {
   let bytes = new Blob([note.content ?? ""]).size;
   for (const url of note.attachment_urls ?? []) {

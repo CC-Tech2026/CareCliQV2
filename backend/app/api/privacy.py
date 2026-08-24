@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from ..core.access import get_user_id, get_user_organization_id, is_support_worker
+from ..core.access import get_user_id, get_user_organization_id
 from ..core.security import get_current_user
 from ..services import privacy_service
 from ..services.supabase_client import get_supabase_admin
@@ -20,11 +20,6 @@ class AnalyticsOptOutBody(BaseModel):
 
 class DeletionRequestBody(BaseModel):
     confirmation_text: str = Field(min_length=1)
-
-
-def _require_worker(user: dict) -> None:
-    if not is_support_worker(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
 
 
 def _user_email(user_id: str) -> str:
@@ -46,7 +41,6 @@ def _user_email(user_id: str) -> str:
 
 @router.get("")
 async def get_privacy_overview(current_user: dict = Depends(get_current_user)):
-    _require_worker(current_user)
     user_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     return privacy_service.get_privacy_overview(user_id, org_id)
@@ -54,7 +48,6 @@ async def get_privacy_overview(current_user: dict = Depends(get_current_user)):
 
 @router.get("/policy/versions")
 async def list_policy_versions(current_user: dict = Depends(get_current_user)):
-    _require_worker(current_user)
     return {"versions": privacy_service.list_privacy_policy_versions()}
 
 
@@ -63,14 +56,12 @@ async def update_analytics_opt_out(
     body: AnalyticsOptOutBody,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     user_id = get_user_id(current_user)
     return privacy_service.set_analytics_opt_out(user_id, body.analytics_opt_out)
 
 
 @router.post("/export")
 async def request_data_export(current_user: dict = Depends(get_current_user)):
-    _require_worker(current_user)
     user_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     email = _user_email(user_id)
@@ -83,7 +74,6 @@ async def download_data_export(
     token: str = Query(..., min_length=8),
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     user_id = get_user_id(current_user)
     data, filename = privacy_service.download_export(request_id, user_id, token)
     return Response(
@@ -98,7 +88,6 @@ async def request_account_deletion(
     body: DeletionRequestBody,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     user_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     try:

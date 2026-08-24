@@ -542,11 +542,15 @@ function SidebarContents({
         {compact ? (
           <div className="relative mx-auto w-fit">
             <div
-              className="h-10 w-10 rounded-full flex items-center justify-center text-[12px] font-black"
+              className="h-10 w-10 overflow-hidden rounded-full flex items-center justify-center text-[12px] font-black"
               style={{ background: CORAL, color: "#fff" }}
               title={displayName}
             >
-              {initials}
+              {user?.profile_photo_url ? (
+                <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             {/* Compact compliance dot */}
             <div
@@ -565,10 +569,14 @@ function SidebarContents({
             {/* Avatar with compliance status ring */}
             <div className="relative shrink-0">
               <div
-                className="h-9 w-9 rounded-full flex items-center justify-center text-[12px] font-black"
+                className="h-9 w-9 overflow-hidden rounded-full flex items-center justify-center text-[12px] font-black"
                 style={{ background: CORAL, color: "#fff" }}
               >
-                {initials}
+                {user?.profile_photo_url ? (
+                  <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
               </div>
               <div
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
@@ -733,8 +741,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
           zIndex: 20,
         }}
       >
-        {/* Brand accent gradient line at very top */}
-        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: `linear-gradient(90deg, ${CORAL} 0%, ${PLUM} 100%)`, opacity: 0.85 }} />
+        {/* Brand accent line at very top */}
+        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: PLUM, opacity: 0.85 }} />
 
         {/* ── Role badge + breadcrumb ── */}
         <div className="flex items-center gap-3 px-5 shrink min-w-0 max-w-[480px]">

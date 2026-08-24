@@ -325,6 +325,33 @@ def download_export(
     return json.dumps(payload, indent=2, default=str).encode("utf-8"), f"carecliq-export-{user_id[:8]}.json"
 
 
+def request_worker_deletion_by_admin(worker_id: str, organization_id: str) -> dict[str, Any]:
+    """A managing director removing a staff member's account from staff
+    management - unlike request_account_deletion (a worker asking their
+    coordinator to review), the MD already has that authority, so this just
+    queues the same pending request without a "please review" notification."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("account_deletion_requests")
+            .insert({
+                "user_id": worker_id,
+                "organization_id": organization_id,
+                "confirmation_text": "Requested by managing director",
+                "status": "pending",
+                "requested_at": now,
+            })
+            .execute()
+        )
+        rows = resp.data or []
+        return rows[0] if rows else {"status": "pending"}
+    except Exception as exc:
+        if _is_missing_table(exc):
+            raise HTTPException(status_code=503, detail="Deletion requests unavailable. Run migration 058.") from exc
+        raise
+
+
 def request_account_deletion(
     user_id: str,
     organization_id: Optional[str],

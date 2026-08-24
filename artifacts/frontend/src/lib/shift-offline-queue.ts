@@ -61,6 +61,23 @@ function newActionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** Call on logout — this store is a single device-wide IndexedDB database with no
+ * per-user partition, so without this a different user logging in on the same
+ * device would still see (and offline-sync could still resubmit) the previous
+ * user's queued clock-ins and session starts. */
+export function deleteShiftOfflineDb(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") {
+      resolve();
+      return;
+    }
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
+}
+
 export async function enqueueClockIn(input: {
   shiftId: string;
   method: "gps" | "qr";

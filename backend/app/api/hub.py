@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..schemas.incident import NDIS_NOTIFICATION_HOURS
-from ..services import incident_service, participant_service, session_service
+from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/hub", tags=["hub"])
@@ -203,6 +203,7 @@ async def get_compliance_alerts(current_user: dict = Depends(get_current_user)):
                     supabase.table("users")
                     .select("id, full_name, email")
                     .in_("id", user_ids)
+                    .eq("organization_id", org_id)
                     .execute()
                 )
                 for u in u_res.data or []:
@@ -532,6 +533,25 @@ async def get_care_alerts(current_user: dict = Depends(get_current_user)):
     return alerts
 
 
+# ── Staff Onboarding Alerts ─────────────────────────────────────────────────────
+
+@router.get("/onboarding-alerts")
+async def get_onboarding_alerts(current_user: dict = Depends(get_current_user)):
+    """
+    Staff Onboarding triage alerts: candidates stuck in Applied/Interview,
+    hires with an unsigned offer or who haven't logged in after being invited,
+    and workers blocked on Credentials/Training — reusing the exact thresholds
+    the existing reminder/escalation passes already use, just exposed as a
+    live list instead of only ever firing one-off notifications. Coordinators
+    and managing directors only, same as the Worker Onboarding Pipeline board
+    this sits above.
+    """
+    org_id = _get_org_id(current_user)
+    if not (has_org_wide_access(current_user) and org_id):
+        return []
+    return onboarding_pipeline_alerts_service.get_onboarding_stuck_alerts(org_id)
+
+
 # ── Organisation Events ───────────────────────────────────────────────────────
 
 class OrgEventBody(BaseModel):
@@ -739,6 +759,7 @@ async def get_community(current_user: dict = Depends(get_current_user)):
             supabase.table("users")
             .select("id, full_name, email, date_of_birth")
             .in_("id", user_ids)
+            .eq("organization_id", org_id)
             .execute()
         )
         profiles: dict[str, dict] = {

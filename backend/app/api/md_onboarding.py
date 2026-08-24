@@ -65,6 +65,7 @@ async def get_overview(current_user: dict = Depends(get_current_user)):
                 supabase.table("users")
                 .select("id, full_name, role")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             for u in (users_res.data or []):

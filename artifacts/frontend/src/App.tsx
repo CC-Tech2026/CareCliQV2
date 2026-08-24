@@ -125,19 +125,19 @@ function Router() {
 
       <Route path="/design-system">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><DesignSystem /></AppLayout>
+          <RoleAwareShell><DesignSystem /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/verify-email">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><VerifyEmail /></AppLayout>
+          <RoleAwareShell><VerifyEmail /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/profile-completion">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><ProfileCompletion /></AppLayout>
+          <RoleAwareShell><ProfileCompletion /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -235,7 +235,7 @@ function Router() {
       {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Dashboard /></AppLayout>
+          <RoleAwareShell><Dashboard /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -279,7 +279,7 @@ function Router() {
 
       <Route path="/accessibility">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerAccessibility /></AppLayout>
+          <RoleAwareShell><WorkerAccessibility /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -395,7 +395,7 @@ function Router() {
 
       <Route path="/toolkit">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Toolkit /></AppLayout>
+          <RoleAwareShell><Toolkit /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -449,7 +449,7 @@ function Router() {
 
       <Route path="/patients">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
-          <AppLayout><Patients /></AppLayout>
+          <RoleAwareShell><Patients /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -493,7 +493,7 @@ function Router() {
       <Route path="/sessions/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <AppLayout><SessionDetail id={params.id} /></AppLayout>
+            <RoleAwareShell><SessionDetail id={params.id} /></RoleAwareShell>
           </ProtectedRoute>
         )}
       </Route>
@@ -502,13 +502,13 @@ function Router() {
       {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Incidents /></AppLayout>
+          <RoleAwareShell><Incidents /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/new">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><IncidentNew /></AppLayout>
+          <RoleAwareShell><IncidentNew /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -520,7 +520,7 @@ function Router() {
       <Route path="/incidents/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <AppLayout><IncidentDetail id={params.id} /></AppLayout>
+            <RoleAwareShell><IncidentDetail id={params.id} /></RoleAwareShell>
           </ProtectedRoute>
         )}
       </Route>
@@ -553,13 +553,13 @@ function Router() {
 
       <Route path="/worker/profile">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerProfile /></AppLayout>
+          <RoleAwareShell><WorkerProfile /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/worker/security">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerSecurity /></AppLayout>
+          <RoleAwareShell><WorkerSecurity /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

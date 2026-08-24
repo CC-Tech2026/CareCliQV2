@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, ShieldAlert, X } from "lucide-react";
 import { getHubComplianceAlerts, type HubComplianceAlert } from "@/services/hubService";
 
 const TEXT = "var(--cc-text)";
@@ -66,36 +66,53 @@ function AlertRow({
   routeForSource: (source: string | undefined) => string;
 }) {
   const { color, soft } = severityColors(alert.severity);
+  const go = () => onNavigate(routeForSource(alert.source));
   return (
-    <button
-      onClick={() => onNavigate(routeForSource(alert.source))}
-      className="flex w-full items-stretch gap-3 px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
+    // A plain div (not <button>) so the title/detail text stays selectable and
+    // copyable - wrapping the whole row in a <button> blocked click-drag text
+    // selection in every browser tested. Still fully keyboard-operable.
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={go}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }}
+      className="flex w-full cursor-pointer items-stretch gap-3 px-5 py-3.5 transition-colors hover:bg-cc-soft focus-visible:bg-cc-soft focus-visible:outline-none"
     >
       <span className="w-[3px] shrink-0 self-stretch rounded-full" style={{ background: color }} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-bold leading-snug" style={{ color: TEXT }}>{alert.title}</p>
-        <p className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{alert.detail}</p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span
-            className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
-            style={{ background: soft, color }}
-          >
-            {severityLabel(alert.severity)}
-          </span>
-          {alert.due_date && (
+      {/* Content is capped and left-packed rather than letting the title/action
+          pair stretch to the row's full width - on a wide card that stretch
+          reads as a big blank gap in the middle of a two-line alert. */}
+      <div className="flex min-w-0 max-w-2xl flex-1 items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-bold leading-snug" style={{ color: TEXT }}>{alert.title}</p>
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{alert.detail}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {alert.category === "urgent" && (
+              <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide" style={{ background: RED_SOFT, color: RED }}>
+                Urgent
+              </span>
+            )}
             <span
-              className="rounded-full px-2 py-0.5 text-[9px] font-bold"
-              style={{ background: "var(--cc-soft)", color: MUTED }}
+              className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+              style={{ background: soft, color }}
             >
-              Due {new Date(alert.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+              {severityLabel(alert.severity)}
             </span>
-          )}
+            {alert.due_date && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-bold"
+                style={{ background: "var(--cc-soft)", color: MUTED }}
+              >
+                Due {new Date(alert.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+              </span>
+            )}
+          </div>
         </div>
+        <span className="mt-0.5 shrink-0 whitespace-nowrap text-[10.5px] font-black" style={{ color }}>
+          {alert.action_label}
+        </span>
       </div>
-      <span className="mt-0.5 shrink-0 self-start text-[10.5px] font-black" style={{ color: color }}>
-        {alert.action_label}
-      </span>
-    </button>
+    </div>
   );
 }
 
@@ -103,7 +120,7 @@ function RowSkeleton() {
   return (
     <div className="flex items-center gap-3 border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
       <span className="h-8 w-[3px] shrink-0 rounded-full" style={{ background: "var(--cc-soft)" }} />
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="min-w-0 max-w-2xl flex-1 space-y-2">
         <div className="h-2.5 w-3/5 animate-pulse rounded" style={{ background: "var(--cc-soft)" }} />
         <div className="h-2 w-4/5 animate-pulse rounded" style={{ background: "var(--cc-soft)" }} />
       </div>
@@ -139,6 +156,7 @@ export function GovernanceTriage({
   routeForSource = defaultRouteForSource,
   viewAllHref = "/md/compliance",
   viewAllLabel = "Compliance Centre",
+  variant = "panel",
 }: {
   onNavigate: (path: string) => void;
   workersAtRisk?: Array<{ id: string; full_name: string; compliance_score: number; sessions: number }>;
@@ -146,9 +164,29 @@ export function GovernanceTriage({
   routeForSource?: (source: string | undefined) => string;
   viewAllHref?: string;
   viewAllLabel?: string;
+  /** "panel" (default): a full-width card sitting in the page flow, own
+   *  collapse toggle, remembered per page. "floating": a small header-bar
+   *  trigger button (badge count) that opens the same content as a dropdown
+   *  instead of permanently taking up page height - for pages that already
+   *  have several stacked sections and don't want one more. */
+  variant?: "panel" | "floating";
 }) {
   const [alerts, setAlerts] = useState<HubComplianceAlert[] | null>(null);
   const [error, setError] = useState(false);
+  // Remembered per page (keyed by viewAllHref, which differs per usage) so
+  // collapsing it on Staff Onboarding doesn't also collapse it on Compliance.
+  const storageKey = `cc-triage-collapsed:${viewAllHref}`;
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(storageKey) === "1"; } catch { return false; }
+  });
+  function toggleCollapsed() {
+    setCollapsed((v) => {
+      const next = !v;
+      try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }
+  const [floatingOpen, setFloatingOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,79 +205,141 @@ export function GovernanceTriage({
 
   if (error) return null;
 
+  const loading = alerts === null;
   const loaded = alerts ?? [];
   const urgent = loaded.filter((a) => a.category === "urgent");
   const exposure = [
     ...loaded.filter((a) => a.category !== "urgent"),
     ...workersAtRiskToAlerts(workersAtRisk),
   ];
+  const all = [...urgent, ...exposure];
 
-  return (
-    <div className="grid items-start gap-5 xl:grid-cols-2">
-      {/* Needs action today / this week */}
-      <section className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
-          <div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={15} strokeWidth={2} style={{ color: RED }} />
-              <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Needs action today / this week</h2>
-            </div>
-            <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Named items with a real deadline attached</p>
-          </div>
-          {urgent.length > 0 && (
-            <span className="rounded-full px-2 py-1 text-[9px] font-black" style={{ background: RED_SOFT, color: RED }}>
-              {urgent.length} open
+  const topSeverity = all.some((a) => a.severity === "critical") ? "critical"
+    : all.some((a) => a.severity === "high") ? "high"
+    : all.length > 0 ? "medium" : null;
+  const topSeverityColors = topSeverity ? severityColors(topSeverity) : { color: GREEN, soft: GREEN_SOFT };
+  const HeaderIcon = urgent.length > 0 ? AlertTriangle : exposure.length > 0 ? ShieldAlert : CheckCircle2;
+
+  const subtitle = loading
+    ? "Checking for open items..."
+    : urgent.length > 0
+      ? `${urgent.length} with a real deadline this week, ${exposure.length} more building exposure`
+      : exposure.length > 0
+        ? "Nothing urgent right now. These are building exposure if left unaddressed"
+        : "All caught up. Nothing needs action and nothing is building exposure";
+
+  if (variant === "floating") {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setFloatingOpen((v) => !v)}
+          aria-expanded={floatingOpen}
+          className="flex items-center gap-2 rounded-full border px-4 py-2.5 text-[12px] font-black transition-all hover:-translate-y-0.5"
+          style={{ borderColor: BORDER, background: SURFACE, color: TEXT }}
+        >
+          <HeaderIcon size={15} strokeWidth={2} style={{ color: topSeverityColors.color }} />
+          Attention
+          {!loading && all.length > 0 && (
+            <span className="flex h-4 min-w-[17px] items-center justify-center rounded-full px-1 text-[9.5px] font-black text-white" style={{ background: topSeverityColors.color }}>
+              {all.length}
             </span>
           )}
-        </div>
-        {alerts === null ? (
-          <ListSkeleton />
-        ) : urgent.length === 0 ? (
-          <EmptyState message="Nothing needs action right now." />
-        ) : (
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {urgent.map((a) => <AlertRow key={a.id} alert={a} onNavigate={onNavigate} routeForSource={routeForSource} />)}
-          </div>
-        )}
-      </section>
-
-      {/* Exposure building up */}
-      <section className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
-          <div>
-            <div className="flex items-center gap-2">
-              <ShieldAlert size={15} strokeWidth={2} style={{ color: AMBER }} />
-              <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Exposure building up</h2>
-            </div>
-            <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Becomes an audit finding if left unaddressed</p>
-          </div>
-          {exposure.length > 0 && (
-            <span className="rounded-full px-2 py-1 text-[9px] font-black" style={{ background: AMBER_SOFT, color: AMBER }}>
-              {exposure.length} open
-            </span>
-          )}
-        </div>
-        {alerts === null ? (
-          <ListSkeleton />
-        ) : exposure.length === 0 ? (
-          <EmptyState message="No exposure currently building up." />
-        ) : (
+        </button>
+        {floatingOpen && (
           <>
-            <div className="divide-y" style={{ borderColor: BORDER }}>
-              {exposure.slice(0, 8).map((a) => <AlertRow key={a.id} alert={a} onNavigate={onNavigate} routeForSource={routeForSource} />)}
+            <div className="fixed inset-0 z-10" onClick={() => setFloatingOpen(false)} />
+            <div
+              className="absolute right-0 top-[calc(100%+8px)] z-20 w-[420px] max-w-[92vw] overflow-hidden rounded-2xl border shadow-xl"
+              style={{ borderColor: BORDER, background: SURFACE }}
+            >
+              <div className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: BORDER }}>
+                <div className="min-w-0">
+                  <h2 className="text-[13px] font-black" style={{ color: TEXT }}>Needs your attention</h2>
+                  <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
+                </div>
+                <button onClick={() => setFloatingOpen(false)} aria-label="Close" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-cc-soft">
+                  <X size={14} style={{ color: MUTED }} />
+                </button>
+              </div>
+              {loading ? (
+                <ListSkeleton />
+              ) : all.length === 0 ? (
+                <EmptyState message="All caught up. Nothing needs action and nothing is building exposure." />
+              ) : (
+                <>
+                  <div className="max-h-[420px] divide-y overflow-y-auto" style={{ borderColor: BORDER }}>
+                    {all.slice(0, 8).map((a) => (
+                      <AlertRow key={a.id} alert={a} onNavigate={(p) => { setFloatingOpen(false); onNavigate(p); }} routeForSource={routeForSource} />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => { setFloatingOpen(false); onNavigate(viewAllHref); }}
+                    className="w-full border-t px-5 py-3 text-center text-[11px] font-bold transition-colors hover:bg-cc-soft"
+                    style={{ borderColor: BORDER, color: "var(--cc-plum)" }}
+                  >
+                    Review all in {viewAllLabel}
+                  </button>
+                </>
+              )}
             </div>
-            {exposure.length > 8 && (
-              <button
-                onClick={() => onNavigate(viewAllHref)}
-                className="w-full border-t px-5 py-3 text-center text-[11px] font-bold transition-colors hover:bg-cc-soft"
-                style={{ borderColor: BORDER, color: AMBER }}
-              >
-                View all {exposure.length} in {viewAllLabel}
-              </button>
-            )}
           </>
         )}
-      </section>
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    // One always-full-width card instead of two side-by-side panels - avoids
+    // both the "empty half" and the "half-width card floating next to blank
+    // canvas" problems that came from trying to keep two panels in sync.
+    <section className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+        style={{ borderColor: BORDER, borderBottom: !collapsed && all.length > 0 ? `1px solid ${BORDER}` : "none" }}
+      >
+        <button onClick={toggleCollapsed} className="flex min-w-0 items-center gap-3 text-left">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: topSeverityColors.soft }}>
+            <HeaderIcon size={16} strokeWidth={2} style={{ color: topSeverityColors.color }} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Needs your attention</h2>
+            <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
+          </div>
+        </button>
+        <div className="flex items-center gap-2.5">
+          {!loading && all.length > 0 && topSeverity && (
+            <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: topSeverityColors.soft, color: topSeverityColors.color }}>
+              {severityLabel(topSeverity)}
+            </span>
+          )}
+          {!loading && all.length > 0 && !collapsed && (
+            <button
+              onClick={() => onNavigate(viewAllHref)}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[11.5px] font-black text-white transition-all hover:-translate-y-0.5"
+              style={{ background: "var(--cc-plum)" }}
+            >
+              Review all <ArrowRight size={13} />
+            </button>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expand" : "Collapse"}
+            aria-expanded={!collapsed}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-cc-soft"
+          >
+            {collapsed ? <ChevronDown size={16} style={{ color: MUTED }} /> : <ChevronUp size={16} style={{ color: MUTED }} />}
+          </button>
+        </div>
+      </div>
+      {collapsed ? null : loading ? (
+        <ListSkeleton />
+      ) : all.length === 0 ? (
+        <EmptyState message="All caught up. Nothing needs action and nothing is building exposure." />
+      ) : (
+        <div className="divide-y border-t" style={{ borderColor: BORDER }}>
+          {all.slice(0, 6).map((a) => <AlertRow key={a.id} alert={a} onNavigate={onNavigate} routeForSource={routeForSource} />)}
+        </div>
+      )}
+    </section>
   );
 }

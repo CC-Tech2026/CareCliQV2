@@ -1,24 +1,29 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Download, Loader2, Shield, Trash2 } from "lucide-react";
+import { CreditCard, ChevronDown, Download, Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { BORDER, CORAL, PLUM } from "@/lib/shift-utils";
 import {
   getPrivacyOverview,
   listPrivacyPolicyVersions,
-  requestAccountDeletion,
   requestDataExport,
   setAnalyticsOptOut,
   type PrivacyOverview,
 } from "@/services/complianceService";
 
-const DELETE_CONFIRMATION = "DELETE MY ACCOUNT";
+type WorkerPrivacyProps = {
+  showHeader?: boolean;
+  /** Settings embeds this and can jump to its own Billing tab; the standalone
+   * /worker/privacy route (workers only, never MD) leaves this unset. */
+  onManageSubscription?: () => void;
+};
 
-export default function WorkerPrivacy() {
+export default function WorkerPrivacy({ showHeader = true, onManageSubscription }: WorkerPrivacyProps = {}) {
+  const { user } = useAuth();
+  const isMD = user?.role === "managing_director";
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
   const [loading, setLoading] = useState(true);
@@ -26,11 +31,7 @@ export default function WorkerPrivacy() {
   const [policyOpen, setPolicyOpen] = useState(false);
   const [versions, setVersions] = useState<Array<{ version: string; published_at: string; is_current?: boolean }>>([]);
   const [exportBusy, setExportBusy] = useState(false);
-  const [deleteText, setDeleteText] = useState("");
-  const [deleteBusy, setDeleteBusy] = useState(false);
   const [analyticsBusy, setAnalyticsBusy] = useState(false);
-
-  const deletePhrase = translate("privacy.deleteAccount");
 
   useEffect(() => {
     let active = true;
@@ -72,23 +73,6 @@ export default function WorkerPrivacy() {
     }
   }
 
-  async function handleDeletion() {
-    setDeleteBusy(true);
-    try {
-      const result = await requestAccountDeletion(deleteText);
-      toast({ title: translate("privacy.requestSubmitted"), description: result.message });
-      setDeleteText("");
-    } catch (err) {
-      toast({
-        title: translate("privacy.submitFailed"),
-        description: err instanceof Error ? err.message : translate("toast.tryAgain"),
-        variant: "destructive",
-      });
-    } finally {
-      setDeleteBusy(false);
-    }
-  }
-
   async function handleAnalyticsToggle(checked: boolean) {
     setAnalyticsBusy(true);
     try {
@@ -121,17 +105,19 @@ export default function WorkerPrivacy() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-10">
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-          {translate("privacy.eyebrow")}
-        </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
-          {translate("privacy.title")}
-        </h1>
-        <p className="mt-2 text-sm text-cc-muted">
-          {translate("privacy.subtitle")}
-        </p>
-      </div>
+      {showHeader && (
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+            {translate("privacy.eyebrow")}
+          </p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+            {translate("privacy.title")}
+          </h1>
+          <p className="mt-2 text-sm text-cc-muted">
+            {translate("privacy.subtitle")}
+          </p>
+        </div>
+      )}
 
       <section className="rounded-[1.5rem] border bg-card p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-cc-text">
@@ -216,35 +202,30 @@ export default function WorkerPrivacy() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border border-red-300 dark:border-red-700 p-6 shadow-sm">
-        <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-red-800">
-          <Trash2 className="h-5 w-5" /> {translate("privacy.requestDeletion")}
-        </h2>
-        <p className="mb-4 text-sm dark:text-red-700 text-red-700">
-          {translateParams("privacy.deleteHint", { phrase: deletePhrase })}
-        </p>
-        <div className="space-y-3">
-          <div>
-            <Label htmlFor="delete-confirm">{translate("privacy.confirmation")}</Label>
-            <Input
-              id="delete-confirm"
-              value={deleteText}
-              onChange={(e) => setDeleteText(e.target.value)}
-              placeholder={deletePhrase}
-              className="mt-1 rounded-xl"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-xl border-red-300 text-red-700 hover:bg-red-100"
-            disabled={deleteBusy || deleteText.trim() !== DELETE_CONFIRMATION}
-            onClick={() => void handleDeletion()}
-          >
-            {deleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("privacy.requestDeletion")}
-          </Button>
-        </div>
-      </section>
+      {isMD ? (
+        <section className="rounded-[1.5rem] border p-6 shadow-sm" style={{ borderColor: BORDER }}>
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-cc-text">
+            <CreditCard className="h-5 w-5 text-cc-plum" /> {translate("privacy.mdUnsubscribeTitle")}
+          </h2>
+          <p className="mb-4 text-sm text-cc-muted">
+            {translate("privacy.mdUnsubscribeHint")}
+          </p>
+          {onManageSubscription && (
+            <Button type="button" variant="outline" className="rounded-xl" onClick={onManageSubscription}>
+              {translate("privacy.manageSubscription")}
+            </Button>
+          )}
+        </section>
+      ) : (
+        <section className="rounded-[1.5rem] border p-6 shadow-sm" style={{ borderColor: BORDER }}>
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-cc-text">
+            <Shield className="h-5 w-5 text-cc-plum" /> {translate("privacy.staffDeletionTitle")}
+          </h2>
+          <p className="text-sm text-cc-muted">
+            {translate("privacy.staffDeletionHint")}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

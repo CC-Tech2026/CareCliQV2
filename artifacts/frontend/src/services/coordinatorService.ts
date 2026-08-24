@@ -2,6 +2,7 @@ import { jsonFetch } from "@/services/http";
 import { apiFetch } from "@/lib/api-fetch";
 import type { DashboardSession } from "@/services/dashboardService";
 import type { Credential } from "@/services/credentialsService";
+import type { ShiftHistoryRow, PerformanceDashboard } from "@/services/workerPerformanceService";
 
 export type TeamMember = {
   id: string;
@@ -241,6 +242,14 @@ export function activateWorker(workerId: string) {
 export function sendWorkerPasswordReset(workerId: string) {
   return jsonFetch<{ worker_id: string; email: string; message: string }>(
     `/api/coordinator/workers/${workerId}/send-password-reset`,
+    { method: "POST" },
+  );
+}
+
+/** MD-only - queues a pending account-removal request for a staff member (see coordinator.py). */
+export function deleteWorkerAccount(workerId: string) {
+  return jsonFetch<{ id: string; status: string }>(
+    `/api/coordinator/workers/${workerId}/delete-account`,
     { method: "POST" },
   );
 }
@@ -514,6 +523,31 @@ export function getCoordinatorWorkerCredentialStatus(workerId: string, shiftType
   return jsonFetch<WorkerCredentialStatusResponse>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/credential-status?${qs.toString()}`);
 }
 
+export type ShiftDetail = CoordinatorShiftRecord & {
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
+  confirmation_status?: string;
+  visual_state?: string;
+  coordinator_notes?: string | null;
+  visit_notes?: string | null;
+  session_notes?: string | null;
+  session_status?: string | null;
+  entry_instructions?: string | null;
+  access_instructions?: string | null;
+  risks_acknowledged?: boolean;
+  risks_acknowledged_at?: string | null;
+  risks_acknowledged_by?: string | null;
+  health_alerts?: unknown[];
+  has_risk_alerts?: boolean;
+  tasks?: Array<{ id?: string; label?: string; title?: string; completed?: boolean; mandatory?: boolean }>;
+  conversation_id?: string;
+};
+
+/** Full single-shift drill-down for the Master Schedule page (org-wide, read-only). */
+export function getShiftDetail(shiftId: string) {
+  return jsonFetch<ShiftDetail>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/detail`);
+}
+
 export function listCoordinatorShifts(params?: {
   start_date?: string;
   end_date?: string;
@@ -774,6 +808,38 @@ export function getWorkerSkills(workerId: string) {
   return jsonFetch<WorkerSkill[]>(
     `/api/coordinator/workers/${encodeURIComponent(workerId)}/skills`
   );
+}
+
+/** Completed-shift history for a worker (which participants, when, how it went) -
+ *  same shape as the worker's own self-service shift history, viewed by a
+ *  coordinator or managing director instead. */
+export function getWorkerShiftHistory(workerId: string) {
+  return jsonFetch<{ shifts: ShiftHistoryRow[]; participants: Array<{ id: string; first_name: string }> }>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history`
+  );
+}
+
+/** 30-day performance trend, strengths/focus areas and badges for a worker -
+ *  the detailed breakdown behind a single compliance percentage. */
+export function getWorkerPerformanceDashboard(workerId: string) {
+  return jsonFetch<PerformanceDashboard>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/performance-dashboard`
+  );
+}
+
+export type WorkerAssignment = {
+  id: string;
+  patient_id: string;
+  user_id: string;
+  allocated_role: string;
+  is_active: boolean;
+  assigned_at?: string;
+  participant?: { id: string; full_name: string; ndis_number?: string | null } | null;
+};
+
+/** Which participants a specific worker is currently assigned to. */
+export function getWorkerAssignments(workerId: string) {
+  return jsonFetch<WorkerAssignment[]>(`/api/assignments?worker_id=${encodeURIComponent(workerId)}`);
 }
 
 /** Add or update a skill for a worker */

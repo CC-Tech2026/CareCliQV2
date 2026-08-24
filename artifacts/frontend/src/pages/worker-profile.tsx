@@ -26,6 +26,7 @@ import {
   changePassword,
   getMe,
   getNotificationPreferences,
+  requestPasswordReset,
   saveNotificationPreferences,
   updateContact,
   type NotificationChannel,
@@ -79,7 +80,8 @@ function ReadOnlyField({
 }
 
 export default function WorkerProfile() {
-  const { updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
+  const canChangeOwnPassword = user?.role !== "support_worker";
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
@@ -97,6 +99,8 @@ export default function WorkerProfile() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [requestingReset, setRequestingReset] = useState(false);
+  const [resetRequested, setResetRequested] = useState(false);
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -243,6 +247,23 @@ export default function WorkerProfile() {
       });
     } finally {
       setChangingPassword(false);
+    }
+  }
+
+  async function handleRequestPasswordReset() {
+    setRequestingReset(true);
+    try {
+      const result = await requestPasswordReset();
+      setResetRequested(true);
+      toast({ title: translate("profile.passwordResetRequested"), description: result.message });
+    } catch (error) {
+      toast({
+        title: translate("profile.passwordResetRequestFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
+        variant: "destructive",
+      });
+    } finally {
+      setRequestingReset(false);
     }
   }
 
@@ -456,64 +477,80 @@ export default function WorkerProfile() {
           </div>
         </div>
 
-        <form onSubmit={handleChangePassword} className="grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <Label htmlFor="current-password">{translate("profile.currentPassword")}</Label>
-            <PasswordInput
-              id="current-password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="mt-1 rounded-xl"
-              autoComplete="current-password"
-            />
-          </div>
-          <div>
-            <Label htmlFor="new-password">{translate("profile.newPassword")}</Label>
-            <PasswordInput
-              id="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 rounded-xl"
-              autoComplete="new-password"
-            />
-            {newPassword ? (
-              <div className="mt-2">
-                <div className="flex gap-1">
-                  {[0, 1, 2, 3].map((index) => (
-                    <div
-                      key={index}
-                      className="h-1.5 flex-1 rounded-full"
-                      style={{ background: index < strength ? "var(--cc-text)" : "#E8E8EA" }}
-                    />
-                  ))}
+        {canChangeOwnPassword ? (
+          <form onSubmit={handleChangePassword} className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <Label htmlFor="current-password">{translate("profile.currentPassword")}</Label>
+              <PasswordInput
+                id="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="mt-1 rounded-xl"
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-password">{translate("profile.newPassword")}</Label>
+              <PasswordInput
+                id="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="mt-1 rounded-xl"
+                autoComplete="new-password"
+              />
+              {newPassword ? (
+                <div className="mt-2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3].map((index) => (
+                      <div
+                        key={index}
+                        className="h-1.5 flex-1 rounded-full"
+                        style={{ background: index < strength ? "var(--cc-text)" : "#E8E8EA" }}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-[#6A6A77]">
+                    {translate("profile.strength")} {strengthLabel(strength)}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs font-medium text-[#6A6A77]">
-                  {translate("profile.strength")} {strengthLabel(strength)}
-                </p>
-              </div>
-            ) : null}
-          </div>
-          <div>
-            <Label htmlFor="confirm-password">{translate("profile.confirmPassword")}</Label>
-            <PasswordInput
-              id="confirm-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1 rounded-xl"
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="md:col-span-2">
+              ) : null}
+            </div>
+            <div>
+              <Label htmlFor="confirm-password">{translate("profile.confirmPassword")}</Label>
+              <PasswordInput
+                id="confirm-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1 rounded-xl"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Button
+                type="submit"
+                disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                className="rounded-xl"
+                style={{ background: "var(--cc-cta)" }}
+              >
+                {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("profile.updatePassword")}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="rounded-2xl bg-cc-soft p-4">
+            <p className="text-sm text-[#6A6A77]">{translate("profile.passwordResetPolicyHint")}</p>
             <Button
-              type="submit"
-              disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
-              className="rounded-xl"
+              type="button"
+              onClick={() => void handleRequestPasswordReset()}
+              disabled={requestingReset || resetRequested}
+              className="mt-3 rounded-xl gap-2"
               style={{ background: "var(--cc-cta)" }}
             >
-              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("profile.updatePassword")}
+              {requestingReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+              {resetRequested ? translate("profile.passwordResetAlreadyRequested") : translate("profile.requestPasswordReset")}
             </Button>
           </div>
-        </form>
+        )}
       </section>
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>

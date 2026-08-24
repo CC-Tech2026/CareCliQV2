@@ -8,10 +8,12 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
-from ..services.supabase_client import get_supabase_admin
+from ..services.supabase_client import get_supabase_admin, signed_storage_url
+
+CREDENTIAL_FILES_BUCKET = "credential-files"
 
 router = APIRouter(prefix="/credentials", tags=["credentials"])
 
@@ -69,6 +71,15 @@ def _status_for(expiry_date: str | None, current: str = "pending_review") -> str
     return "valid"
 
 
+def _with_signed_file_url(row: dict) -> dict:
+    """credential-files is a private bucket — never trust a stored file_url (it may
+    be a stale public link from before the bucket was locked down, or simply
+    expired); always regenerate a fresh signed URL from file_path on read."""
+    row = dict(row)
+    row["file_url"] = signed_storage_url(CREDENTIAL_FILES_BUCKET, row.get("file_path"))
+    return row
+
+
 def _query_own(user: dict):
     return get_supabase_admin().table("credentials").select("*").eq("user_id", get_user_id(user))
 
@@ -89,7 +100,10 @@ def _get_credential_for_user(credential_id: str, user: dict) -> dict:
 async def list_my_credentials(current_user: dict = Depends(get_current_user)):
     result = _query_own(current_user).order("expiry_date", desc=False).execute()
     rows = result.data or []
-    return [{**row, "status": _status_for(row.get("expiry_date"), row.get("status") or "valid")} for row in rows]
+    return [
+        {**_with_signed_file_url(row), "status": _status_for(row.get("expiry_date"), row.get("status") or "valid")}
+        for row in rows
+    ]
 
 
 def _check_screening_number(body: CredentialBody) -> None:
@@ -133,7 +147,8 @@ async def update_my_credential(
         .eq("user_id", get_user_id(current_user))
         .execute()
     )
-    return result.data[0] if result.data else _get_credential_for_user(credential_id, current_user)
+    updated = result.data[0] if result.data else _get_credential_for_user(credential_id, current_user)
+    return _with_signed_file_url(updated)
 
 
 @router.delete("/me/{credential_id}", status_code=204)
@@ -162,28 +177,32 @@ async def upload_my_credential_file(
     path = f"{get_user_organization_id(current_user) or 'personal'}/{get_user_id(current_user)}/{credential_id}-{uuid4().hex}{ext}"
     supabase = get_supabase_admin()
     try:
-        supabase.storage.from_("credential-files").upload(path, raw, {"content-type": content_type, "upsert": "true"})
-        url = supabase.storage.from_("credential-files").get_public_url(path)
+        supabase.storage.from_(CREDENTIAL_FILES_BUCKET).upload(path, raw, {"content-type": content_type, "upsert": "true"})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Credential storage is not configured: {exc}")
     result = (
         supabase.table("credentials")
-        .update({"file_path": path, "file_url": url, "updated_at": datetime.now(timezone.utc).isoformat()})
+        # file_url is intentionally not stored — credential-files is a private bucket,
+        # so the URL must be a freshly-signed one generated at read time (see
+        # _with_signed_file_url), never a persisted link that can outlive its signature
+        # or predate the bucket being locked down.
+        .update({"file_path": path, "file_url": None, "updated_at": datetime.now(timezone.utc).isoformat()})
         .eq("id", credential_id)
         .eq("user_id", get_user_id(current_user))
         .execute()
     )
-    return result.data[0] if result.data else {"file_path": path, "file_url": url}
+    updated = result.data[0] if result.data else {"file_path": path}
+    return _with_signed_file_url(updated)
 
 
 @router.get("/team")
 async def list_team_credentials(current_user: dict = Depends(get_current_user)):
-    if not is_coordinator_role(current_user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can view team credentials.")
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(current_user)
     result = get_supabase_admin().table("credentials").select("*").eq("organization_id", org_id).execute()
     return [
-        {**row, "status": _status_for(row.get("expiry_date"), row.get("status") or "valid")}
+        {**_with_signed_file_url(row), "status": _status_for(row.get("expiry_date"), row.get("status") or "valid")}
         for row in (result.data or [])
     ]
 
@@ -214,4 +233,5 @@ async def review_credential(
     if body.last_checked_against_nwsd is not None:
         payload["last_checked_against_nwsd"] = body.last_checked_against_nwsd
     result = get_supabase_admin().table("credentials").update(payload).eq("id", credential_id).execute()
-    return result.data[0] if result.data else {**existing, **payload}
+    updated = result.data[0] if result.data else {**existing, **payload}
+    return _with_signed_file_url(updated)

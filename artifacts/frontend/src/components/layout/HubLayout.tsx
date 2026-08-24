@@ -133,7 +133,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
-  const [imgError, setImgError] = useState(false);
+  const [brandingLoaded, setBrandingLoaded] = useState(false);
+  // Tracks the specific URL that failed, not a plain boolean - so a fresh
+  // logo_url (e.g. after the org uploads a new one) is never mistaken for
+  // still being broken just because an earlier one failed to load.
+  const [erroredLogoUrl, setErroredLogoUrl] = useState<string | null>(null);
 
   const profileRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
@@ -189,7 +193,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       .then((data) => {
         if (!cancelled) setBranding(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setBrandingLoaded(true);
+      });
 
     return () => {
       cancelled = true;
@@ -206,37 +213,38 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         color: "var(--cc-text)",
       }}
     >
-      {/* Dynamic Background Glows for MD Executive View */}
-      {isMD && (
-        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-30">
-          <div className="absolute -top-[20%] left-[10%] h-[500px] w-[500px] rounded-full bg-[var(--cc-plum)]/10 blur-[120px]" />
-          <div className="absolute top-[30%] right-[5%] h-[600px] w-[600px] rounded-full bg-[var(--cc-coral)]/10 blur-[160px]" />
-        </div>
-      )}
-
       {/* Header / Governance Bar */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl border-b border-[var(--cc-border)] bg-[var(--cc-surface)]/80">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          
+      <header className="sticky top-0 z-40 border-b border-[var(--cc-border)] bg-[var(--cc-surface)]">
+        {/* Purple accent line - carries the CareCliQ Purple identity from the
+            login/signup pages (their background wash) into the MD portal, so
+            arriving here after signing in doesn't feel like a different app. */}
+        <div className="h-[3px] w-full" style={{ background: "#7C3AED" }} />
+        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between px-4 sm:px-6">
+
           {/* Brand & Organization Badge */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              {branding?.logo_url && !imgError ? (
+              {!brandingLoaded ? (
+                // Reserve the exact footprint so nothing shifts once the
+                // branding fetch resolves - no flash of one logo swapping
+                // for another a moment later.
+                <div className="h-9 w-9 shrink-0 rounded-lg" style={{ background: "var(--cc-soft)" }} />
+              ) : branding?.logo_url && branding.logo_url !== erroredLogoUrl ? (
                 <img
                   src={branding.logo_url}
                   alt={organisationDisplay}
-                  onError={() => setImgError(true)}
-                  className="h-8 max-w-[110px] object-contain"
+                  onError={() => setErroredLogoUrl(branding.logo_url ?? null)}
+                  className="h-9 max-w-[120px] object-contain"
                 />
               ) : (
-                <CareCliQLogo size={32} />
+                <CareCliQLogo size={36} />
               )}
-              <span className="hidden h-4 w-px bg-[var(--cc-border)] sm:block" />
+              <span className="hidden h-5 w-px bg-[var(--cc-border)] sm:block" />
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold tracking-tight">{organisationDisplay}</span>
+                  <span className="text-sm font-black tracking-tight">{organisationDisplay}</span>
                   {isMD && (
-                    <span className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "var(--cc-plum-soft)", color: "var(--cc-plum)", borderColor: "var(--cc-plum-soft)" }}>
+                    <span className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(124,58,237,0.1)", color: "#7C3AED", borderColor: "rgba(124,58,237,0.1)" }}>
                       Governance
                     </span>
                   )}
@@ -246,32 +254,25 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Quick Search */}
-          <div className="hidden max-w-sm flex-1 md:block px-6">
+          <div className="hidden max-w-md flex-1 md:block px-6">
             <div className="relative flex items-center">
-              <Search size={14} className="absolute left-3 text-[var(--cc-muted)]" />
+              <Search size={15} className="absolute left-3.5 text-[var(--cc-muted)]" />
               <input
                 type="text"
-                placeholder="Search metrics, reports, audit logs... (⌘K)"
-                className="w-full rounded-full border border-[var(--cc-border)] bg-[var(--cc-soft)]/50 py-1.5 pl-9 pr-4 text-xs font-medium placeholder:text-[var(--cc-muted)] focus:border-[var(--cc-plum)] focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum-soft)] transition-all"
+                placeholder="Search metrics, reports, audit logs..."
+                className="w-full rounded-xl border border-[var(--cc-border)] bg-[var(--cc-soft)] py-2.5 pl-10 pr-14 text-[13px] font-medium placeholder:text-[var(--cc-muted)] focus:border-[var(--cc-plum)] focus:bg-[var(--cc-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum-soft)] transition-all"
               />
+              <kbd
+                className="pointer-events-none absolute right-3 rounded-md border px-1.5 py-0.5 text-[10px] font-bold"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-muted)", background: "var(--cc-surface)" }}
+              >
+                ⌘K
+              </kbd>
             </div>
           </div>
 
           {/* Executive Control Group */}
           <div className="flex items-center gap-2" ref={profileRef}>
-            {/* Quick Status Pill (MD Only) */}
-            {isMD && (
-              <div className="hidden lg:flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1 mr-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  System Compliant
-                </span>
-              </div>
-            )}
-
             <button
               type="button"
               className="relative flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
@@ -298,8 +299,12 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setProfileOpen((prev) => !prev)}
               className="flex items-center gap-2 rounded-full p-1 border border-transparent hover:border-[var(--cc-border)] hover:bg-[var(--cc-soft)]/60 transition-all"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--cc-plum) 0%, var(--cc-coral) 100%)" }}>
-                {initials}
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm" style={{ background: "var(--cc-plum)" }}>
+                {user?.profile_photo_url ? (
+                  <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
               </div>
               <span className="hidden md:block text-xs font-semibold pr-1">
                 {displayName}
@@ -309,7 +314,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
             {/* Profile Dropdown */}
             {profileOpen && (
-              <div className="absolute right-4 top-14 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-1.5 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-4 top-14 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-3 py-2 border-b border-[var(--cc-border)]">
                   <p className="text-xs font-bold">{displayName}</p>
                   <p className="text-[11px] text-[var(--cc-muted)] truncate">{user?.email}</p>
@@ -355,11 +360,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
       {/* Command Deck Executive Navigation (Floating Dock) */}
       {isMD && !sidebarMode && !bottombarMode && (
-        <div className="sticky top-16 z-30 hidden lg:block py-4 px-6 pointer-events-none">
+        <div className="sticky top-[75px] z-30 hidden lg:block py-3 px-6 pointer-events-none">
           <div
             ref={navRef}
-            className="pointer-events-auto mx-auto max-w-fit rounded-full border backdrop-blur-md p-2"
-            style={{ borderColor: "var(--cc-plum-border)", background: navBackground, boxShadow: "var(--cc-shadow-md)" }}
+            className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
+            style={{ borderColor: "rgba(124,58,237,0.15)", background: navBackground, boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
           >
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
@@ -402,7 +407,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     {/* Dropdown Flyout Panel */}
                     {activeGroupHover === group.label && (
                       <div
-                        className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)]/95 backdrop-blur-xl p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                        className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                         onMouseLeave={() => setActiveGroupHover(null)}
                       >
                         <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
@@ -441,7 +446,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Drawer (MD Navigation) */}
       {isMD && !bottombarMode && mobileNavOpen && (
-        <div className="fixed inset-0 top-16 z-50 bg-[var(--cc-surface)] p-6 overflow-y-auto lg:hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 top-[75px] z-50 bg-[var(--cc-surface)] p-6 overflow-y-auto lg:hidden animate-in fade-in duration-200">
           <div className="space-y-6">
             {MD_NAV_GROUPS.map((group) => (
               <div key={group.label} className="space-y-2">
@@ -480,8 +485,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-x-0 bottom-0 z-30 py-4 px-6 pointer-events-none">
           <div
             ref={navRef}
-            className="pointer-events-auto mx-auto max-w-fit rounded-full border backdrop-blur-md p-2"
-            style={{ borderColor: "var(--cc-plum-border)", background: navBackground, boxShadow: "var(--cc-shadow-md)" }}
+            className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
+            style={{ borderColor: "rgba(124,58,237,0.15)", background: navBackground, boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
           >
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
@@ -520,7 +525,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     {/* Upward Dropdown Flyout Panel */}
                     {activeGroupHover === group.label && (
                       <div
-                        className="absolute left-0 bottom-full mb-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)]/95 backdrop-blur-xl p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
+                        className="absolute left-0 bottom-full mb-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
                         onMouseLeave={() => setActiveGroupHover(null)}
                       >
                         <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
@@ -561,10 +566,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {isMD && sidebarMode ? (
         <div className="mx-auto flex max-w-[1600px] items-start gap-0 px-4 py-4 sm:px-6">
           <aside
-            className={`sticky top-[76px] hidden shrink-0 self-start rounded-2xl border transition-all duration-200 lg:block ${
+            className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border transition-all duration-200 lg:block ${
               sidebarCollapsed ? "w-[72px]" : "w-72"
             }`}
-            style={{ background: navBackground, borderColor: "var(--cc-plum-border)", boxShadow: "var(--cc-shadow-md)" }}
+            style={{ background: navBackground, borderColor: "rgba(124,58,237,0.15)", boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
           >
             <div className={sidebarCollapsed ? "flex flex-col items-center px-2 py-4" : "flex flex-col p-4"}>
               <button

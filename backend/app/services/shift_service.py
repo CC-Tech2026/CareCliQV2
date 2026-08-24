@@ -1816,6 +1816,65 @@ def get_shift_detail_for_worker(
     return payload
 
 
+def get_shift_detail_for_org(
+    shift_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Full single-shift detail for coordinator/MD Master Schedule drill-down.
+
+    Unlike get_shift_detail_for_worker, this isn't scoped to a single assigned
+    worker - any shift in the org is visible read-only (mirrors the /shifts
+    list endpoint's org-wide access, CoordinatorShiftRecord's richer sibling).
+    """
+    shift = get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != str(organization_id):
+        return None
+    session = _get_session_for_shift(shift)
+    payload = _shift_card_payload(shift, session)
+    payload["organization_id"] = shift.get("organization_id")
+    payload["worker_id"] = shift.get("worker_id")
+    payload["shift_type"] = shift.get("shift_type") or "standard_support"
+    payload["created_at"] = shift.get("created_at")
+    payload["updated_at"] = shift.get("updated_at")
+    payload["session_notes"] = (session or {}).get("notes") or (session or {}).get("compliance_input_text")
+
+    worker_id = str(shift.get("worker_id") or "")
+    if worker_id:
+        try:
+            resp = (
+                get_supabase_admin()
+                .table("users")
+                .select("id, full_name, email")
+                .eq("id", worker_id)
+                .eq("organization_id", organization_id)
+                .limit(1)
+                .execute()
+            )
+            worker = (resp.data or [None])[0]
+            if worker:
+                payload["worker_name"] = worker.get("full_name")
+                payload["worker_email"] = worker.get("email")
+        except Exception:
+            pass
+
+    try:
+        conv = (
+            get_supabase_admin()
+            .table("conversations")
+            .select("id")
+            .eq("shift_id", shift_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        if conv.data:
+            payload["conversation_id"] = conv.data[0]["id"]
+    except Exception:
+        pass
+
+    return payload
+
+
 def _get_worker_shift_or_none(
     shift_id: str,
     worker_id: str,

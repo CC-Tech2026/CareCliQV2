@@ -25,12 +25,14 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronUp, Clock, Clock3, CheckCircle2,
-  Copy, FileSignature, FileText, ClipboardCheck, Gauge, GripVertical, LayoutGrid, Loader2, Mail, PenLine, Phone,
-  Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserPlus, X,
+  Copy, FileSignature, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail, PenLine,
+  Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
+import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
+import { getOnboardingAlerts } from "@/services/hubService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,7 +40,7 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import {
   getHire, addHireDocument, uploadHireDocumentFile,
   deleteHireDocument, sendForSignature, sendHireInvite,
-  type EmployeeHire, type OnboardingDocument, type CandidateDocument,
+  type EmployeeHire, type OnboardingDocument,
 } from "@/services/employeeOnboardingService";
 import {
   listApplicants, createApplicant, moveApplicantStage, updateApplicantNotes,
@@ -166,20 +168,6 @@ function HireProgressTracker({ status }: { status: EmployeeHire["status"] }) {
   );
 }
 
-function InfoRow({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: SOFT, color: MUTED }}>
-        <Icon size={13} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
-        <p className="mt-0.5 truncate text-[12px] font-bold" style={{ color: TEXT }}>{value}</p>
-      </div>
-    </div>
-  );
-}
-
 type ReadinessCategory = { label: string; achieved: number; max: number };
 
 function ReadinessCard({ categories }: { categories: ReadinessCategory[] }) {
@@ -215,18 +203,6 @@ function ReadinessCard({ categories }: { categories: ReadinessCategory[] }) {
   );
 }
 
-type ProfileSidebarPerson = {
-  email: string;
-  phone?: string | null;
-  role: string;
-  dateLabel: string;
-  dateValue: string;
-  resumeSummary?: string | null;
-  resumeExperienceYears?: string | null;
-  resumeSkills?: string[] | null;
-  credentialsClaimed?: { type: string; mentioned_as: string }[] | null;
-};
-
 const CLAIMED_CREDENTIAL_LABELS: Record<string, string> = {
   ndis_screening: "NDIS Worker Screening",
   wwcc: "Working with Children Check",
@@ -237,136 +213,6 @@ const CLAIMED_CREDENTIAL_LABELS: Record<string, string> = {
   infection_control: "Infection Control",
   medication_admin: "Medication Administration",
 };
-
-function ProfileSidebar({
-  person, documents, notesSlot,
-}: {
-  person: ProfileSidebarPerson;
-  documents?: CandidateDocument[];
-  notesSlot?: React.ReactNode;
-}) {
-  const hasSkills = !!(person.resumeSkills && person.resumeSkills.length > 0);
-  const hasCredentials = !!(person.credentialsClaimed && person.credentialsClaimed.length > 0);
-  const hasDocuments = !!(documents && documents.length > 0);
-
-  const tabs: { key: string; label: string }[] = [{ key: "profile", label: "Profile" }];
-  if (hasCredentials) tabs.push({ key: "credentials", label: `Credentials (${person.credentialsClaimed!.length})` });
-  if (hasSkills) tabs.push({ key: "skills", label: `Skills (${person.resumeSkills!.length})` });
-  if (hasDocuments) tabs.push({ key: "documents", label: "Application" });
-  if (notesSlot) tabs.push({ key: "notes", label: "Notes" });
-
-  const [tab, setTab] = useState(tabs[0].key);
-
-  return (
-    <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
-      {tabs.length > 1 && (
-        <div className="p-3 pb-0">
-          <div className="flex items-center gap-1 rounded-lg p-1" style={{ background: SOFT }}>
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className="flex-1 truncate rounded-md px-2 py-1.5 text-[10px] font-black transition-all"
-                style={{
-                  background: tab === t.key ? "white" : "transparent",
-                  color: tab === t.key ? PLUM : MUTED,
-                  boxShadow: tab === t.key ? "var(--cc-shadow-sm)" : "none",
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="p-5">
-        {tab === "profile" && (
-          <div className="space-y-4">
-            {person.resumeSummary && (
-              <div className="flex items-start gap-2">
-                <Sparkles size={12} className="mt-0.5 shrink-0" style={{ color: PLUM }} />
-                <p className="text-[13px] leading-relaxed" style={{ color: TEXT }}>{person.resumeSummary}</p>
-              </div>
-            )}
-
-            {person.resumeExperienceYears && (
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
-                  <Clock3 size={14} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Experience</p>
-                  <p className="text-[12px] font-bold" style={{ color: TEXT }}>{person.resumeExperienceYears}</p>
-                </div>
-              </div>
-            )}
-
-            {(person.resumeSummary || person.resumeExperienceYears) && <div className="border-t" style={{ borderColor: BORDER }} />}
-
-            <div className="space-y-3">
-              <InfoRow icon={Mail} label="Email" value={person.email} />
-              {person.phone && <InfoRow icon={Phone} label="Phone" value={person.phone} />}
-              <InfoRow icon={Briefcase} label="Role" value={person.role} />
-              <InfoRow icon={CalendarDays} label={person.dateLabel} value={person.dateValue} />
-            </div>
-          </div>
-        )}
-
-        {tab === "credentials" && hasCredentials && (
-          <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-lg p-2.5" style={{ background: SOFT }}>
-              <ShieldCheck size={13} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
-              <p className="text-[10px] leading-relaxed" style={{ color: MUTED }}>
-                Self-reported from their resume, not verified. They'll still need to upload each document for review.
-              </p>
-            </div>
-            <div className="space-y-2">
-              {person.credentialsClaimed!.map((c) => (
-                <div key={c.type} className="rounded-lg border p-2.5" style={{ borderColor: BORDER }}>
-                  <p className="text-[11px] font-bold" style={{ color: TEXT }}>
-                    {CLAIMED_CREDENTIAL_LABELS[c.type] ?? c.type}
-                  </p>
-                  <p className="mt-0.5 text-[10px] italic" style={{ color: MUTED }}>"{c.mentioned_as}"</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === "skills" && hasSkills && (
-          <div className="flex flex-wrap gap-1.5">
-            {person.resumeSkills!.map((skill) => (
-              <span key={skill} className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: SOFT, color: TEXT }}>{skill}</span>
-            ))}
-          </div>
-        )}
-
-        {tab === "documents" && hasDocuments && (
-          <div className="space-y-2.5">
-            {documents!.map((d) => {
-              const meta = APPLICANT_DOC_TYPE_META[d.document_type] ?? APPLICANT_DOC_TYPE_META.other;
-              const Icon = meta.icon;
-              return (
-                <div key={d.id} className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Icon size={13} style={{ color: MUTED }} className="shrink-0" />
-                    <span className="truncate text-xs font-semibold" style={{ color: TEXT }}>{meta.label}</span>
-                  </div>
-                  {d.file_url && (
-                    <a href={d.file_url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {tab === "notes" && notesSlot}
-      </div>
-    </div>
-  );
-}
 
 function SignatureCard({
   label, signedName, signedAt, pendingLabel,
@@ -481,6 +327,9 @@ function HireDetail({
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < hires.length - 1;
 
+  const hasSkills = !!(hire.resume_skills && hire.resume_skills.length > 0);
+  const hasCredentials = !!(hire.credentials_claimed && hire.credentials_claimed.length > 0);
+
   const presentDocTypes = new Set(documents.map((d) => d.document_type));
   const readinessCategories: ReadinessCategory[] = [
     {
@@ -544,69 +393,88 @@ function HireDetail({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="grid gap-5 lg:grid-cols-[1fr_240px] items-start">
-          <div className="space-y-5 min-w-0">
+        <div className="space-y-5">
           <ReadinessCard categories={readinessCategories} />
 
-          <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
-            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-              <div className="flex items-center gap-2">
-                <FileSignature size={16} style={{ color: PLUM }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>Documents</p>
+          {/* Profile */}
+          <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+            {hire.resume_summary ? (
+              <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{hire.resume_summary}</p>
+            ) : (
+              <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary available for this hire.</p>
+            )}
+            {hire.resume_experience_years && (
+              <p className="mt-2 text-[11px] font-bold" style={{ color: PLUM }}>{hire.resume_experience_years} experience</p>
+            )}
+            {hasSkills && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {hire.resume_skills!.map((skill) => (
+                  <span key={skill} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: SOFT, color: TEXT }}>{skill}</span>
+                ))}
               </div>
-              {hire.status === "draft" && (
-                <Button variant="outline" size="sm" className="gap-1.5 rounded-md" onClick={() => setAddDocOpen(true)}>
-                  <FileText size={13} /> Add document
-                </Button>
-              )}
-            </div>
-            <div className="p-5">
-              {documents.length === 0 ? (
-                <div className="rounded-lg p-5 text-center" style={{ background: SOFT }}>
-                  <p className="text-xs font-medium" style={{ color: MUTED }}>
-                    No documents attached yet. Add the offer letter and service agreement before sending for signature.
-                  </p>
+            )}
+            {hasCredentials && (
+              <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
+                <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {hire.credentials_claimed!.map((c) => (
+                    <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+                      {CLAIMED_CREDENTIAL_LABELS[c.type] ?? c.type}
+                    </span>
+                  ))}
                 </div>
-              ) : (
-                <div className="divide-y" style={{ borderColor: BORDER }}>
-                  {documents.map((d: OnboardingDocument) => {
-                    const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
-                    const Icon = meta.icon;
-                    return (
-                      <div key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: SOFT, color: PLUM }}>
-                            <Icon size={16} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{d.title}</p>
-                            <p className="text-xs" style={{ color: MUTED }}>{meta.label}{d.file_url ? " · file attached" : ""}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {d.file_url && (
-                            <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
-                          )}
-                          {hire.status === "draft" && (
-                            <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Remove document">
-                              <Trash2 size={13} style={{ color: MUTED }} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
-            <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-              <PenLine size={16} style={{ color: PLUM }} />
-              <p className="text-sm font-black" style={{ color: TEXT }}>Signatures</p>
+          {/* Documents */}
+          <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+            <div className="flex items-center justify-between gap-3 px-6 py-5">
+              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
+              {hire.status === "draft" && (
+                <button onClick={() => setAddDocOpen(true)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                  <FileText size={12} /> Add document
+                </button>
+              )}
             </div>
-            <div className="p-5 space-y-3">
+            {documents.length === 0 ? (
+              <p className="px-6 pb-6 text-[12px]" style={{ color: MUTED }}>
+                No documents attached yet. Add the offer letter and service agreement before sending for signature.
+              </p>
+            ) : (
+              <div className="divide-y" style={{ borderColor: BORDER }}>
+                {documents.map((d: OnboardingDocument) => {
+                  const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
+                  return (
+                    <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
+                      <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{d.title}</span>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {d.file_url ? (
+                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Attached</span>
+                        ) : (
+                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SOFT, color: MUTED }}>No file</span>
+                        )}
+                        {d.file_url && (
+                          <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                        )}
+                        {hire.status === "draft" && (
+                          <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label="Remove document">
+                            <Trash2 size={13} style={{ color: MUTED }} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Signatures */}
+          <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Signatures</p>
+            <div className="mt-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <SignatureCard label="Employer" signedName={hire.employer_signed_name} signedAt={hire.employer_signed_at} pendingLabel="Not yet sent" />
                 <SignatureCard label="New hire" signedName={hire.worker_signed_name} signedAt={hire.worker_signed_at} pendingLabel="Awaiting signature" />
@@ -655,31 +523,13 @@ function HireDetail({
           </div>
 
           {(hire.status === "invited" || hire.status === "completed") && (
-            <div className="flex items-center gap-2.5 rounded-lg p-4 border" style={{ background: INFO_BG, borderColor: BORDER }}>
+            <div className="flex items-center gap-2.5 rounded-2xl p-4 border" style={{ background: INFO_BG, borderColor: BORDER }}>
               <ShieldCheck size={16} style={{ color: INFO }} className="shrink-0" />
               <p className="text-xs" style={{ color: TEXT }}>
                 {hire.full_name.split(" ")[0]} will appear in the Credentials/Training columns below once they finish setting up their account, and can't be rostered until onboarding is complete.
               </p>
             </div>
           )}
-          </div>
-
-          <div className="space-y-5">
-            <ProfileSidebar
-              person={{
-                email: hire.email,
-                phone: hire.phone,
-                role: hire.role.replace(/_/g, " "),
-                dateLabel: "Added",
-                dateValue: new Date(hire.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
-                resumeSummary: hire.resume_summary,
-                resumeExperienceYears: hire.resume_experience_years,
-                resumeSkills: hire.resume_skills,
-                credentialsClaimed: hire.credentials_claimed,
-              }}
-              documents={hire.candidate_documents}
-            />
-          </div>
         </div>
       </div>
 
@@ -762,7 +612,6 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
         transform: isDragging ? `${CSS.Translate.toString(transform)} scale(0.97) rotate(-1deg)` : CSS.Translate.toString(transform),
         opacity: isDragging ? 0.4 : 1,
         borderColor: BORDER,
-        borderLeft: `3px solid ${accent}`,
       }}
       className="group relative select-none rounded-2xl border bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-md"
     >
@@ -778,7 +627,6 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
             <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{applicant.full_name}</p>
             <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{roleLabel}</p>
           </div>
-          <GripVertical size={13} className="mt-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-40" style={{ color: MUTED }} />
         </div>
         <div className="mt-3 flex items-center gap-1.5 text-[10px] font-medium" style={{ color: MUTED }}>
           <CalendarDays size={11} />
@@ -790,18 +638,16 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
           </span>
         )}
       </div>
-      <div className="absolute right-2.5 top-2.5 flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
-        {onReject && (
-          <button
-            onClick={onReject}
-            aria-label={`Reject ${applicant.full_name}`}
-            title="Reject"
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/5"
-          >
-            <X size={13} style={{ color: MUTED }} />
-          </button>
-        )}
-      </div>
+      {onReject && (
+        <button
+          onClick={onReject}
+          aria-label={`Reject ${applicant.full_name}`}
+          title="Reject"
+          className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/5"
+        >
+          <X size={13} style={{ color: MUTED }} />
+        </button>
+      )}
     </div>
   );
 }
@@ -825,16 +671,7 @@ function ApplicantDragClone({ applicant }: { applicant: Applicant }) {
   );
 }
 
-function ColumnCountPill({ count, color }: { count: number; color?: string }) {
-  return (
-    <span
-      className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black"
-      style={{ background: color ? `${color}1F` : BORDER, color: color ?? MUTED }}
-    >
-      {count}
-    </span>
-  );
-}
+const COLUMN_PAGE_SIZE = 4;
 
 function ColumnHeading({ label, count, color }: { label: string; count: number; color: string }) {
   return (
@@ -843,22 +680,56 @@ function ColumnHeading({ label, count, color }: { label: string; count: number; 
         <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
         <p className="text-[13px] font-black" style={{ color: TEXT }}>{label}</p>
       </div>
-      <ColumnCountPill count={count} color={color} />
+      <span className="text-[13px] font-bold" style={{ color: MUTED }}>{count}</span>
     </div>
   );
 }
 
-function DroppableColumn({
-  id, label, count, color, disabled, isOver, children,
-}: { id: string; label: string; count: number; color: string; disabled: boolean; isOver: boolean; children: React.ReactNode }) {
+function ColumnPager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (page: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: BORDER }}>
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, page - 1))}
+        disabled={page === 0}
+        className="rounded-lg px-2 py-1 text-[10px] font-bold transition-opacity disabled:opacity-30"
+        style={{ color: MUTED }}
+      >
+        ‹ Prev
+      </button>
+      <span className="text-[10px] font-bold" style={{ color: MUTED }}>{page + 1} / {totalPages}</span>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
+        disabled={page === totalPages - 1}
+        className="rounded-lg px-2 py-1 text-[10px] font-bold transition-opacity disabled:opacity-30"
+        style={{ color: MUTED }}
+      >
+        Next ›
+      </button>
+    </div>
+  );
+}
+
+function DroppableColumn<T>({
+  id, label, color, disabled, isOver, items, renderItem, emptyLabel = "Nobody here",
+}: {
+  id: string; label: string; color: string; disabled: boolean; isOver: boolean;
+  items: T[]; renderItem: (item: T) => React.ReactNode; emptyLabel?: string;
+}) {
   const { setNodeRef } = useDroppable({ id, disabled });
   const active = isOver && !disabled;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(items.length / COLUMN_PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
     <div
       ref={setNodeRef}
-      className="flex min-h-[410px] w-[270px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:flex-1 lg:w-auto"
+      className="flex min-h-[410px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
       style={{
-        background: active ? "var(--cc-plum-soft)" : SOFT,
+        background: active ? "var(--cc-plum-soft)" : `${color}12`,
         opacity: disabled ? 0.5 : 1,
         borderTopColor: color,
         outline: active ? `2px dashed ${PLUM}` : "2px dashed transparent",
@@ -866,29 +737,37 @@ function DroppableColumn({
         transform: active ? "scale(1.012)" : "scale(1)",
       }}
     >
-      <ColumnHeading label={label} count={count} color={color} />
+      <ColumnHeading label={label} count={items.length} color={color} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
-        {children}
-        {count === 0 && (
+        {pageItems.map(renderItem)}
+        {items.length === 0 && (
           <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>
-            {active ? "Drop here" : "Nobody here"}
+            {active ? "Drop here" : emptyLabel}
           </p>
         )}
       </div>
+      <ColumnPager page={clampedPage} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }
 
-function StaticColumn({ label, count, color, children }: { label: string; count: number; color: string; children: React.ReactNode }) {
+function StaticColumn<T>({
+  label, color, items, renderItem, emptyLabel = "Nobody here",
+}: { label: string; color: string; items: T[]; renderItem: (item: T) => React.ReactNode; emptyLabel?: string }) {
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(items.length / COLUMN_PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
-    <div className="flex min-h-[410px] w-[270px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:flex-1 lg:w-auto" style={{ background: SOFT, borderTopColor: color }}>
-      <ColumnHeading label={label} count={count} color={color} />
+    <div className="flex min-h-[410px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
+      <ColumnHeading label={label} count={items.length} color={color} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
-        {children}
-        {count === 0 && (
-          <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>Nobody here</p>
+        {pageItems.map(renderItem)}
+        {items.length === 0 && (
+          <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>{emptyLabel}</p>
         )}
       </div>
+      <ColumnPager page={clampedPage} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }
@@ -905,7 +784,7 @@ function OfferLetterCard({ hire, onOpen }: { hire: PipelinePerson; onOpen: () =>
   const { meta, attention } = offerLetterMeta(hire);
   const accent = STAGE_COLOR.offer_extended;
   return (
-    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER, borderLeft: `3px solid ${accent}` }}>
+    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER }}>
       <div className="flex items-start gap-3">
         <Avatar name={hire.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
@@ -1060,26 +939,13 @@ const APPLICANT_STAGE_STEPS = [
 function ApplicantStageTracker({ stage }: { stage: ApplicantStage }) {
   const active = APPLICANT_STAGE_STEPS.findIndex((s) => s.key === stage);
   return (
-    <div className="flex items-start">
-      {APPLICANT_STAGE_STEPS.map((s, i) => {
-        const done = i < active;
-        const current = i === active;
-        const last = i === APPLICANT_STAGE_STEPS.length - 1;
-        return (
-          <div key={s.key} className={`flex items-center ${last ? "shrink-0" : "flex-1"}`}>
-            <div className="flex shrink-0 flex-col items-center gap-1.5">
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded-full"
-                style={{ background: done ? SUCCESS : current ? PLUM : SOFT, color: done || current ? "#fff" : MUTED }}
-              >
-                {done ? <CheckCircle2 size={14} /> : <span className="text-[10px] font-black">{i + 1}</span>}
-              </div>
-              <p className="whitespace-nowrap text-[10px] font-bold" style={{ color: current ? TEXT : MUTED }}>{s.label}</p>
-            </div>
-            {!last && <div className="mx-2 mb-4 h-[2px] flex-1" style={{ background: i < active ? SUCCESS : BORDER }} />}
-          </div>
-        );
-      })}
+    <div className="flex items-start gap-2">
+      {APPLICANT_STAGE_STEPS.map((s, i) => (
+        <div key={s.key} className="min-w-0 flex-1">
+          <div className="h-1.5 rounded-full" style={{ background: i <= active ? PLUM : SOFT }} />
+          <p className="mt-1.5 truncate text-[10px] font-bold" style={{ color: i === active ? TEXT : MUTED }}>{s.label}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1101,7 +967,6 @@ function ApplicantDetailSheet({
   const [addOpen, setAddOpen] = useState(false);
   const [docType, setDocType] = useState<ApplicantDocumentType>("resume");
   const [docFile, setDocFile] = useState<File | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [notes, setNotes] = useState(applicant.notes ?? "");
 
   useEffect(() => {
@@ -1161,6 +1026,9 @@ function ApplicantDetailSheet({
   if (applicant.stage === "interview") stageOptions.push({ value: "applied", label: "Move back to Applied" });
   if (isHireManager) stageOptions.push({ value: "offer_extended", label: "Extend Offer" });
 
+  const hasSkills = !!(applicant.resume_skills && applicant.resume_skills.length > 0);
+  const hasCredentials = !!(applicant.credentials_claimed && applicant.credentials_claimed.length > 0);
+
   const presentApplicantDocTypes = new Set(documents.map((d) => d.document_type));
   const readinessCategories: ReadinessCategory[] = [
     {
@@ -1180,49 +1048,26 @@ function ApplicantDetailSheet({
       <SheetContent side="right" className="w-full overflow-hidden p-0 sm:max-w-3xl" style={{ background: SURFACE }}>
         <div className="flex h-full flex-col">
           <div className="shrink-0 border-b px-6 py-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <div className="flex items-center justify-between gap-3 pr-6">
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => hasPrev && onNavigate(applicants[index - 1].id)}
-                  disabled={!hasPrev}
-                  aria-label="Previous candidate"
-                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-30"
-                >
-                  <ArrowLeft size={14} style={{ color: MUTED }} />
-                </button>
-                {index >= 0 && (
-                  <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
-                )}
-                <button
-                  onClick={() => hasNext && onNavigate(applicants[index + 1].id)}
-                  disabled={!hasNext}
-                  aria-label="Next candidate"
-                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-30"
-                >
-                  <ArrowRight size={14} style={{ color: MUTED }} />
-                </button>
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => setMenuOpen((v) => !v)}
-                  aria-label="More actions"
-                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-black/5"
-                >
-                  <Settings2 size={14} style={{ color: MUTED }} />
-                </button>
-                {menuOpen && (
-                  <div className="absolute right-0 top-[calc(100%+6px)] z-10 w-40 overflow-hidden rounded-lg border bg-white py-1 shadow-lg" style={{ borderColor: BORDER }}>
-                    <button
-                      onClick={() => { setMenuOpen(false); onReject(); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-semibold hover:bg-black/[0.03]"
-                      style={{ color: DANGER }}
-                    >
-                      <X size={13} /> Reject
-                    </button>
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center gap-1 pr-6">
+              <button
+                onClick={() => hasPrev && onNavigate(applicants[index - 1].id)}
+                disabled={!hasPrev}
+                aria-label="Previous candidate"
+                className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-30"
+              >
+                <ArrowLeft size={14} style={{ color: MUTED }} />
+              </button>
+              {index >= 0 && (
+                <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
+              )}
+              <button
+                onClick={() => hasNext && onNavigate(applicants[index + 1].id)}
+                disabled={!hasNext}
+                aria-label="Next candidate"
+                className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-30"
+              >
+                <ArrowRight size={14} style={{ color: MUTED }} />
+              </button>
             </div>
 
             <div className="mt-4 flex items-start gap-3">
@@ -1270,118 +1115,122 @@ function ApplicantDetailSheet({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="grid gap-5 lg:grid-cols-[1fr_260px] items-start">
-              <div className="space-y-5 min-w-0">
-                <ReadinessCard categories={readinessCategories} />
+            <div className="space-y-5">
+              <ReadinessCard categories={readinessCategories} />
 
-                <div className="rounded-lg border" style={{ borderColor: BORDER }}>
-                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} style={{ color: PLUM }} />
-                      <p className="text-sm font-black" style={{ color: TEXT }}>Documents</p>
-                    </div>
-                    <Button variant="outline" size="sm" className="gap-1.5 rounded-md" onClick={() => setAddOpen((v) => !v)}>
-                      <Upload size={13} /> Add file
-                    </Button>
+              <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
+                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+                {applicant.resume_summary ? (
+                  <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{applicant.resume_summary}</p>
+                ) : (
+                  <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary yet. Add a resume below to build one automatically.</p>
+                )}
+                {applicant.resume_experience_years && (
+                  <p className="mt-2 text-[11px] font-bold" style={{ color: PLUM }}>{applicant.resume_experience_years} experience</p>
+                )}
+                {hasSkills && (
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {applicant.resume_skills!.map((skill) => (
+                      <span key={skill} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: SOFT, color: TEXT }}>{skill}</span>
+                    ))}
                   </div>
-
-                  {addOpen && (
-                    <div className="space-y-3 px-5 py-4 border-b" style={{ borderColor: BORDER, background: SOFT }}>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
-                        <Select value={docType} onValueChange={(v) => setDocType(v as ApplicantDocumentType)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="resume">Resume / CV</SelectItem>
-                            <SelectItem value="cover_letter">Cover letter</SelectItem>
-                            <SelectItem value="id_document">ID document</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <label className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
-                        <Upload size={14} />
-                        {docFile ? docFile.name : "Choose file (PDF or image)"}
-                        <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
-                      </label>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
-                        <Button variant="navy" size="sm" onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
-                          {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Upload
-                        </Button>
-                      </div>
+                )}
+                {hasCredentials && (
+                  <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
+                    <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {applicant.credentials_claimed!.map((c) => (
+                        <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+                          {CLAIMED_CREDENTIAL_LABELS[c.type] ?? c.type}
+                        </span>
+                      ))}
                     </div>
-                  )}
-
-                  <div className="p-5">
-                    {documents.length === 0 ? (
-                      <div className="rounded-lg p-5 text-center" style={{ background: SOFT }}>
-                        <p className="text-xs font-medium" style={{ color: MUTED }}>
-                          No files uploaded yet — add a resume/CV or other supporting documents.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="divide-y" style={{ borderColor: BORDER }}>
-                        {documents.map((d: ApplicantDocument) => {
-                          const meta = APPLICANT_DOC_TYPE_META[d.document_type] ?? APPLICANT_DOC_TYPE_META.other;
-                          const Icon = meta.icon;
-                          return (
-                            <div key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: SOFT, color: PLUM }}>
-                                  <Icon size={16} />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{d.title}</p>
-                                  <p className="text-xs" style={{ color: MUTED }}>{meta.label}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {d.file_url && (
-                                  <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
-                                )}
-                                <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label={`Remove ${d.title}`}>
-                                  <Trash2 size={13} style={{ color: MUTED }} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
+                )}
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+                <div className="flex items-center justify-between gap-3 px-6 py-5">
+                  <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
+                  <button onClick={() => setAddOpen((v) => !v)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                    <Upload size={12} /> Add file
+                  </button>
                 </div>
+
+                {addOpen && (
+                  <div className="space-y-3 border-t px-6 py-5" style={{ borderColor: BORDER, background: SOFT }}>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
+                      <Select value={docType} onValueChange={(v) => setDocType(v as ApplicantDocumentType)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="resume">Resume / CV</SelectItem>
+                          <SelectItem value="cover_letter">Cover letter</SelectItem>
+                          <SelectItem value="id_document">ID document</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
+                      <Upload size={14} />
+                      {docFile ? docFile.name : "Choose file (PDF or image)"}
+                      <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
+                    </label>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
+                      <Button variant="navy" size="sm" onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
+                        {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Upload
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {documents.length === 0 ? (
+                  <p className="px-6 pb-6 text-[12px]" style={{ color: MUTED }}>No files uploaded yet.</p>
+                ) : (
+                  <div className="divide-y" style={{ borderColor: BORDER }}>
+                    {documents.map((d: ApplicantDocument) => {
+                      const meta = APPLICANT_DOC_TYPE_META[d.document_type] ?? APPLICANT_DOC_TYPE_META.other;
+                      return (
+                        <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
+                          <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{meta.label}</span>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Uploaded</span>
+                            {d.file_url && (
+                              <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                            )}
+                            <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label={`Remove ${d.title}`}>
+                              <Trash2 size={13} style={{ color: MUTED }} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-5">
-                <ProfileSidebar
-                  person={{
-                    email: applicant.email,
-                    phone: applicant.phone,
-                    role: applicant.role.replace(/_/g, " "),
-                    dateLabel: "Applied",
-                    dateValue: new Date(applicant.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
-                    resumeSummary: applicant.resume_summary,
-                    resumeExperienceYears: applicant.resume_experience_years,
-                    resumeSkills: applicant.resume_skills,
-                    credentialsClaimed: applicant.credentials_claimed,
-                  }}
-                  notesSlot={
-                    <div>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        onBlur={() => { if (notes !== (applicant.notes ?? "")) notesMut.mutate(notes); }}
-                        rows={5}
-                        placeholder="Write a note about this candidate…"
-                        className="w-full resize-none rounded-lg border px-3 py-2 text-[12px] outline-none focus:ring-1"
-                        style={{ borderColor: BORDER, color: TEXT }}
-                      />
-                      {notesMut.isPending && <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>Saving…</p>}
-                    </div>
-                  }
+              <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
+                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Notes</p>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  onBlur={() => { if (notes !== (applicant.notes ?? "")) notesMut.mutate(notes); }}
+                  rows={4}
+                  placeholder="Write a note about this candidate…"
+                  className="mt-3 w-full resize-none rounded-lg border px-3 py-2.5 text-[12px] outline-none focus:ring-1"
+                  style={{ borderColor: BORDER, color: TEXT }}
                 />
+                {notesMut.isPending && <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>Saving…</p>}
               </div>
+
+              <button
+                onClick={onReject}
+                className="rounded-full border-2 px-5 py-2 text-[12px] font-black transition-colors hover:bg-black/[0.02]"
+                style={{ borderColor: "var(--cc-status-critical)", color: "var(--cc-status-critical)" }}
+              >
+                Reject
+              </button>
             </div>
           </div>
         </div>
@@ -1479,7 +1328,7 @@ function OversightCard({ columnKey, person, onOpen }: { columnKey: OversightColu
   const isAttention = person.flag === "warn";
   const accent = STAGE_COLOR[columnKey];
   return (
-    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER, borderLeft: `3px solid ${accent}` }}>
+    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER }}>
       <div className="flex items-start gap-3">
         <Avatar name={person.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
@@ -1495,23 +1344,29 @@ function OversightCard({ columnKey, person, onOpen }: { columnKey: OversightColu
   );
 }
 
-function KpiTile({ label, value, color, bg, active, onClick, icon: Icon }: { label: string; value: number; color: string; bg: string; active?: boolean; onClick?: () => void; icon?: typeof CheckCircle2 }) {
+function routeForOnboardingSource(source: string | undefined): string {
+  if (source === "onboarding-worker") return "/team";
+  return "/md/staff-onboarding";
+}
+
+function KpiTile({ label, value, color, active, onClick }: { label: string; value: number; color: string; active?: boolean; onClick?: () => void }) {
   const content = (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
-        {Icon && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.65)", color }}>
-            <Icon size={15} />
-          </div>
-        )}
-      </div>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
+      <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
+      <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>{label}</p>
       {active && <div className="mt-3 h-1 w-8 rounded-full" style={{ background: color }} />}
     </>
   );
-  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
-  return <button onClick={onClick} className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm" style={{ background: bg, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}>{content}</button>;
+  if (!onClick) return <div className="rounded-2xl border bg-white px-5 py-4.5" style={{ borderColor: BORDER }}>{content}</div>;
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-2xl border bg-white px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+      style={{ borderColor: active ? color : BORDER, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
+    >
+      {content}
+    </button>
+  );
 }
 
 // ── List view ─────────────────────────────────────────────────────────
@@ -1768,6 +1623,14 @@ export default function StaffOnboardingBoard() {
                 Updated {new Date(pipelineQuery.dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
               </span>
             )}
+            <GovernanceTriage
+              variant="floating"
+              onNavigate={navigate}
+              fetchAlerts={getOnboardingAlerts}
+              routeForSource={routeForOnboardingSource}
+              viewAllHref="/md/staff-onboarding"
+              viewAllLabel="Staff Onboarding"
+            />
             <button
               onClick={() => setShowNew(true)}
               className="rounded-full px-5 py-2.5 text-[12px] font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
@@ -1795,10 +1658,10 @@ export default function StaffOnboardingBoard() {
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiTile label="In Progress" value={inPipelineCount} color={PLUM} bg="var(--cc-plum-soft)" active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} icon={Briefcase} />
-              <KpiTile label="Credentials Overdue" value={data.kpis.credentials_overdue} color={AMBER} bg="#FFF3E0" active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} icon={AlertCircle} />
-              <KpiTile label="Starting This Week" value={data.kpis.starting_this_week} color={GREEN} bg="#EAF3DE" active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setAttentionOnly(false); setStageFilter("all"); }} icon={CalendarDays} />
-              <KpiTile label="Auto-Deactivated / Month" value={data.kpis.auto_deactivated_month} color={TEXT} bg={SOFT} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setAttentionOnly(false); setStageFilter("all"); setNotProceedingOpen(true); }} icon={Clock} />
+              <KpiTile label="In progress" value={inPipelineCount} color={PLUM} active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} />
+              <KpiTile label="Credentials overdue" value={data.kpis.credentials_overdue} color={AMBER} active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} />
+              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setAttentionOnly(false); setStageFilter("all"); }} />
+              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setAttentionOnly(false); setStageFilter("all"); setNotProceedingOpen(true); }} />
             </div>
 
             <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
@@ -1884,42 +1747,56 @@ export default function StaffOnboardingBoard() {
                 onDragOver={(e) => setOverStage((e.over?.id as ApplicantStage) ?? null)}
               >
                 <div className="flex gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory">
-                  <DroppableColumn id="interview" label="Interview" count={filteredInterviewApplicants.length} color={STAGE_COLOR.interview} disabled={false} isOver={overStage === "interview"}>
-                    {filteredInterviewApplicants.map((a) => (
+                  <DroppableColumn
+                    id="interview"
+                    label="Interview"
+                    color={STAGE_COLOR.interview}
+                    disabled={false}
+                    isOver={overStage === "interview"}
+                    items={filteredInterviewApplicants}
+                    renderItem={(a) => (
                       <ApplicantCard key={a.id} applicant={a} onReject={() => setPendingReject(a)} onOpen={() => setOpenApplicantId(a.id)} />
-                    ))}
-                  </DroppableColumn>
+                    )}
+                  />
 
                   <DroppableColumn
                     id="offer_extended"
                     label="Offer letter"
-                    count={filteredOfferLetters.length}
                     color={STAGE_COLOR.offer_extended}
                     disabled={!isHireManager}
                     isOver={overStage === "offer_extended"}
-                  >
-                    {filteredOfferLetters.map((h) => (
+                    items={filteredOfferLetters}
+                    renderItem={(h) => (
                       <OfferLetterCard key={h.id} hire={h} onOpen={() => setOpenHireId(h.id)} />
-                    ))}
-                  </DroppableColumn>
+                    )}
+                  />
 
-                  <StaticColumn label="Credentials" count={filteredCredentials.length} color={STAGE_COLOR.credentials}>
-                    {filteredCredentials.map((p) => (
+                  <StaticColumn
+                    label="Credentials"
+                    color={STAGE_COLOR.credentials}
+                    items={filteredCredentials}
+                    renderItem={(p) => (
                       <OversightCard key={p.id} columnKey="credentials" person={p} onOpen={() => openWorker(p.id, "credentials")} />
-                    ))}
-                  </StaticColumn>
+                    )}
+                  />
 
-                  <StaticColumn label="Training" count={filteredTraining.length} color={STAGE_COLOR.training}>
-                    {filteredTraining.map((p) => (
+                  <StaticColumn
+                    label="Training"
+                    color={STAGE_COLOR.training}
+                    items={filteredTraining}
+                    renderItem={(p) => (
                       <OversightCard key={p.id} columnKey="training" person={p} onOpen={() => openWorker(p.id, "training")} />
-                    ))}
-                  </StaticColumn>
+                    )}
+                  />
 
-                  <StaticColumn label="Active" count={filteredActive.length} color={STAGE_COLOR.active}>
-                    {filteredActive.map((p) => (
+                  <StaticColumn
+                    label="Active"
+                    color={STAGE_COLOR.active}
+                    items={filteredActive}
+                    renderItem={(p) => (
                       <OversightCard key={p.id} columnKey="active" person={p} onOpen={() => openWorker(p.id, "overview")} />
-                    ))}
-                  </StaticColumn>
+                    )}
+                  />
                 </div>
                 <DragOverlay dropAnimation={null}>
                   {activeApplicant ? <ApplicantDragClone applicant={activeApplicant} /> : null}

@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, eachDayOfInterval, endOfWeek, format, isToday, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  MessageSquare,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { listCoordinatorShifts, type CoordinatorShiftRecord } from "@/services/coordinatorService";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  getShiftDetail,
+  listCoordinatorShifts,
+  type CoordinatorShiftRecord,
+  type ShiftDetail,
+} from "@/services/coordinatorService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -20,25 +37,46 @@ const GREEN_SOFT = "#E9F5F0";
 const SLATE = "#5B655F";
 const SLATE_SOFT = "#F0F1EE";
 
-const STATUS_STYLE: Record<string, { label: string; color: string; bg: string }> = {
+type Bucket = "active" | "scheduled" | "completed" | "cancelled" | "unassigned";
+
+const STATUS_STYLE: Record<Bucket, { label: string; color: string; bg: string }> = {
   scheduled: { label: "Scheduled", color: PLUM, bg: "var(--cc-soft)" },
-  in_progress: { label: "In progress", color: BLUE, bg: BLUE_SOFT },
-  clocked_in: { label: "In progress", color: BLUE, bg: BLUE_SOFT },
+  active: { label: "Active now", color: BLUE, bg: BLUE_SOFT },
   completed: { label: "Completed", color: GREEN, bg: GREEN_SOFT },
   cancelled: { label: "Cancelled", color: SLATE, bg: SLATE_SOFT },
   unassigned: { label: "Unassigned", color: AMBER, bg: AMBER_SOFT },
 };
 
-function statusStyle(shift: CoordinatorShiftRecord) {
-  const isUnassigned = !shift.worker_id || shift.status === "unassigned";
-  if (isUnassigned) return STATUS_STYLE.unassigned;
-  return STATUS_STYLE[shift.status ?? ""] ?? STATUS_STYLE.scheduled;
+const STATUS_FILTERS: Array<{ key: Bucket | "all"; label: string }> = [
+  { key: "all", label: "All shifts" },
+  { key: "active", label: "Active now" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "completed", label: "Completed" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "unassigned", label: "Unassigned" },
+];
+
+function bucketOf(shift: CoordinatorShiftRecord): Bucket {
+  if (!shift.worker_id || shift.status === "unassigned") return "unassigned";
+  if (shift.status === "in_progress" || shift.status === "clocked_in") return "active";
+  if (shift.status === "completed") return "completed";
+  if (shift.status === "cancelled") return "cancelled";
+  return "scheduled";
 }
 
-function formatTime(iso?: string) {
+function formatTime(iso?: string | null) {
   if (!iso) return "";
   try {
     return format(new Date(iso), "h:mmaaa").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    return format(new Date(iso), "EEE d MMM, h:mmaaa").toLowerCase();
   } catch {
     return "";
   }
@@ -48,6 +86,8 @@ export default function MDSchedulePage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [shifts, setShifts] = useState<CoordinatorShiftRecord[] | null>(null);
   const [error, setError] = useState(false);
+  const [filter, setFilter] = useState<Bucket | "all">("all");
+  const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
 
   const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 1 }), [weekStart]);
   const days = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
@@ -72,11 +112,31 @@ export default function MDSchedulePage() {
     };
   }, [weekStart, weekEnd]);
 
+  const stats = useMemo(() => {
+    const list = shifts ?? [];
+    const counts: Record<Bucket, number> = { active: 0, scheduled: 0, completed: 0, cancelled: 0, unassigned: 0 };
+    const perDay = new Map<string, number>();
+    for (const day of days) perDay.set(format(day, "yyyy-MM-dd"), 0);
+    for (const s of list) {
+      counts[bucketOf(s)]++;
+      if (s.scheduled_start) {
+        const key = format(new Date(s.scheduled_start), "yyyy-MM-dd");
+        if (perDay.has(key)) perDay.set(key, (perDay.get(key) ?? 0) + 1);
+      }
+    }
+    const total = list.length;
+    const settled = counts.completed + counts.cancelled;
+    const cancellationRate = settled > 0 ? Math.round((counts.cancelled / settled) * 100) : null;
+    const busiestCount = Math.max(0, ...Array.from(perDay.values()));
+    return { total, counts, perDay, cancellationRate, busiestCount };
+  }, [shifts, days]);
+
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, CoordinatorShiftRecord[]>();
     for (const day of days) map.set(format(day, "yyyy-MM-dd"), []);
     for (const s of shifts ?? []) {
       if (!s.scheduled_start) continue;
+      if (filter !== "all" && bucketOf(s) !== filter) continue;
       const key = format(new Date(s.scheduled_start), "yyyy-MM-dd");
       if (!map.has(key)) continue;
       map.get(key)!.push(s);
@@ -85,9 +145,13 @@ export default function MDSchedulePage() {
       list.sort((a, b) => (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? ""));
     }
     return map;
-  }, [days, shifts]);
+  }, [days, shifts, filter]);
 
-  const unassignedCount = (shifts ?? []).filter((s) => !s.worker_id || s.status === "unassigned").length;
+  const activityLog = useMemo(() => {
+    return (shifts ?? [])
+      .filter((s) => bucketOf(s) === "cancelled" || bucketOf(s) === "active")
+      .sort((a, b) => (b.scheduled_start ?? "").localeCompare(a.scheduled_start ?? ""));
+  }, [shifts]);
 
   return (
     <HubLayout>
@@ -104,9 +168,12 @@ export default function MDSchedulePage() {
             {shifts !== null && (
               <span
                 className="rounded-full px-3 py-1.5 text-[11px] font-black"
-                style={{ background: unassignedCount > 0 ? AMBER_SOFT : GREEN_SOFT, color: unassignedCount > 0 ? AMBER : GREEN }}
+                style={{
+                  background: stats.counts.unassigned > 0 ? AMBER_SOFT : GREEN_SOFT,
+                  color: stats.counts.unassigned > 0 ? AMBER : GREEN,
+                }}
               >
-                {unassignedCount > 0 ? `${unassignedCount} unassigned this week` : "Fully staffed this week"}
+                {stats.counts.unassigned > 0 ? `${stats.counts.unassigned} unassigned this week` : "Fully staffed this week"}
               </span>
             )}
             <div className="flex items-center gap-1 rounded-xl border p-1" style={{ borderColor: BORDER, background: SURFACE }}>
@@ -129,6 +196,83 @@ export default function MDSchedulePage() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Rostering pattern strip */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {([
+            { label: "Total shifts", value: stats.total, color: TEXT },
+            { label: "Active now", value: stats.counts.active, color: BLUE },
+            { label: "Completed", value: stats.counts.completed, color: GREEN },
+            { label: "Cancelled", value: stats.counts.cancelled, color: SLATE },
+            { label: "Unassigned", value: stats.counts.unassigned, color: AMBER },
+            {
+              label: "Cancellation rate",
+              value: stats.cancellationRate === null ? "—" : `${stats.cancellationRate}%`,
+              color: stats.cancellationRate !== null && stats.cancellationRate >= 15 ? "var(--cc-status-critical)" : TEXT,
+            },
+          ] as const).map((tile) => (
+            <div key={tile.label} className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, background: SURFACE }}>
+              <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{tile.label}</p>
+              <p className="mt-1 text-xl font-black" style={{ color: tile.color }}>
+                {shifts === null ? "—" : tile.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Daily load pattern */}
+        {shifts !== null && stats.total > 0 && (
+          <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Rostering pattern this week</p>
+            <div className="mt-3 grid grid-cols-7 gap-2">
+              {days.map((day) => {
+                const key = format(day, "yyyy-MM-dd");
+                const count = stats.perDay.get(key) ?? 0;
+                const heightPct = stats.busiestCount > 0 ? Math.max(8, (count / stats.busiestCount) * 100) : 8;
+                return (
+                  <div key={key} className="flex flex-col items-center gap-1.5">
+                    <div className="flex h-16 w-full items-end justify-center rounded-lg" style={{ background: SOFT }}>
+                      <div
+                        className="w-full rounded-lg"
+                        style={{
+                          height: `${heightPct}%`,
+                          background: count === stats.busiestCount && count > 0 ? PLUM : BLUE,
+                          opacity: count === 0 ? 0 : 1,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[9px] font-black uppercase" style={{ color: isToday(day) ? PLUM : MUTED }}>
+                      {format(day, "EEE")}
+                    </p>
+                    <p className="text-[10px] font-bold" style={{ color: TEXT }}>{count}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Status filter */}
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_FILTERS.map((f) => {
+            const active = filter === f.key;
+            const count = f.key === "all" ? stats.total : stats.counts[f.key as Bucket];
+            return (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className="rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors"
+                style={{
+                  borderColor: active ? PLUM : BORDER,
+                  background: active ? PLUM : SURFACE,
+                  color: active ? "#fff" : TEXT,
+                }}
+              >
+                {f.label}{shifts !== null ? ` (${count})` : ""}
+              </button>
+            );
+          })}
         </div>
 
         {error ? (
@@ -166,9 +310,15 @@ export default function MDSchedulePage() {
                     ) : (
                       <div className="space-y-1.5">
                         {dayShifts.map((s) => {
-                          const st = statusStyle(s);
+                          const bucket = bucketOf(s);
+                          const st = STATUS_STYLE[bucket];
                           return (
-                            <div key={s.id} className="rounded-lg p-2" style={{ background: st.bg }}>
+                            <button
+                              key={s.id}
+                              onClick={() => setActiveShiftId(s.id)}
+                              className="w-full rounded-lg p-2 text-left transition-transform hover:scale-[1.02]"
+                              style={{ background: st.bg }}
+                            >
                               <p className="text-[10px] font-black" style={{ color: st.color }}>
                                 {formatTime(s.scheduled_start)}
                               </p>
@@ -177,11 +327,11 @@ export default function MDSchedulePage() {
                               </p>
                               <div className="mt-0.5 flex items-center gap-1">
                                 <Users size={10} style={{ color: MUTED }} />
-                                <p className="truncate text-[10px] font-medium" style={{ color: st.color === AMBER ? AMBER : MUTED }}>
-                                  {st.label === "Unassigned" ? "Unassigned" : s.worker_name || "Worker"}
+                                <p className="truncate text-[10px] font-medium" style={{ color: bucket === "unassigned" ? AMBER : MUTED }}>
+                                  {bucket === "unassigned" ? "Unassigned" : s.worker_name || "Worker"}
                                 </p>
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -192,7 +342,203 @@ export default function MDSchedulePage() {
             })}
           </div>
         )}
+
+        {/* Activity log: cancellations + shifts in progress right now */}
+        {shifts !== null && activityLog.length > 0 && (
+          <div className="rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+            <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
+              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>
+                Activity log — active shifts &amp; cancellations this week
+              </p>
+            </div>
+            <div className="max-h-72 divide-y overflow-y-auto" style={{ borderColor: BORDER }}>
+              {activityLog.map((s) => {
+                const bucket = bucketOf(s);
+                const st = STATUS_STYLE[bucket];
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveShiftId(s.id)}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-cc-soft"
+                    style={{ borderColor: BORDER }}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: st.color }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>
+                        {s.participant_name || "Participant"} · {s.worker_name || "Unassigned"}
+                      </p>
+                      <p className="text-[10px] font-medium" style={{ color: MUTED }}>
+                        {formatDateTime(s.scheduled_start)}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black"
+                      style={{ background: st.bg, color: st.color }}
+                    >
+                      {st.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      <ShiftDetailSheet shiftId={activeShiftId} onClose={() => setActiveShiftId(null)} />
     </HubLayout>
+  );
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start gap-2.5">
+      <Icon size={14} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        <p className="text-[12px] font-semibold" style={{ color: TEXT }}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function ShiftDetailSheet({ shiftId, onClose }: { shiftId: string | null; onClose: () => void }) {
+  const [detail, setDetail] = useState<ShiftDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!shiftId) return;
+    let cancelled = false;
+    setDetail(null);
+    setError(false);
+    setLoading(true);
+    getShiftDetail(shiftId)
+      .then((data) => {
+        if (!cancelled) setDetail(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shiftId]);
+
+  const bucket = detail ? bucketOf(detail) : null;
+  const st = bucket ? STATUS_STYLE[bucket] : null;
+  const tasks = detail?.tasks ?? [];
+  const completedTasks = tasks.filter((t) => t.completed).length;
+
+  return (
+    <Sheet open={!!shiftId} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full overflow-y-auto p-6 sm:max-w-lg" style={{ background: "var(--cc-bg)" }}>
+        {loading || !detail ? (
+          <div className="space-y-3 pt-8">
+            {error ? (
+              <p className="text-[12px] font-bold" style={{ color: MUTED }}>Couldn't load this shift.</p>
+            ) : (
+              <>
+                <div className="h-6 w-2/3 animate-pulse rounded-lg" style={{ background: SOFT }} />
+                <div className="h-20 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                <div className="h-32 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-5 pt-6">
+            <div>
+              <div className="flex items-center gap-2">
+                {st && (
+                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: st.bg, color: st.color }}>
+                    {st.label}
+                  </span>
+                )}
+                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+                  {(detail.shift_type || "standard_support").replace(/_/g, " ")}
+                </span>
+              </div>
+              <h2 className="mt-2 text-lg font-black" style={{ color: TEXT }}>{detail.participant_name || "Participant"}</h2>
+              <p className="text-[12px] font-semibold" style={{ color: MUTED }}>
+                Worker: {detail.worker_name || "Unassigned"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+              <DetailRow icon={CalendarClock} label="Scheduled start" value={formatDateTime(detail.scheduled_start)} />
+              <DetailRow icon={CalendarClock} label="Scheduled end" value={formatDateTime(detail.scheduled_end)} />
+              <DetailRow icon={Clock} label="Clocked in" value={detail.clocked_in_at ? formatDateTime(detail.clocked_in_at) : "Not clocked in"} />
+              <DetailRow icon={Clock} label="Clocked out" value={detail.clocked_out_at ? formatDateTime(detail.clocked_out_at) : "Not clocked out"} />
+            </div>
+
+            {tasks.length > 0 && (
+              <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>
+                    <ClipboardList size={13} /> Shift tasks
+                  </p>
+                  <span className="text-[11px] font-bold" style={{ color: TEXT }}>{completedTasks}/{tasks.length} done</span>
+                </div>
+                <div className="mt-2.5 space-y-1.5">
+                  {tasks.map((t, i) => (
+                    <div key={t.id ?? i} className="flex items-center gap-2">
+                      <CheckCircle2 size={13} style={{ color: t.completed ? GREEN : BORDER }} />
+                      <p className="truncate text-[12px] font-medium" style={{ color: t.completed ? TEXT : MUTED }}>
+                        {t.label || t.title || "Task"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(detail.coordinator_notes || detail.visit_notes || detail.session_notes) && (
+              <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Notes on file</p>
+                <div className="mt-2 space-y-2">
+                  {detail.coordinator_notes && (
+                    <p className="text-[12px] font-medium" style={{ color: TEXT }}>
+                      <span className="font-bold">Coordinator: </span>{detail.coordinator_notes}
+                    </p>
+                  )}
+                  {detail.visit_notes && (
+                    <p className="text-[12px] font-medium" style={{ color: TEXT }}>
+                      <span className="font-bold">Visit: </span>{detail.visit_notes}
+                    </p>
+                  )}
+                  {detail.session_notes && (
+                    <p className="text-[12px] font-medium" style={{ color: TEXT }}>
+                      <span className="font-bold">Session: </span>{detail.session_notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {detail.has_risk_alerts && (
+                <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: AMBER_SOFT, color: AMBER }}>
+                  <AlertTriangle size={12} /> Risk alerts on file
+                </span>
+              )}
+              {detail.risks_acknowledged && (
+                <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: GREEN_SOFT, color: GREEN }}>
+                  <ShieldCheck size={12} /> Risks acknowledged
+                </span>
+              )}
+              {detail.conversation_id && (
+                <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: BLUE_SOFT, color: BLUE }}>
+                  <MessageSquare size={12} /> Shift chat active
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

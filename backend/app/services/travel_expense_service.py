@@ -639,6 +639,7 @@ def list_pending_for_coordinator(organization_id: str) -> list[dict[str, Any]]:
             .table("users")
             .select("id, full_name")
             .in_("id", worker_ids)
+            .eq("organization_id", organization_id)
             .execute()
         )
         for row in users_resp.data or []:
