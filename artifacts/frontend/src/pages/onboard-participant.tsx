@@ -584,6 +584,71 @@ const SEED_INTAKES: Intake[] = [
   },
 ];
 
+// ── Participant complaints (dummy — no backend yet) ──────────────────────
+
+type ComplaintStatus = "open" | "in_review" | "resolved";
+
+type ParticipantComplaint = {
+  id: string;
+  participant_name: string;
+  subject: string;
+  description: string;
+  filed_at: string;
+  status: ComplaintStatus;
+  /** What the MD did to address it — required whenever the status is moved off "open". */
+  resolution_notes?: string;
+  responded_at?: string;
+};
+
+const COMPLAINT_STATUS_META: Record<ComplaintStatus, { label: string; bg: string; color: string }> = {
+  open: { label: "Open", bg: DANGER_BG, color: DANGER },
+  in_review: { label: "In review", bg: WARNING_BG, color: WARNING },
+  resolved: { label: "Resolved", bg: SUCCESS_BG, color: SUCCESS },
+};
+
+const SEED_COMPLAINTS: ParticipantComplaint[] = [
+  {
+    id: "1",
+    participant_name: "Sam Rivera",
+    subject: "Support worker punctuality",
+    description: "Sam's family reported that the assigned support worker has arrived 20-30 minutes late to the last three scheduled visits without notice.",
+    filed_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    status: "open",
+  },
+  {
+    id: "2",
+    participant_name: "Priya Nair",
+    subject: "Missed scheduled visit",
+    description: "A community access session was missed entirely with no call ahead. Priya was left waiting for over an hour before contacting the office.",
+    filed_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    status: "open",
+  },
+  {
+    id: "3",
+    participant_name: "Priya Nair",
+    subject: "Communication concerns",
+    description: "Requested that session updates be shared with her support coordinator as agreed, but this hasn't been happening consistently.",
+    filed_at: new Date(Date.now() - 9 * 86_400_000).toISOString(),
+    status: "in_review",
+  },
+  {
+    id: "4",
+    participant_name: "Harold Whitfield",
+    subject: "Billing discrepancy",
+    description: "Eleanor (spouse) flagged that the last invoice included a support session that did not take place. Finance has been notified to review.",
+    filed_at: new Date(Date.now() - 14 * 86_400_000).toISOString(),
+    status: "in_review",
+  },
+  {
+    id: "5",
+    participant_name: "Harold Whitfield",
+    subject: "Personal care approach",
+    description: "Raised a concern about a support worker's approach during personal care. Has since been resolved after a conversation with the coordinator and a worker reassignment.",
+    filed_at: new Date(Date.now() - 21 * 86_400_000).toISOString(),
+    status: "resolved",
+  },
+];
+
 // ── List view ─────────────────────────────────────────────────────────
 // Same table layout as Staff Onboarding's PipelineListView — sortable
 // Name/Stage columns, colored stage pill, meta line, click-through row.
@@ -660,8 +725,8 @@ function ParticipantListView({
  * in-place filter, since MDs use this as a reference list on its own).
  */
 function ActiveParticipantsPage({
-  intakes, onBack, onOpen,
-}: { intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void }) {
+  intakes, onBack, onOpen, onOpenComplaints,
+}: { intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -675,9 +740,8 @@ function ActiveParticipantsPage({
   const activeTotal = intakes.filter((i) => i.status === "active").length;
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
 
-  // Dummy count for now — no complaints backend exists yet, this is just
-  // a placeholder so the mailbox widget has something to show.
-  const complaintCount = 5;
+  // No complaints backend exists yet — dummy seeded data (SEED_COMPLAINTS).
+  const complaintCount = SEED_COMPLAINTS.length;
 
   return (
     <div className="space-y-5 pb-10">
@@ -696,7 +760,12 @@ function ActiveParticipantsPage({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-[1.25rem] px-5 py-3.5" style={{ background: DANGER_BG }} title="Complaints received from participants">
+        <button
+          onClick={onOpenComplaints}
+          className="flex items-center gap-3 rounded-[1.25rem] border px-5 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+          style={{ background: DANGER_BG, borderColor: DANGER }}
+          title="View participant complaints"
+        >
           <div className="relative flex h-10 w-10 items-center justify-center rounded-xl shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: DANGER }}>
             <Mail size={18} />
             {complaintCount > 0 && (
@@ -712,7 +781,7 @@ function ActiveParticipantsPage({
             <p className="text-[22px] font-black leading-none" style={{ color: DANGER }}>{complaintCount}</p>
             <p className="mt-1.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Participant Complaints</p>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
@@ -786,6 +855,172 @@ function ActiveParticipantsPage({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dedicated page listing complaints filed by/on behalf of participants —
+ * reached by clicking the "Participant Complaints" widget on the roster
+ * page. No backend for complaints yet — dummy seeded data (SEED_COMPLAINTS).
+ */
+function ComplaintsPage({ onBack }: { onBack: () => void }) {
+  const { toast } = useToast();
+  const [allComplaints, setAllComplaints] = useState<ParticipantComplaint[]>(SEED_COMPLAINTS);
+  const [statusFilter, setStatusFilter] = useState<"all" | ComplaintStatus>("all");
+
+  // Which complaint is currently being addressed, plus its draft response.
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [draftStatus, setDraftStatus] = useState<ComplaintStatus>("in_review");
+  const [draftNotes, setDraftNotes] = useState("");
+
+  const complaints = allComplaints
+    .filter((c) => statusFilter === "all" || c.status === statusFilter)
+    .sort((a, b) => b.filed_at.localeCompare(a.filed_at));
+  const openCount = allComplaints.filter((c) => c.status === "open").length;
+
+  function startResponding(c: ParticipantComplaint) {
+    setRespondingId(c.id);
+    setDraftStatus(c.status === "open" ? "in_review" : c.status);
+    setDraftNotes(c.resolution_notes ?? "");
+  }
+
+  function cancelResponding() {
+    setRespondingId(null);
+    setDraftNotes("");
+  }
+
+  function saveResponse(id: string) {
+    // A comment is only required (and only shown) once the complaint is
+    // being marked Resolved — "In review" is just a status flag, nothing
+    // to explain yet.
+    if (draftStatus === "resolved" && !draftNotes.trim()) return;
+    setAllComplaints((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              status: draftStatus,
+              resolution_notes: draftStatus === "resolved" ? draftNotes.trim() : c.resolution_notes,
+              responded_at: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    setRespondingId(null);
+    setDraftNotes("");
+    toast({ title: "Complaint updated", description: `Marked as ${COMPLAINT_STATUS_META[draftStatus].label.toLowerCase()}.` });
+  }
+
+  return (
+    <div className="space-y-5 pb-10">
+      <div>
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+          style={{ color: MUTED, background: SOFT }}
+        >
+          <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participants
+        </button>
+        <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Participant Complaints</h1>
+        <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
+          {allComplaints.length} total · {openCount} open.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-0.5 rounded-xl p-1 w-fit" style={{ background: "#F8F7F4" }}>
+        {(["all", "open", "in_review", "resolved"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className="h-8 rounded-lg px-3 text-[11px] font-black transition-all"
+            style={{
+              background: statusFilter === s ? "white" : "transparent",
+              color: statusFilter === s ? PLUM : MUTED,
+              boxShadow: statusFilter === s ? "var(--cc-shadow-sm)" : "none",
+            }}
+          >
+            {s === "all" ? "All" : COMPLAINT_STATUS_META[s].label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+        {complaints.length === 0 ? (
+          <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>No complaints match the current filter.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {complaints.map((c) => {
+              const meta = COMPLAINT_STATUS_META[c.status];
+              const responding = respondingId === c.id;
+              return (
+                <div key={c.id} className="p-5">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={c.participant_name} size={32} color={DANGER} />
+                      <div>
+                        <p className="text-sm font-black" style={{ color: TEXT }}>{c.participant_name}</p>
+                        <p className="text-[11px] font-medium" style={{ color: MUTED }}>Filed {formatDate(c.filed_at)}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm font-bold" style={{ color: TEXT }}>{c.subject}</p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: MUTED }}>{c.description}</p>
+
+                  {c.resolution_notes && !responding && (
+                    <div className="mt-3 rounded-lg p-3" style={{ background: c.status === "resolved" ? SUCCESS_BG : WARNING_BG }}>
+                      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: c.status === "resolved" ? SUCCESS : WARNING }}>
+                        Response
+                      </p>
+                      <p className="mt-1 text-xs leading-5" style={{ color: TEXT }}>{c.resolution_notes}</p>
+                      {c.responded_at && <p className="mt-1.5 text-[10px] font-medium" style={{ color: MUTED }}>Updated {formatDate(c.responded_at)}</p>}
+                    </div>
+                  )}
+
+                  {!responding ? (
+                    <Button variant="outline" size="sm" className="mt-3 gap-1.5 rounded-lg" onClick={() => startResponding(c)}>
+                      <PenLine size={13} /> {c.status === "open" ? "Address complaint" : c.resolution_notes ? "Update response" : "Update status"}
+                    </Button>
+                  ) : (
+                    <div className="mt-3 space-y-2 rounded-lg border p-3" style={{ background: SOFT, borderColor: BORDER }}>
+                      <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Mark as</label>
+                      <Select value={draftStatus} onValueChange={(v) => setDraftStatus(v as ComplaintStatus)}>
+                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="in_review">In review</SelectItem>
+                          <SelectItem value="resolved">Resolved</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {draftStatus === "resolved" && (
+                        <>
+                          <label className="text-[10px] font-black uppercase tracking-wide block pt-1" style={{ color: MUTED }}>
+                            What did you do to solve it?
+                          </label>
+                          <Textarea
+                            value={draftNotes}
+                            onChange={(e) => setDraftNotes(e.target.value)}
+                            placeholder="e.g. Spoke with the participant's family, reassigned the support worker, and confirmed the schedule going forward."
+                            className="min-h-[80px] text-sm bg-white"
+                          />
+                        </>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="rounded-lg" onClick={cancelResponding}>Cancel</Button>
+                        <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={() => saveResponse(c.id)} disabled={draftStatus === "resolved" && !draftNotes.trim()}>
+                          <CheckCircle2 size={13} /> Save
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1058,6 +1293,12 @@ export default function ParticipantOnboardingBoard() {
     );
   }
 
+  // Dedicated complaints list, reached by clicking the "Participant
+  // Complaints" widget on the roster page.
+  if (location === "/onboard-participant/complaints") {
+    return <ComplaintsPage onBack={() => navigate("/onboard-participant/active")} />;
+  }
+
   // Dedicated full-page list, reached by clicking the "Active" column
   // header on the board — a separate page rather than an in-place filter,
   // since it's meant as a proper roster view, not a quick glance.
@@ -1067,6 +1308,7 @@ export default function ParticipantOnboardingBoard() {
         intakes={intakes}
         onBack={() => navigate("/onboard-participant")}
         onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
+        onOpenComplaints={() => navigate("/onboard-participant/complaints")}
       />
     );
   }

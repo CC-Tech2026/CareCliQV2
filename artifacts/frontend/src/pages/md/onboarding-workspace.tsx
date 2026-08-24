@@ -23,12 +23,14 @@ export default function OnboardingWorkspace() {
 
   // Hide the toggle while a participant's detail/profile view is open
   // (?intake=..., ?profile=...) or the dedicated Active Participants roster
-  // is open — all focused drill-downs, not a place to jump areas from.
+  // or complaints list is open — all focused drill-downs, not a place to
+  // jump areas from.
   const viewingDetail =
     active === "participants" &&
     (new URLSearchParams(search).has("intake") ||
       new URLSearchParams(search).has("profile") ||
-      location === "/onboard-participant/active");
+      location === "/onboard-participant/active" ||
+      location === "/onboard-participant/complaints");
 
   return (
     <HubLayout>
