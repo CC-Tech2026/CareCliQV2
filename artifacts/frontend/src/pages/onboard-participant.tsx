@@ -4,7 +4,7 @@ import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X,
+  SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,6 +54,14 @@ type IntakeStatus = "enquiry" | "screening" | "declined" | "withdrawn" | "meet_g
 type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral";
 
 type ServiceCategory = "aged_care" | "disability";
+
+type FundingType = "ndia_managed" | "plan_managed" | "self_managed";
+
+const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
+  ndia_managed: "NDIA-managed",
+  plan_managed: "Plan-managed",
+  self_managed: "Self-managed",
+};
 
 /** Aged Care is only available to participants aged 65 and over. */
 function calculateAge(dob?: string): number | null {
@@ -106,6 +114,23 @@ type Intake = {
   created_at: string;
   /** Present when this enquiry came in through the public web referral form. */
   web_intake?: WebIntakeForm;
+  /** Manual answers to the Screening checklist's judgment-call items (no data model exists for these elsewhere yet). */
+  screening_checks?: ScreeningManualChecks;
+};
+
+/**
+ * The Screening step's judgment-call items — things that can't be computed
+ * from intake data alone and need the MD (or whoever's screening) to
+ * actually check and answer. Undefined = not yet reviewed.
+ */
+type ScreeningManualChecks = {
+  language_support_ok?: boolean;
+  waitlist_open?: boolean;
+  resource_match_ok?: boolean;
+  environment_safe?: boolean;
+  /** true = no red flags found (i.e. safe to proceed) */
+  no_red_flags?: boolean;
+  red_flag_notes?: string;
 };
 
 type NextOfKinEntry = {
@@ -124,10 +149,12 @@ type WebIntakeForm = {
   pronouns?: string;
   gender?: string;
   date_of_birth?: string;
+  preferred_language?: string;
   street_address?: string;
   suburb?: string;
   state?: string;
   postcode?: string;
+  funding_type?: FundingType;
   plan_status?: string;
   plan_start?: string;
   plan_end?: string;
@@ -216,6 +243,20 @@ type BoardColumnId = (typeof BOARD_COLUMNS)[number]["id"];
 
 // Per-column accent colors — same visual language as Staff Onboarding's
 // STAGE_COLOR (colored top border + dot + tinted count pill per column).
+// Provider capacity — dummy inputs for now, since there's no live feed from
+// the Workforce/Staff directory into this page yet. Used at Screening to
+// automatically reflect whether the organisation has room to take on a new
+// participant, based on active caseload vs. what the current support worker
+// headcount can reasonably carry.
+const TOTAL_SUPPORT_WORKERS = 5;
+const MAX_CASELOAD_PER_WORKER = 6;
+
+// Rest of the provider's screening profile — same "dummy until there's a
+// real settings/config source" treatment as the capacity numbers above.
+const PROVIDER_SERVICE_STATES = ["VIC"];
+const PROVIDER_LANGUAGES = ["English", "Mandarin", "Vietnamese", "Arabic", "Punjabi"];
+const PROVIDER_ACCEPTS_NDIA_MANAGED = true;
+
 // "active" intentionally reuses the exact same green as staff's Active
 // column since it's the same underlying concept on both boards.
 const COLUMN_COLOR: Record<BoardColumnId, string> = {
@@ -469,6 +510,7 @@ const SEED_INTAKES: Intake[] = [
       suburb: "Ringwood",
       state: "VIC",
       postcode: "3134",
+      funding_type: "plan_managed",
       plan_status: "Active plan",
       plan_start: "2026-02-01",
       plan_end: "2027-01-31",
@@ -518,6 +560,7 @@ const SEED_INTAKES: Intake[] = [
       suburb: "Glen Waverley",
       state: "VIC",
       postcode: "3150",
+      funding_type: "ndia_managed",
       plan_status: "Active plan",
       plan_start: "2026-01-15",
       plan_end: "2027-01-14",
@@ -566,6 +609,7 @@ const SEED_INTAKES: Intake[] = [
       suburb: "Camberwell",
       state: "VIC",
       postcode: "3124",
+      funding_type: "self_managed",
       plan_status: "Active plan",
       plan_start: "2026-02-01",
       plan_end: "2027-01-31",
@@ -606,7 +650,11 @@ const COMPLAINT_STATUS_META: Record<ComplaintStatus, { label: string; bg: string
   resolved: { label: "Resolved", bg: SUCCESS_BG, color: SUCCESS },
 };
 
-const SEED_COMPLAINTS: ParticipantComplaint[] = [
+// Exported so HubLayout's nav badge can reflect the open-complaint count
+// without needing a shared store — this is still just the static seed
+// (no backend), so the badge won't move as complaints get addressed within
+// a session, same limitation as the rest of this local-state build.
+export const SEED_COMPLAINTS: ParticipantComplaint[] = [
   {
     id: "1",
     participant_name: "Sam Rivera",
@@ -1236,6 +1284,7 @@ export default function ParticipantOnboardingBoard() {
   const [serviceCategory, setServiceCategory] = useState<ServiceCategory>("disability");
   const [dob, setDob] = useState("");
   const [ndisNumber, setNdisNumber] = useState("");
+  const [fundingType, setFundingType] = useState<FundingType | "">("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState<EnquirySource>("online_form");
@@ -1255,13 +1304,18 @@ export default function ParticipantOnboardingBoard() {
       source,
       status: "enquiry",
       created_at: new Date().toISOString(),
-      web_intake: dob.trim()
-        ? { date_of_birth: dob, submitted_by: "Provider", submitted_at: new Date().toISOString() }
+      web_intake: dob.trim() || fundingType
+        ? {
+            date_of_birth: dob.trim() || undefined,
+            funding_type: fundingType || undefined,
+            submitted_by: "Provider",
+            submitted_at: new Date().toISOString(),
+          }
         : undefined,
     };
     setIntakes((prev) => [intake, ...prev]);
     setNewIntakeOpen(false);
-    setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setEmail(""); setPhone(""); setSource("online_form");
+    setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("online_form");
     navigate(`/onboard-participant?intake=${intake.id}`);
     toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
   }
@@ -1272,9 +1326,21 @@ export default function ParticipantOnboardingBoard() {
 
   const selected = selectedId ? intakes.find((i) => i.id === selectedId) ?? null : null;
 
+  // Current active caseload vs. what the support worker headcount can carry
+  // — drives the capacity check shown at Screening. Suspended (inactive)
+  // participants aren't counted since their service delivery is paused.
+  const currentCaseload = intakes.filter((i) => i.status === "active").length;
+  const totalCapacity = TOTAL_SUPPORT_WORKERS * MAX_CASELOAD_PER_WORKER;
+
   if (selected) {
     return (
-      <IntakeDetail intake={selected} onBack={() => navigate("/onboard-participant")} onUpdate={(patch) => updateIntake(selected.id, patch)} />
+      <IntakeDetail
+        intake={selected}
+        onBack={() => navigate("/onboard-participant")}
+        onUpdate={(patch) => updateIntake(selected.id, patch)}
+        currentCaseload={currentCaseload}
+        totalCapacity={totalCapacity}
+      />
     );
   }
 
@@ -1566,9 +1632,22 @@ export default function ParticipantOnboardingBoard() {
                   : "Aged Care is only available to participants aged 65 and over — date of birth is required to confirm eligibility."}
               </p>
             )}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>NDIS number</label>
-              <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>NDIS number</label>
+                <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Funding type</label>
+                <Select value={fundingType} onValueChange={(v) => setFundingType(v as FundingType)}>
+                  <SelectTrigger><SelectValue placeholder="Select funding type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ndia_managed">NDIA-managed</SelectItem>
+                    <SelectItem value="plan_managed">Plan-managed</SelectItem>
+                    <SelectItem value="self_managed">Self-managed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email</label>
@@ -1629,12 +1708,263 @@ export default function ParticipantOnboardingBoard() {
   );
 }
 
+type CheckState = "pass" | "fail" | "unknown";
+
+/** One category card in the Screening checklist. */
+function CheckCategory({ icon: Icon, title, children }: { icon: typeof Mail; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border p-4" style={{ background: SURFACE, borderColor: BORDER }}>
+      <div className="flex items-center gap-2 pb-2.5 mb-2.5 border-b" style={{ borderColor: BORDER }}>
+        <Icon size={14} style={{ color: PLUM }} />
+        <p className="text-xs font-black uppercase tracking-wide" style={{ color: TEXT }}>{title}</p>
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+/** One automatically-computed screening check — pass/fail/unknown derived from data already on file. */
+function CheckItem({ label, state, detail }: { label: string; state: CheckState; detail: string }) {
+  const Icon = state === "pass" ? CheckCircle2 : state === "fail" ? XCircle : AlertTriangle;
+  const color = state === "pass" ? SUCCESS : state === "fail" ? DANGER : WARNING;
+  const bg = state === "pass" ? SUCCESS_BG : state === "fail" ? DANGER_BG : WARNING_BG;
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg p-2.5" style={{ background: bg }}>
+      <Icon size={14} style={{ color }} className="shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-xs font-bold" style={{ color }}>{label}</p>
+        <p className="mt-0.5 text-[11px] leading-4" style={{ color: TEXT }}>{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+/** One judgment-call screening check the MD answers by hand — no data model exists for these yet. */
+function ManualCheckItem({
+  label, detail, value, onChange, trueLabel = "Yes", falseLabel = "No",
+}: {
+  label: string;
+  detail: string;
+  value?: boolean;
+  onChange: (v: boolean) => void;
+  trueLabel?: string;
+  falseLabel?: string;
+}) {
+  const state: CheckState = value === undefined ? "unknown" : value ? "pass" : "fail";
+  const color = state === "pass" ? SUCCESS : state === "fail" ? DANGER : WARNING;
+  const bg = state === "pass" ? SUCCESS_BG : state === "fail" ? DANGER_BG : WARNING_BG;
+  return (
+    <div className="rounded-lg p-2.5" style={{ background: bg }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-xs font-bold" style={{ color }}>{label}</p>
+          <p className="mt-0.5 text-[11px] leading-4" style={{ color: TEXT }}>{detail}</p>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button
+            onClick={() => onChange(true)}
+            className="rounded-full px-2.5 py-1 text-[10px] font-black transition-all"
+            style={{ background: value === true ? SUCCESS : "white", color: value === true ? "white" : MUTED, border: `1px solid ${value === true ? SUCCESS : BORDER}` }}
+          >
+            {trueLabel}
+          </button>
+          <button
+            onClick={() => onChange(false)}
+            className="rounded-full px-2.5 py-1 text-[10px] font-black transition-all"
+            style={{ background: value === false ? DANGER : "white", color: value === false ? "white" : MUTED, border: `1px solid ${value === false ? DANGER : BORDER}` }}
+          >
+            {falseLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The four screening categories a provider checks before deciding whether
+ * to proceed: eligibility/demographics, operational capacity, funding, and
+ * safety/risk. Items with underlying intake data are computed automatically;
+ * the rest (staff rosters, waitlists, on-the-ground risk) need a manual
+ * answer since there's no system of record for them elsewhere in the app.
+ */
+function ScreeningChecklist({
+  intake, currentCaseload, totalCapacity, onUpdateChecks,
+}: {
+  intake: Intake;
+  currentCaseload: number;
+  totalCapacity: number;
+  onUpdateChecks: (patch: Partial<ScreeningManualChecks>) => void;
+}) {
+  const wi = intake.web_intake;
+  const checks = intake.screening_checks ?? {};
+
+  // ── 1. Essential Eligibility & Demographics ──────────────────────────
+  const ageOk = intake.service_category !== "aged_care" || isAgedCareEligible(wi?.date_of_birth);
+  const locationKnown = !!wi?.state;
+  const locationOk = locationKnown ? PROVIDER_SERVICE_STATES.includes(wi!.state!.trim().toUpperCase()) : null;
+  const language = wi?.preferred_language?.trim();
+  const languageAutoOk = !language || PROVIDER_LANGUAGES.some((l) => l.toLowerCase() === language.toLowerCase());
+
+  // ── 2. Operational Capacity & Availability ───────────────────────────
+  const capacityRemaining = totalCapacity - currentCaseload;
+  const hasCapacity = capacityRemaining > 0;
+
+  // ── 3. Financial & Funding Viability ─────────────────────────────────
+  const fundingType = wi?.funding_type;
+  const fundingTypeOk = fundingType === "ndia_managed" ? PROVIDER_ACCEPTS_NDIA_MANAGED : true;
+  const planStatus = wi?.plan_status?.trim();
+  const fundingAvailable = planStatus ? planStatus.toLowerCase().includes("active") : null;
+
+  // Flat list purely for the overall readiness summary at the top — one
+  // source of truth so the banner can never drift from the cards below.
+  const results: CheckState[] = [
+    ageOk ? "pass" : "fail",
+    locationKnown ? (locationOk ? "pass" : "fail") : "unknown",
+    languageAutoOk ? "pass" : (checks.language_support_ok === undefined ? "unknown" : checks.language_support_ok ? "pass" : "fail"),
+    hasCapacity ? "pass" : "fail",
+    hasCapacity ? "pass" : (checks.waitlist_open === undefined ? "unknown" : checks.waitlist_open ? "pass" : "fail"),
+    checks.resource_match_ok === undefined ? "unknown" : checks.resource_match_ok ? "pass" : "fail",
+    fundingType ? (fundingTypeOk ? "pass" : "fail") : "unknown",
+    fundingAvailable === null ? "unknown" : fundingAvailable ? "pass" : "fail",
+    checks.environment_safe === undefined ? "unknown" : checks.environment_safe ? "pass" : "fail",
+    checks.no_red_flags === undefined ? "unknown" : checks.no_red_flags ? "pass" : "fail",
+  ];
+  const blockedCount = results.filter((r) => r === "fail").length;
+  const reviewCount = results.filter((r) => r === "unknown").length;
+  const overall: CheckState = blockedCount > 0 ? "fail" : reviewCount > 0 ? "unknown" : "pass";
+  const overallMeta = {
+    pass: { color: SUCCESS, bg: SUCCESS_BG, icon: CheckCircle2, text: "All screening criteria met — ready to proceed." },
+    fail: { color: DANGER, bg: DANGER_BG, icon: XCircle, text: `${blockedCount} ${blockedCount === 1 ? "criterion" : "criteria"} failed — cannot proceed as-is.` },
+    unknown: { color: WARNING, bg: WARNING_BG, icon: AlertTriangle, text: `${reviewCount} item${reviewCount === 1 ? "" : "s"} still need review before proceeding.` },
+  }[overall];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: overallMeta.bg }}>
+        <overallMeta.icon size={16} style={{ color: overallMeta.color }} className="shrink-0" />
+        <p className="text-xs font-bold" style={{ color: overallMeta.color }}>{overallMeta.text}</p>
+      </div>
+
+      <CheckCategory icon={User} title="1. Essential eligibility & demographics">
+        <CheckItem
+          label="Age group"
+          state={ageOk ? "pass" : "fail"}
+          detail={
+            intake.service_category === "aged_care"
+              ? ageOk
+                ? "Aged Care requires 65+ — this participant meets that."
+                : "Aged Care requires 65+ — this participant does not meet that."
+              : "Disability services have no age restriction."
+          }
+        />
+        <CheckItem
+          label="Location"
+          state={locationKnown ? (locationOk ? "pass" : "fail") : "unknown"}
+          detail={
+            locationKnown
+              ? locationOk
+                ? `${wi?.state} is within the provider's service area (${PROVIDER_SERVICE_STATES.join(", ")}).`
+                : `${wi?.state} is outside the provider's service area (${PROVIDER_SERVICE_STATES.join(", ")}).`
+              : "No address on file yet — add one to confirm this is within the service area."
+          }
+        />
+        {languageAutoOk ? (
+          <CheckItem
+            label="Language/Culture"
+            state="pass"
+            detail={language ? `${language} is supported by current staff.` : "No specific language or cultural requirement noted."}
+          />
+        ) : (
+          <ManualCheckItem
+            label="Language/Culture"
+            detail={`${language} was requested — do current staff support this, or is an interpreter available?`}
+            value={checks.language_support_ok}
+            onChange={(v) => onUpdateChecks({ language_support_ok: v })}
+          />
+        )}
+      </CheckCategory>
+
+      <CheckCategory icon={Users} title="2. Operational capacity & availability">
+        <CheckItem
+          label="Staff availability"
+          state={hasCapacity ? "pass" : "fail"}
+          detail={`${TOTAL_SUPPORT_WORKERS} support workers can carry up to ${totalCapacity} participants (${MAX_CASELOAD_PER_WORKER} each). Currently supporting ${currentCaseload}${hasCapacity ? ` — ${capacityRemaining} spot${capacityRemaining === 1 ? "" : "s"} free.` : " — no free capacity."}`}
+        />
+        {hasCapacity ? (
+          <CheckItem label="Waitlist status" state="pass" detail="Not applicable — capacity is currently available." />
+        ) : (
+          <ManualCheckItem
+            label="Waitlist status"
+            detail="At capacity — is the waitlist open, or should this referral be declined now?"
+            value={checks.waitlist_open}
+            trueLabel="Waitlist open"
+            falseLabel="Must decline"
+            onChange={(v) => onUpdateChecks({ waitlist_open: v })}
+          />
+        )}
+        <ManualCheckItem
+          label="Resource matching"
+          detail="Does the provider have the specific service type this participant needs (e.g. registered nurse vs. general support worker)?"
+          value={checks.resource_match_ok}
+          onChange={(v) => onUpdateChecks({ resource_match_ok: v })}
+        />
+      </CheckCategory>
+
+      <CheckCategory icon={FileSignature} title="3. Financial & funding viability">
+        <CheckItem
+          label="Funding type"
+          state={fundingType ? (fundingTypeOk ? "pass" : "fail") : "unknown"}
+          detail={
+            fundingType
+              ? `${FUNDING_TYPE_LABEL[fundingType]}${fundingType === "ndia_managed" && !PROVIDER_ACCEPTS_NDIA_MANAGED ? " — this provider isn't registered to accept NDIA-managed participants." : "."}`
+              : "Funding type not captured yet — add it on the Enquiry tab to confirm."
+          }
+        />
+        <CheckItem
+          label="Funding availability"
+          state={fundingAvailable === null ? "unknown" : fundingAvailable ? "pass" : "fail"}
+          detail={planStatus ? `Plan status: ${planStatus}.` : "Plan status not captured yet — add it on the Enquiry tab to confirm an active budget."}
+        />
+      </CheckCategory>
+
+      <CheckCategory icon={ShieldCheck} title="4. High-level universal safety & risk">
+        <ManualCheckItem
+          label="Environment safety"
+          detail="For home care — is the geographic area/environment considered safe for staff to enter?"
+          value={checks.environment_safe}
+          onChange={(v) => onUpdateChecks({ environment_safe: v })}
+        />
+        <ManualCheckItem
+          label="Immediate red flags"
+          detail="Any known, severe historic risks that exceed this provider's registration limits or insurance coverage?"
+          value={checks.no_red_flags}
+          trueLabel="No red flags"
+          falseLabel="Red flag found"
+          onChange={(v) => onUpdateChecks({ no_red_flags: v })}
+        />
+        {checks.no_red_flags === false && (
+          <Textarea
+            value={checks.red_flag_notes ?? ""}
+            onChange={(e) => onUpdateChecks({ red_flag_notes: e.target.value })}
+            placeholder="Describe the risk and why it exceeds registration/insurance limits…"
+            className="min-h-[70px] text-sm"
+          />
+        )}
+      </CheckCategory>
+    </div>
+  );
+}
+
 function IntakeDetail({
-  intake, onBack, onUpdate,
+  intake, onBack, onUpdate, currentCaseload, totalCapacity,
 }: {
   intake: Intake;
   onBack: () => void;
   onUpdate: (patch: Partial<Intake>) => void;
+  /** Active caseload vs. total capacity across current support workers — drives the Screening capacity check. */
+  currentCaseload: number;
+  totalCapacity: number;
 }) {
   const { toast } = useToast();
   const [declineReason, setDeclineReason] = useState("");
@@ -2010,7 +2340,15 @@ function IntakeDetail({
                   <div className="p-5 space-y-3">
                     {intake.status === "screening" ? (
                       <>
-                        <p className="text-xs" style={{ color: MUTED }}>Can this organisation take this participant on?</p>
+                        <p className="text-xs" style={{ color: MUTED }}>Can this organisation take this participant on? Check the four areas below before deciding.</p>
+
+                        <ScreeningChecklist
+                          intake={intake}
+                          currentCaseload={currentCaseload}
+                          totalCapacity={totalCapacity}
+                          onUpdateChecks={(patch) => onUpdate({ screening_checks: { ...intake.screening_checks, ...patch } })}
+                        />
+
                         <div className="pt-2 space-y-1.5">
                           <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
                           <div className="flex gap-2">
@@ -2329,16 +2667,22 @@ function formatElapsed(sec: number): string {
   return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
 }
 
-function ConsentPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+/** Radio-button option row — used for the Meet & Greet consent gate's "Consent given by" and "Method" choices. */
+function ConsentRadio({ name, label, checked, onChange }: { name: string; label: string; checked: boolean; onChange: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex-1 h-9 rounded-full text-[12px] font-bold transition-all"
-      style={active ? { background: PLUM, color: "#fff" } : { background: SURFACE, color: TEXT, border: `1px solid ${BORDER}` }}
+    <label
+      className="flex flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 cursor-pointer transition-colors"
+      style={{ background: SURFACE, border: `1px solid ${checked ? PLUM : BORDER}` }}
     >
-      {label}
-    </button>
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        className="h-4 w-4 shrink-0 accent-[var(--cc-plum)]"
+      />
+      <span className="text-[12px] font-bold" style={{ color: checked ? PLUM : TEXT }}>{label}</span>
+    </label>
   );
 }
 
@@ -2373,16 +2717,16 @@ function ConsentPanel({
       <div>
         <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Consent given by</p>
         <div className="flex gap-1.5">
-          <ConsentPill label="Participant" active={consentGivenBy === "participant"} onClick={() => onConsentGivenByChange("participant")} />
-          <ConsentPill label="Nominee" active={consentGivenBy === "nominee"} onClick={() => onConsentGivenByChange("nominee")} />
-          <ConsentPill label="Guardian" active={consentGivenBy === "guardian"} onClick={() => onConsentGivenByChange("guardian")} />
+          <ConsentRadio name="consent-given-by" label="Participant" checked={consentGivenBy === "participant"} onChange={() => onConsentGivenByChange("participant")} />
+          <ConsentRadio name="consent-given-by" label="Nominee" checked={consentGivenBy === "nominee"} onChange={() => onConsentGivenByChange("nominee")} />
+          <ConsentRadio name="consent-given-by" label="Guardian" checked={consentGivenBy === "guardian"} onChange={() => onConsentGivenByChange("guardian")} />
         </div>
       </div>
       <div>
         <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Method</p>
         <div className="flex gap-1.5">
-          <ConsentPill label="Verbal" active={consentMethod === "verbal"} onClick={() => onConsentMethodChange("verbal")} />
-          <ConsentPill label="Written" active={consentMethod === "written"} onClick={() => onConsentMethodChange("written")} />
+          <ConsentRadio name="consent-method" label="Verbal" checked={consentMethod === "verbal"} onChange={() => onConsentMethodChange("verbal")} />
+          <ConsentRadio name="consent-method" label="Written" checked={consentMethod === "written"} onChange={() => onConsentMethodChange("written")} />
         </div>
       </div>
       <label className="flex items-start gap-2 rounded-lg p-3 cursor-pointer" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -2558,7 +2902,7 @@ function IntakeFormBlock({
       {!editing && !hasAnyData ? null : (
         <>
           <IntakeFormSection icon={User} title="Patient details" {...sectionEditProps}>
-            <div className="grid sm:grid-cols-3 gap-3">
+            <div className="grid sm:grid-cols-2 gap-3">
               {editing ? (
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Service category</label>
@@ -2573,8 +2917,21 @@ function IntakeFormBlock({
               ) : (
                 <Field editing={false} label="Service category" value={serviceCategory === "aged_care" ? "Aged Care" : "Disability"} />
               )}
-              <Field editing={editing} label="Given name" value={draft.given_name} onChange={(v) => onChange({ given_name: v })} placeholder="Given name" />
-              <Field editing={editing} label="Surname" value={draft.surname} onChange={(v) => onChange({ surname: v })} placeholder="Surname" />
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Funding type</label>
+                  <Select value={draft.funding_type ?? ""} onValueChange={(v) => onChange({ funding_type: v as FundingType })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select funding type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ndia_managed">NDIA-managed</SelectItem>
+                      <SelectItem value="plan_managed">Plan-managed</SelectItem>
+                      <SelectItem value="self_managed">Self-managed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Field editing={false} label="Funding type" value={draft.funding_type ? FUNDING_TYPE_LABEL[draft.funding_type] : undefined} />
+              )}
             </div>
             {editing && serviceCategory === "aged_care" && (
               <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
@@ -2582,7 +2939,11 @@ function IntakeFormBlock({
               </p>
             )}
             <div className="grid sm:grid-cols-3 gap-3">
+              <Field editing={editing} label="Given name" value={draft.given_name} onChange={(v) => onChange({ given_name: v })} placeholder="Given name" />
+              <Field editing={editing} label="Surname" value={draft.surname} onChange={(v) => onChange({ surname: v })} placeholder="Surname" />
               <Field editing={editing} label="Preferred name" value={draft.preferred_name} onChange={(v) => onChange({ preferred_name: v })} placeholder="Preferred name" />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
               <Field editing={editing} label="Pronouns" value={draft.pronouns} onChange={(v) => onChange({ pronouns: v })} placeholder="e.g. She/her" />
               <Field editing={editing} label="Gender" value={draft.gender} onChange={(v) => onChange({ gender: v })} placeholder="Gender" />
             </div>
@@ -2593,6 +2954,13 @@ function IntakeFormBlock({
                 type="date"
                 value={draft.date_of_birth}
                 onChange={(v) => onChange({ date_of_birth: v })}
+              />
+              <Field
+                editing={editing}
+                label="Preferred language"
+                value={draft.preferred_language}
+                onChange={(v) => onChange({ preferred_language: v })}
+                placeholder="e.g. English, Mandarin"
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>

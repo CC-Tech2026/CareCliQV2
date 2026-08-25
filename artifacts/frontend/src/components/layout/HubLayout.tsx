@@ -15,6 +15,7 @@ import {
   HeartHandshake,
   ShieldCheck,
   AlertTriangle,
+  Mail,
   DollarSign,
   BarChart3,
   ClipboardCheck,
@@ -36,10 +37,37 @@ import {
   getOrganizationBranding,
   type OrganizationBranding,
 } from "@/services/organizationBrandingService";
+import { SEED_COMPLAINTS } from "@/pages/onboard-participant";
 
 // MD pages use the same CareCliQ tokens (--cc-plum pink / --cc-coral purple)
 // as the rest of the app, defined once at :root and swapped automatically by
 // the .dark class — no separate MD-only palette.
+
+// Nav badge counts, keyed by href. Still just the static seed (no backend
+// yet), so this won't move as complaints get addressed within a session —
+// same local-state limitation as the rest of the onboarding build.
+const NAV_BADGE_COUNTS: Record<string, number> = {
+  "/onboard-participant/complaints": SEED_COMPLAINTS.filter((c) => c.status === "open").length,
+};
+
+/** Small count pill shown after a nav item's label, when it has an open count. */
+function NavCountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+      style={{ background: "#DC2626" }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+/** Collapsed-sidebar equivalent — no room for a number, just a dot. */
+function NavCountDot({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "#DC2626" }} />;
+}
 
 const MD_NAV_GROUPS = [
   {
@@ -70,6 +98,7 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/md/compliance", label: "Audit & Compliance", icon: ShieldCheck },
       { href: "/md/incidents", label: "Critical Incidents", icon: AlertTriangle },
+      { href: "/onboard-participant/complaints", label: "Participant Complaints", icon: Mail },
     ],
   },
   {
@@ -430,6 +459,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <Icon size={16} />
                                 <span>{item.label}</span>
+                                <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
                               </Link>
                             );
                           })}
@@ -470,6 +500,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       >
                         <Icon size={18} />
                         <span>{item.label}</span>
+                        <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
                       </Link>
                     );
                   })}
@@ -548,6 +579,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <Icon size={16} />
                                 <span>{item.label}</span>
+                                <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
                               </Link>
                             );
                           })}
@@ -624,12 +656,19 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 }}
                                 className={
                                   sidebarCollapsed
-                                    ? `mx-auto flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${active ? "shadow-sm" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"}`
+                                    ? `relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${active ? "shadow-sm" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"}`
                                     : `flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${active ? "shadow-sm" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"}`
                                 }
                               >
                                 <Icon size={20} />
-                                {!sidebarCollapsed && <span>{item.label}</span>}
+                                {!sidebarCollapsed ? (
+                                  <>
+                                    <span>{item.label}</span>
+                                    <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                  </>
+                                ) : (
+                                  <NavCountDot count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                )}
                               </Link>
                             );
                           })}
