@@ -16,6 +16,7 @@ import {
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import CoordinatorLivePage from "@/pages/coordinator-live";
 import {
   getShiftDetail,
   listCoordinatorShifts,
@@ -99,6 +100,7 @@ function elapsedSince(iso?: string | null): string | null {
 }
 
 export default function MDSchedulePage() {
+  const [viewMode, setViewMode] = useState<"week" | "live">("week");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
@@ -184,7 +186,7 @@ export default function MDSchedulePage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {shifts !== null && (
+            {viewMode === "week" && shifts !== null && (
               <span
                 className="rounded-full px-3 py-1.5 text-[11px] font-black"
                 style={{
@@ -195,28 +197,55 @@ export default function MDSchedulePage() {
                 {stats.counts.unassigned > 0 ? `${stats.counts.unassigned} unassigned this week` : "Fully staffed this week"}
               </span>
             )}
-            <div className="flex items-center gap-1 rounded-xl border p-1" style={{ borderColor: BORDER, background: SURFACE }}>
-              <button
-                onClick={() => setWeekStart((d) => addDays(d, -7))}
-                className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
-                aria-label="Previous week"
-              >
-                <ChevronLeft size={15} style={{ color: MUTED }} />
-              </button>
-              <span className="px-2 text-[11px] font-bold" style={{ color: TEXT }}>
-                {format(weekStart, "d MMM")} - {format(weekEnd, "d MMM")}
-              </span>
-              <button
-                onClick={() => setWeekStart((d) => addDays(d, 7))}
-                className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
-                aria-label="Next week"
-              >
-                <ChevronRight size={15} style={{ color: MUTED }} />
-              </button>
+
+            {/* Week / Live toggle */}
+            <div className="flex items-center gap-0.5 rounded-xl p-1" style={{ borderColor: BORDER, background: SOFT, border: `1px solid ${BORDER}` }}>
+              {([
+                { id: "week", label: "Week" },
+                { id: "live", label: "Live" },
+              ] as const).map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setViewMode(v.id)}
+                  className="rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors"
+                  style={{
+                    background: viewMode === v.id ? PLUM : "transparent",
+                    color: viewMode === v.id ? "#fff" : MUTED,
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
             </div>
+
+            {viewMode === "week" && (
+              <div className="flex items-center gap-1 rounded-xl border p-1" style={{ borderColor: BORDER, background: SURFACE }}>
+                <button
+                  onClick={() => setWeekStart((d) => addDays(d, -7))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
+                  aria-label="Previous week"
+                >
+                  <ChevronLeft size={15} style={{ color: MUTED }} />
+                </button>
+                <span className="px-2 text-[11px] font-bold" style={{ color: TEXT }}>
+                  {format(weekStart, "d MMM")} - {format(weekEnd, "d MMM")}
+                </span>
+                <button
+                  onClick={() => setWeekStart((d) => addDays(d, 7))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
+                  aria-label="Next week"
+                >
+                  <ChevronRight size={15} style={{ color: MUTED }} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
+        {viewMode === "live" && <CoordinatorLivePage readOnly embedded />}
+
+        {viewMode === "week" && (
+        <>
         {/* Rostering pattern strip */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {([
@@ -410,6 +439,8 @@ export default function MDSchedulePage() {
               })}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
 

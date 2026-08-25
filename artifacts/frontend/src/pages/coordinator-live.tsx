@@ -246,9 +246,11 @@ function MessageModal({
 function ShiftSpecialInstructionsEditor({
   shiftId,
   initialValue,
+  readOnly = false,
 }: {
   shiftId: string;
   initialValue?: string | null;
+  readOnly?: boolean;
 }) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
@@ -274,6 +276,18 @@ function ShiftSpecialInstructionsEditor({
       setSaving(false);
     }
   };
+
+  if (readOnly) {
+    if (!initialValue) return null;
+    return (
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>
+          {translate("coordinator.live.specialInstructions")}
+        </p>
+        <p className="text-[13px] rounded-xl p-3" style={{ background: SOFT, color: TEXT }}>{initialValue}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -372,10 +386,12 @@ function ShiftDetailPanel({
   shift,
   open,
   onClose,
+  readOnly = false,
 }: {
   shift: LiveShift;
   open: boolean;
   onClose: () => void;
+  readOnly?: boolean;
 }) {
   const { translate } = useAccessibility();
   const s = liveStatusLabel(shift.live_status, translate);
@@ -465,7 +481,7 @@ function ShiftDetailPanel({
               </p>
             </div>
           )}
-          <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} />
+          <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} readOnly={readOnly} />
         </div>
       </SheetContent>
     </Sheet>
@@ -479,12 +495,14 @@ function LiveShiftCard({
   onFlag,
   onEmergency,
   onDetail,
+  readOnly = false,
 }: {
   shift: LiveShift;
   onMessage: (s: LiveShift) => void;
   onFlag: (s: LiveShift) => void;
   onEmergency: (s: LiveShift) => void;
   onDetail: (s: LiveShift) => void;
+  readOnly?: boolean;
 }) {
   const { translate, translateParams } = useAccessibility();
   const s = liveStatusLabel(shift.live_status, translate);
@@ -618,7 +636,7 @@ function LiveShiftCard({
         </div>
       )}
 
-      {/* Actions — three-dots dropdown */}
+      {/* Actions — three-dots dropdown (coordinator only; MD is read-only) */}
       <div className="flex items-center justify-between mt-1" onClick={(e) => e.stopPropagation()}>
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-colors hover:bg-black/5"
@@ -627,32 +645,34 @@ function LiveShiftCard({
         >
           <Eye size={12} /> View details
         </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="h-8 w-8 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors"
-              style={{ color: MUTED }}
-              aria-label="Shift actions"
-            >
-              <MoreVertical size={16} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onMessage(shift)}>
-              <MessageSquare size={13} className="mr-2" /> Message worker
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onFlag(shift)}>
-              <Flag size={13} className="mr-2" /> Flag issue
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600 focus:bg-red-50"
-              onClick={() => onEmergency(shift)}
-            >
-              <Zap size={13} className="mr-2" /> Emergency stop
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!readOnly && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="h-8 w-8 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors"
+                style={{ color: MUTED }}
+                aria-label="Shift actions"
+              >
+                <MoreVertical size={16} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => onMessage(shift)}>
+                <MessageSquare size={13} className="mr-2" /> Message worker
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onFlag(shift)}>
+                <Flag size={13} className="mr-2" /> Flag issue
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                onClick={() => onEmergency(shift)}
+              >
+                <Zap size={13} className="mr-2" /> Emergency stop
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );
@@ -789,7 +809,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-export default function CoordinatorLivePage({ embedded = false, externalSearch }: { embedded?: boolean; externalSearch?: string } = {}) {
+export default function CoordinatorLivePage({ embedded = false, externalSearch, readOnly = false }: { embedded?: boolean; externalSearch?: string; readOnly?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
@@ -1070,6 +1090,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
                       onFlag={setFlagShiftState}
                       onEmergency={setEmergShift}
                       onDetail={setDetailShift}
+                      readOnly={readOnly}
                     />
                   ))}
                 </div>
@@ -1102,6 +1123,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
           shift={detailShift}
           open={!!detailShift}
           onClose={() => setDetailShift(null)}
+          readOnly={readOnly}
         />
       )}
     </div>
