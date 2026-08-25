@@ -96,6 +96,65 @@ function Avatar({ name, size = 40, color = PLUM }: { name: string; size?: number
   );
 }
 
+// A click-to-browse file label that also accepts drag-and-drop. Renders the
+// same dashed-border affordance used across the onboarding sheets; `active`
+// swaps in a highlighted state while a file is being dragged over it.
+function FileDropZone({
+  onFiles, accept, multiple, active, children, className, style,
+}: {
+  onFiles: (files: File[]) => void;
+  accept?: string;
+  multiple?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  function filterAccepted(files: FileList | File[]): File[] {
+    const list = Array.from(files);
+    if (!accept) return list;
+    const patterns = accept.split(",").map((p) => p.trim().toLowerCase());
+    return list.filter((f) => {
+      const type = f.type.toLowerCase();
+      return patterns.some((p) => (p.includes("/*") ? type.startsWith(p.replace("/*", "/")) : type === p));
+    });
+  }
+
+  return (
+    <label
+      className={className}
+      style={{
+        ...style,
+        borderColor: isDragging ? PLUM : style?.borderColor,
+        background: isDragging ? "var(--cc-plum-soft)" : style?.background,
+      }}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const dropped = filterAccepted(e.dataTransfer.files);
+        if (dropped.length) onFiles(multiple ? dropped : dropped.slice(0, 1));
+      }}
+    >
+      {children}
+      <input
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files ? Array.from(e.target.files) : [];
+          if (files.length) onFiles(multiple ? files : files.slice(0, 1));
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
 // ── Hire detail (documents, signatures, invite) ──────────────────────────
 
 const STATUS_META: Record<EmployeeHire["status"], { label: string; bg: string; color: string }> = {
@@ -513,11 +572,15 @@ function HireDetail({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>File (PDF or image, optional)</label>
-              <label className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
+              <FileDropZone
+                accept="application/pdf,image/jpeg,image/png"
+                onFiles={(files) => setDocFile(files[0] ?? null)}
+                className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
+                style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}
+              >
                 <Upload size={14} />
-                {docFile ? docFile.name : "Choose file"}
-                <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
-              </label>
+                {docFile ? docFile.name : "Choose or drop a file"}
+              </FileDropZone>
             </div>
           </div>
           <SheetFooter className="gap-2 sm:gap-2">
@@ -828,25 +891,28 @@ function NewApplicantSheet({ onClose, onCreated }: { onClose: () => void; onCrea
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Resume / CV (optional)</label>
-            <label className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: resumeFile ? TEXT : MUTED }}>
+            <FileDropZone
+              accept="application/pdf,image/jpeg,image/png"
+              onFiles={(files) => setResumeFile(files[0] ?? null)}
+              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
+              style={{ borderColor: BORDER, color: resumeFile ? TEXT : MUTED }}
+            >
               <Upload size={14} />
-              {resumeFile ? resumeFile.name : "Choose file (PDF or image)"}
-              <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)} />
-            </label>
+              {resumeFile ? resumeFile.name : "Choose or drop a file (PDF or image)"}
+            </FileDropZone>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Other files (optional)</label>
-            <label className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: MUTED }}>
+            <FileDropZone
+              accept="application/pdf,image/jpeg,image/png"
+              multiple
+              onFiles={(files) => setOtherFiles((prev) => [...prev, ...files])}
+              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
+              style={{ borderColor: BORDER, color: MUTED }}
+            >
               <Upload size={14} />
-              Add cover letter, ID, or other files
-              <input
-                type="file"
-                accept="application/pdf,image/jpeg,image/png"
-                multiple
-                className="hidden"
-                onChange={(e) => setOtherFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])])}
-              />
-            </label>
+              Add or drop cover letter, ID, or other files
+            </FileDropZone>
             {otherFiles.length > 0 && (
               <div className="space-y-1">
                 {otherFiles.map((f, i) => (
@@ -1106,11 +1172,15 @@ function ApplicantDetailSheet({
                         </SelectContent>
                       </Select>
                     </div>
-                    <label className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}>
+                    <FileDropZone
+                      accept="application/pdf,image/jpeg,image/png"
+                      onFiles={(files) => setDocFile(files[0] ?? null)}
+                      className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
+                      style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}
+                    >
                       <Upload size={14} />
-                      {docFile ? docFile.name : "Choose file (PDF or image)"}
-                      <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
-                    </label>
+                      {docFile ? docFile.name : "Choose or drop a file (PDF or image)"}
+                    </FileDropZone>
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
                       <Button variant="navy" size="sm" onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
@@ -1234,6 +1304,14 @@ type OversightColumnKey = "credentials" | "training" | "active";
 function daysAgo(iso?: string | null): number | null {
   if (!iso) return null;
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function roleLabelFor(role?: string | null): string {
+  if (!role) return "—";
+  return role
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function FlagBadge({ flag }: { flag?: PipelinePerson["flag"] }) {
@@ -1457,7 +1535,7 @@ export default function StaffOnboardingBoard() {
     ...filteredInterviewApplicants.map((a): PipelineRow => ({
       id: a.id,
       name: a.full_name,
-      roleLabel: a.role === "support_coordinator" ? "Support Coordinator" : "Support Worker",
+      roleLabel: roleLabelFor(a.role),
       stageKey: "interview",
       stageLabel: a.stage === "applied" ? "Applied" : "Interview",
       color: STAGE_COLOR.interview,
@@ -1468,11 +1546,11 @@ export default function StaffOnboardingBoard() {
     })),
     ...filteredOfferLetters.map((h): PipelineRow => {
       const { meta, attention } = offerLetterMeta(h);
-      return { id: h.id, name: h.full_name, roleLabel: "—", stageKey: "offer_extended", stageLabel: "Offer letter", color: STAGE_COLOR.offer_extended, meta, attention, onOpen: () => setOpenHireId(h.id) };
+      return { id: h.id, name: h.full_name, roleLabel: roleLabelFor(h.role), stageKey: "offer_extended", stageLabel: "Offer letter", color: STAGE_COLOR.offer_extended, meta, attention, onOpen: () => setOpenHireId(h.id) };
     }),
-    ...filteredCredentials.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: "—", stageKey: "credentials", stageLabel: "Credentials", color: STAGE_COLOR.credentials, meta: oversightMeta("credentials", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "credentials") })),
-    ...filteredTraining.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: "—", stageKey: "training", stageLabel: "Training", color: STAGE_COLOR.training, meta: oversightMeta("training", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "training") })),
-    ...filteredActive.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: "—", stageKey: "active", stageLabel: "Active", color: STAGE_COLOR.active, meta: oversightMeta("active", p), attention: false, onOpen: () => openWorker(p.id, "overview") })),
+    ...filteredCredentials.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "credentials", stageLabel: "Credentials", color: STAGE_COLOR.credentials, meta: oversightMeta("credentials", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "credentials") })),
+    ...filteredTraining.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "training", stageLabel: "Training", color: STAGE_COLOR.training, meta: oversightMeta("training", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "training") })),
+    ...filteredActive.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "active", stageLabel: "Active", color: STAGE_COLOR.active, meta: oversightMeta("active", p), attention: false, onOpen: () => openWorker(p.id, "overview") })),
   ].sort((a, b) => {
     const dir = sortAsc ? 1 : -1;
     if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
