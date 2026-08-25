@@ -66,7 +66,7 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
     try:
         workers_resp = (
             supabase.table("users")
-            .select("id, full_name, email, role, is_active, onboarding_completed, joined_at, created_at")
+            .select("id, full_name, email, role, is_active, onboarding_completed, created_at")
             .eq("organization_id", organization_id)
             .eq("role", "support_worker")
             .execute()
@@ -96,7 +96,7 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
     active_col = [
         w for w in workers
         if w.get("is_active") and w.get("onboarding_completed")
-        and w.get("joined_at") and w["joined_at"] >= month_ago
+        and w.get("created_at") and w["created_at"] >= month_ago
     ]
 
     auto_deactivated_workers = [
@@ -118,7 +118,7 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
             raise
         auto_deactivated_month = 0
 
-    starting_this_week = len([w for w in workers if w.get("joined_at") and w["joined_at"] >= week_ago])
+    starting_this_week = len([w for w in workers if w.get("created_at") and w["created_at"] >= week_ago])
 
     return {
         "kpis": {
@@ -132,7 +132,7 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
             "offer_letter": offer_letter,
             "credentials": credentials_col,
             "training": training_col,
-            "active": [{**w, "flag": "complete"} for w in active_col],
+            "active": [{**w, "joined_at": w.get("created_at"), "flag": "complete"} for w in active_col],
         },
         "not_proceeding": {
             "rejected_applicants": rejected_applicants,

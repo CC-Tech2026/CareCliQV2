@@ -1546,12 +1546,23 @@ export default function StaffOnboardingBoard() {
   return (
     <>
       <div className="space-y-5 pb-10">
+        <button
+          onClick={() => navigate("/hub")}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+          style={{ color: MUTED, background: SOFT }}
+        >
+          <ArrowLeft size={13} strokeWidth={2.5} /> Back to Hub
+        </button>
+
         <div className="flex flex-wrap items-center gap-4 border-b pb-4">
           <div>
             <h1 className="text-[22px] font-black tracking-tight" style={{ color: TEXT }}>Staff Onboarding</h1>
             <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>Manage candidates from interview through activation.</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {data && (
+              <span className="hidden text-[10px] font-medium sm:inline" style={{ color: MUTED }}>{listRows.length} visible</span>
+            )}
             {pipelineQuery.dataUpdatedAt > 0 && (
               <span className="hidden items-center gap-1.5 text-[10px] font-medium sm:flex" style={{ color: MUTED }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: SUCCESS }} />
@@ -1645,10 +1656,6 @@ export default function StaffOnboardingBoard() {
                   <Rows3 size={13} /> List
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end px-1">
-              <span className="text-[10px] font-medium" style={{ color: MUTED }}>{listRows.length} visible</span>
             </div>
 
             <div className="flex items-start gap-2.5 rounded-2xl border px-4 py-3" style={{ background: "var(--cc-plum-soft)", borderColor: "#D9D2F8" }}>
