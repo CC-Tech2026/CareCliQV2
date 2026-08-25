@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
 import { changePassword, requestPasswordReset } from "@/services/userService";
+import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
 import {
   PenLine,
   Upload,
@@ -87,7 +89,7 @@ import {
 } from "@/services/organizationBrandingService";
 
 // ---------------------------------------------------------------------------
-// ABN validation — 11 digits only (optional field)
+// ABN validation: 11 digits only (optional field)
 // ---------------------------------------------------------------------------
 function isValidABNFormat(abn: string): boolean {
   const digits = abn.replace(/\s/g, "");
@@ -190,7 +192,7 @@ function PanelCard({
 }
 
 // ---------------------------------------------------------------------------
-// Sticky save/cancel bar — shown at the bottom of a section once its fields
+// Sticky save/cancel bar: shown at the bottom of a section once its fields
 // differ from the last-saved snapshot, mirroring the "Update Settings /
 // Cancel" floating bar pattern (reference screenshot, 2026-08-20).
 // ---------------------------------------------------------------------------
@@ -270,7 +272,7 @@ interface PendingInvite {
 }
 
 // -----------------------------------------------------------------------------
-// CARECLIQV2-241 — Notification Preferences section
+// CARECLIQV2-241: Notification Preferences section
 // -----------------------------------------------------------------------------
 
 const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
@@ -479,23 +481,19 @@ function NotificationsSection() {
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
-              <input
-                type="time"
-                title="Quiet hours start time"
+              <TimePicker
                 value={prefs.quiet_from}
-                onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
-                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                onChange={(v) => setPrefs((p) => ({ ...p, quiet_from: v }))}
+                className="rounded-xl px-3 text-[13px]"
                 style={{ border: "1px solid var(--cc-border)" }}
               />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
-              <input
-                type="time"
-                title="Quiet hours end time"
+              <TimePicker
                 value={prefs.quiet_to}
-                onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
-                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                onChange={(v) => setPrefs((p) => ({ ...p, quiet_to: v }))}
+                className="rounded-xl px-3 text-[13px]"
                 style={{ border: "1px solid var(--cc-border)" }}
               />
             </div>
@@ -509,7 +507,7 @@ function NotificationsSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Security Section — available to all roles
+// Security Section: available to all roles
 // -----------------------------------------------------------------------------
 
 function SecuritySection() {
@@ -896,7 +894,7 @@ function SecuritySection() {
 }
 
 // -----------------------------------------------------------------------------
-// Organisation branding (managing director only) — logo, display name, and
+// Organisation branding (managing director only): logo, display name, and
 // accent color used on onboarding-facing emails and the first-login welcome
 // screen. Deliberately scoped to those touchpoints, not a general re-skin.
 // -----------------------------------------------------------------------------
@@ -1198,15 +1196,23 @@ function NavLayoutCard() {
   );
 }
 
-// A handful of curated, tested options — not a free-form picker — so every
+// A handful of curated, tested options, not a free-form picker, so every
 // choice stays readable. "Midnight" reuses the same dark navy the
 // worker/coordinator sidebar already uses (--cc-sidebar-bg), for a look
 // that's consistent with the rest of the app rather than a one-off color.
+// "Indigo Night" is a second dark option: same near-black family as
+// Midnight, but the active pill is solid indigo instead of Midnight's
+// translucent white overlay (reference screenshot, 2026-08-20). Its hex
+// (NAV_INDIGO_NIGHT_HEX, shared with HubLayout.tsx via lib/nav-colors.ts)
+// is checked explicitly so it gets that distinct active-pill treatment
+// instead of the generic dark-background contrast fallback every other
+// dark preset uses.
 const NAV_COLOR_PRESETS: { hex: string | null; labelKey: string }[] = [
   { hex: null, labelKey: "settings.branding.navColorDefault" },
   { hex: "#E8457A", labelKey: "settings.branding.navColorPink" },
   { hex: "#6E79C2", labelKey: "settings.branding.navColorPurple" },
   { hex: "#1A1A18", labelKey: "settings.branding.navColorDark" },
+  { hex: NAV_INDIGO_NIGHT_HEX, labelKey: "settings.branding.navColorIndigoNight" },
 ];
 
 function isDarkHex(hex: string) {
@@ -1216,16 +1222,17 @@ function isDarkHex(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 < 140;
 }
 
-// Renders the nav exactly as it will actually look with this preset —
-// background AND correctly-contrasted text/active-pill bundled together —
+// Renders the nav exactly as it will actually look with this preset:
+// background and correctly-contrasted text/active-pill, bundled together,
 // so there's nothing to discover after clicking. Mirrors the real
 // Command Deck nav's own contrast logic (see HubLayout.tsx's navText/
 // navActiveBg derivation) so the preview never lies about the result.
 function NavDesignPreview({ hex }: { hex: string | null }) {
   const bg = hex ?? "var(--cc-surface)";
   const dark = hex ? isDarkHex(hex) : false;
+  const indigoNight = hex === NAV_INDIGO_NIGHT_HEX;
   const text = dark ? "rgba(255,255,255,0.85)" : "var(--cc-muted)";
-  const activeBg = dark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
+  const activeBg = indigoNight ? "#6C63FF" : dark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
 
   return (
     <div
@@ -1263,9 +1270,9 @@ function NavColorPicker() {
         {translate("settings.branding.navColorLabel")}
       </p>
       <p className="mb-3 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-        Each option is a full nav design — background and text are matched for you, so you never end up with unreadable labels.
+        Each option is a full nav design. Background and text are matched for you, so you never end up with unreadable labels.
       </p>
-      <div className="grid grid-cols-2 gap-3 max-w-md sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {NAV_COLOR_PRESETS.map((preset) => {
           const selected = current === preset.hex;
           return (
@@ -1298,7 +1305,7 @@ function NavColorPicker() {
 }
 
 // -----------------------------------------------------------------------------
-// Billing & Subscription — UI PREVIEW ONLY. No payment provider or subscription
+// Billing & Subscription: UI PREVIEW ONLY. No payment provider or subscription
 // backend exists yet; every control here is inert (local state / disabled),
 // built to show what the section could look like once that backend lands.
 // -----------------------------------------------------------------------------
@@ -1325,7 +1332,7 @@ function BillingSection() {
   const [selectedPlan, setSelectedPlan] = useState<(typeof PLAN_OPTIONS)[number]["id"]>("growth");
 
   function notConnected() {
-    toast({ title: "Not connected yet", description: "This is a design preview — no payment provider is wired up." });
+    toast({ title: "Not connected yet", description: "This is a design preview. No payment provider is wired up." });
   }
 
   return (
@@ -1496,7 +1503,7 @@ export default function Settings() {
       if (membersRes.ok) setMembers(await membersRes.json());
       if (invitesRes.ok) setInvites(await invitesRes.json());
     } catch {
-      // silently skip — team data is supplementary
+      // silently skip: team data is supplementary
     } finally {
       setLoadingTeam(false);
     }
@@ -1576,7 +1583,7 @@ export default function Settings() {
     }
 
     // Fall back to the real account name so the field is never blank on first
-    // load — the system already knows this from signup/invite, no need to
+    // load: the system already knows this from signup/invite, no need to
     // make the user retype it just because practitioner_settings has nothing yet.
     const loadedName = serverSettings.name || user?.full_name || "";
     const loadedCredentials = serverSettings.credentials ?? "";
@@ -1584,7 +1591,7 @@ export default function Settings() {
     setPractCredentials(loadedCredentials);
     setPractPristine({ name: loadedName, credentials: loadedCredentials });
 
-    const provider = serverSettings.provider as { businessName?: string | null; abn?: string | null } | null;
+    const provider = serverSettings.provider as {businessName?: string; abn?: string} | null;
     const loadedBusinessName = provider?.businessName ?? "";
     const loadedAbn = provider?.abn ?? "";
     if (provider?.businessName) setBusinessName(provider.businessName);
@@ -1734,7 +1741,7 @@ export default function Settings() {
         },
       });
     } catch {
-      // server sync failed — signature already cleared locally
+      // server sync failed: signature already cleared locally
     }
     toast({ title: translate("settings.toast.signatureRemoved"), description: translate("settings.toast.signatureRemovedDesc") });
   }, [clearCanvas, saveToServer, serverSettings, toast]);
@@ -1945,7 +1952,7 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* -- Mobile nav (outside flex row — stacks vertically on mobile) ------ */}
+      {/* -- Mobile nav (outside flex row, stacks vertically on mobile) ------ */}
       <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
         {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -1966,8 +1973,12 @@ export default function Settings() {
       <div className="flex gap-6">
 
       {/* -- Sticky sidebar ---------------------------------------------------- */}
+      {/* top-[160px] clears HubLayout's own sticky header (75px) plus its
+          floating Command Deck dock (~80px) that sit above this page on the
+          MD portal - top-0 stuck this nav underneath both of them instead of
+          below them, so scrolling looked like the nav wasn't sticking at all. */}
       <aside className="hidden lg:flex flex-col w-56 shrink-0">
-        <div className="sticky top-0 space-y-0.5">
+        <div className="sticky top-[160px] space-y-0.5">
           <p className="text-[11px] font-bold uppercase tracking-widest px-3 pb-3" style={{ color: "var(--cc-muted)" }}>
             Settings
           </p>
@@ -2016,7 +2027,7 @@ export default function Settings() {
                   <div className="flex items-center justify-between gap-4 rounded-xl px-4 py-3" style={{ background: "var(--cc-soft)" }}>
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>{translate("profile.email")}</p>
-                      <p className="mt-0.5 text-[14px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{user?.email || "—"}</p>
+                      <p className="mt-0.5 text-[14px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{user?.email || "N/A"}</p>
                     </div>
                     <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
                   </div>
@@ -2517,7 +2528,7 @@ export default function Settings() {
                           <p className="text-[11px] truncate" style={{ color: "var(--cc-muted)" }}>{m.email}</p>
                         </div>
 
-                        {/* Role selector — prevent changing own role */}
+                        {/* Role selector: prevent changing own role */}
                         {m.user_id !== user?.id ? (
                           <select
                             title="User role"
@@ -2543,7 +2554,7 @@ export default function Settings() {
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                         </span>
 
-                        {/* Remove — prevent removing self */}
+                        {/* Remove: prevent removing self */}
                         {m.user_id !== user?.id && (
                           <button
                             onClick={() => handleRemoveMember(m.id, m.full_name)}

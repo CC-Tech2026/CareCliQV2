@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { recordShiftViewed } from "@/services/notificationService";
-import { Link, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
@@ -81,6 +81,7 @@ import {
   endShift,
   clearPendingStartSession,
   getWorkerShift,
+  markShiftCannotAttend,
   updateShiftTasks,
   type ClockInRequest,
   type ShiftTask,
@@ -246,6 +247,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const params = useParams<{ id: string }>();
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate } = useAccessibility();
   const tutorial = useWorkerTutorialOptional();
@@ -270,6 +272,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
+  const [cannotAttendOpen, setCannotAttendOpen] = useState(false);
   const [validationOpen, setValidationOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
@@ -713,6 +716,28 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
+  const handleCannotAttend = async () => {
+    if (!shift) return;
+    setBusy("cannot_attend");
+    try {
+      await markShiftCannotAttend(shift.id);
+      setCannotAttendOpen(false);
+      toast({
+        title: "Your coordinator has been notified",
+        description: "This shift is now unassigned so they can arrange cover.",
+      });
+      navigate("/my-shifts");
+    } catch (err) {
+      toast({
+        title: "Could not cancel this shift",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleEndShift = async () => {
     if (!shift || busy === "end") return;
     if (isTutorialDemo) {
@@ -1088,6 +1113,37 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         />
       )}
 
+      <AlertDialog open={cannotAttendOpen} onOpenChange={setCannotAttendOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Can't make this shift?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This shift will be returned to unassigned and your coordinator will be notified
+              immediately so they can arrange cover. This can't be undone from here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "cannot_attend"}>Never mind</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleCannotAttend();
+              }}
+              disabled={busy === "cannot_attend"}
+            >
+              {busy === "cannot_attend" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Notifying…
+                </>
+              ) : (
+                "Yes, I can't make it"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1217,6 +1273,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           submissionComplete={mobileSubmitDone}
           mileageDraftRef={mileageDraftRef}
         />
+        {displayVisualState === "scheduled" && (
+          <div className="px-4 pb-4 text-center">
+            <button
+              type="button"
+              onClick={() => setCannotAttendOpen(true)}
+              className="text-xs font-bold underline decoration-dotted underline-offset-4"
+              style={{ color: MUTED }}
+            >
+              Can't make this shift?
+            </button>
+          </div>
+        )}
         {dialogs}
       </>
     );
@@ -1252,6 +1320,16 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           onEndShift={isSessionActive ? handleAttemptEndShift : undefined}
           endShiftBusy={endValidating || busy === "end"}
         />
+        {displayVisualState === "scheduled" && (
+          <button
+            type="button"
+            onClick={() => setCannotAttendOpen(true)}
+            className="text-xs font-bold underline decoration-dotted underline-offset-4 transition hover:opacity-80"
+            style={{ color: MUTED }}
+          >
+            Can't make this shift?
+          </button>
+        )}
         {workflow}
       </div>
       {dialogs}

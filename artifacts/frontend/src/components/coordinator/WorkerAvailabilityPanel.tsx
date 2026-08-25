@@ -18,6 +18,7 @@ import {
   type BlackoutDate,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
+import { TimePicker } from "@/components/ui/time-picker";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
@@ -226,21 +227,19 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("coordinator.availability.dayStart")}</p>
-                <input
-                  type="time"
+                <TimePicker
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full rounded-xl border px-3 py-1.5 text-[12px] outline-none"
+                  onChange={setStartTime}
+                  className="rounded-xl px-3 py-1.5 text-[12px]"
                   style={{ borderColor: BORDER }}
                 />
               </div>
               <div>
                 <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("coordinator.availability.dayEnd")}</p>
-                <input
-                  type="time"
+                <TimePicker
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full rounded-xl border px-3 py-1.5 text-[12px] outline-none"
+                  onChange={setEndTime}
+                  className="rounded-xl px-3 py-1.5 text-[12px]"
                   style={{ borderColor: BORDER }}
                 />
               </div>

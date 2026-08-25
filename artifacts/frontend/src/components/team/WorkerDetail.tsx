@@ -171,7 +171,7 @@ function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: st
 /** Turns a static phone/email row into something you can act on: click the value to call/email
  * (tel:/mailto:), or copy it without leaving the page. Mirrors ParticipantProfileCard's
  * conditional-link convention so contact info reads consistently across the app. */
-function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
+export function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
   const { toast } = useToast();
   return (
     <span className="group inline-flex items-center gap-1">

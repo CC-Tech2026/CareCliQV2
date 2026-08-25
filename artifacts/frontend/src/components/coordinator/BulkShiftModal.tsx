@@ -22,6 +22,8 @@ import {
 } from "@/services/coordinatorService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { TimePicker } from "@/components/ui/time-picker";
+import { DurationQuickPicks } from "@/components/ui/duration-quick-picks";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -81,6 +83,24 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
   const toggleDay = (d: number) =>
     setSelectedDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+
+  const handleSetDuration = (hours: number) => {
+    const [h, m] = startTime.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const totalMinutes = h * 60 + m + hours * 60;
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+    setEndTime(`${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`);
+  };
+
+  const activeDurationHours = (() => {
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return null;
+    let diffMinutes = (eh * 60 + em) - (sh * 60 + sm);
+    if (diffMinutes <= 0) diffMinutes += 24 * 60; // overnight shift
+    return diffMinutes % 60 === 0 ? diffMinutes / 60 : null;
+  })();
 
   const totalShifts = selectedDays.length * weeks;
 
@@ -270,29 +290,26 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.startTime")}</label>
-                  <input
-                    type="time"
+                  <TimePicker
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    title={translate("coordinator.bulkShift.startTime")}
+                    onChange={setStartTime}
                     placeholder={translate("coordinator.bulkShift.timePlaceholder")}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#E8457A]"
+                    className="rounded-xl px-3 py-2 text-[13px]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.endTime")}</label>
-                  <input
-                    type="time"
+                  <TimePicker
                     value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    title={translate("coordinator.bulkShift.endTime")}
+                    onChange={setEndTime}
                     placeholder={translate("coordinator.bulkShift.timePlaceholder")}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#E8457A]"
+                    className="rounded-xl px-3 py-2 text-[13px]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
               </div>
+              <DurationQuickPicks onSelect={handleSetDuration} activeHours={activeDurationHours} />
 
               {/* Start date & weeks */}
               <div className="grid grid-cols-2 gap-3">

@@ -44,6 +44,7 @@ export interface WorkerMessage {
   created_at: string;
   patient_id?: string;
   session_id?: string;
+  shift_id?: string;
   actions?: MessageAction[];
 }
 
@@ -65,6 +66,7 @@ async function fetchWorkerMessages(unread_only = false): Promise<{ messages: Wor
         created_at: msg.created_at,
         patient_id: msg.patient_id,
         session_id: msg.session_id,
+        shift_id: msg.shift_id,
       })),
       count: data.count || 0,
     };
@@ -85,7 +87,7 @@ async function markMessageRead(messageId: string): Promise<void> {
   }
 }
 
-async function replyToMessage(messageId: string, replyText: string): Promise<void> {  
+async function replyToMessage(messageId: string, replyText: string): Promise<void> {
   try {
     await jsonFetch(`/api/worker/messages/${messageId}/reply`, {
       method: "POST",
@@ -96,7 +98,19 @@ async function replyToMessage(messageId: string, replyText: string): Promise<voi
   }
 }
 
-function generateMessageActions(message: WorkerMessage, translate: (key: string) => string): MessageAction[] {
+async function acceptShiftOffer(shiftId: string): Promise<void> {
+  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/accept`, { method: "POST" });
+}
+
+async function declineShiftOffer(shiftId: string): Promise<void> {
+  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/decline`, { method: "POST" });
+}
+
+function generateMessageActions(
+  message: WorkerMessage,
+  translate: (key: string) => string,
+  handlers?: { onAcceptOffer?: () => void; onDeclineOffer?: () => void },
+): MessageAction[] {
   const actions: MessageAction[] = [];
 
   if (message.alert_type === "credential_expiry") {
@@ -124,6 +138,23 @@ function generateMessageActions(message: WorkerMessage, translate: (key: string)
       label: translate("notifications.panel.replyCoordinator"),
       icon: <Send size={16} />,
       variant: "primary",
+    });
+  } else if (message.alert_type === "shift_offer" && message.shift_id) {
+    actions.push({
+      id: "accept-offer",
+      type: "action",
+      label: translate("notifications.panel.acceptShift"),
+      icon: <CheckCircle2 size={16} />,
+      onClick: handlers?.onAcceptOffer,
+      variant: "primary",
+    });
+    actions.push({
+      id: "decline-offer",
+      type: "action",
+      label: translate("notifications.panel.declineShift"),
+      icon: <X size={16} />,
+      onClick: handlers?.onDeclineOffer,
+      variant: "secondary",
     });
   }
 
@@ -164,15 +195,38 @@ function MessageDetailModal({
   onRefresh?: () => void;
 }) {
   const { translate } = useAccessibility();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const relativeTime = useRelativeTime();
   const meta = getSeverityMeta(message.severity);
   const [replyText, setReplyText] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [replySent, setReplySent] = useState(false);
-  
-  const actions = generateMessageActions(message, translate);
+
   const qc = useQueryClient();
-  
+
+  const acceptOfferMut = useMutation({
+    mutationFn: () => acceptShiftOffer(message.shift_id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "worker"] });
+      onRead();
+      onClose();
+    },
+  });
+  const declineOfferMut = useMutation({
+    mutationFn: () => declineShiftOffer(message.shift_id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "worker"] });
+      onRead();
+      onClose();
+    },
+  });
+
+  const actions = generateMessageActions(message, translate, {
+    onAcceptOffer: () => acceptOfferMut.mutate(),
+    onDeclineOffer: () => declineOfferMut.mutate(),
+  });
+
   const icon =
     message.severity === "urgent" ? (
       <AlertTriangle size={24} />

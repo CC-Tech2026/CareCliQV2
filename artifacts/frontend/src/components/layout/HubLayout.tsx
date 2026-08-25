@@ -32,6 +32,7 @@ import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import {
   getOrganizationBranding,
@@ -149,11 +150,18 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   // Every preset in Settings is a full design (background + guaranteed-
   // readable foreground), not just a raw color — this derives that
   // foreground from the chosen background so text/icons never go invisible.
+  // "Indigo Night" (NAV_INDIGO_NIGHT_HEX in settings.tsx) reads exactly like
+  // every other dark preset at rest - white text, no purple wash - and only
+  // shows purple on the active pill itself. That's the whole point of the
+  // reference screenshot: purple marks "this is where you are," not a
+  // permanent tint (2026-08-20 correction - lavender-tinted resting text was
+  // the wrong read of that reference).
+  const navIsIndigoNight = prefs?.nav_color === NAV_INDIGO_NIGHT_HEX;
   const navIsDark = !!prefs?.nav_color && isDarkHex(prefs.nav_color);
   const navText = navIsDark ? "rgba(255,255,255,0.85)" : "var(--cc-muted)";
   const navTextHover = navIsDark ? "#FFFFFF" : "var(--cc-text)";
-  const navHoverBg = navIsDark ? "rgba(255,255,255,0.10)" : "var(--cc-soft)";
-  const navActiveBg = navIsDark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
+  const navHoverBg = navIsIndigoNight ? "rgba(108,99,255,0.14)" : navIsDark ? "rgba(255,255,255,0.10)" : "var(--cc-soft)";
+  const navActiveBg = navIsIndigoNight ? "#6C63FF" : navIsDark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
 
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -319,6 +327,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             >
               {isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
+
+            <Link
+              href="/settings"
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
+              aria-label="Settings"
+            >
+              <Settings size={17} />
+            </Link>
 
             <div className="mx-1 h-5 w-px bg-[var(--cc-border)] hidden sm:block" />
 

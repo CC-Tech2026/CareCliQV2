@@ -4,6 +4,7 @@ import { Plus, X, Loader2, ChevronDown, ChevronUp, Edit2, Trash2 } from "lucide-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TimePicker } from "@/components/ui/time-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -273,20 +274,18 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.availableFrom")}</Label>
-              <Input
-                type="time"
+              <TimePicker
                 value={form.due_window_start}
-                onChange={(e) => setForm((f) => ({ ...f, due_window_start: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, due_window_start: v }))}
                 className="rounded-xl h-9 text-[13px]"
               />
             </div>
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.availableUntil")}</Label>
-              <Input
-                type="time"
+              <TimePicker
                 value={form.due_window_end}
-                onChange={(e) => setForm((f) => ({ ...f, due_window_end: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, due_window_end: v }))}
                 className="rounded-xl h-9 text-[13px]"
               />
             </div>
