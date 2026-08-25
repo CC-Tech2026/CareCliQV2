@@ -802,6 +802,14 @@ async def worker_shift_cannot_attend(
         )
     except shift_offer_service.ShiftOfferError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.cannot_attend",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"reason": body.reason},
+    )
     return {"shift_id": shift_id, "shift": updated}
 
 
@@ -817,6 +825,13 @@ async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(
         updated = await shift_offer_service.accept_offer(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
     except shift_offer_service.ShiftOfferError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift_offer.accepted",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
     return {"shift_id": shift_id, "shift": updated}
 
 
@@ -841,7 +856,46 @@ async def worker_shift_offer_decline(
         )
     except shift_offer_service.ShiftOfferError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift_offer.declined",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"reason": body.reason},
+    )
     return {"shift_id": shift_id}
+
+
+@router.get("/shifts/{shift_id}/offer")
+async def worker_shift_offer_summary(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Safe, decision-only summary for a shift this worker has been offered
+    but not yet accepted or declined. Deliberately does NOT reuse
+    get_shift_detail_for_worker (worker_id-gated, full participant profile) —
+    a pending offer has no worker_id on the shift yet, so that endpoint
+    always 403s here, and even if it didn't, the full profile shouldn't be
+    visible before the worker has committed to the shift. Returns just
+    enough to decide: first name, timing, shift type."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        offer = shift_offer_service._get_pending_offer(shift_id=shift_id, worker_id=worker_id)
+    except shift_offer_service.ShiftOfferError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending offer found for this shift")
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    participant_name = (shift.get("participant_name") or "").strip()
+    return {
+        "offer_id": offer.get("id"),
+        "shift_id": shift_id,
+        "participant_first_name": participant_name.split()[0] if participant_name else None,
+        "scheduled_start": shift.get("scheduled_start"),
+        "scheduled_end": shift.get("scheduled_end"),
+        "shift_type": shift.get("shift_type"),
+        "offered_at": offer.get("offered_at"),
+    }
 
 
 def _require_shift_owner(shift_id: str, current_user: dict) -> dict:
@@ -1721,7 +1775,7 @@ async def get_worker_messages(
         # Get coordinator messages and credential reminders targeted at this worker
         query = (
             supabase.table("alerts")
-            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id")
+            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id, shift_id")
             .eq("organization_id", org_id)
             .eq("recipient_user_id", worker_id)
             .order("created_at", desc=True)

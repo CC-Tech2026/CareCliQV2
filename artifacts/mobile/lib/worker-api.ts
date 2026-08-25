@@ -291,6 +291,37 @@ export function getWorkerShift(id: string) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}`);
 }
 
+export type ShiftOfferSummary = {
+  offer_id: string;
+  shift_id: string;
+  participant_first_name: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  shift_type: string | null;
+  offered_at: string | null;
+};
+
+/** Decision-only summary for a shift this worker has been offered but not
+ * yet accepted/declined — deliberately excludes the full participant
+ * profile, which stays locked until the worker actually commits to the
+ * shift (getWorkerShift 403s until then; that's intentional, not a bug). */
+export function getShiftOfferSummary(id: string) {
+  return workerFetch<ShiftOfferSummary>(`/api/worker/shifts/${id}/offer`);
+}
+
+export function acceptShiftOffer(id: string) {
+  return workerFetch<{ shift_id: string; shift: WorkerShift }>(`/api/worker/shifts/${id}/offer/accept`, {
+    method: "POST",
+  });
+}
+
+export function declineShiftOffer(id: string, reason?: string) {
+  return workerFetch<{ shift_id: string }>(`/api/worker/shifts/${id}/offer/decline`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || null }),
+  });
+}
+
 export function clockInShift(id: string, body: ClockInRequest) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-in`, {
     method: "POST",

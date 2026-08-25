@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { fetchNotifications } from "@/services/notificationService";
 import { jsonFetch } from "@/services/http";
+import { acceptShiftOffer, declineShiftOffer } from "@/services/shiftService";
 import {
   Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
   Search, Filter, Send, ChevronRight, Zap, AlertCircle,
@@ -96,18 +97,6 @@ async function replyToMessage(messageId: string, replyText: string): Promise<voi
   } catch (error) {
     throw error;
   }
-}
-
-async function acceptShiftOffer(shiftId: string): Promise<void> {
-  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/accept`, { method: "POST" });
-}
-
-async function declineShiftOffer(shiftId: string, reason?: string): Promise<void> {
-  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/decline`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason: reason || null }),
-  });
 }
 
 function generateMessageActions(

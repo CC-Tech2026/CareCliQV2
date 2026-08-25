@@ -11,14 +11,11 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS public.shift_offers (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     shift_id        UUID        NOT NULL REFERENCES public.shifts(id) ON DELETE CASCADE,
-    organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     worker_id       UUID        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     rank            SMALLINT    NOT NULL DEFAULT 1,
     status          TEXT        NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'superseded')),
-    -- Remaining ranked worker ids to try after this one, captured once when
-    -- the coordinator sends the offer — decline/expiry pops the next id off
-    -- this array rather than re-running the matching query each time.
     candidate_queue JSONB       NOT NULL DEFAULT '[]'::jsonb,
     offered_by      UUID        NOT NULL REFERENCES public.users(id),
     offered_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -45,9 +42,6 @@ BEGIN
     END IF;
 END $$;
 
--- The alerts table has no shift reference today (only patient_id/session_id) —
--- needed so a shift-offer notification's Accept/Decline actions know which
--- shift they're acting on.
 ALTER TABLE public.alerts ADD COLUMN IF NOT EXISTS shift_id UUID REFERENCES public.shifts(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_alerts_shift_id ON public.alerts (shift_id);
 
