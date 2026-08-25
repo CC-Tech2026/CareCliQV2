@@ -1587,7 +1587,8 @@ export default function StaffOnboardingBoard() {
   }
 
   function openWorker(workerId: string, tab: string) {
-    navigate(`/team?workerId=${encodeURIComponent(workerId)}&tab=${encodeURIComponent(tab)}`);
+    const target = isHireManager ? "/md/staff" : "/team";
+    navigate(`${target}?workerId=${encodeURIComponent(workerId)}&tab=${encodeURIComponent(tab)}`);
   }
 
   function handleDragStart(event: DragStartEvent) {

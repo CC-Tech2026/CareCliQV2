@@ -3840,6 +3840,7 @@ export const en: Dict = {
   "md.staff.onTrack": "On Track",
   "md.staff.needsAttention": "Needs Attention",
   "md.staff.retentionRisk": "Retention Risk",
+  "md.staff.noData": "No data yet",
   "md.staff.filter.all": "All staff",
   "md.staff.filter.atRisk": "At risk",
   "md.staff.filter.strong": "Strong performers",

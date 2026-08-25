@@ -7,7 +7,9 @@ import {
   AlertTriangle,
   Briefcase,
   ChevronRight,
+  HeartHandshake,
   Search,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -25,8 +27,8 @@ import {
   type WorkerPipelineOverview,
   type WorkerStats,
 } from "@/services/coordinatorService";
-import { WorkerDetail } from "@/components/team/WorkerDetail";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { WorkerDetail, type WorkerDetailTab } from "@/components/team/WorkerDetail";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -34,6 +36,15 @@ const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const CTA = "var(--cc-cta)";
+const PLUM_SOFT = "var(--cc-plum-soft)";
+const GREEN = "#0F7B57";
+const INFO = "#2A5C8A";
+const AMBER = "#9A5B0A";
+const RED = "#B3261E";
+const SUCCESS_BG = "var(--cc-status-success-bg)";
+const INFO_BG = "var(--cc-status-info-bg)";
+const WARNING_BG = "var(--cc-status-warning-bg)";
+const DANGER_BG = "var(--cc-status-danger-bg)";
 
 interface StaffMember {
   id: string;
@@ -66,20 +77,30 @@ function initials(name: string) {
 }
 
 function getScoreColor(score: number) {
-  if (score >= 90) return "#0F7B57";
-  if (score >= 85) return "#2A5C8A";
-  if (score >= 70) return "#9A5B0A";
-  return "#B3261E";
+  if (score <= 0) return MUTED;
+  if (score >= 90) return GREEN;
+  if (score >= 85) return INFO;
+  if (score >= 70) return AMBER;
+  return RED;
 }
 
 function getScoreLabel(
   score: number,
   translate: (key: string) => string,
 ) {
+  if (score <= 0) return translate("md.staff.noData");
   if (score >= 90) return translate("md.staff.strongPerformer");
   if (score >= 85) return translate("md.staff.onTrack");
   if (score >= 70) return translate("md.staff.needsAttention");
   return translate("md.staff.retentionRisk");
+}
+
+function bgForScore(score: number) {
+  if (score <= 0) return SOFT;
+  if (score >= 90) return SUCCESS_BG;
+  if (score >= 85) return INFO_BG;
+  if (score >= 70) return WARNING_BG;
+  return DANGER_BG;
 }
 
 function StatusBadge({
@@ -174,6 +195,46 @@ function Metric({
   );
 }
 
+function KpiTile({
+  label,
+  value,
+  color,
+  bg,
+  icon: Icon,
+  onClick,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  bg: string;
+  icon?: typeof Users;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
+        {Icon && (
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.65)", color }}>
+            <Icon size={15} />
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
+    </>
+  );
+  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+      style={{ background: bg }}
+    >
+      {content}
+    </button>
+  );
+}
+
 function SectionHeader({
   eyebrow,
   title,
@@ -238,8 +299,37 @@ export default function MDStaffPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedWorker, setSelectedWorker] =
     useState<StaffMember | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<WorkerDetailTab | undefined>(undefined);
+  const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
   const [accountActionPending, setAccountActionPending] =
     useState<"reset" | "deactivate" | "delete" | null>(null);
+
+  function openWorker(worker: StaffMember, tab?: WorkerDetailTab) {
+    setDetailInitialTab(tab);
+    setSelectedWorker(worker);
+  }
+
+  // Deep link from other MD pages (e.g. Staff Onboarding): ?workerId=<id>&tab=credentials.
+  // One-shot: consumed into state then stripped from the URL immediately, so it can't
+  // become a "sticky" link that reopens this same worker on every future refresh.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const workerId = params.get("workerId");
+    if (!workerId) return;
+    setPendingWorkerId(workerId);
+    const tab = params.get("tab");
+    if (tab === "credentials" || tab === "documents" || tab === "availability" || tab === "training") {
+      setDetailInitialTab(tab);
+    }
+    window.history.replaceState(null, "", "/md/staff");
+  }, []);
+
+  useEffect(() => {
+    if (!pendingWorkerId || !data) return;
+    const match = data.staff_directory.find((w) => w.id === pendingWorkerId);
+    if (match) setSelectedWorker(match);
+    setPendingWorkerId(null);
+  }, [pendingWorkerId, data]);
 
   async function handleSendPasswordReset(worker: StaffMember) {
     setAccountActionPending("reset");
@@ -552,34 +642,36 @@ export default function MDStaffPage() {
                 WORKFORCE SNAPSHOT
             ===================================================== */}
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-                <p className="text-[30px] font-black leading-none" style={{ color: PLUM }}>{data.active_staff}</p>
-                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Active staff ({data.support_workers} support workers)</p>
-              </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiTile label="Active staff" value={data.active_staff} color={PLUM} bg={PLUM_SOFT} icon={Users} />
 
-              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-                <p className="text-[30px] font-black leading-none" style={{ color: getScoreColor(stats.average) }}>{stats.average}%</p>
-                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Average compliance</p>
-              </div>
+              <KpiTile
+                label="Average compliance"
+                value={`${stats.average}%`}
+                color={getScoreColor(stats.average)}
+                bg={bgForScore(stats.average)}
+                icon={ShieldCheck}
+              />
 
-              <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-                <p className="text-[30px] font-black leading-none" style={{ color: "#0F7B57" }}>{data.staff_retention_rate}%</p>
-                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Retention</p>
-              </div>
+              <KpiTile
+                label="Retention"
+                value={`${data.staff_retention_rate}%`}
+                color={getScoreColor(data.staff_retention_rate)}
+                bg={bgForScore(data.staff_retention_rate)}
+                icon={HeartHandshake}
+              />
 
-              <button
-                onClick={() => {
-                  if (stats.atRisk.length === 0) return;
+              <KpiTile
+                label="Needs attention"
+                value={stats.atRisk.length}
+                color={stats.atRisk.length > 0 ? RED : GREEN}
+                bg={stats.atRisk.length > 0 ? DANGER_BG : SUCCESS_BG}
+                icon={AlertTriangle}
+                onClick={stats.atRisk.length > 0 ? () => {
                   setFilter("at_risk");
                   document.getElementById("staff-directory")?.scrollIntoView({ behavior: "smooth" });
-                }}
-                className="rounded-2xl border bg-white p-5 text-left transition-colors hover:bg-cc-soft"
-                style={{ borderColor: BORDER }}
-              >
-                <p className="text-[30px] font-black leading-none" style={{ color: stats.atRisk.length > 0 ? "#B3261E" : "#0F7B57" }}>{stats.atRisk.length}</p>
-                <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>Needs attention (below 85%)</p>
-              </button>
+                } : undefined}
+              />
             </div>
 
             {/* =====================================================
@@ -732,7 +824,7 @@ export default function MDStaffPage() {
                           <button
                             key={worker.id}
                             onClick={() =>
-                              setSelectedWorker(worker)
+                              openWorker(worker)
                             }
                             className="group grid w-full grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_130px_24px] items-center gap-4 border-b px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
                             style={{
@@ -1018,10 +1110,14 @@ export default function MDStaffPage() {
 
         <Sheet open={!!selectedWorker} onOpenChange={(open) => { if (!open) setSelectedWorker(null); }}>
           <SheetContent side="right" className="w-full overflow-y-auto p-6 sm:max-w-4xl" style={{ background: "var(--cc-bg)" }}>
+            <SheetHeader className="sr-only">
+              <SheetTitle>{selectedWorker ? `${selectedWorker.full_name} · staff profile` : "Staff profile"}</SheetTitle>
+            </SheetHeader>
             {selectedWorker && (
               selectedWorkerStats ? (
                 <WorkerDetail
                   worker={selectedWorkerStats}
+                  initialTab={detailInitialTab}
                   onBack={() => setSelectedWorker(null)}
                   onSendPasswordReset={() => handleSendPasswordReset(selectedWorker)}
                   onDeactivate={() => handleDeactivate(selectedWorker)}

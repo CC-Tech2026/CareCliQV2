@@ -47,7 +47,7 @@ const CARD_SHADOW = "var(--cc-card-shadow)";
 // button renders for it) purely so an old bookmarked ?tab=overview deep link
 // still resolves to something - it's treated as an alias for "personal"
 // wherever tab is read, rather than the two staying separate tabs.
-type WorkerDetailTab = "overview" | "personal" | "documents" | "credentials" | "availability" | "training" | "induction" | "shifts" | "participants";
+export type WorkerDetailTab = "overview" | "personal" | "documents" | "credentials" | "availability" | "training" | "induction" | "shifts" | "participants";
 
 const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
   "personal", "shifts", "participants", "documents", "credentials", "availability", "training", "induction",
