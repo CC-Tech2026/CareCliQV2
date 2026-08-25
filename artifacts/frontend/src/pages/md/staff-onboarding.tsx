@@ -1422,7 +1422,7 @@ function PipelineListView({
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="grid grid-cols-[1fr_140px_140px_1fr_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
+      <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
         <SortHeader label="Candidate" k="name" />
         <SortHeader label="Role" k="name" className="hidden sm:flex" />
         <SortHeader label="Stage" k="stage" />
@@ -1437,7 +1437,7 @@ function PipelineListView({
             <div
               key={row.id}
               onClick={row.onOpen}
-              className={`grid grid-cols-[1fr_140px_140px_1fr_40px] items-center gap-3 px-5 py-3 transition-colors ${row.onOpen ? "cursor-pointer hover:bg-black/[0.02]" : ""}`}
+              className={`group grid grid-cols-[1fr_140px_140px_1fr_76px] items-center gap-3 px-5 py-3.5 transition-colors ${row.onOpen ? "cursor-pointer hover:bg-black/[0.025]" : ""}`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={row.name} size={30} color={row.color} />
@@ -1451,18 +1451,22 @@ function PipelineListView({
               <p className="hidden truncate text-[11px] font-medium md:flex md:items-center md:gap-1" style={{ color: row.attention ? WARNING : MUTED }}>
                 {row.attention && <AlertCircle size={11} />} {row.meta}
               </p>
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-1">
                 {row.onReject && (
                   <button
                     onClick={(e) => { e.stopPropagation(); row.onReject?.(); }}
                     aria-label={`Reject ${row.name}`}
                     title="Reject"
-                    className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/5"
                   >
                     <X size={13} style={{ color: MUTED }} />
                   </button>
                 )}
-                {row.onOpen && <ArrowRight size={14} style={{ color: "#B8B4B0" }} />}
+                {row.onOpen && (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors group-hover:bg-black/5">
+                    <ArrowRight size={14} style={{ color: "#B8B4B0" }} className="transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                )}
               </div>
             </div>
           ))}
