@@ -102,8 +102,12 @@ async function acceptShiftOffer(shiftId: string): Promise<void> {
   await jsonFetch(`/api/worker/shifts/${shiftId}/offer/accept`, { method: "POST" });
 }
 
-async function declineShiftOffer(shiftId: string): Promise<void> {
-  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/decline`, { method: "POST" });
+async function declineShiftOffer(shiftId: string, reason?: string): Promise<void> {
+  await jsonFetch(`/api/worker/shifts/${shiftId}/offer/decline`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: reason || null }),
+  });
 }
 
 function generateMessageActions(
@@ -202,6 +206,8 @@ function MessageDetailModal({
   const [replyText, setReplyText] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [replySent, setReplySent] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
 
   const qc = useQueryClient();
 
@@ -214,7 +220,7 @@ function MessageDetailModal({
     },
   });
   const declineOfferMut = useMutation({
-    mutationFn: () => declineShiftOffer(message.shift_id!),
+    mutationFn: () => declineShiftOffer(message.shift_id!, declineReason.trim()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "worker"] });
       onRead();
@@ -224,7 +230,7 @@ function MessageDetailModal({
 
   const actions = generateMessageActions(message, translate, {
     onAcceptOffer: () => acceptOfferMut.mutate(),
-    onDeclineOffer: () => declineOfferMut.mutate(),
+    onDeclineOffer: () => setIsDeclining(true),
   });
 
   const icon =
@@ -401,6 +407,47 @@ function MessageDetailModal({
                     style={{ background: PLUM }}
                   >
                     {replySent ? translate("notifications.panel.sent") : translate("notifications.panel.sendReply")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Decline Offer Form */}
+            {isDeclining && message.alert_type === "shift_offer" && (
+              <div
+                className="mb-4 p-3 rounded-lg border"
+                style={{ background: SOFT, borderColor: BORDER }}
+              >
+                <p className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>
+                  {translate("notifications.panel.declineReasonTitle")}
+                </p>
+                <textarea
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder={translate("notifications.panel.declineReasonPlaceholder")}
+                  className="w-full p-2.5 rounded border text-[13px] resize-none focus:outline-none focus:ring-2"
+                  style={{
+                    borderColor: BORDER,
+                    "--tw-ring-color": `${PLUM}20`,
+                  } as any}
+                  rows={2}
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => { setIsDeclining(false); setDeclineReason(""); }}
+                    disabled={declineOfferMut.isPending}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors disabled:opacity-50"
+                    style={{ background: BORDER, color: TEXT }}
+                  >
+                    {translate("common.cancel")}
+                  </button>
+                  <button
+                    onClick={() => declineOfferMut.mutate()}
+                    disabled={declineOfferMut.isPending}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors text-white disabled:opacity-50"
+                    style={{ background: PLUM }}
+                  >
+                    {translate("notifications.panel.declineShift")}
                   </button>
                 </div>
               </div>

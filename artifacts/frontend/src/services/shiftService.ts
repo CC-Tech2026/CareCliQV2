@@ -377,10 +377,10 @@ export function clockOutShift(id: string) {
 /** Worker-initiated cancellation — vacates the shift back to unassigned and
  * notifies coordinators. Never auto-reassigns; a coordinator has to pick
  * (or offer) a replacement from the roster. */
-export function markShiftCannotAttend(id: string) {
+export function markShiftCannotAttend(id: string, reason?: string) {
   return jsonFetch<{ shift_id: string; shift: Record<string, unknown> }>(
     `/api/worker/shifts/${id}/cannot-attend`,
-    { method: "PATCH" },
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason || null }) },
   );
 }
 

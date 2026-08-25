@@ -490,6 +490,7 @@ export type CoordinatorShiftRecord = {
   participant_name?: string;
   worker_name?: string;
   worker_email?: string;
+  cannot_attend_reason?: string | null;
   created_at?: string;
   updated_at?: string;
 };

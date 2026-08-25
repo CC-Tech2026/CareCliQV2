@@ -20,6 +20,7 @@ import {
   BarChart3,
   ClipboardCheck,
   GraduationCap,
+  MessageSquareWarning,
   Menu,
   X,
   Bell,
@@ -100,6 +101,7 @@ const MD_NAV_GROUPS = [
       { href: "/md/compliance", label: "Audit & Compliance", icon: ShieldCheck },
       { href: "/md/incidents", label: "Critical Incidents", icon: AlertTriangle },
       { href: "/onboard-participant/complaints", label: "Participant Complaints", icon: Mail },
+      { href: "/feedback-reports", label: "Feedback & Reports", icon: MessageSquareWarning },
     ],
   },
   {

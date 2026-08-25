@@ -28,6 +28,7 @@ import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
 import Incidents from "@/pages/incidents";
 import IncidentNew from "@/pages/incident-new";
+import FeedbackReports from "@/pages/feedback-reports";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
@@ -521,6 +522,15 @@ function Router() {
       {/* Legacy nav links still point here — keep redirect so workers don't hit a blank 404 */}
       <Route path="/incident-new">
         <Redirect to="/incidents/new" />
+      </Route>
+
+      {/* ── Feedback & Reports ───────────────────────────────────────────── */}
+      {/* All roles — any staff member can submit; backend scopes the list to
+          own reports for support_worker, org-wide for coordinator/MD. */}
+      <Route path="/feedback-reports">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <RoleAwareShell><FeedbackReports /></RoleAwareShell>
+        </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/:id">

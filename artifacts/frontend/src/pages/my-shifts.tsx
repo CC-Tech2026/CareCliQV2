@@ -170,7 +170,7 @@ export default function MyShifts() {
           {translate("common.supportWorker")}
         </p>
         <h1 className="mt-0.5 text-2xl font-black tracking-tight text-cc-text">
-          {translate(greetingKey)}, {firstName} 👋
+          {translate(greetingKey)}, {firstName}
         </h1>
         <p className="mt-1 text-sm font-medium text-cc-muted">{dateLabel}</p>
       </header>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -164,7 +164,7 @@ export function LongShiftCheckInForm({ open, onClose, onSubmit, busy, tasks = []
                   background: hasIncident === true ? "#FEF2F2" : "var(--cc-surface)",
                 }}
               >
-                <span>🚨</span>
+                <TriangleAlert size={16} style={{ color: "#EF4444" }} />
                 Yes — report
               </button>
             </div>

@@ -273,6 +273,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [cannotAttendOpen, setCannotAttendOpen] = useState(false);
+  const [cannotAttendReason, setCannotAttendReason] = useState("");
   const [validationOpen, setValidationOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
@@ -720,8 +721,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (!shift) return;
     setBusy("cannot_attend");
     try {
-      await markShiftCannotAttend(shift.id);
+      await markShiftCannotAttend(shift.id, cannotAttendReason.trim());
       setCannotAttendOpen(false);
+      setCannotAttendReason("");
       toast({
         title: "Your coordinator has been notified",
         description: "This shift is now unassigned so they can arrange cover.",
@@ -1113,7 +1115,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         />
       )}
 
-      <AlertDialog open={cannotAttendOpen} onOpenChange={setCannotAttendOpen}>
+      <AlertDialog
+        open={cannotAttendOpen}
+        onOpenChange={(open) => {
+          setCannotAttendOpen(open);
+          if (!open) setCannotAttendReason("");
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Can't make this shift?</AlertDialogTitle>
@@ -1122,6 +1130,19 @@ export default function MyShiftDetail({ id: idProp }: Props) {
               immediately so they can arrange cover. This can't be undone from here.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="px-1 pb-2">
+            <label className="mb-1.5 block text-xs font-bold" style={{ color: TEXT }}>
+              Let your coordinator know why (optional)
+            </label>
+            <textarea
+              value={cannotAttendReason}
+              onChange={(e) => setCannotAttendReason(e.target.value)}
+              placeholder="e.g. Sick, car trouble, family emergency…"
+              rows={3}
+              className="w-full rounded-lg border p-2.5 text-sm outline-none focus:ring-2"
+              style={{ borderColor: BORDER, "--tw-ring-color": `${PLUM}20` } as any}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy === "cannot_attend"}>Never mind</AlertDialogCancel>
             <AlertDialogAction

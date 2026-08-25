@@ -193,7 +193,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                     },
                   ]}
                 >
-                  <Text style={styles.moodEmoji}>🚨</Text>
+                  <Feather name="alert-triangle" size={16} color={colors.destructive} />
                   <Text style={[styles.incidentText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                     Yes — report
                   </Text>

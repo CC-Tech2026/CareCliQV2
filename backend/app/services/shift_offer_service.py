@@ -40,7 +40,9 @@ def _fetch_shift(shift_id: str) -> dict[str, Any]:
     return shift
 
 
-async def mark_cannot_attend(*, shift_id: str, worker_id: str, org_id: str) -> dict[str, Any]:
+async def mark_cannot_attend(
+    *, shift_id: str, worker_id: str, org_id: str, reason: Optional[str] = None
+) -> dict[str, Any]:
     """Worker vacates a shift they're assigned to. Mirrors coordinator.py's
     unassign_existing_shift exactly (worker_id=None, status='unassigned'),
     but from the worker's own side and scoped to their own assignment."""
@@ -50,11 +52,17 @@ async def mark_cannot_attend(*, shift_id: str, worker_id: str, org_id: str) -> d
     if str(shift.get("worker_id") or "") != worker_id:
         raise ShiftOfferError("You are not assigned to this shift")
 
+    reason = (reason or "").strip() or None
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     result = (
         supabase.table("shifts")
-        .update({"worker_id": None, "status": "unassigned", "updated_at": now})
+        .update({
+            "worker_id": None,
+            "status": "unassigned",
+            "cannot_attend_reason": reason,
+            "updated_at": now,
+        })
         .eq("id", shift_id)
         .eq("worker_id", worker_id)
         .execute()
@@ -63,7 +71,7 @@ async def mark_cannot_attend(*, shift_id: str, worker_id: str, org_id: str) -> d
         raise ShiftOfferError("Shift was already reassigned")
     updated = result.data[0]
 
-    await notify_worker_cannot_attend(shift={**shift, **updated})
+    await notify_worker_cannot_attend(shift={**shift, **updated}, reason=reason)
     return updated
 
 
@@ -139,7 +147,7 @@ async def _advance_or_close(
     off the queue, or notify coordinators the queue is exhausted."""
     queue: list[str] = list(prior.get("candidate_queue") or [])
     if not queue:
-        await notify_shift_offer_exhausted(shift=shift)
+        await notify_shift_offer_exhausted(shift=shift, reason=prior.get("decline_reason"))
         return None
 
     next_worker_id, *rest = queue
@@ -171,22 +179,26 @@ def _get_pending_offer(*, shift_id: str, worker_id: str) -> dict[str, Any]:
     return rows[0]
 
 
-async def decline_offer(*, shift_id: str, worker_id: str, org_id: str) -> None:
+async def decline_offer(
+    *, shift_id: str, worker_id: str, org_id: str, reason: Optional[str] = None
+) -> None:
     offer = _get_pending_offer(shift_id=shift_id, worker_id=worker_id)
+    reason = (reason or "").strip() or None
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     result = (
         supabase.table("shift_offers")
-        .update({"status": "declined", "responded_at": now})
+        .update({"status": "declined", "decline_reason": reason, "responded_at": now})
         .eq("id", offer["id"])
         .eq("status", "pending")
         .execute()
     )
     if not result.data:
         raise ShiftOfferError("Offer already responded to")
+    declined = result.data[0]
 
     shift = _fetch_shift(shift_id)
-    await _advance_or_close(shift=shift, org_id=org_id, offered_by=offer["offered_by"], prior=offer)
+    await _advance_or_close(shift=shift, org_id=org_id, offered_by=offer["offered_by"], prior=declined)
 
 
 async def accept_offer(*, shift_id: str, worker_id: str, org_id: str) -> dict[str, Any]:
@@ -212,7 +224,12 @@ async def accept_offer(*, shift_id: str, worker_id: str, org_id: str) -> dict[st
 
     assigned = (
         supabase.table("shifts")
-        .update({"worker_id": worker_id, "status": "scheduled", "updated_at": now})
+        .update({
+            "worker_id": worker_id,
+            "status": "scheduled",
+            "cannot_attend_reason": None,
+            "updated_at": now,
+        })
         .eq("id", shift_id)
         .is_("worker_id", "null")
         .execute()

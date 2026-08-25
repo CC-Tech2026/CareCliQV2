@@ -387,7 +387,9 @@ async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str,
     )
 
 
-async def notify_worker_cannot_attend(*, shift: dict[str, Any]) -> list[dict[str, Any]]:
+async def notify_worker_cannot_attend(
+    *, shift: dict[str, Any], reason: Optional[str] = None
+) -> list[dict[str, Any]]:
     """Reverse of notify_shift_cancelled — a worker vacated a shift they were
     assigned to, so every coordinator in the org needs to know it's now
     unassigned. Deep-links straight into the reassignment panel rather than
@@ -398,6 +400,9 @@ async def notify_worker_cannot_attend(*, shift: dict[str, Any]) -> list[dict[str
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
     shift_id = str(shift.get("id") or "")
+    message = f"A worker can't make their shift: {start_label} with {participant}."
+    if reason:
+        message += f' Reason given: "{reason}"'
     results = []
     for coord_id in _org_coordinator_user_ids(org_id):
         results.append(await notify_worker(
@@ -405,7 +410,7 @@ async def notify_worker_cannot_attend(*, shift: dict[str, Any]) -> list[dict[str
             org_id=org_id,
             event="worker_cannot_attend",
             title="Shift needs reassigning",
-            message=f"A worker can't make their shift: {start_label} with {participant}.",
+            message=message,
             reference_key=f"shift:{shift_id}:cannot_attend",
             severity="high",
             action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
@@ -442,7 +447,9 @@ async def notify_shift_offer(*, shift: dict[str, Any], worker_id: str, rank: int
     )
 
 
-async def notify_shift_offer_exhausted(*, shift: dict[str, Any]) -> list[dict[str, Any]]:
+async def notify_shift_offer_exhausted(
+    *, shift: dict[str, Any], reason: Optional[str] = None
+) -> list[dict[str, Any]]:
     """Every candidate in the offer queue declined or timed out — coordinators
     need to assign manually now."""
     org_id = str(shift.get("organization_id") or "")
@@ -451,6 +458,9 @@ async def notify_shift_offer_exhausted(*, shift: dict[str, Any]) -> list[dict[st
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
     shift_id = str(shift.get("id") or "")
+    message = f"Every suggested worker declined or didn't respond: {start_label} with {participant}. Please assign manually."
+    if reason:
+        message += f' Last decline reason: "{reason}"'
     results = []
     for coord_id in _org_coordinator_user_ids(org_id):
         results.append(await notify_worker(
@@ -458,7 +468,7 @@ async def notify_shift_offer_exhausted(*, shift: dict[str, Any]) -> list[dict[st
             org_id=org_id,
             event="shift_offer_exhausted",
             title="No one accepted the shift offer",
-            message=f"Every suggested worker declined or didn't respond: {start_label} with {participant}. Please assign manually.",
+            message=message,
             reference_key=f"shift:{shift_id}:offer_exhausted",
             severity="high",
             action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",

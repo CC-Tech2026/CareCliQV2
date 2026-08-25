@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
@@ -90,8 +91,8 @@ export function ProtectedRoute({
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-cc-surface p-8 shadow-sm text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-3xl">
-            🔒
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <Lock size={28} className="text-gray-500" />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">

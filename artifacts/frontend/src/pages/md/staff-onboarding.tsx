@@ -25,7 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronUp, Clock, Clock3, CheckCircle2,
-  Copy, FileSignature, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail, PenLine,
+  Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail,
   Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -113,58 +113,12 @@ const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = 
   other: { label: "Other", icon: FileText },
 };
 
-const STEPS = [
-  { key: "details", label: "Details", icon: UserPlus },
-  { key: "documents", label: "Documents", icon: FileSignature },
-  { key: "signatures", label: "Signatures", icon: PenLine },
-  { key: "invite", label: "Invite sent", icon: Mail },
-] as const;
-
-function stepIndexForStatus(status: EmployeeHire["status"]): number {
-  switch (status) {
-    case "draft": return 1;
-    case "awaiting_signatures": return 2;
-    case "signed": return 2;
-    case "invited": return 3;
-    case "completed": return 3;
-    default: return 0;
-  }
-}
-
 function StatusBadge({ status }: { status: EmployeeHire["status"] }) {
   const meta = STATUS_META[status];
   return (
     <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
       {meta.label}
     </span>
-  );
-}
-
-function HireProgressTracker({ status }: { status: EmployeeHire["status"] }) {
-  const active = stepIndexForStatus(status);
-  return (
-    <div className="flex items-start">
-      {STEPS.map((s, i) => {
-        const Icon = s.icon;
-        const done = i < active;
-        const current = i === active;
-        const last = i === STEPS.length - 1;
-        return (
-          <div key={s.key} className={`flex items-center ${last ? "shrink-0" : "flex-1"}`}>
-            <div className="flex shrink-0 flex-col items-center gap-1.5">
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded-full"
-                style={{ background: done ? SUCCESS : current ? PLUM : SOFT, color: done || current ? "#fff" : MUTED }}
-              >
-                {done ? <CheckCircle2 size={14} /> : <Icon size={13} />}
-              </div>
-              <p className="whitespace-nowrap text-[10px] font-bold" style={{ color: current ? TEXT : MUTED }}>{s.label}</p>
-            </div>
-            {!last && <div className="mx-2 mb-4 h-[2px] flex-1" style={{ background: i < active ? SUCCESS : BORDER }} />}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -386,9 +340,6 @@ function HireDetail({
               {hire.email}{hire.phone ? ` · ${hire.phone}` : ""} · <span className="capitalize">{hire.role.replace(/_/g, " ")}</span>
             </p>
           </div>
-        </div>
-        <div className="mt-5">
-          <HireProgressTracker status={hire.status} />
         </div>
       </div>
 
@@ -936,19 +887,6 @@ const APPLICANT_STAGE_STEPS = [
   { key: "offer_extended", label: "Offer extended" },
 ] as const;
 
-function ApplicantStageTracker({ stage }: { stage: ApplicantStage }) {
-  const active = APPLICANT_STAGE_STEPS.findIndex((s) => s.key === stage);
-  return (
-    <div className="flex items-start gap-2">
-      {APPLICANT_STAGE_STEPS.map((s, i) => (
-        <div key={s.key} className="min-w-0 flex-1">
-          <div className="h-1.5 rounded-full" style={{ background: i <= active ? PLUM : SOFT }} />
-          <p className="mt-1.5 truncate text-[10px] font-bold" style={{ color: i === active ? TEXT : MUTED }}>{s.label}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function ApplicantDetailSheet({
   applicant, applicants, onClose, onNavigate, isHireManager, movePending, onMoveStage, onReject,
@@ -1108,9 +1046,6 @@ function ApplicantDetailSheet({
                   })}
                 </div>
               )}
-            </div>
-            <div className="mt-3">
-              <ApplicantStageTracker stage={applicant.stage} />
             </div>
           </div>
 
@@ -1712,19 +1647,7 @@ export default function StaffOnboardingBoard() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 px-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Onboarding flow</p>
-                <div className="hidden items-center gap-1 md:flex">
-                  {[["Interview", STAGE_COLOR.interview], ["Offer", STAGE_COLOR.offer_extended], ["Credentials", STAGE_COLOR.credentials], ["Training", STAGE_COLOR.training], ["Active", STAGE_COLOR.active]].map(([label, color], i) => (
-                    <div key={label} className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
-                      <span className="text-[9px] font-bold" style={{ color: MUTED }}>{label}</span>
-                      {i < 4 && <ArrowRight size={10} style={{ color: BORDER }} />}
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="flex items-center justify-end px-1">
               <span className="text-[10px] font-medium" style={{ color: MUTED }}>{listRows.length} visible</span>
             </div>
 

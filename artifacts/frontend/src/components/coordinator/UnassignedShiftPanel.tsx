@@ -143,6 +143,20 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
             </SheetDescription>
           </SheetHeader>
 
+          {shift?.cannot_attend_reason && (
+            <div
+              className="mt-4 rounded-xl border p-3"
+              style={{ borderColor: "#FCA5A5", background: "#FEF2F2" }}
+            >
+              <p className="text-[11px] font-black uppercase" style={{ color: "#DC2626" }}>
+                {translate("coordinator.shiftAssign.cannotAttendReason")}
+              </p>
+              <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
+                {shift.cannot_attend_reason}
+              </p>
+            </div>
+          )}
+
           {goalsWithTasks.length > 0 && (
             <div className="mt-4 space-y-2">
               <p className="flex items-center gap-1.5 text-[12px] font-black" style={{ color: TEXT }}>

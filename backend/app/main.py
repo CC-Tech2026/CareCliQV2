@@ -244,6 +244,8 @@ from .api import applicants as applicants_api
 app.include_router(applicants_api.router, prefix="/api")
 from .api import organization_branding as organization_branding_api
 app.include_router(organization_branding_api.router, prefix="/api")
+from .api import operational_feedback as operational_feedback_api
+app.include_router(operational_feedback_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

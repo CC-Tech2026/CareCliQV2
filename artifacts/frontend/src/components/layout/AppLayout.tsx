@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus,
+  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -203,6 +203,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Training",            description: "Assigned training modules & certifications", href: "/worker/training",              icon: GraduationCap,   group: "pages",    roles: ["support_worker"] },
   { label: "My Credentials",      description: "Manage certifications & licences",        href: "/worker-onboarding",               icon: BadgeCheck,      group: "pages",    roles: ["support_worker"] },
   { label: "Incidents",           description: "Incident reports & history",              href: "/incidents",                       icon: AlertTriangle,   group: "pages",    roles: ["support_coordinator", "support_worker"] },
+  { label: "Feedback & Reports",  description: "Operational issues, complaints & feedback", href: "/feedback-reports",              icon: MessageSquareWarning, group: "pages", roles: ["support_coordinator", "support_worker"] },
   { label: "Toolkit",             description: "Resources & reference materials",         href: "/toolkit",                         icon: Wrench,          group: "pages",    roles: ["support_coordinator", "support_worker"] },
   { label: "Executive Dashboard", description: "Organisation-wide performance",           href: "/md/executive",                    icon: BarChart2,       group: "pages",    roles: ["managing_director"] },
   { label: "Staff Overview",      description: "All workers, compliance & credentials",   href: "/md/staff",                        icon: UserCheck,       group: "pages",    roles: ["managing_director"] },

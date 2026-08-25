@@ -1253,7 +1253,7 @@ def _execute_shift_query_with_legacy_fallback(
     full_columns = (
         "id, organization_id, worker_id, participant_id, session_id, shift_type, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "created_at, updated_at"
+        "cannot_attend_reason, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, session_id, "
@@ -2159,7 +2159,12 @@ async def assign_existing_shift(
         now = datetime.now(timezone.utc).isoformat()
         result = (
             supabase.table("shifts")
-            .update({"worker_id": body.worker_id, "status": "scheduled", "updated_at": now})
+            .update({
+                "worker_id": body.worker_id,
+                "status": "scheduled",
+                "cannot_attend_reason": None,
+                "updated_at": now,
+            })
             .eq("id", shift_id)
             .execute()
         )
@@ -2224,7 +2229,7 @@ async def unassign_existing_shift(
         now = datetime.now(timezone.utc).isoformat()
         result = (
             supabase.table("shifts")
-            .update({"worker_id": None, "status": "unassigned", "updated_at": now})
+            .update({"worker_id": None, "status": "unassigned", "cannot_attend_reason": None, "updated_at": now})
             .eq("id", shift_id)
             .execute()
         )

@@ -780,8 +780,16 @@ async def worker_shift_participant_profile(shift_id: str, current_user: dict = D
     return payload
 
 
+class CannotAttendBody(BaseModel):
+    reason: Optional[str] = None
+
+
 @router.patch("/shifts/{shift_id}/cannot-attend")
-async def worker_shift_cannot_attend(shift_id: str, current_user: dict = Depends(get_current_user)):
+async def worker_shift_cannot_attend(
+    shift_id: str,
+    body: CannotAttendBody = CannotAttendBody(),
+    current_user: dict = Depends(get_current_user),
+):
     """Worker-initiated cancellation — vacates the shift back to 'unassigned'
     and notifies coordinators, the reverse of a coordinator cancelling on the
     worker (notify_shift_cancelled)."""
@@ -789,7 +797,9 @@ async def worker_shift_cannot_attend(shift_id: str, current_user: dict = Depends
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     try:
-        updated = await shift_offer_service.mark_cannot_attend(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+        updated = await shift_offer_service.mark_cannot_attend(
+            shift_id=shift_id, worker_id=worker_id, org_id=org_id, reason=body.reason,
+        )
     except shift_offer_service.ShiftOfferError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"shift_id": shift_id, "shift": updated}
@@ -810,15 +820,25 @@ async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(
     return {"shift_id": shift_id, "shift": updated}
 
 
+class DeclineOfferBody(BaseModel):
+    reason: Optional[str] = None
+
+
 @router.post("/shifts/{shift_id}/offer/decline")
-async def worker_shift_offer_decline(shift_id: str, current_user: dict = Depends(get_current_user)):
+async def worker_shift_offer_decline(
+    shift_id: str,
+    body: DeclineOfferBody = DeclineOfferBody(),
+    current_user: dict = Depends(get_current_user),
+):
     """Decline a pending ranked shift offer — auto-advances to the next
     ranked candidate, or notifies coordinators if none remain."""
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     try:
-        await shift_offer_service.decline_offer(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+        await shift_offer_service.decline_offer(
+            shift_id=shift_id, worker_id=worker_id, org_id=org_id, reason=body.reason,
+        )
     except shift_offer_service.ShiftOfferError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return {"shift_id": shift_id}
