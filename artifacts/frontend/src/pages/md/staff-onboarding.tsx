@@ -26,7 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronUp, Clock, Clock3, CheckCircle2,
   Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail,
-  Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, X,
+  Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, UserX, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -1284,20 +1284,28 @@ function routeForOnboardingSource(source: string | undefined): string {
   return "/md/staff-onboarding";
 }
 
-function KpiTile({ label, value, color, active, onClick }: { label: string; value: number; color: string; active?: boolean; onClick?: () => void }) {
+function KpiTile({ label, value, color, bg, icon: Icon, active, onClick }: { label: string; value: number; color: string; bg: string; icon?: typeof Clock3; active?: boolean; onClick?: () => void }) {
   const content = (
     <>
-      <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
-      <p className="mt-2 text-[12.5px] font-semibold" style={{ color: MUTED }}>{label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
+        {Icon && (
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.65)", color }}>
+            <Icon size={15} />
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
       {active && <div className="mt-3 h-1 w-8 rounded-full" style={{ background: color }} />}
     </>
   );
-  if (!onClick) return <div className="rounded-2xl border bg-white px-5 py-4.5" style={{ borderColor: BORDER }}>{content}</div>;
+  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-2xl border bg-white px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ borderColor: active ? color : BORDER, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
+      aria-pressed={active}
+      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+      style={{ background: bg, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
     >
       {content}
     </button>
@@ -1546,20 +1554,19 @@ export default function StaffOnboardingBoard() {
   return (
     <>
       <div className="space-y-5 pb-10">
-        <button
-          onClick={() => navigate("/hub")}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-          style={{ color: MUTED, background: SOFT }}
-        >
-          <ArrowLeft size={13} strokeWidth={2.5} /> Back to Hub
-        </button>
-
-        <div className="flex flex-wrap items-center gap-4 border-b pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-[22px] font-black tracking-tight" style={{ color: TEXT }}>Staff Onboarding</h1>
+            <button
+              onClick={() => navigate("/hub")}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+              style={{ color: MUTED, background: SOFT }}
+            >
+              <ArrowLeft size={13} strokeWidth={2.5} /> Back to Hub
+            </button>
+            <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Staff Onboarding</h1>
             <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>Manage candidates from interview through activation.</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {data && (
               <span className="hidden text-[10px] font-medium sm:inline" style={{ color: MUTED }}>{listRows.length} visible</span>
             )}
@@ -1577,19 +1584,15 @@ export default function StaffOnboardingBoard() {
               viewAllHref="/md/staff-onboarding"
               viewAllLabel="Staff Onboarding"
             />
-            <button
-              onClick={() => setShowNew(true)}
-              className="rounded-full px-5 py-2.5 text-[12px] font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-              style={{ background: PLUM }}
-            >
-              <span className="inline-flex items-center gap-1.5"><UserPlus size={14} /> New candidate</span>
-            </button>
+            <Button variant="navy" className="gap-2 rounded-lg shrink-0" onClick={() => setShowNew(true)}>
+              <UserPlus size={15} /> New candidate
+            </Button>
           </div>
         </div>
 
         {pipelineQuery.isLoading ? (
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 animate-pulse rounded-[1.25rem]" style={{ background: SOFT }} />)}
             </div>
             <div className="flex gap-3 overflow-hidden">
@@ -1603,11 +1606,11 @@ export default function StaffOnboardingBoard() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiTile label="In progress" value={inPipelineCount} color={PLUM} active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} />
-              <KpiTile label="Credentials overdue" value={data.kpis.credentials_overdue} color={AMBER} active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} />
-              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setAttentionOnly(false); setStageFilter("all"); }} />
-              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setAttentionOnly(false); setStageFilter("all"); setNotProceedingOpen(true); }} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiTile label="In progress" value={inPipelineCount} color={PLUM} bg="var(--cc-plum-soft)" icon={UserPlus} active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} />
+              <KpiTile label="Credentials overdue" value={data.kpis.credentials_overdue} color={AMBER} bg={WARNING_BG} icon={ShieldCheck} active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} />
+              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} bg={SUCCESS_BG} icon={CalendarDays} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setAttentionOnly(false); setStageFilter("all"); }} />
+              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} bg={SOFT} icon={UserX} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setAttentionOnly(false); setStageFilter("all"); setNotProceedingOpen(true); }} />
             </div>
 
             <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
