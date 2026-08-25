@@ -407,8 +407,8 @@ function Router() {
       </Route>
 
       <Route path="/team">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><Team /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><Team /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

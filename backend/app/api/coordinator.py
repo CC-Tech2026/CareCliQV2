@@ -394,7 +394,7 @@ async def rp_flags(current_user: dict = Depends(get_current_user)):
 
 @router.get("/credential-alerts")
 async def credential_alerts(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     today = date.today()
@@ -4285,7 +4285,7 @@ async def coordinator_team_training_status(current_user: dict = Depends(get_curr
 
 @router.get("/training-completions/pending")
 async def coordinator_pending_training_completions(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.list_pending_completions(org_id)
