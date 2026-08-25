@@ -8,7 +8,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.operational_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     reporter_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     category TEXT NOT NULL DEFAULT 'other'
         CHECK (category IN ('process', 'equipment', 'scheduling', 'communication', 'safety_non_incident', 'other')),
