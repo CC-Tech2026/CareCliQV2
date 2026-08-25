@@ -1253,12 +1253,12 @@ def _execute_shift_query_with_legacy_fallback(
     full_columns = (
         "id, organization_id, worker_id, participant_id, session_id, shift_type, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "cannot_attend_reason, created_at, updated_at"
+        "cannot_attend_reason, clocked_in_at, clocked_out_at, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, session_id, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "created_at, updated_at"
+        "clocked_in_at, clocked_out_at, created_at, updated_at"
     )
 
     def _run(select_columns: str):
@@ -2939,8 +2939,9 @@ async def get_live_shifts(
 ):
     """Return all in-progress and recently-clocked-in shifts for real-time monitoring.
     Also auto-generates alerts for shifts that meet alert conditions.
-    """
-    org_id = _require_coordinator(current_user)
+    Read-only — coordinators and MD both get access, same _require_org_read
+    pattern as /workers/pipeline. Nothing here mutates shift state."""
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc)
     window_start = (now - timedelta(hours=12)).isoformat()

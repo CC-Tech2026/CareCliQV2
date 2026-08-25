@@ -491,6 +491,8 @@ export type CoordinatorShiftRecord = {
   worker_name?: string;
   worker_email?: string;
   cannot_attend_reason?: string | null;
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
   created_at?: string;
   updated_at?: string;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { addDays, eachDayOfInterval, endOfWeek, format, isToday, startOfWeek } from "date-fns";
 import {
   AlertTriangle,
@@ -9,17 +9,21 @@ import {
   ClipboardList,
   Clock,
   MessageSquare,
+  Radio,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getShiftDetail,
   listCoordinatorShifts,
   type CoordinatorShiftRecord,
   type ShiftDetail,
 } from "@/services/coordinatorService";
+
+const LIVE_REFRESH_MS = 30_000;
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -82,35 +86,41 @@ function formatDateTime(iso?: string | null) {
   }
 }
 
+/** How long a worker has been clocked in, for the real-time "active now" views. */
+function elapsedSince(iso?: string | null): string | null {
+  if (!iso) return null;
+  const started = new Date(iso).getTime();
+  if (Number.isNaN(started)) return null;
+  const minutes = Math.max(0, Math.round((Date.now() - started) / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
 export default function MDSchedulePage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [shifts, setShifts] = useState<CoordinatorShiftRecord[] | null>(null);
-  const [error, setError] = useState(false);
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
 
   const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 1 }), [weekStart]);
   const days = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setShifts(null);
-    setError(false);
-    listCoordinatorShifts({
-      start_date: format(weekStart, "yyyy-MM-dd"),
-      end_date: format(weekEnd, "yyyy-MM-dd"),
-      limit: 500,
-    })
-      .then((data) => {
-        if (!cancelled) setShifts(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [weekStart, weekEnd]);
+  const startKey = format(weekStart, "yyyy-MM-dd");
+  const endKey = format(weekEnd, "yyyy-MM-dd");
+
+  // Polls every 30s so an MD watching this page sees clock-ins/outs and
+  // status changes as they happen, not just when they change weeks.
+  const {
+    data: shifts = null,
+    isError,
+    dataUpdatedAt,
+  } = useOrgQuery<CoordinatorShiftRecord[]>(["md-schedule", startKey, endKey], {
+    queryFn: () => listCoordinatorShifts({ start_date: startKey, end_date: endKey, limit: 500 }),
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchOnWindowFocus: true,
+  });
+  const error = isError;
 
   const stats = useMemo(() => {
     const list = shifts ?? [];
@@ -159,8 +169,17 @@ export default function MDSchedulePage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-xl font-black" style={{ color: TEXT }}>Master Schedule</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>
+            <p className="flex items-center gap-1.5 text-[12px] font-medium" style={{ color: MUTED }}>
               Org-wide shift oversight, read-only. Assigning and rescheduling stays with coordinators.
+              {shifts !== null && (
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <Radio size={11} style={{ color: GREEN }} />
+                  <span style={{ color: GREEN }}>Live</span>
+                  {dataUpdatedAt > 0 && (
+                    <span>· updated {format(new Date(dataUpdatedAt), "h:mm:ssaaa").toLowerCase()}</span>
+                  )}
+                </span>
+              )}
             </p>
           </div>
 
@@ -319,9 +338,16 @@ export default function MDSchedulePage() {
                               className="w-full rounded-lg p-2 text-left transition-transform hover:scale-[1.02]"
                               style={{ background: st.bg }}
                             >
-                              <p className="text-[10px] font-black" style={{ color: st.color }}>
-                                {formatTime(s.scheduled_start)}
-                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-[10px] font-black" style={{ color: st.color }}>
+                                  {formatTime(s.scheduled_start)}
+                                </p>
+                                {bucket === "active" && elapsedSince(s.clocked_in_at) && (
+                                  <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ background: st.color, color: "#fff" }}>
+                                    {elapsedSince(s.clocked_in_at)}
+                                  </span>
+                                )}
+                              </div>
                               <p className="mt-0.5 truncate text-[11px] font-bold" style={{ color: TEXT }}>
                                 {s.participant_name || "Participant"}
                               </p>
@@ -368,7 +394,9 @@ export default function MDSchedulePage() {
                         {s.participant_name || "Participant"} · {s.worker_name || "Unassigned"}
                       </p>
                       <p className="text-[10px] font-medium" style={{ color: MUTED }}>
-                        {formatDateTime(s.scheduled_start)}
+                        {bucket === "active" && elapsedSince(s.clocked_in_at)
+                          ? `Clocked in ${formatTime(s.clocked_in_at)} · active ${elapsedSince(s.clocked_in_at)}`
+                          : formatDateTime(s.scheduled_start)}
                       </p>
                     </div>
                     <span
@@ -404,30 +432,17 @@ function DetailRow({ icon: Icon, label, value }: { icon: typeof Clock; label: st
 }
 
 function ShiftDetailSheet({ shiftId, onClose }: { shiftId: string | null; onClose: () => void }) {
-  const [detail, setDetail] = useState<ShiftDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (!shiftId) return;
-    let cancelled = false;
-    setDetail(null);
-    setError(false);
-    setLoading(true);
-    getShiftDetail(shiftId)
-      .then((data) => {
-        if (!cancelled) setDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [shiftId]);
+  // Polls while open so a shift being actively worked (task ticks, clock-out)
+  // updates live rather than needing the sheet closed and reopened.
+  const {
+    data: detail = null,
+    isLoading: loading,
+    isError: error,
+  } = useOrgQuery<ShiftDetail>(["md-schedule-shift-detail", shiftId], {
+    queryFn: () => getShiftDetail(shiftId!),
+    enabled: !!shiftId,
+    refetchInterval: (query) => (query.state.data && bucketOf(query.state.data) === "active" ? LIVE_REFRESH_MS : false),
+  });
 
   const bucket = detail ? bucketOf(detail) : null;
   const st = bucket ? STATUS_STYLE[bucket] : null;
