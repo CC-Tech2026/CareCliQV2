@@ -93,11 +93,7 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
             overdue = bool(training_overdue_map.get(w["id"])) or bool(induction_incomplete_map.get(w["id"]))
             training_col.append({**w, "flag": "warn" if overdue else "ok"})
 
-    active_col = [
-        w for w in workers
-        if w.get("is_active") and w.get("onboarding_completed")
-        and w.get("created_at") and w["created_at"] >= month_ago
-    ]
+    active_col = [w for w in workers if w.get("is_active") and w.get("onboarding_completed")]
 
     auto_deactivated_workers = [
         w for w in workers if not w.get("is_active") and not w.get("onboarding_completed")
