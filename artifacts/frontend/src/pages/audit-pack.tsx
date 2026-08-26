@@ -14,6 +14,7 @@ import {
 import { getAuditEngagementPack } from "@/services/longShiftService";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SectionInfo } from "@/components/ui/section-info";
 import { KpiCard, KpiGrid, kpiTint, toneColour, type StatTone } from "@/components/ui/stat-card";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -139,7 +140,10 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
         {!embedded && (
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>{translate("auditPack.eyebrow")}</p>
-            <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("auditPack.title")}</h1>
+            <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+              {translate("auditPack.title")}
+              <SectionInfo text="Everything an NDIS auditor would ask for, bundled and exportable: session records, signatures, and evidence." />
+            </h1>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
           </div>
         )}

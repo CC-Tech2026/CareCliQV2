@@ -326,10 +326,7 @@ export default function Compliance() {
     <div className="flex flex-col gap-5 pb-10">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-            {translate("compliance.page.eyebrow")}
-          </p>
-          <h1 className="mt-1 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
+          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
           <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
         </div>
         <div className="flex items-start gap-2 shrink-0">

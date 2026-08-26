@@ -2861,7 +2861,7 @@ export const en: Dict = {
 
   // Compliance centre (coordinator)
   "compliance.page.eyebrow": "Compliance",
-  "compliance.page.title": "Compliance Centre",
+  "compliance.page.title": "Compliance",
   "compliance.page.overallScore": "Overall Score",
   "compliance.page.scoreOf100": "/ 100",
   "compliance.page.ndisAuditScore": "NDIS Audit Score",
@@ -3889,7 +3889,7 @@ export const en: Dict = {
   "md.compliance.audit.complete": "Complete",
   "md.compliance.audit.review": "Needs Review",
   "md.compliance.audit.pending": "Pending",
-  "md.onboarding.title": "Onboarding Centre",
+  "md.onboarding.title": "Onboarding",
   "md.onboarding.subtitle": "Design programs, manage resources, track progress and approve completions",
   "md.onboarding.tab.overview": "Overview",
   "md.onboarding.tab.builder": "Builder",
@@ -4358,7 +4358,7 @@ export const en: Dict = {
   "hub.workspace.financial.title": "Financial Overview",
   "hub.workspace.financial.short": "Financial",
   "hub.workspace.financial.subtitle": "Revenue, margins and billing performance.",
-  "hub.workspace.onboarding.title": "Onboarding Centre",
+  "hub.workspace.onboarding.title": "Onboarding",
   "hub.workspace.onboarding.short": "Onboarding",
   "hub.workspace.onboarding.subtitle": "Design programs and track staff progress.",
   "hub.workspace.workerPipeline.title": "Staff Onboarding",

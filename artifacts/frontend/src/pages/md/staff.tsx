@@ -31,6 +31,7 @@ import {
 import { WorkerDetail, type WorkerDetailTab } from "@/components/team/WorkerDetail";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -251,33 +252,25 @@ function KpiTile({
 }
 
 function SectionHeader({
-  eyebrow,
   title,
+  info,
   description,
   action,
 }: {
-  eyebrow?: string;
   title: string;
+  info?: string;
   description?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex items-end justify-between gap-4">
       <div>
-        {eyebrow && (
-          <p
-            className="mb-1 text-[9px] font-black uppercase tracking-[0.18em]"
-            style={{ color: PLUM }}
-          >
-            {eyebrow}
-          </p>
-        )}
-
         <h2
-          className="text-[16px] font-black tracking-tight"
+          className="flex items-center gap-1.5 text-[16px] font-black tracking-tight"
           style={{ color: TEXT }}
         >
           {title}
+          {info && <SectionInfo text={info} />}
         </h2>
 
         {description && (
@@ -593,33 +586,19 @@ export default function MDStaffPage() {
         <header>
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
-              <div className="mb-2 flex items-center gap-2">
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: "#0F7B57" }}
-                />
-
-                <span
-                  className="text-[9px] font-black uppercase tracking-[0.2em]"
-                  style={{ color: MUTED }}
-                >
-                  Workforce command centre
-                </span>
-              </div>
-
               <h1
-                className="text-3xl font-black tracking-[-0.04em]"
+                className="flex items-center gap-2 text-3xl font-black tracking-[-0.04em]"
                 style={{ color: TEXT }}
               >
-                People & Workforce
+                Staff Directory
+                <SectionInfo text="Your organisation's staff: who's active, how they're performing, credentials due, and who's coming through hiring." />
               </h1>
 
               <p
-                className="mt-1.5 max-w-2xl text-[12px] font-medium leading-relaxed"
+                className="mt-1.5 text-[12px] font-medium leading-relaxed"
                 style={{ color: MUTED }}
               >
-                Organisation-wide view of workforce health, performance,
-                retention risk and hiring activity.
+                Your team at a glance.
               </p>
             </div>
 
@@ -713,8 +692,7 @@ export default function MDStaffPage() {
             <section id="staff-directory">
               <div className="mb-4">
                 <SectionHeader
-                  eyebrow="People directory"
-                  title="Staff workforce"
+                  title="All staff"
                   description={`${filtered.length} of ${allStaff.length} staff shown`}
                 />
               </div>
@@ -1047,8 +1025,8 @@ export default function MDStaffPage() {
 
             <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
               <SectionHeader
-                eyebrow="Performance health"
-                title="Workforce performance distribution"
+                title="Performance overview"
+                info="How compliance scores are spread across your team, from strong performers to staff who need support. Staff with no sessions yet aren't counted."
               />
 
               <div className="mt-5">
@@ -1101,10 +1079,7 @@ export default function MDStaffPage() {
               style={{ borderColor: BORDER }}
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <SectionHeader
-                  eyebrow="Workforce growth"
-                  title="Hiring & onboarding"
-                />
+                <SectionHeader title="Hiring" />
 
                 <button
                   onClick={() =>

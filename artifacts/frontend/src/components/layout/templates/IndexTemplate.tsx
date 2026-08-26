@@ -13,26 +13,30 @@
  */
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { SectionInfo } from "@/components/ui/section-info";
 
 // ── Sub-components exported for composition ───────────────────────────────────
 
 interface IndexHeaderProps {
   title: string;
   count?: number | null;
+  /** Optional "what is this page for" popover, shown as a small info icon next to the title. */
+  info?: string;
   /** Single primary action button — placed top-right. Keep to one. */
   primaryAction?: React.ReactNode;
   className?: string;
 }
 
-export function IndexHeader({ title, count, primaryAction, className }: IndexHeaderProps) {
+export function IndexHeader({ title, count, info, primaryAction, className }: IndexHeaderProps) {
   return (
     <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4", className)}>
       <div className="min-w-0">
         <h1
-          className="text-xl font-black tracking-tight truncate"
+          className="flex items-center gap-2 text-xl font-black tracking-tight truncate"
           style={{ fontFamily: "var(--app-font-display)", color: "var(--cc-text)" }}
         >
           {title}
+          {info && <SectionInfo text={info} />}
         </h1>
         {count != null && (
           <p className="mt-0.5 text-sm font-medium" style={{ color: "var(--cc-muted)" }}>

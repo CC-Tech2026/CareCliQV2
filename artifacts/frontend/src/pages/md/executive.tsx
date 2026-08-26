@@ -25,6 +25,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -467,41 +468,20 @@ export default function MDExecutivePage() {
         <header className="mb-9">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className="text-[9px] font-black uppercase tracking-[0.2em]"
-                  style={{ color: PLUM }}
-                >
-                  Executive command centre
-                </span>
-
-                <span
-                  className="h-1 w-1 rounded-full"
-                  style={{ background: BORDER }}
-                />
-
-                <span
-                  className="text-[9px] font-bold"
-                  style={{ color: MUTED }}
-                >
-                  {formatDate(data.generated_at)}
-                </span>
-              </div>
-
-              <h1
-                className="mt-2 text-[28px] font-black tracking-[-0.035em] sm:text-[34px]"
-                style={{ color: TEXT }}
-              >
-                Organisation at a glance.
-              </h1>
-
-              <p
-                className="mt-1 max-w-xl text-[12px] leading-5"
+              <span
+                className="text-[9px] font-bold"
                 style={{ color: MUTED }}
               >
-                A governance view of compliance, workforce health and
-                service delivery.
-              </p>
+                {formatDate(data.generated_at)}
+              </span>
+
+              <h1
+                className="mt-2 flex items-center gap-2 text-[28px] font-black tracking-[-0.035em] sm:text-[34px]"
+                style={{ color: TEXT }}
+              >
+                Organisation at a glance
+                <SectionInfo text="A governance view across compliance, workforce health, and service delivery for the whole organisation." />
+              </h1>
             </div>
 
             <div className="hidden text-right sm:block">

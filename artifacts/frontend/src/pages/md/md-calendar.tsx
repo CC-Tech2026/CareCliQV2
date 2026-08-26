@@ -8,6 +8,7 @@ import {
   ClipboardCheck, BookOpen, Users, Target, Briefcase, X,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { SectionInfo } from "@/components/ui/section-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -329,9 +330,10 @@ export default function MDCalendarPage() {
           <div>
             <h1 className="text-xl font-black flex items-center gap-2" style={{ color: TEXT }}>
               <CalendarDays size={19} style={{ color: PLUM }} /> Calendar
+              <SectionInfo text="Scheduled appointments across the organisation, plus your own audits, training, meetings and reviews." />
             </h1>
             <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-              Scheduled appointments across the organisation, plus your own audits, training, meetings and reviews.
+              Everything on the org's calendar.
             </p>
           </div>
           <div className="flex items-center gap-2">

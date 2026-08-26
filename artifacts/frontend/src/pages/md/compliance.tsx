@@ -25,6 +25,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT = "var(--cc-text)";
@@ -386,27 +387,13 @@ export default function MDCompliancePage() {
         ------------------------------------------------------------ */}
         <header className="flex items-center gap-4">
           <div>
-            <p
-              className="text-[9px] font-black uppercase tracking-[0.18em]"
-              style={{ color: PLUM }}
-            >
-              Executive quality centre
-            </p>
-
             <h1
-              className="mt-0.5 text-xl font-black tracking-[-0.025em]"
+              className="flex items-center gap-2 text-xl font-black tracking-[-0.025em]"
               style={{ color: TEXT }}
             >
-              Compliance & Audit Readiness
+              Audit & Compliance
+              <SectionInfo text="Quality posture, risk signals, and audit readiness across the organisation." />
             </h1>
-
-            <p
-              className="mt-0.5 text-[12px] font-medium"
-              style={{ color: MUTED }}
-            >
-              Organisation-wide quality posture, risk signals and audit
-              readiness.
-            </p>
           </div>
         </header>
 

@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
@@ -488,7 +489,10 @@ export default function Sessions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("sessions.title")}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+            {translate("sessions.title")}
+            <SectionInfo text="Clinical documentation for every support session: notes, outcomes, and progress toward goals." />
+          </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
             {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
           </p>

@@ -539,6 +539,7 @@ export default function Team() {
       <IndexHeader
         title={translate("team.title")}
         count={workers.length}
+        info="Your support workers: compliance, credentials, availability, and shift history, all in one place."
         primaryAction={
           <Button
             variant="navy"

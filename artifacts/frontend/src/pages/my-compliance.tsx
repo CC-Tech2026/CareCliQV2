@@ -3,6 +3,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
+import { SectionInfo } from "@/components/ui/section-info";
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
 import { getMyCompliance, getWorkerComplianceDetail } from "@/services/workerService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -78,7 +79,10 @@ export default function MyCompliance() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: MUTED }}>Support Worker</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.title")}</h1>
+        <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          {translate("compliance.title")}
+          <SectionInfo text="How your documentation is tracking: session notes, checklists, and anything that needs follow-up." />
+        </h1>
       </div>
 
       <div

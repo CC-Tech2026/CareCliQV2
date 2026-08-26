@@ -3,6 +3,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -130,8 +131,9 @@ function WorkerIncidentsList() {
     <div className="space-y-6 pb-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("incidents.title")}
+            <SectionInfo text="Record and follow up on incidents, from first report through investigation and NDIS notification where required." />
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
             {translate("incidents.workerSubtitle")}

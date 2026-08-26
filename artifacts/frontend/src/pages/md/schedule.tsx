@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
-  Info,
   MessageSquare,
   Radio,
   ShieldCheck,
@@ -18,7 +17,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import CoordinatorLivePage from "@/pages/coordinator-live";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   getShiftDetail,
   listCoordinatorShifts,
@@ -105,27 +104,6 @@ function elapsedSince(iso?: string | null): string | null {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-/** Click-triggered (not hover-only) info popover for a section header —
- *  a Tooltip wouldn't work on touch/click, so this uses Popover throughout. */
-function SectionInfo({ text }: { text: string }) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="What does this section show?"
-          className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70"
-          style={{ color: MUTED }}
-        >
-          <Info size={12} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-[260px] p-3 text-[11px] leading-relaxed">
-        <p>{text}</p>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export default function MDSchedulePage() {
   const [viewMode, setViewMode] = useState<"week" | "live">("week");

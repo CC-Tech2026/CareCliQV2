@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
@@ -351,8 +352,9 @@ export default function Billing() {
           <p className="hidden text-cc-muted">
             {translate("billing.role.coordinator")}
           </p>
-          <h1 className="text-xl font-black tracking-tight text-cc-text">
+          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight text-cc-text">
             {translate("billing.title")}
+            <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, track payment status, and review pricing." />
           </h1>
         </div>
 

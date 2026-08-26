@@ -155,7 +155,7 @@ export function GovernanceTriage({
   fetchAlerts = getHubComplianceAlerts,
   routeForSource = defaultRouteForSource,
   viewAllHref = "/md/compliance",
-  viewAllLabel = "Compliance Centre",
+  viewAllLabel = "Audit & Compliance",
   variant = "panel",
 }: {
   onNavigate: (path: string) => void;

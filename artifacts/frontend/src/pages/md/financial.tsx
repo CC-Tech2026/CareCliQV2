@@ -630,7 +630,7 @@ export default function MDFinancialPage() {
                         className="text-[23px] font-black tracking-tight"
                         style={{ color: TEXT }}
                       >
-                        Financial Command Centre
+                        Finance
                       </h1>
 
                       <span

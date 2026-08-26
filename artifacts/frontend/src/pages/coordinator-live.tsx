@@ -8,6 +8,7 @@ import {
   RefreshCw, Filter, Eye, MoreVertical, Search, Phone, Mail, LogIn, Clock3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SectionInfo } from "@/components/ui/section-info";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -900,8 +901,9 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch, 
               <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
                 {translate("coordinator.live.eyebrow")}
               </p>
-              <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+              <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
                 {translate("coordinator.live.title")}
+                <SectionInfo text="Workers currently on shift, right now: who's clocked in, what stage they're at, and anything that needs attention." />
               </h1>
               <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
                 {translateParams("coordinator.live.subtitle", { time: lastRefresh })}

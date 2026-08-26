@@ -13,6 +13,7 @@ import {
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { SectionInfo } from "@/components/ui/section-info";
 import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -375,7 +376,10 @@ export default function CoordinatorRosteringPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+            {translate("coordinator.rostering.title")}
+            <SectionInfo text="Build and adjust the shift roster for your team, week by week or month by month." />
+          </h1>
         </div>
         {pageTab === "roster" ? (
         <div className="flex items-center gap-2">
