@@ -24,7 +24,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronUp, Clock, Clock3, CheckCircle2,
+  AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
   Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail,
   Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, UserX, X,
 } from "lucide-react";
@@ -690,14 +690,45 @@ function ApplicantDragClone({ applicant }: { applicant: Applicant }) {
 
 const COLUMN_PAGE_SIZE = 4;
 
-function ColumnHeading({ label, count, color }: { label: string; count: number; color: string }) {
+function ColumnHeading({
+  label, count, color, onOpenAll, openAllTitle,
+}: {
+  label: string;
+  count: number;
+  color: string;
+  /** When set, the heading becomes a clickable link (dotted underline + chevron) to a
+   * full list elsewhere, and the count renders as a filled pill instead of plain text -
+   * same "Onboarded Participants" pattern used by the Active column on the Participant
+   * Onboarding board. */
+  onOpenAll?: () => void;
+  openAllTitle?: string;
+}) {
   return (
     <div className="flex items-center justify-between px-0.5 pb-0.5">
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-        <p className="text-[13px] font-black" style={{ color: TEXT }}>{label}</p>
-      </div>
-      <span className="text-[13px] font-bold" style={{ color: MUTED }}>{count}</span>
+      {onOpenAll ? (
+        <button
+          type="button"
+          onClick={onOpenAll}
+          className="flex items-center gap-2 rounded-md transition-opacity hover:opacity-70"
+          title={openAllTitle}
+        >
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
+          <p className="text-[13px] font-black underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{label}</p>
+          <ChevronRight size={12} style={{ color }} />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
+          <p className="text-[13px] font-black" style={{ color: TEXT }}>{label}</p>
+        </div>
+      )}
+      {onOpenAll ? (
+        <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black" style={{ background: `${color}1F`, color }}>
+          {count}
+        </span>
+      ) : (
+        <span className="text-[13px] font-bold" style={{ color: MUTED }}>{count}</span>
+      )}
     </div>
   );
 }
@@ -769,15 +800,23 @@ function DroppableColumn<T>({
 }
 
 function StaticColumn<T>({
-  label, color, items, renderItem, emptyLabel = "Nobody here",
-}: { label: string; color: string; items: T[]; renderItem: (item: T) => React.ReactNode; emptyLabel?: string }) {
+  label, color, items, renderItem, emptyLabel = "Nobody here", onOpenAll, openAllTitle,
+}: {
+  label: string;
+  color: string;
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
+  emptyLabel?: string;
+  onOpenAll?: () => void;
+  openAllTitle?: string;
+}) {
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(items.length / COLUMN_PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages - 1);
   const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
     <div className="flex min-h-[410px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
-      <ColumnHeading label={label} count={items.length} color={color} />
+      <ColumnHeading label={label} count={items.length} color={color} onOpenAll={onOpenAll} openAllTitle={openAllTitle} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
         {items.length === 0 && (
@@ -1836,6 +1875,8 @@ export default function StaffOnboardingBoard() {
                     renderItem={(p) => (
                       <OversightCard key={p.id} columnKey="active" person={p} onOpen={() => openWorker(p.id, "overview")} />
                     )}
+                    onOpenAll={() => navigate(isHireManager ? "/md/staff" : "/team")}
+                    openAllTitle="View full Staff list"
                   />
                 </div>
                 <DragOverlay dropAnimation={null}>
