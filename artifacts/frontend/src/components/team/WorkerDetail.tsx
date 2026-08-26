@@ -397,7 +397,7 @@ export function WorkerDetail({
   const hasQuickActions = onAssignShift || onAssignClient || onReminder || onDeactivate || onActivate || onSendPasswordReset || onDeleteAccount;
 
   return (
-    <div className="space-y-4">
+    <div className={fullScreen ? "mx-auto w-full max-w-[1400px] space-y-4 xl:px-6" : "space-y-4"}>
       {/* Back + quick actions - pr-8 keeps the "..." trigger clear of a Sheet's
           own built-in close (X) button, which sits fixed top-right whenever
           this panel is opened inside one (e.g. md/staff.tsx). */}
@@ -481,16 +481,16 @@ export function WorkerDetail({
 
       {/* Identity + at-a-glance header */}
       <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-5">
+        <div className={`flex flex-col sm:flex-row sm:items-start gap-4 ${fullScreen ? "p-6 xl:p-7" : "p-5"}`}>
           <div
-            className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black shadow-sm"
+            className={`${fullScreen ? "h-20 w-20 text-2xl" : "h-16 w-16 text-xl"} rounded-full shrink-0 flex items-center justify-center font-black shadow-sm`}
             style={{ background: avatar.bg, color: avatar.fg }}
           >
             {(worker.full_name || "?").charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-black truncate" style={{ color: TEXT }}>{worker.full_name}</h2>
+              <h2 className={`${fullScreen ? "text-2xl" : "text-lg"} font-black truncate`} style={{ color: TEXT }}>{worker.full_name}</h2>
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{
@@ -541,9 +541,9 @@ export function WorkerDetail({
         {/* At-a-glance stat strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
           {statCells.map((cell) => (
-            <div key={cell.label} className="px-4 py-3" style={{ borderColor: BORDER }}>
+            <div key={cell.label} className={fullScreen ? "px-5 py-4" : "px-4 py-3"} style={{ borderColor: BORDER }}>
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{cell.label}</p>
-              <p className="text-base font-black tabular-nums mt-0.5" style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
+              <p className={`${fullScreen ? "text-lg" : "text-base"} font-black tabular-nums mt-0.5`} style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
             </div>
           ))}
         </div>
@@ -553,7 +553,7 @@ export function WorkerDetail({
           wide enough now to earn it, and 8 tabs was starting to overflow a
           horizontal scroller), falling back to the original horizontal
           scrollable strip on narrow/mobile widths. */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+      <div className={`flex flex-col gap-5 lg:flex-row lg:items-start ${fullScreen ? "xl:gap-8" : ""}`}>
         <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b lg:hidden" style={{ borderColor: BORDER }}>
           {ALL_WORKER_DETAIL_TABS.map((t) => {
             const badge = tabBadges[t];
@@ -580,7 +580,7 @@ export function WorkerDetail({
           })}
         </div>
 
-        <div role="tablist" className="hidden shrink-0 flex-col gap-0.5 lg:flex lg:w-52">
+        <div role="tablist" className={`hidden shrink-0 flex-col gap-0.5 lg:flex ${fullScreen ? "lg:w-56 xl:w-64" : "lg:w-52"}`}>
           {ALL_WORKER_DETAIL_TABS.map((t) => {
             const badge = tabBadges[t];
             const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
@@ -609,7 +609,7 @@ export function WorkerDetail({
           })}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className={`min-w-0 flex-1 ${fullScreen ? "xl:max-w-3xl" : ""}`}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={tab}
