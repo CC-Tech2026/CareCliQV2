@@ -224,6 +224,29 @@ def _invoice_select_query(supabase, user: dict):
     return query
 
 
+async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[dict]:
+    """Attach each invoice's participant.service_category (Aged Care/Disability) —
+    the ledger's "Service Type" column — via a single batched lookup rather
+    than one query per row."""
+    participant_ids = list({str(inv["participant_id"]) for inv in invoices if inv.get("participant_id")})
+    if not participant_ids:
+        return invoices
+    try:
+        result = (
+            supabase.table("patients")
+            .select("id, service_category")
+            .in_("id", participant_ids)
+            .execute()
+        )
+        category_by_id = {str(r["id"]): r.get("service_category") for r in (result.data or [])}
+    except Exception:
+        category_by_id = {}
+    for inv in invoices:
+        pid = inv.get("participant_id")
+        inv["service_category"] = category_by_id.get(str(pid)) if pid else None
+    return invoices
+
+
 async def list_invoices(user: dict, status_filter: str | None = None) -> list[dict]:
     _require_billing_role(user)
     supabase = get_supabase_admin()
@@ -233,7 +256,8 @@ async def list_invoices(user: dict, status_filter: str | None = None) -> list[di
             raise HTTPException(status_code=422, detail="Invalid invoice status.")
         query = query.eq("status", status_filter)
     result = query.order("created_at", desc=True).limit(200).execute()
-    return [_with_signed_pdf_url(row) for row in (result.data or [])]
+    invoices = [_with_signed_pdf_url(row) for row in (result.data or [])]
+    return await _enrich_with_service_category(supabase, invoices)
 
 
 async def get_invoice(invoice_id: str, user: dict) -> dict:
@@ -242,7 +266,9 @@ async def get_invoice(invoice_id: str, user: dict) -> dict:
     result = _invoice_select_query(supabase, user).eq("id", invoice_id).limit(1).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Invoice not found.")
-    return _with_signed_pdf_url(result.data[0])
+    invoice = _with_signed_pdf_url(result.data[0])
+    enriched = await _enrich_with_service_category(supabase, [invoice])
+    return enriched[0]
 
 
 async def _verify_invoice_scope(user: dict, data: dict) -> None:
@@ -415,6 +441,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
         "paid_at": _now_iso() if status_value == "paid" else None,
         "payment_date": data.get("payment_date") or None,
         "payment_reference": data.get("payment_reference") or None,
+        "payment_method": data.get("payment_method") or None,
         "notes": data.get("notes") or None,
     }
     supabase = get_supabase_admin()
@@ -463,6 +490,7 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         "recipient_email": data.get("recipient_email", existing.get("recipient_email")),
         "status": status_value,
         "due_date": data.get("due_date", existing.get("due_date")),
+        "payment_method": data.get("payment_method", existing.get("payment_method")),
         "notes": data.get("notes", existing.get("notes")),
         "updated_at": _now_iso(),
     }

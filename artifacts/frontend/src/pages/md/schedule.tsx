@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Info,
   MessageSquare,
   Radio,
   ShieldCheck,
@@ -17,6 +18,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import CoordinatorLivePage from "@/pages/coordinator-live";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   getShiftDetail,
   listCoordinatorShifts,
@@ -41,6 +43,10 @@ const GREEN = "#0F7B57";
 const GREEN_SOFT = "#E9F5F0";
 const SLATE = "#5B655F";
 const SLATE_SOFT = "#F0F1EE";
+// Real safety/roster-risk severity, not the brand's destructive-action purple
+// (--cc-status-critical) — this is the one reserved for "something needs a human".
+const DANGER = "var(--cc-status-danger)";
+const DANGER_SOFT = "var(--cc-status-danger-bg)";
 
 type Bucket = "active" | "scheduled" | "completed" | "cancelled" | "unassigned";
 
@@ -99,6 +105,28 @@ function elapsedSince(iso?: string | null): string | null {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
+/** Click-triggered (not hover-only) info popover for a section header —
+ *  a Tooltip wouldn't work on touch/click, so this uses Popover throughout. */
+function SectionInfo({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="What does this section show?"
+          className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70"
+          style={{ color: MUTED }}
+        >
+          <Info size={12} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-[260px] p-3 text-[11px] leading-relaxed">
+        <p>{text}</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function MDSchedulePage() {
   const [viewMode, setViewMode] = useState<"week" | "live">("week");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -142,6 +170,21 @@ export default function MDSchedulePage() {
     const busiestCount = Math.max(0, ...Array.from(perDay.values()));
     return { total, counts, perDay, cancellationRate, busiestCount };
   }, [shifts, days]);
+
+  const attentionItems = useMemo(() => {
+    if (shifts === null) return [];
+    const items: { key: string; text: string }[] = [];
+    if (stats.counts.unassigned > 0) {
+      items.push({
+        key: "unassigned",
+        text: `${stats.counts.unassigned} shift${stats.counts.unassigned === 1 ? "" : "s"} this week ${stats.counts.unassigned === 1 ? "has" : "have"} no worker assigned.`,
+      });
+    }
+    if (stats.cancellationRate !== null && stats.cancellationRate >= 15) {
+      items.push({ key: "cancellation", text: `Cancellation rate is elevated at ${stats.cancellationRate}% this week.` });
+    }
+    return items;
+  }, [shifts, stats]);
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, CoordinatorShiftRecord[]>();
@@ -246,7 +289,37 @@ export default function MDSchedulePage() {
 
         {viewMode === "week" && (
         <>
+        {/* Needs attention — the specific roster issues on this page that
+            want a coordinator's action, not just a status readout. */}
+        {attentionItems.length > 0 && (
+          <div className="rounded-2xl border p-4" style={{ borderColor: DANGER, background: DANGER_SOFT }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle size={16} style={{ color: DANGER }} />
+                <p className="text-[12px] font-black" style={{ color: DANGER }}>Needs attention</p>
+                <SectionInfo text="Roster issues on this page that need a coordinator's action this week — shifts with no worker assigned, and a cancellation rate running high." />
+              </div>
+              <button
+                onClick={() => setFilter("unassigned")}
+                className="rounded-full px-3 py-1.5 text-[11px] font-black text-white transition-opacity hover:opacity-90"
+                style={{ background: DANGER }}
+              >
+                Resolve unassigned
+              </button>
+            </div>
+            <ul className="mt-2.5 space-y-1">
+              {attentionItems.map((item) => (
+                <li key={item.key} className="text-[11.5px] font-semibold" style={{ color: TEXT }}>• {item.text}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Rostering pattern strip */}
+        <div className="flex items-center gap-1.5">
+          <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>This week at a glance</p>
+          <SectionInfo text="Shift counts for the selected week, by status. Unassigned counts shifts with no worker attached; cancellation rate is cancelled ÷ (cancelled + completed)." />
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {([
             { label: "Total shifts", value: stats.total, color: TEXT },
@@ -257,7 +330,7 @@ export default function MDSchedulePage() {
             {
               label: "Cancellation rate",
               value: stats.cancellationRate === null ? "—" : `${stats.cancellationRate}%`,
-              color: stats.cancellationRate !== null && stats.cancellationRate >= 15 ? "var(--cc-status-critical)" : TEXT,
+              color: stats.cancellationRate !== null && stats.cancellationRate >= 15 ? DANGER : TEXT,
             },
           ] as const).map((tile) => (
             <div key={tile.label} className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, background: SURFACE }}>
@@ -272,7 +345,10 @@ export default function MDSchedulePage() {
         {/* Daily load pattern */}
         {shifts !== null && stats.total > 0 && (
           <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Rostering pattern this week</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Rostering pattern this week</p>
+              <SectionInfo text="How shifts are spread across the week. Taller bars mean more shifts scheduled that day; the busiest day is highlighted." />
+            </div>
             <div className="mt-3 grid grid-cols-7 gap-2">
               {days.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
@@ -329,6 +405,11 @@ export default function MDSchedulePage() {
             <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Try again shortly.</p>
           </div>
         ) : (
+          <>
+          <div className="flex items-center gap-1.5">
+            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Weekly board</p>
+            <SectionInfo text="Every shift this week, grouped by day and narrowed by the status filter above. Click a shift for full detail — participant, worker, timing, tasks and notes." />
+          </div>
           <div className="grid gap-3 lg:grid-cols-7">
             {days.map((day) => {
               const key = format(day, "yyyy-MM-dd");
@@ -396,15 +477,17 @@ export default function MDSchedulePage() {
               );
             })}
           </div>
+          </>
         )}
 
         {/* Activity log: cancellations + shifts in progress right now */}
         {shifts !== null && activityLog.length > 0 && (
           <div className="rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-            <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
+            <div className="flex items-center gap-1.5 border-b px-4 py-3" style={{ borderColor: BORDER }}>
               <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>
                 Activity log — active shifts &amp; cancellations this week
               </p>
+              <SectionInfo text="Shifts currently in progress and shifts cancelled this week, most recent first — a quick read on what's happening right now." />
             </div>
             <div className="max-h-72 divide-y overflow-y-auto" style={{ borderColor: BORDER }}>
               {activityLog.map((s) => {

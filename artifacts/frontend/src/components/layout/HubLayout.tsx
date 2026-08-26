@@ -321,6 +321,19 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               <span className="absolute top-2 right-2 h-2 w-2 rounded-full ring-2 ring-[var(--cc-surface)]" style={{ background: "var(--cc-status-danger)" }} />
             </button>
 
+            {/* HubLayout is also shared with coordinators (e.g. /hub, /md/staff-onboarding)
+                and the Calendar page itself is MD-only (App.tsx), so the button only
+                shows for the role that can actually open it. */}
+            {isMD && (
+              <Link
+                href="/md/calendar"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
+                aria-label="Calendar"
+              >
+                <CalendarDays size={17} />
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={toggleTheme}

@@ -16,6 +16,7 @@ GoalStatus   = Literal["active", "archived"]
 GoalCategory = Literal["core", "capacity_building", "capital", "general"]
 BiologicalSex = Literal["male", "female", "unspecified"]
 PlanManagementType = Literal["NDIA-managed", "plan-managed", "self-managed"]
+ServiceCategory = Literal["aged_care", "disability"]
 
 # Constrained int type for 0-100 percentage values
 Percentage = Annotated[int, Field(ge=0, le=100)]
@@ -80,6 +81,7 @@ class ParticipantCreate(BaseModel):
     allergies: Optional[str] = None
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = "unspecified"
+    service_category: Optional[ServiceCategory] = None
     # Privacy Act 2026 — APP 2 Anonymity support
     external_pseudonym: Optional[str] = None   # auto-generated on create if not provided
     disposal_date: Optional[date] = None       # auto-set to 7 years from today if not provided
@@ -101,6 +103,7 @@ class ParticipantUpdate(BaseModel):
     allergies: Optional[str] = None
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = None
+    service_category: Optional[ServiceCategory] = None
     external_pseudonym: Optional[str] = None
     disposal_date: Optional[date] = None
     upcoming_review_date: Optional[str] = None

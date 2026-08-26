@@ -561,6 +561,7 @@ class OrgEventBody(BaseModel):
     event_type: str = "meeting"
     location: Optional[str] = None
     participants_desc: Optional[str] = None
+    start_time: Optional[str] = None  # "HH:MM", 24h — positions the event in the Week/Day hour grid
 
 
 @router.get("/org-events")
@@ -586,9 +587,21 @@ async def list_org_events(current_user: dict = Depends(get_current_user)):
         return []
 
 
+def _require_org_wide(user: dict) -> str:
+    """Coordinator or MD, org-wide — used for the calendar's own meetings
+    (audit/training/meeting/review), which the MD creates directly from the
+    Calendar page, unlike the coordinator-only actions elsewhere in this file."""
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=403, detail="Coordinator or managing director access required.")
+    org_id = _get_org_id(user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organisation membership required.")
+    return org_id
+
+
 @router.post("/org-events", status_code=201)
 async def create_org_event(body: OrgEventBody, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_wide(current_user)
     allowed_types = {"audit", "training", "meeting", "review"}
     if body.event_type not in allowed_types:
         raise HTTPException(status_code=422, detail=f"event_type must be one of: {', '.join(allowed_types)}")
@@ -608,7 +621,7 @@ async def create_org_event(body: OrgEventBody, current_user: dict = Depends(get_
 
 @router.delete("/org-events/{event_id}", status_code=204)
 async def delete_org_event(event_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_wide(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("org_events").delete().eq("id", event_id).eq("organization_id", org_id).execute()

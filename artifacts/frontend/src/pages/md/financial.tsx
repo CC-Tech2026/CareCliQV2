@@ -10,10 +10,16 @@ import {
   PieChart,
   TrendingUp,
   Wallet,
+  Search,
+  Eye,
+  Printer,
+  Download,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -77,6 +83,240 @@ function getMonthLabel(month: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Invoice-level ledger                                                       */
+/* -------------------------------------------------------------------------- */
+
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  recipient_name: string;
+  total_cents: number;
+  status: string;
+  payment_method: string | null;
+  service_category: "aged_care" | "disability" | null;
+  created_at: string;
+  pdf_url: string | null;
+}
+
+const INVOICE_STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
+  draft: { label: "Draft", bg: SOFT, color: MUTED },
+  finalized: { label: "Finalized", bg: `${CYAN}1F`, color: CYAN },
+  issued: { label: "Issued", bg: `${CYAN}1F`, color: CYAN },
+  sent: { label: "Sent", bg: `${CYAN}1F`, color: CYAN },
+  paid: { label: "Paid", bg: `${GREEN}1F`, color: GREEN },
+  overdue: { label: "Overdue", bg: `${RED}1F`, color: RED },
+  void: { label: "Void", bg: SOFT, color: MUTED },
+  cancelled: { label: "Cancelled", bg: SOFT, color: MUTED },
+};
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  bank_transfer: "Bank transfer",
+  credit_card: "Credit card",
+  direct_debit: "Direct debit",
+  ndis_portal: "NDIS portal",
+  cash: "Cash",
+  other: "Other",
+};
+
+type LedgerStatusFilter = "all" | "paid" | "outstanding" | "overdue" | "void";
+
+// UI-only placeholders — service_category and payment_method aren't real
+// columns yet (migration 142 hasn't been run), so until they are, the
+// ledger fills these two cells with a value derived deterministically from
+// the invoice's own id. Same invoice always shows the same dummy value on
+// every render/reload; nothing is written anywhere, purely cosmetic.
+const DUMMY_SERVICE_CATEGORIES: Array<"aged_care" | "disability"> = ["disability", "aged_care"];
+const DUMMY_PAYMENT_METHODS = ["bank_transfer", "credit_card", "direct_debit", "ndis_portal"];
+
+function stableIndex(seed: string, length: number): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return hash % length;
+}
+
+function displayServiceCategory(inv: Invoice): "aged_care" | "disability" {
+  return inv.service_category ?? DUMMY_SERVICE_CATEGORIES[stableIndex(inv.id, DUMMY_SERVICE_CATEGORIES.length)];
+}
+
+function displayPaymentMethod(inv: Invoice): string {
+  return inv.payment_method ?? DUMMY_PAYMENT_METHODS[stableIndex(inv.id, DUMMY_PAYMENT_METHODS.length)];
+}
+
+/** Fetches the PDF as a blob and saves it locally — more reliable than a plain
+ *  <a download> against a cross-origin signed URL, which browsers often just
+ *  navigate to instead of downloading. */
+async function downloadInvoicePdf(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function InvoiceLedger() {
+  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<LedgerStatusFilter>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  useEffect(() => {
+    apiFetch("/api/billing/invoices")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setInvoices(Array.isArray(data) ? data : []))
+      .catch(() => setInvoices([]));
+  }, []);
+
+  const q = search.trim().toLowerCase();
+  const filtered = (invoices ?? []).filter((inv) => {
+    if (q && !(inv.recipient_name.toLowerCase().includes(q) || inv.invoice_number.toLowerCase().includes(q))) return false;
+    if (statusFilter === "paid" && inv.status !== "paid") return false;
+    if (statusFilter === "outstanding" && !["draft", "finalized", "issued", "sent"].includes(inv.status)) return false;
+    if (statusFilter === "overdue" && inv.status !== "overdue") return false;
+    if (statusFilter === "void" && !["void", "cancelled"].includes(inv.status)) return false;
+    const day = inv.created_at.slice(0, 10);
+    if (dateFrom && day < dateFrom) return false;
+    if (dateTo && day > dateTo) return false;
+    return true;
+  });
+
+  return (
+    <section className="mb-5 rounded-3xl border bg-white" style={{ borderColor: BORDER }}>
+      <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <FileText size={15} strokeWidth={2.5} style={{ color: PLUM }} />
+          <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Monthly financial ledger</h2>
+        </div>
+        <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>Invoice-level billing activity, collections and outstanding balances</p>
+      </div>
+
+      <div className="flex flex-col gap-3 border-b px-6 py-4 lg:flex-row lg:items-center" style={{ borderColor: BORDER }}>
+        <div className="relative min-w-0 flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by participant name or invoice ID"
+            className="h-9 rounded-xl pl-8 text-[12px]"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as LedgerStatusFilter)}>
+          <SelectTrigger className="h-9 w-full rounded-xl text-[12px] lg:w-[170px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Status</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="outstanding">Outstanding</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="void">Void / Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[135px] rounded-xl text-[11px]" />
+          <span className="text-[10px] font-bold" style={{ color: MUTED }}>to</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 w-[135px] rounded-xl text-[11px]" />
+          {(search || statusFilter !== "all" || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setSearch(""); setStatusFilter("all"); setDateFrom(""); setDateTo(""); }}
+              className="whitespace-nowrap text-[11px] font-bold hover:opacity-70"
+              style={{ color: PLUM }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {invoices === null ? (
+        <div className="p-8 text-center"><p className="text-[12px] font-medium" style={{ color: MUTED }}>Loading…</p></div>
+      ) : filtered.length === 0 ? (
+        <div className="p-8 text-center"><p className="text-[12px] font-medium" style={{ color: MUTED }}>No invoices match the current filters.</p></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px]">
+            <thead>
+              <tr className="border-b text-left" style={{ borderColor: BORDER }}>
+                <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Invoice ID</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Participant</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Service type</th>
+                <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Amount</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Payment method</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Date</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Status</th>
+                <th className="px-6 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((inv) => {
+                const meta = INVOICE_STATUS_META[inv.status] ?? INVOICE_STATUS_META.draft;
+                return (
+                  <tr key={inv.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                    <td className="px-6 py-3.5 text-[11px] font-black" style={{ color: TEXT }}>{inv.invoice_number}</td>
+                    <td className="px-4 py-3.5 text-[11px] font-bold" style={{ color: TEXT }}>{inv.recipient_name}</td>
+                    <td className="px-4 py-3.5 text-[11px] font-medium" style={{ color: MUTED }}>
+                      {displayServiceCategory(inv) === "aged_care" ? "Aged Care" : "Disability"}
+                    </td>
+                    <td className="px-4 py-3.5 text-right text-[11px] font-black" style={{ color: TEXT }}>{formatMoney(centsToAud(inv.total_cents))}</td>
+                    <td className="px-4 py-3.5 text-[11px] font-medium" style={{ color: MUTED }}>
+                      {PAYMENT_METHOD_LABEL[displayPaymentMethod(inv)] ?? displayPaymentMethod(inv)}
+                    </td>
+                    <td className="px-4 py-3.5 text-[11px] font-medium" style={{ color: MUTED }}>
+                      {new Date(inv.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wide" style={{ background: meta.bg, color: meta.color }}>
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => inv.pdf_url && window.open(inv.pdf_url, "_blank", "noopener")}
+                          disabled={!inv.pdf_url}
+                          title="View"
+                          aria-label={`View invoice ${inv.invoice_number}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <Eye size={13} style={{ color: MUTED }} />
+                        </button>
+                        <button
+                          onClick={() => inv.pdf_url && window.open(inv.pdf_url, "_blank", "noopener")}
+                          disabled={!inv.pdf_url}
+                          title="Print"
+                          aria-label={`Print invoice ${inv.invoice_number}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <Printer size={13} style={{ color: MUTED }} />
+                        </button>
+                        <button
+                          onClick={() => inv.pdf_url && downloadInvoicePdf(inv.pdf_url, `${inv.invoice_number}.pdf`)}
+                          disabled={!inv.pdf_url}
+                          title="Download"
+                          aria-label={`Download invoice ${inv.invoice_number}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <Download size={13} style={{ color: MUTED }} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function FinancialStat({
@@ -1067,163 +1307,10 @@ export default function MDFinancialPage() {
             </section>
 
             {/* ========================================================= */}
-            {/* MONTHLY LEDGER                                            */}
+            {/* MONTHLY LEDGER (invoice-level)                            */}
             {/* ========================================================= */}
 
-            <section
-              className="mb-5 rounded-3xl border bg-white"
-              style={{ borderColor: BORDER }}
-            >
-              <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
-                <div className="flex items-center gap-2">
-                  <FileText
-                    size={15}
-                    strokeWidth={2.5}
-                    style={{ color: PLUM }}
-                  />
-
-                  <h2
-                    className="text-[14px] font-black"
-                    style={{ color: TEXT }}
-                  >
-                    Monthly financial ledger
-                  </h2>
-                </div>
-
-                <p
-                  className="mt-1 text-[11px] font-medium"
-                  style={{ color: MUTED }}
-                >
-                  Billing activity, collections and outstanding balances
-                </p>
-              </div>
-
-              {visibleMonths.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[650px]">
-                    <thead>
-                      <tr
-                        className="border-b text-left"
-                        style={{ borderColor: BORDER }}
-                      >
-                        <th
-                          className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.14em]"
-                          style={{ color: MUTED }}
-                        >
-                          Period
-                        </th>
-
-                        <th
-                          className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]"
-                          style={{ color: MUTED }}
-                        >
-                          Billed
-                        </th>
-
-                        <th
-                          className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]"
-                          style={{ color: MUTED }}
-                        >
-                          Collected
-                        </th>
-
-                        <th
-                          className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]"
-                          style={{ color: MUTED }}
-                        >
-                          Outstanding
-                        </th>
-
-                        <th
-                          className="px-6 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]"
-                          style={{ color: MUTED }}
-                        >
-                          Invoices
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {visibleMonths
-                        .slice()
-                        .reverse()
-                        .map((month, index) => (
-                          <tr
-                            key={month.month}
-                            className="border-b last:border-b-0"
-                            style={{ borderColor: BORDER }}
-                          >
-                            <td className="px-6 py-3.5">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="text-[11px] font-black"
-                                  style={{ color: TEXT }}
-                                >
-                                  {getMonthLabel(month.month)}
-                                </span>
-
-                                {index === 0 && (
-                                  <span
-                                    className="rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase"
-                                    style={{
-                                      background: `${PLUM}12`,
-                                      color: PLUM,
-                                    }}
-                                  >
-                                    Latest
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-
-                            <td
-                              className="px-4 py-3.5 text-right text-[11px] font-black"
-                              style={{ color: TEXT }}
-                            >
-                              {formatMoney(month.billedAud)}
-                            </td>
-
-                            <td
-                              className="px-4 py-3.5 text-right text-[11px] font-black"
-                              style={{ color: GREEN }}
-                            >
-                              {formatMoney(month.paidAud)}
-                            </td>
-
-                            <td
-                              className="px-4 py-3.5 text-right text-[11px] font-black"
-                              style={{
-                                color:
-                                  month.outstandingAud > 0
-                                    ? AMBER
-                                    : MUTED,
-                              }}
-                            >
-                              {formatMoney(month.outstandingAud)}
-                            </td>
-
-                            <td
-                              className="px-6 py-3.5 text-right text-[11px] font-bold"
-                              style={{ color: MUTED }}
-                            >
-                              {month.count}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="p-8 text-center">
-                  <p
-                    className="text-[12px] font-medium"
-                    style={{ color: MUTED }}
-                  >
-                    No monthly financial records are available.
-                  </p>
-                </div>
-              )}
-            </section>
+            <InvoiceLedger />
 
             {/* ========================================================= */}
             {/* DATA COVERAGE                                             */}

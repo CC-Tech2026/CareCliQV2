@@ -859,10 +859,10 @@ function ActiveParticipantsPage({
         </Select>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
           <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[150px]">
-            <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All statuses" />
+            <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="all">Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>

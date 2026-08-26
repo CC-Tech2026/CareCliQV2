@@ -58,6 +58,7 @@ import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
+import MDCalendarPage from "@/pages/md/md-calendar";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
 import DevProgressTestPage from "@/pages/dev-progress-test";
@@ -195,6 +196,12 @@ function Router() {
       <Route path="/md/financial">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDFinancialPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/calendar">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDCalendarPage />
         </ProtectedRoute>
       </Route>
 

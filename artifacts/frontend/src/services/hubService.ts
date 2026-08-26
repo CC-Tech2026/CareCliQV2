@@ -22,6 +22,9 @@ export type OrgEvent = {
   event_type: "audit" | "training" | "meeting" | "review";
   location?: string | null;
   participants_desc?: string | null;
+  /** "HH:MM", 24h. Null on events created before this field existed —
+   *  those render in the calendar's all-day strip instead of the hour grid. */
+  start_time?: string | null;
   organization_id?: string;
   created_by?: string;
   created_at?: string;

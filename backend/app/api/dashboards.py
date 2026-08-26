@@ -495,6 +495,23 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
     today = _today_iso()
     active_workers = [m for m in team if m.get("is_active")]
     support_workers = [m for m in active_workers if m.get("role") == "support_worker"]
+    coordinators = [m for m in active_workers if m.get("role") == "support_coordinator"]
+
+    # Participant composition — gender split and NDIS plan status breakdown,
+    # for the Hub's participant overview card.
+    participants_by_sex = {"male": 0, "female": 0, "unspecified": 0}
+    for p in participants:
+        sex = p.get("biological_sex") or "unspecified"
+        if sex not in participants_by_sex:
+            sex = "unspecified"
+        participants_by_sex[sex] += 1
+
+    participants_by_plan_status = {"active": 0, "pending": 0, "review": 0, "expired": 0, "inactive": 0}
+    for p in participants:
+        plan_status = p.get("plan_status") or "active"
+        if plan_status not in participants_by_plan_status:
+            plan_status = "active"
+        participants_by_plan_status[plan_status] += 1
 
     # Sessions this week
     from datetime import timedelta
@@ -663,6 +680,9 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
         "active_participants": len(participants),
         "active_staff": len(active_workers),
         "support_workers": len(support_workers),
+        "coordinators": len(coordinators),
+        "participants_by_sex": participants_by_sex,
+        "participants_by_plan_status": participants_by_plan_status,
         "staff_retention_rate": retention_rate,
         "sessions_this_week": len(sessions_this_week),
         "compliance_score": compliance_score,

@@ -168,8 +168,12 @@ export function GovernanceTriage({
    *  collapse toggle, remembered per page. "floating": a small header-bar
    *  trigger button (badge count) that opens the same content as a dropdown
    *  instead of permanently taking up page height - for pages that already
-   *  have several stacked sections and don't want one more. */
-  variant?: "panel" | "floating";
+   *  have several stacked sections and don't want one more. "sidebar": a
+   *  narrow, always-expanded column meant to sit beside real content (e.g. a
+   *  chart) in a two-column row - unlike "panel", which was deliberately
+   *  kept full-width elsewhere because a lone half-width card next to blank
+   *  canvas read as unfinished; this is for when the other half isn't blank. */
+  variant?: "panel" | "floating" | "sidebar";
 }) {
   const [alerts, setAlerts] = useState<HubComplianceAlert[] | null>(null);
   const [error, setError] = useState(false);
@@ -285,6 +289,52 @@ export function GovernanceTriage({
           </>
         )}
       </div>
+    );
+  }
+
+  if (variant === "sidebar") {
+    return (
+      <section className="flex h-full flex-col overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+        <div className="flex items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: BORDER }}>
+          <h2 className="text-[13px] font-black" style={{ color: TEXT }}>Needs your attention</h2>
+          {!loading && all.length > 0 && (
+            <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white" style={{ background: topSeverityColors.color }}>
+              {all.length}
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <ListSkeleton />
+        ) : all.length === 0 ? (
+          <EmptyState message="All caught up. Nothing needs action right now." />
+        ) : (
+          <div className="flex-1 divide-y overflow-y-auto" style={{ borderColor: BORDER }}>
+            {all.slice(0, 6).map((a) => {
+              const { color } = severityColors(a.severity);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onNavigate(routeForSource(a.source))}
+                  className="w-full px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-wide" style={{ color }}>{severityLabel(a.severity)}</p>
+                  <p className="mt-1 text-[12px] font-bold leading-snug" style={{ color: TEXT }}>{a.title}</p>
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed" style={{ color: MUTED }}>{a.detail}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!loading && all.length > 0 && (
+          <button
+            onClick={() => onNavigate(viewAllHref)}
+            className="border-t px-5 py-3 text-center text-[11px] font-bold transition-colors hover:bg-cc-soft"
+            style={{ borderColor: BORDER, color: "var(--cc-plum)" }}
+          >
+            View all in {viewAllLabel}
+          </button>
+        )}
+      </section>
     );
   }
 
