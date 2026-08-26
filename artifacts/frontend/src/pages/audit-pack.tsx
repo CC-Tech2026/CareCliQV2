@@ -144,7 +144,6 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
               {translate("auditPack.title")}
               <SectionInfo text="Everything an NDIS auditor would ask for, bundled and exportable: session records, signatures, and evidence." />
             </h1>
-            <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
           </div>
         )}
         <Button

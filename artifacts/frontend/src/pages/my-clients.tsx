@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Search, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -217,7 +218,10 @@ export default function MyClients() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("clients.title")}</h1>
+          <h1 className="flex items-center gap-2 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>
+            {translate("clients.title")}
+            <SectionInfo text="Everyone you're currently supporting: their plans, goals, and how their sessions are tracking." />
+          </h1>
           <p className="text-[13px] font-medium mt-0.5" style={{ color: MUTED }}>
             {translateParams(data.length === 1 ? "clients.assignedCountOne" : "clients.assignedCountMany", { count: String(data.length) })}
           </p>

@@ -332,9 +332,6 @@ export default function MDCalendarPage() {
               <CalendarDays size={19} style={{ color: PLUM }} /> Calendar
               <SectionInfo text="Scheduled appointments across the organisation, plus your own audits, training, meetings and reviews." />
             </h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-              Everything on the org's calendar.
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 rounded-xl border p-1" style={{ borderColor: BORDER, background: SOFT }}>

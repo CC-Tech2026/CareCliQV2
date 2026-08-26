@@ -6,6 +6,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { cn } from "@/lib/utils";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   getWorkerAvailability,
   nextSlotStatus,
@@ -129,7 +130,10 @@ export default function WorkerAvailabilityPage() {
     <div className="w-full space-y-5 pb-10">
       <header>
         <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{translate("availability.title")}</h1>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
+          {translate("availability.title")}
+          <SectionInfo text="Set the days and times you're available to work, so coordinators can offer you shifts that fit." />
+        </h1>
         <Link href="/calendar" className="mt-2 inline-block text-xs font-black" style={{ color: PLUM }}>
           {translate("availability.backToCalendar")}
         </Link>

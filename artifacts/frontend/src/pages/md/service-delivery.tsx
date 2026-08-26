@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { getCareAlerts } from "@/services/hubService";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -20,10 +21,10 @@ export default function MDServiceDeliveryPage() {
     <HubLayout>
       <div className="space-y-5 pb-10">
         <div>
-          <h1 className="text-xl font-black" style={{ color: TEXT }}>Delivery Quality</h1>
-          <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-            Care delivery and participant engagement — what needs a name and a next step, not a score.
-          </p>
+          <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
+            Delivery Quality
+            <SectionInfo text="Care delivery and participant engagement: what needs a name and a next step, not a score." />
+          </h1>
         </div>
 
         <GovernanceTriage

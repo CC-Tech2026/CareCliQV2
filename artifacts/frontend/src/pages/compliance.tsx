@@ -25,6 +25,7 @@ import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditT
 import { IncidentAccordionCard } from "@/components/incidents/IncidentAccordionCard";
 import { MedicationRegisterPanel } from "@/components/compliance/MedicationRegisterPanel";
 import { Card } from "@/components/ui/card";
+import { SectionInfo } from "@/components/ui/section-info";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -326,8 +327,10 @@ export default function Compliance() {
     <div className="flex flex-col gap-5 pb-10">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
-          <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
+          <h1 className="flex items-center gap-2 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>
+            {translate("compliance.page.title")}
+            <SectionInfo text={translate("compliance.centre.subtitle")} />
+          </h1>
         </div>
         <div className="flex items-start gap-2 shrink-0">
         {(overallScore != null || urgentCount > 0) && (

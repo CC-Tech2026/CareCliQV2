@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   createMeetingSession, transcribeAndResolveNames,
   type ConsentGivenBy, type ConsentMethod,
@@ -802,7 +803,10 @@ function ActiveParticipantsPage({
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participant Onboarding
           </button>
-          <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Participants</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+            Participants
+            <SectionInfo text="Everyone onboarded with your organisation, active and inactive." />
+          </h1>
           <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
             {activeTotal} active · {inactiveTotal} inactive with this provider.
           </p>
@@ -973,7 +977,10 @@ function ComplaintsPage({ onBack }: { onBack: () => void }) {
         >
           <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participants
         </button>
-        <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Participant Complaints</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+          Participant Complaints
+          <SectionInfo text="Complaints and feedback logged against a participant, with resolution status and notes." />
+        </h1>
         <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
           {allComplaints.length} total · {openCount} open.
         </p>
@@ -1443,7 +1450,10 @@ export default function ParticipantOnboardingBoard() {
             >
               <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
             </button>
-            <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Participant Onboarding</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+              Participant Onboarding
+              <SectionInfo text="Move a new participant from referral through to an active plan: intake, consent, and setup." />
+            </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

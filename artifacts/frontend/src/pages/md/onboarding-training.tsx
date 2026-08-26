@@ -6,6 +6,7 @@ import {
   FileVideo, Link2, X, Loader2, ClipboardCheck,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -1708,8 +1709,10 @@ export default function MDOnboardingTrainingPage() {
             <ArrowLeft size={13} strokeWidth={2.5} /> Back to Onboarding
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.onboarding.subtitle")}</p>
+            <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
+              {translate("md.onboarding.title")}
+              <SectionInfo text={translate("md.onboarding.subtitle")} />
+            </h1>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
             <GraduationCap size={16} strokeWidth={2.5} />

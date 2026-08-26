@@ -20,6 +20,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -633,6 +634,8 @@ export default function MDFinancialPage() {
                         Finance
                       </h1>
 
+                      <SectionInfo text="Revenue, cash collection, and delivery economics across the organisation." />
+
                       <span
                         className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
                         style={{
@@ -643,13 +646,6 @@ export default function MDFinancialPage() {
                         Live
                       </span>
                     </div>
-
-                    <p
-                      className="mt-0.5 text-[12px] font-medium"
-                      style={{ color: MUTED }}
-                    >
-                      Revenue, cash collection and delivery economics
-                    </p>
                   </div>
                 </div>
               </div>

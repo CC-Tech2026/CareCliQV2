@@ -7,6 +7,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useToast } from "@/hooks/use-toast";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import {
@@ -137,8 +138,9 @@ export default function WorkerTrainingPage() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("performance.eyebrow")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("training.title")}
+            <SectionInfo text="Required and optional courses, certifications, and training requests." />
           </h1>
         </div>
         <button

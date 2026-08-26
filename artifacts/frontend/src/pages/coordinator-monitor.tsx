@@ -127,9 +127,6 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
           <Radio size={22} /> Long shift monitor
           <SectionInfo text="Tracks engagement for shifts 4 hours or longer, per NDIS Practice Standard Check 16. Refreshes every 30 seconds." />
         </h1>
-        <p className="mt-1 text-sm" style={{ color: MUTED }}>
-          Live engagement for long shifts.
-        </p>
       </div>
       )}
 

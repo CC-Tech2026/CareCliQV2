@@ -4,6 +4,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Bell, Loader2 } from "lucide-react";
+import { SectionInfo } from "@/components/ui/section-info";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import {
   dismissNotification,
@@ -100,8 +101,9 @@ export default function WorkerNotificationsPage() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("nav.notifications")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("notifications.title")}
+          <SectionInfo text="Every notification you've received in the last 90 days: shift reminders, messages, and alerts." />
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
           {translate("notifications.last90Days")}

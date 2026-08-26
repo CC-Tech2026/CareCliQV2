@@ -2,6 +2,7 @@
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { ClipboardList } from "lucide-react";
 import { getMyClients, getMyClientNdisPlan } from "@/services/workerService";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -34,7 +35,10 @@ export default function WorkerNdisPlan() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("ndisPlan.title")}</h1>
+        <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+          {translate("ndisPlan.title")}
+          <SectionInfo text="NDIS plan details for the participants you support: funding goals and plan status." />
+        </h1>
       </div>
       <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-2">

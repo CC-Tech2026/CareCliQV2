@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -151,12 +152,15 @@ export default function FeedbackReports() {
     <div className="mx-auto max-w-4xl space-y-5 p-6 pb-16">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-black tracking-tight" style={{ color: TEXT }}>Feedback & Reports</h1>
-          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-            {canResolve
-              ? `${allReports.length} total · ${openCount} open. Operational issues only — participant-safety incidents go through Report Incident.`
-              : "Flag anything operational that isn't working — rostering, equipment, scheduling, communication. For participant-safety issues, use Report Incident instead."}
-          </p>
+          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+            Feedback & Reports
+            <SectionInfo text="Flag anything operational that isn't working: rostering, equipment, scheduling, communication. For participant-safety issues, use Report Incident instead." />
+          </h1>
+          {canResolve && (
+            <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
+              {allReports.length} total · {openCount} open
+            </p>
+          )}
         </div>
         <Button variant="navy" className="gap-1.5" onClick={() => setNewOpen(true)}>
           <Plus size={15} /> New Report

@@ -191,9 +191,11 @@ export default function MDSchedulePage() {
       <div className="space-y-5 pb-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>Master Schedule</h1>
+            <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
+              Master Schedule
+              <SectionInfo text="Org-wide shift oversight, read-only. Assigning and rescheduling stays with coordinators." />
+            </h1>
             <p className="flex items-center gap-1.5 text-[12px] font-medium" style={{ color: MUTED }}>
-              Org-wide shift oversight, read-only. Assigning and rescheduling stays with coordinators.
               {shifts !== null && (
                 <span className="flex items-center gap-1 whitespace-nowrap">
                   <Radio size={11} style={{ color: GREEN }} />

@@ -593,13 +593,6 @@ export default function MDStaffPage() {
                 Staff Directory
                 <SectionInfo text="Your organisation's staff: who's active, how they're performing, credentials due, and who's coming through hiring." />
               </h1>
-
-              <p
-                className="mt-1.5 text-[12px] font-medium leading-relaxed"
-                style={{ color: MUTED }}
-              >
-                Your team at a glance.
-              </p>
             </div>
 
             <button

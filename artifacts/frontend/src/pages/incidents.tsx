@@ -135,9 +135,6 @@ function WorkerIncidentsList() {
             {translate("incidents.title")}
             <SectionInfo text="Record and follow up on incidents, from first report through investigation and NDIS notification where required." />
           </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-            {translate("incidents.workerSubtitle")}
-          </p>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}

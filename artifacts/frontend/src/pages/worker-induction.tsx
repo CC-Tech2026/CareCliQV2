@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
+import { SectionInfo } from "@/components/ui/section-info";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { completeMyInductionItem, getMyInduction, type InductionItem } from "@/services/inductionService";
 
@@ -40,8 +41,9 @@ export default function WorkerInductionPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
           {translate("induction.eyebrow") || "Getting started"}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("induction.title") || "Induction"}
+          <SectionInfo text="Your checklist for getting set up: required reading, policies, and first steps before your first shift." />
         </h1>
       </header>
 

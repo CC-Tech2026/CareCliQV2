@@ -11,6 +11,7 @@ import {
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -2688,7 +2689,10 @@ export default function Patients() {
           {/* Title row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>{translate("patients.title")}</h2>
+              <h2 className="flex items-center gap-1.5 text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
+                {translate("patients.title")}
+                <SectionInfo text="Everyone you support: their plans, goals, sessions, and compliance, in one place." />
+              </h2>
               {!participantsLoading && (
                 <span
                   className="text-[10px] font-black px-2 py-0.5 rounded-full"

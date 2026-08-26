@@ -23,6 +23,7 @@ import {
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
   Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail,
@@ -1700,8 +1701,10 @@ export default function StaffOnboardingBoard() {
             >
               <ArrowLeft size={13} strokeWidth={2.5} /> Back to Hub
             </button>
-            <h1 className="text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>Staff Onboarding</h1>
-            <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>Manage candidates from interview through activation.</p>
+            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+              Staff Onboarding
+              <SectionInfo text="Manage candidates from interview through activation, and track them through credentials and training." />
+            </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {data && (

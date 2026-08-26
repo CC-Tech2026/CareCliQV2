@@ -1177,11 +1177,8 @@ export default function Reports() {
           </p>
           <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate(activeTab_.labelKey)}
-            <SectionInfo text="Build and export reports for audits, funding bodies, and your own records — pick a report type from the tabs." />
+            <SectionInfo text="Build and export reports for audits, funding bodies, and your own records. Pick a report type from the tabs below." />
           </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: "var(--cc-muted)" }}>
-            Export NDIS-ready reports and audit documentation
-          </p>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">

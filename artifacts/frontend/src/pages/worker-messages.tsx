@@ -6,6 +6,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Bell, Loader2, MessageCircle, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   fetchConversationMessages,
   fetchConversations,
@@ -218,8 +219,9 @@ export default function WorkerMessages() {
         <p className="hidden" style={{ color: CORAL }}>
           {translate("messages.title")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("messages.title")}
+          <SectionInfo text="Direct conversations with your coordinator, about shifts, participants, or anything else." />
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
           {data?.unread_count

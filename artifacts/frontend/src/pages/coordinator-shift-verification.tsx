@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { SectionInfo } from "@/components/ui/section-info";
 import { format, parseISO } from "date-fns";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Loader2,
@@ -208,8 +209,9 @@ export default function CoordinatorShiftVerification() {
         <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
           Schedule
         </p>
-        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+        <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           Shift Verification
+          <SectionInfo text="Review completed shifts before they're finalised: check timing, tasks, and notes are all in order." />
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
           {isLoading

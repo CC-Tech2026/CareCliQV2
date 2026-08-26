@@ -196,9 +196,6 @@ export function IncidentRegisterPanel() {
             {translate("incidents.register.title")}
             <SectionInfo text="Every incident recorded across your organisation, from all sources, aligned to NDIS Practice Standard Core." />
           </h1>
-          <p className="mt-1 text-sm font-medium text-[var(--cc-muted)]">
-            All incidents, all sources.
-          </p>
         </div>
         <div className="flex gap-2">
           <button

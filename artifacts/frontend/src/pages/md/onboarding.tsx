@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { GraduationCap, ChevronRight } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
@@ -32,10 +33,10 @@ export default function MDOnboardingPage() {
       <div className="space-y-6 pb-10">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-              Training programs for new starters.
-            </p>
+            <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
+              {translate("md.onboarding.title")}
+              <SectionInfo text="Training programs for new starters, and the resources and approvals that go with them." />
+            </h1>
           </div>
         </div>
 
