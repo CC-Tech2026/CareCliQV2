@@ -49,8 +49,11 @@ import {
 } from "@/services/applicantsService";
 import {
   getWorkerPipelineOverview,
+  getCoordinatorWorkerStats,
   type PipelinePerson,
+  type WorkerStats,
 } from "@/services/coordinatorService";
+import { WorkerDetail, type WorkerDetailTab } from "@/components/team/WorkerDetail";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -1488,6 +1491,9 @@ export default function StaffOnboardingBoard() {
 
   const [openHireId, setOpenHireId] = useState<string | null>(null);
   const [openApplicantId, setOpenApplicantId] = useState<string | null>(null);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [selectedWorkerTab, setSelectedWorkerTab] = useState<WorkerDetailTab | undefined>(undefined);
+  const [workerFullScreen, setWorkerFullScreen] = useState(false);
   const [notProceedingOpen, setNotProceedingOpen] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [activeApplicant, setActiveApplicant] = useState<Applicant | null>(null);
@@ -1505,6 +1511,16 @@ export default function StaffOnboardingBoard() {
 
   const pipelineQuery = useQuery({ queryKey: ["worker-pipeline"], queryFn: getWorkerPipelineOverview });
   const data = pipelineQuery.data;
+
+  // Only fetched lazily once the MD actually opens a worker's side panel from this board -
+  // no reason to pull every worker's full stats record on every load of this page.
+  const workerStatsQuery = useQuery({
+    queryKey: ["coordinator-worker-stats"],
+    queryFn: getCoordinatorWorkerStats,
+    enabled: isHireManager && !!selectedWorkerId,
+  });
+  const selectedWorkerStats: WorkerStats | null =
+    workerStatsQuery.data?.find((w) => w.id === selectedWorkerId) ?? null;
 
   const applicantsQuery = useQuery({ queryKey: ["applicants"], queryFn: listApplicants });
   const applicants = applicantsQuery.data ?? [];
@@ -1587,8 +1603,16 @@ export default function StaffOnboardingBoard() {
   }
 
   function openWorker(workerId: string, tab: string) {
-    const target = isHireManager ? "/md/staff" : "/team";
-    navigate(`${target}?workerId=${encodeURIComponent(workerId)}&tab=${encodeURIComponent(tab)}`);
+    // MD: open the worker's side panel right here on the board - no reason to leave this
+    // page and land back on the staff directory just to see one profile. Coordinators still
+    // go to /team, which doesn't have an equivalent inline panel wired up (yet).
+    if (isHireManager) {
+      setSelectedWorkerId(workerId);
+      setSelectedWorkerTab(tab as WorkerDetailTab);
+      setWorkerFullScreen(false);
+      return;
+    }
+    navigate(`/team?workerId=${encodeURIComponent(workerId)}&tab=${encodeURIComponent(tab)}`);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -1905,6 +1929,31 @@ export default function StaffOnboardingBoard() {
               onNavigate={setOpenHireId}
               requireReAuth={requireReAuth}
             />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!selectedWorkerId} onOpenChange={(open) => { if (!open) { setSelectedWorkerId(null); setWorkerFullScreen(false); } }}>
+        <SheetContent side="right" className={`w-full overflow-y-auto p-6 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
+          <SheetHeader className="sr-only">
+            <SheetTitle>{selectedWorkerStats ? `${selectedWorkerStats.full_name} · staff profile` : "Staff profile"}</SheetTitle>
+          </SheetHeader>
+          {selectedWorkerId && (
+            selectedWorkerStats ? (
+              <WorkerDetail
+                worker={selectedWorkerStats}
+                initialTab={selectedWorkerTab}
+                onBack={() => setSelectedWorkerId(null)}
+                fullScreen={workerFullScreen}
+                onToggleFullScreen={() => setWorkerFullScreen((v) => !v)}
+              />
+            ) : (
+              <div className="space-y-4 pt-2">
+                <div className="h-16 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                <div className="h-40 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                <div className="h-40 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+              </div>
+            )
           )}
         </SheetContent>
       </Sheet>

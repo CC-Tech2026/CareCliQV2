@@ -651,8 +651,150 @@ export function WorkerDetail({
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {fullScreen && (
+          <div className="hidden xl:flex xl:w-80 xl:shrink-0 xl:flex-col gap-4">
+            <RailCard title="Contact">
+              <RailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
+              <RailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
+              <RailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
+              <RailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
+              <RailRow icon={LogIn} label={translate("team.detail.lastLogin")} value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined} emptyText={translate("team.detail.noLoginYet")} />
+            </RailCard>
+
+            <RailCard title="Compliance snapshot">
+              <RailStatusRow
+                label="Credentials"
+                value={`${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`}
+                tone={credentialsComplete ? "success" : credentialsCompleteCount === 0 ? "danger" : "warning"}
+                onClick={() => setTab("credentials")}
+              />
+              <RailStatusRow
+                label="Training"
+                value={worker.training_overdue ? "Overdue" : trainingPendingCount > 0 ? `${trainingPendingCount} to review` : "Up to date"}
+                tone={worker.training_overdue ? "danger" : trainingPendingCount > 0 ? "warning" : "success"}
+                onClick={() => setTab("training")}
+              />
+              <RailStatusRow
+                label="Documents"
+                value={`${documentsCount} on file`}
+                tone="neutral"
+                onClick={() => setTab("documents")}
+              />
+              {onboardingPending && (
+                <RailStatusRow
+                  label="Onboarding"
+                  value="In progress"
+                  tone="warning"
+                  onClick={() => setTab("personal")}
+                />
+              )}
+            </RailCard>
+
+            {hasQuickActions && (
+              <RailCard title="Quick actions">
+                <div className="flex flex-col gap-1.5">
+                  {onAssignShift && <RailActionButton icon={Clock} label={translate("team.assignShift")} onClick={onAssignShift} />}
+                  {onAssignClient && <RailActionButton icon={Link2} label={translate("team.assignClient")} onClick={onAssignClient} />}
+                  {onReminder && <RailActionButton icon={Mail} label={translate("team.reminder")} onClick={onReminder} />}
+                  {onSendPasswordReset && <RailActionButton icon={KeyRound} label="Send password reset email" onClick={onSendPasswordReset} />}
+                  {onDeactivate && worker.is_active !== false && (
+                    <RailActionButton icon={UserX} label={translate("team.deactivate")} onClick={onDeactivate} tone="danger" />
+                  )}
+                  {onActivate && worker.is_active === false && (
+                    <RailActionButton icon={UserCheck} label={translate("team.reactivate")} onClick={onActivate} tone="success" />
+                  )}
+                  {onDeleteAccount && (
+                    <RailActionButton icon={Trash2} label="Remove account" onClick={onDeleteAccount} tone="danger" />
+                  )}
+                </div>
+              </RailCard>
+            )}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** Compact card shell for the full-screen right rail — same visual language as the
+ * main content cards (SURFACE/BORDER/CARD_SHADOW), just tighter padding since it's
+ * secondary, at-a-glance context rather than primary content. */
+function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border overflow-hidden" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="px-4 pt-3.5 pb-2 text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{title}</p>
+      <div className="divide-y" style={{ borderColor: BORDER }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RailRow({
+  icon: Icon, label, value, emptyText,
+}: {
+  icon: typeof Mail;
+  label: string;
+  value?: string | null;
+  emptyText: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 px-4 py-2.5">
+      <Icon size={13} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        <p className={`text-[13px] font-semibold mt-0.5 truncate ${value ? "" : "italic"}`} style={{ color: value ? TEXT : MUTED }}>
+          {value || emptyText}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RailStatusRow({
+  label, value, tone, onClick,
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  onClick: () => void;
+}) {
+  const color = tone === "success" ? "var(--cc-status-success)" : tone === "warning" ? "var(--cc-status-warning)" : tone === "danger" ? "var(--cc-status-danger)" : TEXT;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
+    >
+      <span className="text-[13px] font-bold" style={{ color: TEXT }}>{label}</span>
+      <span className="flex items-center gap-1 text-[12px] font-black" style={{ color }}>
+        {value}
+        <ArrowRight size={11} />
+      </span>
+    </button>
+  );
+}
+
+function RailActionButton({
+  icon: Icon, label, onClick, tone,
+}: {
+  icon: typeof Mail;
+  label: string;
+  onClick: () => void;
+  tone?: "danger" | "success";
+}) {
+  const color = tone === "danger" ? "var(--cc-status-danger)" : tone === "success" ? "var(--cc-status-success)" : PLUM;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-bold transition-colors hover:bg-black/[0.04]"
+      style={{ color }}
+    >
+      <Icon size={13} className="shrink-0" />
+      {label}
+    </button>
   );
 }
 
