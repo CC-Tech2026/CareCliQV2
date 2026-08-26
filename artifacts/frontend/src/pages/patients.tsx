@@ -972,7 +972,7 @@ function SetupPlanPanel({
 
 type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile";
 
-function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
+function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void }) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
@@ -1377,6 +1377,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
           {/* Action buttons — desktop: inline right */}
           <div className="hidden sm:flex items-center gap-2 shrink-0">
+            {onToggleFullScreen && (
+              <button
+                type="button"
+                onClick={onToggleFullScreen}
+                className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+              >
+                {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                {fullScreen ? "Exit full screen" : "Full screen"}
+              </button>
+            )}
             <EditParticipantPanel
               participant={participant}
               hasPlan={hasPlan}
@@ -2893,27 +2904,15 @@ export default function Patients() {
               {translate("patients.backToList")}
             </button>
 
-            {/* Full-screen toggle — desktop only */}
-            <div
-              className="hidden lg:flex items-center justify-end px-3 py-1.5 shrink-0"
-              style={{ borderBottom: "1px solid var(--cc-border)" }}
-            >
-              <button
-                type="button"
-                onClick={() => setDetailFullScreen((v) => !v)}
-                aria-label={detailFullScreen ? "Exit full screen" : "Open full screen"}
-                title={detailFullScreen ? "Exit full screen" : "Open full screen"}
-                className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
-                style={{ color: "var(--cc-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--cc-active-bg)"; e.currentTarget.style.color = "var(--cc-plum)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--cc-muted)"; }}
-              >
-                {detailFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-              </button>
-            </div>
-
             <div className="flex-1 overflow-y-auto">
-              <ParticipantDetail key={selectedId} id={selectedId} onRefreshList={refetch} initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined} />
+              <ParticipantDetail
+                key={selectedId}
+                id={selectedId}
+                onRefreshList={refetch}
+                initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined}
+                fullScreen={detailFullScreen}
+                onToggleFullScreen={() => setDetailFullScreen((v) => !v)}
+              />
             </div>
           </>
         ) : (
