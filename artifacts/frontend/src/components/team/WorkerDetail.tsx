@@ -7,6 +7,7 @@ import {
   Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
   MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown,
+  Maximize2, Minimize2,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -311,6 +312,7 @@ function translateFlagged(count: number, translate: (k: string) => string): stri
 export function WorkerDetail({
   worker, onBack, initialTab,
   onAssignShift, onAssignClient, onReminder, onDeactivate, onActivate, onSendPasswordReset, onDeleteAccount,
+  fullScreen, onToggleFullScreen,
 }: {
   worker: WorkerStats;
   onBack: () => void;
@@ -327,6 +329,10 @@ export function WorkerDetail({
   /** MD-only - deactivation covers "can't log in" for both roles, but only the
    * MD has authority to remove a staff member's account entirely. */
   onDeleteAccount?: () => void;
+  /** Optional — only set when this profile is rendered inside a Sheet whose
+   * parent controls the panel width (e.g. md/staff.tsx). */
+  fullScreen?: boolean;
+  onToggleFullScreen?: () => void;
 }) {
   const { translate } = useAccessibility();
   const [tab, setTab] = useState<WorkerDetailTab>(!initialTab || initialTab === "overview" ? "personal" : initialTab);
@@ -404,7 +410,19 @@ export function WorkerDetail({
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
         </button>
-        {hasQuickActions && (
+        <div className="flex items-center gap-2">
+          {onToggleFullScreen && (
+            <button
+              type="button"
+              onClick={onToggleFullScreen}
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+              style={{ borderColor: BORDER, color: PLUM }}
+            >
+              {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              {fullScreen ? "Exit full screen" : "Full screen"}
+            </button>
+          )}
+          {hasQuickActions && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -457,7 +475,8 @@ export function WorkerDetail({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Identity + at-a-glance header */}

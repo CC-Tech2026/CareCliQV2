@@ -315,6 +315,7 @@ export default function MDStaffPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedWorker, setSelectedWorker] =
     useState<StaffMember | null>(null);
+  const [workerFullScreen, setWorkerFullScreen] = useState(false);
   const [detailInitialTab, setDetailInitialTab] = useState<WorkerDetailTab | undefined>(undefined);
   const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
   const [accountActionPending, setAccountActionPending] =
@@ -1159,8 +1160,8 @@ export default function MDStaffPage() {
             WORKER DETAIL DRAWER
         ========================================================= */}
 
-        <Sheet open={!!selectedWorker} onOpenChange={(open) => { if (!open) setSelectedWorker(null); }}>
-          <SheetContent side="right" className="w-full overflow-y-auto p-6 sm:max-w-4xl" style={{ background: "var(--cc-bg)" }}>
+        <Sheet open={!!selectedWorker} onOpenChange={(open) => { if (!open) { setSelectedWorker(null); setWorkerFullScreen(false); } }}>
+          <SheetContent side="right" className={`w-full overflow-y-auto p-6 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
             <SheetHeader className="sr-only">
               <SheetTitle>{selectedWorker ? `${selectedWorker.full_name} · staff profile` : "Staff profile"}</SheetTitle>
             </SheetHeader>
@@ -1173,6 +1174,8 @@ export default function MDStaffPage() {
                   onSendPasswordReset={() => handleSendPasswordReset(selectedWorker)}
                   onDeactivate={() => handleDeactivate(selectedWorker)}
                   onDeleteAccount={() => handleDeleteAccount(selectedWorker)}
+                  fullScreen={workerFullScreen}
+                  onToggleFullScreen={() => setWorkerFullScreen((v) => !v)}
                 />
               ) : (
                 <div className="space-y-4 pt-2">
