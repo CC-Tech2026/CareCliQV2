@@ -6,6 +6,7 @@ import {
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
+import { writeWaitlistSnapshot, readPendingReferrals, type PendingReferral } from "@/lib/onboardingWaitlist";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -85,6 +86,8 @@ type Intake = {
   id: string;
   full_name: string;
   service_category?: ServiceCategory;
+  /** Weekly support hours requested at enquiry — captured on the public referral form. */
+  service_hours_required?: number;
   ndis_number: string;
   email: string;
   phone: string;
@@ -487,6 +490,33 @@ let nextId = 4;
 
 // Seeded dummy records so the board isn't empty on first load — local
 // state only, same as everything else here, so it resets on page reload.
+/** Turns a publicly-submitted referral into an Enquiry-column card — see
+ *  onboardingWaitlist.ts for the full flow this is part of. */
+function pendingReferralToIntake(r: PendingReferral): Intake {
+  return {
+    id: r.id,
+    full_name: r.full_name || "Unnamed referral",
+    service_category: r.service_category,
+    service_hours_required: r.service_hours_required,
+    ndis_number: r.ndis_number || "",
+    email: r.email || "",
+    phone: r.phone || "",
+    source: "online_form",
+    status: "enquiry",
+    created_at: r.submitted_at,
+    web_intake: {
+      submitted_at: r.submitted_at,
+      given_name: r.full_name?.split(" ")[0],
+      surname: r.full_name?.split(" ").slice(1).join(" ") || undefined,
+      presenting_needs: r.support_needs ? [r.support_needs] : undefined,
+      next_of_kin: r.referrer_name
+        ? [{ name: r.referrer_name, relationship: r.referrer_relationship, phone: r.referrer_phone, email: r.referrer_email }]
+        : undefined,
+      notes: r.primary_disability ? `Primary disability: ${r.primary_disability}` : undefined,
+    },
+  };
+}
+
 const SEED_INTAKES: Intake[] = [
   {
     id: "1",
@@ -1272,7 +1302,25 @@ export default function ParticipantOnboardingBoard() {
   const selectedId = new URLSearchParams(urlSearch).get("intake");
   const profileId = new URLSearchParams(urlSearch).get("profile");
 
-  const [intakes, setIntakes] = useState<Intake[]>(SEED_INTAKES);
+  // Seed data plus any referrals submitted through the public form since —
+  // re-derived fresh on every mount, same as the rest of this page's state.
+  const [intakes, setIntakes] = useState<Intake[]>(() => [
+    ...SEED_INTAKES,
+    ...readPendingReferrals().map(pendingReferralToIntake),
+  ]);
+
+  // Mirrors just the enquiry-stage count and total requested hours to
+  // localStorage so the Hub dashboard's "Waiting list" cards can reflect
+  // them — see onboardingWaitlist.ts for why this doesn't go through a real
+  // backend.
+  useEffect(() => {
+    const enquiries = intakes.filter((i) => i.status === "enquiry");
+    writeWaitlistSnapshot({
+      count: enquiries.length,
+      hours: enquiries.reduce((sum, i) => sum + (i.service_hours_required || 0), 0),
+    });
+  }, [intakes]);
+
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
   const [view, setView] = useState<"kanban" | "list">("kanban");

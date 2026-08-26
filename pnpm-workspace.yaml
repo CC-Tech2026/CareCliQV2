@@ -102,7 +102,7 @@ overrides:
   "@tailwindcss/oxide>@tailwindcss/oxide-linux-arm64-musl": "-"
   "@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl": "-"
   "@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc": "-"
-  esbuild: "0.27.3"
+  esbuild: ">=0.28.1"
   "esbuild>@esbuild/aix-ppc64": '-'
   "esbuild>@esbuild/android-arm": '-'
   "esbuild>@esbuild/android-arm64": '-'

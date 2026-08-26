@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -9,8 +9,12 @@ import {
   TrendingUp,
   TrendingDown,
   Info,
+  Clock,
+  Timer,
+  Zap,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { readWaitlistSnapshot, type WaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // Aliased — recharts also exports a "Tooltip" (used for the chart tooltips
@@ -47,6 +51,10 @@ const SKY = "#0EA5E9";
 // in Participant Onboarding — no live staffing-capacity feed exists yet, so
 // this estimates total capacity as active staff × a reasonable caseload.
 const CASELOAD_PER_WORKER = 6;
+
+// UI-only placeholder for the waiting-list cards until a real referral has
+// been logged through the public form — see the read effect below.
+const DUMMY_WAITLIST: WaitlistSnapshot = { count: 6, hours: 34 };
 
 interface MDData {
   active_participants: number;
@@ -185,8 +193,11 @@ function StaffCompositionRing({ supportWorkers, coordinators, size = 136, stroke
           transform={`rotate(-90 ${center} ${center})`}
         />
       )}
-      <text x="50%" y="50%" textAnchor="middle" dy="0.32em" style={{ fill: TEXT, fontSize: 28, fontWeight: 900 }}>
+      <text x="50%" y="46%" textAnchor="middle" style={{ fill: TEXT, fontSize: 28, fontWeight: 900 }}>
         {formatNumber(total)}
+      </text>
+      <text x="50%" y="62%" textAnchor="middle" style={{ fill: MUTED, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>
+        TOTAL STAFF
       </text>
     </svg>
   );
@@ -333,6 +344,290 @@ function ParticipantStat({ label, value, color }: { label: string; value: number
     <div>
       <p className="text-[17px] font-black" style={{ color: color ?? TEXT }}>{formatNumber(value)}</p>
       <p className="text-[9px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+    </div>
+  );
+}
+
+/** A single real count, not a comparison or a ratio against a limit — a plain
+ *  stat tile is the right form here, not a chart (see dataviz "is it even a
+ *  chart?"). Sits above the participant overview it's a stage of. */
+function WaitlistCard({ count, onNavigate }: { count: number; onNavigate: () => void }) {
+  return (
+    <button
+      onClick={onNavigate}
+      className="grid h-full w-full grid-rows-[auto_1fr] rounded-2xl border px-6 py-5 text-left transition-colors hover:bg-cc-soft"
+      style={{ borderColor: BORDER, background: SURFACE }}
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: count > 0 ? AMBER + "1F" : SOFT }}>
+          <Clock size={16} style={{ color: count > 0 ? AMBER : MUTED }} />
+        </span>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Participants Waiting List</p>
+          <p className="text-[11px]" style={{ color: MUTED }}>New enquiries not yet screened</p>
+        </div>
+      </div>
+      <div className="flex items-center">
+        <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: count > 0 ? AMBER : TEXT }}>{formatNumber(count)}</p>
+      </div>
+    </button>
+  );
+}
+
+/** Sits beside WaitlistCard — total weekly hours the same enquiry-stage
+ *  people have requested, from the referral form's hours field. Additive
+ *  (sum of what's known), not an estimate — enquiries logged without hours
+ *  captured (e.g. via the staff-side manual form) simply contribute 0. */
+function WaitlistHoursCard({ hours }: { hours: number }) {
+  return (
+    <div
+      className="grid h-full w-full grid-rows-[auto_1fr] rounded-2xl border px-6 py-5"
+      style={{ borderColor: BORDER, background: SURFACE }}
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: hours > 0 ? BLUE + "1F" : SOFT }}>
+          <Timer size={16} style={{ color: hours > 0 ? BLUE : MUTED }} />
+        </span>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Hours in demand</p>
+          <p className="text-[11px]" style={{ color: MUTED }}>Requested, waiting list</p>
+        </div>
+      </div>
+      <div className="flex items-center">
+        <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: TEXT }}>
+          {formatNumber(hours)}<span className="text-[20px] font-bold" style={{ color: MUTED }}>h</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Sits beside Hours in demand, so the two can be read against each other at
+ *  a glance. Dummy numbers for now — no rostering/availability feed backs
+ *  this yet; the real version needs actual worker availability + shift-offer
+ *  acceptance data, which is a backend job for later. Reliable and casual
+ *  capacity get their own rows (not summed into one figure) since they carry
+ *  different confidence — a single blended number would overstate what's
+ *  actually guaranteed. */
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const angleRad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
+}
+
+/** SVG arc path for a ring segment from 0deg to `sweepDeg`, clockwise from
+ *  the top — used instead of a plain <circle> so a dash texture (the
+ *  "segmented gauge" look) only applies within the filled portion, not the
+ *  whole 360°. */
+function describeArc(cx: number, cy: number, r: number, sweepDeg: number): string {
+  const clamped = Math.min(359.9, Math.max(0, sweepDeg));
+  const start = polarToCartesian(cx, cy, r, clamped);
+  const end = polarToCartesian(cx, cy, r, 0);
+  const largeArcFlag = clamped > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+}
+
+/** Two concentric segmented rings against a shared scale, each its own
+ *  color — same job as the "Speed Statistic" reference (two arcs + a
+ *  center readout), adapted to two reliability tiers instead of two speeds.
+ *
+ *  Interactive: clicking a ring extends a short leader line outward from its
+ *  edge, ending in a small label showing that ring's exact figure — the
+ *  center total stays put either way. Each ring's callout toggles
+ *  independently, so both can be open at once. */
+function DualRingGauge({
+  outerValue,
+  innerValue,
+  max,
+  outerColor,
+  innerColor,
+  outerCallout,
+  innerCallout,
+  centerValue,
+  centerLabel,
+  size = 152,
+  stroke = 11,
+  gap = 9,
+}: {
+  outerValue: number;
+  innerValue: number;
+  max: number;
+  outerColor: string;
+  innerColor: string;
+  /** Text shown in the popped-out label when that ring is clicked, e.g. "40 hrs/wk". */
+  outerCallout: string;
+  innerCallout: string;
+  centerValue: string;
+  centerLabel: string;
+  size?: number;
+  stroke?: number;
+  gap?: number;
+}) {
+  const arrowId = useId();
+  const [outerOpen, setOuterOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+
+  const center = size / 2;
+  const outerRadius = (size - stroke) / 2;
+  const innerRadius = outerRadius - stroke - gap;
+  const outerSweep = 360 * Math.max(0, Math.min(1, outerValue / max));
+  const innerSweep = 360 * Math.max(0, Math.min(1, innerValue / max));
+
+  // Leader lines point outward from the midpoint of each ring's filled arc,
+  // both reaching the same outer radius so the inner one's line visibly
+  // crosses past the outer ring rather than getting lost near the center.
+  const calloutRadius = outerRadius + 16;
+  const outerMidAngle = outerSweep / 2;
+  const innerMidAngle = innerSweep / 2;
+  const outerAnchor = polarToCartesian(center, center, outerRadius, outerMidAngle);
+  const outerTip = polarToCartesian(center, center, calloutRadius, outerMidAngle);
+  const innerAnchor = polarToCartesian(center, center, innerRadius, innerMidAngle);
+  const innerTip = polarToCartesian(center, center, calloutRadius, innerMidAngle);
+
+  const padding = 46; // room for the callout labels to sit outside the ring itself
+  const canvas = size + padding * 2;
+  const shift = padding;
+
+  function CalloutLabel({ point, color, text, onRingLeft }: { point: { x: number; y: number }; color: string; text: string; onRingLeft: boolean }) {
+    return (
+      <div
+        className="pointer-events-none absolute z-10 flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-black shadow-sm"
+        style={{
+          left: point.x + shift,
+          top: point.y + shift,
+          transform: `translate(${onRingLeft ? "-100%" : "0%"}, -50%) translateX(${onRingLeft ? "-6px" : "6px"})`,
+          borderColor: color,
+          background: SURFACE,
+          color,
+        }}
+      >
+        {text}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative" style={{ width: canvas, height: canvas }}>
+      <svg
+        width={canvas}
+        height={canvas}
+        viewBox={`0 0 ${canvas} ${canvas}`}
+        className="absolute inset-0"
+      >
+        <defs>
+          <marker id={`${arrowId}-outer`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill={outerColor} />
+          </marker>
+          <marker id={`${arrowId}-inner`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill={innerColor} />
+          </marker>
+        </defs>
+        <g transform={`translate(${shift} ${shift})`}>
+          <circle cx={center} cy={center} r={outerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} strokeDasharray="1 7" strokeLinecap="round" />
+          <circle cx={center} cy={center} r={innerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} strokeDasharray="1 7" strokeLinecap="round" />
+          <path
+            d={describeArc(center, center, outerRadius, outerSweep)}
+            fill="none"
+            stroke={outerColor}
+            strokeWidth={stroke}
+            strokeDasharray="9 6"
+            strokeLinecap="round"
+            style={{ cursor: outerValue > 0 ? "pointer" : "default" }}
+            onClick={() => outerValue > 0 && setOuterOpen((v) => !v)}
+          />
+          <path
+            d={describeArc(center, center, innerRadius, innerSweep)}
+            fill="none"
+            stroke={innerColor}
+            strokeWidth={stroke}
+            strokeDasharray="9 6"
+            strokeLinecap="round"
+            style={{ cursor: innerValue > 0 ? "pointer" : "default" }}
+            onClick={() => innerValue > 0 && setInnerOpen((v) => !v)}
+          />
+          <text x={center} y={center - 6} textAnchor="middle" style={{ fill: TEXT, fontSize: 26, fontWeight: 900 }}>{centerValue}</text>
+          <text x={center} y={center + 15} textAnchor="middle" style={{ fill: MUTED, fontSize: 9, fontWeight: 700 }}>{centerLabel}</text>
+
+          {outerOpen && (
+            <>
+              <circle cx={outerAnchor.x} cy={outerAnchor.y} r={3} fill={outerColor} />
+              <line x1={outerAnchor.x} y1={outerAnchor.y} x2={outerTip.x} y2={outerTip.y} stroke={outerColor} strokeWidth={1.5} markerEnd={`url(#${arrowId}-outer)`} />
+            </>
+          )}
+          {innerOpen && (
+            <>
+              <circle cx={innerAnchor.x} cy={innerAnchor.y} r={3} fill={innerColor} />
+              <line x1={innerAnchor.x} y1={innerAnchor.y} x2={innerTip.x} y2={innerTip.y} stroke={innerColor} strokeWidth={1.5} markerEnd={`url(#${arrowId}-inner)`} />
+            </>
+          )}
+        </g>
+      </svg>
+
+      {outerOpen && <CalloutLabel point={outerTip} color={outerColor} text={outerCallout} onRingLeft={outerTip.x < center} />}
+      {innerOpen && <CalloutLabel point={innerTip} color={innerColor} text={innerCallout} onRingLeft={innerTip.x < center} />}
+    </div>
+  );
+}
+
+/** Dummy numbers for now — no rostering/availability feed backs this yet;
+ *  the real version needs actual worker availability + shift-offer
+ *  acceptance data, which is a backend job for later. Reliable and casual
+ *  capacity get their own ring (not summed into the visual encoding) since
+ *  they carry different confidence — the center total is a convenience
+ *  readout, and the info popover spells out the two components it hides. */
+function AvailableHoursCard() {
+  const reliable = 40;
+  const casual = 26;
+  const max = Math.ceil((Math.max(reliable, casual) * 1.25) / 10) * 10;
+  return (
+    <div className="rounded-2xl border px-6 py-4" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
+            <Zap size={16} style={{ color: PLUM }} />
+          </span>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Available hours</p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" aria-label="What does available hours mean?" className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70" style={{ color: MUTED }}>
+                    <Info size={12} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" align="start" className="w-[280px] space-y-2.5 p-3.5 text-[11px] leading-relaxed">
+                  <p><strong style={{ color: PLUM }}>Reliable extra capacity</strong> — {reliable} hrs/week from part-time staff who've opted in to extra shifts. Safe to plan against.</p>
+                  <p><strong style={{ color: SKY }}>Casual staff typical volume</strong> — ~{casual} hrs/week, based on casual staff's usual availability. Not guaranteed — don't commit new participants against this alone.</p>
+                  <p style={{ color: MUTED }}>Placeholder numbers for now — a real feed needs actual worker availability and shift-offer acceptance data.</p>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <p className="text-[11px]" style={{ color: MUTED }}>Extra weekly capacity, by reliability</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-4">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: MUTED }}>
+          <span className="h-2 w-2 rounded-full" style={{ background: PLUM }} /> Reliable
+        </span>
+        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: MUTED }}>
+          <span className="h-2 w-2 rounded-full" style={{ background: SKY }} /> Casual
+        </span>
+      </div>
+
+      <div className="mt-2 flex justify-center">
+        <DualRingGauge
+          outerValue={reliable}
+          innerValue={casual}
+          max={max}
+          outerColor={PLUM}
+          innerColor={SKY}
+          outerCallout={`${reliable} hrs/wk`}
+          innerCallout={`~${casual} hrs/wk`}
+          centerValue={`${reliable + casual}`}
+          centerLabel="hrs/wk available"
+        />
+      </div>
     </div>
   );
 }
@@ -1055,6 +1350,17 @@ export function MDHubView() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [waitlist, setWaitlist] = useState<WaitlistSnapshot>({ count: 0, hours: 0 });
+
+  // Read once on mount — the onboarding board is a separate page with its
+  // own in-memory state; see onboardingWaitlist.ts for why localStorage is
+  // the bridge instead of a shared store or a backend table. Falls back to
+  // a UI-only placeholder until a real referral has been logged, same as
+  // the dummy Service Type/Payment Method fallback on the Finance Ledger.
+  useEffect(() => {
+    const snapshot = readWaitlistSnapshot();
+    setWaitlist(snapshot.count > 0 ? snapshot : DUMMY_WAITLIST);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1182,14 +1488,28 @@ export function MDHubView() {
     <div className="space-y-8">
 
       {/* ------------------------------------------------------------------ */}
-      {/* Revenue (left) + needs action / exposure (right) — a two-column    */}
-      {/* row rather than the triage list's usual full width, since it's     */}
-      {/* paired with real chart content instead of sitting next to blank   */}
-      {/* canvas (see the "sidebar" variant note in GovernanceTriage).       */}
+      {/* Waiting list + participant overview (left) + needs action /        */}
+      {/* exposure (right) — a two-column row rather than the triage list's  */}
+      {/* usual full width, since it's paired with real content instead of   */}
+      {/* sitting next to blank canvas (see the "sidebar" variant note in    */}
+      {/* GovernanceTriage). Revenue moves below "How we're tracking".       */}
       {/* ------------------------------------------------------------------ */}
 
       <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_360px]">
-        <RevenueChart />
+        <div className="flex flex-col gap-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <WaitlistCard count={waitlist.count} onNavigate={() => navigate("/onboard-participant")} />
+            <WaitlistHoursCard hours={waitlist.hours} />
+            <AvailableHoursCard />
+          </div>
+          <ParticipantOverviewCard
+            total={data.active_participants}
+            bySex={data.participants_by_sex}
+            byPlanStatus={data.participants_by_plan_status}
+            capacity={{ used: data.active_participants, total: data.active_staff * CASELOAD_PER_WORKER }}
+            onNavigate={() => navigate("/participants")}
+          />
+        </div>
         <GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
       </div>
 
@@ -1238,14 +1558,6 @@ export function MDHubView() {
           />
         </div>
 
-        <ParticipantOverviewCard
-          total={data.active_participants}
-          bySex={data.participants_by_sex}
-          byPlanStatus={data.participants_by_plan_status}
-          capacity={{ used: data.active_participants, total: data.active_staff * CASELOAD_PER_WORKER }}
-          onNavigate={() => navigate("/participants")}
-        />
-
         <ComplianceCard
           score={data.compliance_score}
           target={data.compliance_target}
@@ -1256,11 +1568,13 @@ export function MDHubView() {
           trend={trend}
           target={data.compliance_target}
         />
-
-        <FinancialSummary
-          onNavigate={() => navigate("/md/financial")}
-        />
       </div>
+
+      <RevenueChart />
+
+      <FinancialSummary
+        onNavigate={() => navigate("/md/financial")}
+      />
     </div>
   );
 }

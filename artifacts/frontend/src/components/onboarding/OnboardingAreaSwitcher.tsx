@@ -1,9 +1,7 @@
 import { useLocation } from "wouter";
 import { Users, HeartHandshake } from "lucide-react";
 
-const MUTED = "var(--cc-muted)";
 const PLUM = "var(--cc-plum)";
-const BORDER = "var(--cc-border)";
 
 const AREAS = [
   { key: "staff", label: "Staff", href: "/md/staff-onboarding", icon: Users },
@@ -15,32 +13,42 @@ const AREAS = [
  * pages. The two pipelines have distinct data models (staff hiring vs.
  * participant intake) and stay separate pages/components — this just makes
  * them feel like one connected "Onboarding" area instead of two unrelated
- * destinations. Same visual pattern as the Board/List toggle on Staff
- * Onboarding.
+ * destinations.
+ *
+ * Styled as a raised tab bar — active tab in solid white text with a small
+ * rounded "tongue" dropping from the bar into the page below it, pointing
+ * at whichever area is open, rather than the plain pill-on-beige switcher
+ * this replaced.
  */
 export function OnboardingAreaSwitcher({ active }: { active: "staff" | "participants" }) {
   const [, navigate] = useLocation();
   return (
-    <div className="inline-flex h-15 w-fit shrink-0 items-center gap-0.5 rounded-xl p-1" style={{ background: "#F8F7F4", border: `1.5px solid ${BORDER}` }}>
-      {AREAS.map((area) => {
-        const Icon = area.icon;
-        const isActive = area.key === active;
-        return (
-          <button
-            key={area.key}
-            onClick={() => navigate(area.href)}
-            aria-pressed={isActive}
-            className="flex h-12.5 items-center justify-center gap-2.5 rounded-lg px-5 text-[15px] font-black transition-all"
-            style={{
-              background: isActive ? "white" : "transparent",
-              color: isActive ? PLUM : MUTED,
-              boxShadow: isActive ? "var(--cc-shadow-sm)" : "none",
-            }}
-          >
-            <Icon size={35} /> {area.label}
-          </button>
-        );
-      })}
+    <div className="w-fit" style={{ filter: "drop-shadow(var(--cc-shadow-sm))" }}>
+      <div className="relative flex items-center gap-1 rounded-[26px] px-2 py-2" style={{ background: PLUM }}>
+        {AREAS.map((area) => {
+          const Icon = area.icon;
+          const isActive = area.key === active;
+          return (
+            <button
+              key={area.key}
+              onClick={() => navigate(area.href)}
+              aria-pressed={isActive}
+              className="relative flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-[14px] font-black transition-colors"
+              style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.62)" }}
+            >
+              <Icon size={15} />
+              {area.label}
+              {isActive && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute left-1/2 top-full h-3 w-9 -translate-x-1/2 rounded-b-full"
+                  style={{ background: PLUM }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

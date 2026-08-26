@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { addPendingReferral } from "@/lib/onboardingWaitlist";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -29,6 +30,8 @@ type ReferralForm = {
   ndisNumber: string;
   primaryDisability: string;
   supportNeeds: string;
+  /** Weekly service hours the participant needs — kept as text while typing, parsed on submit. */
+  serviceHoursRequired: string;
   referrerName: string;
   referrerRelationship: string;
   referrerPhone: string;
@@ -37,7 +40,7 @@ type ReferralForm = {
 
 const EMPTY_FORM: ReferralForm = {
   fullName: "", serviceCategory: "disability", dob: "", phone: "", email: "",
-  ndisNumber: "", primaryDisability: "", supportNeeds: "",
+  ndisNumber: "", primaryDisability: "", supportNeeds: "", serviceHoursRequired: "",
   referrerName: "", referrerRelationship: "family", referrerPhone: "", referrerEmail: "",
 };
 
@@ -57,8 +60,9 @@ function calculateAge(dob: string): number | null {
  * Public, unauthenticated referral intake form — reached from the
  * "View public referral form" link on the MD's Participant Onboarding
  * board. No participant_onboarding backend exists yet (same constraint as
- * the rest of that page), so submitting here doesn't yet create a real
- * Enquiry card — it's the UI/UX of the intake flow, not wired to storage.
+ * the rest of that page), so a submission is queued to localStorage
+ * (see onboardingWaitlist.ts) rather than a real database — the Onboarding
+ * board picks it up as a new Enquiry card the next time it's opened.
  */
 export default function ParticipantReferralPage() {
   const [, navigate] = useLocation();
@@ -82,6 +86,22 @@ export default function ParticipantReferralPage() {
     setStep((s) => Math.max(s - 1, 0));
   }
   function submit() {
+    addPendingReferral({
+      id: `referral-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      full_name: form.fullName.trim(),
+      service_category: form.serviceCategory,
+      service_hours_required: Math.max(0, parseFloat(form.serviceHoursRequired) || 0),
+      phone: form.phone.trim() || undefined,
+      email: form.email.trim() || undefined,
+      ndis_number: form.ndisNumber.trim() || undefined,
+      primary_disability: form.primaryDisability.trim() || undefined,
+      support_needs: form.supportNeeds.trim() || undefined,
+      referrer_name: form.referrerName.trim(),
+      referrer_relationship: form.referrerRelationship,
+      referrer_phone: form.referrerPhone.trim() || undefined,
+      referrer_email: form.referrerEmail.trim() || undefined,
+      submitted_at: new Date().toISOString(),
+    });
     setSubmitted(true);
   }
 
@@ -191,6 +211,19 @@ export default function ParticipantReferralPage() {
                   className="min-h-[90px]"
                 />
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold" style={{ color: TEXT }}>Service hours required per week</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  inputMode="decimal"
+                  value={form.serviceHoursRequired}
+                  onChange={(e) => update("serviceHoursRequired", e.target.value)}
+                  placeholder="e.g. 10"
+                />
+                <p className="text-[11px]" style={{ color: MUTED }}>Roughly how many hours of support per week — helps us plan capacity.</p>
+              </div>
             </>
           )}
 
@@ -232,6 +265,7 @@ export default function ParticipantReferralPage() {
                 <p style={{ color: MUTED }}>{form.serviceCategory === "aged_care" ? "Aged Care" : "Disability"} service</p>
                 <p style={{ color: MUTED }}>{form.phone || "No phone"} · {form.email || "No email"}</p>
                 {form.ndisNumber && <p style={{ color: MUTED }}>NDIS {form.ndisNumber}</p>}
+                {form.serviceHoursRequired && <p style={{ color: MUTED }}>{form.serviceHoursRequired} hours/week requested</p>}
                 <p style={{ color: MUTED }}>Referred by {form.referrerName || "—"} ({form.referrerRelationship.replace("_", " ")})</p>
               </div>
               <p className="text-xs" style={{ color: MUTED }}>
