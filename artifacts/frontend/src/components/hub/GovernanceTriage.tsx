@@ -272,7 +272,7 @@ export function GovernanceTriage({
               ) : (
                 <>
                   <div className="max-h-[420px] divide-y overflow-y-auto" style={{ borderColor: BORDER }}>
-                    {all.slice(0, 8).map((a) => (
+                    {all.map((a) => (
                       <AlertRow key={a.id} alert={a} onNavigate={(p) => { setFloatingOpen(false); onNavigate(p); }} routeForSource={routeForSource} />
                     ))}
                   </div>

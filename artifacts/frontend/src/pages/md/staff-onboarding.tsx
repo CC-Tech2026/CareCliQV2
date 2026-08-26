@@ -1541,7 +1541,6 @@ export default function StaffOnboardingBoard() {
   const [pendingReject, setPendingReject] = useState<Applicant | null>(null);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
-  const [attentionOnly, setAttentionOnly] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -1570,23 +1569,20 @@ export default function StaffOnboardingBoard() {
   const matchesSearch = (name: string) => !normalizedSearch || name.toLowerCase().includes(normalizedSearch);
   const filteredInterviewApplicants = interviewApplicants.filter((a) => {
     if (!matchesSearch(a.full_name)) return false;
-    if (stageFilter !== "all" && stageFilter !== a.stage) return false;
-    return !attentionOnly;
+    return stageFilter === "all" || stageFilter === a.stage;
   });
   const filteredOfferLetters = (data?.columns.offer_letter ?? []).filter((p) => {
     if (!matchesSearch(p.full_name)) return false;
-    if (stageFilter !== "all" && stageFilter !== "offer_extended") return false;
-    if (attentionOnly) return p.status === "awaiting_signatures";
-    return true;
+    return stageFilter === "all" || stageFilter === "offer_extended";
   });
   const filteredCredentials = (stageFilter === "all" || stageFilter === "credentials")
-    ? (data?.columns.credentials ?? []).filter((p) => matchesSearch(p.full_name) && (!attentionOnly || p.flag === "warn"))
+    ? (data?.columns.credentials ?? []).filter((p) => matchesSearch(p.full_name))
     : [];
   const filteredTraining = (stageFilter === "all" || stageFilter === "training")
-    ? (data?.columns.training ?? []).filter((p) => matchesSearch(p.full_name) && (!attentionOnly || p.flag === "warn"))
+    ? (data?.columns.training ?? []).filter((p) => matchesSearch(p.full_name))
     : [];
   const filteredActive = (stageFilter === "all" || stageFilter === "active")
-    ? (data?.columns.active ?? []).filter((p) => matchesSearch(p.full_name) && !attentionOnly)
+    ? (data?.columns.active ?? []).filter((p) => matchesSearch(p.full_name))
     : [];
 
   const STAGE_ORDER: Record<PipelineRow["stageKey"], number> = { interview: 0, offer_extended: 1, credentials: 2, training: 3, active: 4 };
@@ -1679,12 +1675,6 @@ export default function StaffOnboardingBoard() {
   function setKpiFilter(filter: string) {
     setActiveKpi(filter);
     setSearch("");
-    if (filter === "attention") {
-      setAttentionOnly(true);
-      setStageFilter("all");
-      return;
-    }
-    setAttentionOnly(false);
     if (filter === "pipeline") setStageFilter("all");
     else if (filter === "credentials") setStageFilter("credentials");
     else setStageFilter("all");
@@ -1693,7 +1683,6 @@ export default function StaffOnboardingBoard() {
   function clearFilters() {
     setSearch("");
     setStageFilter("all");
-    setAttentionOnly(false);
     setActiveKpi(null);
   }
 
@@ -1755,8 +1744,8 @@ export default function StaffOnboardingBoard() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiTile label="In progress" value={inPipelineCount} color={PLUM} bg="var(--cc-plum-soft)" icon={UserPlus} active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} />
               <KpiTile label="Credentials overdue" value={data.kpis.credentials_overdue} color={AMBER} bg={WARNING_BG} icon={ShieldCheck} active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} />
-              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} bg={SUCCESS_BG} icon={CalendarDays} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setAttentionOnly(false); setStageFilter("all"); }} />
-              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} bg={SOFT} icon={UserX} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setAttentionOnly(false); setStageFilter("all"); setNotProceedingOpen(true); }} />
+              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} bg={SUCCESS_BG} icon={CalendarDays} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setStageFilter("all"); }} />
+              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} bg={SOFT} icon={UserX} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setStageFilter("all"); setNotProceedingOpen(true); }} />
             </div>
 
             <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
@@ -1777,10 +1766,7 @@ export default function StaffOnboardingBoard() {
                   <SelectItem value="active">Active</SelectItem>
                 </SelectContent>
               </Select>
-              <button onClick={() => { setAttentionOnly((v) => !v); setActiveKpi(attentionOnly ? null : "attention"); }} className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3.5 text-[11px] font-black transition-all" style={{ background: attentionOnly ? WARNING_BG : SOFT, color: attentionOnly ? WARNING : MUTED }}>
-                <AlertCircle size={13} /> Needs attention
-              </button>
-              {(search || stageFilter !== "all" || attentionOnly || activeKpi) && (
+              {(search || stageFilter !== "all" || activeKpi) && (
                 <button onClick={clearFilters} className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5" style={{ color: MUTED }}>
                   <X size={13} /> Clear
                 </button>
