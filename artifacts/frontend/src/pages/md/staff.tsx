@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { formatDistanceToNow } from "date-fns";
 import {
   ArrowRight,
   ArrowUp,
@@ -29,6 +30,7 @@ import {
 } from "@/services/coordinatorService";
 import { WorkerDetail, type WorkerDetailTab } from "@/components/team/WorkerDetail";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -66,6 +68,19 @@ interface MDData {
 }
 
 type Filter = "all" | "at_risk" | "strong";
+
+function formatLastActive(value?: string) {
+  if (!value) return "Never signed in";
+  try {
+    return formatDistanceToNow(new Date(value), { addSuffix: true });
+  } catch {
+    return "Never signed in";
+  }
+}
+
+function formatRole(role?: string) {
+  return role ? role.replace(/_/g, " ") : "Support worker";
+}
 
 function initials(name: string) {
   return name
@@ -294,8 +309,9 @@ export default function MDStaffPage() {
   const [error, setError] = useState(false);
 
   const [filter, setFilter] = useState<Filter>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<"name" | "compliance" | "participants" | "sessions">("compliance");
+  const [sortKey, setSortKey] = useState<"name" | "compliance" | "participants" | "sessions" | "lastActive">("compliance");
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedWorker, setSelectedWorker] =
     useState<StaffMember | null>(null);
@@ -501,6 +517,11 @@ export default function MDStaffPage() {
     };
   }, [allStaff]);
 
+  const distinctRoles = useMemo(() => {
+    const roles = new Set(allStaff.map((worker) => worker.role || "support_worker"));
+    return Array.from(roles).sort();
+  }, [allStaff]);
+
   const filtered = useMemo(() => {
     const normalized = search.trim().toLowerCase();
 
@@ -518,9 +539,12 @@ export default function MDStaffPage() {
         (filter === "strong" &&
           worker.compliance_score >= 90);
 
-      return matchesSearch && matchesFilter;
+      const matchesRole =
+        roleFilter === "all" || (worker.role || "support_worker") === roleFilter;
+
+      return matchesSearch && matchesFilter && matchesRole;
     });
-  }, [allStaff, filter, search]);
+  }, [allStaff, filter, roleFilter, search]);
 
   // Sortable by clicking a column header - the old separate "Leading performers"
   // cards duplicated exactly this (top-3 by compliance) as its own section;
@@ -536,6 +560,11 @@ export default function MDStaffPage() {
           return (a.participant_count - b.participant_count) * dir;
         case "sessions":
           return (a.sessions - b.sessions) * dir;
+        case "lastActive":
+          return (
+            (a.last_login ? new Date(a.last_login).getTime() : 0) -
+            (b.last_login ? new Date(b.last_login).getTime() : 0)
+          ) * dir;
         default:
           return (a.compliance_score - b.compliance_score) * dir;
       }
@@ -730,7 +759,23 @@ export default function MDStaffPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
+                    {distinctRoles.length > 1 && (
+                      <Select value={roleFilter} onValueChange={setRoleFilter}>
+                        <SelectTrigger className="h-8 w-[150px] rounded-lg border text-[10px] font-black" style={{ borderColor: BORDER, color: MUTED }}>
+                          <SelectValue placeholder="All roles" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All roles</SelectItem>
+                          {distinctRoles.map((role) => (
+                            <SelectItem key={role} value={role} className="capitalize">
+                              {formatRole(role)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
                     {(
                       ["all", "at_risk", "strong"] as Filter[]
                     ).map((item) => {
@@ -791,7 +836,7 @@ export default function MDStaffPage() {
                     {/* Desktop table */}
                     <div className="hidden md:block">
                       <div
-                        className="grid grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_130px_24px] items-center gap-4 border-b px-5 py-3"
+                        className="grid grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_120px_130px_24px] items-center gap-4 border-b px-5 py-3"
                         style={{
                           borderColor: BORDER,
                           background: SOFT,
@@ -802,6 +847,7 @@ export default function MDStaffPage() {
                           ["Compliance", "compliance"],
                           ["Participants", "participants"],
                           ["Sessions", "sessions"],
+                          ["Last active", "lastActive"],
                           ["Status", null],
                           ["", null],
                         ] as [string, typeof sortKey | null][]).map(([heading, key]) => (
@@ -826,7 +872,7 @@ export default function MDStaffPage() {
                             onClick={() =>
                               openWorker(worker)
                             }
-                            className="group grid w-full grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_130px_24px] items-center gap-4 border-b px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
+                            className="group grid w-full grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_120px_130px_24px] items-center gap-4 border-b px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
                             style={{
                               borderColor: BORDER,
                             }}
@@ -856,12 +902,7 @@ export default function MDStaffPage() {
                                   className="truncate text-[10px] font-medium"
                                   style={{ color: MUTED }}
                                 >
-                                  {worker.role
-                                    ?.replace(
-                                      /_/g,
-                                      " ",
-                                    ) ||
-                                    "Support worker"}
+                                  {formatRole(worker.role)}
                                 </p>
                               </div>
                             </div>
@@ -884,6 +925,13 @@ export default function MDStaffPage() {
                               style={{ color: TEXT }}
                             >
                               {worker.sessions}
+                            </span>
+
+                            <span
+                              className="text-[11px] font-medium"
+                              style={{ color: MUTED }}
+                            >
+                              {formatLastActive(worker.last_login)}
                             </span>
 
                             <StatusBadge
@@ -942,11 +990,7 @@ export default function MDStaffPage() {
                                   className="truncate text-[10px] font-medium"
                                   style={{ color: MUTED }}
                                 >
-                                  {worker.role?.replace(
-                                    /_/g,
-                                    " ",
-                                  ) ||
-                                    "Support worker"}
+                                  {formatRole(worker.role)}
                                 </p>
                               </div>
                             </div>
@@ -980,6 +1024,13 @@ export default function MDStaffPage() {
                               value={worker.sessions}
                             />
                           </div>
+
+                          <p
+                            className="mt-3 text-[10px] font-medium"
+                            style={{ color: MUTED }}
+                          >
+                            Last active: {formatLastActive(worker.last_login)}
+                          </p>
                         </button>
                       ))}
                     </div>

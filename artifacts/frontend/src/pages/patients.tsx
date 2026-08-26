@@ -49,6 +49,8 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  Maximize2,
+  Minimize2,
   LayoutTemplate,
   Sunrise,
   Sun,
@@ -2597,6 +2599,7 @@ export default function Patients() {
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [detailFullScreen, setDetailFullScreen] = useState(false);
 
   // Deep-link support: "Back to Participant" from session/shift detail pages
   // passes ?id=<participantId>&tab=<tab> so the coordinator lands back on the
@@ -2638,7 +2641,7 @@ export default function Patients() {
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
+        className={`${detailFullScreen ? "hidden" : showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
         style={{ background: "var(--cc-bg)", border: showMobileDetail ? "none" : "1px solid var(--cc-border)" }}
       >
         {sidebarCollapsed ? (
@@ -2889,6 +2892,26 @@ export default function Patients() {
               </svg>
               {translate("patients.backToList")}
             </button>
+
+            {/* Full-screen toggle — desktop only */}
+            <div
+              className="hidden lg:flex items-center justify-end px-3 py-1.5 shrink-0"
+              style={{ borderBottom: "1px solid var(--cc-border)" }}
+            >
+              <button
+                type="button"
+                onClick={() => setDetailFullScreen((v) => !v)}
+                aria-label={detailFullScreen ? "Exit full screen" : "Open full screen"}
+                title={detailFullScreen ? "Exit full screen" : "Open full screen"}
+                className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
+                style={{ color: "var(--cc-muted)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--cc-active-bg)"; e.currentTarget.style.color = "var(--cc-plum)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--cc-muted)"; }}
+              >
+                {detailFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+            </div>
+
             <div className="flex-1 overflow-y-auto">
               <ParticipantDetail key={selectedId} id={selectedId} onRefreshList={refetch} initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined} />
             </div>

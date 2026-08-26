@@ -90,7 +90,7 @@ const MD_NAV_GROUPS = [
   {
     label: "Workforce & People",
     items: [
-      { href: "/md/staff", label: "Directory", icon: Users },
+      { href: "/md/staff", label: "Staff", icon: Users },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
     ],

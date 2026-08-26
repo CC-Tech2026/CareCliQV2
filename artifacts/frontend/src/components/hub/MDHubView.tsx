@@ -102,8 +102,8 @@ interface RevenueMonth {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function formatNumber(value: number) {
-  return value.toLocaleString("en-AU");
+function formatNumber(value: number | null | undefined) {
+  return (value ?? 0).toLocaleString("en-AU");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -345,11 +345,14 @@ function ParticipantOverviewCard({
   onNavigate,
 }: {
   total: number;
-  bySex: MDData["participants_by_sex"];
-  byPlanStatus: MDData["participants_by_plan_status"];
+  bySex: MDData["participants_by_sex"] | null | undefined;
+  byPlanStatus: MDData["participants_by_plan_status"] | null | undefined;
   capacity: { used: number; total: number };
   onNavigate: () => void;
 }) {
+  const sex = bySex ?? { male: 0, female: 0, unspecified: 0 };
+  const planStatus = byPlanStatus ?? { pending: 0, review: 0, expired: 0 };
+
   return (
     <div className="rounded-2xl border overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: BORDER }}>
@@ -368,9 +371,9 @@ function ParticipantOverviewCard({
           <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Total participants</p>
           <CapacityMeter used={capacity.used} total={capacity.total} />
           <div className="mt-4 flex items-center gap-6">
-            <ParticipantStat label="Male" value={bySex.male} />
-            <ParticipantStat label="Female" value={bySex.female} />
-            {bySex.unspecified > 0 && <ParticipantStat label="Others" value={bySex.unspecified} />}
+            <ParticipantStat label="Male" value={sex.male} />
+            <ParticipantStat label="Female" value={sex.female} />
+            {sex.unspecified > 0 && <ParticipantStat label="Others" value={sex.unspecified} />}
           </div>
         </div>
 
@@ -393,9 +396,9 @@ function ParticipantOverviewCard({
             </Popover>
           </div>
           <div className="flex items-center gap-6">
-            <ParticipantStat label="Pending" value={byPlanStatus.pending} color={byPlanStatus.pending > 0 ? AMBER : undefined} />
-            <ParticipantStat label="Review" value={byPlanStatus.review} color={byPlanStatus.review > 0 ? AMBER : undefined} />
-            <ParticipantStat label="Expired" value={byPlanStatus.expired} color={byPlanStatus.expired > 0 ? RED : undefined} />
+            <ParticipantStat label="Pending" value={planStatus.pending} color={planStatus.pending > 0 ? AMBER : undefined} />
+            <ParticipantStat label="Review" value={planStatus.review} color={planStatus.review > 0 ? AMBER : undefined} />
+            <ParticipantStat label="Expired" value={planStatus.expired} color={planStatus.expired > 0 ? RED : undefined} />
           </div>
         </div>
       </div>
