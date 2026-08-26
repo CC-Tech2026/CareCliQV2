@@ -1370,10 +1370,12 @@ function FlagBadge({ flag }: { flag?: PipelinePerson["flag"] }) {
   return <span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: SOFT, color: MUTED }}>In progress</span>;
 }
 
-const OVERSIGHT_LABEL: Record<OversightColumnKey, string> = { credentials: "Credentials", training: "Training", active: "Active" };
+const OVERSIGHT_LABEL: Record<OversightColumnKey, string> = { credentials: "Screening/Credentials", training: "Training", active: "Active" };
 
 function oversightMeta(columnKey: OversightColumnKey, person: PipelinePerson): string {
-  if (columnKey === "credentials") return "Mandatory credentials incomplete";
+  if (columnKey === "credentials") {
+    return person.flag === "warn" ? "Mandatory credentials missing or rejected" : "Submitted — awaiting coordinator approval";
+  }
   if (columnKey === "training") return "Training or induction incomplete";
   const days = daysAgo(person.joined_at);
   return days != null ? `Sent to coordinator for rostering, ${days}d ago` : "Rostering ready";
@@ -1603,7 +1605,7 @@ export default function StaffOnboardingBoard() {
       const { meta, attention } = offerLetterMeta(h);
       return { id: h.id, name: h.full_name, roleLabel: roleLabelFor(h.role), stageKey: "offer_extended", stageLabel: "Offer letter", color: STAGE_COLOR.offer_extended, meta, attention, onOpen: () => setOpenHireId(h.id) };
     }),
-    ...filteredCredentials.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "credentials", stageLabel: "Credentials", color: STAGE_COLOR.credentials, meta: oversightMeta("credentials", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "credentials") })),
+    ...filteredCredentials.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "credentials", stageLabel: "Screening/Credentials", color: STAGE_COLOR.credentials, meta: oversightMeta("credentials", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "credentials") })),
     ...filteredTraining.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "training", stageLabel: "Training", color: STAGE_COLOR.training, meta: oversightMeta("training", p), attention: p.flag === "warn", onOpen: () => openWorker(p.id, "training") })),
     ...filteredActive.map((p): PipelineRow => ({ id: p.id, name: p.full_name, roleLabel: roleLabelFor(p.role), stageKey: "active", stageLabel: "Active", color: STAGE_COLOR.active, meta: oversightMeta("active", p), attention: false, onOpen: () => openWorker(p.id, "overview") })),
   ].sort((a, b) => {
@@ -1761,7 +1763,7 @@ export default function StaffOnboardingBoard() {
                   <SelectItem value="applied">Applied</SelectItem>
                   <SelectItem value="interview">Interview</SelectItem>
                   <SelectItem value="offer_extended">Offer letter</SelectItem>
-                  <SelectItem value="credentials">Credentials</SelectItem>
+                  <SelectItem value="credentials">Screening/Credentials</SelectItem>
                   <SelectItem value="training">Training</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                 </SelectContent>
@@ -1837,7 +1839,7 @@ export default function StaffOnboardingBoard() {
                   />
 
                   <StaticColumn
-                    label="Credentials"
+                    label="Screening/Credentials"
                     color={STAGE_COLOR.credentials}
                     items={filteredCredentials}
                     renderItem={(p) => (

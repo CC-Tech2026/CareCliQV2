@@ -1,7 +1,7 @@
 """Worker Onboarding Pipeline — a read-only oversight board spanning
 Interview through Active. Per the Managing Director Frontend reconciliation
 (Aug 2026): this is the one genuinely missing piece — nothing in the app
-unifies pre-hire (Interview, Offer letter) and post-hire (Credentials,
+unifies pre-hire (Interview, Offer letter) and post-hire (Screening/Credentials,
 Training, Active) stages into a single view. Every column here reads from
 an existing data model rather than a new one:
 
@@ -12,9 +12,17 @@ an existing data model rather than a new one:
                          worker yet at that point (no public.users row exists), so
                          they'd otherwise vanish from every column until they
                          actually accept the invite and log in.
-- Credentials         -> onboarding_escalation_service.credentials_blocked,
-                         the same mandatory-credential check used for the
-                         rostering gate and the 3-day/14-day escalation.
+- Screening/Credentials -> a worker lands here as soon as they've logged in and
+                         started self-service setup, and stays here until ALL
+                         mandatory credential types (onboarding_escalation_service
+                         .mandatory_credentials_approved) are verified valid by a
+                         coordinator — not merely submitted. Not every credential
+                         type gates this, only the mandatory ones; optional ones
+                         (driver's licence, vehicle rego, etc.) can be completed
+                         after moving on. credentials_blocked() (a looser missing
+                         /rejected-only check, used for the 3-day/14-day reminder
+                         escalation) only decides the in-column warn/ok flag here,
+                         not which column a worker is placed in.
 - Training            -> worker_training_service.team_training_overdue_map
                          and induction_service.team_induction_incomplete_map
 - Active               -> users.onboarding_completed
@@ -80,15 +88,23 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
     onboarding_workers = [w for w in workers if w.get("is_active") and not w.get("onboarding_completed")]
     worker_ids = [w["id"] for w in onboarding_workers]
 
+    # cred_blocked: worker's own action outstanding (missing/rejected mandatory
+    # credential) - used only for the in-column "warn" flag below.
+    # cred_approved: ALL mandatory credentials verified valid - the gate that
+    # actually moves a worker from Screening/Credentials into Training. A
+    # worker who has submitted everything but is still awaiting coordinator
+    # review is neither blocked nor approved, so stays in Screening/Credentials
+    # with an "ok" flag (nothing outstanding on their end).
     cred_blocked = escalation.credentials_blocked(worker_ids) if worker_ids else set()
+    cred_approved = escalation.mandatory_credentials_approved(worker_ids) if worker_ids else set()
     training_overdue_map = training.team_training_overdue_map(organization_id)
     induction_incomplete_map = induction_service.team_induction_incomplete_map(organization_id)
 
     credentials_col: list[dict[str, Any]] = []
     training_col: list[dict[str, Any]] = []
     for w in onboarding_workers:
-        if w["id"] in cred_blocked:
-            credentials_col.append({**w, "flag": "warn"})
+        if w["id"] not in cred_approved:
+            credentials_col.append({**w, "flag": "warn" if w["id"] in cred_blocked else "ok"})
         else:
             overdue = bool(training_overdue_map.get(w["id"])) or bool(induction_incomplete_map.get(w["id"]))
             training_col.append({**w, "flag": "warn" if overdue else "ok"})
@@ -119,7 +135,10 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
     return {
         "kpis": {
             "in_pipeline": len(interview) + len(offer_letter),
-            "credentials_overdue": len(credentials_col),
+            # Genuinely blocked (missing/rejected), not the whole Screening/Credentials
+            # column - that column also holds workers who submitted everything and
+            # are just waiting on coordinator approval, which isn't "overdue".
+            "credentials_overdue": len([w for w in credentials_col if w["flag"] == "warn"]),
             "starting_this_week": starting_this_week,
             "auto_deactivated_month": auto_deactivated_month,
         },

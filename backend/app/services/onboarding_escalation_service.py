@@ -113,6 +113,51 @@ def credentials_blocked(worker_ids: list[str]) -> set[str]:
     return blocked
 
 
+def mandatory_credentials_approved(worker_ids: list[str]) -> set[str]:
+    """Workers whose mandatory credentials are ALL status == 'valid'.
+
+    Stricter than credentials_blocked() above, and answers a different
+    question. credentials_blocked() treats pending_review as "not blocked"
+    so the worker isn't nagged/escalated while it's the coordinator's turn -
+    correct for the reminder system, but wrong for deciding whether a worker
+    has actually cleared the Screening/Credentials pipeline stage. A worker
+    who has submitted everything but is still awaiting coordinator review
+    hasn't cleared it yet; this is the check worker_pipeline_service.py uses
+    to decide Screening/Credentials vs Training column placement.
+    """
+    if not worker_ids:
+        return set()
+    try:
+        result = (
+            get_supabase_admin()
+            .table("credentials")
+            .select("user_id, credential_type, status")
+            .in_("user_id", worker_ids)
+            .in_("credential_type", REQUIRED_CREDENTIAL_TYPES)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return set()
+        logger.warning("Credential approval query failed: %s", exc)
+        return set()
+
+    by_worker: dict[str, dict[str, str]] = {}
+    for row in rows:
+        uid = str(row.get("user_id") or "")
+        ctype = row.get("credential_type")
+        if uid and ctype:
+            by_worker.setdefault(uid, {})[ctype] = row.get("status")
+
+    approved: set[str] = set()
+    for uid in worker_ids:
+        statuses = by_worker.get(uid, {})
+        if all(statuses.get(ctype) == "valid" for ctype in REQUIRED_CREDENTIAL_TYPES):
+            approved.add(uid)
+    return approved
+
+
 def _upsert_stage_flags(organization_id: str, stage: str, blocked_worker_ids: set[str]) -> None:
     if not blocked_worker_ids:
         return
