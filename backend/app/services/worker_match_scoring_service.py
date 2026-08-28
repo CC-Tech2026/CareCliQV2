@@ -10,18 +10,16 @@ Weights (Section 5.2 of the design spec) - a starting configuration, not a
 fixed formula:
     shared interests            30   (real - participant_tags/worker_tags overlap)
     relevant lived experience   25   (real - same mechanism, different category role)
-    prior positive history      25   (Phase 3 placeholder - shift_match_feedback
-                                       doesn't exist yet, so this is a fixed
-                                       neutral value for every candidate today;
-                                       it can't affect relative ranking, but
-                                       keeps the total meaningfully "out of 100"
-                                       without a rescale once Phase 3 lands)
+    prior positive history      25   (real, Phase 3 - average outcome_rating from
+                                       shift_match_feedback for this pair; neutral
+                                       half-weight until this pair has any rated
+                                       feedback on file)
     continuity                  10   (real - has a completed shift with this
                                        participant ever happened, from `shifts`)
     fair distribution           10   (Phase 4 placeholder, deferred by design
                                        until there's enough real shift history
                                        to make it meaningful - same fixed-
-                                       neutral treatment as prior history)
+                                       neutral treatment prior history used to get)
 
 "Missing data reads as neutral, never as a bad fit" (Section 5.2) applies at
 the component level too: a component with no comparable data on EITHER side
@@ -35,10 +33,11 @@ from typing import Any, Optional
 
 from .supabase_client import get_supabase_admin
 from . import tag_service
+from . import shift_match_feedback_service as feedback_service
 
 INTERESTS_WEIGHT = 30.0
 LIVED_EXPERIENCE_WEIGHT = 25.0
-PRIOR_HISTORY_WEIGHT = 25.0  # Phase 3 placeholder - always neutral today
+PRIOR_HISTORY_WEIGHT = 25.0  # real (Phase 3) - neutral half-weight until this pair has rated feedback
 CONTINUITY_WEIGHT = 10.0
 FAIR_DISTRIBUTION_WEIGHT = 10.0  # Phase 4 placeholder - always neutral today
 
@@ -92,6 +91,18 @@ def _continuity_component(worker_id: str, participant_id: str, organization_id: 
     return 0.0, None
 
 
+def _prior_history_component(worker_id: str, participant_id: str, organization_id: str) -> tuple[float, Optional[str]]:
+    history = feedback_service.rating_history_for_pair(worker_id, participant_id, organization_id)
+    if not history:
+        return PRIOR_HISTORY_WEIGHT / 2, None
+    avg_rating, count = history
+    # avg_rating is 1-5; map linearly onto this component's weight (1 -> 0, 5 -> full weight).
+    score = max(0.0, min(PRIOR_HISTORY_WEIGHT, (avg_rating - 1) / 4 * PRIOR_HISTORY_WEIGHT))
+    times = "once" if count == 1 else f"{count} times"
+    reason = f"Worked with this participant {times}, average rating {avg_rating:.1f}/5"
+    return score, reason
+
+
 def score_candidates(
     worker_ids: list[str],
     participant_id: Optional[str],
@@ -126,16 +137,24 @@ def score_candidates(
             participant_lived_exp, worker_lived_exp, LIVED_EXPERIENCE_WEIGHT, "Relevant lived experience"
         )
         continuity_score, continuity_reason = _continuity_component(worker_id, participant_id, organization_id)
+        prior_history_score, prior_history_reason = _prior_history_component(worker_id, participant_id, organization_id)
+        # The rated-history reason ("worked together 3 times, avg 4.6/5") is
+        # strictly more informative than the plain continuity one ("has worked
+        # with this participant before") when both are true - don't show both.
+        if prior_history_reason:
+            continuity_reason = None
 
         total = (
             interests_score
             + lived_exp_score
-            + (PRIOR_HISTORY_WEIGHT / 2)
+            + prior_history_score
             + continuity_score
             + (FAIR_DISTRIBUTION_WEIGHT / 2)
         )
 
-        reasons = [r for r in (interests_reason, lived_exp_reason, continuity_reason) if r][:MAX_REASONS]
+        # Prior history is the strongest, most concrete signal when present -
+        # shown first, ahead of the tag-overlap reasons.
+        reasons = [r for r in (prior_history_reason, interests_reason, lived_exp_reason, continuity_reason) if r][:MAX_REASONS]
         out[worker_id] = {"score": round(total), "reasons": reasons}
 
     return out

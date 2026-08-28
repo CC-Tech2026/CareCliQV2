@@ -3001,6 +3001,42 @@ async def remove_worker_tag(worker_id: str, tag_id: str, current_user: dict = De
     return None
 
 
+# ── Worker-Participant Matching Enhancement, Phase 3 (Feedback loop) ─────────
+# Coordinator side of shift_match_feedback. Recording an outcome is a routine
+# operational action (not org-wide admin config like the tag taxonomy above),
+# so this follows the usual _require_coordinator-mutation / _require_org_read
+# convention rather than the tags' deliberate has_org_wide_access-for-writes
+# exception.
+
+@router.get("/shifts/{shift_id}/match-feedback")
+async def get_shift_match_feedback(shift_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import shift_match_feedback_service
+
+    return shift_match_feedback_service.get_feedback_for_shift(shift_id)
+
+
+class ShiftMatchFeedbackBody(BaseModel):
+    participant_response: Optional[str] = None
+    outcome_rating: Optional[int] = None
+    would_repeat: Optional[bool] = None
+
+
+@router.post("/shifts/{shift_id}/match-feedback")
+async def post_shift_match_feedback(shift_id: str, body: ShiftMatchFeedbackBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    if body.outcome_rating is not None and not (1 <= body.outcome_rating <= 5):
+        raise HTTPException(status_code=422, detail="outcome_rating must be between 1 and 5.")
+    from ..services import shift_match_feedback_service
+
+    try:
+        return shift_match_feedback_service.record_coordinator_feedback(
+            shift_id, org_id, get_user_id(current_user), body.participant_response, body.outcome_rating, body.would_repeat
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CARECLIQV2-236 – Real-Time Shift Monitoring
 # ══════════════════════════════════════════════════════════════════════════════

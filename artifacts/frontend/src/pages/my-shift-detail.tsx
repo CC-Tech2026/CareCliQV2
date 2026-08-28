@@ -55,6 +55,7 @@ import {
 } from "@/lib/shift-offline-queue";
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
+import { ShiftMatchFeedbackPrompt } from "@/components/worker/ShiftMatchFeedbackPrompt";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
 import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
@@ -1904,7 +1905,10 @@ function ShiftWorkflow({
         />
       )}
       {isCompleted && (
-        <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
+        <>
+          <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
+          <ShiftMatchFeedbackPrompt shiftId={shift.id} />
+        </>
       )}
 
       <section

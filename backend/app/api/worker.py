@@ -265,6 +265,32 @@ async def update_matching_preferences(body: MatchingPreferencesBody, current_use
     return {"ok": True}
 
 
+# ── Worker-Participant Matching Enhancement, Phase 3 — worker-side feedback ──
+# Worker's own optional reflection on a completed shift, independent of the
+# coordinator's outcome_rating/participant_response - either side can arrive
+# first (see migration 146's comment on shift_match_feedback).
+
+class ShiftMatchWorkerFeedbackBody(BaseModel):
+    worker_feedback: str
+
+
+@router.post("/shifts/{shift_id}/match-feedback")
+async def submit_shift_match_worker_feedback(
+    shift_id: str, body: ShiftMatchWorkerFeedbackBody, current_user: dict = Depends(get_current_user)
+):
+    _require_worker(current_user)
+    if not body.worker_feedback.strip():
+        raise HTTPException(status_code=422, detail="worker_feedback is required.")
+    from ..services import shift_match_feedback_service
+
+    try:
+        return shift_match_feedback_service.record_worker_feedback(
+            shift_id, get_user_id(current_user), body.worker_feedback.strip()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @router.post("/account/request-password-reset")
 async def request_password_reset(current_user: dict = Depends(get_current_user)):
     """Support workers can't change their own password (org policy) — this

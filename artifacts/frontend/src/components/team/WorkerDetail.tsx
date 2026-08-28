@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -7,7 +7,7 @@ import {
   Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
   MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, Star,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -16,8 +16,10 @@ import {
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
   getWorkerSkills, getWorkerShiftHistory, getWorkerPerformanceDashboard, getWorkerAssignments,
   getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
+  getShiftMatchFeedback, postShiftMatchFeedback,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
+import type { ShiftHistoryRow } from "@/services/workerPerformanceService";
 import { getWorkerInduction } from "@/services/inductionService";
 import { reviewCredential, type Credential } from "@/services/credentialsService";
 import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
@@ -1858,26 +1860,159 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
         ) : shifts.length === 0 ? (
           <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>No completed shifts on file yet.</p>
         ) : (
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {shifts.slice(0, 30).map((s) => {
-              const band = complianceBandColor(s.compliance_band);
-              return (
-                <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
-                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                      {safeFormat(s.scheduled_start, "d MMM yyyy")}
-                      {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" style={band}>
-                    {s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : s.compliance_band}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <ShiftHistoryList shifts={shifts} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Worker-Participant Matching Enhancement, Phase 3 — the first completed
+ * shift for each participant this worker has worked with gets a "First
+ * shift" badge, prompting the coordinator toward the light-touch check-in
+ * the design spec calls for on new pairings. Computed client-side from the
+ * already-fetched shift list rather than a new backend field. */
+function ShiftHistoryList({ shifts }: { shifts: ShiftHistoryRow[] }) {
+  const firstPairingShiftIds = useMemo(() => {
+    const earliestByParticipant = new Map<string, { id: string; time: number }>();
+    for (const s of shifts) {
+      if (!s.participant_id || !s.scheduled_start) continue;
+      const time = new Date(s.scheduled_start).getTime();
+      const current = earliestByParticipant.get(s.participant_id);
+      if (!current || time < current.time) earliestByParticipant.set(s.participant_id, { id: s.id, time });
+    }
+    return new Set(Array.from(earliestByParticipant.values()).map((v) => v.id));
+  }, [shifts]);
+
+  return (
+    <div className="divide-y" style={{ borderColor: BORDER }}>
+      {shifts.slice(0, 30).map((s) => (
+        <ShiftHistoryRowItem key={s.id} shift={s} isFirstPairing={firstPairingShiftIds.has(s.id)} />
+      ))}
+    </div>
+  );
+}
+
+function ShiftHistoryRowItem({ shift: s, isFirstPairing }: { shift: ShiftHistoryRow; isFirstPairing: boolean }) {
+  const band = complianceBandColor(s.compliance_band);
+  const [open, setOpen] = useState(isFirstPairing);
+
+  return (
+    <div className="px-5 py-3">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
+            {isFirstPairing && (
+              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+                First shift
+              </span>
+            )}
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+            {safeFormat(s.scheduled_start, "d MMM yyyy")}
+            {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" style={band}>
+          {s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : s.compliance_band}
+        </span>
+      </button>
+      {open && <ShiftMatchFeedbackForm shiftId={s.id} />}
+    </div>
+  );
+}
+
+/** Compact coordinator-side match feedback: 1-5 rating, would-repeat, and an
+ * optional note on how the participant responded. Independent of the
+ * worker's own reflection (worker.py's /shifts/{id}/match-feedback) - either
+ * side can record first. */
+function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const feedbackKey = ["shift-match-feedback", shiftId];
+  const { data: feedback, isLoading } = useOrgQuery(feedbackKey, { queryFn: () => getShiftMatchFeedback(shiftId) });
+
+  const [rating, setRating] = useState<number | null>(null);
+  const [wouldRepeat, setWouldRepeat] = useState<boolean | null>(null);
+  const [note, setNote] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  if (feedback && !hydrated) {
+    setRating(feedback.outcome_rating ?? null);
+    setWouldRepeat(feedback.would_repeat ?? null);
+    setNote(feedback.participant_response ?? "");
+    setHydrated(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => postShiftMatchFeedback(shiftId, { outcome_rating: rating, would_repeat: wouldRepeat, participant_response: note || null }),
+    onSuccess: () => {
+      toast({ title: "Saved" });
+      queryClient.invalidateQueries({ queryKey: feedbackKey });
+    },
+    onError: (err) => toast({ title: "Could not save", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>How did this pairing go?</p>
+      <div className="mt-2 flex items-center gap-3">
+        <div className="flex items-center gap-0.5">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setRating(n)}
+              aria-label={`${n} star${n === 1 ? "" : "s"}`}
+              className="p-0.5"
+            >
+              <Star size={16} fill={rating != null && n <= rating ? PLUM : "none"} style={{ color: PLUM }} />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWouldRepeat(true)}
+            className="rounded-lg px-2 py-1 text-[11px] font-bold"
+            style={{ background: wouldRepeat === true ? "var(--cc-status-success-bg)" : "transparent", color: wouldRepeat === true ? "var(--cc-status-success)" : MUTED }}
+          >
+            Would repeat
+          </button>
+          <button
+            type="button"
+            onClick={() => setWouldRepeat(false)}
+            className="rounded-lg px-2 py-1 text-[11px] font-bold"
+            style={{ background: wouldRepeat === false ? "var(--cc-status-danger-bg)" : "transparent", color: wouldRepeat === false ? "var(--cc-status-danger)" : MUTED }}
+          >
+            Wouldn't repeat
+          </button>
+        </div>
+      </div>
+      <textarea
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="How did the participant respond? (optional)"
+        rows={2}
+        className="mt-2 w-full resize-none rounded-lg border p-2 text-xs"
+        style={{ borderColor: BORDER, background: SURFACE }}
+      />
+      {feedback?.worker_feedback && (
+        <p className="mt-2 text-xs italic" style={{ color: MUTED }}>Worker's note: "{feedback.worker_feedback}"</p>
+      )}
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          disabled={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
+          style={{ background: PLUM }}
+        >
+          Save
+        </button>
       </div>
     </div>
   );

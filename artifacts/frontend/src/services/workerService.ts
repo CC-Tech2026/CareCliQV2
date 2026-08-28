@@ -194,3 +194,14 @@ export function setMatchingOptIn(optIn: boolean) {
     body: JSON.stringify({ matching_opt_in: optIn }),
   });
 }
+
+// ── Worker-Participant Matching Enhancement, Phase 3 — worker-side feedback ─
+
+/** Optional, light-touch reflection on a completed shift, independent of the
+ * coordinator's own rating - either side can leave feedback first. */
+export function submitShiftMatchFeedback(shiftId: string, workerFeedback: string) {
+  return jsonFetch<{ id: string }>(`/api/worker/shifts/${encodeURIComponent(shiftId)}/match-feedback`, {
+    method: "POST",
+    body: JSON.stringify({ worker_feedback: workerFeedback }),
+  });
+}

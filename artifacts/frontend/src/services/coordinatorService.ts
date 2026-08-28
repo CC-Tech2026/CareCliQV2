@@ -991,6 +991,37 @@ export function removeWorkerTag(workerId: string, tagId: string) {
   });
 }
 
+// ── Worker-Participant Matching Enhancement, Phase 3 — shift outcome feedback
+
+export type ShiftMatchFeedback = {
+  id: string;
+  shift_id: string;
+  participant_id: string;
+  worker_id: string;
+  recorded_by_user_id?: string | null;
+  recorded_at?: string | null;
+  participant_response?: string | null;
+  outcome_rating?: number | null;
+  would_repeat?: boolean | null;
+  worker_feedback?: string | null;
+  worker_feedback_recorded_at?: string | null;
+};
+
+export function getShiftMatchFeedback(shiftId: string) {
+  return jsonFetch<ShiftMatchFeedback | null>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/match-feedback`);
+}
+
+export function postShiftMatchFeedback(
+  shiftId: string,
+  payload: { participant_response?: string | null; outcome_rating?: number | null; would_repeat?: boolean | null }
+) {
+  return jsonFetch<ShiftMatchFeedback>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/match-feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Add a required skill to a participant */
 export function addParticipantRequiredSkill(participantId: string, skill: string, isMandatory = true) {
   return jsonFetch<{ id: string; skill: string; is_mandatory: boolean }>(
