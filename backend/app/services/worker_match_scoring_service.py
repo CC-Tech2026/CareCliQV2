@@ -16,10 +16,11 @@ fixed formula:
                                        feedback on file)
     continuity                  10   (real - has a completed shift with this
                                        participant ever happened, from `shifts`)
-    fair distribution           10   (Phase 4 placeholder, deferred by design
-                                       until there's enough real shift history
-                                       to make it meaningful - same fixed-
-                                       neutral treatment prior history used to get)
+    fair distribution           10   (real, Phase 4 - this worker's share of the
+                                       participant's completed shifts in the last
+                                       90 days; neutral half-weight until that
+                                       window has enough shifts on file across
+                                       any worker for a share to mean anything)
 
 "Missing data reads as neutral, never as a bad fit" (Section 5.2) applies at
 the component level too: a component with no comparable data on EITHER side
@@ -29,6 +30,8 @@ sides have tags in that category and genuinely share none.
 
 from __future__ import annotations
 
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from .supabase_client import get_supabase_admin
@@ -39,7 +42,17 @@ INTERESTS_WEIGHT = 30.0
 LIVED_EXPERIENCE_WEIGHT = 25.0
 PRIOR_HISTORY_WEIGHT = 25.0  # real (Phase 3) - neutral half-weight until this pair has rated feedback
 CONTINUITY_WEIGHT = 10.0
-FAIR_DISTRIBUTION_WEIGHT = 10.0  # Phase 4 placeholder - always neutral today
+FAIR_DISTRIBUTION_WEIGHT = 10.0  # real (Phase 4) - neutral half-weight until there's enough recent history
+
+# Below this many completed shifts for a participant (across every worker,
+# not just the candidate), a "share" of them doesn't mean anything yet - a
+# freshly seeded organisation should read as neutral, not as everyone being
+# unfairly overloaded on one shift each.
+FAIR_DISTRIBUTION_MIN_SHIFTS = 3
+FAIR_DISTRIBUTION_LOOKBACK_DAYS = 90
+# Above this share of a participant's recent shifts, flag it in the reasons -
+# below it, a real (non-neutral) score still applies but isn't called out.
+FAIR_DISTRIBUTION_FLAG_SHARE = 0.6
 
 MAX_REASONS = 3
 
@@ -103,6 +116,42 @@ def _prior_history_component(worker_id: str, participant_id: str, organization_i
     return score, reason
 
 
+def _recent_shift_counts_by_worker(participant_id: str, organization_id: str) -> Counter[str]:
+    """How many completed shifts each worker has taken with this participant
+    in the lookback window - fetched once per scoring pass (not once per
+    candidate), since it's participant-scoped, not worker-scoped."""
+    supabase = get_supabase_admin()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=FAIR_DISTRIBUTION_LOOKBACK_DAYS)).isoformat()
+    try:
+        resp = (
+            supabase.table("shifts")
+            .select("worker_id")
+            .eq("organization_id", organization_id)
+            .eq("participant_id", participant_id)
+            .eq("status", "completed")
+            .gte("scheduled_start", cutoff)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception:
+        rows = []
+    return Counter(str(r["worker_id"]) for r in rows if r.get("worker_id"))
+
+
+def _fair_distribution_component(worker_id: str, recent_counts: Counter[str]) -> tuple[float, Optional[str]]:
+    total = sum(recent_counts.values())
+    if total < FAIR_DISTRIBUTION_MIN_SHIFTS:
+        return FAIR_DISTRIBUTION_WEIGHT / 2, None
+    share = recent_counts.get(worker_id, 0) / total
+    score = FAIR_DISTRIBUTION_WEIGHT * (1 - share)
+    reason = (
+        "Has taken most of this participant's recent shifts - consider spreading coverage"
+        if share >= FAIR_DISTRIBUTION_FLAG_SHARE
+        else None
+    )
+    return score, reason
+
+
 def score_candidates(
     worker_ids: list[str],
     participant_id: Optional[str],
@@ -123,6 +172,7 @@ def score_candidates(
     participant_tags = tag_service.list_participant_tags(participant_id)
     participant_interests = _tags_in_categories(participant_tags, interests_cat_ids)
     participant_lived_exp = _tags_in_categories(participant_tags, lived_exp_cat_ids)
+    recent_counts = _recent_shift_counts_by_worker(participant_id, organization_id)
 
     out: dict[str, dict[str, Any]] = {}
     for worker_id in worker_ids:
@@ -143,18 +193,25 @@ def score_candidates(
         # with this participant before") when both are true - don't show both.
         if prior_history_reason:
             continuity_reason = None
+        fair_distribution_score, fair_distribution_reason = _fair_distribution_component(worker_id, recent_counts)
 
         total = (
             interests_score
             + lived_exp_score
             + prior_history_score
             + continuity_score
-            + (FAIR_DISTRIBUTION_WEIGHT / 2)
+            + fair_distribution_score
         )
 
         # Prior history is the strongest, most concrete signal when present -
-        # shown first, ahead of the tag-overlap reasons.
-        reasons = [r for r in (prior_history_reason, interests_reason, lived_exp_reason, continuity_reason) if r][:MAX_REASONS]
+        # shown first, ahead of the tag-overlap reasons. The distribution flag
+        # is a caution rather than a positive signal, so it's last in line and
+        # rarely displayed (WorkerMatchBadge only shows reasons[0]) unless
+        # nothing more positive applies.
+        reasons = [
+            r for r in (prior_history_reason, interests_reason, lived_exp_reason, continuity_reason, fair_distribution_reason)
+            if r
+        ][:MAX_REASONS]
         out[worker_id] = {"score": round(total), "reasons": reasons}
 
     return out
