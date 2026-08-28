@@ -629,6 +629,9 @@ export type AvailableWorker = WorkerStats & {
   /** Phase 2 (ranking) — null when no participant was given to score fit against. */
   match_score: number | null;
   match_reasons: string[];
+  /** Phase 4 — a coordinator recorded would_repeat=false for this exact pair.
+   * Never hidden, sorted last, still selectable — see WorkerMatchBadge. */
+  excluded?: boolean;
 };
 
 export type AssignExistingShiftPayload = {

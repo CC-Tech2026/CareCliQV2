@@ -87,6 +87,29 @@ def record_worker_feedback(shift_id: str, worker_id: str, worker_feedback: str) 
     return (resp.data or [payload])[0]
 
 
+def has_do_not_repeat_flag(worker_id: str, participant_id: str, organization_id: str) -> bool:
+    """True if a coordinator has ever recorded would_repeat=False for this
+    exact worker-participant pair. Checked before scoring (see
+    worker_match_scoring_service.score_candidates) - a documented "this
+    pairing didn't work" is a deliberate, considered coordinator call, not
+    something a low outcome_rating alone should imply."""
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table(TABLE)
+            .select("id")
+            .eq("organization_id", organization_id)
+            .eq("worker_id", worker_id)
+            .eq("participant_id", participant_id)
+            .eq("would_repeat", False)
+            .limit(1)
+            .execute()
+        )
+        return bool(resp.data)
+    except Exception:
+        return False
+
+
 def rating_history_for_pair(worker_id: str, participant_id: str, organization_id: str) -> Optional[tuple[float, int]]:
     """(average_rating, count) across every shift this pair has feedback for,
     or None if there's no rated feedback yet at all."""

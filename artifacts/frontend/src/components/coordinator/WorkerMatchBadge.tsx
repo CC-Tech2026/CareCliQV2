@@ -12,6 +12,17 @@ export function WorkerMatchBadge({ worker }: { worker: AvailableWorker | undefin
   const conflicts = worker.conflicts ?? [];
   const skillWarnings = worker.skill_warnings ?? [];
 
+  // Phase 4 (do-not-repeat) — takes priority over every other signal: a
+  // coordinator's own recorded "this pairing didn't work" is the single most
+  // important thing to surface, ahead of availability or fit. Still just a
+  // badge, never a block — see worker_match_scoring_service's has_do_not_repeat_flag.
+  if (worker.excluded) {
+    return (
+      <span className="text-[11px] font-semibold" style={{ color: "#991B1B" }}>
+        {(worker.match_reasons ?? [])[0] ?? "Previous pairing marked as not to repeat"}
+      </span>
+    );
+  }
   if (worker.availability_status === "unavailable") {
     const msg = conflicts.find((c) => c.severity === "error")?.message ?? skillWarnings[0]?.message;
     return msg ? <span className="text-[11px] font-semibold" style={{ color: "#DC2626" }}>{msg}</span> : null;

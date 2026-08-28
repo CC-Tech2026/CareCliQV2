@@ -2164,9 +2164,11 @@ async def get_available_workers(
         match = match_by_worker.get(wid)
         w["match_score"] = match["score"] if match else None
         w["match_reasons"] = match["reasons"] if match else []
+        w["excluded"] = bool(match.get("excluded")) if match else False
 
     order = {"available": 0, "warning": 1, "unavailable": 2}
     results.sort(key=lambda w: (
+        1 if w["excluded"] else 0,  # do-not-repeat sorts below even "unavailable" — never hidden, always last
         order.get(w["availability_status"], 3),
         -(w["match_score"] if w["match_score"] is not None else -1),
         0 if w["preferred_availability"] else 1,

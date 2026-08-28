@@ -176,6 +176,23 @@ def score_candidates(
 
     out: dict[str, dict[str, Any]] = {}
     for worker_id in worker_ids:
+        # A coordinator explicitly flagging "would not repeat" for this exact
+        # pair is a deliberate, considered call (see has_do_not_repeat_flag's
+        # docstring) - it overrides scoring entirely rather than lowering it,
+        # per the design spec's "documented problem is a hard stop, not a
+        # lower score" principle. Consistent with this codebase's existing
+        # convention of always showing and explaining rather than silently
+        # removing a candidate (e.g. an unavailable worker still appears in
+        # /available-workers, just sorted last with a reason) - excluded is a
+        # sort/display tier, not a hard filter the caller can't see past.
+        if feedback_service.has_do_not_repeat_flag(worker_id, participant_id, organization_id):
+            out[worker_id] = {
+                "score": 0,
+                "reasons": ["Previous pairing marked as not to repeat"],
+                "excluded": True,
+            }
+            continue
+
         worker_tags = tag_service.list_worker_tags(worker_id, include_private=True)
         worker_interests = _tags_in_categories(worker_tags, interests_cat_ids)
         worker_lived_exp = _tags_in_categories(worker_tags, lived_exp_cat_ids)
