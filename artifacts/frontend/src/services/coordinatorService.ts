@@ -786,6 +786,24 @@ export function createUnassignedShift(payload: {
   );
 }
 
+export type OverdueUnassignedShift = {
+  id: string;
+  participant_id: string;
+  participant_name?: string | null;
+  scheduled_start: string;
+  scheduled_end?: string | null;
+  shift_type?: string | null;
+  worker_id?: string | null;
+  status?: string | null;
+};
+
+/** Unassigned shifts whose start time has already passed - independent of
+ * whatever week/month range the roster board happens to be showing, since
+ * that view is range-scoped and these otherwise silently fall out of it. */
+export function getOverdueUnassignedShifts() {
+  return jsonFetch<OverdueUnassignedShift[]>("/api/coordinator/shifts/overdue-unassigned");
+}
+
 /** Get in-app notifications for a worker */
 export function getWorkerNotifications(workerId: string, unreadOnly = false) {
   const qs = unreadOnly ? "?unread_only=true" : "";

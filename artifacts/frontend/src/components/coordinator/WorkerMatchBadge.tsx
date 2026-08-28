@@ -9,21 +9,27 @@ export function WorkerMatchBadge({ worker }: { worker: AvailableWorker | undefin
   const { translate } = useAccessibility();
   if (!worker) return null;
 
+  const conflicts = worker.conflicts ?? [];
+  const skillWarnings = worker.skill_warnings ?? [];
+
   if (worker.availability_status === "unavailable") {
-    const msg = worker.conflicts.find((c) => c.severity === "error")?.message ?? worker.skill_warnings[0]?.message;
+    const msg = conflicts.find((c) => c.severity === "error")?.message ?? skillWarnings[0]?.message;
     return msg ? <span className="text-[11px] font-semibold" style={{ color: "#DC2626" }}>{msg}</span> : null;
   }
   if (worker.availability_status === "warning") {
-    const msg = [...worker.conflicts, ...worker.skill_warnings].find((c) => c.severity !== "error")?.message;
+    const msg = [...conflicts, ...skillWarnings].find((c) => c.severity !== "error")?.message;
     return msg ? <span className="text-[11px] font-semibold" style={{ color: "#D97706" }}>{msg}</span> : null;
   }
   // Phase 2 (ranking) — the top reason the fit score picked this worker,
   // e.g. "Shares interests: gaming, football". Purely explanatory, shown
   // ahead of preferred_availability since it's the more specific signal.
-  if (worker.match_reasons.length > 0) {
+  // Defensive fallback: a backend running code from before match_reasons
+  // existed would omit the field entirely rather than send an empty array.
+  const topMatchReason = (worker.match_reasons ?? [])[0];
+  if (topMatchReason) {
     return (
       <span className="text-[11px] font-semibold" style={{ color: "var(--cc-plum)" }}>
-        {worker.match_reasons[0]}
+        {topMatchReason}
       </span>
     );
   }

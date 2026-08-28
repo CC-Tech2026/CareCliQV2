@@ -43,6 +43,11 @@ from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
 
+# Mirrors RosterBoard.tsx's UNASSIGNED_PLACEHOLDER_ID — shifts.worker_id is
+# NOT NULL, so an unassigned shift gets this all-zeros UUID instead of a real
+# worker id (see create_unassigned_shift below for where it's set).
+UNASSIGNED_SHIFT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+
 
 def _require_coordinator(user: dict) -> str:
     if not is_coordinator_role(user):
@@ -2516,15 +2521,12 @@ async def create_unassigned_shift(
 
     shift_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Use a special placeholder worker_id for unassigned shifts (all zeros UUID)
-    # This satisfies the NOT NULL constraint while marking the shift as unassigned
-    unassigned_placeholder_id = "00000000-0000-0000-0000-000000000000"
     payload = {
         "id": shift_id,
         "organization_id": org_id,
         "participant_id": body.participant_id,
         "participant_name": participant.get("full_name"),
-        "worker_id": unassigned_placeholder_id,
+        "worker_id": UNASSIGNED_SHIFT_PLACEHOLDER_ID,
         "shift_type": _normalize_shift_type(body.shift_type),
         "scheduled_start": s_dt.isoformat(),
         "scheduled_end": e_dt.isoformat(),
@@ -2540,6 +2542,40 @@ async def create_unassigned_shift(
     if shift:
         shift["is_unassigned"] = True
     return {"shift_id": shift_id, "shift": shift}
+
+
+@router.get("/shifts/overdue-unassigned")
+async def get_overdue_unassigned_shifts(current_user: dict = Depends(get_current_user)):
+    """Unassigned shifts whose scheduled_start has already passed.
+
+    The roster board's shift list is week/month-range-scoped (coordinator-
+    rostering.tsx) - once a coordinator navigates away from the week an
+    unassigned shift was in, it silently disappears from view with no
+    escalation, notification, or KPI anywhere (confirmed gap, Aug 2026). This
+    is a standalone, always-current list independent of whatever range the
+    roster board happens to be showing, so a coordinator/MD can see these
+    regardless of where they've navigated to.
+    """
+    org_id = _require_org_read(current_user)
+    supabase = get_supabase_admin()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        resp = (
+            supabase.table("shifts")
+            .select("id, participant_id, participant_name, scheduled_start, scheduled_end, shift_type, worker_id, status")
+            .eq("organization_id", org_id)
+            .lt("scheduled_start", now_iso)
+            .not_.in_("status", ["cancelled", "completed"])
+            .order("scheduled_start")
+            .limit(200)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception:
+        rows = []
+
+    return [r for r in rows if not r.get("worker_id") or r["worker_id"] == UNASSIGNED_SHIFT_PLACEHOLDER_ID]
 
 
 # ── Worker notifications ──────────────────────────────────────────────────────

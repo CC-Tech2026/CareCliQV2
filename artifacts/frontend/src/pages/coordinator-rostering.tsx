@@ -3,11 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
-  eachDayOfInterval, isToday, isSameMonth, addDays,
+  eachDayOfInterval, isToday, isSameMonth, addDays, differenceInCalendarDays,
 } from "date-fns";
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
-  Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
+  CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
+  Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
   Activity, Search, RefreshCw,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -25,10 +25,12 @@ import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
   getWorkerAvailability,
+  getOverdueUnassignedShifts,
   type CoordinatorShiftRecord,
   type WorkerStats,
   type WorkerAvailability,
   type BlackoutDate,
+  type OverdueUnassignedShift,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { RosterBoard }           from "@/components/coordinator/RosterBoard";
@@ -275,6 +277,72 @@ function DayPanel({
   );
 }
 
+/** Overdue unassigned shifts silently fall out of view once a coordinator
+ * navigates the week/month-scoped roster board away from wherever the shift
+ * was scheduled - there's no other alert, escalation, or KPI for this
+ * anywhere in the app (confirmed gap, Aug 2026). This is deliberately always
+ * visible regardless of which tab/week/month is currently shown, not tied
+ * to shiftsQuery's range. */
+function OverdueUnassignedBanner({
+  shifts, isLoading, onJump,
+}: {
+  shifts: OverdueUnassignedShift[];
+  isLoading: boolean;
+  onJump: (shift: OverdueUnassignedShift) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  if (isLoading || shifts.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border-2" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>
+      <button type="button" onClick={() => setCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+        <span className="flex items-center gap-2">
+          <AlertTriangle size={16} style={{ color: "var(--cc-status-danger)" }} />
+          <span className="text-[13px] font-black" style={{ color: "var(--cc-status-danger)" }}>
+            {shifts.length} overdue unassigned shift{shifts.length === 1 ? "" : "s"}
+          </span>
+          <span className="text-[11px] font-medium" style={{ color: "var(--cc-status-danger)" }}>
+            — start time has passed with no worker assigned
+          </span>
+        </span>
+        {collapsed ? <ChevronDown size={16} style={{ color: "var(--cc-status-danger)" }} /> : <ChevronUp size={16} style={{ color: "var(--cc-status-danger)" }} />}
+      </button>
+      {!collapsed && (
+        <div className="divide-y border-t" style={{ borderColor: "var(--cc-status-danger)" }}>
+          {shifts.slice(0, 10).map((s) => {
+            const daysOverdue = Math.max(0, differenceInCalendarDays(new Date(), parseISO(s.scheduled_start)));
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onJump(s)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
+                    {s.participant_name || "Participant"}
+                  </span>
+                  <span className="block text-[11px]" style={{ color: "var(--cc-muted)" }}>
+                    {format(parseISO(s.scheduled_start), "d MMM yyyy, h:mm a")}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" style={{ background: "var(--cc-status-danger)", color: "white" }}>
+                  {daysOverdue === 0 ? "Today" : `${daysOverdue}d overdue`}
+                </span>
+              </button>
+            );
+          })}
+          {shifts.length > 10 && (
+            <p className="px-4 py-2 text-[11px] font-medium" style={{ color: "var(--cc-muted)" }}>
+              +{shifts.length - 10} more
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
   const { user: currentUser } = useAuth();
@@ -325,6 +393,15 @@ export default function CoordinatorRosteringPage() {
     }
   );
 
+  // Independent of rangeStart/rangeEnd on purpose - shiftsQuery above only
+  // covers the currently-viewed week/month, so an unassigned shift whose
+  // time has passed silently falls out of view once the coordinator moves
+  // on. This stays visible regardless of what's currently shown.
+  const overdueUnassignedQuery = useOrgQuery(
+    ["coordinator", "overdue-unassigned-shifts"],
+    { queryFn: getOverdueUnassignedShifts, refetchInterval: 5 * 60_000 }
+  );
+
   const workers = workersQuery.data ?? [];
   const shifts  = shiftsQuery.data  ?? [];
 
@@ -364,6 +441,15 @@ export default function CoordinatorRosteringPage() {
     setCurrentMonth(now);
     setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
     setSelectedDay(now);
+  };
+
+  const handleJumpToOverdueShift = (shift: OverdueUnassignedShift) => {
+    setPageTab("roster");
+    setViewMode("roster");
+    const target = parseISO(shift.scheduled_start);
+    setCurrentMonth(target);
+    setWeekStart(startOfWeek(target, { weekStartsOn: 1 }));
+    setSelectedDay(target);
   };
 
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
@@ -431,6 +517,12 @@ export default function CoordinatorRosteringPage() {
         </div>
         ) : null}
       </div>
+
+      <OverdueUnassignedBanner
+        shifts={overdueUnassignedQuery.data ?? []}
+        isLoading={overdueUnassignedQuery.isLoading}
+        onJump={handleJumpToOverdueShift}
+      />
 
       {/* Page-level tabs: Roster | Live | Monitor */}
       <div role="tablist" className="flex gap-5 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
