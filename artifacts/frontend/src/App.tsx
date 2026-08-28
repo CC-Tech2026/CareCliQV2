@@ -19,6 +19,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
+import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -629,6 +630,7 @@ function App() {
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <AuthSessionGuards />
                 <WelcomeScreenGate />
+                <OnboardingCompleteGate />
                 <Router />
               </WouterRouter>
             </OfflineSyncProvider>

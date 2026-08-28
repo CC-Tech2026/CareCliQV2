@@ -45,10 +45,30 @@ from .supabase_client import get_supabase_admin
 
 OFFER_LETTER_STATUSES = ("draft", "awaiting_signatures", "signed", "invited")
 
+STAGE_ORDER = ("interview", "offer_letter", "credentials", "training", "active")
+STAGE_LABELS = {
+    "interview": "Interview",
+    "offer_letter": "Offer letter",
+    "credentials": "Screening & Credentials",
+    "training": "Training",
+    "active": "Active",
+}
+
 
 def _is_missing_schema_error(exc: Exception) -> bool:
     err = str(exc).lower()
     return "does not exist" in err or "42703" in err or "pgrst" in err or "could not find" in err
+
+
+def _classify_mid_onboarding(
+    cred_approved: bool, cred_blocked: bool, training_or_induction_overdue: bool
+) -> tuple[str, str]:
+    """(stage, flag) for a worker still mid-onboarding (not yet Active). Factored out
+    of get_pipeline_overview's per-worker loop so get_pipeline_for_worker (single
+    worker) can reuse the exact same placement logic rather than a second copy."""
+    if not cred_approved:
+        return "credentials", "warn" if cred_blocked else "ok"
+    return "training", "warn" if training_or_induction_overdue else "ok"
 
 
 def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
@@ -103,11 +123,9 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
     credentials_col: list[dict[str, Any]] = []
     training_col: list[dict[str, Any]] = []
     for w in onboarding_workers:
-        if w["id"] not in cred_approved:
-            credentials_col.append({**w, "flag": "warn" if w["id"] in cred_blocked else "ok"})
-        else:
-            overdue = bool(training_overdue_map.get(w["id"])) or bool(induction_incomplete_map.get(w["id"]))
-            training_col.append({**w, "flag": "warn" if overdue else "ok"})
+        overdue = bool(training_overdue_map.get(w["id"])) or bool(induction_incomplete_map.get(w["id"]))
+        stage, flag = _classify_mid_onboarding(w["id"] in cred_approved, w["id"] in cred_blocked, overdue)
+        (credentials_col if stage == "credentials" else training_col).append({**w, "flag": flag})
 
     active_col = [w for w in workers if w.get("is_active") and w.get("onboarding_completed")]
 
@@ -154,4 +172,78 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
             "expired_offers": expired_offers,
             "auto_deactivated_workers": auto_deactivated_workers,
         },
+    }
+
+
+def get_pipeline_for_worker(worker_id: str, organization_id: str) -> dict[str, Any] | None:
+    """Single-worker mirror of get_pipeline_overview, for the worker-facing "My
+    Onboarding" progress view. A worker calling this is always already logged
+    in (has a users row) - Interview and Offer letter, which by definition
+    happen before a users row exists, are always already behind them, so
+    they're shown as completed stepper steps for context rather than looked
+    up from applicants/employee_onboarding.
+
+    Returns None if the worker has no users row in this organization (should
+    not happen for an authenticated caller, but the endpoint treats it as a
+    404 rather than assuming shape).
+    """
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("users")
+            .select("id, full_name, email, is_active, onboarding_completed, created_at")
+            .eq("id", worker_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    if not rows:
+        return None
+    worker = rows[0]
+
+    # A worker set inactive without completing onboarding (auto-deactivated by
+    # onboarding_escalation_service after 14 days stalled) is layered on top of
+    # whichever stage they were blocked on, not a 6th stage of its own - the
+    # stepper still shows where they were, with a separate "paused" flag.
+    deactivated = not worker.get("is_active") and not worker.get("onboarding_completed")
+
+    outstanding: list[str] = []
+    if worker.get("is_active") and worker.get("onboarding_completed"):
+        current_stage = "active"
+    else:
+        cred_approved = bool(escalation.mandatory_credentials_approved([worker_id]))
+        cred_blocked = bool(escalation.credentials_blocked([worker_id]))
+        training_overdue = training.is_training_overdue(worker_id, organization_id)
+        induction_incomplete = induction_service.is_induction_incomplete(worker_id, organization_id)
+        current_stage, _flag = _classify_mid_onboarding(
+            cred_approved, cred_blocked, training_overdue or induction_incomplete
+        )
+        if current_stage == "credentials" and cred_blocked:
+            outstanding.append("Submit your outstanding mandatory credentials")
+        elif current_stage == "training":
+            if training_overdue:
+                outstanding.append("Complete your overdue training module(s)")
+            if induction_incomplete:
+                outstanding.append("Complete your remaining induction items")
+
+    current_index = STAGE_ORDER.index(current_stage)
+    stages = [
+        {
+            "key": key,
+            "label": STAGE_LABELS[key],
+            "status": "complete" if i < current_index else "current" if i == current_index else "upcoming",
+        }
+        for i, key in enumerate(STAGE_ORDER)
+    ]
+
+    return {
+        "current_stage": current_stage,
+        "stages": stages,
+        "outstanding_items": outstanding,
+        "deactivated": deactivated,
     }

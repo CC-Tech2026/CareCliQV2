@@ -43,6 +43,37 @@ export function getInductionItems() {
   return jsonFetch<InductionItem[]>("/api/coordinator/induction-items");
 }
 
+export type OnboardingStage = "interview" | "offer_letter" | "credentials" | "training" | "active";
+
+export type OnboardingStageStep = {
+  key: OnboardingStage;
+  label: string;
+  status: "complete" | "current" | "upcoming";
+};
+
+export type MyPipeline = {
+  current_stage: OnboardingStage;
+  stages: OnboardingStageStep[];
+  outstanding_items: string[];
+  deactivated: boolean;
+};
+
+export function getMyPipeline() {
+  return jsonFetch<MyPipeline>("/api/onboarding/me/pipeline");
+}
+
+export function getMyCompletionStatus() {
+  return jsonFetch<{ onboarding_completed: boolean; onboarding_completed_seen_at: string | null }>(
+    "/api/onboarding/me/completion-status",
+  );
+}
+
+export function markMyCompletionSeen() {
+  return jsonFetch<{ onboarding_completed_seen_at: string | null }>("/api/onboarding/me/completion-seen", {
+    method: "POST",
+  });
+}
+
 export function createInductionItem(payload: {
   title: string;
   description?: string;

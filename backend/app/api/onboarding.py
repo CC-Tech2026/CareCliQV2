@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
-from ..services import induction_service, worker_financial_service, worker_training_service
+from ..services import induction_service, worker_financial_service, worker_pipeline_service, worker_training_service
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
 
 PROFILE_PHOTOS_BUCKET = "profile-photos"
@@ -34,7 +34,8 @@ def _load_user(user_id: str) -> dict:
         .table("users")
         .select(
             "id, role, organization_id, email_verified, profile_completed, onboarding_completed, "
-            "role_specific_profile_completed, profile_photo_url, onboarding_checklist, welcome_seen_at"
+            "role_specific_profile_completed, profile_photo_url, onboarding_checklist, welcome_seen_at, "
+            "onboarding_completed_seen_at"
         )
         .eq("id", user_id)
         .maybe_single()
@@ -166,6 +167,34 @@ async def complete_my_induction_item(item_id: str, current_user: dict = Depends(
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization membership required.")
     return induction_service.complete_induction_item(get_user_id(current_user), item_id, org_id)
+
+
+@router.get("/me/pipeline")
+async def get_my_pipeline(current_user: dict = Depends(get_current_user)):
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    pipeline = worker_pipeline_service.get_pipeline_for_worker(get_user_id(current_user), org_id)
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+    return pipeline
+
+
+@router.get("/me/completion-status")
+async def get_my_completion_status(current_user: dict = Depends(get_current_user)):
+    profile = _load_user(get_user_id(current_user))
+    return {
+        "onboarding_completed": bool(profile.get("onboarding_completed")),
+        "onboarding_completed_seen_at": profile.get("onboarding_completed_seen_at"),
+    }
+
+
+@router.post("/me/completion-seen")
+async def mark_my_completion_seen(current_user: dict = Depends(get_current_user)):
+    result = get_supabase_admin().table("users").update(
+        {"onboarding_completed_seen_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", get_user_id(current_user)).execute()
+    return {"onboarding_completed_seen_at": result.data[0].get("onboarding_completed_seen_at") if result.data else None}
 
 
 @router.get("/team")

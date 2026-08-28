@@ -22,6 +22,7 @@ import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { WorkerOnboardingChecklist } from "@/components/onboarding/WorkerOnboardingChecklist";
 import { MyCredentialsCard } from "@/components/onboarding/MyCredentialsCard";
 import { MyInterestsCard } from "@/components/onboarding/MyInterestsCard";
+import { MyOnboardingProgress } from "@/components/onboarding/MyOnboardingProgress";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -402,6 +403,16 @@ export default function WorkerOnboarding() {
             }}
           />
         </div>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-[#E8E8EA] bg-white p-5 shadow-sm sm:p-6">
+        <SectionHeader
+          icon={ClipboardList}
+          title="My onboarding"
+          description="Where you are in the process, from interview to active."
+        />
+
+        <MyOnboardingProgress />
       </div>
 
       <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
