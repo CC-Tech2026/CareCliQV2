@@ -188,6 +188,37 @@ export function getUnassignedTeam() {
   return jsonFetch<Array<{ id: string; full_name: string; email: string }>>("/api/coordinator/team/unassigned");
 }
 
+export type BuddySuggestion = { id: string; full_name: string; same_suburb: boolean };
+
+export type WorkerBuddy = {
+  id?: string;
+  buddy_worker_id?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  status?: string;
+  assigned_at?: string;
+};
+
+export function getWorkerBuddy(workerId: string) {
+  return jsonFetch<WorkerBuddy>(`/api/coordinator/team/${encodeURIComponent(workerId)}/buddy`);
+}
+
+export function getBuddySuggestions(workerId: string) {
+  return jsonFetch<BuddySuggestion[]>(`/api/coordinator/team/${encodeURIComponent(workerId)}/buddy-suggestions`);
+}
+
+export function assignWorkerBuddy(workerId: string, buddyWorkerId: string | null) {
+  return jsonFetch<{ new_worker_id?: string; buddy_worker_id: string | null }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/buddy`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buddy_worker_id: buddyWorkerId }),
+    },
+  );
+}
+
 export function getCoordinatorSessions() {
   return jsonFetch<DashboardSession[]>("/api/coordinator/all-sessions");
 }

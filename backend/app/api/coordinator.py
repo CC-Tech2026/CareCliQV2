@@ -38,6 +38,7 @@ from ..services.notification_service import (
     notify_shift_change,
 )
 from ..services import conversation_service, shift_offer_service, worker_matching_service
+from ..services import worker_buddy_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -855,6 +856,34 @@ async def list_unassigned_team(current_user: dict = Depends(get_current_user)):
         .execute()
     )
     return result.data or []
+
+
+class AssignBuddyBody(BaseModel):
+    buddy_worker_id: Optional[str] = None  # null to clear
+
+
+@router.get("/team/{worker_id}/buddy")
+async def get_worker_buddy(worker_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    return worker_buddy_service.get_buddy(worker_id) or {}
+
+
+@router.get("/team/{worker_id}/buddy-suggestions")
+async def get_buddy_suggestions(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    return worker_buddy_service.suggest_buddies(worker_id, org_id)
+
+
+@router.post("/team/{worker_id}/buddy")
+async def assign_worker_buddy(worker_id: str, body: AssignBuddyBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    result = await worker_buddy_service.assign_buddy(
+        new_worker_id=worker_id,
+        buddy_worker_id=body.buddy_worker_id,
+        organization_id=org_id,
+        assigned_by_user_id=get_user_id(current_user),
+    )
+    return result or {"new_worker_id": worker_id, "buddy_worker_id": None}
 
 
 def _send_recovery_email(email: str) -> None:

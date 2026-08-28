@@ -1,6 +1,6 @@
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, Mail, Phone, UserRound } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { getMyPipeline } from "@/services/inductionService";
+import { getMyBuddy, getMyPipeline } from "@/services/inductionService";
 
 const PLUM = "var(--cc-plum)";
 const MUTED = "var(--cc-muted)";
@@ -11,6 +11,7 @@ const WARNING_BG = "var(--cc-status-warning-bg)";
 
 export function MyOnboardingProgress() {
   const { data, isLoading } = useOrgQuery(["worker-my-pipeline"], { queryFn: getMyPipeline });
+  const { data: buddy } = useOrgQuery(["worker-my-buddy"], { queryFn: getMyBuddy });
 
   if (isLoading || !data) {
     return <div className="h-24 animate-pulse rounded-xl" style={{ background: "var(--cc-soft)" }} />;
@@ -59,6 +60,30 @@ export function MyOnboardingProgress() {
           </div>
         ))}
       </div>
+
+      {buddy?.full_name && (
+        <div className="flex items-center gap-3 rounded-xl border p-4" style={{ borderColor: BORDER }}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)" }}>
+            <UserRound size={18} style={{ color: PLUM }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Your buddy</p>
+            <p className="text-sm font-black" style={{ color: "#1A1A2E" }}>{buddy.full_name}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {buddy.email && (
+              <a href={`mailto:${buddy.email}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
+                <Mail size={14} />
+              </a>
+            )}
+            {buddy.phone && (
+              <a href={`tel:${buddy.phone.replace(/\s/g, "")}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
+                <Phone size={14} />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {data.outstanding_items.length > 0 && (
         <div className="rounded-xl border p-4" style={{ borderColor: BORDER }}>

@@ -18,6 +18,7 @@ import {
   getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
   getShiftMatchFeedback, postShiftMatchFeedback,
   getCoordinatorWorkerStats, assignWorkerCoordinator,
+  getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
 import type { ShiftHistoryRow } from "@/services/workerPerformanceService";
@@ -1057,6 +1058,8 @@ function PersonalInfoTab({
 
       <CoordinatorAssignmentSection worker={worker} />
 
+      <BuddyAssignmentSection worker={worker} />
+
       <WorkerTagsSection workerId={worker.id} />
     </div>
   );
@@ -1107,6 +1110,68 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
             <SelectItem value="unassigned">Unassigned</SelectItem>
             {coordinators.map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+/** Coordinator/MD - pairs a new worker with an experienced, active worker
+ * before their first shift. Suggestions come from a simple heuristic
+ * (matching_opt_in workers, most recently active, same suburb favoured) —
+ * the coordinator always makes the final call, same as every other match in
+ * this system, so a hand-picked buddy outside the suggestion list is also
+ * shown once assigned. */
+function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
+  const { toast } = useToast();
+  const { data: currentBuddy } = useOrgQuery(["worker-buddy", worker.id], {
+    queryFn: () => getWorkerBuddy(worker.id),
+  });
+  const { data: suggestions = [] } = useOrgQuery(["buddy-suggestions", worker.id], {
+    queryFn: () => getBuddySuggestions(worker.id),
+  });
+
+  const [buddyId, setBuddyId] = useState<string | null>(null);
+  useEffect(() => {
+    setBuddyId(currentBuddy?.buddy_worker_id ?? null);
+  }, [currentBuddy?.buddy_worker_id]);
+
+  const assignMutation = useMutation({
+    mutationFn: (nextId: string | null) => assignWorkerBuddy(worker.id, nextId),
+    onSuccess: (_, nextId) => setBuddyId(nextId),
+    onError: (err) => toast({ title: "Could not update buddy", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (worker.role !== "support_worker") return null;
+
+  const options = [...suggestions];
+  if (buddyId && currentBuddy?.full_name && !options.some((o) => o.id === buddyId)) {
+    options.unshift({ id: buddyId, full_name: currentBuddy.full_name, same_suburb: false });
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Buddy</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        An experienced worker to help them settle in before their first shift.
+      </p>
+      <div className="mt-3 max-w-xs">
+        <Select
+          value={buddyId ?? "none"}
+          onValueChange={(value) => assignMutation.mutate(value === "none" ? null : value)}
+          disabled={assignMutation.isPending}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="No buddy assigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No buddy assigned</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.full_name}{o.same_suburb ? " · same suburb" : ""}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

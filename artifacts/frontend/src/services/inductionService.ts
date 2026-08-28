@@ -62,10 +62,31 @@ export function getMyPipeline() {
   return jsonFetch<MyPipeline>("/api/onboarding/me/pipeline");
 }
 
+export type MyBuddy = {
+  id?: string;
+  buddy_worker_id?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  status?: string;
+  assigned_at?: string;
+};
+
+export function getMyBuddy() {
+  return jsonFetch<MyBuddy>("/api/onboarding/me/buddy");
+}
+
+export type MyCompletionStats = {
+  credentials_verified: number;
+  training_completed: number;
+};
+
 export function getMyCompletionStatus() {
-  return jsonFetch<{ onboarding_completed: boolean; onboarding_completed_seen_at: string | null }>(
-    "/api/onboarding/me/completion-status",
-  );
+  return jsonFetch<{
+    onboarding_completed: boolean;
+    onboarding_completed_seen_at: string | null;
+    stats: MyCompletionStats;
+  }>("/api/onboarding/me/completion-status");
 }
 
 export function markMyCompletionSeen() {

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
-from ..services import induction_service, worker_financial_service, worker_pipeline_service, worker_training_service
+from ..services import induction_service, worker_buddy_service, worker_financial_service, worker_pipeline_service, worker_training_service
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
 
 PROFILE_PHOTOS_BUCKET = "profile-photos"
@@ -180,12 +180,45 @@ async def get_my_pipeline(current_user: dict = Depends(get_current_user)):
     return pipeline
 
 
+@router.get("/me/buddy")
+async def get_my_buddy(current_user: dict = Depends(get_current_user)):
+    buddy = worker_buddy_service.get_buddy(get_user_id(current_user))
+    return buddy or {}
+
+
 @router.get("/me/completion-status")
 async def get_my_completion_status(current_user: dict = Depends(get_current_user)):
-    profile = _load_user(get_user_id(current_user))
+    worker_id = get_user_id(current_user)
+    profile = _load_user(worker_id)
+    stats = {"credentials_verified": 0, "training_completed": 0}
+    try:
+        cred_resp = (
+            get_supabase_admin()
+            .table("credentials")
+            .select("id", count="exact")
+            .eq("user_id", worker_id)
+            .eq("status", "valid")
+            .execute()
+        )
+        stats["credentials_verified"] = cred_resp.count or 0
+    except Exception:
+        pass
+    try:
+        training_resp = (
+            get_supabase_admin()
+            .table("worker_training_completions")
+            .select("id", count="exact")
+            .eq("worker_id", worker_id)
+            .eq("status", "confirmed")
+            .execute()
+        )
+        stats["training_completed"] = training_resp.count or 0
+    except Exception:
+        pass
     return {
         "onboarding_completed": bool(profile.get("onboarding_completed")),
         "onboarding_completed_seen_at": profile.get("onboarding_completed_seen_at"),
+        "stats": stats,
     }
 
 
