@@ -8,14 +8,22 @@ import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getTagCatalog,
   createTagCategory,
   setTagCategoryActive,
+  setTagCategoryMatchingRole,
   createTag,
   setTagActive,
   type TagCategory,
+  type TagMatchingRole,
 } from "@/services/coordinatorService";
+
+const MATCHING_ROLE_LABEL: Record<NonNullable<TagMatchingRole>, string> = {
+  interests: "Interests",
+  lived_experience: "Lived experience",
+};
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -49,6 +57,12 @@ function CategoryCard({ category }: { category: TagCategory }) {
     onError: (err) => toast({ title: "Could not update category", description: (err as Error).message, variant: "destructive" }),
   });
 
+  const roleMutation = useMutation({
+    mutationFn: (role: TagMatchingRole) => setTagCategoryMatchingRole(category.id, role),
+    onSuccess: invalidate,
+    onError: (err) => toast({ title: "Could not update matching role", description: (err as Error).message, variant: "destructive" }),
+  });
+
   function submitTag(event: React.FormEvent) {
     event.preventDefault();
     const label = newTagLabel.trim();
@@ -68,6 +82,20 @@ function CategoryCard({ category }: { category: TagCategory }) {
         >
           {category.is_active ? "Deactivate" : "Reactivate"}
         </button>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Feeds match score:</p>
+        <Select value={category.matching_role ?? "none"} onValueChange={(v) => roleMutation.mutate(v === "none" ? null : (v as TagMatchingRole))}>
+          <SelectTrigger className="h-6 w-auto gap-1 rounded-full border-0 px-2 text-[10px] font-bold" style={{ background: category.matching_role ? "var(--cc-plum-soft)" : SOFT, color: category.matching_role ? PLUM : MUTED }}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Not used for matching</SelectItem>
+            <SelectItem value="interests">{MATCHING_ROLE_LABEL.interests}</SelectItem>
+            <SelectItem value="lived_experience">{MATCHING_ROLE_LABEL.lived_experience}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -119,11 +147,13 @@ export default function TagManagementPage() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useOrgQuery(["coordinator-tags"], { queryFn: getTagCatalog });
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryRole, setNewCategoryRole] = useState<TagMatchingRole>(null);
 
   const addCategoryMutation = useMutation({
-    mutationFn: (name: string) => createTagCategory(name),
+    mutationFn: ({ name, role }: { name: string; role: TagMatchingRole }) => createTagCategory(name, role ?? undefined),
     onSuccess: () => {
       setNewCategoryName("");
+      setNewCategoryRole(null);
       queryClient.invalidateQueries({ queryKey: ["coordinator-tags"] });
     },
     onError: (err) => toast({ title: "Could not add category", description: (err as Error).message, variant: "destructive" }),
@@ -133,7 +163,7 @@ export default function TagManagementPage() {
     event.preventDefault();
     const name = newCategoryName.trim();
     if (!name) return;
-    addCategoryMutation.mutate(name);
+    addCategoryMutation.mutate({ name, role: newCategoryRole });
   }
 
   return (
@@ -152,17 +182,29 @@ export default function TagManagementPage() {
 
         <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
           <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Add a category</p>
-          <form onSubmit={submitCategory} className="mt-2 flex max-w-md gap-2">
+          <form onSubmit={submitCategory} className="mt-2 flex max-w-xl flex-wrap gap-2">
             <Input
               value={newCategoryName}
               onChange={(event) => setNewCategoryName(event.target.value)}
               placeholder="e.g. Communication Style"
-              className="h-9 rounded-lg text-[12px]"
+              className="h-9 min-w-[180px] flex-1 rounded-lg text-[12px]"
             />
+            <Select value={newCategoryRole ?? "none"} onValueChange={(v) => setNewCategoryRole(v === "none" ? null : (v as TagMatchingRole))}>
+              <SelectTrigger className="h-9 w-[190px] rounded-lg text-[12px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not used for matching</SelectItem>
+                <SelectItem value="interests">Feeds "{MATCHING_ROLE_LABEL.interests}" score</SelectItem>
+                <SelectItem value="lived_experience">Feeds "{MATCHING_ROLE_LABEL.lived_experience}" score</SelectItem>
+              </SelectContent>
+            </Select>
             <Button type="submit" disabled={addCategoryMutation.isPending} className="h-9 gap-1 rounded-lg px-3 text-[11px]" style={{ background: CTA }}>
               <Plus size={13} /> Add category
             </Button>
           </form>
+          <p className="mt-2 text-[10px]" style={{ color: MUTED }}>
+            Only categories marked "Interests" or "Lived experience" affect the shift-assignment match score - everything
+            else is descriptive only. You can change this later per category.
+          </p>
         </div>
 
         {isLoading ? (

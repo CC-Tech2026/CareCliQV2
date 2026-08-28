@@ -2041,7 +2041,8 @@ async def get_available_workers(
 ):
     """List all team workers with their availability status for a given shift window.
 
-    Returns workers sorted by: available → warning → unavailable, then by name.
+    Returns workers sorted by: available → warning → unavailable, then (Phase 2)
+    by match score with the given participant, then preferred-availability, then name.
     """
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
@@ -2081,9 +2082,25 @@ async def get_available_workers(
             "preferred_availability": preferred,
         })
 
+    # Phase 2 (ranking): a soft fit score + explanatory reasons on top of the
+    # hard filters above — never changes availability_status, purely a
+    # suggestion the coordinator can ignore. Only computed when there's a
+    # participant to score fit against.
+    from ..services import worker_match_scoring_service
+
+    match_by_worker = worker_match_scoring_service.score_candidates(
+        [w.get("id") or w.get("user_id") or "" for w in results], participant_id, org_id
+    )
+    for w in results:
+        wid = w.get("id") or w.get("user_id") or ""
+        match = match_by_worker.get(wid)
+        w["match_score"] = match["score"] if match else None
+        w["match_reasons"] = match["reasons"] if match else []
+
     order = {"available": 0, "warning": 1, "unavailable": 2}
     results.sort(key=lambda w: (
         order.get(w["availability_status"], 3),
+        -(w["match_score"] if w["match_score"] is not None else -1),
         0 if w["preferred_availability"] else 1,
         (w.get("full_name") or "").lower(),
     ))
@@ -2847,6 +2864,11 @@ async def list_tags(current_user: dict = Depends(get_current_user)):
 
 class TagCategoryBody(BaseModel):
     name: str
+    # Phase 2 (ranking): which scoring component this category feeds, if any.
+    # None (the default) means "descriptive only" - doesn't affect the match
+    # score. See migration 145's comment for why this is explicit rather than
+    # matched on the free-text name.
+    matching_role: Optional[str] = None
 
 
 @router.post("/tag-categories", status_code=201)
@@ -2854,9 +2876,11 @@ async def create_tag_category(body: TagCategoryBody, current_user: dict = Depend
     org_id = _require_org_read(current_user)
     if not body.name.strip():
         raise HTTPException(status_code=422, detail="Category name is required.")
+    if body.matching_role and body.matching_role not in ("interests", "lived_experience"):
+        raise HTTPException(status_code=422, detail="matching_role must be 'interests', 'lived_experience', or omitted.")
     from ..services import tag_service
 
-    return tag_service.create_tag_category(org_id, body.name)
+    return tag_service.create_tag_category(org_id, body.name, body.matching_role)
 
 
 class TagActiveBody(BaseModel):
@@ -2869,6 +2893,21 @@ async def update_tag_category_active(category_id: str, body: TagActiveBody, curr
     from ..services import tag_service
 
     tag_service.set_tag_category_active(org_id, category_id, body.is_active)
+    return {"ok": True}
+
+
+class TagCategoryRoleBody(BaseModel):
+    matching_role: Optional[str] = None
+
+
+@router.patch("/tag-categories/{category_id}/matching-role")
+async def update_tag_category_role(category_id: str, body: TagCategoryRoleBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if body.matching_role and body.matching_role not in ("interests", "lived_experience"):
+        raise HTTPException(status_code=422, detail="matching_role must be 'interests', 'lived_experience', or omitted.")
+    from ..services import tag_service
+
+    tag_service.set_tag_category_matching_role(org_id, category_id, body.matching_role)
     return {"ok": True}
 
 

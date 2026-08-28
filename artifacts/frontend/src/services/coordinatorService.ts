@@ -610,6 +610,9 @@ export type AvailableWorker = WorkerStats & {
   conflicts: ConflictItem[];
   skill_warnings: ConflictItem[];
   preferred_availability: boolean;
+  /** Phase 2 (ranking) — null when no participant was given to score fit against. */
+  match_score: number | null;
+  match_reasons: string[];
 };
 
 export type AssignExistingShiftPayload = {
@@ -890,7 +893,10 @@ export function getParticipantRequiredSkills(participantId: string) {
 // ── Worker-Participant Matching Enhancement, Phase 1 — tag taxonomy ─────────
 
 export type Tag = { id: string; label: string; is_active: boolean };
-export type TagCategory = { id: string; name: string; is_active: boolean; tags: Tag[] };
+/** matching_role (Phase 2): which fit-score component this category feeds.
+ * null means descriptive only — doesn't affect ranking. */
+export type TagMatchingRole = "interests" | "lived_experience" | null;
+export type TagCategory = { id: string; name: string; is_active: boolean; matching_role: TagMatchingRole; tags: Tag[] };
 export type AssignedTag = {
   id: string;
   tag_id: string;
@@ -907,11 +913,19 @@ export function getTagCatalog() {
   return jsonFetch<TagCategory[]>("/api/coordinator/tags");
 }
 
-export function createTagCategory(name: string) {
+export function createTagCategory(name: string, matchingRole?: TagMatchingRole) {
   return jsonFetch<TagCategory>("/api/coordinator/tag-categories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, matching_role: matchingRole ?? null }),
+  });
+}
+
+export function setTagCategoryMatchingRole(categoryId: string, matchingRole: TagMatchingRole) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tag-categories/${encodeURIComponent(categoryId)}/matching-role`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ matching_role: matchingRole }),
   });
 }
 

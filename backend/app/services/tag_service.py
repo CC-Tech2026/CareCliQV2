@@ -20,7 +20,9 @@ def list_tag_catalog(organization_id: str, active_only: bool = True) -> list[dic
     """Categories with their nested tags, for this org."""
     supabase = get_supabase_admin()
 
-    cat_query = supabase.table("tag_categories").select("id, name, is_active").eq("organization_id", organization_id)
+    cat_query = supabase.table("tag_categories").select("id, name, is_active, matching_role").eq(
+        "organization_id", organization_id
+    )
     if active_only:
         cat_query = cat_query.eq("is_active", True)
     categories = (cat_query.order("name").execute().data) or []
@@ -49,20 +51,44 @@ def list_tag_catalog(organization_id: str, active_only: bool = True) -> list[dic
             "id": c["id"],
             "name": c["name"],
             "is_active": c["is_active"],
+            "matching_role": c.get("matching_role"),
             "tags": tags_by_category.get(c["id"], []),
         }
         for c in categories
     ]
 
 
-def create_tag_category(organization_id: str, name: str) -> dict[str, Any]:
+def create_tag_category(organization_id: str, name: str, matching_role: Optional[str] = None) -> dict[str, Any]:
     supabase = get_supabase_admin()
+    payload: dict[str, Any] = {"organization_id": organization_id, "name": name.strip(), "is_active": True}
+    if matching_role:
+        payload["matching_role"] = matching_role
     resp = (
         supabase.table("tag_categories")
-        .upsert({"organization_id": organization_id, "name": name.strip(), "is_active": True}, on_conflict="organization_id,name")
+        .upsert(payload, on_conflict="organization_id,name")
         .execute()
     )
     return (resp.data or [{}])[0]
+
+
+def set_tag_category_matching_role(organization_id: str, category_id: str, matching_role: Optional[str]) -> None:
+    supabase = get_supabase_admin()
+    supabase.table("tag_categories").update({"matching_role": matching_role}).eq("id", category_id).eq(
+        "organization_id", organization_id
+    ).execute()
+
+
+def category_ids_for_role(organization_id: str, matching_role: str) -> list[str]:
+    supabase = get_supabase_admin()
+    resp = (
+        supabase.table("tag_categories")
+        .select("id")
+        .eq("organization_id", organization_id)
+        .eq("matching_role", matching_role)
+        .eq("is_active", True)
+        .execute()
+    )
+    return [r["id"] for r in (resp.data or [])]
 
 
 def set_tag_category_active(organization_id: str, category_id: str, is_active: bool) -> None:

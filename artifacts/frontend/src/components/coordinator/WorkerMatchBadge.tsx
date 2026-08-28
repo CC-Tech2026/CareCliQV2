@@ -17,6 +17,16 @@ export function WorkerMatchBadge({ worker }: { worker: AvailableWorker | undefin
     const msg = [...worker.conflicts, ...worker.skill_warnings].find((c) => c.severity !== "error")?.message;
     return msg ? <span className="text-[11px] font-semibold" style={{ color: "#D97706" }}>{msg}</span> : null;
   }
+  // Phase 2 (ranking) — the top reason the fit score picked this worker,
+  // e.g. "Shares interests: gaming, football". Purely explanatory, shown
+  // ahead of preferred_availability since it's the more specific signal.
+  if (worker.match_reasons.length > 0) {
+    return (
+      <span className="text-[11px] font-semibold" style={{ color: "var(--cc-plum)" }}>
+        {worker.match_reasons[0]}
+      </span>
+    );
+  }
   if (worker.preferred_availability) {
     return (
       <span className="text-[11px] font-semibold" style={{ color: "#16A34A" }}>
