@@ -17,6 +17,7 @@ import {
   getWorkerSkills, getWorkerShiftHistory, getWorkerPerformanceDashboard, getWorkerAssignments,
   getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
   getShiftMatchFeedback, postShiftMatchFeedback,
+  getCoordinatorWorkerStats, assignWorkerCoordinator,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
 import type { ShiftHistoryRow } from "@/services/workerPerformanceService";
@@ -1054,6 +1055,8 @@ function PersonalInfoTab({
           their live profile permanently, not just during the hiring process. */}
       <ProfileCard worker={worker} />
 
+      <CoordinatorAssignmentSection worker={worker} />
+
       <WorkerTagsSection workerId={worker.id} />
     </div>
   );
@@ -1064,6 +1067,54 @@ function PersonalInfoTab({
  * marked visible_to_coordinator_only (every coordinator/MD in the org sees
  * those, not just an assigned coordinator - see migration 144's comment on
  * worker_tags). A coordinator can also add a tag on the worker's behalf. */
+/** MD-only - who this worker's dashboard/session-review/credential-alert
+ * scoping is under (users.coordinator_id). Local optimistic state rather
+ * than invalidating md/staff.tsx's own worker-stats fetch (a plain useEffect
+ * fetch, not react-query) so the dropdown reflects the change immediately
+ * without needing that page's whole list to refetch. */
+function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const { data: coordinators = [] } = useOrgQuery(["org-coordinators"], {
+    queryFn: () => getCoordinatorWorkerStats().then((list) => list.filter((w) => w.role === "support_coordinator")),
+  });
+  const [coordinatorId, setCoordinatorId] = useState<string | null>(worker.coordinator_id ?? null);
+
+  const assignMutation = useMutation({
+    mutationFn: (nextId: string | null) => assignWorkerCoordinator(worker.id, nextId),
+    onSuccess: (_, nextId) => setCoordinatorId(nextId),
+    onError: (err) => toast({ title: "Could not update coordinator", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (user?.role !== "managing_director" || worker.role !== "support_worker") return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Assigned coordinator</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Who this worker's dashboard, session review, and credential alerts are scoped to.
+      </p>
+      <div className="mt-3 max-w-xs">
+        <Select
+          value={coordinatorId ?? "unassigned"}
+          onValueChange={(value) => assignMutation.mutate(value === "unassigned" ? null : value)}
+          disabled={assignMutation.isPending}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Unassigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {coordinators.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 function WorkerTagsSection({ workerId }: { workerId: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

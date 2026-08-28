@@ -20,6 +20,7 @@ export type TeamMember = {
   profile_experience_years?: string | null;
   training_overdue?: boolean;
   induction_overdue?: boolean;
+  coordinator_id?: string | null;
 };
 
 export type WorkerStats = TeamMember & {
@@ -170,6 +171,21 @@ export function getWorkerPipelineOverview() {
 
 export function getCoordinatorWorkerStats() {
   return jsonFetch<WorkerStats[]>("/api/coordinator/worker-stats");
+}
+
+export function assignWorkerCoordinator(workerId: string, coordinatorId: string | null) {
+  return jsonFetch<{ worker_id: string; coordinator_id: string | null }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/assign-coordinator`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinator_id: coordinatorId }),
+    },
+  );
+}
+
+export function getUnassignedTeam() {
+  return jsonFetch<Array<{ id: string; full_name: string; email: string }>>("/api/coordinator/team/unassigned");
 }
 
 export function getCoordinatorSessions() {

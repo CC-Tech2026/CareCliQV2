@@ -931,6 +931,27 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         logger.error("accept_invite organization_members insert error: %s", e)
 
     # ------------------------------------------------------------------
+    # 4b. Default coordinator_id to whoever sent the invite, but only when
+    #     that person is a coordinator - an MD-sent invite shouldn't
+    #     auto-assign the MD as the new worker's day-to-day coordinator.
+    # ------------------------------------------------------------------
+    if invite.get("invited_by"):
+        try:
+            inviter = (
+                supabase.table("users")
+                .select("id, role")
+                .eq("id", invite["invited_by"])
+                .maybe_single()
+                .execute()
+            )
+            if inviter and inviter.data and inviter.data.get("role") == "support_coordinator":
+                supabase.table("users").update(
+                    {"coordinator_id": invite["invited_by"]}
+                ).eq("id", user_id).execute()
+        except Exception as e:
+            logger.warning("accept_invite coordinator_id default error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
     # 5. Mark invite as accepted
     # ------------------------------------------------------------------
     try:

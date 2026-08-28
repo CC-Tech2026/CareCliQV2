@@ -203,7 +203,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
                     "preferred_contact_method, phone, onboarding_completed, "
-                    "profile_summary, profile_experience_years"
+                    "profile_summary, profile_experience_years, coordinator_id"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -270,7 +270,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed"
+                "preferred_contact_method, phone, onboarding_completed, coordinator_id"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -792,6 +792,69 @@ async def delete_worker_account(worker_id: str, current_user: dict = Depends(get
     if not email:
         raise HTTPException(status_code=404, detail="Worker not found in this organization.")
     return privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
+
+
+class AssignCoordinatorBody(BaseModel):
+    coordinator_id: Optional[str] = None  # null to unassign, back to "unassigned"
+
+
+@router.patch("/team/{worker_id}/assign-coordinator")
+async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, current_user: dict = Depends(get_current_user)):
+    """MD-only - sets which coordinator a support worker is scoped under for
+    dashboard/session-review/credential-alert purposes (users.coordinator_id).
+    Not gated to support_coordinator like most team-management endpoints: this
+    is org structure, an MD decision, not day-to-day coordinator work."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+
+    supabase = get_supabase_admin()
+    worker = (
+        supabase.table("users")
+        .select("id")
+        .eq("id", worker_id)
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    if not worker or not worker.data:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+
+    if body.coordinator_id:
+        coordinator = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("id", body.coordinator_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        if not coordinator or not coordinator.data or coordinator.data.get("role") != "support_coordinator":
+            raise HTTPException(status_code=422, detail="coordinator_id must be an existing coordinator in this organization.")
+
+    supabase.table("users").update({"coordinator_id": body.coordinator_id}).eq("id", worker_id).execute()
+    return {"worker_id": worker_id, "coordinator_id": body.coordinator_id}
+
+
+@router.get("/team/unassigned")
+async def list_unassigned_team(current_user: dict = Depends(get_current_user)):
+    """Support workers in this org with no coordinator_id set - the "claim"
+    view any coordinator can use once coordinator_id assignment has started
+    rolling out, so a worker never silently drops out of every coordinator's
+    view (see get_coordinator_team_ids's org-wide rollout fallback)."""
+    org_id = _require_org_read(current_user)
+    result = (
+        get_supabase_admin()
+        .table("users")
+        .select("id, full_name, email")
+        .eq("organization_id", org_id)
+        .eq("role", "support_worker")
+        .is_("coordinator_id", "null")
+        .execute()
+    )
+    return result.data or []
 
 
 def _send_recovery_email(email: str) -> None:

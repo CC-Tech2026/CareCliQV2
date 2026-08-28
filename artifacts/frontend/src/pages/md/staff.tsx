@@ -303,6 +303,7 @@ export default function MDStaffPage() {
 
   const [filter, setFilter] = useState<Filter>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<"name" | "compliance" | "participants" | "sessions" | "lastActive">("compliance");
   const [sortAsc, setSortAsc] = useState(false);
@@ -536,9 +537,19 @@ export default function MDStaffPage() {
       const matchesRole =
         roleFilter === "all" || (worker.role || "support_worker") === roleFilter;
 
-      return matchesSearch && matchesFilter && matchesRole;
+      // coordinator_id lives on the richer workerStats record (fetched separately
+      // for the org), not on the dashboard's staff_directory summary row — see
+      // Phase 2 of the onboarding/matching plan: coordinator_id assignment is a
+      // gradual rollout, and a worker no one has claimed yet needs to stay findable
+      // rather than silently drop out of the directory.
+      const matchesUnassigned =
+        !unassignedOnly ||
+        (worker.role || "support_worker") !== "support_worker" ||
+        !workerStats?.find((w) => w.id === worker.id)?.coordinator_id;
+
+      return matchesSearch && matchesFilter && matchesRole && matchesUnassigned;
     });
-  }, [allStaff, filter, roleFilter, search]);
+  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats]);
 
   // Sortable by clicking a column header - the old separate "Leading performers"
   // cards duplicated exactly this (top-3 by compliance) as its own section;
@@ -778,6 +789,19 @@ export default function MDStaffPage() {
                         </button>
                       );
                     })}
+
+                    {workerStats && (
+                      <button
+                        onClick={() => setUnassignedOnly((v) => !v)}
+                        className="rounded-lg px-3 py-1.5 text-[10px] font-black transition"
+                        style={{
+                          background: unassignedOnly ? CTA : SOFT,
+                          color: unassignedOnly ? "#fff" : MUTED,
+                        }}
+                      >
+                        Unassigned {workerStats.filter((w) => w.role === "support_worker" && !w.coordinator_id).length}
+                      </button>
+                    )}
                   </div>
                 </div>
 
