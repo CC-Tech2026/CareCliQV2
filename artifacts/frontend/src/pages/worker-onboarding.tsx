@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Heart,
   Landmark,
   Loader2,
   LockKeyhole,
@@ -20,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { WorkerOnboardingChecklist } from "@/components/onboarding/WorkerOnboardingChecklist";
 import { MyCredentialsCard } from "@/components/onboarding/MyCredentialsCard";
+import { MyInterestsCard } from "@/components/onboarding/MyInterestsCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -455,6 +457,16 @@ export default function WorkerOnboarding() {
             />
 
             <MyCredentialsCard />
+          </div>
+
+          <div className="rounded-2xl border border-[#E8E8EA] bg-white p-5 shadow-sm sm:p-6">
+            <SectionHeader
+              icon={Heart}
+              title="Interests & experience"
+              description="Help your coordinator suggest you for shifts you're likely to enjoy."
+            />
+
+            <MyInterestsCard />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

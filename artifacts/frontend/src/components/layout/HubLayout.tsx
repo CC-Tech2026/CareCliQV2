@@ -21,6 +21,7 @@ import {
   ClipboardCheck,
   GraduationCap,
   MessageSquareWarning,
+  Tags,
   Menu,
   X,
   Bell,
@@ -93,6 +94,7 @@ const MD_NAV_GROUPS = [
       { href: "/md/staff", label: "Staff", icon: Users },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
+      { href: "/md/tags", label: "Matching Tags", icon: Tags },
     ],
   },
   {

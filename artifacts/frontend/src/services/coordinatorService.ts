@@ -887,6 +887,96 @@ export function getParticipantRequiredSkills(participantId: string) {
   );
 }
 
+// ── Worker-Participant Matching Enhancement, Phase 1 — tag taxonomy ─────────
+
+export type Tag = { id: string; label: string; is_active: boolean };
+export type TagCategory = { id: string; name: string; is_active: boolean; tags: Tag[] };
+export type AssignedTag = {
+  id: string;
+  tag_id: string;
+  label?: string;
+  category_id?: string;
+  added_by_user_id?: string | null;
+  added_at: string;
+  notes?: string | null;
+  visible_to_coordinator_only?: boolean;
+};
+
+/** Full tag taxonomy (categories + nested tags) for the org. */
+export function getTagCatalog() {
+  return jsonFetch<TagCategory[]>("/api/coordinator/tags");
+}
+
+export function createTagCategory(name: string) {
+  return jsonFetch<TagCategory>("/api/coordinator/tag-categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function setTagCategoryActive(categoryId: string, isActive: boolean) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tag-categories/${encodeURIComponent(categoryId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export function createTag(categoryId: string, label: string) {
+  return jsonFetch<Tag>("/api/coordinator/tags", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category_id: categoryId, label }),
+  });
+}
+
+export function setTagActive(tagId: string, isActive: boolean) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tags/${encodeURIComponent(tagId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export function getParticipantTags(participantId: string) {
+  return jsonFetch<AssignedTag[]>(`/api/coordinator/participants/${encodeURIComponent(participantId)}/tags`);
+}
+
+export function addParticipantTag(participantId: string, tagId: string, notes?: string) {
+  return jsonFetch<AssignedTag>(`/api/coordinator/participants/${encodeURIComponent(participantId)}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag_id: tagId, notes: notes ?? null }),
+  });
+}
+
+export function removeParticipantTag(participantId: string, tagId: string) {
+  return jsonFetch<void>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/tags/${encodeURIComponent(tagId)}`,
+    { method: "DELETE" }
+  );
+}
+
+/** A worker's tags as seen by a coordinator/MD - includes visible_to_coordinator_only entries. */
+export function getWorkerTags(workerId: string) {
+  return jsonFetch<AssignedTag[]>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags`);
+}
+
+export function addWorkerTag(workerId: string, tagId: string, notes?: string, visibleToCoordinatorOnly = false) {
+  return jsonFetch<AssignedTag>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag_id: tagId, notes: notes ?? null, visible_to_coordinator_only: visibleToCoordinatorOnly }),
+  });
+}
+
+export function removeWorkerTag(workerId: string, tagId: string) {
+  return jsonFetch<void>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags/${encodeURIComponent(tagId)}`, {
+    method: "DELETE",
+  });
+}
+
 /** Add a required skill to a participant */
 export function addParticipantRequiredSkill(participantId: string, skill: string, isMandatory = true) {
   return jsonFetch<{ id: string; skill: string; is_mandatory: boolean }>(

@@ -2822,6 +2822,147 @@ async def add_participant_required_skill(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Worker-Participant Matching Enhancement, Phase 1 (Foundation) — Aug 2026
+#
+# Structured tag taxonomy (interests, lived experience, communication style,
+# ...) and its assignment to participants/workers. No scoring here - this is
+# the data foundation the Phase 2 ranking service will read from.
+#
+# Tag taxonomy management (categories/tags themselves) is gated on
+# has_org_wide_access rather than the usual _require_coordinator-only-mutation
+# convention used elsewhere in this file: this is deliberately MD-or-coordinator,
+# same as the design spec's stated access model, because curating an org's
+# shared tag list is an org-level admin concern the MD should be able to shape
+# directly, not a routine day-to-day coordinator action.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/tags")
+async def list_tags(current_user: dict = Depends(get_current_user)):
+    """Full tag taxonomy (categories + nested tags) for this org."""
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_tag_catalog(org_id)
+
+
+class TagCategoryBody(BaseModel):
+    name: str
+
+
+@router.post("/tag-categories", status_code=201)
+async def create_tag_category(body: TagCategoryBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if not body.name.strip():
+        raise HTTPException(status_code=422, detail="Category name is required.")
+    from ..services import tag_service
+
+    return tag_service.create_tag_category(org_id, body.name)
+
+
+class TagActiveBody(BaseModel):
+    is_active: bool
+
+
+@router.patch("/tag-categories/{category_id}")
+async def update_tag_category_active(category_id: str, body: TagActiveBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.set_tag_category_active(org_id, category_id, body.is_active)
+    return {"ok": True}
+
+
+class TagBody(BaseModel):
+    category_id: str
+    label: str
+
+
+@router.post("/tags", status_code=201)
+async def create_tag(body: TagBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if not body.label.strip():
+        raise HTTPException(status_code=422, detail="Tag label is required.")
+    from ..services import tag_service
+
+    return tag_service.create_tag(org_id, body.category_id, body.label)
+
+
+@router.patch("/tags/{tag_id}")
+async def update_tag_active(tag_id: str, body: TagActiveBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.set_tag_active(org_id, tag_id, body.is_active)
+    return {"ok": True}
+
+
+@router.get("/participants/{participant_id}/tags")
+async def get_participant_tags(participant_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_participant_tags(participant_id)
+
+
+class ParticipantTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+
+
+@router.post("/participants/{participant_id}/tags", status_code=201)
+async def add_participant_tag(participant_id: str, body: ParticipantTagBody, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.add_participant_tag(participant_id, body.tag_id, get_user_id(current_user), body.notes)
+
+
+@router.delete("/participants/{participant_id}/tags/{tag_id}", status_code=204)
+async def remove_participant_tag(participant_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_participant_tag(participant_id, tag_id)
+    return None
+
+
+@router.get("/workers/{worker_id}/tags")
+async def get_worker_tags(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """Coordinators and the MD see a worker's full tag list, including entries
+    the worker marked visible_to_coordinator_only - see migration 144's comment
+    on worker_tags for why that flag doesn't further restrict within this role."""
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_worker_tags(worker_id, include_private=True)
+
+
+class WorkerTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+    visible_to_coordinator_only: bool = False
+
+
+@router.post("/workers/{worker_id}/tags", status_code=201)
+async def add_worker_tag(worker_id: str, body: WorkerTagBody, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.add_worker_tag(
+        worker_id, body.tag_id, get_user_id(current_user), body.notes, body.visible_to_coordinator_only
+    )
+
+
+@router.delete("/workers/{worker_id}/tags/{tag_id}", status_code=204)
+async def remove_worker_tag(worker_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_worker_tag(worker_id, tag_id)
+    return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CARECLIQV2-236 – Real-Time Shift Monitoring
 # ══════════════════════════════════════════════════════════════════════════════
 

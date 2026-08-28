@@ -199,6 +199,72 @@ def _require_worker(user: dict) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
 
 
+# ── Worker-Participant Matching Enhancement, Phase 1 — self-service tags ──────
+# A worker can browse the org's tag catalog, add/remove tags describing their
+# own interests or (consented) lived experience, and mark any tag
+# visible_to_coordinator_only. Coordinators/MD manage the catalog itself and
+# can also tag a worker on their behalf (coordinator.py) - this is the
+# worker's own door onto the same participant_tags/worker_tags data.
+
+@router.get("/tag-catalog")
+async def worker_tag_catalog(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    from ..services import tag_service
+
+    return tag_service.list_tag_catalog(org_id)
+
+
+@router.get("/tags")
+async def worker_own_tags(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_worker_tags(get_user_id(current_user), include_private=True)
+
+
+class WorkerOwnTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+    visible_to_coordinator_only: bool = False
+
+
+@router.post("/tags", status_code=201)
+async def add_worker_own_tag(body: WorkerOwnTagBody, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    worker_id = get_user_id(current_user)
+    return tag_service.add_worker_tag(worker_id, body.tag_id, worker_id, body.notes, body.visible_to_coordinator_only)
+
+
+@router.delete("/tags/{tag_id}", status_code=204)
+async def remove_worker_own_tag(tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_worker_tag(get_user_id(current_user), tag_id)
+    return None
+
+
+class MatchingPreferencesBody(BaseModel):
+    matching_opt_in: bool
+
+
+@router.patch("/matching-preferences")
+async def update_matching_preferences(body: MatchingPreferencesBody, current_user: dict = Depends(get_current_user)):
+    """Lets a worker opt out of interest/lived-experience-based shift ranking
+    (Phase 2) entirely, while keeping any tags already on file for their own
+    reference."""
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    tag_service.set_matching_opt_in(get_user_id(current_user), body.matching_opt_in)
+    return {"ok": True}
+
+
 @router.post("/account/request-password-reset")
 async def request_password_reset(current_user: dict = Depends(get_current_user)):
     """Support workers can't change their own password (org policy) — this

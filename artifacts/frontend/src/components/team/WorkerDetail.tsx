@@ -15,6 +15,7 @@ import {
   assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
   getWorkerSkills, getWorkerShiftHistory, getWorkerPerformanceDashboard, getWorkerAssignments,
+  getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
 import { getWorkerInduction } from "@/services/inductionService";
@@ -1050,6 +1051,100 @@ function PersonalInfoTab({
       {/* Resume-derived bio, experience and skills - captured at onboarding and kept on
           their live profile permanently, not just during the hiring process. */}
       <ProfileCard worker={worker} />
+
+      <WorkerTagsSection workerId={worker.id} />
+    </div>
+  );
+}
+
+/** Worker-Participant Matching Enhancement, Phase 1 — coordinator view of a
+ * worker's self-reported interests/lived-experience tags, including any
+ * marked visible_to_coordinator_only (every coordinator/MD in the org sees
+ * those, not just an assigned coordinator - see migration 144's comment on
+ * worker_tags). A coordinator can also add a tag on the worker's behalf. */
+function WorkerTagsSection({ workerId }: { workerId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const tagsKey = ["worker-tags", workerId];
+  const catalogKey = ["coordinator-tags"];
+
+  const { data: tags = [], isLoading } = useOrgQuery(tagsKey, { queryFn: () => getWorkerTags(workerId) });
+  const { data: catalog = [] } = useOrgQuery(catalogKey, { queryFn: getTagCatalog });
+
+  const [selectedTagId, setSelectedTagId] = useState("");
+
+  const availableTags = (() => {
+    const already = new Set(tags.map((t) => t.tag_id));
+    return catalog.flatMap((category) =>
+      category.tags.filter((t) => t.is_active && !already.has(t.id)).map((t) => ({ ...t, categoryName: category.name }))
+    );
+  })();
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: tagsKey });
+
+  const addMutation = useMutation({
+    mutationFn: (tagId: string) => addWorkerTag(workerId, tagId),
+    onSuccess: () => { setSelectedTagId(""); invalidate(); },
+    onError: (err) => toast({ title: "Could not add tag", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (tagId: string) => removeWorkerTag(workerId, tagId),
+    onSuccess: invalidate,
+    onError: (err) => toast({ title: "Could not remove tag", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Interests & lived experience</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Self-reported by the worker (or added here) - used to suggest a better-fitting participant match.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {tags.length === 0 && <p className="text-xs italic" style={{ color: MUTED }}>Nothing on file yet.</p>}
+        {tags.map((tag) => (
+          <span
+            key={tag.id}
+            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+            style={{ borderColor: BORDER, background: SOFT, color: TEXT }}
+          >
+            {tag.label}
+            {tag.visible_to_coordinator_only && (
+              <span className="text-[9px] font-black uppercase" style={{ color: PLUM }}>Private</span>
+            )}
+            <button type="button" onClick={() => removeMutation.mutate(tag.tag_id)} aria-label={`Remove ${tag.label}`} className="opacity-60 hover:opacity-100">
+              <XIcon size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <select
+          title="Add a tag"
+          value={selectedTagId}
+          onChange={(event) => setSelectedTagId(event.target.value)}
+          className="h-8 flex-1 rounded-lg border px-2 text-xs"
+          style={{ borderColor: BORDER }}
+        >
+          <option value="">Add an interest...</option>
+          {availableTags.map((tag) => (
+            <option key={tag.id} value={tag.id}>{tag.categoryName} · {tag.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!selectedTagId || addMutation.isPending}
+          onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
+          className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
+          style={{ background: PLUM }}
+        >
+          Add
+        </button>
+      </div>
     </div>
   );
 }

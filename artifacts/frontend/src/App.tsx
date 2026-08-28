@@ -61,6 +61,7 @@ import MDFinancialPage from "@/pages/md/financial";
 import MDCalendarPage from "@/pages/md/md-calendar";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
+import TagManagementPage from "@/pages/md/tag-management";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
@@ -214,6 +215,14 @@ function Router() {
       <Route path="/md/onboarding/training">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDOnboardingTrainingPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* Worker-Participant Matching Enhancement, Phase 1 — shared tag taxonomy,
+             same coordinator+MD access as /md/staff-onboarding. */}
+      <Route path="/md/tags">
+        <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
+          <TagManagementPage />
         </ProtectedRoute>
       </Route>
 
