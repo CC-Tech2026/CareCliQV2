@@ -93,6 +93,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
   const [doseGiven, setDoseGiven] = useState("");
   const [prnPhotoUrl, setPrnPhotoUrl] = useState<string | null>(null);
   const [uploadingPrnPhoto, setUploadingPrnPhoto] = useState(false);
+  const [confirmPrnOverride, setConfirmPrnOverride] = useState(false);
   const [effectTarget, setEffectTarget] = useState<PrnPendingEffect | null>(null);
   const [effectText, setEffectText] = useState("");
 
@@ -135,6 +136,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
     setDoseGiven("");
     setPrnPhotoUrl(null);
     setUploadingPrnPhoto(false);
+    setConfirmPrnOverride(false);
   };
 
   const scheduleMutation = useMutation({
@@ -305,6 +307,10 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
       toast({ title: "Reason for administering is required", variant: "destructive" });
       return;
     }
+    if (doseTarget.at_or_over_max && !confirmPrnOverride) {
+      toast({ title: "Confirm the PRN override first", variant: "destructive" });
+      return;
+    }
     if (doseTarget.is_high_risk && !prnPhotoUrl) {
       toast({ title: "Verification photo required", description: "Upload a photo before logging this dose.", variant: "destructive" });
       return;
@@ -445,6 +451,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
                             setDoseReason("");
                             setDoseGiven("");
                             setPrnPhotoUrl(null);
+                            setConfirmPrnOverride(false);
                           }}
                         >
                           Log dose
@@ -463,7 +470,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
         open={Boolean(activeItem) || Boolean(followUp)}
         onOpenChange={(open) => {
           if (open) return;
-          if (!followUp) resetChecklist();
+          resetChecklist();
           setFollowUp(null);
           setReasonCode(null);
           setNoteText("");
@@ -629,14 +636,36 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
                 {prnPhotoUrl && <p className="mt-2 text-xs font-medium text-emerald-700">Verification photo ready.</p>}
               </div>
             )}
-            <Button className="w-full rounded-xl" disabled={busy} onClick={submitPrnDose}>
+            {doseTarget?.at_or_over_max && (
+              <label className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <input
+                  type="checkbox"
+                  checked={confirmPrnOverride}
+                  onChange={(e) => setConfirmPrnOverride(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>I confirm this override has been clinically directed and should still be logged.</span>
+              </label>
+            )}
+            <Button
+              className="w-full rounded-xl"
+              disabled={busy || (doseTarget?.at_or_over_max === true && !confirmPrnOverride)}
+              onClick={submitPrnDose}
+            >
               {prnDoseMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : "Log PRN dose"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(effectTarget)} onOpenChange={(open) => !open && setEffectTarget(null)}>
+      <Dialog
+        open={Boolean(effectTarget)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setEffectTarget(null);
+          setEffectText("");
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Log PRN effect</DialogTitle>
