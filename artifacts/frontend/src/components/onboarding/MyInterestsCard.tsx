@@ -66,15 +66,15 @@ export function MyInterestsCard() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[#1A1A2E]">
           <Heart className="h-5 w-5 text-[#E8457A]" />
-          <h2 className="font-black">My interests & experience</h2>
+          <h2 className="font-black">My skills & interests</h2>
         </div>
       </div>
 
       <p className="text-xs leading-relaxed" style={{ color: MUTED }}>
-        Sharing your interests helps coordinators suggest you for shifts where you and the participant are likely
-        to actually get along - not just where you're available. Anything you mark "Private to coordinators" is
-        only shown to coordinators and the managing director, never to participants or other workers. Nothing here
-        is required.
+        Add skills you've picked up and things you're interested in. Sharing this helps coordinators suggest you
+        for shifts where you and the participant are likely to actually get along, not just where you're available.
+        Anything you mark "Private to coordinators" is only shown to coordinators and the managing director, never
+        to participants or other workers. Nothing here is required.
       </p>
 
       <div className="rounded-xl border p-3" style={{ borderColor: BORDER, background: "var(--cc-soft)" }}>
@@ -112,10 +112,10 @@ export function MyInterestsCard() {
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Select value={selectedTagId} onValueChange={setSelectedTagId}>
-          <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue placeholder="Choose an interest to add..." /></SelectTrigger>
+          <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue placeholder="Choose a skill or interest to add..." /></SelectTrigger>
           <SelectContent>
             {availableTags.length === 0 ? (
-              <div className="px-3 py-2 text-xs" style={{ color: MUTED }}>No more tags available - ask your coordinator to add more.</div>
+              <div className="px-3 py-2 text-xs" style={{ color: MUTED }}>No more tags available. Ask your coordinator to add more.</div>
             ) : (
               availableTags.map((tag) => (
                 <SelectItem key={tag.id} value={tag.id}>{tag.categoryName} · {tag.label}</SelectItem>

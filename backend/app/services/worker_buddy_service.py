@@ -1,4 +1,4 @@
-"""Support Worker Onboarding Journey, Phase 2 — buddy pairing.
+"""Support Worker Onboarding Journey, Phase 2: buddy pairing.
 
 Pairs a new worker with an experienced, active worker before their first
 shift. See migration 149's comment for the schema/design rationale.
@@ -21,11 +21,11 @@ def _is_missing_schema_error(exc: Exception) -> bool:
 
 
 def suggest_buddies(new_worker_id: str, organization_id: str, limit: int = 3) -> list[dict[str, Any]]:
-    """Simple starting heuristic — most-recently-active, same suburb where
+    """Simple starting heuristic: most-recently-active, same suburb where
     known, filtered to workers who've opted in to matching and are
     themselves fully onboarded (a worker still mid-onboarding shouldn't be
     suggested as someone else's buddy). Deliberately not the tag-based
-    scoring service — that's worker-to-participant shaped, not
+    scoring service, since that's worker-to-participant shaped, not
     worker-to-worker, and the design spec's own Build Order says buddy
     suggestion doesn't need to wait for a proper scoring upgrade."""
     supabase = get_supabase_admin()
@@ -121,7 +121,7 @@ async def assign_buddy(
     assigned_by_user_id: Optional[str],
 ) -> Optional[dict[str, Any]]:
     """Assign (or clear, if buddy_worker_id is None) the new worker's buddy.
-    Retires any previously-assigned row for this new worker first — only one
+    Retires any previously-assigned row for this new worker first: only one
     buddy should be 'assigned' at a time, enforced here rather than as a DB
     constraint since it's a point-in-time state a coordinator can change."""
     supabase = get_supabase_admin()

@@ -6,6 +6,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
+import { MyInterestsCard } from "@/components/onboarding/MyInterestsCard";
 import { useToast } from "@/hooks/use-toast";
 import {
   getDesktopNotificationPermission,
@@ -465,6 +466,8 @@ export default function WorkerProfile() {
           )}
         </div>
       </section>
+
+      {user?.role === "support_worker" && <MyInterestsCard />}
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
