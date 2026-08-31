@@ -31,7 +31,6 @@ import {
   getTaskVisualState,
   hasTaskEvidence,
   TASK_STATE_STYLES,
-  QUICK_NOTE_MAX,
   QUICK_NOTE_PREVIEW,
 } from "@/lib/task-evidence-status";
 import { handleNoteTextareaKeyDown } from "@/lib/note-textarea-keyboard";
@@ -277,7 +276,7 @@ export function ShiftTaskChecklist({
     const now = new Date().toISOString();
     const next = localTasks.map((task) =>
       task.task_id === taskId
-        ? applyEvidencePatch(task, { context_note: contextNote.slice(0, QUICK_NOTE_MAX) }, now)
+        ? applyEvidencePatch(task, { context_note: contextNote }, now)
         : task,
     );
     await persist(next);
@@ -567,19 +566,17 @@ function QuickNoteField({
     <div className="mt-2 space-y-1">
       <textarea
         disabled={disabled}
-        maxLength={QUICK_NOTE_MAX}
         rows={2}
         value={draft}
         placeholder={translate("tasks.contextPlaceholder")}
         className="w-full resize-none rounded-lg border border-[#E8E8EA] bg-white px-2.5 py-1.5 text-xs"
-        onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
+        onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           onSave(draft.trim());
           if (!draft.trim()) setOpen(false);
         }}
         onKeyDown={(e) =>
           handleNoteTextareaKeyDown(e, {
-            maxLength: QUICK_NOTE_MAX,
             setValue: setDraft,
             onSave: (value) => {
               onSave(value);
@@ -589,10 +586,7 @@ function QuickNoteField({
         }
       />
       <p className="text-[10px] font-semibold" style={{ color: MUTED }}>
-        {translateParams("tasks.noteCharCount", {
-          current: String(draft.length),
-          max: String(QUICK_NOTE_MAX),
-        })}
+        {draft.length} characters
       </p>
     </div>
   );

@@ -7,9 +7,7 @@ import { CC, CC_STATUS } from "@/lib/brand-tokens";
 
 export type EvidenceStatus = "with_evidence" | "without_evidence";
 
-export const QUICK_NOTE_MAX = 150;
 export const QUICK_NOTE_PREVIEW = 50;
-export const SESSION_NOTE_MAX = 500;
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
 
 export function deriveEvidenceFlags(task: Partial<ShiftTask>) {

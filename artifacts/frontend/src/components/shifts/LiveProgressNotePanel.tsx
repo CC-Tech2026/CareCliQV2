@@ -28,7 +28,6 @@ import {
   newClientNoteId,
   removePendingSessionNote,
 } from "@/lib/session-notes-storage";
-import { SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
 import {
   deleteSessionNote,
   listSessionNotes,
@@ -170,7 +169,7 @@ export function LiveProgressNotePanel({
       file_name?: string;
       attachment_urls?: string[];
     }) => {
-      const clean = params.content.trim().slice(0, SESSION_NOTE_MAX);
+      const clean = params.content.trim();
       if (!clean || !sessionId || ended || tutorialDemo) return;
 
       const noteId = newClientNoteId();
@@ -574,7 +573,6 @@ export function LiveProgressNotePanel({
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleInputKeyDown}
                 disabled={ended}
-                maxLength={SESSION_NOTE_MAX}
                 className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                 style={{ color: TEXT }}
                 placeholder={translate("shift.session.notePlaceholder")}

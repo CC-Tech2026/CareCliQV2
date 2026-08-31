@@ -31,6 +31,7 @@ import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
 import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
 import { LongShiftCheckInForm } from "@/components/shifts/LongShiftCheckInForm";
+import { ShiftMedicationPanel } from "@/components/shifts/ShiftMedicationPanel";
 import { useLongShiftCheckin } from "@/hooks/useLongShiftCheckin";
 import {
   markSessionHeartbeat,
@@ -1603,6 +1604,13 @@ function ShiftWorkflow({
     </div>
   );
 
+  const medicationBlock =
+    isSessionActive ? (
+      <div className="mt-4">
+        <ShiftMedicationPanel shiftId={shift.id} disabled={isCompleted || busy !== null} />
+      </div>
+    ) : null;
+
   const sessionTimelineBlock =
     isSessionActive && checklistSessionId && activeTasks.length > 0 ? (
       <SessionTimeline
@@ -1673,6 +1681,7 @@ function ShiftWorkflow({
           <div className="border-t border-cc-border px-4 py-3">
             {taskFeedProgress}
             {taskChecklistBlock}
+            {medicationBlock}
             {sessionTimelineBlock}
           </div>
         )}

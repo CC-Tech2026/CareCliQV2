@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Camera, ChevronRight, Languages, Loader2, Mic, MicOff, Paperclip } from "lucide-react";
 import { WM } from "@/lib/worker-mobile-tokens";
-import { SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
 import {
   enqueuePendingSessionNote,
   newClientNoteId,
@@ -87,7 +86,7 @@ export function WorkerMobileComposer({
         note_id: noteId,
         session_id: sessionId,
         task_id: taskId ?? undefined,
-        content: content.trim().slice(0, SESSION_NOTE_MAX),
+        content: content.trim(),
         created_at: now,
         auto_saved_at: now,
         note_type: noteType,

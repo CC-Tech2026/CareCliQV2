@@ -48,7 +48,6 @@ import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { translateToEnglish } from "@/services/translationService";
 
-const NOTE_MAX = 500;
 const VOICE_MAX_SECONDS = 60;
 const MAX_PHOTOS = 2;
 const MAX_FILES = 3;
@@ -366,7 +365,7 @@ export function ShiftTaskEvidencePanel({
         goal_id: task.goal_id ?? null,
         session_id: sessionId,
         type: "text",
-        content: english.slice(0, NOTE_MAX),
+        content: english,
         created_at: new Date().toISOString(),
         synced: false,
       };
@@ -399,7 +398,7 @@ export function ShiftTaskEvidencePanel({
 
   const persistText = useCallback(
     async (text: string) => {
-      const trimmed = text.slice(0, NOTE_MAX);
+      const trimmed = text;
       await onTaskPatch({ note: trimmed });
       const existing = records.find((r) => r.type === "text");
       const record: TaskEvidenceRecord = {
@@ -687,7 +686,7 @@ export function ShiftTaskEvidencePanel({
             goal_id: task.goal_id ?? null,
             session_id: sessionId,
             type: "text",
-            content: trimmed.slice(0, NOTE_MAX),
+            content: trimmed,
             created_at: new Date().toISOString(),
             synced: false,
           };
@@ -927,10 +926,9 @@ export function ShiftTaskEvidencePanel({
             data-tutorial="task-evidence-note"
             value={note}
             disabled={disabled}
-            maxLength={NOTE_MAX}
             placeholder={translate("shift.evidence.progressPlaceholder")}
             className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-card px-4 text-sm text-cc-text"
-            onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+            onChange={(e) => setNote(e.target.value)}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
             onKeyDown={(e) => {
@@ -1010,7 +1008,7 @@ export function ShiftTaskEvidencePanel({
             !readyToMarkComplete &&
             note.length > 0 &&
             !(isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20) &&
-            `${note.length}/${NOTE_MAX}`}
+            `${note.length} characters`}
           {saveState === "idle" &&
             !evidenceAddedFlash &&
             !readyToMarkComplete &&
@@ -1188,16 +1186,15 @@ export function ShiftTaskEvidencePanel({
           <Textarea
             value={note}
             disabled={disabled}
-            maxLength={NOTE_MAX}
             placeholder={taskPlaceholder(task, participantName, translate, translateParams)}
             className="min-h-[88px] resize-none text-sm"
-            onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+            onChange={(e) => setNote(e.target.value)}
             onBlur={() => {
               if (note !== (task.note ?? "")) void persistText(note);
             }}
           />
           <p className="mt-1 text-[10px] font-bold" style={{ color: MUTED }}>
-            {note.length}/{NOTE_MAX}
+            {note.length} characters
             {!readyToMarkComplete && isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20 && (
               <span className="ml-2 text-amber-700">
                 {translateParams("shift.evidence.moreToComplete", { count: String(20 - note.trim().length) })}

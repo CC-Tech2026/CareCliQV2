@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { WM } from "@/lib/worker-mobile-tokens";
-import { applyTaskCompletion, MIN_EVIDENCE_NOTE_CHARS, SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
+import { applyTaskCompletion, MIN_EVIDENCE_NOTE_CHARS } from "@/lib/task-evidence-status";
 import { hasStrongTaskEvidence } from "@/lib/shift-utils";
 import {
   saveTasksLocally,
@@ -20,6 +20,7 @@ import { WorkerMobileNoteBubble } from "./WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "./WorkerMobileParticipantStrip";
 import { WorkerMobileRiskStrip } from "./WorkerMobileRiskStrip";
 import { WorkerMobileTaskList } from "./WorkerMobileTaskList";
+import { ShiftMedicationPanel } from "@/components/shifts/ShiftMedicationPanel";
 import { LongShiftEngagementPanel } from "@/components/shifts/LongShiftEngagementPanel";
 import { BreakStatusBanner } from "@/components/shifts/BreakStatusBanner";
 import { useLongShiftBreak } from "@/hooks/useLongShiftBreak";
@@ -70,7 +71,7 @@ function attachSessionNotesToTask(
 ): ShiftTask {
   const texts = sessionNoteTextsForTask(sessionNotes, task.task_id);
   if (!texts.length) return task;
-  const merged = texts.join("\n\n").slice(0, SESSION_NOTE_MAX);
+  const merged = texts.join("\n\n");
   if ((task.note?.trim().length ?? 0) >= MIN_EVIDENCE_NOTE_CHARS) return task;
   return { ...task, note: merged, has_text_notes: true };
 }
@@ -313,6 +314,8 @@ export function WorkerMobileSessionScreen({
             disabled={disabled || busy}
           />
         </div>
+
+        <ShiftMedicationPanel shiftId={shiftId} disabled={disabled || busy} compact />
 
         {!showNotes && (
           <p className="mt-3 text-center text-[12px] font-medium" style={{ color: WM.muted }}>

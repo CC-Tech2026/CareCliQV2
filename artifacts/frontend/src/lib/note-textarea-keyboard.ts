@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 
 type Options = {
-  maxLength: number;
+  maxLength?: number;
   onSave: (value: string) => void;
   setValue: (next: string) => void;
 };
@@ -15,7 +15,8 @@ export function handleNoteTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>,
     e.preventDefault();
     const start = el.selectionStart ?? value.length;
     const end = el.selectionEnd ?? value.length;
-    const next = `${value.slice(0, start)}\n${value.slice(end)}`.slice(0, options.maxLength);
+    const nextValue = `${value.slice(0, start)}\n${value.slice(end)}`;
+    const next = options.maxLength != null ? nextValue.slice(0, options.maxLength) : nextValue;
     options.setValue(next);
     const cursor = Math.min(start + 1, next.length);
     requestAnimationFrame(() => {
@@ -26,6 +27,7 @@ export function handleNoteTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>,
 
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    options.onSave(value.slice(0, options.maxLength).trim());
+    const next = options.maxLength != null ? value.slice(0, options.maxLength) : value;
+    options.onSave(next.trim());
   }
 }

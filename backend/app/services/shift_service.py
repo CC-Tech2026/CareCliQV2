@@ -3422,8 +3422,7 @@ def create_shift_visit_note(
         raise
 
 
-TASK_CONTEXT_NOTE_MAX = 150
-SESSION_PROGRESS_NOTE_MAX = 500
+
 
 
 def _goal_id_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Optional[str]:
@@ -3573,10 +3572,6 @@ def sync_session_notes(
             continue
 
         task_id = str(item.get("task_id") or "").strip() or None
-        max_len = TASK_CONTEXT_NOTE_MAX if task_id else SESSION_PROGRESS_NOTE_MAX
-        if len(content) > max_len:
-            content = content[:max_len]
-
         goal_id = str(item.get("goal_id") or "").strip() or None
         if task_id and not goal_id:
             goal_id = _goal_id_for_shift_task(shift, task_id)
