@@ -35,6 +35,7 @@ NOTIFICATION_EVENTS = (
     "worker_cannot_attend",
     "shift_offer",
     "shift_offer_exhausted",
+    "shift_auto_cancelled_unassigned",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -56,6 +57,7 @@ EVENT_ALERT_TYPES = {
     "worker_cannot_attend": "worker_cannot_attend",
     "shift_offer": "shift_offer",
     "shift_offer_exhausted": "shift_offer_exhausted",
+    "shift_auto_cancelled_unassigned": "shift_auto_cancelled_unassigned",
 }
 
 

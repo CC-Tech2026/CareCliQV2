@@ -24,6 +24,7 @@ from .screening_recheck_service import run_screening_recheck_pass
 from .shift_offer_service import run_shift_offer_pass
 from .supabase_client import get_supabase_admin
 from .task_reminder_service import run_task_reminder_pass
+from .unassigned_shift_expiry_service import run_unassigned_shift_expiry_pass
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ async def run_notification_pass() -> dict[str, int]:
         medication_pattern_count, dose_reminder_count, retention_count,
         screening_recheck_count, onboarding_escalation_stats,
         offer_letter_stats, applicant_stage_reminder_count,
-        shift_offer_stats,
+        shift_offer_stats, unassigned_shift_expiry_count,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -181,6 +182,7 @@ async def run_notification_pass() -> dict[str, int]:
         run_offer_letter_reminder_pass(),
         run_applicant_stage_reminder_pass(),
         run_shift_offer_pass(),
+        run_unassigned_shift_expiry_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -202,6 +204,7 @@ async def run_notification_pass() -> dict[str, int]:
         "shift_offers_expired": shift_offer_stats["expired"],
         "shift_offers_advanced": shift_offer_stats["advanced"],
         "shift_offers_exhausted": shift_offer_stats["exhausted"],
+        "unassigned_shift_expirations": unassigned_shift_expiry_count,
     }
 
 

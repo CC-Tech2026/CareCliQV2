@@ -2814,6 +2814,11 @@ async def get_overdue_unassigned_shifts(current_user: dict = Depends(get_current
     is a standalone, always-current list independent of whatever range the
     roster board happens to be showing, so a coordinator/MD can see these
     regardless of where they've navigated to.
+
+    A shift only stays in this list for so long: unassigned_shift_expiry_service
+    auto-cancels anything still sitting here 24h after its scheduled_start (see
+    that module's docstring), so this list also doubles as the warning window
+    before that safety net kicks in.
     """
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
