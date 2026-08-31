@@ -574,8 +574,8 @@ importers:
         specifier: ~6.0.9
         version: 6.0.9(expo@54.0.35)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
       expo-web-browser:
-        specifier: ~15.0.10
-        version: 15.0.11(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
+        specifier: ~57.0.2
+        version: 57.0.2(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
       react:
         specifier: 'catalog:'
         version: 19.1.0
@@ -3705,6 +3705,7 @@ packages:
   '@xmldom/xmldom@0.9.11':
     resolution: {integrity: sha512-tW8bcK3hsG0/uqSnNz6TK4BkcuZSezoU7DlnYssILmZDktPnSHHuDJJFM0AJv+13gz2r0iGdrj6qqKeUnxXEDg==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -5009,8 +5010,8 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-web-browser@15.0.11:
-    resolution: {integrity: sha512-r2LS4Ro6DgUPZkcaEfgt8mp9eJuoA93x11Jh7S6utFe0FEzvUNn2yFhxg8XVwESaaHGt2k5V8LuK36rsp0BeIw==}
+  expo-web-browser@57.0.2:
+    resolution: {integrity: sha512-3vl5kvd7PB48ub6PpNIJUuPxO8xVa6D8RnIgNba6SXRwqFprOfeEZgwTgtm41kz0AAtvMOztUVNEUkwrHKjqMQ==}
     peerDependencies:
       expo: '*'
       react-native: '*'
@@ -13355,7 +13356,7 @@ snapshots:
     dependencies:
       expo: 54.0.35(@babel/core@8.0.1)(@expo/dom-webview@57.0.1)(expo-router@6.0.24)(graphql@16.8.1)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
 
-  expo-web-browser@15.0.11(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)):
+  expo-web-browser@57.0.2(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)):
     dependencies:
       expo: 54.0.35(@babel/core@8.0.1)(@expo/dom-webview@57.0.1)(expo-router@6.0.24)(graphql@16.8.1)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
       react-native: 0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)
