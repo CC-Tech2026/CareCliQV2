@@ -76,7 +76,7 @@
     "expo-dev-client": "~6.0.21",
     "expo-image-manipulator": "~14.0.8",
     "expo-local-authentication": "~16.0.5",
-    "expo-network": "~8.0.8",
+    "expo-network": "~57.0.1",
     "expo-secure-store": "~15.0.8"
   }
 }
