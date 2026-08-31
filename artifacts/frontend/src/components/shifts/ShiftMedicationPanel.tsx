@@ -49,6 +49,15 @@ const ERROR_SUBTYPE_LABELS: Record<MedicationErrorSubtype, string> = {
   other: "Other",
 };
 
+const ACTION_REASON_KEY: Record<
+  Exclude<MedicationAdministrationAction, "given" | "administration_error">,
+  Exclude<keyof typeof MEDICATION_REASON_CODES, "given_late" | "given_early">
+> = {
+  refused: "refused",
+  missed: "missed",
+  withheld: "withheld",
+};
+
 function formatTimeLabel(value: string) {
   try {
     return new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -81,6 +90,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
   const queryClient = useQueryClient();
   const photoRef = useRef<HTMLInputElement>(null);
   const prnPhotoRef = useRef<HTMLInputElement>(null);
+  const [scheduledDialogOpen, setScheduledDialogOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<MedicationChecklistItem | null>(null);
   const [reasonAction, setReasonAction] = useState<MedicationAdministrationAction | null>(null);
   const [reasonCode, setReasonCode] = useState<string | null>(null);
@@ -130,6 +140,12 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
     setUploadingPhoto(false);
   };
 
+  const closeScheduledDialog = () => {
+    setScheduledDialogOpen(false);
+    resetChecklist();
+    setFollowUp(null);
+  };
+
   const resetPrn = () => {
     setDoseTarget(null);
     setDoseReason("");
@@ -172,39 +188,42 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
         });
         resetChecklist();
         setFollowUp({ administrationId: result.id, outcome: result.outcome });
+        setScheduledDialogOpen(true);
         return;
       }
       toast({ title: "Medication logged" });
       resetChecklist();
+      setScheduledDialogOpen(false);
     },
     onError: (error: Error) =>
       toast({ title: "Could not log medication", description: error.message, variant: "destructive" }),
   });
 
   const followUpMutation = useMutation({
-    mutationFn: () =>
-      attachMedicationReason(followUp!.administrationId, reasonCode ?? undefined, noteText.trim() || undefined),
+    mutationFn: (payload: { administrationId: string; reasonCode?: string; notes?: string }) =>
+      attachMedicationReason(payload.administrationId, payload.reasonCode, payload.notes),
     onSuccess: async () => {
       await invalidate();
       toast({ title: "Reason recorded" });
-      setFollowUp(null);
-      setReasonCode(null);
-      setNoteText("");
+      closeScheduledDialog();
     },
     onError: (error: Error) =>
       toast({ title: "Could not save reason", description: error.message, variant: "destructive" }),
   });
 
   const prnDoseMutation = useMutation({
-    mutationFn: () => {
-      if (!doseTarget) throw new Error("No medication selected.");
-      return logMedicationAdministration(shiftId, doseTarget.id, {
+    mutationFn: (payload: {
+      medicationId: string;
+      prn_reason: string;
+      dose_given?: string;
+      verification_photo_url?: string;
+    }) =>
+      logMedicationAdministration(shiftId, payload.medicationId, {
         action: "given",
-        prn_reason: doseReason.trim(),
-        dose_given: doseGiven.trim() || undefined,
-        verification_photo_url: prnPhotoUrl ?? undefined,
-      });
-    },
+        prn_reason: payload.prn_reason,
+        dose_given: payload.dose_given,
+        verification_photo_url: payload.verification_photo_url,
+      }),
     onSuccess: async () => {
       await invalidate();
       toast({ title: "PRN dose logged" });
@@ -298,7 +317,12 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
       toast({ title: "Pick a reason or add a note", variant: "destructive" });
       return;
     }
-    followUpMutation.mutate();
+    if (!followUp) return;
+    followUpMutation.mutate({
+      administrationId: followUp.administrationId,
+      reasonCode: reasonCode ?? undefined,
+      notes: noteText.trim() || undefined,
+    });
   };
 
   const submitPrnDose = () => {
@@ -315,7 +339,12 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
       toast({ title: "Verification photo required", description: "Upload a photo before logging this dose.", variant: "destructive" });
       return;
     }
-    prnDoseMutation.mutate();
+    prnDoseMutation.mutate({
+      medicationId: doseTarget.id,
+      prn_reason: doseReason.trim(),
+      dose_given: doseGiven.trim() || undefined,
+      verification_photo_url: prnPhotoUrl ?? undefined,
+    });
   };
 
   const isLoading = checklistQuery.isLoading || prnQuery.isLoading;
@@ -332,7 +361,9 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
   const reasonCodes = reasonAction
     ? reasonAction === "administration_error"
       ? MEDICATION_ERROR_SUBTYPES
-      : MEDICATION_REASON_CODES[reasonAction as Exclude<MedicationAdministrationAction, "given" | "administration_error">] ?? []
+      : reasonAction === "given"
+        ? []
+        : MEDICATION_REASON_CODES[ACTION_REASON_KEY[reasonAction]]
     : followUp
       ? MEDICATION_REASON_CODES[followUp.outcome]
       : [];
@@ -377,6 +408,7 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
                           setReasonCode(null);
                           setNoteText("");
                           setVerificationPhotoUrl(null);
+                          setScheduledDialogOpen(true);
                         }}
                         className="flex w-full items-center justify-between gap-3 border-b border-cc-border px-3 py-3 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
                       >
@@ -467,13 +499,10 @@ export function ShiftMedicationPanel({ shiftId, disabled, compact = false }: Pro
       </section>
 
       <Dialog
-        open={Boolean(activeItem) || Boolean(followUp)}
+        open={scheduledDialogOpen}
         onOpenChange={(open) => {
           if (open) return;
-          resetChecklist();
-          setFollowUp(null);
-          setReasonCode(null);
-          setNoteText("");
+          closeScheduledDialog();
         }}
       >
         <DialogContent className="max-w-lg">

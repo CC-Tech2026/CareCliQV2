@@ -1008,7 +1008,7 @@ export function ShiftTaskEvidencePanel({
             !readyToMarkComplete &&
             note.length > 0 &&
             !(isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20) &&
-            `${note.length} characters`}
+            translateParams("tasks.noteCharCount", { current: String(note.length), max: "∞" })}
           {saveState === "idle" &&
             !evidenceAddedFlash &&
             !readyToMarkComplete &&
@@ -1194,7 +1194,7 @@ export function ShiftTaskEvidencePanel({
             }}
           />
           <p className="mt-1 text-[10px] font-bold" style={{ color: MUTED }}>
-            {note.length} characters
+            {translateParams("tasks.noteCharCount", { current: String(note.length), max: "∞" })}
             {!readyToMarkComplete && isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20 && (
               <span className="ml-2 text-amber-700">
                 {translateParams("shift.evidence.moreToComplete", { count: String(20 - note.trim().length) })}

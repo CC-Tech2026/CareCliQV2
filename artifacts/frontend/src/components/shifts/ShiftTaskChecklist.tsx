@@ -586,7 +586,10 @@ function QuickNoteField({
         }
       />
       <p className="text-[10px] font-semibold" style={{ color: MUTED }}>
-        {draft.length} characters
+        {translateParams("tasks.noteCharCount", {
+          current: String(draft.length),
+          max: "∞",
+        })}
       </p>
     </div>
   );

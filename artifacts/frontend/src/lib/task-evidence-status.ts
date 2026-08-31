@@ -79,7 +79,7 @@ export function applyEvidencePatch(
   const merged: ShiftTask = { ...task, ...patch };
   const flags = deriveEvidenceFlags(merged);
   const gainedStrong =
-    hasStrongTaskEvidence({ ...task, ...flags }) && !hasStrongTaskEvidence(task);
+    hasStrongTaskEvidence({ ...merged, ...flags }) && !hasStrongTaskEvidence(task);
 
   return {
     ...merged,
