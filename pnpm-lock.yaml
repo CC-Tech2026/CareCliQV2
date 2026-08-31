@@ -571,8 +571,8 @@ importers:
         specifier: ~1.0.8
         version: 1.0.8(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
       expo-system-ui:
-        specifier: ~6.0.9
-        version: 6.0.9(expo@54.0.35)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
+        specifier: ~57.0.3
+        version: 57.0.3(expo@54.0.35)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
       expo-web-browser:
         specifier: ~15.0.10
         version: 15.0.11(expo@54.0.35)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))
@@ -3024,6 +3024,9 @@ packages:
   '@react-native/normalize-colors@0.86.2':
     resolution: {integrity: sha512-EzPFc9Y6lzYOWeso2almwXI7f8+qReHxWvT+algsOczb2UhWXIWXDoSvkdwoSfiwwmGt/ijJgKJoeHlzPkLwRg==}
 
+  '@react-native/normalize-colors@0.86.3':
+    resolution: {integrity: sha512-Cv3CDkprb67GrzuaS9BGbBJC/6G4lIw3nyKOHRKTqTTum4bn37y5+R0Z04L8mcbQN85eEohNrRwb7IOM4j6uvg==}
+
   '@react-native/virtualized-lists@0.81.5':
     resolution: {integrity: sha512-UVXgV/db25OPIvwZySeToXD/9sKKhOdkcWmmf4Jh8iBZuyfML+/5CasaZ1E7Lqg6g3uqVQq75NqIwkYmORJMPw==}
     engines: {node: '>= 20.19.4'}
@@ -3705,6 +3708,7 @@ packages:
   '@xmldom/xmldom@0.9.11':
     resolution: {integrity: sha512-tW8bcK3hsG0/uqSnNz6TK4BkcuZSezoU7DlnYssILmZDktPnSHHuDJJFM0AJv+13gz2r0iGdrj6qqKeUnxXEDg==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -4994,8 +4998,8 @@ packages:
       expo: '*'
       react-native: '*'
 
-  expo-system-ui@6.0.9:
-    resolution: {integrity: sha512-eQTYGzw1V4RYiYHL9xDLYID3Wsec2aZS+ypEssmF64D38aDrqbDgz1a2MSlHLQp2jHXSs3FvojhZ9FVela1Zcg==}
+  expo-system-ui@57.0.3:
+    resolution: {integrity: sha512-3N3BoagGojEvQw0h7kL0Lvv2LrVjqEvODSNS+Nc9lj/kzaTaVx4K1HI8qqxeALMf5jui3rLP2b3Ai2pXotoNuA==}
     peerDependencies:
       expo: '*'
       react-native: '*'
@@ -11230,6 +11234,8 @@ snapshots:
 
   '@react-native/normalize-colors@0.86.2': {}
 
+  '@react-native/normalize-colors@0.86.3': {}
+
   '@react-native/virtualized-lists@0.81.5(@types/react@19.2.14)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)':
     dependencies:
       invariant: 2.2.4
@@ -13340,9 +13346,9 @@ snapshots:
       react-native: 0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)
       sf-symbols-typescript: 2.2.0
 
-  expo-system-ui@6.0.9(expo@54.0.35)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)):
+  expo-system-ui@57.0.3(expo@54.0.35)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)):
     dependencies:
-      '@react-native/normalize-colors': 0.81.5
+      '@react-native/normalize-colors': 0.86.3
       debug: 4.4.3(supports-color@8.1.1)
       expo: 54.0.35(@babel/core@8.0.1)(@expo/dom-webview@57.0.1)(expo-router@6.0.24)(graphql@16.8.1)(react-native@0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
       react-native: 0.81.5(@babel/core@8.0.1)(@types/react@19.2.14)(react@19.1.0)
