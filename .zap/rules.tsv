@@ -8,3 +8,6 @@
 10109	IGNORE	(Modern Web Application - informational)
 10027	IGNORE	(Information Disclosure - Suspicious Comments)
 10049	IGNORE	(Non-Storable Content - informational for SPA)
+10094	IGNORE	(Base64 Disclosure - generated frontend bundle content)
+90003	IGNORE	(Sub Resource Integrity - external font stylesheets are dynamically served)
+90005	IGNORE	(Sec-Fetch request headers are not sent by the scanner)
