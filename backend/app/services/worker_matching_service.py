@@ -12,7 +12,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from .worker_availability_service import get_slot_status_for_shift, slot_for_hour
+from .worker_availability_service import (
+    emergency_overrides_batch,
+    get_slot_status_for_shift,
+    raw_slot_statuses_batch,
+    slot_for_hour,
+)
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 
 _SLOT_HOUR_BOUNDARIES = (
@@ -61,3 +66,33 @@ def availability_status_for_shift(worker_id: str, scheduled_start: str, schedule
         for slot in _slots_touched(start_local, end_local)
     ]
     return _worst_status(statuses)
+
+
+def availability_statuses_for_shift_batch(
+    worker_ids: list[str], scheduled_start: str, scheduled_end: Optional[str]
+) -> dict[str, str]:
+    """Batch form of availability_status_for_shift for many workers against
+    one shift window - two queries total regardless of how many workers or
+    slots are involved, instead of up to several queries per worker (each
+    touched slot used to call get_slot_status_for_shift, and that in turn
+    called get_availability - itself several sequential queries - fresh every
+    time). Used by coordinator.py's get_available_workers, which used to
+    call availability_status_for_shift once per team member in a loop."""
+    if not worker_ids:
+        return {}
+    start_local = parse_shift_datetime(scheduled_start).astimezone(APP_TIMEZONE)
+    end_local = parse_shift_datetime(scheduled_end).astimezone(APP_TIMEZONE) if scheduled_end else None
+    touched = _slots_touched(start_local, end_local)
+    dow = start_local.isoweekday()
+
+    raw = raw_slot_statuses_batch(worker_ids, dow, touched)
+    overridden = emergency_overrides_batch(worker_ids, start_local.date().isoformat())
+
+    out: dict[str, str] = {}
+    for wid in worker_ids:
+        if wid in overridden:
+            out[wid] = "available"
+            continue
+        per_slot = raw.get(wid, {})
+        out[wid] = _worst_status([per_slot.get(slot) for slot in touched])
+    return out

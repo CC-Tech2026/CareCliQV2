@@ -181,6 +181,30 @@ def list_worker_tags(worker_id: str, *, include_private: bool) -> list[dict[str,
     return _tags_with_label(rows)
 
 
+def list_worker_tags_batch(worker_ids: list[str], *, include_private: bool) -> dict[str, list[dict[str, Any]]]:
+    """Batch form of list_worker_tags for many workers at once - two queries
+    total (worker_tags + the tags join) instead of two queries per worker.
+    Used by worker_match_scoring_service.score_candidates, which used to call
+    list_worker_tags once per candidate."""
+    out: dict[str, list[dict[str, Any]]] = {wid: [] for wid in worker_ids}
+    if not worker_ids:
+        return out
+    supabase = get_supabase_admin()
+    query = (
+        supabase.table("worker_tags")
+        .select("id, worker_id, tag_id, added_by_user_id, added_at, notes, visible_to_coordinator_only")
+        .in_("worker_id", worker_ids)
+    )
+    if not include_private:
+        query = query.eq("visible_to_coordinator_only", False)
+    rows = query.execute().data or []
+    for row in _tags_with_label(rows):
+        wid = row.get("worker_id")
+        if wid in out:
+            out[wid].append(row)
+    return out
+
+
 def add_worker_tag(
     worker_id: str,
     tag_id: str,

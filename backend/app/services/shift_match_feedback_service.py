@@ -87,46 +87,53 @@ def record_worker_feedback(shift_id: str, worker_id: str, worker_feedback: str) 
     return (resp.data or [payload])[0]
 
 
-def has_do_not_repeat_flag(worker_id: str, participant_id: str, organization_id: str) -> bool:
-    """True if a coordinator has ever recorded would_repeat=False for this
-    exact worker-participant pair. Checked before scoring (see
-    worker_match_scoring_service.score_candidates) - a documented "this
-    pairing didn't work" is a deliberate, considered coordinator call, not
-    something a low outcome_rating alone should imply."""
+def do_not_repeat_worker_ids(participant_id: str, organization_id: str) -> set[str]:
+    """Every worker_id with a would_repeat=False row for this participant.
+    Checked before scoring (see worker_match_scoring_service.score_candidates)
+    - a documented "this pairing didn't work" is a deliberate, considered
+    coordinator call, not something a low outcome_rating alone should imply.
+    One query for the whole candidate list, not one query per candidate."""
     supabase = get_supabase_admin()
     try:
         resp = (
             supabase.table(TABLE)
-            .select("id")
+            .select("worker_id")
             .eq("organization_id", organization_id)
-            .eq("worker_id", worker_id)
             .eq("participant_id", participant_id)
             .eq("would_repeat", False)
-            .limit(1)
             .execute()
         )
-        return bool(resp.data)
+        return {r["worker_id"] for r in (resp.data or []) if r.get("worker_id")}
     except Exception:
-        return False
+        return set()
 
 
-def rating_history_for_pair(worker_id: str, participant_id: str, organization_id: str) -> Optional[tuple[float, int]]:
-    """(average_rating, count) across every shift this pair has feedback for,
-    or None if there's no rated feedback yet at all."""
+def rating_history_by_worker(
+    participant_id: str, organization_id: str, worker_ids: list[str]
+) -> dict[str, tuple[float, int]]:
+    """(average_rating, count) per worker_id, across every shift that pair has
+    feedback for - one query covering every candidate worker for this
+    participant, aggregated in memory, instead of one query per candidate."""
+    if not worker_ids:
+        return {}
     supabase = get_supabase_admin()
     try:
         resp = (
             supabase.table(TABLE)
-            .select("outcome_rating")
+            .select("worker_id, outcome_rating")
             .eq("organization_id", organization_id)
-            .eq("worker_id", worker_id)
             .eq("participant_id", participant_id)
+            .in_("worker_id", worker_ids)
             .not_.is_("outcome_rating", "null")
             .execute()
         )
-        ratings = [r["outcome_rating"] for r in (resp.data or []) if r.get("outcome_rating") is not None]
+        rows = resp.data or []
     except Exception:
-        return None
-    if not ratings:
-        return None
-    return sum(ratings) / len(ratings), len(ratings)
+        return {}
+    ratings_by_worker: dict[str, list[float]] = {}
+    for r in rows:
+        rating = r.get("outcome_rating")
+        wid = r.get("worker_id")
+        if wid and rating is not None:
+            ratings_by_worker.setdefault(wid, []).append(rating)
+    return {wid: (sum(ratings) / len(ratings), len(ratings)) for wid, ratings in ratings_by_worker.items()}

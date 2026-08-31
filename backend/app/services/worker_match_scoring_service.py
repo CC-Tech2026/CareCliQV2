@@ -83,29 +83,30 @@ def _overlap_component(
     return score, reason
 
 
-def _continuity_component(worker_id: str, participant_id: str, organization_id: str) -> tuple[float, Optional[str]]:
+def _continuity_worker_ids_batch(worker_ids: list[str], participant_id: str, organization_id: str) -> set[str]:
+    """Which of these candidates have ever completed a shift with this
+    participant - batch form of the old per-worker _continuity_component
+    existence check, one query for the whole candidate list instead of one
+    query per candidate."""
+    if not worker_ids:
+        return set()
     supabase = get_supabase_admin()
     try:
         resp = (
             supabase.table("shifts")
-            .select("id")
+            .select("worker_id")
             .eq("organization_id", organization_id)
-            .eq("worker_id", worker_id)
             .eq("participant_id", participant_id)
             .eq("status", "completed")
-            .limit(1)
+            .in_("worker_id", worker_ids)
             .execute()
         )
-        worked_before = bool(resp.data)
+        return {r["worker_id"] for r in (resp.data or []) if r.get("worker_id")}
     except Exception:
-        worked_before = False
-    if worked_before:
-        return CONTINUITY_WEIGHT, "Has worked with this participant before"
-    return 0.0, None
+        return set()
 
 
-def _prior_history_component(worker_id: str, participant_id: str, organization_id: str) -> tuple[float, Optional[str]]:
-    history = feedback_service.rating_history_for_pair(worker_id, participant_id, organization_id)
+def _prior_history_from_batch(history: Optional[tuple[float, int]]) -> tuple[float, Optional[str]]:
     if not history:
         return PRIOR_HISTORY_WEIGHT / 2, None
     avg_rating, count = history
@@ -174,10 +175,21 @@ def score_candidates(
     participant_lived_exp = _tags_in_categories(participant_tags, lived_exp_cat_ids)
     recent_counts = _recent_shift_counts_by_worker(participant_id, organization_id)
 
+    # Everything below used to be fetched per candidate worker (has_do_not_repeat_flag,
+    # list_worker_tags, continuity, rating history - 4-5 sequential queries each),
+    # which turned a team of a dozen workers into 50+ round trips. Batched up
+    # front instead: a small constant number of queries regardless of how many
+    # candidates there are.
+    do_not_repeat_ids = feedback_service.do_not_repeat_worker_ids(participant_id, organization_id)
+    remaining_ids = [wid for wid in worker_ids if wid not in do_not_repeat_ids]
+    worker_tags_by_id = tag_service.list_worker_tags_batch(remaining_ids, include_private=True)
+    continuity_worker_ids = _continuity_worker_ids_batch(remaining_ids, participant_id, organization_id)
+    rating_history_by_id = feedback_service.rating_history_by_worker(participant_id, organization_id, remaining_ids)
+
     out: dict[str, dict[str, Any]] = {}
     for worker_id in worker_ids:
         # A coordinator explicitly flagging "would not repeat" for this exact
-        # pair is a deliberate, considered call (see has_do_not_repeat_flag's
+        # pair is a deliberate, considered call (see do_not_repeat_worker_ids'
         # docstring) - it overrides scoring entirely rather than lowering it,
         # per the design spec's "documented problem is a hard stop, not a
         # lower score" principle. Consistent with this codebase's existing
@@ -185,7 +197,7 @@ def score_candidates(
         # removing a candidate (e.g. an unavailable worker still appears in
         # /available-workers, just sorted last with a reason) - excluded is a
         # sort/display tier, not a hard filter the caller can't see past.
-        if feedback_service.has_do_not_repeat_flag(worker_id, participant_id, organization_id):
+        if worker_id in do_not_repeat_ids:
             out[worker_id] = {
                 "score": 0,
                 "reasons": ["Previous pairing marked as not to repeat"],
@@ -193,7 +205,7 @@ def score_candidates(
             }
             continue
 
-        worker_tags = tag_service.list_worker_tags(worker_id, include_private=True)
+        worker_tags = worker_tags_by_id.get(worker_id, [])
         worker_interests = _tags_in_categories(worker_tags, interests_cat_ids)
         worker_lived_exp = _tags_in_categories(worker_tags, lived_exp_cat_ids)
 
@@ -203,8 +215,12 @@ def score_candidates(
         lived_exp_score, lived_exp_reason = _overlap_component(
             participant_lived_exp, worker_lived_exp, LIVED_EXPERIENCE_WEIGHT, "Relevant lived experience"
         )
-        continuity_score, continuity_reason = _continuity_component(worker_id, participant_id, organization_id)
-        prior_history_score, prior_history_reason = _prior_history_component(worker_id, participant_id, organization_id)
+        continuity_score, continuity_reason = (
+            (CONTINUITY_WEIGHT, "Has worked with this participant before")
+            if worker_id in continuity_worker_ids
+            else (0.0, None)
+        )
+        prior_history_score, prior_history_reason = _prior_history_from_batch(rating_history_by_id.get(worker_id))
         # The rated-history reason ("worked together 3 times, avg 4.6/5") is
         # strictly more informative than the plain continuity one ("has worked
         # with this participant before") when both are true - don't show both.

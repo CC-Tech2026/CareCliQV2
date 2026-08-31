@@ -2059,6 +2059,164 @@ def _check_skill_match(
     return warnings
 
 
+def _conflicts_batch(
+    supabase, worker_ids: list[str], org_id: str, shift_start: datetime, shift_end: datetime,
+) -> dict[str, list[dict]]:
+    """Batch form of _detect_worker_conflicts for many workers against one
+    shift window - same three checks, but each hits Supabase once for the
+    whole team instead of once per worker. Used by get_available_workers,
+    whose per-worker loop calling _detect_worker_conflicts directly used to
+    turn a team of a dozen workers into dozens of sequential round trips."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not worker_ids:
+        return out
+
+    # 1 — Overlapping shifts
+    try:
+        resp = (
+            supabase.table("shifts")
+            .select("id, worker_id, scheduled_start, scheduled_end, participant_name, status")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled", "completed"])
+            .execute()
+        )
+        for row in (resp.data or []):
+            rs = _parse_dt(row.get("scheduled_start"))
+            re = _parse_dt(row.get("scheduled_end") or row.get("scheduled_start"))
+            if rs and re and _shifts_overlap(shift_start, shift_end, rs, re):
+                ts = rs.strftime("%I:%M %p").lstrip("0")
+                te = re.strftime("%I:%M %p").lstrip("0")
+                out.setdefault(row["worker_id"], []).append({
+                    "type": "shift_overlap",
+                    "severity": "error",
+                    "message": f"Has shift {ts}–{te} ({row.get('participant_name', 'Participant')})",
+                })
+    except Exception:
+        pass
+
+    # 2 — Blackout dates
+    try:
+        day_str = shift_start.date().isoformat()
+        bo_resp = (
+            supabase.table("worker_blackout_dates")
+            .select("user_id, start_date, end_date, reason")
+            .in_("user_id", worker_ids)
+            .lte("start_date", day_str)
+            .gte("end_date", day_str)
+            .execute()
+        )
+        for row in (bo_resp.data or []):
+            reason = row.get("reason") or "Blackout date"
+            out.setdefault(row["user_id"], []).append({
+                "type": "blackout",
+                "severity": "warning",
+                "message": f"Off-schedule: {reason} ({row['start_date']} – {row['end_date']})",
+            })
+    except Exception:
+        pass
+
+    # 3 — Weekly hours check
+    try:
+        avail_resp = (
+            supabase.table("worker_availability")
+            .select("user_id, max_hours_per_week")
+            .in_("user_id", worker_ids)
+            .execute()
+        )
+        # A worker with no row here gets no max-hours check at all, matching
+        # _detect_worker_conflicts' original per-worker behaviour.
+        max_hours_by_worker = {r["user_id"]: (r.get("max_hours_per_week") or 40) for r in (avail_resp.data or [])}
+
+        week_start = (shift_start - timedelta(days=shift_start.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        week_end = week_start + timedelta(days=7)
+        week_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_start, scheduled_end, duration_minutes")
+            .in_("worker_id", worker_ids)
+            .gte("scheduled_start", week_start.isoformat())
+            .lt("scheduled_start", week_end.isoformat())
+            .not_.in_("status", ["cancelled"])
+            .execute()
+        )
+        minutes_by_worker: dict[str, int] = {}
+        for row in (week_resp.data or []):
+            wid = row.get("worker_id")
+            if not wid:
+                continue
+            if row.get("duration_minutes"):
+                minutes = row["duration_minutes"]
+            else:
+                rs = _parse_dt(row.get("scheduled_start"))
+                re = _parse_dt(row.get("scheduled_end"))
+                minutes = int((re - rs).total_seconds() / 60) if rs and re else 0
+            minutes_by_worker[wid] = minutes_by_worker.get(wid, 0) + minutes
+
+        proposed_minutes = int((shift_end - shift_start).total_seconds() / 60)
+        for wid, max_hours in max_hours_by_worker.items():
+            total_hours = (minutes_by_worker.get(wid, 0) + proposed_minutes) / 60
+            if total_hours > max_hours:
+                out.setdefault(wid, []).append({
+                    "type": "max_hours",
+                    "severity": "warning",
+                    "message": f"Will exceed max hours ({total_hours:.1f}h / {max_hours}h this week)",
+                })
+            elif total_hours > max_hours * 0.9:
+                out.setdefault(wid, []).append({
+                    "type": "approaching_hours",
+                    "severity": "info",
+                    "message": f"Approaching max hours ({total_hours:.1f}h / {max_hours}h this week)",
+                })
+    except Exception:
+        pass
+
+    return out
+
+
+def _skill_warnings_batch(
+    supabase, worker_ids: list[str], participant_id: str | None
+) -> dict[str, list[dict]]:
+    """Batch form of _check_skill_match - the participant's required skills
+    are fetched once (not once per worker, as the original per-worker loop
+    did - that query doesn't even vary by worker)."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not participant_id or not worker_ids:
+        return out
+    try:
+        req_resp = (
+            supabase.table("participant_required_skills")
+            .select("skill, is_mandatory")
+            .eq("participant_id", participant_id)
+            .execute()
+        )
+        required = {r["skill"]: r.get("is_mandatory", True) for r in (req_resp.data or [])}
+        if not required:
+            return out
+        skill_resp = (
+            supabase.table("worker_skills")
+            .select("user_id, skill, is_certified")
+            .in_("user_id", worker_ids)
+            .execute()
+        )
+        certified_by_worker: dict[str, set[str]] = {}
+        for r in (skill_resp.data or []):
+            if r.get("is_certified"):
+                certified_by_worker.setdefault(r["user_id"], set()).add(r["skill"])
+        for wid in worker_ids:
+            have = certified_by_worker.get(wid, set())
+            for skill, mandatory in required.items():
+                if skill not in have:
+                    out[wid].append({
+                        "type": "missing_skill",
+                        "severity": "error" if mandatory else "warning",
+                        "message": f"Missing required skill: {skill}",
+                    })
+    except Exception:
+        pass
+    return out
+
+
 async def _send_worker_notification(
     supabase,
     user_id: str,
@@ -2153,30 +2311,39 @@ async def get_available_workers(
     # rollout rules — see _team's docstring), matching worker_stats' scoping.
     team = await _team(org_id, coordinator_user=current_user if is_coordinator_role(current_user) else None)
     active_workers = [w for w in team if w.get("is_active", True)]
+    worker_ids = [wid for wid in (w.get("id") or w.get("user_id") or "" for w in active_workers) if wid]
+
+    # Batched up front: this loop used to hit Supabase several times PER
+    # worker (conflicts, skill checks, preferred-availability each did their
+    # own per-worker queries), which for a team of a dozen or so meant well
+    # over a hundred sequential round trips and a multi-second load. Each of
+    # these now does a small constant number of queries for the whole team.
+    conflicts_by_worker = _conflicts_batch(supabase, worker_ids, org_id, s_dt, e_dt)
+    skill_warnings_by_worker = _skill_warnings_batch(supabase, worker_ids, participant_id)
+    try:
+        preferred_by_worker = worker_matching_service.availability_statuses_for_shift_batch(
+            worker_ids, s_dt.isoformat(), e_dt.isoformat()
+        )
+    except Exception:
+        preferred_by_worker = {}
 
     results = []
     for worker in active_workers:
         wid = worker.get("id") or worker.get("user_id") or ""
         if not wid:
             continue
-        conflicts = _detect_worker_conflicts(supabase, wid, org_id, s_dt, e_dt)
-        skill_warnings = _check_skill_match(supabase, wid, participant_id)
+        conflicts = conflicts_by_worker.get(wid, [])
+        skill_warnings = skill_warnings_by_worker.get(wid, [])
         all_issues = conflicts + skill_warnings
         hard = any(i["severity"] == "error" for i in all_issues)
         soft = any(i["severity"] in ("warning", "info") for i in all_issues)
         status = "unavailable" if hard else ("warning" if soft else "available")
-        try:
-            preferred = worker_matching_service.availability_status_for_shift(
-                wid, s_dt.isoformat(), e_dt.isoformat()
-            ) == "preferred"
-        except Exception:
-            preferred = False
         results.append({
             **worker,
             "availability_status": status,
             "conflicts": conflicts,
             "skill_warnings": skill_warnings,
-            "preferred_availability": preferred,
+            "preferred_availability": preferred_by_worker.get(wid) == "preferred",
         })
 
     # Phase 2 (ranking): a soft fit score + explanatory reasons on top of the
@@ -2185,9 +2352,7 @@ async def get_available_workers(
     # participant to score fit against.
     from ..services import worker_match_scoring_service
 
-    match_by_worker = worker_match_scoring_service.score_candidates(
-        [w.get("id") or w.get("user_id") or "" for w in results], participant_id, org_id
-    )
+    match_by_worker = worker_match_scoring_service.score_candidates(worker_ids, participant_id, org_id)
     for w in results:
         wid = w.get("id") or w.get("user_id") or ""
         match = match_by_worker.get(wid)
