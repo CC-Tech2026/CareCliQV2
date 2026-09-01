@@ -49,6 +49,7 @@ import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
+import AccountDeactivated from "@/pages/account-deactivated";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
@@ -136,6 +137,12 @@ function Router() {
       <Route path="/verify-email">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <RoleAwareShell><VerifyEmail /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/account-deactivated">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <RoleAwareShell><AccountDeactivated /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

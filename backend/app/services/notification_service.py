@@ -36,6 +36,8 @@ NOTIFICATION_EVENTS = (
     "shift_offer",
     "shift_offer_exhausted",
     "shift_auto_cancelled_unassigned",
+    "account_deactivated",
+    "account_reactivated",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -58,6 +60,8 @@ EVENT_ALERT_TYPES = {
     "shift_offer": "shift_offer",
     "shift_offer_exhausted": "shift_offer_exhausted",
     "shift_auto_cancelled_unassigned": "shift_auto_cancelled_unassigned",
+    "account_deactivated": "account_deactivated",
+    "account_reactivated": "account_reactivated",
 }
 
 

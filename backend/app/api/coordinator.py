@@ -36,8 +36,9 @@ from ..services.notification_service import (
     notify_feedback_received,
     notify_shift_cancelled,
     notify_shift_change,
+    notify_worker,
 )
-from ..services import conversation_service, shift_offer_service, worker_matching_service
+from ..services import audit_service, conversation_service, shift_offer_service, worker_matching_service
 from ..services import worker_buddy_service
 from ..services.supabase_client import get_supabase_admin
 
@@ -754,27 +755,148 @@ def _require_org_account_access(user: dict) -> str:
     return org_id
 
 
-@router.post("/workers/{worker_id}/deactivate")
-async def deactivate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_org_account_access(current_user)
-    supabase = get_supabase_admin()
+DEACTIVATION_REASONS = ("credentials", "training", "credentials_training", "manual")
+
+# Human copy for the worker-facing locked-account screen, mirrored on the
+# frontend's account-deactivated page (kept here too so notification text and
+# the audit trail read the same as what the worker actually sees).
+_DEACTIVATION_REASON_LABELS = {
+    "credentials": "your credentials are incomplete",
+    "training": "your mandatory training is incomplete",
+    "credentials_training": "your credentials and mandatory training are incomplete",
+    "manual": None,
+}
+
+
+def _require_target_support_worker(supabase, worker_id: str, org_id: str) -> dict:
+    """Account lifecycle actions (deactivate/activate/delete) only ever target
+    a support_worker - a coordinator managing a fellow coordinator's or the
+    MD's account isn't a case this feature covers, and allowing it would be a
+    real privilege-escalation gap."""
     try:
-        supabase.table("users").update({"is_active": False}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        row = (
+            supabase.table("users")
+            .select("id, role, full_name, email")
+            .eq("id", worker_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+    target = row.data if row else None
+    if not target:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+    if target.get("role") != "support_worker":
+        raise HTTPException(status_code=403, detail="Only support worker accounts can be managed here.")
+    return target
+
+
+class DeactivateWorkerBody(BaseModel):
+    reason: str = "manual"  # one of DEACTIVATION_REASONS
+    note: Optional[str] = None
+
+
+@router.post("/workers/{worker_id}/deactivate")
+async def deactivate_worker(
+    worker_id: str, body: DeactivateWorkerBody, current_user: dict = Depends(get_current_user)
+):
+    """Reversible: is_active flips to False, but the worker can still log in
+    to a locked-down portal (frontend gates on is_active + deactivation_reason
+    - see ProtectedRoute.tsx). Distinct from delete-account below, which is a
+    one-way request queued for removal. Coordinators and MD both have access
+    here (has_org_wide_access) - only delete is MD-only."""
+    org_id = _require_org_account_access(current_user)
+    if body.reason not in DEACTIVATION_REASONS:
+        raise HTTPException(status_code=422, detail=f"reason must be one of {DEACTIVATION_REASONS}")
+    supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    now = datetime.now(timezone.utc).isoformat()
+    actor_id = get_user_id(current_user)
+    try:
+        supabase.table("users").update({
+            "is_active": False,
+            "deactivated_at": now,
+            "deactivated_by": actor_id,
+            "deactivation_reason": body.reason,
+            "deactivation_note": body.note,
+        }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": False}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Deactivation failed: {e}")
-    return {"worker_id": worker_id, "is_active": False}
+
+    await audit_service.log_action(
+        action_type="coordinator.worker.deactivated",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=actor_id,
+        organization_id=org_id,
+        before_state={"is_active": True},
+        after_state={"is_active": False, "deactivation_reason": body.reason},
+        details={"note": body.note},
+    )
+    reason_label = _DEACTIVATION_REASON_LABELS.get(body.reason)
+    message = (
+        f"Your account has been deactivated because {reason_label}. Complete it to regain full access."
+        if reason_label
+        else "Your account has been deactivated. Contact your organisation admin for details."
+    )
+    try:
+        await notify_worker(
+            user_id=worker_id,
+            org_id=org_id,
+            event="account_deactivated",
+            title="Your account has been deactivated",
+            message=message,
+            reference_key=f"account_deactivated:{worker_id}:{now}",
+            severity="high",
+            alert_type="account_deactivated",
+        )
+    except Exception:
+        pass
+    return {"worker_id": worker_id, "is_active": False, "deactivation_reason": body.reason}
 
 
 @router.post("/workers/{worker_id}/activate")
 async def activate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
     org_id = _require_org_account_access(current_user)
     supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    actor_id = get_user_id(current_user)
     try:
-        supabase.table("users").update({"is_active": True}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        supabase.table("users").update({
+            "is_active": True,
+            "deactivated_at": None,
+            "deactivated_by": None,
+            "deactivation_reason": None,
+            "deactivation_note": None,
+        }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
+
+    await audit_service.log_action(
+        action_type="coordinator.worker.activated",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=actor_id,
+        organization_id=org_id,
+        before_state={"is_active": False},
+        after_state={"is_active": True},
+    )
+    try:
+        await notify_worker(
+            user_id=worker_id,
+            org_id=org_id,
+            event="account_reactivated",
+            title="Your account has been reactivated",
+            message="Your account is active again - you have full access to CareCliQ.",
+            reference_key=f"account_reactivated:{worker_id}:{datetime.now(timezone.utc).isoformat()}",
+            severity="medium",
+            alert_type="account_reactivated",
+        )
+    except Exception:
+        pass
     return {"worker_id": worker_id, "is_active": True}
 
 
@@ -789,10 +911,18 @@ async def delete_worker_account(worker_id: str, current_user: dict = Depends(get
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
-    email = _lookup_worker_email(get_supabase_admin(), worker_id, org_id)
-    if not email:
-        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
-    return privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
+    supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    result = privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
+    await audit_service.log_action(
+        action_type="coordinator.worker.delete_requested",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        details={"email": target.get("email")},
+    )
+    return result
 
 
 class AssignCoordinatorBody(BaseModel):
@@ -1193,6 +1323,11 @@ class AssignShiftBody(BaseModel):
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
     selected_task_ids: Optional[list[str]] = None
+    # Shadow shift: worker_id is still the trainee actually doing the shift
+    # (same credential/training/induction gates apply below) — this just
+    # flags it as supervised and records who's supervising.
+    is_shadow_shift: bool = False
+    shadow_of_worker_id: Optional[str] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1265,7 +1400,12 @@ async def coordinator_shifts(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
 
-    worker_ids = sorted({str(r.get("worker_id")) for r in rows if r.get("worker_id")})
+    worker_ids = sorted({
+        str(r.get(key))
+        for r in rows
+        for key in ("worker_id", "shadow_of_worker_id")
+        if r.get(key)
+    })
     participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
 
     workers_by_id: dict[str, dict] = {}
@@ -1310,6 +1450,10 @@ async def coordinator_shifts(
             **row,
             "worker_name": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("full_name") or "Worker",
             "worker_email": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("email"),
+            "shadow_of_worker_name": (
+                (workers_by_id.get(str(row.get("shadow_of_worker_id")), {}) or {}).get("full_name")
+                if row.get("shadow_of_worker_id") else None
+            ),
             "participant_name": row.get("participant_name")
             or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
             or "Participant",
@@ -1350,7 +1494,8 @@ def _execute_shift_query_with_legacy_fallback(
     full_columns = (
         "id, organization_id, worker_id, participant_id, session_id, shift_type, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "cannot_attend_reason, clocked_in_at, clocked_out_at, created_at, updated_at"
+        "cannot_attend_reason, clocked_in_at, clocked_out_at, "
+        "is_shadow_shift, shadow_of_worker_id, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, session_id, "
@@ -1400,6 +1545,8 @@ def _insert_shift_with_legacy_fallback(supabase, payload: dict[str, Any]):
         fallback_payload = dict(payload)
         fallback_payload.pop("created_by", None)
         fallback_payload.pop("shift_type", None)
+        fallback_payload.pop("is_shadow_shift", None)
+        fallback_payload.pop("shadow_of_worker_id", None)
         return supabase.table("shifts").insert(fallback_payload).execute()
 
 
@@ -1666,7 +1813,25 @@ async def assign_shift(
             status_code=500,
             detail=f"Worker lookup failed: {exc}"
         )
-    
+
+    if body.is_shadow_shift:
+        if not body.shadow_of_worker_id:
+            raise HTTPException(status_code=422, detail="shadow_of_worker_id is required for a shadow shift")
+        if body.shadow_of_worker_id == body.worker_id:
+            raise HTTPException(status_code=422, detail="A worker can't shadow themselves")
+        try:
+            shadow_resp = supabase.table("users").select("id, is_active").eq(
+                "id", body.shadow_of_worker_id
+            ).eq("organization_id", org_id).execute()
+            if not shadow_resp.data:
+                raise HTTPException(status_code=404, detail="Shadowed worker not found in your organization")
+            if not shadow_resp.data[0].get("is_active"):
+                raise HTTPException(status_code=400, detail="Cannot shadow an inactive worker")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Shadowed worker lookup failed: {exc}")
+
     # Verify participant exists and belongs to organization
     try:
         participant_resp = supabase.table("patients").select(
@@ -1762,8 +1927,10 @@ async def assign_shift(
             "created_by": get_user_id(current_user),
             "created_at": now,
             "updated_at": now,
+            "is_shadow_shift": body.is_shadow_shift,
+            "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
         }
-        
+
         result = _insert_shift_with_legacy_fallback(supabase, shift_payload)
         
         if not result.data:
@@ -2376,6 +2543,8 @@ async def get_available_workers(
 class ShiftAssignBody(BaseModel):
     worker_id: str
     confirm_conflicts: bool = False
+    is_shadow_shift: bool = False
+    shadow_of_worker_id: Optional[str] = None
 
 
 @router.put("/shifts/{shift_id}/assign")
@@ -2417,6 +2586,24 @@ async def assign_existing_shift(
     if not worker.get("is_active", True):
         raise HTTPException(status_code=400, detail="Worker is inactive")
 
+    if body.is_shadow_shift:
+        if not body.shadow_of_worker_id:
+            raise HTTPException(status_code=422, detail="shadow_of_worker_id is required for a shadow shift")
+        if body.shadow_of_worker_id == body.worker_id:
+            raise HTTPException(status_code=422, detail="A worker can't shadow themselves")
+        shadow_resp = (
+            supabase.table("users")
+            .select("id, is_active")
+            .eq("id", body.shadow_of_worker_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+        if not shadow_resp.data:
+            raise HTTPException(status_code=404, detail="Shadowed worker not found in your organization")
+        if not shadow_resp.data[0].get("is_active"):
+            raise HTTPException(status_code=400, detail="Cannot shadow an inactive worker")
+
     # Conflict detection
     participant_id = str(shift.get("participant_id") or "")
     conflicts = _detect_worker_conflicts(supabase, body.worker_id, org_id, s_dt, e_dt, exclude_shift_id=shift_id)
@@ -2438,17 +2625,24 @@ async def assign_existing_shift(
     # Assign
     try:
         now = datetime.now(timezone.utc).isoformat()
-        result = (
-            supabase.table("shifts")
-            .update({
-                "worker_id": body.worker_id,
-                "status": "scheduled",
-                "cannot_attend_reason": None,
-                "updated_at": now,
-            })
-            .eq("id", shift_id)
-            .execute()
-        )
+        update_payload = {
+            "worker_id": body.worker_id,
+            "status": "scheduled",
+            "cannot_attend_reason": None,
+            "updated_at": now,
+            "is_shadow_shift": body.is_shadow_shift,
+            "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
+        }
+        try:
+            result = supabase.table("shifts").update(update_payload).eq("id", shift_id).execute()
+        except Exception as exc:
+            if not _is_missing_schema_error(exc):
+                raise
+            # Migration 151 not applied yet on this deployment — assign without the
+            # shadow-shift fields rather than 500ing every shift assignment.
+            update_payload.pop("is_shadow_shift", None)
+            update_payload.pop("shadow_of_worker_id", None)
+            result = supabase.table("shifts").update(update_payload).eq("id", shift_id).execute()
         updated = (result.data or [None])[0] or {**shift, "worker_id": body.worker_id, "status": "scheduled"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")

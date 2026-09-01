@@ -342,7 +342,8 @@ async def _get_user_profile(user_id: str) -> dict:
             .select(
                 "role, full_name, account_type, onboarding_complete, organization_id, "
                 "email_verified, profile_completed, onboarding_completed, "
-                "role_specific_profile_completed, profile_photo_url, profile_photo_path"
+                "role_specific_profile_completed, profile_photo_url, profile_photo_path, "
+                "is_active, deactivation_reason, deactivation_note"
             )
             .eq("id", user_id)
             .maybe_single()
@@ -711,6 +712,9 @@ async def _finalize_login_response(
                 profile.get("role_specific_profile_completed")
             ),
             "profile_photo_url": profile.get("profile_photo_url"),
+            "is_active": profile.get("is_active") is not False,
+            "deactivation_reason": profile.get("deactivation_reason"),
+            "deactivation_note": profile.get("deactivation_note"),
         },
     }
     supabase_payload = _serialize_supabase_session(supabase_session)
@@ -1150,5 +1154,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
                 profile.get("role_specific_profile_completed")
             ),
             "profile_photo_url": profile.get("profile_photo_url"),
+            "is_active": profile.get("is_active") is not False,
+            "deactivation_reason": profile.get("deactivation_reason"),
+            "deactivation_note": profile.get("deactivation_note"),
         }
     }

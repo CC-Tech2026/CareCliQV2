@@ -58,6 +58,29 @@ export function ProtectedRoute({
     return <Redirect to="/verify-email" />;
   }
 
+  /**
+   * Deactivated account lockdown.
+   *
+   * A deactivated worker can still log in (their account isn't deleted),
+   * but the portal is locked down: everything redirects to
+   * /account-deactivated except the one page (if any) that resolves a
+   * self-fixable reason. "manual" (and any reason not listed below) has no
+   * self-service path at all - only the admin can reactivate that account.
+   */
+  const DEACTIVATED_ALLOWED_PATHS: Record<string, string[]> = {
+    credentials: ["/worker-onboarding"],
+    training: ["/worker/training"],
+    credentials_training: ["/worker-onboarding", "/worker/training"],
+  };
+  const isDeactivated = user.role === "support_worker" && user.is_active === false;
+  if (isDeactivated) {
+    const allowedPaths = ["/account-deactivated", ...(DEACTIVATED_ALLOWED_PATHS[user.deactivation_reason ?? ""] ?? [])];
+    const isAllowedWhileDeactivated = allowedPaths.some((p) => location === p || location.startsWith(p + "/"));
+    if (!isAllowedWhileDeactivated) {
+      return <Redirect to="/account-deactivated" />;
+    }
+  }
+
   const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/worker/profile", "/settings"];
   const isProfileGatePath = profileGatePaths.some((path) => location === path || location.startsWith(path + "/"));
   const needsRoleProfile =

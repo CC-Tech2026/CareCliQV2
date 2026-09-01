@@ -41,6 +41,8 @@ function clearDeviceLocalCaches(): void {
 export type UserRole = "support_coordinator" | "support_worker" | "managing_director";
 export type AccountType = "independent_worker" | "small_provider";
 
+export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -54,6 +56,9 @@ export interface AuthUser {
   role_specific_profile_completed?: boolean;
   profile_photo_url?: string | null;
   organizationId?: string;
+  is_active?: boolean;
+  deactivation_reason?: DeactivationReason | null;
+  deactivation_note?: string | null;
 }
 
 export type LoginResult =
@@ -118,6 +123,9 @@ function mapAuthUser(data: { user: Record<string, unknown> }): AuthUser {
       user.role_specific_profile_completed ?? user.onboarding_complete ?? false,
     ),
     profile_photo_url: (user.profile_photo_url as string | null | undefined) ?? null,
+    is_active: user.is_active === false ? false : true,
+    deactivation_reason: (user.deactivation_reason as DeactivationReason | null | undefined) ?? null,
+    deactivation_note: (user.deactivation_note as string | null | undefined) ?? null,
   };
 }
 

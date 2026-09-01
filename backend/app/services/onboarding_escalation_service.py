@@ -254,9 +254,32 @@ async def _process_due_reminders() -> tuple[int, int]:
         if flagged_at <= escalate_cutoff:
             try:
                 supabase = get_supabase_admin()
-                supabase.table("users").update({"is_active": False}).eq("id", worker_id).eq(
-                    "organization_id", org_id
-                ).execute()
+                # A worker can be independently blocked on both stages at once
+                # (separate tracking rows, separate 14-day clocks) - if the
+                # other stage also has an outstanding row for this worker,
+                # the deactivation reason covers both, so the locked-down
+                # portal unlocks both self-service pages rather than just one.
+                other_stage = "training" if stage == "credentials" else "credentials"
+                try:
+                    other_resp = (
+                        supabase.table("onboarding_stage_reminders")
+                        .select("id")
+                        .eq("organization_id", org_id)
+                        .eq("worker_id", worker_id)
+                        .eq("stage", other_stage)
+                        .limit(1)
+                        .execute()
+                    )
+                    reason = "credentials_training" if other_resp.data else stage
+                except Exception:
+                    reason = stage
+                supabase.table("users").update({
+                    "is_active": False,
+                    "deactivated_at": now.isoformat(),
+                    "deactivated_by": None,
+                    "deactivation_reason": reason,
+                    "deactivation_note": None,
+                }).eq("id", worker_id).eq("organization_id", org_id).execute()
                 supabase.table("organization_members").update({"is_active": False}).eq(
                     "user_id", worker_id
                 ).eq("organization_id", org_id).execute()

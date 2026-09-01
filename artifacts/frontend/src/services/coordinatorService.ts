@@ -276,8 +276,13 @@ export function flagSessionForReview(sessionId: string, flagged: boolean, review
   });
 }
 
-export function deactivateWorker(workerId: string) {
-  return jsonFetch<{ worker_id: string; is_active: boolean }>(`/api/coordinator/workers/${workerId}/deactivate`, { method: "POST" });
+export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
+
+export function deactivateWorker(workerId: string, reason: DeactivationReason, note?: string) {
+  return jsonFetch<{ worker_id: string; is_active: boolean; deactivation_reason: DeactivationReason }>(
+    `/api/coordinator/workers/${workerId}/deactivate`,
+    { method: "POST", body: JSON.stringify({ reason, note: note || null }) },
+  );
 }
 
 export function activateWorker(workerId: string) {
@@ -508,6 +513,8 @@ export type AssignShiftPayload = {
   duration_minutes?: number;
   shift_type?: string;
   selected_task_ids?: string[];
+  is_shadow_shift?: boolean;
+  shadow_of_worker_id?: string;
 };
 
 export type AssignShiftResult = {
@@ -540,6 +547,9 @@ export type CoordinatorShiftRecord = {
   cannot_attend_reason?: string | null;
   clocked_in_at?: string | null;
   clocked_out_at?: string | null;
+  is_shadow_shift?: boolean;
+  shadow_of_worker_id?: string | null;
+  shadow_of_worker_name?: string | null;
   created_at?: string;
   updated_at?: string;
 };

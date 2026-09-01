@@ -27,8 +27,10 @@ import {
   sendWorkerPasswordReset,
   type WorkerPipelineOverview,
   type WorkerStats,
+  type DeactivationReason,
 } from "@/services/coordinatorService";
 import { WorkerDetail, type WorkerDetailTab } from "@/components/team/WorkerDetail";
+import { DeactivateWorkerPanel } from "@/components/team/DeactivateWorkerPanel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -314,6 +316,7 @@ export default function MDStaffPage() {
   const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
   const [accountActionPending, setAccountActionPending] =
     useState<"reset" | "deactivate" | "delete" | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<StaffMember | null>(null);
 
   function openWorker(worker: StaffMember, tab?: WorkerDetailTab) {
     setDetailInitialTab(tab);
@@ -354,13 +357,19 @@ export default function MDStaffPage() {
     }
   }
 
-  async function handleDeactivate(worker: StaffMember) {
-    if (!window.confirm(`Deactivate ${worker.full_name}'s account? They will lose access immediately.`)) return;
+  function handleDeactivate(worker: StaffMember) {
+    setDeactivateTarget(worker);
+  }
+
+  async function confirmDeactivate(reason: DeactivationReason, note: string) {
+    const worker = deactivateTarget;
+    if (!worker) return;
     setAccountActionPending("deactivate");
     try {
-      await deactivateWorker(worker.id);
-      toast({ title: "Account deactivated", description: `${worker.full_name} can no longer sign in.` });
+      await deactivateWorker(worker.id, reason, note);
+      toast({ title: "Account deactivated", description: `${worker.full_name} can still sign in, but their portal is now locked down.` });
       setSelectedWorker(null);
+      setDeactivateTarget(null);
       setData((prev) => prev ? { ...prev, staff_directory: prev.staff_directory.filter((w) => w.id !== worker.id) } : prev);
     } catch (err) {
       toast({ title: "Could not deactivate account", description: err instanceof Error ? err.message : "Try again shortly.", variant: "destructive" });
@@ -1152,12 +1161,23 @@ export default function MDStaffPage() {
             WORKER DETAIL DRAWER
         ========================================================= */}
 
-        <Sheet open={!!selectedWorker} onOpenChange={(open) => { if (!open) { setSelectedWorker(null); setWorkerFullScreen(false); } }}>
+        <Sheet
+          open={!!selectedWorker}
+          onOpenChange={(open) => { if (!open) { setSelectedWorker(null); setWorkerFullScreen(false); setDeactivateTarget(null); } }}
+        >
           <SheetContent side="right" className={`w-full overflow-y-auto p-6 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
             <SheetHeader className="sr-only">
               <SheetTitle>{selectedWorker ? `${selectedWorker.full_name} · staff profile` : "Staff profile"}</SheetTitle>
             </SheetHeader>
-            {selectedWorker && (
+            {selectedWorker && deactivateTarget && (
+              <DeactivateWorkerPanel
+                workerName={deactivateTarget.full_name}
+                pending={accountActionPending === "deactivate"}
+                onCancel={() => setDeactivateTarget(null)}
+                onConfirm={confirmDeactivate}
+              />
+            )}
+            {selectedWorker && !deactivateTarget && (
               selectedWorkerStats ? (
                 <WorkerDetail
                   worker={selectedWorkerStats}
