@@ -19,6 +19,7 @@ import {
   WorkerMobileComplianceReport,
   WorkerMobileSubmitSuccess,
 } from "@/components/worker/WorkerMobileComplianceReport";
+import { WorkerMobileClockInSheet } from "@/components/worker/WorkerMobileClockInSheet";
 import { WorkerMobileIncidentSheet } from "@/components/worker/WorkerMobileIncidentSheet";
 import { WorkerMobileReviewScreen } from "@/components/worker/WorkerMobileReviewScreen";
 import { WorkerMobileSessionScreen } from "@/components/worker/WorkerMobileSessionScreen";
@@ -225,61 +226,84 @@ export function WorkerMobileShiftView({
     [sessionId, compliance.noteFlags],
   );
 
-  const handleClockIn = useCallback(async () => {
-    setBusy("clock-in");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      let location: { lat: number; lng: number; accuracy?: number } | null = null;
+  const [clockInSheetOpen, setClockInSheetOpen] = useState(false);
+
+  const submitClockIn = useCallback(
+    async (method: "gps" | "qr", location: { lat: number; lng: number; accuracy?: number } | null, qrToken?: string) => {
+      setBusy("clock-in");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          location = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy ?? undefined,
-          };
+        const clientTimestamp = new Date().toISOString();
+
+        if (!isOnline) {
+          await queueWorkerUpdate({
+            type: "clock_in",
+            id: `clock_in-${shift.id}`,
+            shiftId: shift.id,
+            method,
+            location,
+            qrToken,
+            clientTimestamp,
+            startSession: true,
+            timestamp: Date.now(),
+          });
+          onRefresh();
+          setPhase("session");
+          showAlert(
+            "Clocked in offline",
+            "Your clock-in is saved and will sync automatically when you're back online. You can keep working.",
+          );
+          return;
         }
-      } catch {
-        /* GPS unavailable (e.g. airplane mode) — clock in without location */
-      }
 
-      const clientTimestamp = new Date().toISOString();
-
-      if (!isOnline) {
-        await queueWorkerUpdate({
-          type: "clock_in",
-          id: `clock_in-${shift.id}`,
-          shiftId: shift.id,
-          method: "gps",
+        await clockInShift(shift.id, {
+          method,
           location,
-          clientTimestamp,
-          startSession: true,
-          timestamp: Date.now(),
+          qr_token: qrToken,
+          client_timestamp: clientTimestamp,
         });
+        await startShiftSession(shift.id);
         onRefresh();
         setPhase("session");
-        showAlert(
-          "Clocked in offline",
-          "Your clock-in is saved and will sync automatically when you're back online. You can keep working.",
-        );
-        return;
+      } catch (err) {
+        Alert.alert("Clock-in failed", err instanceof Error ? err.message : "Please try again.");
+      } finally {
+        setBusy(null);
       }
+    },
+    [shift.id, onRefresh, isOnline, queueWorkerUpdate],
+  );
 
-      await clockInShift(shift.id, {
-        method: "gps",
-        location,
-        client_timestamp: clientTimestamp,
-      });
-      await startShiftSession(shift.id);
-      onRefresh();
-      setPhase("session");
-    } catch (err) {
-      Alert.alert("Clock-in failed", err instanceof Error ? err.message : "Please try again.");
-    } finally {
-      setBusy(null);
+  const handleGpsClockIn = useCallback(async () => {
+    setClockInSheetOpen(false);
+    let location: { lat: number; lng: number; accuracy?: number } | null = null;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        location = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy ?? undefined,
+        };
+      }
+    } catch {
+      /* GPS unavailable (e.g. airplane mode) — clock in without location */
     }
-  }, [shift.id, onRefresh, isOnline, queueWorkerUpdate]);
+    await submitClockIn("gps", location);
+  }, [submitClockIn]);
+
+  const handleQrClockIn = useCallback(
+    async (token: string) => {
+      setClockInSheetOpen(false);
+      await submitClockIn("qr", null, token);
+    },
+    [submitClockIn],
+  );
+
+  const handleClockIn = useCallback(() => {
+    setClockInSheetOpen(true);
+  }, []);
 
   const handleAttemptEnd = useCallback(() => {
     if (busy) return;
@@ -635,6 +659,18 @@ export function WorkerMobileShiftView({
         </Pressable>
       </View>
       </ScrollView>
+      <Modal
+        visible={clockInSheetOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setClockInSheetOpen(false)}
+      >
+        <WorkerMobileClockInSheet
+          onClose={() => setClockInSheetOpen(false)}
+          onChooseGps={() => void handleGpsClockIn()}
+          onQrScanned={(token) => void handleQrClockIn(token)}
+        />
+      </Modal>
     </View>
   );
 }

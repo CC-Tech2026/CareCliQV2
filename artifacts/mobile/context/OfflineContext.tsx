@@ -96,6 +96,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           await clockInShift(item.shiftId, {
             method: item.method,
             location: item.location,
+            qr_token: item.qrToken,
             client_timestamp: item.clientTimestamp,
           });
           if (item.startSession) {

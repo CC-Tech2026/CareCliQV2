@@ -274,6 +274,7 @@ export type ShiftSignature = {
 export type ClockInRequest = {
   method: "gps" | "qr";
   location?: { lat: number; lng: number; accuracy?: number } | null;
+  qr_token?: string | null;
   client_timestamp?: string;
 };
 
@@ -834,6 +835,30 @@ export function fetchNotifications(params?: {
   if (params?.offset != null) q.set("offset", String(params.offset));
   return workerFetch<{ notifications: UserNotification[]; count: number }>(
     `/api/worker/notifications?${q}`,
+  );
+}
+
+export type MyCompletionStats = {
+  credentials_verified: number;
+  training_completed: number;
+};
+
+export type MyCompletionStatus = {
+  onboarding_completed: boolean;
+  onboarding_completed_seen_at: string | null;
+  stats: MyCompletionStats;
+};
+
+/** Fires once when a worker reaches Active (cleared Credentials and Training) —
+ * the mobile mirror of the web app's OnboardingCompleteGate. */
+export function getMyCompletionStatus() {
+  return workerFetch<MyCompletionStatus>("/api/onboarding/me/completion-status");
+}
+
+export function markMyCompletionSeen() {
+  return workerFetch<{ onboarding_completed_seen_at: string | null }>(
+    "/api/onboarding/me/completion-seen",
+    { method: "POST" },
   );
 }
 

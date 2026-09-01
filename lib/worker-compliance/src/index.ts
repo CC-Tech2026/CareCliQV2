@@ -282,6 +282,74 @@ export function scoreColor(score: number) {
   return "#E24B4A";
 }
 
+export type DraftNoteHintSeverity = "info" | "fail";
+
+export type DraftNoteHint = {
+  id: string;
+  severity: DraftNoteHintSeverity;
+  message: string;
+};
+
+/**
+ * Live, single-note hints for a note still being typed/recorded - a
+ * lightweight subset of evaluateWorkerCompliance's rules that only need the
+ * draft text itself (not the full shift/notes/tasks context evaluateWorkerCompliance
+ * needs). Meant to be run debounced while typing, so a note already reads as
+ * compliant by the time it's actually saved rather than surfacing an issue
+ * only after the fact. Purely advisory - severity "info" is a soft nudge,
+ * never blocks sending; "fail" (restrictive practice only) still doesn't
+ * block sending here either, since the existing end-of-shift compliance
+ * review is what actually requires the incident report - this is just an
+ * earlier heads-up.
+ */
+export function checkDraftNoteHints(text: string, participantFirstName?: string): DraftNoteHint[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const hints: DraftNoteHint[] = [];
+
+  const rp = detectRestrictivePracticeHit(trimmed);
+  if (rp) {
+    hints.push({
+      id: "restrictive-practice",
+      severity: "fail",
+      message: `This may describe a restrictive practice ("${rp.phrase}"). An incident report may be required.`,
+    });
+  }
+
+  // Only nudge on length/specificity/participant-reference once there's
+  // enough text to judge - no point flagging "too short" after two words.
+  const words = wordCount(trimmed);
+  if (words >= 4) {
+    if (words < 10) {
+      hints.push({
+        id: "word-count",
+        severity: "info",
+        message: "Add a bit more detail - aim for at least a sentence or two.",
+      });
+    } else if (!hasSpecificObservation(trimmed)) {
+      hints.push({
+        id: "specific-observation",
+        severity: "info",
+        message: "Try adding a specific detail - a time, duration, or what exactly happened.",
+      });
+    }
+
+    const firstName = participantFirstName?.trim();
+    const participantNamed = firstName
+      ? new RegExp(`\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b(he|she|they)\\b`, "i").test(trimmed)
+      : /\b(he|she|they)\b/i.test(trimmed);
+    if (!participantNamed && words >= 12) {
+      hints.push({
+        id: "participant-reference",
+        severity: "info",
+        message: "Consider referencing the participant by name or pronoun.",
+      });
+    }
+  }
+
+  return hints;
+}
+
 export function evaluateSessionTextCompliance(
   notesText: string,
   participantFirstName?: string,

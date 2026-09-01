@@ -28,6 +28,7 @@ import { showAlert } from "@/lib/alert";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
 import { syncSessionNotes, translateNoteToEnglish, transcribeSessionAudio, uploadSessionAttachment } from "@/lib/worker-api";
 import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import { checkDraftNoteHints, type DraftNoteHint } from "@workspace/worker-compliance";
 
 const LANGUAGE_OPTIONS = [
   { value: "auto", label: "Auto detect" },
@@ -274,6 +275,7 @@ export function WorkerMobileComposer({
   const [langOpen, setLangOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
+  const [draftHints, setDraftHints] = useState<DraftNoteHint[]>([]);
 
   const disabledInput = disabled || !taskId;
   const voiceUnavailable = !isOnline;
@@ -284,6 +286,21 @@ export function WorkerMobileComposer({
     LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? "Auto detect";
   const hasText = value.trim().length > 0;
   const showTranslateBadge = hasText && language !== "en";
+
+  // Live, debounced compliance nudge while typing - soft/advisory only (see
+  // checkDraftNoteHints' own docstring), so the note already reads as
+  // compliant by the time it's actually saved rather than surprising the
+  // worker with a warning after the fact. Never blocks typing or sending.
+  useEffect(() => {
+    if (!hasText) {
+      setDraftHints([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      setDraftHints(checkDraftNoteHints(value, participantName?.split(" ")[0]));
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [value, hasText, participantName]);
 
   const saveNote = async (
     content: string,
@@ -595,15 +612,28 @@ export function WorkerMobileComposer({
         </Pressable>
       </View>
 
-      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-        {!taskId
-          ? "Select a task above to start noting."
-          : recording
-            ? "Recording… tap send to save, or cancel."
-            : voiceUnavailable && !hasText
-              ? t("composer.voice.offlineHint")
-              : "Hold mic to record · tap to send when typing."}
-      </Text>
+      {(() => {
+        const topHint = !recording
+          ? draftHints.find((h) => h.severity === "fail") ?? draftHints[0]
+          : undefined;
+        // Only the restrictive-practice hint gets a stronger color - everything
+        // else stays the same muted tone as the default caption, so it reads
+        // as a gentle nudge rather than a warning (less intrusive by design).
+        const hintColor = topHint?.severity === "fail" ? colors.destructive : colors.mutedForeground;
+        return (
+          <Text style={[styles.hint, { color: hintColor, fontFamily: "Inter_500Medium" }]}>
+            {topHint
+              ? topHint.message
+              : !taskId
+                ? "Select a task above to start noting."
+                : recording
+                  ? "Recording… tap send to save, or cancel."
+                  : voiceUnavailable && !hasText
+                    ? t("composer.voice.offlineHint")
+                    : "Hold mic to record · tap to send when typing."}
+          </Text>
+        );
+      })()}
 
       <Modal visible={langOpen} transparent animationType="slide" onRequestClose={() => setLangOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setLangOpen(false)}>

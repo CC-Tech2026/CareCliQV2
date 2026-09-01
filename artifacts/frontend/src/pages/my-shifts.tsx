@@ -12,10 +12,7 @@ import {
   getWorkerShiftCounts,
   type WorkerShift,
 } from "@/services/shiftService";
-import {
-  getPrimaryTodayShiftId,
-  sortTodayShiftsForList,
-} from "@/lib/shift-utils";
+import { sortTodayShiftsForList } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -138,17 +135,13 @@ export default function MyShifts() {
     return formatHours(list.reduce((sum, s) => sum + shiftMinutes(s), 0));
   }, [todayQuery.data?.shifts]);
 
-  const { sortedShifts, primaryShiftId } = useMemo(() => {
+  const sortedShifts = useMemo(() => {
     const list = listQuery.data?.shifts ?? [];
     void nowTick;
     if (activeFilter !== "today") {
-      return { sortedShifts: list, primaryShiftId: null as string | null };
+      return list;
     }
-    const now = new Date();
-    return {
-      sortedShifts: sortTodayShiftsForList(list, now),
-      primaryShiftId: getPrimaryTodayShiftId(list, now),
-    };
+    return sortTodayShiftsForList(list, new Date());
   }, [listQuery.data?.shifts, nowTick, activeFilter]);
 
   const tabCount = useCallback(
@@ -246,7 +239,11 @@ export default function MyShifts() {
           <ShiftListCard
             key={shift.id}
             shift={shift}
-            showActions={activeFilter === "today" && shift.id === primaryShiftId}
+            // Clocking in / starting a session happens on the mobile app now -
+            // the web list stays a read-only view (my-shift-detail.tsx has the
+            // matching gate for the detail page). false, not the old
+            // primary-shift check, so no inline action button shows here.
+            showActions={false}
           />
         ))}
       </div>

@@ -13,6 +13,7 @@ import {
   MapPin,
   Navigation,
   Phone,
+  Smartphone,
   Square,
   MessageCircle,
 } from "lucide-react";
@@ -1381,6 +1382,44 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       setBusy(null);
     }
   };
+
+  /**
+   * Support workers clock in, write notes, complete tasks, and sign off
+   * exclusively from the mobile app now - the web app stays read-only for
+   * anything that isn't already completed (or cancelled, which has nothing
+   * to "do" either way). History browsing (my-shifts.tsx and this page for
+   * completed shifts) is unaffected.
+   */
+  const isDoableElsewhere =
+    !!shift && displayVisualState !== "completed" && shift.status !== "cancelled" && shift.status !== "completed";
+
+  if (isDoableElsewhere) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+        <div
+          className="flex h-16 w-16 items-center justify-center rounded-full"
+          style={{ background: "var(--cc-soft)" }}
+        >
+          <Smartphone className="h-8 w-8" style={{ color: "var(--cc-plum)" }} />
+        </div>
+        <h1 className="mt-5 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+          Use the CareCliQ mobile app for this shift
+        </h1>
+        <p className="mt-3 text-sm leading-6" style={{ color: "var(--cc-muted)" }}>
+          Clocking in, progress notes, tasks, and signing off all happen in the mobile app now. Once this shift
+          is completed, you'll be able to review it here.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-6 gap-2 rounded-xl"
+          onClick={() => navigate("/my-shifts")}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to my shifts
+        </Button>
+      </div>
+    );
+  }
 
   if (isMobile && shift) {
     return (

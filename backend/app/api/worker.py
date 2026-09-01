@@ -199,6 +199,33 @@ def _require_worker(user: dict) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
 
 
+def _require_worker_active(user: dict) -> None:
+    """Blocks a deactivated worker from starting/documenting a shift or
+    taking on new work, even with a still-valid token - the frontend already
+    keeps them off these pages during normal use (ProtectedRoute.tsx gates on
+    is_active), but this is the real enforcement boundary against a direct
+    API call, since is_active isn't part of the JWT and a deactivated
+    worker's existing session isn't revoked. Deliberately narrow: only the
+    handful of endpoints that represent actually performing paid support
+    work call this (clock-in/out, session creation, shift-offer accept) -
+    self-service pages (credentials, training) never do, since a worker
+    deactivated for a self-fixable reason still needs those to work."""
+    result = (
+        get_supabase_admin()
+        .table("users")
+        .select("is_active, deactivation_reason")
+        .eq("id", get_user_id(user))
+        .maybe_single()
+        .execute()
+    )
+    profile = result.data if result else {}
+    if profile.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Contact your organisation admin.",
+        )
+
+
 # ── Worker-Participant Matching Enhancement, Phase 1 — self-service tags ──────
 # A worker can browse the org's tag catalog, add/remove tags describing their
 # own interests or (consented) lived experience, and mark any tag
@@ -755,6 +782,7 @@ async def create_my_client_session(
     current_user: dict = Depends(get_current_user),
 ):
     await _assigned_participant(participant_id, current_user)
+    _require_worker_active(current_user)
     _require_worker_ready_for_sessions(current_user)
     # Auto-populate goals_addressed from goal_progress_notes if not explicitly provided
     goals_addressed = body.goals_addressed or [
@@ -911,6 +939,7 @@ async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(
     worker. Never triggered automatically; this is the only path that
     confirms an offer into an actual assignment."""
     _require_worker(current_user)
+    _require_worker_active(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     try:
@@ -1176,6 +1205,7 @@ async def worker_clock_in(
 ):
     """Clock in to a shift with GPS/QR verification (CARECLIQV2-197)."""
     _require_worker(current_user)
+    _require_worker_active(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     location = body.location.model_dump() if body.location else None

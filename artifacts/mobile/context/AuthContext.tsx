@@ -23,6 +23,7 @@ import {
   readStoredUserJson,
 } from "@/lib/session";
 import { setWorkerUnauthorizedHandler } from "@/lib/worker-fetch";
+import { clearQueue, clearWorkerQueue } from "@/hooks/useOfflineCache";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -155,6 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await logoutApi();
     await clearMobileAuthSession();
+    // AsyncStorage's offline queues aren't partitioned per user on a shared
+    // device - without this, a different worker logging in on the same
+    // phone could have this worker's still-unsynced clock-ins/notes/task
+    // updates silently replayed under their session (mirrors the web app's
+    // deleteShiftOfflineDb-on-logout for the same reason).
+    await Promise.all([clearWorkerQueue(), clearQueue()]);
     setUser(null);
   }, []);
 

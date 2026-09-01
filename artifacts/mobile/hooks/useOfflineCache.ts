@@ -36,6 +36,7 @@ export type WorkerOfflineQueueItem =
       shiftId: string;
       method: "gps" | "qr";
       location: { lat: number; lng: number; accuracy?: number } | null;
+      qrToken?: string | null;
       clientTimestamp: string;
       startSession: boolean;
       timestamp: number;
@@ -149,6 +150,17 @@ export async function removeWorkerQueueItem(id: string): Promise<void> {
     const queue: WorkerOfflineQueueItem[] = raw ? JSON.parse(raw) : [];
     const updated = queue.filter((q) => q.id !== id);
     await AsyncStorage.setItem(WORKER_QUEUE_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+/** Called on logout (see AuthContext.tsx) - AsyncStorage isn't partitioned
+ * per user on a shared device, so without this a second worker logging in
+ * on the same phone could have the first worker's still-unsynced clock-ins/
+ * notes/task updates silently replayed under their own session. Mirrors
+ * deleteShiftOfflineDb's logout-wipe on the web app for the same reason. */
+export async function clearWorkerQueue(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(WORKER_QUEUE_KEY);
   } catch {}
 }
 
