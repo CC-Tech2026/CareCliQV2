@@ -23,6 +23,7 @@
         "NSMicrophoneUsageDescription": "Record voice notes during clinical sessions",
         "NSPhotoLibraryUsageDescription": "Access photos to attach evidence to sessions",
         "NSFaceIDUsageDescription": "Unlock CareCliQ and sign in with Face ID.",
+        "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"
         ]
