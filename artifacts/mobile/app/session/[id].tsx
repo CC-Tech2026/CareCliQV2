@@ -174,7 +174,7 @@ export default function LiveSessionScreen() {
           Alert.alert("Permission needed", "Microphone access is required for voice notes.");
           return;
         }
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
         await audioRecorder.prepareToRecordAsync();
         audioRecorder.record();
         setIsRecording(true);

@@ -4,6 +4,7 @@ import {
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
+  useAudioRecorderState,
 } from "expo-audio";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -133,9 +134,14 @@ export function ActiveVoiceRecording({
   onSave: (secs: number, uri: string | null) => void | Promise<void>;
 }) {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder, 500);
   const [recordSecs, setRecordSecs] = useState(0);
   const recordSecsRef = useRef(0);
   const finishedRef = useRef(false);
+  const startedRef = useRef(false);
+  const resumeAttemptedRef = useRef(false);
+  const wasInterruptedRef = useRef(false);
+  const sawRecordingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onSaveRef = useRef(onSave);
   const onEndedRef = useRef(onEnded);
@@ -167,8 +173,17 @@ export function ActiveVoiceRecording({
       /* ignore */
     }
     const secs = recordSecsRef.current;
-    if (save) await onSaveRef.current(secs, uri);
-    else onEndedRef.current();
+    if (save) {
+      if (wasInterruptedRef.current) {
+        showAlert(
+          "Recording interrupted",
+          "Something interrupted the recording (e.g. a phone call). What was captured up to that point has been saved - review it and add anything you missed.",
+        );
+      }
+      await onSaveRef.current(secs, uri);
+    } else {
+      onEndedRef.current();
+    }
   };
 
   useEffect(() => {
@@ -180,11 +195,16 @@ export function ActiveVoiceRecording({
           onEndedRef.current();
           return;
         }
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        // allowsBackgroundRecording matters here specifically: without it, the
+        // recording is silently torn down the moment the screen locks or the
+        // worker briefly switches apps (both routine mid-shift interruptions) -
+        // the single biggest real-world cause of a recording getting cut off.
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
         if (cancelled) return;
         await audioRecorder.prepareToRecordAsync();
         if (cancelled || finishedRef.current) return;
         audioRecorder.record();
+        startedRef.current = true;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         timerRef.current = setInterval(() => {
           setRecordSecs((s) => {
@@ -213,6 +233,46 @@ export function ActiveVoiceRecording({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Detects a genuine system interruption (a phone call, Siri, the OS
+  // reclaiming the mic - mediaServicesDidReset is expo-audio's documented
+  // signal for exactly this) and tries once to resume automatically, rather
+  // than letting the recording just silently die. If resuming doesn't stick,
+  // finalize with whatever was captured instead of discarding it - the
+  // worker is told, not left guessing why their note looks short.
+  useEffect(() => {
+    if (!startedRef.current || finishedRef.current || !timerRef.current) return;
+    // Don't trust a "not recording" reading until the poller has confirmed
+    // recording actually started at least once - the poll and record() are
+    // on independent timers, so right at startup a stale/early tick could
+    // otherwise look identical to a genuine interruption.
+    if (recorderState.isRecording) sawRecordingRef.current = true;
+    if (!sawRecordingRef.current) return;
+    const interrupted = recorderState.mediaServicesDidReset || !recorderState.isRecording;
+    if (!interrupted) {
+      resumeAttemptedRef.current = false;
+      return;
+    }
+    if (resumeAttemptedRef.current) return;
+    resumeAttemptedRef.current = true;
+    wasInterruptedRef.current = true;
+
+    (async () => {
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
+        audioRecorder.record();
+      } catch {
+        /* checked below regardless */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (finishedRef.current) return;
+      if (audioRecorder.isRecording) {
+        resumeAttemptedRef.current = false;
+      } else {
+        void finishRef.current(true);
+      }
+    })();
+  }, [recorderState.isRecording, recorderState.mediaServicesDidReset, audioRecorder]);
 
   useEffect(() => {
     controlsRef.current = {
