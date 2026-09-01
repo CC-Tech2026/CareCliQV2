@@ -13,7 +13,6 @@ import {
 import { ClockedInBanner } from "@/components/worker/ClockedInBanner";
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
 import { LongShiftEngagementPanel } from "@/components/worker/LongShiftEngagementPanel";
-import { WorkerMobileComposer } from "@/components/worker/WorkerMobileComposer";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
 import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
@@ -139,7 +138,10 @@ export function WorkerMobileSessionScreen({
         : `${startedMandatory} of ${mandatoryTasks.length} required started`
       : `${activeTasks.filter((t) => t.completed).length} of ${activeTasks.length} done`;
 
-  const activeTask = activeTasks.find((t) => t.task_id === activeTaskId);
+  const untaskedNotes = useMemo(
+    () => localSessionNotes.filter((n) => !n.task_id),
+    [localSessionNotes],
+  );
 
   const persist = useCallback(
     async (next: ShiftTask[]) => {
@@ -274,6 +276,12 @@ export function WorkerMobileSessionScreen({
               !isMandatoryTask(t) || taskHasMobileDocumentation(t, localSessionNotes)
             }
             disabled={disabled || busy}
+            sessionId={sessionId}
+            participantName={participantName}
+            sessionNotes={localSessionNotes}
+            compliance={compliance}
+            onNoteSaved={handleNoteSaved}
+            onOpenIncidentReport={onOpenIncidentReport}
           />
         </View>
 
@@ -286,21 +294,22 @@ export function WorkerMobileSessionScreen({
           </View>
         )}
 
-        {localSessionNotes.length > 0 && (
+        {/* Task-scoped notes render inline in their own task's thread above
+            (WorkerMobileTaskList) - this is only for notes with no task_id,
+            e.g. long-shift check-ins, which would otherwise never be shown
+            anywhere now that there's no single flat notes list. */}
+        {untaskedNotes.length > 0 && (
           <>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-              NOTES
+              CHECK-INS
             </Text>
-            {localSessionNotes.map((note) => {
-              const task = localTasks.find((t) => t.task_id === note.task_id);
+            {untaskedNotes.map((note) => {
               const flag = compliance.noteFlags.find((f) => f.noteId === note.note_id);
               return (
                 <WorkerMobileNoteBubble
                   key={note.note_id}
                   note={note}
                   participantName={participantName}
-                  taskLabel={task?.label}
-                  goalTitle={task?.goal_title ?? undefined}
                   flag={flag}
                   onIncidentReport={flag?.severity === "fail" ? onOpenIncidentReport : undefined}
                 />
@@ -309,15 +318,6 @@ export function WorkerMobileSessionScreen({
           </>
         )}
       </ScrollView>
-
-      <WorkerMobileComposer
-        sessionId={sessionId}
-        taskId={activeTask?.task_id}
-        taskLabel={activeTask?.label}
-        participantName={participantName}
-        disabled={disabled || busy || !sessionId}
-        onNoteSaved={handleNoteSaved}
-      />
     </KeyboardAvoidingView>
   );
 }
