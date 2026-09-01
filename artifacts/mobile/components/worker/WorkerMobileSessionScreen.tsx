@@ -2,6 +2,8 @@ import * as Haptics from "@/lib/haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -221,7 +223,16 @@ export function WorkerMobileSessionScreen({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      // iOS never resizes the window for the keyboard - without this the
+      // composer (pinned at the bottom, below the scrollable task/notes
+      // list) sits directly under wherever the keyboard slides up to,
+      // hiding both the input and whatever's being typed. Android already
+      // handles this correctly via its default resize windowing, so this
+      // is deliberately iOS-only rather than double-handling it.
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <WorkerMobileParticipantStrip participantName={participantName} />
 
       <ScrollView
@@ -307,7 +318,7 @@ export function WorkerMobileSessionScreen({
         disabled={disabled || busy || !sessionId}
         onNoteSaved={handleNoteSaved}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
