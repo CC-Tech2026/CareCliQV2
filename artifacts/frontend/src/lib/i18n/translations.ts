@@ -1221,7 +1221,7 @@ export const en: Dict = {
   "coordinator.live.status.onTrack": "On Track",
   "coordinator.live.status.alert": "Alert",
   "coordinator.live.stopping": "Stopping…",
-  "coordinator.live.subtitle": "Real-time shift status · refreshes every 10s · last {time}",
+  "coordinator.live.subtitle": "Real-time shift status · updates live as workers document · last {time}",
   "coordinator.live.tasks": "Tasks",
   "coordinator.live.eyebrow": "Schedule",
   "coordinator.live.title": "Live Monitoring",

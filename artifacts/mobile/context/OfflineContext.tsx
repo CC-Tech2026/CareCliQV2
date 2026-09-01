@@ -19,22 +19,42 @@ import {
   removeFromQueue,
   removeWorkerQueueItem,
 } from "@/hooks/useOfflineCache";
-import { clockInShift, startShiftSession, syncSessionNotes, updateShiftTasks } from "@/lib/worker-api";
+import {
+  clockInShift,
+  deleteSessionNote,
+  startShiftSession,
+  syncSessionNotes,
+  updateShiftTasks,
+  uploadSessionAttachment,
+  type SessionNoteRecord,
+} from "@/lib/worker-api";
+import { createWorkerIncident } from "@/lib/resource-api";
 
 interface OfflineContextValue {
   isOnline: boolean;
   pendingCount: number;
   queueNoteUpdate: (item: OfflineQueueItem) => Promise<void>;
-  queueWorkerUpdate: (item: WorkerOfflineQueueItem) => Promise<void>;
+  /** Returns false if the item could not even be persisted to the queue
+   * itself (e.g. AsyncStorage write failed) - callers that tell the worker
+   * "saved, will sync later" must check this rather than assume it worked. */
+  queueWorkerUpdate: (item: WorkerOfflineQueueItem) => Promise<boolean>;
   markOffline: () => void;
+  /** Flushes the queue now and resolves with the count still pending
+   * afterward (not necessarily 0 - genuinely offline/failed items stay
+   * queued). Returns the fresh count directly rather than relying on
+   * pendingCount state, which callers would otherwise read stale right
+   * after awaiting this. Used before ending a shift so nothing is silently
+   * left behind. */
+  flushNow: () => Promise<number>;
 }
 
 const OfflineContext = createContext<OfflineContextValue>({
   isOnline: true,
   pendingCount: 0,
   queueNoteUpdate: async () => {},
-  queueWorkerUpdate: async () => {},
+  queueWorkerUpdate: async () => false,
   markOffline: () => {},
+  flushNow: async () => 0,
 });
 
 export function useOffline() {
@@ -50,7 +70,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   const refreshPendingCount = useCallback(async () => {
     const [legacy, worker] = await Promise.all([getOfflineQueue(), getWorkerOfflineQueue()]);
-    setPendingCount(legacy.length + worker.length);
+    const count = legacy.length + worker.length;
+    setPendingCount(count);
+    return count;
   }, []);
 
   useEffect(() => {
@@ -92,13 +114,48 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           await syncSessionNotes(item.sessionId, item.notes);
         } else if (item.type === "update_tasks") {
           await updateShiftTasks(item.shiftId, item.tasks);
-        } else if (item.type === "clock_in") {
-          await clockInShift(item.shiftId, {
-            method: item.method,
-            location: item.location,
-            qr_token: item.qrToken,
-            client_timestamp: item.clientTimestamp,
+        } else if (item.type === "delete_note") {
+          await deleteSessionNote(item.sessionId, item.noteId);
+        } else if (item.type === "submit_incident") {
+          await createWorkerIncident(item.payload);
+        } else if (item.type === "upload_attachment") {
+          const uploaded = await uploadSessionAttachment(item.sessionId, {
+            uri: item.uri,
+            name: item.name,
+            type: item.mimeType,
           });
+          const note: SessionNoteRecord = {
+            note_id: item.id,
+            session_id: item.sessionId,
+            task_id: item.taskId,
+            content: `[Attachment: ${item.name}]`,
+            note_type: item.noteType,
+            file_name: item.name,
+            attachment_urls: [uploaded.public_url],
+            created_at: new Date(item.timestamp).toISOString(),
+          };
+          await syncSessionNotes(item.sessionId, [note]);
+        } else if (item.type === "clock_in") {
+          if (!item.clockedIn) {
+            try {
+              await clockInShift(item.shiftId, {
+                method: item.method,
+                location: item.location,
+                qr_token: item.qrToken,
+                client_timestamp: item.clientTimestamp,
+              });
+            } catch (clockInError) {
+              // Don't let a startSession-only retry re-submit clock-in above
+              // this catch on a future pass if it already succeeded once -
+              // this failure means clock-in itself didn't go through, so
+              // just re-throw and keep the whole item queued as-is.
+              throw clockInError;
+            }
+            // Record success immediately so a startSession failure below
+            // doesn't cause clock-in to be resubmitted next attempt - there's
+            // no idempotency key server-side for it.
+            await enqueueWorkerUpdate({ ...item, clockedIn: true });
+          }
           if (item.startSession) {
             await startShiftSession(item.shiftId);
           }
@@ -111,15 +168,15 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncQueue = useCallback(async () => {
-    if (isSyncingRef.current) return;
+    if (isSyncingRef.current) return refreshPendingCount();
     isSyncingRef.current = true;
     try {
       await syncLegacyQueue();
       await syncWorkerQueue();
     } finally {
       isSyncingRef.current = false;
-      await refreshPendingCount();
     }
+    return refreshPendingCount();
   }, [syncLegacyQueue, syncWorkerQueue, refreshPendingCount]);
 
   useEffect(() => {
@@ -138,15 +195,20 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   const queueWorkerUpdate = useCallback(
     async (item: WorkerOfflineQueueItem) => {
-      await enqueueWorkerUpdate(item);
+      const ok = await enqueueWorkerUpdate(item);
       await refreshPendingCount();
+      return ok;
     },
     [refreshPendingCount],
   );
 
+  const flushNow = useCallback(async () => {
+    return syncQueue();
+  }, [syncQueue]);
+
   return (
     <OfflineContext.Provider
-      value={{ isOnline, pendingCount, queueNoteUpdate, queueWorkerUpdate, markOffline }}
+      value={{ isOnline, pendingCount, queueNoteUpdate, queueWorkerUpdate, markOffline, flushNow }}
     >
       {children}
     </OfflineContext.Provider>

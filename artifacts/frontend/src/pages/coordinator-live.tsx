@@ -23,6 +23,7 @@ import {
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useLiveShiftsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -825,6 +826,10 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch, 
   const [detailShift, setDetailShift] = useState<LiveShift | null>(null);
 
   const { data: shifts = [], isLoading, dataUpdatedAt, refetch } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], { queryFn: getLiveShifts, refetchInterval: 30_000 });
+  // Realtime push on top of the 30s poll - the poll stays as a fallback in
+  // case the websocket silently drops, but most updates now land within a
+  // second or two of a worker's phone syncing instead of waiting for the tick.
+  useLiveShiftsRealtime(true);
 
   // Derive time-of-day from scheduled_start (6–12 morning, 12–17 afternoon, 17–22 evening, else night)
   const getTimeSlot = (iso?: string | null): "morning" | "afternoon" | "evening" | "night" | null => {
@@ -890,7 +895,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch, 
       {/* Header — full when standalone, compact toolbar when embedded */}
       {/* When embedded the parent (rostering page) owns search + refresh — just show refresh timestamp */}
       {embedded ? (
-        <p className="text-[11px] mb-4" style={{ color: MUTED }}>Auto-updating every 30s · Last refresh {lastRefresh}</p>
+        <p className="text-[11px] mb-4" style={{ color: MUTED }}>Live · updates as workers document · Last refresh {lastRefresh}</p>
       ) : (
         <div className="flex items-center mb-5 flex-wrap gap-3">
           <div className="flex items-center gap-3">

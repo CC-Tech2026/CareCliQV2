@@ -12,6 +12,7 @@ import { getIncidentStats, listIncidents } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { IncidentRegisterPanel } from "@/components/incidents/IncidentRegisterPanel";
+import { useIncidentsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
 
 const PLUM   = "var(--cc-plum)";
 const TEXT   = "var(--cc-text)";
@@ -232,6 +233,9 @@ function WorkerIncidentsList() {
 export default function Incidents() {
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
+  // New incident reports (worker mobile app, offline queue included) now
+  // land here the moment they reach the database, not just on next page load.
+  useIncidentsRealtime(true);
 
   if (isCoordinator) {
     return <IncidentRegisterPanel />;

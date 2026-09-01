@@ -391,27 +391,49 @@ export function WorkerMobileComposer({
     onNoteSaved?.(payload);
     setValue("");
 
-    if (!isOnline) {
-      await queueWorkerUpdate({
-        type: "sync_notes",
-        id: noteId,
-        sessionId,
-        notes: [payload],
-        timestamp: Date.now(),
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSubmitting(false);
-      return;
+    // Queue on ANY failure, not just when the device is offline - isOnline
+    // is device-link connectivity, not "the CareCliQ API actually accepted
+    // this request" (a weak cell signal, a timeout, or a 5xx all look
+    // "online" but still fail the request). Previously an online-but-failed
+    // save was silently dropped: the note stayed visible locally looking
+    // saved, but nothing was ever persisted server-side.
+    const trySync = isOnline;
+    let syncFailed = false;
+    if (trySync) {
+      try {
+        await syncSessionNotes(sessionId, [payload]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setSubmitting(false);
+        return;
+      } catch {
+        syncFailed = true;
+      }
     }
 
-    try {
-      await syncSessionNotes(sessionId, [payload]);
+    const queued = await queueWorkerUpdate({
+      type: "sync_notes",
+      id: noteId,
+      sessionId,
+      notes: [payload],
+      timestamp: Date.now(),
+    });
+    if (queued) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      /* optimistic — note already shown locally */
-    } finally {
-      setSubmitting(false);
+      if (syncFailed) {
+        showAlert(
+          "Saved locally",
+          "Couldn't reach the server just now - this note will sync automatically once you're back online.",
+        );
+      }
+    } else {
+      // The queue write itself failed too - this note genuinely isn't saved
+      // anywhere yet. Say so plainly rather than a false "saved" haptic.
+      showAlert(
+        "Not saved yet",
+        "This note couldn't be saved. Please try sending it again before leaving this task.",
+      );
     }
+    setSubmitting(false);
   };
 
   const handleSend = async () => {
@@ -496,32 +518,60 @@ export function WorkerMobileComposer({
       taskTitle: taskLabel,
       originalName: asset.fileName ?? fallbackName,
     });
+    const mimeType = asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream");
     setSubmitting(true);
-    try {
-      const uploaded = await uploadSessionAttachment(sessionId, {
-        uri: asset.uri,
-        name,
-        type: asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream"),
-      });
-      await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
-    } catch (err) {
+
+    // The captured/picked file is already safely on local disk regardless of
+    // connectivity - only the upload needs a connection. Queue on any
+    // failure (not just when already known-offline) rather than discarding
+    // the local file reference and forcing the worker to redo the capture -
+    // previously a failed upload lost the photo/file entirely, no retry.
+    const attemptUpload = isOnline;
+    let uploadFailed = false;
+    if (attemptUpload) {
+      try {
+        const uploaded = await uploadSessionAttachment(sessionId, { uri: asset.uri, name, type: mimeType });
+        await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
+        setSubmitting(false);
+        return;
+      } catch {
+        uploadFailed = true;
+      }
+    }
+
+    const queued = await queueWorkerUpdate({
+      type: "upload_attachment",
+      id: newClientNoteId(),
+      sessionId,
+      taskId: taskId ?? undefined,
+      taskLabel,
+      uri: asset.uri,
+      name,
+      mimeType,
+      noteType: noteType === "photo" ? "photo" : "file",
+      timestamp: Date.now(),
+    });
+    if (queued) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(
+        "Saved locally",
+        uploadFailed
+          ? "Couldn't reach the server just now - this will upload automatically once you're back online."
+          : "You're offline - this will upload automatically once you're back online.",
+      );
+    } else {
       Alert.alert(
         "Upload failed",
-        err instanceof Error ? err.message : "Could not upload the attachment. Please try again.",
+        "Could not save this attachment. Please try again before leaving this task.",
       );
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   const handleAttach = async () => {
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before attaching a file.");
-      return;
-    }
-    if (!isOnline) {
-      Alert.alert("You're offline", "Attachments need a connection to upload. Try again once you're back online.");
       return;
     }
     try {
@@ -545,10 +595,6 @@ export function WorkerMobileComposer({
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before taking a photo note.");
-      return;
-    }
-    if (!isOnline) {
-      Alert.alert("You're offline", "Photos need a connection to upload. Try again once you're back online.");
       return;
     }
     try {

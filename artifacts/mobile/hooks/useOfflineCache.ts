@@ -39,6 +39,37 @@ export type WorkerOfflineQueueItem =
       qrToken?: string | null;
       clientTimestamp: string;
       startSession: boolean;
+      /** Set once the clock-in call itself has succeeded on a prior sync
+       * attempt but startSession then failed - prevents re-submitting the
+       * clock-in (no idempotency key server-side) on the retry, since only
+       * the session-start step still needs to happen. */
+      clockedIn?: boolean;
+      timestamp: number;
+    }
+  | {
+      type: "delete_note";
+      id: string;
+      sessionId: string;
+      noteId: string;
+      timestamp: number;
+    }
+  | {
+      type: "upload_attachment";
+      id: string;
+      sessionId: string;
+      taskId?: string;
+      taskLabel?: string;
+      /** Local file uri from the picker/camera - must still exist on disk when replayed. */
+      uri: string;
+      name: string;
+      mimeType: string;
+      noteType: "photo" | "file";
+      timestamp: number;
+    }
+  | {
+      type: "submit_incident";
+      id: string;
+      payload: import("@/lib/resource-api").WorkerIncidentPayload;
       timestamp: number;
     };
 
@@ -117,7 +148,13 @@ export async function clearQueue(): Promise<void> {
   } catch {}
 }
 
-export async function enqueueWorkerUpdate(item: WorkerOfflineQueueItem): Promise<void> {
+/**
+ * Returns whether the item was actually persisted. Callers that tell the
+ * worker "saved, will sync later" (haptic/toast) must check this first -
+ * previously this swallowed AsyncStorage failures silently, so a worker
+ * could be told something was queued when it never actually was.
+ */
+export async function enqueueWorkerUpdate(item: WorkerOfflineQueueItem): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(WORKER_QUEUE_KEY);
     const queue: WorkerOfflineQueueItem[] = raw ? JSON.parse(raw) : [];
@@ -132,7 +169,10 @@ export async function enqueueWorkerUpdate(item: WorkerOfflineQueueItem): Promise
       queue.push(item);
     }
     await AsyncStorage.setItem(WORKER_QUEUE_KEY, JSON.stringify(queue));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getWorkerOfflineQueue(): Promise<WorkerOfflineQueueItem[]> {

@@ -109,7 +109,7 @@ export function WorkerMobileShiftView({
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isOnline, queueWorkerUpdate } = useOffline();
+  const { isOnline, queueWorkerUpdate, flushNow } = useOffline();
   const [phase, setPhase] = useState<WorkerMobilePhase>(() => {
     if (shift.visual_state === "completed") return "completed";
     return shift.visual_state === "scheduled" ? "scheduled" : "session";
@@ -321,16 +321,25 @@ export function WorkerMobileShiftView({
 
   const refreshNotes = onNotesRefresh ?? onRefresh;
 
+  // Every path below used to swallow a failed server call once the device
+  // was nominally "online" - the local state (already updated optimistically
+  // above each call) kept looking saved with no error shown and nothing
+  // queued for retry, so the change silently never reached the server. Now
+  // any failure falls back to the same offline queue used for the
+  // genuinely-offline case, so it's retried automatically instead of lost.
   const handleSaveNote = async (noteId: string, content: string) => {
     if (!sessionId) return;
     const updated = localNotes.map((n) =>
       n.note_id === noteId ? { ...n, content, auto_saved_at: new Date().toISOString() } : n,
     );
     setLocalNotes(updated);
+    const edited = updated.find((n) => n.note_id === noteId);
     try {
       await syncSessionNotes(sessionId, updated);
     } catch {
-      /* optimistic */
+      if (edited) {
+        await queueWorkerUpdate({ type: "sync_notes", id: noteId, sessionId, notes: [edited], timestamp: Date.now() });
+      }
     }
     refreshNotes();
   };
@@ -371,7 +380,7 @@ export function WorkerMobileShiftView({
         try {
           await updateShiftTasks(shift.id, nextTasks);
         } catch {
-          /* optimistic */
+          await queueWorkerUpdate({ type: "update_tasks", id: `${shift.id}-${Date.now()}`, shiftId: shift.id, tasks: nextTasks, timestamp: Date.now() });
         }
       }
     }
@@ -379,7 +388,7 @@ export function WorkerMobileShiftView({
     try {
       await deleteSessionNote(sessionId, noteId);
     } catch {
-      /* optimistic */
+      await queueWorkerUpdate({ type: "delete_note", id: `del-${noteId}`, sessionId, noteId, timestamp: Date.now() });
     }
     refreshNotes();
   };
@@ -397,7 +406,11 @@ export function WorkerMobileShiftView({
     };
     const updated = [...localNotes, note];
     setLocalNotes(updated);
-    await syncSessionNotes(sessionId, updated);
+    try {
+      await syncSessionNotes(sessionId, updated);
+    } catch {
+      await queueWorkerUpdate({ type: "sync_notes", id: note.note_id, sessionId, notes: [note], timestamp: Date.now() });
+    }
     refreshNotes();
   };
 
@@ -424,10 +437,23 @@ export function WorkerMobileShiftView({
   const handleSigned = async () => {
     setBusy("end");
     try {
+      // Flush any queued notes/tasks/attachments/incidents before finalizing
+      // so the shift isn't marked complete while documentation is still
+      // sitting unsynced on the device. Genuinely offline items just stay
+      // queued and keep retrying in the background - the worker is warned
+      // below rather than blocked, since holding up sign-off wouldn't get
+      // those items online any faster.
+      const remaining = await flushNow();
       await endShift(shift.id);
       setSubmittedAt(new Date().toISOString());
       setPhase("submitted");
       onRefresh();
+      if (remaining > 0) {
+        Alert.alert(
+          "Shift submitted",
+          `${remaining} item${remaining === 1 ? "" : "s"} (notes, photos, or updates) couldn't reach the server yet and will sync automatically once you're back online. Don't uninstall the app or clear its data until they've synced.`,
+        );
+      }
     } catch (err) {
       Alert.alert("End shift failed", err instanceof Error ? err.message : "Please try again.");
     } finally {
