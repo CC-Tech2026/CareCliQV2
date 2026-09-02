@@ -61,6 +61,14 @@ import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDCalendarPage from "@/pages/md/md-calendar";
+import AdminDashboardPage from "@/pages/admin/dashboard";
+import AdminProvidersPage from "@/pages/admin/providers";
+import AdminProviderDetailPage from "@/pages/admin/provider-detail";
+import AdminOnboardingPage from "@/pages/admin/onboarding";
+import AdminFeedbackPage from "@/pages/admin/feedback";
+import AdminBugReportsPage from "@/pages/admin/bug-reports";
+import AdminLayoutSettingsPage from "@/pages/admin/settings-layout";
+import AdminAccessibilitySettingsPage from "@/pages/admin/settings-accessibility";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
 import TagManagementPage from "@/pages/md/tag-management";
@@ -102,6 +110,9 @@ const WORKER_ROLES = ["support_worker"] as const;
 
 // Managing Director only
 const MD_ROLES = ["managing_director"] as const;
+
+// CareCliQ vendor-side only — the Super Admin portal, not scoped to any org
+const ADMIN_ROLES = ["super_admin"] as const;
 
 // Managing directors live in HubLayout everywhere (a distinct shell befitting
 // their org-wide privileges); everyone else uses the standard AppLayout
@@ -168,6 +179,55 @@ function Router() {
       <Route path="/hub">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <HubLayout><HubPage /></HubLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Super Admin Portal — CareCliQ vendor-side, not org-scoped ───────── */}
+      <Route path="/admin/dashboard">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminDashboardPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/organizations/:organizationId">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminProviderDetailPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/organizations">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminProvidersPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/onboarding">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminOnboardingPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/feedback">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminFeedbackPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/bug-reports">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminBugReportsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/settings/layout">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminLayoutSettingsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/settings/accessibility">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminAccessibilitySettingsPage />
         </ProtectedRoute>
       </Route>
 

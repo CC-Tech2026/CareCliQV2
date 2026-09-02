@@ -10,7 +10,11 @@ from fastapi import HTTPException, Request, status
 COORDINATOR_ROLES = {"support_coordinator"}
 SCOPED_ROLES = {"support_worker"}
 EXECUTIVE_ROLES = {"managing_director"}
-VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES
+# Vendor-side (CareCliQ) role — manages every provider organisation from the
+# Super Admin portal. Not scoped to any single organization_id (that column
+# is NULL for these users), unlike every other role above.
+SUPER_ADMIN_ROLES = {"super_admin"}
+VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES | SUPER_ADMIN_ROLES
 
 SUPPORT_WORKER_PARTICIPANT_FIELDS = (
     "assigned_worker_id",
@@ -108,6 +112,10 @@ def is_support_worker(user: Optional[dict]) -> bool:
 
 def is_managing_director(user: Optional[dict]) -> bool:
     return get_user_role(user) == "managing_director"
+
+
+def is_super_admin(user: Optional[dict]) -> bool:
+    return get_user_role(user) == "super_admin"
 
 
 def record_belongs_to_user_org(row: dict, user: Optional[dict]) -> bool:

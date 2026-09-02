@@ -1202,6 +1202,12 @@ export default function Dashboard() {
     return <CoordinatorDashboardView data={coordinatorQuery.data as CoordinatorDashboard} />;
   }
 
+  // Super admins (CareCliQ vendor-side) have no org-scoped home at all —
+  // send them straight to the provider list.
+  if (user?.role === "super_admin") {
+    return <Redirect to="/admin/dashboard" />;
+  }
+
   // Managing directors have their own home at /hub — this generic fallback
   // view below is not tailored to them, so send them to the real one instead
   // of showing a page that looks like a second, unrelated "home".

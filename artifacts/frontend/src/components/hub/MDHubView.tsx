@@ -54,7 +54,7 @@ const CASELOAD_PER_WORKER = 6;
 
 // UI-only placeholder for the waiting-list cards until a real referral has
 // been logged through the public form — see the read effect below.
-const DUMMY_WAITLIST: WaitlistSnapshot = { count: 6, hours: 34 };
+const DUMMY_WAITLIST: WaitlistSnapshot = { count: 59, hours: 28 };
 
 interface MDData {
   active_participants: number;
@@ -367,7 +367,7 @@ function WaitlistCard({ count, onNavigate }: { count: number; onNavigate: () => 
           <p className="text-[11px]" style={{ color: MUTED }}>New enquiries not yet screened</p>
         </div>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center justify-center">
         <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: count > 0 ? AMBER : TEXT }}>{formatNumber(count)}</p>
       </div>
     </button>
@@ -393,9 +393,9 @@ function WaitlistHoursCard({ hours }: { hours: number }) {
           <p className="text-[11px]" style={{ color: MUTED }}>Requested, waiting list</p>
         </div>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center justify-center">
         <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: TEXT }}>
-          {formatNumber(hours)}<span className="text-[20px] font-bold" style={{ color: MUTED }}>h</span>
+          {formatNumber(hours)}<span className="ml-1.5 text-[20px] font-bold" style={{ color: MUTED }}>h</span>
         </p>
       </div>
     </div>
@@ -426,9 +426,11 @@ function describeArc(cx: number, cy: number, r: number, sweepDeg: number): strin
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
 }
 
-/** Two concentric segmented rings against a shared scale, each its own
- *  color — same job as the "Speed Statistic" reference (two arcs + a
- *  center readout), adapted to two reliability tiers instead of two speeds.
+/** Two concentric smooth rings against a shared scale, each its own color —
+ *  same job as the "Speed Statistic" reference (two arcs + a center
+ *  readout), adapted to two reliability tiers instead of two speeds. Solid
+ *  strokes, not dashed — a dash pattern stretched around a short arc at
+ *  this size reads as lumpy/organic rather than a clean gauge.
  *
  *  Interactive: clicking a ring extends a short leader line outward from its
  *  edge, ending in a small label showing that ring's exact figure — the
@@ -444,8 +446,8 @@ function DualRingGauge({
   innerCallout,
   centerValue,
   centerLabel,
-  size = 152,
-  stroke = 11,
+  size = 156,
+  stroke = 12,
   gap = 9,
 }: {
   outerValue: number;
@@ -483,7 +485,7 @@ function DualRingGauge({
   const innerAnchor = polarToCartesian(center, center, innerRadius, innerMidAngle);
   const innerTip = polarToCartesian(center, center, calloutRadius, innerMidAngle);
 
-  const padding = 46; // room for the callout labels to sit outside the ring itself
+  const padding = 32; // room for the callout labels to sit outside the ring itself
   const canvas = size + padding * 2;
   const shift = padding;
 
@@ -522,14 +524,13 @@ function DualRingGauge({
           </marker>
         </defs>
         <g transform={`translate(${shift} ${shift})`}>
-          <circle cx={center} cy={center} r={outerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} strokeDasharray="1 7" strokeLinecap="round" />
-          <circle cx={center} cy={center} r={innerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} strokeDasharray="1 7" strokeLinecap="round" />
+          <circle cx={center} cy={center} r={outerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} />
+          <circle cx={center} cy={center} r={innerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} />
           <path
             d={describeArc(center, center, outerRadius, outerSweep)}
             fill="none"
             stroke={outerColor}
             strokeWidth={stroke}
-            strokeDasharray="9 6"
             strokeLinecap="round"
             style={{ cursor: outerValue > 0 ? "pointer" : "default" }}
             onClick={() => outerValue > 0 && setOuterOpen((v) => !v)}
@@ -539,13 +540,12 @@ function DualRingGauge({
             fill="none"
             stroke={innerColor}
             strokeWidth={stroke}
-            strokeDasharray="9 6"
             strokeLinecap="round"
             style={{ cursor: innerValue > 0 ? "pointer" : "default" }}
             onClick={() => innerValue > 0 && setInnerOpen((v) => !v)}
           />
           <text x={center} y={center - 6} textAnchor="middle" style={{ fill: TEXT, fontSize: 26, fontWeight: 900 }}>{centerValue}</text>
-          <text x={center} y={center + 15} textAnchor="middle" style={{ fill: MUTED, fontSize: 9, fontWeight: 700 }}>{centerLabel}</text>
+          <text x={center} y={center + 14} textAnchor="middle" style={{ fill: MUTED, fontSize: 9, fontWeight: 700 }}>{centerLabel}</text>
 
           {outerOpen && (
             <>
@@ -579,7 +579,7 @@ function AvailableHoursCard() {
   const casual = 26;
   const max = Math.ceil((Math.max(reliable, casual) * 1.25) / 10) * 10;
   return (
-    <div className="rounded-2xl border px-6 py-4" style={{ borderColor: BORDER, background: SURFACE }}>
+    <div className="flex h-full w-full flex-col rounded-2xl border px-6 py-5" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
@@ -615,7 +615,7 @@ function AvailableHoursCard() {
         </span>
       </div>
 
-      <div className="mt-2 flex justify-center">
+      <div className="mt-2 flex flex-1 items-center justify-center">
         <DualRingGauge
           outerValue={reliable}
           innerValue={casual}
@@ -1352,14 +1352,13 @@ export function MDHubView() {
   const [error, setError] = useState(false);
   const [waitlist, setWaitlist] = useState<WaitlistSnapshot>({ count: 0, hours: 0 });
 
-  // Read once on mount — the onboarding board is a separate page with its
-  // own in-memory state; see onboardingWaitlist.ts for why localStorage is
-  // the bridge instead of a shared store or a backend table. Falls back to
-  // a UI-only placeholder until a real referral has been logged, same as
-  // the dummy Service Type/Payment Method fallback on the Finance Ledger.
+  // TEMP: always shows the UI-only placeholder numbers right now, ignoring
+  // any real snapshot in localStorage (e.g. leftover from testing the
+  // onboarding board/referral form) — purely for the UI per request. Swap
+  // back to `setWaitlist(snapshot.count > 0 ? snapshot : DUMMY_WAITLIST)`
+  // once ready to show real enquiry data again.
   useEffect(() => {
-    const snapshot = readWaitlistSnapshot();
-    setWaitlist(snapshot.count > 0 ? snapshot : DUMMY_WAITLIST);
+    setWaitlist(DUMMY_WAITLIST);
   }, []);
 
   useEffect(() => {

@@ -38,7 +38,7 @@ function clearDeviceLocalCaches(): void {
   void deleteShiftOfflineDb();
 }
 
-export type UserRole = "support_coordinator" | "support_worker" | "managing_director";
+export type UserRole = "support_coordinator" | "support_worker" | "managing_director" | "super_admin";
 export type AccountType = "independent_worker" | "small_provider";
 
 export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
@@ -183,7 +183,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): AuthUser => {
     endVoluntaryLogout();
     const authUser = mapAuthUser(data);
-    if (!authUser.organizationId) {
+    // super_admin is CareCliQ's own vendor-side role — deliberately not
+    // scoped to any organization (see access.py's SUPER_ADMIN_ROLES), so
+    // it's the one legitimate exception to "every user belongs to an org".
+    if (!authUser.organizationId && authUser.role !== "super_admin") {
       throw new Error("Organisation not found. Contact your administrator.");
     }
     persistSession(data.access_token, authUser, rememberDevice);
