@@ -255,7 +255,7 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
                 className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold"
                 style={{
                   borderColor: expiryUrgency === "critical" ? "#FECACA" : expiryUrgency === "warn" ? "#FDE68A" : BORDER,
-                  background: expiryUrgency === "critical" ? "#FEF2F2" : expiryUrgency === "warn" ? "#FFFBEB" : "#F4EDE6",
+                  background: expiryUrgency === "critical" ? "#FEF2F2" : expiryUrgency === "warn" ? "#FFFBEB" : "#ECECEC",
                   color: expiryUrgency === "critical" ? "#DC2626" : expiryUrgency === "warn" ? "#92400E" : MUTED,
                 }}
               >
@@ -707,7 +707,7 @@ function InlineSessionComposer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F4EDE6]"
+            className="rounded-full p-2 transition hover:bg-[#ECECEC]"
             style={{ color: MUTED }}
             aria-label={translate("client.session.closeComposer")}
           >
@@ -906,7 +906,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F4EDE6]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#ECECEC]"
                     style={{ color: PLUM }}
                     aria-label={translate("client.session.attachFile")}
                   >
@@ -915,7 +915,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F4EDE6]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#ECECEC]"
                     style={{ color: PLUM }}
                     aria-label={translate("client.session.addPhotoEvidence")}
                   >
@@ -934,7 +934,7 @@ function InlineSessionComposer({
               </div>
             )}
             {!ended && attachmentName && (
-              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F4EDE6] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
+              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#ECECEC] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
                 <Paperclip size={12} className="mr-1 shrink-0" />
                 <span className="truncate">{attachmentName}</span>
               </p>
@@ -1316,7 +1316,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F4EDE6]"
+            className="rounded-full p-2 transition hover:bg-[#ECECEC]"
             style={{ color: MUTED }}
             aria-label={translate("client.incident.closeForm")}
           >
@@ -2025,7 +2025,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setActiveTab("notes")}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#F4EDE6]"
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#ECECEC]"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             <Plus size={15} />

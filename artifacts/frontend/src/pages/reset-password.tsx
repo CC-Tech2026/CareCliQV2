@@ -69,7 +69,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F4EDE6]">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#ECECEC]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
           <CareCliQLogo size={54} />
@@ -128,7 +128,7 @@ export default function ResetPassword() {
                     placeholder={t("auth.reset.passwordPlaceholder")}
                     required
                     disabled={busy}
-                    className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#F4EDE6]"
+                    className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#ECECEC]"
                     style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                   />
                 </div>
@@ -143,7 +143,7 @@ export default function ResetPassword() {
                   placeholder={t("auth.reset.confirmPlaceholder")}
                   required
                   disabled={busy}
-                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F4EDE6]"
+                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#ECECEC]"
                   style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                 />
               </div>

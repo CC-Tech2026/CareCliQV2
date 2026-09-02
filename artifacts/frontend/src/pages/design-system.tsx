@@ -64,7 +64,7 @@ export default function DesignSystem() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Swatch name="Pink" cssVar="--cc-plum" hex="#E8457A" role="Active nav, focus rings, links, small badges, icon accents, gradient start" />
           <Swatch name="Purple" cssVar="--cc-coral" hex="#7C3AED" role="Small callout backgrounds, selected states, gradient end" />
-          <Swatch name="Cream" cssVar="--cc-bg" hex="#FDF6EE" role="Page canvas — never pure white" />
+          <Swatch name="Light Grey" cssVar="--cc-bg" hex="#F5F5F5" role="Page canvas — never pure white" />
           <Swatch name="Navy" cssVar="--cc-text" hex="#1A1A2E" role="All body text, headings, dark surfaces — never pure black" />
         </div>
         <div className="mt-4 rounded-lg p-3" style={{ background: "var(--cc-soft)" }}>

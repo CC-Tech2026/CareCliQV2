@@ -25,7 +25,7 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
             {translate("auth.idle.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-2xl bg-[#F4EDE6] px-5 py-4 text-center">
+        <div className="rounded-2xl bg-[#ECECEC] px-5 py-4 text-center">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6A6A77]">{translate("auth.idle.countdown")}</p>
           <p className="mt-1 text-4xl font-black text-[#E8457A]">{minutes}:{seconds}</p>
         </div>

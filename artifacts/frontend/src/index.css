@@ -220,10 +220,10 @@
   /* ── Surfaces ── */
   --cc-bg:         #F5F5F5;   /* Light Grey — page canvas (was warm cream #FCFBF0) */
   --cc-surface:    #FFFFFF;   /* Pure white — cards/panels lift off the grey page canvas via colour + shadow */
-  --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg (unchanged, per explicit scope) */
+  --cc-soft:       #ECECEC;   /* Light Grey tint — hover/secondary/muted bg (was warm off-white #F4EDE6) */
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
-  --cc-active-bg:  #FCFBF0;
+  --cc-active-bg:  #E5E5E5;   /* Light Grey — was warm cream #FCFBF0 */
   /* ── Sidebar ── */
   --cc-sidebar-bg: #1a1a18;   /* Deep dark navy — matches reference image */
   /* ── Alert pill ── */
@@ -297,7 +297,7 @@
   /* Auth pages (login / signup) */
   --auth-shell-bg: #FFFFFF;
   --auth-form-bg: #FFFFFF;
-  --auth-marketing-bg: #FDF6EE;
+  --auth-marketing-bg: #F5F5F5;   /* Light Grey — was warm off-white #FDF6EE */
   --auth-marketing-glow: none;
   /* Faint node-and-line motif tiled across the auth marketing panels — texture, not decoration */
   --auth-motif-svg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22220%22%20height%3D%22220%22%3E%0A%20%20%3Ccircle%20cx%3D%2226%22%20cy%3D%22150%22%20r%3D%222.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2250%22%20cy%3D%22172%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2226%22%20y1%3D%22150%22%20x2%3D%2250%22%20y2%3D%22172%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22158%22%20cy%3D%2234%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22130%22%20cy%3D%2218%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22158%22%20y1%3D%2234%22%20x2%3D%22130%22%20y2%3D%2218%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2296%22%20r%3D%222.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2264%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2296%22%20y1%3D%2296%22%20x2%3D%2296%22%20y2%3D%2264%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22176%22%20cy%3D%22148%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22198%22%20cy%3D%22170%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22176%22%20y1%3D%22148%22%20x2%3D%22198%22%20y2%3D%22170%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2264%22%20cy%3D%2238%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2234%22%20cy%3D%22100%22%20r%3D%221.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%22196%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E%0A");
@@ -307,7 +307,7 @@
   --auth-marketing-body: #33334A;
   --auth-accent: #6E79C2;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
   --auth-input-border: #E8E8EA;
-  --auth-input-bg: #F4EDE6;
+  --auth-input-bg: #ECECEC;   /* Light Grey — was warm off-white #F4EDE6 */
   --auth-card-bg: rgba(255, 255, 255, 0.7);
   --auth-card-border: rgba(26, 26, 46, 0.10);
   --auth-stat-card-bg: rgba(26, 26, 46, 0.04);
@@ -669,7 +669,7 @@
   --input: var(--cc-border);
   --ring: var(--cc-plum);
 
-  /* Cards — ivory, matching the page canvas; lift comes from shadow-sm, not colour */
+  /* Cards — pure white, lifting off the grey page canvas via shadow-sm, not colour */
   --card: var(--cc-surface);
   --card-foreground: var(--cc-text);
   --card-border: var(--cc-border);

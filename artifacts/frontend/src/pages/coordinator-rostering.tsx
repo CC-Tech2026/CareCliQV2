@@ -688,7 +688,7 @@ export default function CoordinatorRosteringPage() {
                   <button
                     key={w.id}
                     onClick={() => setAvailWorker(w)}
-                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
+                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#ECECEC]"
                     style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
                   >
                     <div

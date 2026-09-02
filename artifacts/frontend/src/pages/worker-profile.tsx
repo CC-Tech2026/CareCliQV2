@@ -363,7 +363,7 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <UserRound className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
@@ -471,7 +471,7 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <LockKeyhole className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>

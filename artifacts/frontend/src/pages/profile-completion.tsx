@@ -98,7 +98,7 @@ export default function ProfileCompletion() {
         <p className="mt-1 text-sm text-[#6A6A77]">{translate("profileCompletion.subtitle")}</p>
       </div>
       <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E8E8EA] bg-white p-6 shadow-sm">
-        <div className="mb-6 rounded-2xl bg-[#F4EDE6] p-4">
+        <div className="mb-6 rounded-2xl bg-[#ECECEC] p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -119,7 +119,7 @@ export default function ProfileCompletion() {
             <Input value={profile.address || ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} className="mt-1 rounded-xl" />
           </div>
         </div>
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm text-[#6A6A77]">
+        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#ECECEC] p-4 text-sm text-[#6A6A77]">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-[#E8457A]" />
             <span>{translate("profileCompletion.roleConfirmedWorker")}</span>

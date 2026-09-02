@@ -137,7 +137,7 @@ export function MyInterestsCard() {
       <div className="space-y-2">
         {isLoading && <p className="text-sm font-bold" style={{ color: MUTED }}>Loading...</p>}
         {!isLoading && myTags.length === 0 && (
-          <p className="rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>
             No interests added yet.
           </p>
         )}

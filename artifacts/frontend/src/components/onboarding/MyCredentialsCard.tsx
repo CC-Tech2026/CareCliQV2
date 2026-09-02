@@ -36,7 +36,7 @@ function statusClass(status: string) {
   if (status === "valid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "expiring") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "expired" || status === "rejected") return "bg-red-50 text-red-700 border-red-200";
-  return "bg-[#F4EDE6] text-[#E8457A] border-[#E8E8EA]";
+  return "bg-[#ECECEC] text-[#E8457A] border-[#E8E8EA]";
 }
 
 function statusLabel(status: string, translate: (key: string) => string) {
@@ -411,10 +411,10 @@ export function MyCredentialsCard() {
         {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>{translate("credentials.loading")}</p>}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && data.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.empty")}</p>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.empty")}</p>
         )}
         {!isLoading && data.length > 0 && filteredData.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.noMatch")}</p>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.noMatch")}</p>
         )}
         <div className="mt-3">
           {filteredData.map((credential) => (
