@@ -62,6 +62,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Participant completed hygiene routine with appropriate support.",
+        "category": "personal_care",
     },
     {
         "task_id": "fallback_meal_prep",
@@ -76,6 +77,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Meals prepared safely with participant involvement where possible.",
+        "category": "meal_prep",
     },
     {
         "task_id": "fallback_medication",
@@ -90,6 +92,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Medications taken as prescribed with no adverse reactions noted.",
+        "category": "medication",
     },
     {
         "task_id": "fallback_health_wellness",
@@ -104,6 +107,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Participant wellbeing observed and any concerns documented.",
+        "category": "other",
     },
     {
         "task_id": "fallback_community_access",
@@ -118,6 +122,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Participant engaged in community activity with support as needed.",
+        "category": "community_access",
     },
     {
         "task_id": "fallback_documentation",
@@ -132,6 +137,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Progress notes capture what was done and participant response.",
+        "category": "documentation",
     },
 ]
 
@@ -2056,6 +2062,7 @@ def _load_tasks_from_templates(
                 "goal_title": None,
                 "outcome_tip": None,
                 "evidence_required": row.get("evidence_required") or "none",
+                "category": row.get("category") or "other",
             })
         return tasks
 
@@ -2163,6 +2170,7 @@ def _load_tasks_from_shift_tasks(
                 "marked_na": bool(link.get("marked_na")),
                 "na_reason": link.get("na_reason"),
                 "shift_task_id": str(link["id"]) if link.get("id") else None,
+                "category": pt.get("category") or "other",
             })
         return tasks
     except Exception as exc:
@@ -3643,8 +3651,14 @@ def sync_session_notes(
         client_note_id = _coerce_client_note_id(
             str(item.get("note_id") or item.get("client_note_id") or "").strip() or None
         )
+        # auto_saved_at is a soft "worker's device autosaved this locally at X" UX
+        # marker, fine to trust the client for. created_at is the audit-of-record
+        # timestamp — always server time, never the client's, so a wrong device
+        # clock (or a backdated payload) can't misstate when a note actually
+        # entered the system, matching how medication administration already
+        # has the server (not the client) assign the authoritative time.
         auto_saved_at = item.get("auto_saved_at") or now
-        created_at = item.get("created_at") or now
+        created_at = now
         note_type = str(item.get("note_type") or "text").strip().lower()
         if note_type in ("check-in", "checkin"):
             category = "session_checkin"
@@ -3693,7 +3707,7 @@ def sync_session_notes(
                 existing = (
                     get_supabase_admin()
                     .table("shift_visit_notes")
-                    .select("id")
+                    .select("id, created_at")
                     .eq("session_id", session_id)
                     .eq("client_note_id", client_note_id)
                     .limit(1)
@@ -3704,7 +3718,9 @@ def sync_session_notes(
                     row_id = rows[0]["id"]
                     get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
                     payload["id"] = row_id
-                    payload["created_at"] = created_at
+                    # Preserve the note's true original created_at on re-sync — this is
+                    # an update, not a new note, so it must not be re-stamped with "now".
+                    payload["created_at"] = rows[0].get("created_at") or created_at
                     confirmed.append(_note_payload_from_row({**payload, "id": row_id}))
                     continue
 
