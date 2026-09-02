@@ -191,6 +191,8 @@ export function ShiftAssignmentModal({
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
   const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
+  const [isShadowShift,         setIsShadowShift]         = useState(false);
+  const [shadowOfWorkerId,      setShadowOfWorkerId]      = useState("");
 
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
@@ -289,7 +291,12 @@ export function ShiftAssignmentModal({
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       };
       if (selectedWorkerId) {
-        return assignShift({ ...payload, worker_id: selectedWorkerId });
+        return assignShift({
+          ...payload,
+          worker_id: selectedWorkerId,
+          is_shadow_shift: isShadowShift,
+          shadow_of_worker_id: isShadowShift ? shadowOfWorkerId : undefined,
+        });
       }
       const created = await createUnassignedShift(payload);
       return {
@@ -326,6 +333,8 @@ export function ShiftAssignmentModal({
     setScheduledEnd("");
     setShiftType("standard_support");
     setSelectedTaskIds([]);
+    setIsShadowShift(false);
+    setShadowOfWorkerId("");
   };
 
   const handleSetDuration = (hours: number) => {
@@ -365,6 +374,7 @@ export function ShiftAssignmentModal({
     selectedParticipantId &&
     scheduledStart &&
     (!selectedWorkerId || !hasBlock) &&
+    (!isShadowShift || shadowOfWorkerId) &&
     goalsTasksValid &&
     !assignMut.isPending
   );
@@ -507,6 +517,40 @@ export function ShiftAssignmentModal({
               </p>
             )}
           </div>
+
+          {/* Shadow shift — worker still does the shift themselves (same
+              credential/training gates apply above); this just pairs them
+              with a senior worker for support and marks it as supervised. */}
+          {selectedWorkerId && (
+            <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] font-black" style={{ color: TEXT }}>
+                <input
+                  type="checkbox"
+                  checked={isShadowShift}
+                  onChange={(e) => {
+                    setIsShadowShift(e.target.checked);
+                    if (!e.target.checked) setShadowOfWorkerId("");
+                  }}
+                  className="h-4 w-4 rounded"
+                />
+                Shadow shift — pair with a senior worker
+              </label>
+              {isShadowShift && (
+                <Select value={shadowOfWorkerId} onValueChange={setShadowOfWorkerId}>
+                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                    <SelectValue placeholder="Who are they shadowing?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignableWorkers
+                      .filter((w) => w.id !== selectedWorkerId)
+                      .map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
 
           {/* Participant */}
           <div className="space-y-2">

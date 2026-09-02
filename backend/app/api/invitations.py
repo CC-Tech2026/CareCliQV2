@@ -153,7 +153,13 @@ async def create_invite(
             raise HTTPException(status_code=403, detail="Only managing directors can send new-hire login invites.")
         from ..services import employee_onboarding_service as onboarding_svc
         hire = onboarding_svc.get_hire(body.onboarding_id, org_id)
-        if hire["status"] != "signed":
+        # "signed" is the first invite; "invited" is a resend (the candidate's original
+        # invite expired after 7 days without them logging in — see
+        # offer_letter_reminder_service.py's day-7 "hire_invite_expired" notice — or the
+        # MD just wants to re-send it). The pending-invite check below still applies: a
+        # still-live invite for this email must be revoked first, only an expired one is
+        # silently replaced.
+        if hire["status"] not in {"signed", "invited"}:
             raise HTTPException(
                 status_code=409,
                 detail="This hire's offer letter and service agreement must be signed by both sides before sending the login invite.",
@@ -178,12 +184,17 @@ async def create_invite(
         if existing.data:
             ex = existing.data[0]
             ex_expires = _parse_iso(ex["expires_at"])
-            if ex_expires > _now_utc():
+            # For the general "invite a new team member" flow, a still-live invite must be
+            # revoked explicitly first — two people getting two different valid links for
+            # the same email would be confusing. For the hire-specific "resend this
+            # candidate's login invite" flow (onboarding_id set), clicking Resend on their
+            # record IS the explicit confirmation — silently replace it instead of making
+            # the MD go find and revoke the old one first.
+            if ex_expires > _now_utc() and not body.onboarding_id:
                 raise HTTPException(
                     status_code=409,
                     detail=f"A pending invitation for {email} already exists. Revoke it first or wait for it to expire.",
                 )
-            # Expired — delete and re-issue
             supabase.table("invitations").delete().eq("id", ex["id"]).execute()
 
         short_code = _generate_short_code(supabase)
@@ -648,7 +659,11 @@ async def validate_invite(token: str):
             "organization_name": org_name,
             "expires_at": invite["expires_at"],
             "email_verified": bool(invite.get("email_verified_at")),
-            "requires_email_code": bool(invite.get("onboarding_id")),
+            # accept_invite no longer gates on this (see its comment) — the
+            # frontend never consumed this flag either, kept only in case a
+            # future caller wants to know an email-code flow is available
+            # (send-code/verify-code below still work, just aren't required).
+            "requires_email_code": False,
         }
 
     except HTTPException:
@@ -858,8 +873,19 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     if _parse_iso(invite["expires_at"]) < _now_utc():
         raise HTTPException(status_code=410, detail="This invitation has expired")
 
-    if invite.get("onboarding_id") and not invite.get("email_verified_at"):
-        raise HTTPException(status_code=403, detail="Please verify your email with the code we sent before continuing.")
+    # Hire-based invites (onboarding_id set) used to require a second, invite-level
+    # email code here — but accept-invite.tsx never implemented the send-code/
+    # verify-code screen for it (only validate_invite's requires_email_code flag
+    # exists, unconsumed), so email_verified_at could never actually be set and
+    # this permanently 403'd every candidate who came through Offer -> Signed ->
+    # Invited (confirmed Aug 2026: reproducible for essentially every seeded
+    # hire, not an edge case). The candidate already proved they control this
+    # inbox to get this far — the invite link itself is only ever emailed to
+    # hire.email (queue_invitation_email), and reaching "signed"/"invited"
+    # status requires having received and acted on that same offer email
+    # earlier in the pipeline — so a second, unbuildable code gate here added
+    # friction without a corresponding security gap it closed. Removed rather
+    # than reintroduce the (already broken) code screen.
 
     email = invite["email"]
     role  = invite["role"]

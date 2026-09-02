@@ -220,8 +220,15 @@ def delete_document(document_id: str) -> None:
 
 def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str, employer_name: str) -> dict[str, Any]:
     hire = get_hire(hire_id, organization_id)
-    if hire["status"] not in {"draft"}:
-        raise HTTPException(status_code=409, detail="This hire has already been sent for signature.")
+    # "draft" is the first send; "awaiting_signatures"/"expired" are a resend — the MD
+    # asking for a fresh link (their own session expired, they lost the email, or the
+    # 14-day auto-expiry in offer_letter_reminder_service.py already fired). A resend
+    # always issues a brand-new sign_token so the old link stops working, and restarts
+    # both the employer_signed_at clock (offer_letter_reminder_service's 14-day expiry)
+    # and the day-3 reminder (offer_reminder_sent_at reset to None) — otherwise a resend
+    # right before the old 14-day window closed would expire again almost immediately.
+    if hire["status"] not in {"draft", "awaiting_signatures", "expired"}:
+        raise HTTPException(status_code=409, detail="This hire isn't awaiting a signature.")
     docs = list_documents(hire_id)
     if not docs:
         raise HTTPException(status_code=422, detail="Attach at least one document (e.g. offer letter) before sending for signature.")
@@ -233,6 +240,7 @@ def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str
         "employer_signed_by": employer_user_id,
         "employer_signed_name": employer_name,
         "employer_signed_at": _now(),
+        "offer_reminder_sent_at": None,
         "updated_at": _now(),
     }
     result = (

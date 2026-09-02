@@ -38,6 +38,15 @@ export type EmployeeHire = {
   worker_signed_name?: string | null;
   worker_signed_at?: string | null;
   invitation_id?: string | null;
+  /** Whether the day-3 nudge for this send has already gone out — reset to
+   *  null on every (re)send so a resend gets its own fresh reminder cycle. */
+  offer_reminder_sent_at?: string | null;
+  /** Set when the login invite is (re)sent — employer_signed_at drives the
+   *  offer link's own 14-day expiry (offer_letter_reminder_service.py); this
+   *  drives the invite token's 7-day expiry (invitations.py's fixed TTL). */
+  invited_at?: string | null;
+  invite_reminder_sent_at?: string | null;
+  invite_expired_notified_at?: string | null;
   created_at: string;
   documents?: OnboardingDocument[];
   email_delivery?: { status?: string; message?: string };

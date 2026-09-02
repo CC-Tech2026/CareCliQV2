@@ -51,6 +51,7 @@ export type MedicationPayload = {
   is_prn?: boolean;
   prn_max_per_day?: number | null;
   source_document_id?: string | null;
+  status?: Extract<MedicationStatus, "draft" | "pending_verification">;
 };
 
 export function getParticipantMedications(participantId: string, status?: MedicationStatus) {
@@ -65,7 +66,7 @@ export function createParticipantMedication(participantId: string, payload: Medi
   });
 }
 
-export function updateMedication(medicationId: string, updates: Partial<MedicationPayload & { status: MedicationStatus }>) {
+export function updateMedication(medicationId: string, updates: Partial<Omit<MedicationPayload, "status"> & { status: MedicationStatus }>) {
   return jsonFetch<Medication>(`/api/medications/${medicationId}`, {
     method: "PATCH",
     body: JSON.stringify(updates),

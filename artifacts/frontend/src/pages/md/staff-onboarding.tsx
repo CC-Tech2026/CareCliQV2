@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { addDays, formatDistanceToNowStrict, isPast } from "date-fns";
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
@@ -25,8 +26,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { SectionInfo } from "@/components/ui/section-info";
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
-  Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail,
+  AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
+  Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail, RefreshCw,
   Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, UserX, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -169,6 +170,33 @@ const STATUS_META: Record<EmployeeHire["status"], { label: string; bg: string; c
   completed: { label: "Onboarded", bg: SUCCESS_BG, color: SUCCESS },
   expired: { label: "Offer expired", bg: DANGER_BG, color: DANGER },
 };
+
+// Fixed TTLs mirrored from the backend (offer_letter_reminder_service.py's
+// EXPIRE_AFTER_DAYS, invitations.py's 7-day invite token lifetime) — not
+// returned by the API since they're constants, not per-record data.
+const OFFER_LINK_TTL_DAYS = 14;
+const INVITE_TOKEN_TTL_DAYS = 7;
+
+/** "Expires in 3 days" / "Expired 2 days ago", computed client-side from a
+ *  sent timestamp + the matching fixed TTL above. */
+function expiryStatus(sentAt: string | null | undefined, ttlDays: number): { expired: boolean; label: string } | null {
+  if (!sentAt) return null;
+  let sent: Date;
+  try {
+    sent = new Date(sentAt);
+    if (Number.isNaN(sent.getTime())) return null;
+  } catch {
+    return null;
+  }
+  const expiresAt = addDays(sent, ttlDays);
+  const expired = isPast(expiresAt);
+  return {
+    expired,
+    label: expired
+      ? `Expired ${formatDistanceToNowStrict(expiresAt, { addSuffix: true })}`
+      : `Expires ${formatDistanceToNowStrict(expiresAt, { addSuffix: true })}`,
+  };
+}
 
 const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = {
   offer_letter: { label: "Offer letter", icon: Briefcase },
@@ -500,22 +528,49 @@ function HireDetail({
                 </Button>
               )}
 
-              {hire.status === "awaiting_signatures" && signLink && (
-                <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
-                  <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
-                  <p className="text-xs flex-1" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(signLink)
-                        .then(() => toast({ title: "Sign link copied" }))
-                        .catch(() => toast({ title: "Could not copy link", description: "Copy it manually instead.", variant: "destructive" }));
-                    }}
-                    className="rounded-lg p-1.5 hover:bg-black/5 shrink-0"
-                    aria-label="Copy sign link"
-                    title="Copy sign link"
-                  >
-                    <Copy size={13} style={{ color: MUTED }} />
-                  </button>
+              {hire.status === "awaiting_signatures" && signLink && (() => {
+                const offerExpiry = expiryStatus(hire.employer_signed_at, OFFER_LINK_TTL_DAYS);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                      <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
+                        {offerExpiry && (
+                          <p className="mt-0.5 text-[11px] font-bold" style={{ color: offerExpiry.expired ? DANGER : WARNING }}>{offerExpiry.label}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(signLink)
+                            .then(() => toast({ title: "Sign link copied" }))
+                            .catch(() => toast({ title: "Could not copy link", description: "Copy it manually instead.", variant: "destructive" }));
+                        }}
+                        className="rounded-lg p-1.5 hover:bg-black/5 shrink-0"
+                        aria-label="Copy sign link"
+                        title="Copy sign link"
+                      >
+                        <Copy size={13} style={{ color: MUTED }} />
+                      </button>
+                    </div>
+                    <Button variant="outline" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                      {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend offer email
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {hire.status === "expired" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: DANGER_BG }}>
+                    <AlertTriangle size={14} style={{ color: DANGER }} className="shrink-0" />
+                    <p className="text-xs flex-1" style={{ color: TEXT }}>
+                      The offer link expired after {OFFER_LINK_TTL_DAYS} days without a signature. Resend to issue a fresh link.
+                    </p>
+                  </div>
+                  <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                    {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Resend offer
+                  </Button>
                 </div>
               )}
 
@@ -525,12 +580,41 @@ function HireDetail({
                 </Button>
               )}
 
-              {(hire.status === "invited" || hire.status === "completed") && (
+              {hire.status === "invited" && (() => {
+                const inviteExpiry = expiryStatus(hire.invited_at, INVITE_TOKEN_TTL_DAYS);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: inviteExpiry?.expired ? DANGER_BG : SUCCESS_BG }}>
+                      {inviteExpiry?.expired ? (
+                        <AlertTriangle size={16} style={{ color: DANGER }} className="shrink-0" />
+                      ) : (
+                        <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <p className="text-xs font-bold" style={{ color: inviteExpiry?.expired ? DANGER : SUCCESS }}>
+                          {inviteExpiry?.expired ? "Login invite expired" : "Login invite sent — waiting for them to set up their account."}
+                        </p>
+                        {inviteExpiry && (
+                          <p className="mt-0.5 text-[11px] font-medium" style={{ color: inviteExpiry.expired ? DANGER : MUTED }}>{inviteExpiry.label}</p>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant={inviteExpiry?.expired ? "navy" : "outline"}
+                      className="w-full gap-2 rounded-lg"
+                      onClick={() => sendInviteMut.mutate()}
+                      disabled={sendInviteMut.isPending}
+                    >
+                      {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend login invite
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {hire.status === "completed" && (
                 <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
                   <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
-                  <p className="text-xs font-bold" style={{ color: SUCCESS }}>
-                    Login invite sent — {hire.status === "completed" ? "account activated." : "waiting for them to set up their account."}
-                  </p>
+                  <p className="text-xs font-bold" style={{ color: SUCCESS }}>Login invite sent — account activated.</p>
                 </div>
               )}
             </div>
@@ -1896,10 +1980,15 @@ export default function StaffOnboardingBoard() {
                     </div>
                   ))}
                   {data.not_proceeding.expired_offers.map((p) => (
-                    <div key={p.id} className="rounded-2xl border-l-[3px] p-3 opacity-70" style={{ borderColor: BORDER, borderLeftColor: "#C8C4BC", background: SOFT }}>
+                    <button
+                      key={p.id}
+                      onClick={() => setOpenHireId(p.id)}
+                      className="rounded-2xl border-l-[3px] p-3 text-left transition-opacity hover:opacity-100"
+                      style={{ borderColor: BORDER, borderLeftColor: DANGER, background: SOFT }}
+                    >
                       <p className="text-[11px] font-bold" style={{ color: TEXT }}>{p.full_name}</p>
-                      <p className="text-[10px] font-medium" style={{ color: MUTED }}>Offer expired</p>
-                    </div>
+                      <p className="text-[10px] font-medium" style={{ color: DANGER }}>Offer expired · click to resend</p>
+                    </button>
                   ))}
                   {data.not_proceeding.auto_deactivated_workers.map((p) => (
                     <div key={p.id} className="rounded-2xl border-l-[3px] p-3 opacity-70" style={{ borderColor: BORDER, borderLeftColor: "#C8C4BC", background: SOFT }}>

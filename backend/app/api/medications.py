@@ -53,6 +53,7 @@ class MedicationCreateBody(BaseModel):
     is_prn: bool = False
     prn_max_per_day: Optional[int] = None
     source_document_id: Optional[str] = None
+    status: Optional[str] = None
 
 
 class MedicationUpdateBody(BaseModel):
@@ -154,6 +155,7 @@ async def create_participant_medication(
         is_prn=body.is_prn,
         prn_max_per_day=body.prn_max_per_day,
         source_document_id=body.source_document_id,
+        status=body.status,
     )
     if body.source_document_id:
         medication_document_service.link_document_to_medication(body.source_document_id, medication["id"], org_id)

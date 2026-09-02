@@ -38,6 +38,11 @@ from .supabase_client import get_supabase_admin
 from . import tag_service
 from . import shift_match_feedback_service as feedback_service
 
+
+def _is_missing_schema_error(exc: Exception) -> bool:
+    err = str(exc).lower()
+    return "does not exist" in err or "42703" in err or "pgrst" in err or "could not find" in err
+
 INTERESTS_WEIGHT = 30.0
 LIVED_EXPERIENCE_WEIGHT = 25.0
 PRIOR_HISTORY_WEIGHT = 25.0  # real (Phase 3) - neutral half-weight until this pair has rated feedback
@@ -87,23 +92,35 @@ def _continuity_worker_ids_batch(worker_ids: list[str], participant_id: str, org
     """Which of these candidates have ever completed a shift with this
     participant - batch form of the old per-worker _continuity_component
     existence check, one query for the whole candidate list instead of one
-    query per candidate."""
+    query per candidate. Shadow shifts don't count - the trainee wasn't
+    working solo with this participant, so it shouldn't read as continuity."""
     if not worker_ids:
         return set()
     supabase = get_supabase_admin()
-    try:
-        resp = (
+
+    def _run(exclude_shadow: bool):
+        query = (
             supabase.table("shifts")
             .select("worker_id")
             .eq("organization_id", organization_id)
             .eq("participant_id", participant_id)
             .eq("status", "completed")
             .in_("worker_id", worker_ids)
-            .execute()
         )
-        return {r["worker_id"] for r in (resp.data or []) if r.get("worker_id")}
-    except Exception:
-        return set()
+        if exclude_shadow:
+            query = query.eq("is_shadow_shift", False)
+        return query.execute()
+
+    try:
+        resp = _run(exclude_shadow=True)
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            return set()
+        try:
+            resp = _run(exclude_shadow=False)  # migration 151 not applied yet on this deployment
+        except Exception:
+            return set()
+    return {r["worker_id"] for r in (resp.data or []) if r.get("worker_id")}
 
 
 def _prior_history_from_batch(history: Optional[tuple[float, int]]) -> tuple[float, Optional[str]]:
@@ -120,22 +137,37 @@ def _prior_history_from_batch(history: Optional[tuple[float, int]]) -> tuple[flo
 def _recent_shift_counts_by_worker(participant_id: str, organization_id: str) -> Counter[str]:
     """How many completed shifts each worker has taken with this participant
     in the lookback window - fetched once per scoring pass (not once per
-    candidate), since it's participant-scoped, not worker-scoped."""
+    candidate), since it's participant-scoped, not worker-scoped. Shadow
+    shifts are excluded - a trainee's supervised shift shouldn't count toward
+    "has taken most of this participant's recent shifts"."""
     supabase = get_supabase_admin()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=FAIR_DISTRIBUTION_LOOKBACK_DAYS)).isoformat()
-    try:
-        resp = (
+
+    def _run(exclude_shadow: bool):
+        query = (
             supabase.table("shifts")
             .select("worker_id")
             .eq("organization_id", organization_id)
             .eq("participant_id", participant_id)
             .eq("status", "completed")
             .gte("scheduled_start", cutoff)
-            .execute()
         )
+        if exclude_shadow:
+            query = query.eq("is_shadow_shift", False)
+        return query.execute()
+
+    try:
+        resp = _run(exclude_shadow=True)
         rows = resp.data or []
-    except Exception:
-        rows = []
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            rows = []
+        else:
+            try:
+                resp = _run(exclude_shadow=False)  # migration 151 not applied yet on this deployment
+                rows = resp.data or []
+            except Exception:
+                rows = []
     return Counter(str(r["worker_id"]) for r in rows if r.get("worker_id"))
 
 

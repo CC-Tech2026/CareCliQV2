@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clock3, GripVertical,
-  Loader2, Minus, Plus, Sparkles, User2, XCircle, MinusCircle,
+  Loader2, Minus, Plus, Sparkles, User2, Users, XCircle, MinusCircle,
 } from "lucide-react";
 import {
   assignExistingShift,
@@ -120,8 +120,16 @@ function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShift
     >
       <GripVertical size={10} className="mt-0.5 shrink-0 opacity-40 group-hover:opacity-80" style={{ color: clrs.color }} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10.5px] font-black leading-tight" style={{ color: clrs.color }}>
-          {shift.participant_name || translate("common.participant")}
+        <p className="flex items-center gap-1 truncate text-[10.5px] font-black leading-tight" style={{ color: clrs.color }}>
+          {shift.is_shadow_shift && (
+            <span
+              className="inline-flex shrink-0"
+              title={shift.shadow_of_worker_name ? `Shadowing ${shift.shadow_of_worker_name}` : "Shadow shift"}
+            >
+              <Users size={10} aria-label="Shadow shift" />
+            </span>
+          )}
+          <span className="truncate">{shift.participant_name || translate("common.participant")}</span>
         </p>
         {start && (
           <p className="truncate text-[9.5px] font-medium opacity-80" style={{ color: clrs.color }}>
