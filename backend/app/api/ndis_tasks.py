@@ -170,7 +170,40 @@ async def verify_task_completion(
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
-    
+
+    # A verified completion feeds invoicing unconditionally - invoice_service
+    # and billing_service both trust task_completions.status == "verified"
+    # with no further check of their own. Without this gate, a completion
+    # linked to a shift that's still scheduled, in progress, or even
+    # cancelled could be approved here and billed for real money despite the
+    # shift never actually having happened.
+    existing_resp = (
+        supabase.table("task_completions")
+        .select("id, shift_id")
+        .eq("id", completion_id)
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    existing = existing_resp.data if existing_resp else None
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task completion not found")
+
+    if approved and existing.get("shift_id"):
+        shift_resp = (
+            supabase.table("shifts")
+            .select("status")
+            .eq("id", existing["shift_id"])
+            .maybe_single()
+            .execute()
+        )
+        shift = shift_resp.data if shift_resp else None
+        if not shift or shift.get("status") != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot verify this completion - the linked shift has not been completed yet.",
+            )
+
     # Update completion record
     new_status = "verified" if approved else "rejected"
     update_payload = {

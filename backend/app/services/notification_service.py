@@ -18,6 +18,12 @@ from . import user_notification_store as notification_store
 
 logger = logging.getLogger(__name__)
 
+# Mirrors coordinator.py's UNASSIGNED_SHIFT_PLACEHOLDER_ID - an unassigned
+# shift's worker_id is this placeholder, not null, so a plain "if not
+# worker_id" guard doesn't catch it. Duplicated here (not imported) to avoid
+# a circular import, since coordinator.py imports from this module.
+_UNASSIGNED_SHIFT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+
 NOTIFICATION_EVENTS = (
     "shift_reminder",
     "shift_change",
@@ -330,7 +336,7 @@ async def notify_shift_change(
     new_values: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
@@ -373,7 +379,7 @@ async def notify_shift_change(
 
 async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
@@ -491,7 +497,7 @@ async def notify_shift_reminder(
     minutes_before: int = 60,
 ) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
 
     if minutes_before <= 35 and shift.get("clocked_in_at"):

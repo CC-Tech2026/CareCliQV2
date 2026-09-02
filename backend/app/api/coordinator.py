@@ -2647,6 +2647,20 @@ async def assign_existing_shift(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
 
+    await audit_service.log_action(
+        action_type="coordinator.shift.assigned",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        before_state={
+            "worker_id": old_worker_id if old_worker_id != UNASSIGNED_SHIFT_PLACEHOLDER_ID else None,
+            "status": shift.get("status"),
+        },
+        after_state={"worker_id": body.worker_id, "status": "scheduled"},
+        details={"scheduled_start": shift.get("scheduled_start"), "participant_id": participant_id or None},
+    )
+
     # Notify new worker
     await _send_worker_notification(
         supabase, body.worker_id, org_id,
@@ -2655,8 +2669,12 @@ async def assign_existing_shift(
         f"You've been assigned to a shift on {s_dt.strftime('%d %b %Y at %I:%M %p')}",
     )
 
-    # Notify old worker if reassignment
-    if old_worker_id and old_worker_id != body.worker_id:
+    # Notify old worker if reassignment - old_worker_id is the placeholder
+    # UUID (not a real user) the first time a shift goes from unassigned to
+    # assigned, which is the most common case; sending "you've been removed"
+    # to that placeholder isn't just pointless, it fails a foreign-key
+    # constraint against users and logs an error on every such assignment.
+    if old_worker_id and old_worker_id != body.worker_id and old_worker_id != UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         await _send_worker_notification(
             supabase, old_worker_id, org_id,
             "shift_unassigned", shift_id,
@@ -2689,7 +2707,7 @@ async def unassign_existing_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     old_worker_id = shift.get("worker_id")
-    if not old_worker_id:
+    if not old_worker_id or old_worker_id == UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         raise HTTPException(status_code=400, detail="Shift has no assigned worker")
 
     # Block unassignment if shift starts within 2 hours
@@ -2711,6 +2729,17 @@ async def unassign_existing_shift(
         updated = (result.data or [None])[0] or {**shift, "worker_id": None, "status": "unassigned"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+
+    await audit_service.log_action(
+        action_type="coordinator.shift.unassigned",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        before_state={"worker_id": old_worker_id, "status": shift.get("status")},
+        after_state={"worker_id": None, "status": "unassigned"},
+        details={"scheduled_start": shift.get("scheduled_start"), "started_within_2h": bool(warning_msg)},
+    )
 
     await _send_worker_notification(
         supabase, old_worker_id, org_id,
@@ -2939,11 +2968,7 @@ async def create_unassigned_shift(
     body: CreateUnassignedShiftBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a shift without an assigned worker (status = 'unassigned').
-    
-    NOTE: This endpoint requires migration 043 to be applied.
-    The 'unassigned' status must be in the shifts_status_check constraint.
-    """
+    """Create a shift without an assigned worker (status = 'unassigned')."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
 
@@ -2984,7 +3009,7 @@ async def create_unassigned_shift(
         "scheduled_start": s_dt.isoformat(),
         "scheduled_end": e_dt.isoformat(),
         "duration_minutes": duration,
-        "status": "scheduled",  # Use 'scheduled' temporarily until migration 043 is applied
+        "status": "unassigned",
         "created_by": get_user_id(current_user),
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -3021,7 +3046,13 @@ async def get_overdue_unassigned_shifts(current_user: dict = Depends(get_current
     try:
         resp = (
             supabase.table("shifts")
-            .select("id, participant_id, participant_name, scheduled_start, scheduled_end, shift_type, worker_id, status")
+            # shift_type is deliberately not selected here - it's absent on
+            # this deployment's shifts table (see _insert_shift_with_legacy_
+            # fallback, which already strips it on insert for the same
+            # reason), and selecting it made this query 500 on every call,
+            # silently swallowed below into an always-empty list - the
+            # overdue-unassigned banner never showed anything as a result.
+            .select("id, participant_id, participant_name, scheduled_start, scheduled_end, worker_id, status")
             .eq("organization_id", org_id)
             .lt("scheduled_start", now_iso)
             .not_.in_("status", ["cancelled", "completed"])
@@ -3030,7 +3061,8 @@ async def get_overdue_unassigned_shifts(current_user: dict = Depends(get_current
             .execute()
         )
         rows = resp.data or []
-    except Exception:
+    except Exception as exc:
+        logger.warning("get_overdue_unassigned_shifts query failed: %s", exc)
         rows = []
 
     return [r for r in rows if not r.get("worker_id") or r["worker_id"] == UNASSIGNED_SHIFT_PLACEHOLDER_ID]
