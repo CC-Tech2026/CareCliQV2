@@ -7,7 +7,7 @@ import {
   Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
   MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
-  Maximize2, Minimize2, Star,
+  Maximize2, Minimize2, Star, User, HeartHandshake, CalendarClock,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -59,6 +59,18 @@ export type WorkerDetailTab = "overview" | "personal" | "documents" | "credentia
 const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
   "personal", "shifts", "participants", "documents", "credentials", "availability", "training", "induction",
 ];
+
+const TAB_ICON: Record<WorkerDetailTab, typeof User> = {
+  overview: User,
+  personal: User,
+  shifts: CalendarDays,
+  participants: HeartHandshake,
+  documents: FileText,
+  credentials: ShieldCheck,
+  availability: CalendarClock,
+  training: GraduationCap,
+  induction: ClipboardCheck,
+};
 
 /** Mandatory credential types every worker is expected to have on file. */
 export const REQUIRED_CREDENTIAL_TYPES = [
@@ -559,7 +571,7 @@ export function WorkerDetail({
           wide enough now to earn it, and 8 tabs was starting to overflow a
           horizontal scroller), falling back to the original horizontal
           scrollable strip on narrow/mobile widths. */}
-      <div className={`flex flex-col gap-5 lg:flex-row lg:items-start ${fullScreen ? "xl:gap-8" : ""}`}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b lg:hidden" style={{ borderColor: BORDER }}>
           {ALL_WORKER_DETAIL_TABS.map((t) => {
             const badge = tabBadges[t];
@@ -586,24 +598,42 @@ export function WorkerDetail({
           })}
         </div>
 
-        <div role="tablist" className={`hidden shrink-0 flex-col gap-0.5 lg:flex ${fullScreen ? "lg:w-56 xl:w-64" : "lg:w-52"}`}>
+        <div role="tablist" className={`hidden shrink-0 flex-col gap-1 lg:flex ${fullScreen ? "lg:w-56 xl:w-64" : "lg:w-52"}`}>
           {ALL_WORKER_DETAIL_TABS.map((t) => {
             const badge = tabBadges[t];
             const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
             const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
             const active = tab === t;
+            const Icon = TAB_ICON[t];
             return (
               <button
                 key={t}
                 role="tab"
                 aria-selected={active ? "true" : "false"}
                 onClick={() => setTab(t)}
-                className="relative flex items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ background: active ? SOFT : "transparent", color: active ? TEXT : MUTED, outlineColor: PLUM }}
+                className="relative flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
+                style={{
+                  // Deliberately NOT trying to visually merge with the content
+                  // column beside it - that cross-column "bleed" technique
+                  // (matching background + negative margin) went through
+                  // several rounds here without landing right, and this repo
+                  // has no way to render/verify it live. A plain
+                  // self-contained pill is a safer, more predictable choice:
+                  // it doesn't depend on precise alignment with a sibling
+                  // column to look correct.
+                  background: active ? SOFT : "transparent",
+                  color: active ? TEXT : MUTED,
+                  outlineColor: PLUM,
+                }}
               >
-                <span className="flex items-center gap-2">
-                  {active && <span className="h-4 w-[3px] shrink-0 rounded-full" style={{ background: PLUM }} />}
-                  {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
+                    style={{ background: active ? PLUM : SOFT, color: active ? "#fff" : MUTED }}
+                  >
+                    <Icon size={13} />
+                  </span>
+                  <span className="truncate">{translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}</span>
                 </span>
                 {badge && (
                   <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: badgeBg, color: badgeColor }}>
@@ -2370,41 +2400,106 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
   );
 }
 
+/** practitioner_allocations (the formal roster) and actual completed shifts
+ * are two independent facts - a worker can genuinely have worked with a
+ * participant many times without ever being formally "assigned" to them
+ * (e.g. one-off cover, pre-assignment-rollout history). Showing only the
+ * formal list made this tab look broken/empty for a worker who clearly has
+ * real participant relationships - the "worked with" section below is
+ * derived straight from real shift history so that history is never hidden. */
 function ParticipantsTab({ worker }: { worker: WorkerStats }) {
   const assignmentsQuery = useOrgQuery(["worker-assignments", worker.id], {
     queryFn: () => getWorkerAssignments(worker.id),
   });
   const assignments = assignmentsQuery.data ?? [];
 
+  const historyQuery = useOrgQuery(["worker-shift-history", worker.id], {
+    queryFn: () => getWorkerShiftHistory(worker.id),
+  });
+  const shifts = historyQuery.data?.shifts ?? [];
+
+  const workedWith = useMemo(() => {
+    const assignedIds = new Set(assignments.map((a) => a.patient_id));
+    const byParticipant = new Map<string, { id: string; name: string; count: number; lastShift: string }>();
+    for (const s of shifts) {
+      if (!s.participant_id || assignedIds.has(s.participant_id)) continue;
+      const shiftDate = s.scheduled_start ?? "";
+      const existing = byParticipant.get(s.participant_id);
+      if (existing) {
+        existing.count += 1;
+        if (shiftDate > existing.lastShift) existing.lastShift = shiftDate;
+      } else {
+        byParticipant.set(s.participant_id, {
+          id: s.participant_id,
+          name: s.participant_name || "Participant",
+          count: 1,
+          lastShift: shiftDate,
+        });
+      }
+    }
+    return Array.from(byParticipant.values()).sort((a, b) => (b.lastShift || "").localeCompare(a.lastShift || ""));
+  }, [shifts, assignments]);
+
+  const isLoading = assignmentsQuery.isLoading || historyQuery.isLoading;
+
   return (
-    <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-        <p className="text-sm font-black" style={{ color: TEXT }}>Assigned participants</p>
-        <span className="text-xs font-bold" style={{ color: MUTED }}>{assignments.length}</span>
+    <div className="space-y-4">
+      <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+          <p className="text-sm font-black" style={{ color: TEXT }}>Assigned participants</p>
+          <span className="text-xs font-bold" style={{ color: MUTED }}>{assignments.length}</span>
+        </div>
+        {assignmentsQuery.isLoading ? (
+          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>Loading…</p>
+        ) : assignments.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>Not currently assigned to any participant.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {assignments.map((a) => (
+              <a
+                key={a.id}
+                href={`/patients?id=${encodeURIComponent(a.patient_id)}`}
+                className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{a.participant?.full_name || "Participant"}</p>
+                  {a.participant?.ndis_number && (
+                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>NDIS {a.participant.ndis_number}</p>
+                  )}
+                </div>
+                <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black capitalize" style={{ background: SOFT, color: MUTED }}>
+                  {a.allocated_role.replace(/_/g, " ")}
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
-      {assignmentsQuery.isLoading ? (
-        <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>Loading…</p>
-      ) : assignments.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>Not currently assigned to any participant.</p>
-      ) : (
-        <div className="divide-y" style={{ borderColor: BORDER }}>
-          {assignments.map((a) => (
-            <a
-              key={a.id}
-              href={`/patients?id=${encodeURIComponent(a.patient_id)}`}
-              className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{a.participant?.full_name || "Participant"}</p>
-                {a.participant?.ndis_number && (
-                  <p className="text-xs mt-0.5" style={{ color: MUTED }}>NDIS {a.participant.ndis_number}</p>
-                )}
-              </div>
-              <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black capitalize" style={{ background: SOFT, color: MUTED }}>
-                {a.allocated_role.replace(/_/g, " ")}
-              </span>
-            </a>
-          ))}
+
+      {!isLoading && workedWith.length > 0 && (
+        <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-black" style={{ color: TEXT }}>Also worked with</p>
+              <span className="text-xs font-bold" style={{ color: MUTED }}>{workedWith.length}</span>
+            </div>
+            <p className="mt-0.5 text-xs" style={{ color: MUTED }}>From completed shifts, not a standing assignment.</p>
+          </div>
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {workedWith.map((p) => (
+              <a
+                key={p.id}
+                href={`/patients?id=${encodeURIComponent(p.id)}`}
+                className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+              >
+                <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{p.name}</p>
+                <span className="shrink-0 text-xs" style={{ color: MUTED }}>
+                  {p.count} shift{p.count !== 1 ? "s" : ""}
+                  {p.lastShift ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}` : ""}
+                </span>
+              </a>
+            ))}
+          </div>
         </div>
       )}
     </div>
