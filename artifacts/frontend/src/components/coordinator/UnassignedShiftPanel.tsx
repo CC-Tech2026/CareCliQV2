@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Phone, Mail, Target } from "lucide-react";
+import { Phone, Mail, Target, CalendarClock, Ban } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue } from "@/lib/datetime";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { WorkerMatchBadge } from "@/components/coordinator/WorkerMatchBadge";
 import { ContactLink } from "@/components/team/WorkerDetail";
@@ -18,6 +20,8 @@ import {
   getParticipantTasks,
   assignExistingShift,
   sendShiftOffer,
+  rescheduleShift,
+  cancelShift,
   type CoordinatorShiftRecord,
   type WorkerStats,
   type AvailableWorker,
@@ -52,8 +56,18 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   const auth = useAuth();
   const orgId = auth?.user?.organizationId ?? "__no_org__";
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [draftStart, setDraftStart] = useState("");
+  const [draftEnd, setDraftEnd] = useState("");
 
   const participantId = shift?.participant_id;
+
+  // Leaving the reschedule form open across a shift switch (or the panel
+  // closing and reopening on a different card) would silently apply edits
+  // meant for a different shift.
+  useEffect(() => {
+    setRescheduling(false);
+  }, [shift?.id]);
 
   const goalsQuery = useOrgQuery<NdisGoal[]>([orgId, "shift-panel-goals", participantId], {
     queryFn: () => getNdisGoals({ participant_id: participantId! }),
@@ -125,6 +139,50 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
     offerMut.mutate({ workerId: worker.id, candidateQueue });
   };
 
+  const rescheduleMut = useMutation({
+    mutationFn: (payload: { scheduled_start?: string; scheduled_end?: string }) => rescheduleShift(shift!.id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
+      toast({ title: translate("coordinator.shiftAssign.rescheduled") });
+      setRescheduling(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: translate("coordinator.shiftAssign.rescheduleFailed"), description: err.message, variant: "destructive" });
+    },
+  });
+
+  const openReschedule = () => {
+    setDraftStart(shift?.scheduled_start ? utcIsoToDatetimeLocalValue(shift.scheduled_start) : "");
+    setDraftEnd(shift?.scheduled_end ? utcIsoToDatetimeLocalValue(shift.scheduled_end) : "");
+    setRescheduling(true);
+  };
+
+  const handleSaveReschedule = () => {
+    if (!draftStart) return;
+    rescheduleMut.mutate({
+      scheduled_start: datetimeLocalValueToUtcIso(draftStart),
+      scheduled_end: draftEnd ? datetimeLocalValueToUtcIso(draftEnd) : undefined,
+    });
+  };
+
+  const cancelMut = useMutation({
+    mutationFn: () => cancelShift(shift!.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
+      toast({ title: translate("coordinator.shiftAssign.cancelled") });
+      onOpenChange(false);
+      onAssigned?.();
+    },
+    onError: (err: Error) => {
+      toast({ title: translate("coordinator.shiftAssign.cancelFailed"), description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleCancelShift = () => {
+    if (!window.confirm(translate("coordinator.shiftAssign.cancelShiftConfirm"))) return;
+    cancelMut.mutate();
+  };
+
   const start = shift?.scheduled_start ? parseISO(shift.scheduled_start) : null;
   const end = shift?.scheduled_end ? parseISO(shift.scheduled_end) : null;
   const goalsWithTasks = (goalsQuery.data ?? [])
@@ -142,6 +200,62 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
               {shift?.shift_type ? ` · ${shift.shift_type.replace(/_/g, " ")}` : ""}
             </SheetDescription>
           </SheetHeader>
+
+          {/* Reschedule / cancel - the only edit actions this shift has, since
+              it's still unassigned (no worker to conflict-check against). */}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openReschedule}
+              disabled={rescheduling || cancelMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
+              style={{ borderColor: BORDER, color: TEXT }}
+            >
+              <CalendarClock size={13} /> {translate("coordinator.shiftAssign.reschedule")}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelShift}
+              disabled={rescheduling || cancelMut.isPending}
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
+              style={{ borderColor: "#FCA5A5", color: "#DC2626" }}
+            >
+              <Ban size={13} /> {translate("coordinator.shiftAssign.cancelShift")}
+            </button>
+          </div>
+
+          {rescheduling && (
+            <div className="mt-3 space-y-3 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
+                <DateTimePicker value={draftStart} onChange={setDraftStart} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
+                <DateTimePicker value={draftEnd} onChange={setDraftEnd} />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveReschedule}
+                  disabled={!draftStart || rescheduleMut.isPending}
+                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                  style={{ background: PLUM }}
+                >
+                  {translate("coordinator.shiftAssign.rescheduleSave")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRescheduling(false)}
+                  disabled={rescheduleMut.isPending}
+                  className="rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-50"
+                  style={{ borderColor: BORDER, color: MUTED }}
+                >
+                  {translate("coordinator.shiftAssign.rescheduleDiscard")}
+                </button>
+              </div>
+            </div>
+          )}
 
           {shift?.cannot_attend_reason && (
             <div

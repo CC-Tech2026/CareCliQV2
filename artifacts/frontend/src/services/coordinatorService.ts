@@ -808,6 +808,28 @@ export function unassignShift(shiftId: string) {
   );
 }
 
+/** Change a shift's start and/or end time (assigned or unassigned) and
+ * notify the assigned worker, if any. */
+export function rescheduleShift(shiftId: string, payload: { scheduled_start?: string; scheduled_end?: string }) {
+  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/schedule`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+/** Cancel a shift outright (assigned or unassigned) and notify the assigned
+ * worker, if any. Idempotent - cancelling an already-cancelled shift is a no-op. */
+export function cancelShift(shiftId: string) {
+  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/cancel`,
+    { method: "PATCH" }
+  );
+}
+
 /** Reassign a shift to a different worker */
 export function reassignShift(shiftId: string, newWorkerId: string, confirmConflicts = false) {
   return jsonFetch<AssignExistingShiftResult>(
