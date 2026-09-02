@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +36,8 @@ type ExtendedSession = Session & {
   goal_progress_notes?: GoalProgressNote[] | null;
   // SCRUM-227: participant choice & control narrative
   participant_choice_control?: string | null;
+  worker_id?: string | null;
+  worker_name?: string | null;
 };
 
 import { Button } from "@/components/ui/button";
@@ -53,7 +55,7 @@ import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
   RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target,
-  Flag, FlagOff, ArrowLeft,
+  Flag, FlagOff, ArrowLeft, User,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -228,6 +230,7 @@ function RuleIcon({ status }: { status: string }) {
 export default function SessionDetail({ id }: { id?: string }) {
   const { id: paramId } = useParams();
   const sessionId = id || paramId;
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -379,6 +382,34 @@ export default function SessionDetail({ id }: { id?: string }) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Sign-off audit trail — worker identity, signature, and acknowledgements.
+  // Same /audit endpoint the Export Audit button downloads, just also shown
+  // on screen instead of only inside a JSON file nobody opens day to day.
+  const { data: auditTrail } = useOrgQuery(["sessionAudit", sessionId], {
+    queryFn: async () => {
+      const res = await apiFetch(`/api/sessions/${sessionId}/audit`);
+      if (!res.ok) throw new Error("Failed to load audit trail");
+      return res.json() as Promise<{
+        worker?: { id?: string | null; name?: string | null };
+        signature?: {
+          signer_name?: string | null;
+          signed_at?: string | null;
+          confirm_tasks_accurate?: boolean;
+          confirm_safety_followed?: boolean;
+          confirm_no_unreported_incidents?: boolean;
+          signature_png_url?: string | null;
+          content_hash?: string | null;
+          device_id?: string | null;
+          ip_address?: string | null;
+        } | null;
+        risk_acknowledgement?: { acknowledged_by_name?: string | null; acknowledged_at?: string | null } | null;
+        safety_acknowledgements?: Array<{ content_version?: number; acknowledged_at?: string }>;
+      }>;
+    },
+    enabled: Boolean(sessionId),
+    staleTime: 1000 * 60,
+  });
+
   // Stage 6: AI note improvement — per-rule suggestions + full rewrite
   const improveNoteMutation = useMutation({
     mutationFn: async () => {
@@ -459,6 +490,25 @@ export default function SessionDetail({ id }: { id?: string }) {
             description: `Tick the checkbox for each issue in the compliance panel before saving.`,
             variant: "destructive",
           });
+        } else if (detail?.code === "COMPLIANCE_BLOCKING_FAILURE") {
+          // The backend already knows exactly which rule(s) failed and why
+          // (detail.blocking_rules) - showing only the generic top-line
+          // message left the worker with no way to know what to fix.
+          const rules = Array.isArray(detail.blocking_rules) ? detail.blocking_rules : [];
+          toast({
+            title: translate("sessions.detail.toast.aiFailed"),
+            // Joined with a bullet, not a newline - ToastDescription has no
+            // white-space: pre-wrap, so literal \n characters would just
+            // collapse into a single run-on line instead of separate rows.
+            description: rules.length
+              ? rules.map((r: { label?: string; message?: string }) => `${r.label ?? ""}: ${r.message ?? ""}`).join("  •  ")
+              : detail?.message ?? translate("toast.tryAgain"),
+            variant: "destructive",
+          });
+          // These same rules are persisted to compliance_rule_results even on
+          // a blocking failure - refetch so the "Must Fix" panel below shows
+          // the same detail the toast just gave, not stale/older results.
+          refetch();
         } else {
           toast({ title: translate("sessions.detail.toast.aiFailed"), description: detail?.message ?? translate("toast.tryAgain"), variant: "destructive" });
         }
@@ -569,6 +619,20 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   return (
     <div className="space-y-6 pb-12">
+
+      {/* Back — this page has no single fixed parent (reachable from a
+          participant's Shift History, the Compliance tab, a worker's own
+          session list, etc), so browser history is the only thing that's
+          reliably correct regardless of entry point. Falls back to the
+          participants list if opened with no history (e.g. a fresh tab). */}
+      <button
+        type="button"
+        onClick={() => (window.history.length > 1 ? window.history.back() : navigate("/patients"))}
+        className="flex items-center gap-1.5 text-[13px] font-medium transition-opacity hover:opacity-70"
+        style={{ color: "var(--cc-muted)" }}
+      >
+        <ArrowLeft size={14} /> Back
+      </button>
 
       {/* Blocking save warning dialog */}
       <AlertDialog open={showSaveWarning} onOpenChange={setShowSaveWarning}>
@@ -703,6 +767,11 @@ export default function SessionDetail({ id }: { id?: string }) {
             </span>
             <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {session.duration_minutes || 0} min</span>
             <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-slate-400" /> {session.session_type}</span>
+            {(session as ExtendedSession).worker_name && (
+              <span className="flex items-center gap-1.5">
+                <User className="h-4 w-4 text-slate-400" /> {(session as ExtendedSession).worker_name}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1040,6 +1109,89 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Right column — compliance score breakdowns + linked targets + metadata tools */}
         <div className="space-y-6">
+
+          {/* Sign-Off & Audit Trail — the actual evidence a completed shift
+              happened as documented: who signed, what they confirmed, when,
+              plus any safety/risk acknowledgements on file. Previously only
+              reachable by downloading the raw Export Audit JSON. */}
+          {auditTrail && (
+            <div className="rounded-2xl overflow-hidden bg-white" style={{ boxShadow: "var(--cc-card-shadow)" }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "var(--cc-card-divider)" }}>
+                <Shield className="h-4 w-4 text-slate-500" />
+                <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>Sign-Off &amp; Audit Trail</p>
+              </div>
+              <div className="p-5 space-y-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Support Worker</span>
+                  <span className="font-bold text-slate-800">
+                    {auditTrail.worker?.name || <span className="italic font-medium text-slate-400">Not recorded</span>}
+                  </span>
+                </div>
+
+                {auditTrail.signature ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800">Signed off</span>
+                      <span className="text-[10px] text-slate-500">
+                        {auditTrail.signature.signed_at ? new Date(auditTrail.signature.signed_at).toLocaleString() : "unknown time"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {[
+                        ["Tasks accurate", auditTrail.signature.confirm_tasks_accurate],
+                        ["Safety protocols followed", auditTrail.signature.confirm_safety_followed],
+                        ["No unreported incidents", auditTrail.signature.confirm_no_unreported_incidents],
+                      ].map(([label, ok]) => (
+                        <span key={label as string} className="flex items-center gap-1.5">
+                          {ok ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-red-500" />}
+                          {label as string}
+                        </span>
+                      ))}
+                    </div>
+                    {auditTrail.signature.signature_png_url && (
+                      <img
+                        src={auditTrail.signature.signature_png_url}
+                        alt="Worker signature"
+                        className="h-16 rounded-lg border border-slate-200 bg-white object-contain px-2"
+                      />
+                    )}
+                    {auditTrail.signature.content_hash && (
+                      <p className="text-[9px] text-slate-400 font-mono truncate" title={auditTrail.signature.content_hash}>
+                        Hash: {auditTrail.signature.content_hash}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="italic text-slate-400">Not yet signed off.</p>
+                )}
+
+                {auditTrail.risk_acknowledgement && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Risk acknowledgement</span>
+                    <span className="font-medium text-slate-700 text-[11px]">
+                      {auditTrail.risk_acknowledgement.acknowledged_by_name || "Worker"} ·{" "}
+                      {auditTrail.risk_acknowledgement.acknowledged_at
+                        ? new Date(auditTrail.risk_acknowledgement.acknowledged_at).toLocaleDateString()
+                        : ""}
+                    </span>
+                  </div>
+                )}
+
+                {(auditTrail.safety_acknowledgements?.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-slate-500 mb-1">Safety protocol acknowledgements</p>
+                    <div className="space-y-1">
+                      {auditTrail.safety_acknowledgements!.map((ack, i) => (
+                        <p key={i} className="text-[11px] text-slate-700">
+                          v{ack.content_version} · {ack.acknowledged_at ? new Date(ack.acknowledged_at).toLocaleDateString() : ""}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Compliance Score Card */}
           <div className="rounded-2xl overflow-hidden bg-white" style={{
@@ -1399,7 +1551,9 @@ export default function SessionDetail({ id }: { id?: string }) {
             <div className="p-4 space-y-3 text-xs font-medium">
               <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50">
                 <span className="text-slate-500">Support Category:</span>
-                <span className="text-slate-800 font-bold">{(session as ExtendedSession).support_category || "Capacity Building"}</span>
+                <span className="text-slate-800 font-bold">
+                  {(session as ExtendedSession).support_category || <span className="italic font-medium text-slate-400">Not set</span>}
+                </span>
               </div>
               <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50">
                 <span className="text-slate-500">Calculated Cost:</span>

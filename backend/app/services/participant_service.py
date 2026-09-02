@@ -294,7 +294,30 @@ async def get_participant_by_id(
             _normalize(participant),
             active_only=False,
         )
-        return await funding_service.enrich_participant_plan_fields(enriched)
+        enriched = await funding_service.enrich_participant_plan_fields(enriched)
+
+        # assigned_worker_id has always been on this record but was never
+        # resolved to a name anywhere - coordinators/MD had no way to see
+        # who is actually rostered to this participant, only who happened to
+        # work any one specific already-completed shift (Shift History).
+        assigned_worker_id = enriched.get("assigned_worker_id")
+        if assigned_worker_id:
+            try:
+                worker_resp = (
+                    supabase.table("users")
+                    .select("full_name, email")
+                    .eq("id", assigned_worker_id)
+                    .maybe_single()
+                    .execute()
+                )
+                if worker_resp and worker_resp.data:
+                    enriched["assigned_worker_name"] = (
+                        worker_resp.data.get("full_name") or worker_resp.data.get("email")
+                    )
+            except Exception:
+                pass
+
+        return enriched
 
     except Exception as exc:
 

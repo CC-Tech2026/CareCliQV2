@@ -19,7 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO } from "date-fns";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Search,
   UserPlus,
@@ -194,6 +194,7 @@ export type ParticipantRecord = {
   used_budget?: number | string | null;
   goals?: Array<Record<string, unknown>>;
   assigned_worker_id?: string | null;
+  assigned_worker_name?: string | null;
   allied_health_id?: string | null;
 };
 
@@ -213,6 +214,8 @@ export type SessionRecord = {
   translation_provider?: string | null;
   goals_addressed?: unknown;
   participant_name?: string | null;
+  worker_id?: string | null;
+  worker_name?: string | null;
 };
 
 export type BudgetSummary = {
@@ -1005,10 +1008,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
 
   const qc = useQueryClient();
 
-  // UI state — collapsible header + inline shift detail
+  const [, navigate] = useLocation();
+
+  // UI state — collapsible header
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  // Session detail panel — opens full session detail in-context instead of navigating away
-  const [sessionPanelId, setSessionPanelId] = useState<string | null>(null);
 
   // Assign Shift — coordinator only
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -1181,6 +1184,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
   const [careProfileSection, setCareProfileSection] = useState<"context" | "clinical">("context");
   const [planGoalsSection, setPlanGoalsSection] = useState<"plan" | "goals">("plan");
   const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
+
+  // Keep ?id=&tab= in sync with what's actually on screen, replacing (not
+  // pushing) so tab clicks don't pollute history - browser back only needs
+  // to restore the CURRENT entry, not step through every tab switch. Without
+  // this, navigating away (e.g. to a session's full detail page) and back
+  // always landed on the participant list with nothing selected, since this
+  // page's real state (which participant, which tab) never made it into the
+  // URL despite the deep-link *read* side already existing below.
+  useEffect(() => {
+    navigate(`/patients?id=${id}&tab=${activeTab}`, { replace: true });
+  }, [id, activeTab]);
 
   // Form state for creating / editing goals & tasks
   const [createMode, setCreateMode] = useState<'goal' | 'edit_goal' | 'tasks' | null>(null);
@@ -1365,13 +1379,19 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               {participant.plan_start_date && participant.plan_end_date && (
                 <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
               )}
+              {participant.assigned_worker_name && (
+                <> &middot; Assigned: {participant.assigned_worker_name}</>
+              )}
             </p>
-            
+
              {/* NDIS number + plan dates — desktop */}
               <p className="hidden sm:block text-[11px] text-[#6A6A77] leading-relaxed mt-2" style={{ color: "var(--cc-muted)" }}>
                 {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
                 {participant.plan_start_date && participant.plan_end_date && (
                   <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
+                )}
+                {participant.assigned_worker_name && (
+                  <> &middot; Assigned: {participant.assigned_worker_name}</>
                 )}
               </p>
           </div>
@@ -2500,8 +2520,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
           <ParticipantSessionsTab
             sessions={sessions}
             isLoading={sessionsQuery.isLoading}
-            sessionPanelId={sessionPanelId}
-            onSessionPanelIdChange={setSessionPanelId}
           />
         )}
         {activeTab === "compliance" && (
@@ -2509,10 +2527,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
             complianceHistory={complianceHistory}
             averageCompliance={averageCompliance}
             isLoading={complianceQuery.isLoading}
-            onSelectSession={(sessionId) => {
-              setSessionPanelId(sessionId);
-              setActiveTab("sessions");
-            }}
+            onSelectSession={(sessionId) => navigate(`/sessions/${sessionId}`)}
             breakdown={complianceBreakdownQuery.data ?? null}
             breakdownLoading={complianceBreakdownQuery.isLoading}
           />
