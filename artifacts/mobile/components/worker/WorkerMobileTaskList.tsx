@@ -21,6 +21,7 @@ type Props = {
   shiftId?: string;
   sessionId: string | null;
   participantName: string;
+  participantId?: string | null;
   sessionNotes: SessionNoteRecord[];
   compliance: ComplianceEvaluation;
   onNoteSaved: (note: SessionNoteRecord) => void | Promise<void>;
@@ -45,6 +46,7 @@ export function WorkerMobileTaskList({
   shiftId,
   sessionId,
   participantName,
+  participantId,
   sessionNotes,
   compliance,
   onNoteSaved,
@@ -71,9 +73,9 @@ export function WorkerMobileTaskList({
               {
                 borderTopWidth: index > 0 ? StyleSheet.hairlineWidth : 0,
                 borderTopColor: colors.border,
-                backgroundColor: done ? colors.success + "10" : expanded ? colors.primary + "08" : "transparent",
-                borderLeftWidth: done ? 3 : 0,
-                borderLeftColor: colors.success,
+                backgroundColor: done ? colors.success + "10" : expanded ? colors.primary + "12" : "transparent",
+                borderLeftWidth: done || expanded ? 3 : 0,
+                borderLeftColor: done ? colors.success : colors.primary,
               },
             ]}
           >
@@ -227,6 +229,7 @@ export function WorkerMobileTaskList({
                   taskId={task.task_id}
                   taskLabel={task.label}
                   participantName={participantName}
+                  participantId={participantId}
                   disabled={disabled || !sessionId}
                   onNoteSaved={onNoteSaved}
                 />

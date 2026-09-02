@@ -67,9 +67,9 @@ export function DuringShiftActionsSidebar({ shiftId, officePhone, onReportIncide
     return (
       <Pressable
         onPress={() => setExpanded(true)}
-        style={[styles.tab, { top: tabTop, backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.tab, { top: tabTop, backgroundColor: colors.primary, borderColor: colors.primary }]}
       >
-        <Feather name="chevron-left" size={16} color={colors.mutedForeground} />
+        <Feather name="chevron-left" size={16} color="#FFFFFF" />
       </Pressable>
     );
   }
@@ -127,6 +127,11 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: -2, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   panel: {
     position: "absolute",
