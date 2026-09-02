@@ -6,7 +6,7 @@ import {
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
   Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
-  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown,
+  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
   Maximize2, Minimize2, Star,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -14,14 +14,15 @@ import {
   getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments, getWorkerAvailability,
   assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
-  getWorkerSkills, getWorkerShiftHistory, getWorkerPerformanceDashboard, getWorkerAssignments,
+  getWorkerSkills, getWorkerShiftHistory, getWorkerShiftHistoryDetail, getWorkerPerformanceDashboard, getWorkerAssignments,
   getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
   getShiftMatchFeedback, postShiftMatchFeedback,
   getCoordinatorWorkerStats, assignWorkerCoordinator,
   getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
-import type { ShiftHistoryRow } from "@/services/workerPerformanceService";
+import type { ShiftHistoryRow, ShiftHistoryDetail } from "@/services/workerPerformanceService";
+import { listIncidents } from "@/services/incidentService";
 import { getWorkerInduction } from "@/services/inductionService";
 import { reviewCredential, type Credential } from "@/services/credentialsService";
 import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
@@ -1898,9 +1899,11 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
   const dashboardQuery = useOrgQuery(["worker-performance-dashboard", worker.id], {
     queryFn: () => getWorkerPerformanceDashboard(worker.id),
   });
+  const [openShiftId, setOpenShiftId] = useState<string | null>(null);
 
   const shifts = historyQuery.data?.shifts ?? [];
   const dashboard = dashboardQuery.data;
+  const openShift = openShiftId ? shifts.find((s) => s.id === openShiftId) ?? null : null;
 
   return (
     <div className="space-y-4">
@@ -1976,9 +1979,18 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
         ) : shifts.length === 0 ? (
           <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>No completed shifts on file yet.</p>
         ) : (
-          <ShiftHistoryList shifts={shifts} />
+          <ShiftHistoryList shifts={shifts} onOpenShift={setOpenShiftId} />
         )}
       </div>
+
+      {/* Per-shift audit trail - a side panel rather than an inline dropdown,
+          so a shift with a lot to show (incidents, flagged tasks, notes) gets
+          real room instead of squeezing into an expanding row. */}
+      <Sheet open={!!openShift} onOpenChange={(open) => { if (!open) setOpenShiftId(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto" style={{ background: SURFACE }}>
+          {openShift && <ShiftAuditPanel workerId={worker.id} shift={openShift} />}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -1988,7 +2000,7 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
  * shift" badge, prompting the coordinator toward the light-touch check-in
  * the design spec calls for on new pairings. Computed client-side from the
  * already-fetched shift list rather than a new backend field. */
-function ShiftHistoryList({ shifts }: { shifts: ShiftHistoryRow[] }) {
+function ShiftHistoryList({ shifts, onOpenShift }: { shifts: ShiftHistoryRow[]; onOpenShift: (id: string) => void }) {
   const firstPairingShiftIds = useMemo(() => {
     const earliestByParticipant = new Map<string, { id: string; time: number }>();
     for (const s of shifts) {
@@ -2003,39 +2015,263 @@ function ShiftHistoryList({ shifts }: { shifts: ShiftHistoryRow[] }) {
   return (
     <div className="divide-y" style={{ borderColor: BORDER }}>
       {shifts.slice(0, 30).map((s) => (
-        <ShiftHistoryRowItem key={s.id} shift={s} isFirstPairing={firstPairingShiftIds.has(s.id)} />
+        <ShiftHistoryRowItem key={s.id} shift={s} isFirstPairing={firstPairingShiftIds.has(s.id)} onOpen={() => onOpenShift(s.id)} />
       ))}
     </div>
   );
 }
 
-function ShiftHistoryRowItem({ shift: s, isFirstPairing }: { shift: ShiftHistoryRow; isFirstPairing: boolean }) {
+/** clocked_in_at/clocked_out_at when available (what actually happened),
+ * falling back to scheduled_start/end - a completed shift almost always has
+ * the real clock times, but older/backfilled rows may not. */
+function formatShiftTimeRange(s: ShiftHistoryRow): string | null {
+  const start = s.clocked_in_at || s.scheduled_start;
+  const end = s.clocked_out_at || s.scheduled_end;
+  if (!start || !end) return null;
+  const startLabel = safeFormat(start, "h:mm a");
+  const endLabel = safeFormat(end, "h:mm a");
+  if (!startLabel || !endLabel) return null;
+  return `${startLabel} – ${endLabel}`;
+}
+
+/** A plain summary row - clicking it opens the full audit trail as a side
+ * panel (ShiftAuditPanel) rather than expanding inline, so incidents,
+ * flagged tasks, and notes all get proper room instead of a cramped dropdown. */
+function ShiftHistoryRowItem({
+  shift: s, isFirstPairing, onOpen,
+}: {
+  shift: ShiftHistoryRow;
+  isFirstPairing: boolean;
+  onOpen: () => void;
+}) {
   const band = complianceBandColor(s.compliance_band);
-  const [open, setOpen] = useState(isFirstPairing);
+  const timeRange = formatShiftTimeRange(s);
 
   return (
-    <div className="px-5 py-3">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
-            {isFirstPairing && (
-              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
-                First shift
-              </span>
-            )}
-          </div>
-          <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-            {safeFormat(s.scheduled_start, "d MMM yyyy")}
-            {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
-          </p>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-black/[0.02]"
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
+          {isFirstPairing && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+              First shift
+            </span>
+          )}
         </div>
-        <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" style={band}>
+        <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+          {safeFormat(s.scheduled_start, "d MMM yyyy")}
+          {timeRange ? ` · ${timeRange}` : ""}
+          {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
+        </p>
+        {s.compliance_explanation && (
+          <p className="mt-1 text-xs truncate" style={{ color: MUTED }}>{s.compliance_explanation}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="rounded-full px-2 py-1 text-[10px] font-black" style={band}>
           {s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : s.compliance_band}
         </span>
-      </button>
-      {open && <ShiftMatchFeedbackForm shiftId={s.id} />}
-    </div>
+        <ChevronRight size={14} style={{ color: MUTED }} />
+      </div>
+    </button>
+  );
+}
+
+const FLAG_TYPE_LABEL: Record<string, string> = {
+  no_evidence: "completed without evidence",
+  incomplete: "not completed",
+  low_compliance: "low overall compliance",
+};
+
+type ShiftIncidentSummary = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  incident_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  worker_actions?: string | null;
+  corrective_actions?: string | null;
+  incident_date?: string | null;
+  resolved_date?: string | null;
+  ndis_reportable?: boolean | null;
+};
+
+/** Full per-shift audit trail, opened as a side panel: outcome/score,
+ * incidents reported during this shift (what happened, action taken, when),
+ * flagged tasks, what went well, shift notes, and coordinator feedback. This
+ * is the "what did they actually do" view behind a single shift's score. */
+function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHistoryRow }) {
+  const band = complianceBandColor(shift.compliance_band);
+  const timeRange = formatShiftTimeRange(shift);
+
+  const { data, isLoading } = useOrgQuery(["worker-shift-history-detail", workerId, shift.id], {
+    queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
+  });
+  const { data: incidents, isLoading: incidentsLoading } = useOrgQuery(
+    ["shift-incidents", shift.id],
+    { queryFn: () => listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }) },
+  );
+
+  const flagged = data?.flagged_tasks ?? [];
+  const tasks = (data?.tasks ?? []) as Array<{
+    task_id?: string; label?: string; completed?: boolean; marked_na?: boolean;
+    has_photo?: boolean; has_voice?: boolean; note?: string;
+  }>;
+  const doneWell = tasks.filter(
+    (t) => !t.marked_na && t.completed
+      && (t.has_photo || t.has_voice || (t.note && t.note.trim().length >= 20)),
+  );
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+          <ClipboardCheck size={18} style={{ color: PLUM }} />
+          Shift audit — {shift.participant_name || "Participant"}
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="mt-4 space-y-5">
+        {/* Summary: date, time, duration, participant, score, outcome */}
+        <div className="rounded-xl border p-4 space-y-1.5" style={{ borderColor: BORDER, background: SOFT }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-black" style={{ color: TEXT }}>
+              {safeFormat(shift.scheduled_start, "EEEE d MMM yyyy")}
+            </p>
+            <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black" style={band}>
+              {shift.compliance_score != null ? `${Math.round(shift.compliance_score)}%` : shift.compliance_band}
+            </span>
+          </div>
+          <p className="text-xs" style={{ color: MUTED }}>
+            {timeRange || "Clock in/out not recorded"}
+            {shift.duration_minutes ? ` · ${Math.round(shift.duration_minutes / 60 * 10) / 10}h` : ""}
+          </p>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Participant: <span style={{ color: TEXT }}>{shift.participant_name || "Not recorded"}</span>
+          </p>
+          {shift.compliance_explanation && (
+            <p className="pt-1.5 text-xs" style={{ color: TEXT }}>{shift.compliance_explanation}</p>
+          )}
+        </div>
+
+        {/* Incidents - explicit audit-trail requirement: what happened, what
+            action was taken, and when, for anything reported off this shift. */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+            Incidents this shift
+          </p>
+          {incidentsLoading ? (
+            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+          ) : !incidents || incidents.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED }}>No incidents reported for this shift.</p>
+          ) : (
+            <div className="space-y-2">
+              {incidents.map((inc) => (
+                <div
+                  key={inc.id}
+                  className="rounded-xl border p-3"
+                  style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-black" style={{ color: TEXT }}>
+                      {inc.title || (inc.incident_type ?? "incident").replace(/_/g, " ")}
+                    </p>
+                    {inc.severity && (
+                      <span className="shrink-0 text-[9px] font-black uppercase" style={{ color: "var(--cc-status-danger)" }}>
+                        {inc.severity}
+                      </span>
+                    )}
+                  </div>
+                  {inc.description && (
+                    <p className="mt-1 text-xs" style={{ color: TEXT }}>{inc.description}</p>
+                  )}
+                  {(inc.worker_actions || inc.corrective_actions) && (
+                    <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                      <span className="font-bold" style={{ color: TEXT }}>Action taken: </span>
+                      {inc.worker_actions || inc.corrective_actions}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>
+                    {inc.incident_date ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a") : "Date not recorded"}
+                    {" · "}
+                    {inc.status ? String(inc.status).replace(/_/g, " ") : "Status not set"}
+                    {inc.resolved_date ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}` : ""}
+                    {inc.ndis_reportable ? " · NDIS reportable" : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isLoading ? (
+          <p className="text-xs" style={{ color: MUTED }}>Loading shift detail…</p>
+        ) : (
+          <>
+            {flagged.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-danger)" }}>Flagged</p>
+                <ul className="space-y-1">
+                  {flagged.map((f, i) => (
+                    <li key={`${f.task_id ?? "overall"}-${i}`} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
+                      <AlertTriangle size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-danger)" }} />
+                      <span>
+                        {(f.label as string) || "Overall compliance"}
+                        {f.flag_type ? ` — ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {doneWell.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-success)" }}>Done well</p>
+                <ul className="space-y-1">
+                  {doneWell.map((t) => (
+                    <li key={t.task_id} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
+                      <CheckCircle2 size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-success)" }} />
+                      {t.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {data?.notes && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Shift notes</p>
+                <p className="whitespace-pre-wrap text-xs" style={{ color: TEXT }}>{data.notes}</p>
+              </div>
+            )}
+
+            {data?.feedback && data.feedback.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Coordinator feedback</p>
+                <ul className="space-y-1.5">
+                  {data.feedback.map((f) => (
+                    <li key={f.id} className="text-xs" style={{ color: TEXT }}>
+                      <span className="font-bold">{f.coordinator_name ?? "Coordinator"}:</span> {f.strengths}
+                      {f.areas_to_improve ? ` · ${f.areas_to_improve}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="border-t pt-4" style={{ borderColor: BORDER }}>
+          <ShiftMatchFeedbackForm shiftId={shift.id} />
+        </div>
+      </div>
+    </>
   );
 }
 

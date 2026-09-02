@@ -164,7 +164,7 @@ def _task_evidence_items(task: dict[str, Any]) -> list[dict[str, Any]]:
     photo_item = _photo_evidence_item(task)
     if photo_item:
         items.append({**photo_item, "type": "photo"})
-    if task.get("voice_evidence"):
+    if task.get("voice_evidence") or task.get("has_voice"):
         items.append({
             "task_id": task.get("task_id"),
             "label": task.get("label"),
@@ -244,7 +244,7 @@ def list_completed_shifts(
             .select(
                 "id, participant_id, participant_name, scheduled_start, scheduled_end, "
                 "duration_minutes, status, session_id, tasks, clocked_in_at, clocked_out_at, "
-                "updated_at, worker_id, created_by"
+                "updated_at, worker_id"
             )
             .eq("worker_id", worker_id)
             .eq("organization_id", organization_id)
@@ -308,6 +308,15 @@ def get_shift_history_detail(
 
     validation = _get_session_validation(shift)
     score = validation.get("compliance_score")
+    # Deliberately the raw shifts.tasks JSONB, NOT _resolve_shift_checklist_
+    # tasks()/the normalized shift_tasks table: shift_tasks only ever stores
+    # completed/note/marked_na (see _sync_shift_tasks_progress in
+    # shift_service.py) - has_photo/has_voice/photo_evidence/voice_evidence
+    # are never written there, only into this JSONB column. Using the
+    # "preferred" normalized source here would silently strip photo/voice
+    # evidence from the compliance picture. This also matches what
+    # end_shift() itself reads when it computes and caches the validation
+    # this function falls back to, so the two stay consistent.
     tasks = shift.get("tasks") or []
 
     notes = ""
@@ -326,6 +335,52 @@ def get_shift_history_detail(
             notes = (sess.get("compliance_input_text") or sess.get("notes") or "").strip()
         except Exception:
             pass
+
+    # The current per-task composer (mobile) writes documentation exclusively
+    # to shift_visit_notes - sessions.notes/compliance_input_text is a legacy
+    # single free-text field from before that redesign and is never populated
+    # by it. Without this, a shift fully documented task-by-task showed up
+    # here (and in the auto-generated AI PDF summary, which reads this same
+    # "notes" field) as if nothing was written at all. Timestamps are kept
+    # inline so this also serves as a readable audit trail of when each note
+    # was actually captured, not just what it said.
+    session_notes: list[dict[str, Any]] = []
+    try:
+        vn_resp = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("id, content, task_id, category, created_at, worker_id")
+            .eq("shift_id", shift_id)
+            .order("created_at")
+            .execute()
+        )
+        task_label_by_id = {
+            str(t.get("task_id")): t.get("label") for t in tasks if t.get("task_id")
+        }
+        visit_note_lines: list[str] = []
+        for row in vn_resp.data or []:
+            content = (row.get("content") or "").strip()
+            if not content:
+                continue
+            task_id = str(row.get("task_id") or "")
+            label = task_label_by_id.get(task_id)
+            created_at = row.get("created_at") or ""
+            timestamp = str(created_at)[:16].replace("T", " ")
+            prefix = f"[{timestamp}] {label}: " if label else f"[{timestamp}] "
+            visit_note_lines.append(f"{prefix}{content}")
+            session_notes.append({
+                "id": row.get("id"),
+                "task_id": task_id or None,
+                "task_label": label,
+                "content": content,
+                "category": row.get("category"),
+                "created_at": created_at,
+            })
+        if visit_note_lines:
+            notes = "\n\n".join(part for part in (notes, "\n\n".join(visit_note_lines)) if part)
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.debug("shift_visit_notes lookup failed for history detail: %s", exc)
 
     evidence_items: list[dict[str, Any]] = []
     for task in tasks:
@@ -373,6 +428,7 @@ def get_shift_history_detail(
         "validation": validation,
         "flagged_tasks": validation.get("flagged_tasks") or [],
         "notes": notes,
+        "session_notes": session_notes,
         "evidence": evidence_items,
         "feedback": feedback_items,
         "shift_signature": signature,

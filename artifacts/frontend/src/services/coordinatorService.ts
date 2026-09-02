@@ -2,7 +2,7 @@ import { jsonFetch } from "@/services/http";
 import { apiFetch } from "@/lib/api-fetch";
 import type { DashboardSession } from "@/services/dashboardService";
 import type { Credential } from "@/services/credentialsService";
-import type { ShiftHistoryRow, PerformanceDashboard } from "@/services/workerPerformanceService";
+import type { ShiftHistoryRow, ShiftHistoryDetail, PerformanceDashboard } from "@/services/workerPerformanceService";
 
 export type TeamMember = {
   id: string;
@@ -915,6 +915,14 @@ export function getWorkerSkills(workerId: string) {
 export function getWorkerShiftHistory(workerId: string) {
   return jsonFetch<{ shifts: ShiftHistoryRow[]; participants: Array<{ id: string; first_name: string }> }>(
     `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history`
+  );
+}
+
+/** Full per-shift breakdown (tasks, flagged items, notes, evidence, signature) -
+ *  the coordinator/MD drill-down behind a single shift history row. */
+export function getWorkerShiftHistoryDetail(workerId: string, shiftId: string) {
+  return jsonFetch<ShiftHistoryDetail>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history/${encodeURIComponent(shiftId)}`
   );
 }
 

@@ -3266,6 +3266,24 @@ async def coordinator_worker_shift_history(
     )
 
 
+@router.get("/workers/{worker_id}/shift-history/{shift_id}")
+async def coordinator_worker_shift_history_detail(
+    worker_id: str,
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full per-shift breakdown (tasks, flagged items, notes, evidence,
+    signature) - the coordinator/MD-facing counterpart to the worker's own
+    GET /worker/shift-history/{shift_id}, same underlying service call."""
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    detail = worker_shift_history_service.get_shift_history_detail(shift_id, worker_id, org_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+    return detail
+
+
 @router.get("/workers/{worker_id}/performance-dashboard")
 async def coordinator_worker_performance_dashboard(
     worker_id: str,
