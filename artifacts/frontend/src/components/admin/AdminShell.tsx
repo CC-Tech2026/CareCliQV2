@@ -14,8 +14,8 @@ import {
   LayoutPanelLeft,
   Accessibility,
   ArrowLeft,
-  ChevronsLeft,
-  ChevronsRight,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -146,7 +146,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-cc-soft"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {iconOnly ? <ChevronsRight size={15} style={{ color: MUTED }} /> : <ChevronsLeft size={15} style={{ color: MUTED }} />}
+            {iconOnly ? <PanelLeftOpen size={16} style={{ color: MUTED }} /> : <PanelLeftClose size={16} style={{ color: MUTED }} />}
           </button>
         </div>
 
