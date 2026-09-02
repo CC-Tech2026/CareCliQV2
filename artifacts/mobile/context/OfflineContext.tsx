@@ -22,7 +22,9 @@ import {
 import {
   clockInShift,
   deleteSessionNote,
+  endShift,
   startShiftSession,
+  submitShiftSignature,
   syncSessionNotes,
   updateShiftTasks,
   uploadSessionAttachment,
@@ -158,6 +160,24 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           }
           if (item.startSession) {
             await startShiftSession(item.shiftId);
+          }
+        } else if (item.type === "end_shift") {
+          if (!item.signatureSubmitted) {
+            try {
+              await submitShiftSignature(item.shiftId, item.signature);
+            } catch (sigError) {
+              const msg = sigError instanceof Error ? sigError.message : "";
+              // Already signed on a prior attempt (e.g. this synced once
+              // before but the end-shift call below failed) - fine, move on.
+              if (!/already signed/i.test(msg)) throw sigError;
+            }
+            await enqueueWorkerUpdate({ ...item, signatureSubmitted: true });
+          }
+          try {
+            await endShift(item.shiftId);
+          } catch (endError) {
+            const msg = endError instanceof Error ? endError.message : "";
+            if (!/already completed/i.test(msg)) throw endError;
           }
         }
         await removeWorkerQueueItem(item.id);

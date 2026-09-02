@@ -71,6 +71,16 @@ export type WorkerOfflineQueueItem =
       id: string;
       payload: import("@/lib/resource-api").WorkerIncidentPayload;
       timestamp: number;
+    }
+  | {
+      type: "end_shift";
+      id: string;
+      shiftId: string;
+      signature: import("@/lib/worker-api").ShiftSignaturePayload;
+      /** Set once the signature itself has synced on a prior attempt, so a
+       * retry doesn't resubmit it - mirrors clock_in's clockedIn flag. */
+      signatureSubmitted?: boolean;
+      timestamp: number;
     };
 
 export async function cacheSessions(sessions: unknown[]): Promise<void> {
@@ -158,8 +168,8 @@ export async function enqueueWorkerUpdate(item: WorkerOfflineQueueItem): Promise
   try {
     const raw = await AsyncStorage.getItem(WORKER_QUEUE_KEY);
     const queue: WorkerOfflineQueueItem[] = raw ? JSON.parse(raw) : [];
-    if (item.type === "clock_in") {
-      const idx = queue.findIndex((q) => q.type === "clock_in" && q.shiftId === item.shiftId);
+    if (item.type === "clock_in" || item.type === "end_shift") {
+      const idx = queue.findIndex((q) => q.type === item.type && q.shiftId === item.shiftId);
       if (idx >= 0) {
         queue[idx] = item;
       } else {

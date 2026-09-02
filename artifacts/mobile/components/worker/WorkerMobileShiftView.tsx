@@ -32,16 +32,20 @@ import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
+  checkShiftDocumentationCompliance,
   clockInShift,
   deleteSessionNote,
   endShift,
   startShiftSession,
   submitMissedCheckinReason,
+  submitShiftSignature,
   syncSessionNotes,
   updateShiftTasks,
   type ActiveBreakStatus,
   type CheckinWindowStatus,
+  type DocumentationComplianceCheck,
   type SessionNoteRecord,
+  type ShiftSignaturePayload,
   type ShiftTask,
   type ShiftVisualState,
   type WorkerShift,
@@ -224,6 +228,49 @@ export function WorkerMobileShiftView({
   useEffect(() => {
     if (sessionId) setFiledNoteIds(loadFiledNoteIds(sessionId));
   }, [sessionId, localNotes]);
+
+  const [documentationCompliance, setDocumentationCompliance] = useState<DocumentationComplianceCheck | null>(null);
+  // Real backend 12-rule check, debounced after note activity settles rather
+  // than run on every keystroke - it's a genuine compliance_engine call
+  // (word count, language, goal references, RP/incident handling, etc), not
+  // free to run continuously the way the local evaluateWorkerCompliance
+  // heuristic above is.
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      checkShiftDocumentationCompliance(shift.id)
+        .then((result) => {
+          if (!cancelled) setDocumentationCompliance(result);
+        })
+        .catch(() => {
+          /* keep showing the last known result rather than clearing it on a transient failure */
+        });
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [shift.id, sessionId, localNotes.length]);
+
+  // One immediate (non-debounced) check right as the worker reaches the
+  // final review screen, so what they see on the compliance report reflects
+  // the actual final state - not a slightly-stale snapshot from the last
+  // 3s-debounced poll if they just added one more note before continuing.
+  useEffect(() => {
+    if (phase !== "review" || !sessionId) return;
+    let cancelled = false;
+    checkShiftDocumentationCompliance(shift.id)
+      .then((result) => {
+        if (!cancelled) setDocumentationCompliance(result);
+      })
+      .catch(() => {
+        /* keep showing the last known result rather than clearing it on a transient failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, shift.id, sessionId]);
 
   const openIncidentReport = useCallback((noteId?: string, content?: string) => {
     setIncidentDraft({ noteId, content });
@@ -474,17 +521,67 @@ export function WorkerMobileShiftView({
     setPhase("signature");
   };
 
-  const handleSigned = async () => {
+  // Signature submission and ending the shift are one transaction now, not
+  // two independent calls split across this component and ShiftSignatureForm
+  // - that split was the actual bug behind shifts silently never completing:
+  // ShiftSignatureForm swallowed a failed signature submit with nothing but
+  // a haptic buzz and no queue fallback, and endShift() itself had no offline
+  // handling at all. A worker signing off with a weak connection (extremely
+  // common leaving a client's home) would see nothing happen, and the shift
+  // would stay stuck in "today" forever - never completed, so never showing
+  // up in shift history either.
+  const queueEndShift = useCallback(
+    async (signature: ShiftSignaturePayload) => {
+      const queued = await queueWorkerUpdate({
+        type: "end_shift",
+        id: `end_shift-${shift.id}`,
+        shiftId: shift.id,
+        signature,
+        timestamp: Date.now(),
+      });
+      return queued;
+    },
+    [shift.id, queueWorkerUpdate],
+  );
+
+  const handleSigned = async (signature: ShiftSignaturePayload) => {
     setBusy("end");
     try {
+      if (!isOnline) {
+        const queued = await queueEndShift(signature);
+        if (queued) {
+          setSubmittedAt(new Date().toISOString());
+          setPhase("submitted");
+          onRefresh();
+          showAlert(
+            "Saved offline",
+            "Your signature and shift completion are saved and will submit automatically once you're back online.",
+          );
+        } else {
+          Alert.alert("Not saved yet", "Couldn't save your sign-off. Please try again before leaving this screen.");
+        }
+        return;
+      }
+
+      try {
+        await submitShiftSignature(shift.id, signature);
+      } catch (sigErr) {
+        const message = sigErr instanceof Error ? sigErr.message : "";
+        if (!/already signed/i.test(message)) throw sigErr;
+      }
+
       // Flush any queued notes/tasks/attachments/incidents before finalizing
       // so the shift isn't marked complete while documentation is still
-      // sitting unsynced on the device. Genuinely offline items just stay
-      // queued and keep retrying in the background - the worker is warned
-      // below rather than blocked, since holding up sign-off wouldn't get
-      // those items online any faster.
+      // sitting unsynced on the device.
       const remaining = await flushNow();
-      await endShift(shift.id);
+
+      try {
+        await endShift(shift.id);
+      } catch (endErr) {
+        const message = endErr instanceof Error ? endErr.message : "";
+        if (!/already completed/i.test(message)) throw endErr;
+      }
+
       setSubmittedAt(new Date().toISOString());
       setPhase("submitted");
       onRefresh();
@@ -495,7 +592,22 @@ export function WorkerMobileShiftView({
         );
       }
     } catch (err) {
-      Alert.alert("End shift failed", err instanceof Error ? err.message : "Please try again.");
+      // A genuine live failure (nominally online, but the signature or
+      // end-shift call itself failed for a real reason - e.g. a dropped
+      // connection mid-request) used to just show an error and strand the
+      // attempt. Fall back to the same offline queue instead of losing it.
+      const queued = await queueEndShift(signature);
+      if (queued) {
+        setSubmittedAt(new Date().toISOString());
+        setPhase("submitted");
+        onRefresh();
+        showAlert(
+          "Saved",
+          "Couldn't reach the server just now - your sign-off will submit automatically once you're back online.",
+        );
+      } else {
+        Alert.alert("End shift failed", err instanceof Error ? err.message : "Please try again.");
+      }
     } finally {
       setBusy(null);
     }
@@ -535,7 +647,6 @@ export function WorkerMobileShiftView({
   if (phase === "signature") {
     return (
       <WorkerMobileSignatureScreen
-        shiftId={shift.id}
         participantName={participantName}
         busy={Boolean(busy)}
         onSigned={handleSigned}
@@ -548,6 +659,7 @@ export function WorkerMobileShiftView({
     return (
       <WorkerMobileComplianceReport
         compliance={compliance}
+        documentationCompliance={documentationCompliance}
         onClose={() => setPhase("review")}
         onContinue={handleContinueFromCompliance}
         onReviseNotes={() => setPhase("review")}
@@ -644,6 +756,7 @@ export function WorkerMobileShiftView({
           shiftId={shift.id}
           participantName={participantName}
           participantFirstName={participantFirstName}
+          participantId={shift.participant_id}
           healthAlerts={shift.health_alerts}
           clockedInAt={shift.clocked_in_at ?? null}
           sessionId={sessionId}
@@ -651,6 +764,7 @@ export function WorkerMobileShiftView({
           onTasksChange={setTasks}
           sessionNotes={localNotes}
           compliance={compliance}
+          documentationCompliance={documentationCompliance}
           onNotesRefresh={refreshNotes}
           onOpenIncidentReport={openIncidentReport}
           disabled={Boolean(busy)}

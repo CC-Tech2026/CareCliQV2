@@ -3157,12 +3157,111 @@ def end_shift(
     now = _now_iso()
     session_id = shift.get("session_id")
     if session_id:
+        # goals_addressed / activities_performed: never populated anywhere
+        # else for shift-linked sessions, so the coordinator/MD "NDIS Core
+        # Mapping" and structured-notes views always showed "no goals linked"
+        # even when the worker completed goal-linked tasks. Both are derived
+        # from real data actually on the tasks (goal_id -> ndis_goals.name,
+        # completed task labels) - not invented. Deliberately NOT populating
+        # outcomes/participant_response/progress_toward_goals here: those are
+        # genuine clinical narrative with no non-fabricated source from a
+        # task checklist: an empty field is honest, a made-up one would not be.
+        completed_active = [t for t in tasks if t.get("completed") and not t.get("marked_na")]
+        goal_ids = list({str(t.get("goal_id")) for t in completed_active if t.get("goal_id")})
+        goals_addressed: list[str] = []
+        if goal_ids:
+            try:
+                goal_rows = (
+                    get_supabase_admin()
+                    .table("ndis_goals")
+                    .select("id, name")
+                    .in_("id", goal_ids)
+                    .execute()
+                )
+                goals_addressed = sorted({
+                    str(row.get("name")).strip()
+                    for row in (goal_rows.data or [])
+                    if row.get("name")
+                })
+            except Exception as exc:
+                if not _is_missing_schema_error(exc):
+                    raise
+        activities_performed = ", ".join(
+            str(t.get("label")).strip() for t in completed_active if t.get("label")
+        )
+
+        # support_category / cost: same gap, and same fix - reuse the exact
+        # calculate_session_cost()/get_support_category() already trusted
+        # elsewhere for NDIS budget-alignment checks (funding_service.py),
+        # rather than a second, invented pricing path. Session_type and
+        # duration are already real, stored values by this point (set when
+        # the session was created) - this isn't a guess, it's the same
+        # calculation the rest of the app already relies on, just never
+        # actually run for a shift-linked session before now.
+        support_category = None
+        cost = None
+        try:
+            from . import funding_service
+
+            sess_resp = (
+                get_supabase_admin()
+                .table("sessions")
+                .select("session_type, duration_minutes, notes, compliance_input_text")
+                .eq("id", str(session_id))
+                .limit(1)
+                .execute()
+            )
+            sess_row = (sess_resp.data or [None])[0]
+            if sess_row:
+                session_type = str(sess_row.get("session_type") or "")
+                duration = int(sess_row.get("duration_minutes") or shift.get("duration_minutes") or 0)
+                if duration > 0:
+                    category_key = funding_service.get_support_category(session_type)
+                    support_category = funding_service._CATEGORY_LABELS.get(
+                        category_key, category_key.replace("_", " ").title()
+                    )
+                    cost_info = funding_service.calculate_session_cost(duration, session_type)
+                    cost = cost_info.get("cost")
+        except Exception as exc:
+            if not _is_missing_schema_error(exc):
+                raise
+            sess_row = None
+
+        # notes / compliance_input_text: finalize once, here, at the moment
+        # the worker actually ends the shift - not recomputed on every later
+        # read (session_service.get_session_by_id and friends still do that
+        # aggregation too, but only as a fallback for shifts that ended
+        # before this existed). compliance_input_text specifically is what
+        # /save-with-ai ("Analyze with AI") and /audit actually gate on, and
+        # it was never populated for shift-based sessions at all before this.
+        existing_notes = (sess_row or {}).get("notes") or ""
+        existing_compliance_text = (sess_row or {}).get("compliance_input_text") or ""
+        aggregated_notes = None
+        if not existing_notes.strip() or not existing_compliance_text.strip():
+            aggregated_notes = aggregate_shift_visit_notes_text(shift_id)
+
         session_update: dict[str, Any] = {
             "status": "completed",
             "updated_at": now,
+            "goals_addressed": goals_addressed,
+            "activities_performed": activities_performed,
+            # Never set anywhere else for shift-linked sessions - without it,
+            # R1 (compliance_engine.check_session_time_and_duration) always
+            # fails with "end time is missing" regardless of anything the
+            # worker actually did.
+            "end_time": now,
             "end_validation": validation,
             "compliance_score": validation.get("compliance_score"),
         }
+        if support_category is not None:
+            session_update["support_category"] = support_category
+        if cost is not None:
+            session_update["cost"] = cost
+        if aggregated_notes and aggregated_notes.strip():
+            if not existing_notes.strip():
+                session_update["notes"] = aggregated_notes
+            if not existing_compliance_text.strip():
+                session_update["compliance_input_text"] = aggregated_notes
         try:
             get_supabase_admin().table("sessions").update(session_update).eq("id", str(session_id)).execute()
         except Exception as exc:
@@ -3584,6 +3683,39 @@ def _get_worker_session_or_none(
     if not _session_owned_by_worker(session, worker_id, organization_id):
         return None
     return session
+
+
+def aggregate_shift_visit_notes_text(shift_id: str) -> str:
+    """Consolidate a shift's shift_visit_notes into one timestamped text block.
+
+    The 12-rule compliance engine (compliance_engine.run_compliance_check)
+    expects a single free-text note (session.compliance_input_text) - a shape
+    left over from before the per-task mobile composer, which instead writes
+    many small notes to shift_visit_notes. This is the shared bridge between
+    the two so the real rules engine has something to actually evaluate for
+    shift-based sessions, instead of never running at all.
+    """
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("content, created_at")
+            .eq("shift_id", shift_id)
+            .order("created_at")
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return ""
+        raise
+    lines = []
+    for row in resp.data or []:
+        content = (row.get("content") or "").strip()
+        if not content:
+            continue
+        timestamp = str(row.get("created_at") or "")[:16].replace("T", " ")
+        lines.append(f"[{timestamp}] {content}")
+    return "\n\n".join(lines)
 
 
 def list_session_notes(

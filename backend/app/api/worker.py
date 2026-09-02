@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
@@ -32,8 +32,10 @@ from ..services import (
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
+from ..services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.notification_service import notify_office_worker_message, notify_password_reset_requested
+from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -1552,6 +1554,133 @@ async def worker_clock_out(shift_id: str, current_user: dict = Depends(get_curre
     return shift
 
 
+async def _run_shift_documentation_compliance_check(
+    shift: dict,
+    current_user: dict,
+    *,
+    persist: bool,
+) -> dict:
+    """Run the real R1-R12 rules engine (compliance_engine.run_compliance_check)
+    against a shift's documentation so far.
+
+    Distinct from compute_shift_validation's compliance_score (task evidence -
+    did the worker document each required task): this is the documentation-
+    quality axis (is the note itself NDIS-compliant - length, language, goal
+    references, incident/RP handling, etc). The engine expects one
+    consolidated note; the current per-task mobile composer writes many small
+    notes to shift_visit_notes instead, so those get aggregated first via
+    shift_service.aggregate_shift_visit_notes_text - this is the bridge that
+    lets the existing rules engine run for shift-based work at all, since
+    nothing previously called it outside the legacy single-note session flow.
+
+    When persist=True (end-of-shift), the result is saved into
+    sessions.ai_insights.rules_result / compliance_checked_at - the exact
+    field the worker's existing /compliance-detail dashboard already reads
+    via _latest_rule_results, so no dashboard changes were needed, only real
+    data reaching it.
+    """
+    session_id = shift.get("session_id")
+    if not session_id:
+        return {"available": False, "reason": "This shift hasn't started a session yet."}
+
+    session = await session_service.get_session_by_id(str(session_id), current_user)
+    if not session:
+        return {"available": False, "reason": "Session not found."}
+
+    notes_text = shift_service.aggregate_shift_visit_notes_text(str(shift.get("id") or ""))
+    if not notes_text.strip():
+        return {"available": False, "reason": "No documentation recorded yet for this shift."}
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+
+    session_for_analysis = {
+        **session,
+        "notes": notes_text,
+        "compliance_input_text": notes_text,
+        "activities_performed": "",
+        "outcomes": "",
+        "participant_response": "",
+        "progress_toward_goals": "",
+    }
+
+    existing_sessions: list[dict] = []
+    if participant_id:
+        existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
+    custom_physical_types = await get_physical_exam_session_types()
+
+    budget_context = None
+    if participant_id:
+        plan = await funding_service.get_plan_for_participant(participant_id)
+        budget_context = funding_service.build_budget_alignment_context(session_for_analysis, plan)
+
+    duration_context = shift_service.build_duration_consistency_context(session_for_analysis)
+
+    try:
+        rules_result = run_compliance_check(
+            session_for_analysis,
+            participant,
+            existing_sessions,
+            custom_physical_types,
+            budget_context=budget_context,
+            duration_context=duration_context,
+        )
+    except ComplianceBlockedError:
+        return {"available": False, "reason": "Not enough documentation recorded yet to check."}
+
+    enriched_rules = enrich_rule_results(rules_result.get("rules"))
+    result = {
+        "available": True,
+        "score": rules_result.get("score"),
+        "passed": rules_result.get("passed"),
+        "warnings": rules_result.get("warnings"),
+        "failed": rules_result.get("failed"),
+        "total_rules": rules_result.get("total_rules"),
+        "rules": enriched_rules,
+        "failed_rules": [r for r in enriched_rules if r.get("status") in {"fail", "warning"}],
+    }
+
+    if persist:
+        try:
+            existing_ai = session.get("ai_insights") or {}
+            if isinstance(existing_ai, str):
+                existing_ai = json.loads(existing_ai) if existing_ai.strip() else {}
+            if not isinstance(existing_ai, dict):
+                existing_ai = {}
+            existing_ai["rules_result"] = rules_result
+            get_supabase_admin().table("sessions").update({
+                "ai_insights": json.dumps(existing_ai),
+                "compliance_checked_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", str(session_id)).execute()
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist shift documentation compliance check for session %s: %s",
+                session_id, exc,
+            )
+
+    return result
+
+
+@router.get("/shifts/{shift_id}/documentation-compliance-check")
+async def worker_shift_documentation_compliance_check(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only, no-side-effect preview of the real 12-rule documentation
+    check against a shift's notes so far - safe to poll periodically while a
+    shift is in progress (unlike /sessions/{id}/save-with-ai, this makes no AI
+    call and never mutates session status)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("worker_id") or "") != str(worker_id) or str(shift.get("organization_id") or "") != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return await _run_shift_documentation_compliance_check(shift, current_user, persist=False)
+
+
 @router.post("/shifts/{shift_id}/end-shift")
 async def worker_end_shift(
     shift_id: str,
@@ -1587,7 +1716,21 @@ async def worker_end_shift(
         except Exception as exc:
             logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
 
+    async def _documentation_check() -> None:
+        # Off the critical path deliberately: this does several DB round-trips
+        # (note aggregation, goal/budget/duration context, the rules engine
+        # itself) that used to sit in front of the end-shift response the
+        # worker is waiting on - often on a weak connection right as they
+        # leave a client's home. It's supplementary to the task-evidence
+        # score end_shift() already computed synchronously above, so nothing
+        # worker-facing depends on this finishing before the response returns.
+        try:
+            await _run_shift_documentation_compliance_check(shift, current_user, persist=True)
+        except Exception as exc:
+            logger.warning("Documentation compliance check failed for shift %s: %s", shift_id, exc)
+
     background_tasks.add_task(_auto_summary_and_notify)
+    background_tasks.add_task(_documentation_check)
     return shift
 
 

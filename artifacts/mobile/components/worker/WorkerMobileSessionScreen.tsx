@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ClockedInBanner } from "@/components/worker/ClockedInBanner";
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
+import { DocumentationComplianceBar } from "@/components/worker/DocumentationComplianceBar";
 import { LongShiftEngagementPanel } from "@/components/worker/LongShiftEngagementPanel";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
@@ -18,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import type {
   ActiveBreakStatus,
   CheckinWindowStatus,
+  DocumentationComplianceCheck,
   SessionNoteRecord,
   ShiftHealthAlert,
   ShiftTask,
@@ -35,6 +37,7 @@ type Props = {
   shiftId: string;
   participantName: string;
   participantFirstName?: string;
+  participantId?: string | null;
   healthAlerts?: ShiftHealthAlert[];
   clockedInAt: string | null;
   sessionId: string | null;
@@ -42,6 +45,9 @@ type Props = {
   onTasksChange: (tasks: ShiftTask[]) => void;
   sessionNotes: SessionNoteRecord[];
   compliance: ComplianceEvaluation;
+  /** Real backend 12-rule documentation-quality check, fetched periodically
+   * by the parent - null while no check has completed yet. */
+  documentationCompliance?: DocumentationComplianceCheck | null;
   onNotesRefresh: () => void;
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
   disabled?: boolean;
@@ -64,12 +70,39 @@ function sessionNoteTextsForTask(sessionNotes: SessionNoteRecord[], taskId: stri
     .map((n) => n.content!.trim());
 }
 
+/**
+ * Reconciles a task's own evidence fields (note/has_text_notes/has_photo/
+ * has_voice) against every session note attached to it. These fields - not
+ * the session notes themselves - are what the backend's end-of-shift
+ * compliance validation and audit summary read (compute_shift_validation in
+ * shift_validation_service.py operates on the task list, not on
+ * shift_visit_notes), so a task with real photo/voice/text documentation but
+ * stale evidence fields shows up server-side as "no evidence" even though
+ * the worker genuinely documented it. Returns the same object (no new
+ * identity) when nothing actually changed, so callers can cheaply detect
+ * "does this need to sync."
+ */
 function attachSessionNotesToTask(task: ShiftTask, sessionNotes: SessionNoteRecord[]): ShiftTask {
-  const texts = sessionNoteTextsForTask(sessionNotes, task.task_id);
-  if (!texts.length) return task;
-  if ((task.note?.trim().length ?? 0) >= MIN_EVIDENCE_NOTE_CHARS) return task;
-  const merged = texts.join("\n\n").slice(0, SESSION_NOTE_MAX);
-  return { ...task, note: merged, has_text_notes: true };
+  const forTask = sessionNotes.filter((n) => n.task_id === task.task_id);
+  if (!forTask.length) return task;
+
+  const hasPhoto = task.has_photo || forTask.some((n) => n.note_type === "photo");
+  const hasVoice = task.has_voice || forTask.some((n) => n.note_type === "voice");
+
+  let note = task.note;
+  let hasTextNotes = task.has_text_notes;
+  if ((task.note?.trim().length ?? 0) < MIN_EVIDENCE_NOTE_CHARS) {
+    const texts = sessionNoteTextsForTask(sessionNotes, task.task_id);
+    if (texts.length) {
+      note = texts.join("\n\n").slice(0, SESSION_NOTE_MAX);
+      hasTextNotes = true;
+    }
+  }
+
+  if (note === task.note && hasTextNotes === task.has_text_notes && hasPhoto === task.has_photo && hasVoice === task.has_voice) {
+    return task;
+  }
+  return { ...task, note, has_text_notes: hasTextNotes, has_photo: hasPhoto, has_voice: hasVoice };
 }
 
 function taskHasMobileDocumentation(task: ShiftTask, sessionNotes: SessionNoteRecord[]): boolean {
@@ -88,6 +121,7 @@ export function WorkerMobileSessionScreen({
   shiftId,
   participantName,
   participantFirstName,
+  participantId,
   healthAlerts = [],
   clockedInAt,
   sessionId,
@@ -95,6 +129,7 @@ export function WorkerMobileSessionScreen({
   onTasksChange,
   sessionNotes,
   compliance,
+  documentationCompliance,
   onNotesRefresh,
   onOpenIncidentReport,
   disabled,
@@ -203,15 +238,30 @@ export function WorkerMobileSessionScreen({
     const taskId = note.task_id;
     if (taskId) {
       const task = localTasks.find((t) => t.task_id === taskId);
-      if (task && !task.completed && taskHasMobileDocumentation(task, mergedNotes)) {
-        Haptics.selectionAsync();
-        const now = new Date().toISOString();
-        const next = localTasks.map((t) => {
-          if (t.task_id !== taskId) return t;
-          const withEvidence = attachSessionNotesToTask(t, mergedNotes);
-          return { ...withEvidence, completed: true, completed_at: now, checked_at: now };
-        });
-        await persist(next);
+      if (task) {
+        const withEvidence = attachSessionNotesToTask(task, mergedNotes);
+        const evidenceChanged = withEvidence !== task;
+        const shouldAutoComplete = !task.completed && taskHasMobileDocumentation(withEvidence, mergedNotes);
+        // Sync on every note, not just the one that happens to cross the
+        // auto-complete threshold - a task already marked complete, or a
+        // second/third note on the same task, previously never made it back
+        // to the server, so the end-of-shift compliance report and the
+        // coordinator/MD's view of what happened during the shift saw stale
+        // (often empty) evidence despite everything the worker actually wrote.
+        if (evidenceChanged || shouldAutoComplete) {
+          Haptics.selectionAsync();
+          const now = new Date().toISOString();
+          const next = localTasks.map((t) => {
+            if (t.task_id !== taskId) return t;
+            return {
+              ...withEvidence,
+              completed: shouldAutoComplete ? true : t.completed,
+              completed_at: shouldAutoComplete ? now : t.completed_at,
+              checked_at: shouldAutoComplete ? now : t.checked_at,
+            };
+          });
+          await persist(next);
+        }
       }
     }
 
@@ -272,6 +322,7 @@ export function WorkerMobileSessionScreen({
             shiftId={shiftId}
             sessionId={sessionId}
             participantName={participantName}
+            participantId={participantId}
             sessionNotes={localSessionNotes}
             compliance={compliance}
             onNoteSaved={handleNoteSaved}
@@ -298,6 +349,12 @@ export function WorkerMobileSessionScreen({
         {(localSessionNotes.length > 0 || compliance.score > 0) && (
           <View style={styles.scoreWrap}>
             <ComplianceScoreBar score={compliance.score} />
+          </View>
+        )}
+
+        {documentationCompliance && (
+          <View style={styles.scoreWrap}>
+            <DocumentationComplianceBar check={documentationCompliance} />
           </View>
         )}
 

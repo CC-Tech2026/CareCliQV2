@@ -160,10 +160,21 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
       });
       await runStartSession();
     } catch (err) {
-      showAlert(
-        t("shifts.listCard.clockInFailed"),
-        err instanceof Error ? err.message : t("shifts.listCard.tryAgain"),
-      );
+      const message = err instanceof Error ? err.message : "";
+      if (message.toLowerCase().includes("acknowledge the participant safety card")) {
+        // This card has no room for the full safety-card read/acknowledge flow -
+        // send the worker into the shift detail screen, which now handles it.
+        showAlert(
+          "Safety card required",
+          "Read and acknowledge the participant's safety card before clocking in. Opening shift details.",
+          [{ text: "OK", onPress: () => router.push(`/shift/${shift.id}` as never) }],
+        );
+      } else {
+        showAlert(
+          t("shifts.listCard.clockInFailed"),
+          message || t("shifts.listCard.tryAgain"),
+        );
+      }
     } finally {
       setStarting(false);
     }

@@ -13,12 +13,11 @@ import Svg, { Path } from "react-native-svg";
 
 import { useColors } from "@/hooks/useColors";
 import { useT } from "@/context/PreferencesContext";
-import { submitShiftSignature } from "@/lib/worker-api";
+import type { ShiftSignaturePayload } from "@/lib/worker-api";
 
 type Props = {
-  shiftId: string;
   busy?: boolean;
-  onSigned: () => void | Promise<void>;
+  onSigned: (payload: ShiftSignaturePayload) => void | Promise<void>;
 };
 
 type Point = { x: number; y: number };
@@ -66,18 +65,17 @@ const CHECKBOXES = [
   { key: "incidents" as const, labelKey: "shift.signature.confirmIncidents" as const },
 ];
 
-export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
+export function ShiftSignatureForm({ busy, onSigned }: Props) {
   const colors = useColors();
   const t = useT();
   const [checks, setChecks] = useState({ tasks: false, safety: false, incidents: false });
-  const [submitting, setSubmitting] = useState(false);
   const [paths, setPaths] = useState<string[]>([]);
   const currentPath = useRef<Point[]>([]);
   const canvasSize = useRef({ width: 300, height: 160 });
 
   const hasStroke = paths.length > 0;
   const allChecked = checks.tasks && checks.safety && checks.incidents;
-  const isWaiting = submitting || Boolean(busy);
+  const isWaiting = Boolean(busy);
   const canSign = allChecked && hasStroke && !isWaiting;
 
   const panResponder = useRef(
@@ -125,28 +123,19 @@ export function ShiftSignatureForm({ shiftId, busy, onSigned }: Props) {
 
   const handleConfirm = async () => {
     if (!canSign) return;
-    setSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-      await submitShiftSignature(shiftId, {
-        confirm_tasks_accurate: checks.tasks,
-        confirm_safety_followed: checks.safety,
-        confirm_no_unreported_incidents: checks.incidents,
-        signature_svg: buildSvg(),
-        signature_png_data_url: buildPngDataUrl(),
-      });
-      await onSigned();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (/already signed/i.test(message)) {
-        await onSigned();
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setSubmitting(false);
-    }
+    // Submission (live or offline-queued), retries, and error handling all
+    // live in the parent now (WorkerMobileShiftView.handleSigned) - it also
+    // owns ending the shift right after, and the two need to be one
+    // coordinated transaction rather than split across two components with
+    // no shared offline/retry story.
+    await onSigned({
+      confirm_tasks_accurate: checks.tasks,
+      confirm_safety_followed: checks.safety,
+      confirm_no_unreported_incidents: checks.incidents,
+      signature_svg: buildSvg(),
+      signature_png_data_url: buildPngDataUrl(),
+    });
   };
 
   const toggleCheck = (key: keyof typeof checks) => {
