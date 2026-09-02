@@ -102,6 +102,21 @@ function medicationTask(tasks: ComplianceTask[]) {
   return tasks.find((t) => !t.marked_na && /medication|medicine|meds/i.test(t.label));
 }
 
+/**
+ * Real-time, per-note advisory checks derivable purely from local state
+ * (word count, goal linkage, participant naming, a medication-note reminder,
+ * restrictive-practice phrase detection, duplicate-note detection, task
+ * completion). Deliberately does NOT include worker credentials, support-
+ * hours-within-plan, prior-incident status, or budget alignment - those were
+ * previously hardcoded here as permanent "pass" entries (worth ~26% of the
+ * total score from the moment the screen opened, regardless of anything the
+ * worker had done), which is exactly why the score used to jump to 70-80%
+ * immediately. Those facts require real backend data and now come from the
+ * actual 12-rule engine (compliance_engine.run_compliance_check on the
+ * backend, via GET /worker/shifts/{id}/documentation-compliance-check),
+ * fetched periodically and shown as a separate, clearly-labeled score -
+ * this function's score is a lighter, immediate-feedback signal only.
+ */
 export function evaluateWorkerCompliance(input: EvaluateComplianceInput): ComplianceEvaluation {
   const {
     notes,
@@ -167,8 +182,6 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
       : vagueNotes.length === 0 ? "Notes include specific observations." : "Add a specific observation — what exactly happened?",
   });
 
-  rules.push({ id: 6, name: "Worker credentialed", weight: 10, status: "pass", message: "Checked at clock-in." });
-
   const medTask = medicationTask(tasks);
   const medNote = medTask
     ? textNotes.some((n) => n.task_id === medTask.task_id || /medication|medicine|meds/i.test(n.content))
@@ -188,8 +201,6 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
       actionLabel: "Add note now", dismissible: true,
     });
   }
-
-  rules.push({ id: 8, name: "Support hours within plan", weight: 7, status: "pass", message: "Within approved support hours." });
 
   let rpFail = false;
   for (const n of textNotes) {
@@ -219,8 +230,6 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
     });
   }
 
-  rules.push({ id: 10, name: "Incident reporting current", weight: 5, status: "pass", message: "No unresolved incidents from previous sessions." });
-
   for (const n of textNotes) {
     for (const prev of previousSessionNotes) {
       if (textSimilarity(n.content, prev) > 0.85) {
@@ -243,8 +252,6 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
     status: noteFlags.some((f) => f.ruleId === 11) ? "info" : "pass",
     message: noteFlags.some((f) => f.ruleId === 11) ? "One or more notes resemble prior session notes." : "No duplicate notes detected.",
   });
-
-  rules.push({ id: 12, name: "Plan budget alignment", weight: 5, status: "pass", message: "Support type matches active NDIS plan." });
 
   const activeTasks = tasks.filter((t) => !t.marked_na);
   const completedTasks = activeTasks.filter((t) => t.completed);
@@ -288,6 +295,10 @@ export type DraftNoteHint = {
   id: string;
   severity: DraftNoteHintSeverity;
   message: string;
+  /** Raw detected phrase for "restrictive-practice" hints - lets a caller
+   * localize the surrounding message while still interpolating the actual
+   * (untranslated) phrase found in the note. Undefined for every other hint. */
+  phrase?: string;
 };
 
 /**
@@ -313,6 +324,7 @@ export function checkDraftNoteHints(text: string, participantFirstName?: string)
       id: "restrictive-practice",
       severity: "fail",
       message: `This may describe a restrictive practice ("${rp.phrase}"). An incident report may be required.`,
+      phrase: rp.phrase,
     });
   }
 

@@ -396,6 +396,44 @@ export function endShift(id: string, options?: { force?: boolean }) {
   });
 }
 
+export type DocumentationComplianceRule = {
+  rule: string;
+  label: string;
+  status: "pass" | "warning" | "fail";
+  message: string;
+  severity?: string;
+  explanation?: string;
+  is_blocking?: boolean;
+  enforcement_tier?: string;
+  category?: string;
+};
+
+export type DocumentationComplianceCheck =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      score: number;
+      passed: number;
+      warnings: number;
+      failed: number;
+      total_rules: number;
+      rules: DocumentationComplianceRule[];
+      failed_rules: DocumentationComplianceRule[];
+    };
+
+/**
+ * Real 12-rule NDIS documentation-quality check (compliance_engine.
+ * run_compliance_check on the backend) run against this shift's notes so
+ * far. Read-only, no AI call, safe to poll periodically while the shift is
+ * in progress - distinct from the task-evidence compliance_score computed
+ * at end_shift().
+ */
+export function checkShiftDocumentationCompliance(shiftId: string) {
+  return workerFetch<DocumentationComplianceCheck>(
+    `/api/worker/shifts/${shiftId}/documentation-compliance-check`,
+  );
+}
+
 export function updateShiftTasks(id: string, tasks: ShiftTask[]) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/tasks`, {
     method: "PATCH",
@@ -634,16 +672,15 @@ export function deleteSessionNote(sessionId: string, noteId: string) {
   });
 }
 
-export function submitShiftSignature(
-  shiftId: string,
-  body: {
-    confirm_tasks_accurate: boolean;
-    confirm_safety_followed: boolean;
-    confirm_no_unreported_incidents: boolean;
-    signature_svg: string;
-    signature_png_data_url: string;
-  },
-) {
+export type ShiftSignaturePayload = {
+  confirm_tasks_accurate: boolean;
+  confirm_safety_followed: boolean;
+  confirm_no_unreported_incidents: boolean;
+  signature_svg: string;
+  signature_png_data_url: string;
+};
+
+export function submitShiftSignature(shiftId: string, body: ShiftSignaturePayload) {
   return workerFetch<ShiftSignature>(`/api/worker/shifts/${shiftId}/sign`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -713,6 +750,52 @@ export function clinicalRewriteText(text: string, sourceLanguage = "auto") {
       body: JSON.stringify({ text, source_language: sourceLanguage }),
     },
   );
+}
+
+export type ImproveNoteResult = {
+  improved_note: string;
+  rule_suggestions: { rule: string; issue: string; suggestion: string }[];
+};
+
+/**
+ * Rewrites a draft note to fix specific issues (word count, vagueness,
+ * missing participant reference, etc.) using the same AI capability already
+ * used coordinator-side for full session notes (ai_service.improve_note) -
+ * here scoped to a single in-progress task note rather than a whole shift.
+ */
+export function improveNote(
+  notes: string,
+  failedRules: { rule: string; message: string }[],
+  participantId?: string | null,
+) {
+  return workerFetch<ImproveNoteResult>("/api/ai/improve-note", {
+    method: "POST",
+    body: JSON.stringify({
+      notes,
+      failed_rules: failedRules,
+      participant_id: participantId ?? undefined,
+    }),
+  });
+}
+
+export type TranslatePreviewResult = {
+  translated: string;
+  target_language: string;
+  translated_ok: boolean;
+};
+
+/**
+ * Best-effort English -> display-language translation for a read-only
+ * preview only (e.g. showing what an AI-suggested note rewrite says in the
+ * worker's own app language) - never the saved legal record, which stays
+ * English. Always resolves (backend degrades to the original text on
+ * failure rather than erroring), so this never needs its own error UI.
+ */
+export function translateForWorkerPreview(text: string, targetLanguage: string) {
+  return workerFetch<TranslatePreviewResult>("/api/ai/translate-preview", {
+    method: "POST",
+    body: JSON.stringify({ text, target_language: targetLanguage }),
+  });
 }
 
 export function getMyCompliance(params?: { sessionsLimit?: number; sessionsOffset?: number }) {
