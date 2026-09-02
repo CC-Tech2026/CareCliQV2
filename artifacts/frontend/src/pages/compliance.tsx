@@ -46,6 +46,7 @@ const TEXT     = "var(--cc-text)";
 const MUTED    = "var(--cc-muted)";
 const BORDER   = "var(--cc-border)";
 const SOFT     = "var(--cc-soft)";
+const SURFACE  = "var(--cc-surface)";
 const SUCCESS  = "var(--cc-status-success)";
 const WARNING  = "var(--cc-status-warning)";
 // Real red — deliberately not var(--cc-coral)/var(--cc-status-critical): those are the
@@ -374,54 +375,75 @@ export default function Compliance() {
         </div>
       </div>
 
-      <div
-        role="tablist"
-        className="flex w-full max-w-full gap-5 overflow-x-auto scrollbar-none border-b"
-        style={{ borderColor: BORDER }}
-      >
-        {SUB_TABS.map((tab) => {
-          const active = activeTab === tab;
-          const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
-          return (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={active ? "true" : "false"}
-              onClick={() => setActiveTab(tab)}
-              onKeyDown={(e) => {
-                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-                e.preventDefault();
-                const idx = SUB_TABS.indexOf(tab);
-                const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
-                setActiveTab(SUB_TABS[next]);
-              }}
-              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
-            >
-              {tabLabels[tab]}
-              {badge > 0 && (
+      {/* Tabs + content wrapped together (not left as siblings of the page's
+          gap-5 flex-col) so that utility can't put a forced gap between the
+          tab bar and its panel - same fix as the roster and participant
+          detail pages needed. Active tab: rounded top corners only, no
+          box-shadow (a shadow draws a visible seam and breaks the "one
+          continuous shape" look), background matches the panel directly
+          below it. Icon badges give each tab a visual identity the same way
+          the roster/participant tabs now do. */}
+      <div>
+        <div
+          role="tablist"
+          className="flex w-full max-w-full items-end gap-1.5 overflow-x-auto scrollbar-none"
+        >
+          {SUB_TABS.map((tab) => {
+            const active = activeTab === tab;
+            const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
+            const Icon = TAB_ICONS[tab];
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={active ? "true" : "false"}
+                onClick={() => setActiveTab(tab)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                  e.preventDefault();
+                  const idx = SUB_TABS.indexOf(tab);
+                  const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
+                  setActiveTab(SUB_TABS[next]);
+                }}
+                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-[13px] font-bold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{
+                  borderRadius: active ? "12px 12px 0 0" : "0",
+                  background: active ? SURFACE : "transparent",
+                  color: TEXT,
+                  opacity: active ? 1 : 0.75,
+                  outlineColor: PLUM,
+                }}
+              >
                 <span
-                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
-                  style={{ background: CRITICAL }}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: active ? PLUM : "#C7C7CE" }}
                 >
-                  {badge}
+                  <Icon size={11} style={{ color: "#fff" }} />
                 </span>
-              )}
-              {active && (
-                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {tabLabels[tab]}
+                {badge > 0 && (
+                  <span
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                    style={{ background: CRITICAL }}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-      {activeTab === "overview" && <OverviewPanel onNavigateTab={setActiveTab} />}
-      {activeTab === "staff" && <StaffPanel />}
-      {activeTab === "participants" && <ParticipantsPanel />}
-      {activeTab === "incidents" && <IncidentsPanel />}
-      {activeTab === "medications" && <MedicationRegisterPanel />}
-      {activeTab === "audit_pack" && <AuditPackPanel embedded />}
+        <div className="rounded-2xl rounded-tl-none p-4 sm:p-5" style={{ background: SURFACE }}>
+          {activeTab === "overview" && <OverviewPanel onNavigateTab={setActiveTab} />}
+          {activeTab === "staff" && <StaffPanel />}
+          {activeTab === "participants" && <ParticipantsPanel />}
+          {activeTab === "incidents" && <IncidentsPanel />}
+          {activeTab === "medications" && <MedicationRegisterPanel />}
+          {activeTab === "audit_pack" && <AuditPackPanel embedded />}
+        </div>
+      </div>
     </div>
   );
 }

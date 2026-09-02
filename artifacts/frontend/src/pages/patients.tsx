@@ -1357,7 +1357,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
       <div
-        className="sticky top-0 z-10 border-b border-purple-100/60 px-3 pt-3 pb-0 sm:px-5 sm:pt-5"
+        className="sticky top-0 z-10 px-3 pt-3 sm:px-5 sm:pt-5"
         style={{ background: "var(--cc-bg)" }}
       >
 
@@ -1476,8 +1476,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
           </>
         )}
 
-        {/* Tab bar */}
-        <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none scroll-px-3">
+        {/* Tab bar - flush with the content panel below, same language as the
+            roster page's tabs and the onboarding area switcher: rounded top
+            corners only, matching background (var(--cc-surface)) and zero
+            gap so the active tab visually continues straight into the panel
+            beneath it. No box-shadow on the active tab on purpose - a shadow
+            projects downward and draws a visible line right at the seam,
+            which breaks the "one continuous shape" illusion (this bit it
+            twice already; OnboardingAreaSwitcher's shipped code has the same
+            note). The content wrapper right below carries the matching
+            var(--cc-surface) background that completes the illusion. */}
+        <div className="flex items-end gap-1.5 overflow-x-auto scrollbar-none scroll-px-3">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1485,13 +1494,20 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 min-h-[44px] ${
-                  active
-                    ? "border-[#E8457A] text-[#E8457A]"
-                    : "border-transparent text-[#6A6A77] hover:text-[#1A1A2E] hover:border-[#E8E8EA]"
-                }`}
+                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold transition-opacity min-h-[44px]"
+                style={{
+                  borderRadius: active ? "14px 14px 0 0" : "0",
+                  background: active ? "var(--cc-surface)" : "transparent",
+                  color: "var(--cc-text)",
+                  opacity: active ? 1 : 0.75,
+                }}
               >
-                <Icon size={14} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: active ? "var(--cc-coral)" : "#C7C7CE" }}
+                >
+                  <Icon size={11} style={{ color: "#fff" }} />
+                </span>
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
                 {"isNew" in tab && tab.isNew && (
@@ -1509,7 +1525,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6" style={{ background: "var(--cc-surface)" }}>
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (

@@ -43,9 +43,9 @@ import CoordinatorLivePage from "./coordinator-live";
 import CoordinatorMonitorPage from "./coordinator-monitor";
 
 type ScheduleTab = "roster" | "live";
-const SCHEDULE_TABS: { id: ScheduleTab; label: string }[] = [
-  { id: "roster", label: "Roster"         },
-  { id: "live",   label: "Live Monitor" },
+const SCHEDULE_TABS: { id: ScheduleTab; label: string; icon: typeof CalendarDays }[] = [
+  { id: "roster", label: "Roster",       icon: CalendarDays },
+  { id: "live",   label: "Live Monitor", icon: Activity },
 ];
 
 const PLUM   = "var(--cc-plum)";
@@ -277,71 +277,12 @@ function DayPanel({
   );
 }
 
-/** Overdue unassigned shifts silently fall out of view once a coordinator
- * navigates the week/month-scoped roster board away from wherever the shift
- * was scheduled - there's no other alert, escalation, or KPI for this
- * anywhere in the app (confirmed gap, Aug 2026). This is deliberately always
- * visible regardless of which tab/week/month is currently shown, not tied
- * to shiftsQuery's range. */
-function OverdueUnassignedBanner({
-  shifts, isLoading, onJump,
-}: {
-  shifts: OverdueUnassignedShift[];
-  isLoading: boolean;
-  onJump: (shift: OverdueUnassignedShift) => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  if (isLoading || shifts.length === 0) return null;
-
-  return (
-    <div className="overflow-hidden rounded-2xl border-2" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>
-      <button type="button" onClick={() => setCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-        <span className="flex items-center gap-2">
-          <AlertTriangle size={16} style={{ color: "var(--cc-status-danger)" }} />
-          <span className="text-[13px] font-black" style={{ color: "var(--cc-status-danger)" }}>
-            {shifts.length} overdue unassigned shift{shifts.length === 1 ? "" : "s"}
-          </span>
-          <span className="text-[11px] font-medium" style={{ color: "var(--cc-status-danger)" }}>
-            — start time has passed with no worker assigned
-          </span>
-        </span>
-        {collapsed ? <ChevronDown size={16} style={{ color: "var(--cc-status-danger)" }} /> : <ChevronUp size={16} style={{ color: "var(--cc-status-danger)" }} />}
-      </button>
-      {!collapsed && (
-        <div className="divide-y border-t" style={{ borderColor: "var(--cc-status-danger)" }}>
-          {shifts.slice(0, 10).map((s) => {
-            const daysOverdue = Math.max(0, differenceInCalendarDays(new Date(), parseISO(s.scheduled_start)));
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onJump(s)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
-                    {s.participant_name || "Participant"}
-                  </span>
-                  <span className="block text-[11px]" style={{ color: "var(--cc-muted)" }}>
-                    {format(parseISO(s.scheduled_start), "d MMM yyyy, h:mm a")}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" style={{ background: "var(--cc-status-danger)", color: "white" }}>
-                  {daysOverdue === 0 ? "Today" : `${daysOverdue}d overdue`}
-                </span>
-              </button>
-            );
-          })}
-          {shifts.length > 10 && (
-            <p className="px-4 py-2 text-[11px] font-medium" style={{ color: "var(--cc-muted)" }}>
-              +{shifts.length - 10} more
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// Overdue unassigned shifts silently fall out of view once a coordinator
+// navigates the week/month-scoped roster board away from wherever the shift
+// was scheduled - there's no other alert, escalation, or KPI for this
+// anywhere in the app (confirmed gap, Aug 2026). Surfaced via a stat card in
+// the page's existing stat strip (only rendered when count > 0), not a
+// standing banner - see overdueUnassignedShifts below.
 
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
@@ -404,6 +345,7 @@ export default function CoordinatorRosteringPage() {
 
   const workers = workersQuery.data ?? [];
   const shifts  = shiftsQuery.data  ?? [];
+  const overdueUnassignedShifts = overdueUnassignedQuery.data ?? [];
 
   // Load availability for all workers when the list changes
   useEffect(() => {
@@ -518,16 +460,24 @@ export default function CoordinatorRosteringPage() {
         ) : null}
       </div>
 
-      <OverdueUnassignedBanner
-        shifts={overdueUnassignedQuery.data ?? []}
-        isLoading={overdueUnassignedQuery.isLoading}
-        onJump={handleJumpToOverdueShift}
-      />
+      {/* Page-level tabs: Roster | Live Monitor - same raised-pill language as
+          the onboarding area switcher (OnboardingAreaSwitcher: rounded-top
+          active tab flush with the panel below, circular icon badge, flat
+          unelevated inactive tab), adapted to local state instead of a route
+          change since both live on this one page.
 
-      {/* Page-level tabs: Roster | Live | Monitor */}
-      <div role="tablist" className="flex gap-5 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
+          Tabs + panel are wrapped together in one div rather than left as
+          two siblings of the page's space-y-4 container - that utility puts
+          a margin between every child, which put a visible gap between the
+          tab and the panel it's supposed to sit flush against, breaking the
+          "one continuous shape" illusion (the rounded-top-only tab looked
+          like an isolated, oddly-clipped shape floating on its own instead
+          of merging into the panel below). */}
+      <div>
+      <div role="tablist" className="flex items-end gap-3">
         {SCHEDULE_TABS.map((tab) => {
           const active = pageTab === tab.id;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
@@ -535,17 +485,26 @@ export default function CoordinatorRosteringPage() {
               role="tab"
               aria-selected={active ? "true" : "false"}
               onClick={() => setPageTab(tab.id)}
-              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
+              className="relative flex items-center gap-2 px-6 py-3 text-[14px] font-black transition-opacity"
+              style={{
+                borderRadius: active ? "14px 14px 0 0" : "0",
+                background: active ? "var(--cc-surface)" : "transparent",
+                color: TEXT,
+                opacity: active ? 1 : 0.75,
+              }}
             >
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                style={{ background: PLUM }}
+              >
+                <Icon size={13} style={{ color: "#fff" }} />
+              </span>
               {tab.label}
-              {active && (
-                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
-              )}
             </button>
           );
         })}
       </div>
+      <div className="rounded-2xl rounded-tl-none" style={{ background: "var(--cc-surface)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
       {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
 
@@ -561,6 +520,25 @@ export default function CoordinatorRosteringPage() {
           value={workers.length}
           icon={<Users2 size={16} />}
         />
+        {/* Only appears when something needs attention - an unassigned shift
+            whose start time has already passed, possibly outside the week/
+            month currently in view. Was previously a standing red banner
+            pinned above the page; folded into this existing stat strip
+            instead so it doesn't compete for space when there's nothing to
+            flag, and stays proportionate (a number, not a list) when there is. */}
+        {overdueUnassignedShifts.length > 0 && (
+          <StatCard
+            label={translate("coordinator.rostering.overdueUnassigned")}
+            value={overdueUnassignedShifts.length}
+            tone="danger"
+            icon={<AlertTriangle size={16} />}
+            role="button"
+            tabIndex={0}
+            onClick={() => handleJumpToOverdueShift(overdueUnassignedShifts[0])}
+            onKeyDown={(e) => { if (e.key === "Enter") handleJumpToOverdueShift(overdueUnassignedShifts[0]); }}
+            className="cursor-pointer"
+          />
+        )}
       </StatCardGroup>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
@@ -728,6 +706,8 @@ export default function CoordinatorRosteringPage() {
       />
       </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

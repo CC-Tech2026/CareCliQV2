@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clock3, GripVertical,
-  Loader2, Minus, Plus, Sparkles, User2, Users, XCircle, MinusCircle,
+  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle,
 } from "lucide-react";
 import {
   assignExistingShift,
@@ -426,24 +426,23 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
         />
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-4 py-2.5" style={{ borderColor: BORDER }}>
-        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>{translate("coordinator.rostering.availability")}</span>
+      {/* Legend — a lightweight caption, not a competing card: no border/box,
+          solid dots instead of bordered swatches, and no persistent "click or
+          drag to assign" instructional copy (that's onboarding-style text
+          that just becomes noise once a coordinator already knows the UI). */}
+      <div className="flex flex-wrap items-center gap-3 px-1">
         {[
-          { color: "#DCFCE7", border: "#86EFAC", label: translate("coordinator.rostering.legend.available") },
-          { color: "#FCE3EB", border: "#F3A8C4", label: translate("coordinator.rostering.legend.assigned") },
-          { color: "#FEF3C7", border: "#FCD34D", label: translate("coordinator.rostering.legend.onLeave") },
-          { color: "#F1F5F9", border: "#CBD5E1", label: translate("coordinator.rostering.legend.notRostered") },
+          { color: "#86EFAC", label: translate("coordinator.rostering.legend.available") },
+          { color: "#F3A8C4", label: translate("coordinator.rostering.legend.assigned") },
+          { color: "#FCD34D", label: translate("coordinator.rostering.legend.onLeave") },
+          { color: "#CBD5E1", label: translate("coordinator.rostering.legend.notRostered") },
         ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded" style={{ background: l.color, border: `1px solid ${l.border}` }} />
-            <span className="text-[11px]" style={{ color: MUTED }}>{l.label}</span>
+          <div key={l.label} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: l.color }} />
+            <span className="text-[10.5px] font-medium" style={{ color: MUTED }}>{l.label}</span>
           </div>
         ))}
-        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-medium" style={{ color: MUTED }}>
-          <Sparkles size={12} style={{ color: PLUM }} /> {translate("coordinator.rostering.dragToAssign")}
-        </span>
-        {loadingAvail && <Loader2 size={12} className="animate-spin" style={{ color: MUTED }} />}
+        {loadingAvail && <Loader2 size={11} className="animate-spin" style={{ color: MUTED }} />}
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
