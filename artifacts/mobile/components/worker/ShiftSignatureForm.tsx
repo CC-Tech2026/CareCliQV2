@@ -275,6 +275,9 @@ const styles = StyleSheet.create({
   canvasLabel: { fontSize: 10, letterSpacing: 1, marginTop: 4 },
   canvas: {
     height: 160,
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     borderRadius: 12,
     borderWidth: 1.5,
     borderStyle: "dashed",

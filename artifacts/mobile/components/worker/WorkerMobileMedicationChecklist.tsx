@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
@@ -21,6 +21,10 @@ import {
 type Props = {
   shiftId: string;
   disabled?: boolean;
+  /** Fires whenever the derived "every scheduled dose logged" state changes,
+   * so a parent (the medication task row) can drive its own completion off
+   * real doses instead of a manual tick. */
+  onStatusChange?: (allLogged: boolean, hasScheduled: boolean) => void;
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -57,7 +61,7 @@ function dueMeta(item: MedicationChecklistItem, colors: ReturnType<typeof useCol
   return { label: "Upcoming", color: colors.mutedForeground, bg: colors.soft };
 }
 
-export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
+export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusChange }: Props) {
   const colors = useColors();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -80,6 +84,14 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
   });
 
   const checklist = data?.checklist ?? [];
+
+  useEffect(() => {
+    if (!data) return;
+    const hasScheduled = checklist.length > 0;
+    const allLogged = hasScheduled && checklist.every((item) => !!item.administration);
+    onStatusChange?.(allLogged, hasScheduled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const reset = () => {
     setActiveItem(null);
@@ -223,11 +235,11 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
   const busy = logMutation.isPending || followUpMutation.isPending;
 
   return (
-    <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <View>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Feather name="clipboard" size={14} color={colors.foreground} />
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          Medications
+        <Feather name="clock" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.headerTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          Scheduled
         </Text>
       </View>
 
@@ -264,7 +276,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
       })}
 
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={reset}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {followUp ? (
               <>
@@ -417,16 +429,15 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled }: Props) {
               </Pressable>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 13 },
+  headerTitle: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   rowCopy: { flex: 1, gap: 2 },
   rowTitle: { fontSize: 14 },
@@ -434,7 +445,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   badgeText: { fontSize: 11 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalCard: { width: "100%", borderRadius: 16, borderWidth: 1, padding: 18, gap: 10 },
+  modalCard: { width: "100%", maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18, gap: 10 },
   modalTitle: { fontSize: 16 },
   modalSubtitle: { fontSize: 13, marginBottom: 4 },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: 12 },

@@ -125,14 +125,17 @@ export function WorkerMobileClockInSheet({ onClose, onChooseGps, onQrScanned }: 
             <View style={styles.scannerBox} />
           </View>
           <Text style={styles.scannerHint}>Point your camera at the shift's QR code</Text>
-          <Pressable onPress={() => setStep("choose")} style={styles.scannerCancel}>
+          <Pressable
+            onPress={() => setStep("choose")}
+            style={[styles.scannerCancel, { bottom: insets.bottom + 30 }]}
+          >
             <Text style={styles.scannerCancelText}>Cancel</Text>
           </Pressable>
         </View>
       )}
 
       {step === "manual" && (
-        <View style={styles.body}>
+        <View style={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
           {permission && !permission.granted && (
             <Text style={[styles.deniedText, { color: colors.destructive, fontFamily: "Inter_500Medium" }]}>
               Camera access isn't available - enter the code shown on the shift's QR code instead.

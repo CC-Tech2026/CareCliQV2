@@ -157,6 +157,9 @@ patchedDependencies:
   '@expo/plist@0.4.8':
     hash: 22170e64bb9c60cecdde64c1cf19069670d0e9350ee5ecd8df70d8aa52bf8517
     path: patches/@expo__plist@0.4.8.patch
+  '@expo/plist@0.4.9':
+    hash: 1ac4fd0f9bfe59ef92b128725f711963598861f25d688da83668dba53499e48d
+    path: patches/@expo__plist@0.4.9.patch
 
 importers:
 
@@ -8754,7 +8757,7 @@ snapshots:
       '@expo/metro-config': 54.0.16(expo@54.0.35)
       '@expo/osascript': 2.4.3
       '@expo/package-manager': 1.10.5
-      '@expo/plist': 0.4.9
+      '@expo/plist': 0.4.9(patch_hash=1ac4fd0f9bfe59ef92b128725f711963598861f25d688da83668dba53499e48d)
       '@expo/prebuild-config': 54.0.8(expo@54.0.35)(typescript@5.9.3)
       '@expo/schema-utils': 0.1.8
       '@expo/spawn-async': 1.7.2
@@ -9263,7 +9266,7 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  '@expo/plist@0.4.9':
+  '@expo/plist@0.4.9(patch_hash=1ac4fd0f9bfe59ef92b128725f711963598861f25d688da83668dba53499e48d)':
     dependencies:
       '@xmldom/xmldom': 0.8.13
       base64-js: 1.5.1

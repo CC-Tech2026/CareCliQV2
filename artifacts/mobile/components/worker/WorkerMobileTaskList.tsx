@@ -4,7 +4,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { WorkerMobileComposer } from "@/components/worker/WorkerMobileComposer";
+import { WorkerMobileMedicationChecklist } from "@/components/worker/WorkerMobileMedicationChecklist";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
+import { WorkerMobilePrnMedications } from "@/components/worker/WorkerMobilePrnMedications";
 import type { SessionNoteRecord, ShiftTask } from "@/lib/worker-api";
 import { isMandatoryTask } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
@@ -16,6 +18,7 @@ type Props = {
   onToggleTask: (taskId: string) => void;
   taskCanComplete?: (task: ShiftTask) => boolean;
   disabled?: boolean;
+  shiftId?: string;
   sessionId: string | null;
   participantName: string;
   sessionNotes: SessionNoteRecord[];
@@ -39,6 +42,7 @@ export function WorkerMobileTaskList({
   onToggleTask,
   taskCanComplete,
   disabled,
+  shiftId,
   sessionId,
   participantName,
   sessionNotes,
@@ -54,6 +58,7 @@ export function WorkerMobileTaskList({
       {active.map((task, index) => {
         const expanded = activeTaskId === task.task_id;
         const done = task.completed;
+        const isMedication = task.category === "medication";
         const canComplete = taskCanComplete?.(task) ?? true;
         const required = isMandatoryTask(task);
         const taskNotes = sessionNotes.filter((n) => n.task_id === task.task_id);
@@ -66,13 +71,15 @@ export function WorkerMobileTaskList({
               {
                 borderTopWidth: index > 0 ? StyleSheet.hairlineWidth : 0,
                 borderTopColor: colors.border,
-                backgroundColor: expanded ? colors.primary + "08" : "transparent",
+                backgroundColor: done ? colors.success + "10" : expanded ? colors.primary + "08" : "transparent",
+                borderLeftWidth: done ? 3 : 0,
+                borderLeftColor: colors.success,
               },
             ]}
           >
             <View style={styles.row}>
               <Pressable
-                disabled={disabled}
+                disabled={disabled || isMedication}
                 onPress={() => {
                   if (!done && !canComplete) {
                     onSelectTask(task.task_id);
@@ -84,9 +91,9 @@ export function WorkerMobileTaskList({
                 style={[
                   styles.checkbox,
                   {
-                    borderColor: done ? "#22C55E" : colors.border,
-                    backgroundColor: done ? "#22C55E" : "transparent",
-                    opacity: !done && !canComplete ? 0.4 : 1,
+                    borderColor: done ? colors.success : colors.border,
+                    backgroundColor: done ? colors.success : "transparent",
+                    opacity: !done && (isMedication || !canComplete) ? 0.4 : 1,
                   },
                 ]}
               >
@@ -144,9 +151,11 @@ export function WorkerMobileTaskList({
                 ) : null}
                 {!expanded && (
                   <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {taskNotes.length > 0
-                      ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
-                      : "Tap to add updates"}
+                    {isMedication
+                      ? "Tap to log doses · completes automatically"
+                      : taskNotes.length > 0
+                        ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
+                        : "Tap to add updates"}
                   </Text>
                 )}
               </Pressable>
@@ -164,6 +173,21 @@ export function WorkerMobileTaskList({
                     Evidence: {String(task.evidence_required).replace(/_/g, " ")}
                   </Text>
                 ) : null}
+
+                {isMedication && shiftId && (
+                  <View style={[styles.medicationBox, { borderColor: colors.border }]}>
+                    <WorkerMobileMedicationChecklist
+                      shiftId={shiftId}
+                      disabled={disabled}
+                      onStatusChange={(allLogged, hasScheduled) => {
+                        if (allLogged && hasScheduled && !task.completed) {
+                          onToggleTask(task.task_id);
+                        }
+                      }}
+                    />
+                    <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled} />
+                  </View>
+                )}
 
                 <View style={[styles.thread, { borderColor: colors.border, backgroundColor: colors.background }]}>
                   {taskNotes.length === 0 ? (
@@ -288,6 +312,11 @@ const styles = StyleSheet.create({
   evidenceHint: {
     fontSize: 11,
     lineHeight: 16,
+  },
+  medicationBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   thread: {
     minHeight: 110,

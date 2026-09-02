@@ -201,11 +201,11 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
   if (medications.length === 0 && pendingEffects.length === 0) return null;
 
   return (
-    <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <View style={[styles.wrap, { borderTopColor: colors.border }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Feather name="zap" size={14} color={colors.foreground} />
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          As-needed (PRN) medications
+        <Feather name="zap" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.headerTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          As-needed (PRN)
         </Text>
       </View>
 
@@ -256,7 +256,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
       ))}
 
       <Modal visible={!!doseTarget} transparent animationType="fade" onRequestClose={() => setDoseTarget(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               {doseTarget?.name}
@@ -312,7 +312,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
       </Modal>
 
       <Modal visible={!!effectTarget} transparent animationType="fade" onRequestClose={() => setEffectTarget(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Effect observed</Text>
             <Text style={[styles.modalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -338,9 +338,9 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 12 },
+  wrap: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4 },
   header: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 13 },
+  headerTitle: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   rowCopy: { flex: 1, gap: 2 },
   rowTitle: { fontSize: 14 },
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   smallBtnText: { fontSize: 11, color: "#FFFFFF" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalCard: { width: "100%", borderRadius: 16, borderWidth: 1, padding: 18, gap: 8 },
+  modalCard: { width: "100%", maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18, gap: 8 },
   modalTitle: { fontSize: 16 },
   modalSubtitle: { fontSize: 13, marginBottom: 4 },
   warningText: { fontSize: 12, marginBottom: 4 },

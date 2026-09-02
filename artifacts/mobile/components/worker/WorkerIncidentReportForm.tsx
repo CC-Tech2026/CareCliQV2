@@ -60,6 +60,11 @@ type Props = {
   initialWorkerActions?: string;
   onSubmitted?: (referenceNumber?: string) => void;
   onCancel?: () => void;
+  /** Extra bottom padding for presentation contexts that don't already
+   * handle safe-area insets themselves (e.g. WorkerMobileIncidentSheet's
+   * bottom sheet) — the full-screen route (WorkerStackScreen) already pads
+   * for the device's bottom inset, so this defaults to 0 there. */
+  bottomInset?: number;
 };
 
 /** Text field with a mic button that records, transcribes via the shared voice pipeline, and appends the result. */
@@ -149,6 +154,7 @@ export function WorkerIncidentReportForm({
   initialWorkerActions = "",
   onSubmitted,
   onCancel,
+  bottomInset = 0,
 }: Props) {
   const colors = useColors();
   const t = useT();
@@ -368,7 +374,7 @@ export function WorkerIncidentReportForm({
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: 40 + bottomInset }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >

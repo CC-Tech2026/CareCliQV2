@@ -1,15 +1,9 @@
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ClockedInBanner } from "@/components/worker/ClockedInBanner";
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
 import { LongShiftEngagementPanel } from "@/components/worker/LongShiftEngagementPanel";
@@ -225,22 +219,21 @@ export function WorkerMobileSessionScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      // iOS never resizes the window for the keyboard - without this the
-      // composer (pinned at the bottom, below the scrollable task/notes
-      // list) sits directly under wherever the keyboard slides up to,
-      // hiding both the input and whatever's being typed. Android already
-      // handles this correctly via its default resize windowing, so this
-      // is deliberately iOS-only rather than double-handling it.
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WorkerMobileParticipantStrip participantName={participantName} />
 
-      <ScrollView
+      {/* Each task's composer (WorkerMobileTaskList) can be expanded anywhere
+          in this list, including the last task at the very bottom - a plain
+          ScrollView + KeyboardAvoidingView doesn't auto-scroll a focused
+          TextInput above the keyboard, so a note composer deep in the list
+          got hidden behind the keyboard the moment the worker started typing.
+          KeyboardAwareScrollView tracks the focused input and scrolls it into
+          view itself, correctly on both iOS and Android. */}
+      <KeyboardAwareScrollViewCompat
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        bottomOffset={24}
       >
         <WorkerMobileRiskStrip alerts={healthAlerts} />
         <ClockedInBanner clockedInAt={clockedInAt} participantName={participantName} />
@@ -276,6 +269,7 @@ export function WorkerMobileSessionScreen({
               !isMandatoryTask(t) || taskHasMobileDocumentation(t, localSessionNotes)
             }
             disabled={disabled || busy}
+            shiftId={shiftId}
             sessionId={sessionId}
             participantName={participantName}
             sessionNotes={localSessionNotes}
@@ -285,8 +279,21 @@ export function WorkerMobileSessionScreen({
           />
         </View>
 
-        <WorkerMobileMedicationChecklist shiftId={shiftId} disabled={disabled || busy} />
-        <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled || busy} />
+        {/* Medications normally live inside the "Medication Administration" task above.
+            This is a safety net only — shown when the shift's task list has no
+            medication-category task, so scheduled/PRN doses are never unreachable. */}
+        {!localTasks.some((t) => t.category === "medication") && (
+          <View style={[styles.taskCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <View style={[styles.medicationsTitleRow, { borderBottomColor: colors.border }]}>
+              <Feather name="clipboard" size={14} color={colors.foreground} />
+              <Text style={[styles.medicationsTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                Medications
+              </Text>
+            </View>
+            <WorkerMobileMedicationChecklist shiftId={shiftId} disabled={disabled || busy} />
+            <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled || busy} />
+          </View>
+        )}
 
         {(localSessionNotes.length > 0 || compliance.score > 0) && (
           <View style={styles.scoreWrap}>
@@ -317,8 +324,8 @@ export function WorkerMobileSessionScreen({
             })}
           </>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
@@ -345,6 +352,17 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
+  },
+  medicationsTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  medicationsTitle: {
+    fontSize: 14,
   },
   taskHeader: {
     flexDirection: "row",

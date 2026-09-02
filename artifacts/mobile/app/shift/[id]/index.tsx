@@ -247,6 +247,12 @@ export default function ShiftDetailScreen() {
 
   const invalidateShiftQueries = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["worker", "shift", id] });
+    // Also refresh the shifts list — every caller of this (clock-in, clock-out,
+    // end-shift, safety ack) changes this shift's status, and the list's own
+    // query key ("shifts", plural) doesn't prefix-match "shift" (singular) so
+    // it was never invalidated, leaving stale scheduled/clocked-in badges
+    // until a manual pull-to-refresh.
+    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
   }, [queryClient, id]);
 
   const invalidateNotesQuery = useCallback(() => {

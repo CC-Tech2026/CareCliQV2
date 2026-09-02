@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
@@ -64,6 +65,7 @@ export function WorkerMobileReviewScreen({
   onOpenIncidentReport,
 }: Props) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const t = useT();
   const [medDraft, setMedDraft] = useState("");
   const [addingMed, setAddingMed] = useState(false);
@@ -115,7 +117,10 @@ export function WorkerMobileReviewScreen({
       <WorkerMobileRiskStrip alerts={healthAlerts} />
       <ComplianceScoreBar score={compliance.score} onPress={onViewComplianceReport} />
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 100 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {pendingIncidentReport && (
           <View style={[styles.alert, { backgroundColor: "#FCEBEB", borderColor: "#EF4444" }]}>
             <Feather name="alert-octagon" size={16} color="#A32D2D" />
@@ -208,7 +213,7 @@ export function WorkerMobileReviewScreen({
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 14 }]}>
         <Pressable
           onPress={handleSubmit}
           disabled={busy || pendingIncidentReport}

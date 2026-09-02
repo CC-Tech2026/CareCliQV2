@@ -35,6 +35,9 @@ export type ShiftTask = {
   evidence_required?: string | null;
   marked_na?: boolean;
   na_reason?: string | null;
+  /** "medication" identifies the structured medication-administration task
+   * (WorkerMobileTaskList embeds the real dosing checklist for it). */
+  category?: string | null;
 };
 
 export type ParticipantProfile = {

@@ -27,6 +27,7 @@ import { WorkerMobileSignatureScreen } from "@/components/worker/WorkerMobileSig
 import { WorkerMobileTopbar } from "@/components/worker/WorkerMobileTopbar";
 import { DuringShiftActionsSidebar } from "@/components/worker/DuringShiftActionsSidebar";
 import { useOffline } from "@/context/OfflineContext";
+import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
@@ -109,6 +110,7 @@ export function WorkerMobileShiftView({
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const { isOnline, queueWorkerUpdate, flushNow } = useOffline();
   const [phase, setPhase] = useState<WorkerMobilePhase>(() => {
     if (shift.visual_state === "completed") return "completed";
@@ -265,6 +267,8 @@ export function WorkerMobileShiftView({
         await startShiftSession(shift.id);
         onRefresh();
         setPhase("session");
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast(`Clocked in for ${participantName}`, "success");
       } catch (err) {
         Alert.alert("Clock-in failed", err instanceof Error ? err.message : "Please try again.");
       } finally {
@@ -560,7 +564,11 @@ export function WorkerMobileShiftView({
             />
           )}
         </Modal>
-        <DuringShiftActionsSidebar shiftId={shift.id} officePhone={shift.office_contact_number} />
+        <DuringShiftActionsSidebar
+          shiftId={shift.id}
+          officePhone={shift.office_contact_number}
+          onReportIncident={() => openIncidentReport()}
+        />
       </View>
     );
   }
@@ -630,7 +638,11 @@ export function WorkerMobileShiftView({
             />
           )}
         </Modal>
-        <DuringShiftActionsSidebar shiftId={shift.id} officePhone={shift.office_contact_number} />
+        <DuringShiftActionsSidebar
+          shiftId={shift.id}
+          officePhone={shift.office_contact_number}
+          onReportIncident={() => openIncidentReport()}
+        />
       </View>
     );
   }
