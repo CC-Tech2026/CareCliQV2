@@ -634,6 +634,7 @@ def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_i
             participant_id=participant_id,
             organization_id=organization_id,
             worker_id=worker_id,
+            shift_id=str(shift.get("id") or "") or None,
         )
         if status.get("requires_safety_ack"):
             raise ValueError(
@@ -1770,6 +1771,7 @@ def get_shift_detail_for_worker(
             participant_id=participant_id,
             organization_id=organization_id,
             worker_id=worker_id,
+            shift_id=shift_id,
         )
         payload.update(safety_status)
         if safety_status.get("has_safety_content"):

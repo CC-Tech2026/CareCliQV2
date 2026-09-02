@@ -70,27 +70,24 @@ def get_protocol(participant_id: str, organization_id: str) -> dict[str, Any]:
     return row
 
 
-def get_worker_ack_version(worker_id: str, participant_id: str) -> Optional[int]:
+def _has_shift_acknowledgement(worker_id: str, participant_id: str, shift_id: str) -> bool:
     try:
         resp = (
             get_supabase_admin()
             .table(ACK_TABLE)
-            .select("content_version")
+            .select("id")
             .eq("worker_id", worker_id)
             .eq("participant_id", participant_id)
-            .order("content_version", desc=True)
+            .eq("shift_id", shift_id)
             .limit(1)
             .execute()
         )
-        rows = (resp.data if resp else None) or []
-        if not rows:
-            return None
-        return int(rows[0].get("content_version") or 0) or None
+        return bool(resp.data)
     except Exception as exc:
         if _is_missing_schema_error(exc):
-            return None
+            return False
         logger.debug("Safety ack lookup failed: %s", exc)
-        return None
+        return False
 
 
 def build_worker_safety_status(
@@ -98,18 +95,20 @@ def build_worker_safety_status(
     participant_id: str,
     organization_id: str,
     worker_id: str,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
+    """Safety card status for a worker. Acknowledgement is scoped to a single shift -
+    it's always required again on the next clock-in, never reused from a prior shift,
+    and required even when the card has no content on file (nothing to skip on)."""
     protocol = get_protocol(participant_id, organization_id)
     content_version = int(protocol.get("content_version") or 1)
-    acknowledged_version = get_worker_ack_version(worker_id, participant_id)
     has_content = _has_safety_content(protocol)
-    requires_ack = has_content and (
-        acknowledged_version is None or acknowledged_version < content_version
+    acknowledged_for_shift = bool(shift_id) and _has_shift_acknowledgement(
+        worker_id, participant_id, str(shift_id)
     )
     return {
         "content_version": content_version,
-        "acknowledged_version": acknowledged_version,
-        "requires_safety_ack": requires_ack,
+        "requires_safety_ack": not acknowledged_for_shift,
         "has_safety_content": has_content,
     }
 
@@ -118,6 +117,7 @@ def enrich_protocol_for_worker(
     protocol: dict[str, Any],
     *,
     worker_id: str,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
     participant_id = str(protocol.get("participant_id") or "")
     organization_id = str(protocol.get("organization_id") or "")
@@ -125,6 +125,7 @@ def enrich_protocol_for_worker(
         participant_id=participant_id,
         organization_id=organization_id,
         worker_id=worker_id,
+        shift_id=shift_id,
     )
     return {**protocol, **status}
 
@@ -196,6 +197,7 @@ def acknowledge_protocol(
     participant_id: str,
     organization_id: str,
     content_version: int,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
     protocol = get_protocol(participant_id, organization_id)
     current_version = int(protocol.get("content_version") or 1)
@@ -203,22 +205,27 @@ def acknowledge_protocol(
         raise ValueError(
             "Safety content was updated. Please read the latest version before acknowledging."
         )
-    if not _has_safety_content(protocol):
-        raise ValueError("No safety content to acknowledge for this participant.")
+    # No has-content check here: acknowledgement is required every clock-in
+    # regardless of whether a safety card has been filled in - the worker is
+    # confirming they checked, not just clearing a rich-content prompt.
 
     now = datetime.now(timezone.utc).isoformat()
-    row = {
+    row: dict[str, Any] = {
         "worker_id": worker_id,
         "participant_id": participant_id,
         "organization_id": organization_id,
         "content_version": content_version,
         "acknowledged_at": now,
+        "shift_id": shift_id,
     }
     try:
-        get_supabase_admin().table(ACK_TABLE).upsert(
-            row,
-            on_conflict="worker_id,participant_id,content_version",
-        ).execute()
+        if shift_id:
+            get_supabase_admin().table(ACK_TABLE).upsert(
+                row,
+                on_conflict="worker_id,participant_id,shift_id",
+            ).execute()
+        else:
+            get_supabase_admin().table(ACK_TABLE).insert(row).execute()
     except Exception as exc:
         if _is_missing_schema_error(exc):
             raise ValueError("Safety acknowledgements are not available — run database migrations.") from exc

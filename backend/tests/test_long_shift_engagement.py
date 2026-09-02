@@ -206,8 +206,11 @@ class TestCheckinWindow(unittest.TestCase):
 
 
 class TestRequiredCheckins(unittest.TestCase):
-    def test_5_hour_shift(self):
-        self.assertEqual(_required_checkins(5.0, 5 * 3600), 3)
+    def test_5_hour_shift_uses_random_short_band_when_session_unknown(self):
+        # 4-6h shifts now use the same random scheduling as 6h+, just with a
+        # smaller count (1-2) - this is the display estimate before the
+        # actual per-shift schedule exists.
+        self.assertEqual(_required_checkins(5.0, 5 * 3600), 1)
 
     def test_6_hour_shift_uses_random_when_session_unknown(self):
         self.assertEqual(_required_checkins(6.0, 6 * 3600), 2)

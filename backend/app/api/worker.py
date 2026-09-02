@@ -1454,6 +1454,7 @@ async def _worker_can_access_participant(
 @router.get("/participants/{participant_id}/safety-protocol")
 async def worker_get_safety_protocol(
     participant_id: str,
+    shift_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     """Participant safety protocols for worker (read-only)."""
@@ -1463,7 +1464,9 @@ async def worker_get_safety_protocol(
     if not await _worker_can_access_participant(participant_id, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
     protocol = safety_protocol_service.get_protocol(participant_id, str(org_id or ""))
-    return safety_protocol_service.enrich_protocol_for_worker(protocol, worker_id=worker_id)
+    return safety_protocol_service.enrich_protocol_for_worker(
+        protocol, worker_id=worker_id, shift_id=shift_id
+    )
 
 
 @router.post("/participants/{participant_id}/safety-protocol/acknowledge")
@@ -1484,6 +1487,7 @@ async def worker_acknowledge_safety_protocol(
             participant_id=participant_id,
             organization_id=str(org_id or ""),
             content_version=body.content_version,
+            shift_id=body.shift_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
@@ -2155,6 +2159,35 @@ async def worker_submit_checkin(
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     return result
+
+
+class MissedCheckinReasonBody(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/sessions/{session_id}/checkins/{scheduled_checkin_id}/missed-reason")
+async def worker_submit_missed_checkin_reason(
+    session_id: str,
+    scheduled_checkin_id: str,
+    body: MissedCheckinReasonBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Explain why a random compliance check-in was missed (required before shift submission)."""
+    _require_worker(current_user)
+    from ..services import random_checkin_service
+
+    worker_id = get_user_id(current_user)
+    try:
+        ok = random_checkin_service.submit_missed_checkin_reason(
+            scheduled_checkin_id=scheduled_checkin_id,
+            worker_id=worker_id,
+            reason=body.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check-in not found")
+    return {"ok": True}
 
 
 @router.get("/sessions/{session_id}/checkins/status")

@@ -339,6 +339,50 @@ export function acknowledgeShiftRisks(id: string) {
   });
 }
 
+export type SafetyScenario = { trigger: string; response: string; sort_order?: number };
+export type DeescalationTechnique = { title: string; steps: string[]; sort_order?: number };
+export type PhysicalSafetyNote = { note: string; sort_order?: number };
+export type EscalationContact = {
+  role: "coordinator" | "on_call" | "emergency";
+  label: string;
+  phone: string;
+  sort_order?: number;
+};
+
+export type SafetyProtocol = {
+  participant_id: string;
+  organization_id: string;
+  safety_card_body: string;
+  scenarios: SafetyScenario[];
+  deescalation_techniques: DeescalationTechnique[];
+  physical_safety_notes: PhysicalSafetyNote[];
+  escalation_contacts: EscalationContact[];
+  content_version: number;
+  /** Always required fresh per shift — never satisfied by a past acknowledgement,
+   * even for the same participant/content version. */
+  requires_safety_ack?: boolean;
+  has_safety_content?: boolean;
+};
+
+export function getParticipantSafetyProtocol(participantId: string, shiftId?: string) {
+  const query = shiftId ? `?shift_id=${encodeURIComponent(shiftId)}` : "";
+  return workerFetch<SafetyProtocol>(`/api/worker/participants/${participantId}/safety-protocol${query}`);
+}
+
+export function acknowledgeParticipantSafetyProtocol(
+  participantId: string,
+  contentVersion: number,
+  shiftId?: string,
+) {
+  return workerFetch<{ acknowledged_at: string; requires_safety_ack: boolean }>(
+    `/api/worker/participants/${participantId}/safety-protocol/acknowledge`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content_version: contentVersion, shift_id: shiftId }),
+    },
+  );
+}
+
 export function startShiftSession(id: string) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/start-session`, {
     method: "POST",
@@ -688,6 +732,12 @@ export type UpcomingCheckin = {
   status?: string;
 };
 
+export type MissedCheckin = {
+  id: string;
+  sequence_number?: number;
+  scheduled_at: string | null;
+};
+
 export type CheckinWindowStatus = {
   applicable?: boolean;
   can_submit_checkin?: boolean;
@@ -702,6 +752,8 @@ export type CheckinWindowStatus = {
   checkin_response_window_secs?: number;
   /** Pending/prompted check-ins — used to schedule offline-capable local notifications. */
   upcoming_checkins?: UpcomingCheckin[];
+  /** Missed check-ins the worker hasn't explained yet — blocks shift submission until each has a reason. */
+  missed_checkins_needing_reason?: MissedCheckin[];
 };
 
 export type UserNotification = {
@@ -741,6 +793,16 @@ export type WorkerComplianceDetail = {
 
 export function getCheckinStatusByShift(shiftId: string) {
   return workerFetch<CheckinWindowStatus>(`/api/worker/shifts/${shiftId}/checkins/status`);
+}
+
+export function submitMissedCheckinReason(sessionId: string, scheduledCheckinId: string, reason: string) {
+  return workerFetch<{ ok: boolean }>(
+    `/api/worker/sessions/${sessionId}/checkins/${scheduledCheckinId}/missed-reason`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+  );
 }
 
 export function submitLongShiftCheckin(

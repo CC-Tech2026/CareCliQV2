@@ -18,7 +18,7 @@ import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobilePa
 import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
-import type { SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
+import type { MissedCheckin, SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
 import { isMandatoryTask } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
@@ -29,6 +29,8 @@ type Props = {
   notes: SessionNoteRecord[];
   compliance: ComplianceEvaluation;
   busy?: boolean;
+  missedCheckins?: MissedCheckin[];
+  onSubmitMissedCheckinReason: (scheduledCheckinId: string, reason: string) => Promise<void>;
   onSaveNote: (noteId: string, content: string) => void;
   onRemoveNote: (noteId: string) => void;
   onAddMissingNote: (taskId: string, content: string) => void;
@@ -36,6 +38,13 @@ type Props = {
   onViewComplianceReport: () => void;
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
 };
+
+function formatMissedTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+}
 
 function medicationTask(tasks: ShiftTask[]) {
   return tasks.find((t) => !t.marked_na && /medication|medicine|meds/i.test(t.label));
@@ -57,6 +66,8 @@ export function WorkerMobileReviewScreen({
   notes,
   compliance,
   busy,
+  missedCheckins = [],
+  onSubmitMissedCheckinReason,
   onSaveNote,
   onRemoveNote,
   onAddMissingNote,
@@ -70,6 +81,8 @@ export function WorkerMobileReviewScreen({
   const [medDraft, setMedDraft] = useState("");
   const [addingMed, setAddingMed] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [missedReasons, setMissedReasons] = useState<Record<string, string>>({});
+  const [submittingMissedReasons, setSubmittingMissedReasons] = useState(false);
 
   const medTask = medicationTask(tasks);
   const medMissing = Boolean(medTask && !hasMedicationNote(medTask, notes));
@@ -86,15 +99,30 @@ export function WorkerMobileReviewScreen({
   const pendingIncidentReport = compliance.noteFlags.some(
     (f) => f.ruleId === 9 && f.severity === "fail" && Boolean(f.actionLabel),
   );
-  const submitBlocked = medMissing || otherIncomplete.length > 0 || pendingIncidentReport;
+  const missingCheckinReasons = missedCheckins.some((m) => !(missedReasons[m.id] ?? "").trim());
+  const submitBlocked =
+    medMissing || otherIncomplete.length > 0 || pendingIncidentReport || missingCheckinReasons;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setSubmitAttempted(true);
-    if (submitBlocked) {
+    if (submitBlocked || submittingMissedReasons) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (missedCheckins.length > 0) {
+      setSubmittingMissedReasons(true);
+      try {
+        await Promise.all(
+          missedCheckins.map((m) => onSubmitMissedCheckinReason(m.id, missedReasons[m.id] ?? "")),
+        );
+      } catch {
+        setSubmittingMissedReasons(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+      setSubmittingMissedReasons(false);
+    }
     onSubmit();
   };
 
@@ -176,6 +204,43 @@ export function WorkerMobileReviewScreen({
           </View>
         )}
 
+        {missedCheckins.length > 0 && (
+          <View style={[styles.alert, { backgroundColor: "#FFF3E0", borderColor: colors.warning }]}>
+            <Feather name="alert-triangle" size={16} color="#854F0B" />
+            <View style={styles.alertText}>
+              <Text style={[styles.alertTitle, { fontFamily: "Inter_700Bold", color: "#854F0B" }]}>
+                Missed check-in{missedCheckins.length > 1 ? "s" : ""}
+              </Text>
+              <Text style={[styles.alertBody, { fontFamily: "Inter_400Regular", color: "#854F0B" }]}>
+                You did not respond to a system check-in. Please explain what happened before
+                submitting this shift.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {missedCheckins.map((m) => (
+          <View
+            key={m.id}
+            style={[styles.medSection, { borderColor: colors.border, backgroundColor: colors.card }]}
+          >
+            <Text style={[styles.missedCheckinLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              Missed check-in{formatMissedTime(m.scheduled_at) ? ` around ${formatMissedTime(m.scheduled_at)}` : ""}
+            </Text>
+            <TextInput
+              value={missedReasons[m.id] ?? ""}
+              onChangeText={(text) => setMissedReasons((prev) => ({ ...prev, [m.id]: text }))}
+              placeholder="What were you doing? e.g. assisting participant in the bathroom, driving, poor signal…"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              style={[
+                styles.medInput,
+                { color: colors.foreground, borderColor: colors.border, fontFamily: "Inter_400Regular" },
+              ]}
+            />
+          </View>
+        ))}
+
         {submitAttempted && otherIncomplete.length > 0 && (
           <View style={[styles.alert, { backgroundColor: "#FFF3E0", borderColor: colors.warning }]}>
             <Feather name="alert-triangle" size={16} color="#854F0B" />
@@ -216,16 +281,16 @@ export function WorkerMobileReviewScreen({
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 14 }]}>
         <Pressable
           onPress={handleSubmit}
-          disabled={busy || pendingIncidentReport}
+          disabled={busy || pendingIncidentReport || submittingMissedReasons}
           style={[
             styles.submitBtn,
             {
               backgroundColor: colors.primary,
-              opacity: busy || pendingIncidentReport ? 0.5 : 1,
+              opacity: busy || pendingIncidentReport || submittingMissedReasons ? 0.5 : 1,
             },
           ]}
         >
-          {busy ? (
+          {busy || submittingMissedReasons ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>{t("review.submitNotes")}</Text>
@@ -258,6 +323,7 @@ const styles = StyleSheet.create({
   alertText: { flex: 1, gap: 4 },
   alertTitle: { fontSize: 14 },
   alertBody: { fontSize: 13, lineHeight: 18 },
+  missedCheckinLabel: { fontSize: 12, lineHeight: 17 },
   medSection: {
     marginHorizontal: 14,
     marginTop: 8,

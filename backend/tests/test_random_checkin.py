@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from backend.app.services.random_checkin_service import (
+    RANDOM_CHECKIN_ABS_MIN_GAP_SECS,
     RANDOM_CHECKIN_MIN_GAP_SECS,
     RANDOM_CHECKIN_MIN_SHIFT_SECS,
     RANDOM_CHECKIN_RESPONSE_SECS,
@@ -13,9 +14,10 @@ from backend.app.services.random_checkin_service import (
 
 
 class TestUsesRandomCheckins(unittest.TestCase):
-    def test_only_6_plus_hours(self):
-        self.assertFalse(uses_random_checkins(5 * 3600))
+    def test_only_4_plus_hours(self):
+        self.assertFalse(uses_random_checkins(3 * 3600))
         self.assertTrue(uses_random_checkins(RANDOM_CHECKIN_MIN_SHIFT_SECS))
+        self.assertTrue(uses_random_checkins(5 * 3600))
         self.assertTrue(uses_random_checkins(8 * 3600))
 
 
@@ -41,6 +43,16 @@ class TestGenerateRandomCheckinTimes(unittest.TestCase):
         self.assertEqual(len(times), 2)
         self.assertGreater(times[0], clock_in)
         self.assertLess(times[-1], shift_end)
+
+    def test_never_below_absolute_min_gap_on_tight_window(self):
+        # A short 4h shift leaves a small usable window once start/end buffers are
+        # applied - even asking for 2 check-ins must never pack them < 15 min apart.
+        clock_in = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+        shift_end = clock_in + timedelta(hours=4)
+        times = generate_random_checkin_times(clock_in, shift_end, 2, rng=__import__("random").Random(3))
+        for i in range(len(times) - 1):
+            gap = (times[i + 1] - times[i]).total_seconds()
+            self.assertGreaterEqual(gap, RANDOM_CHECKIN_ABS_MIN_GAP_SECS)
 
 
 class TestEvaluateRandomCheckinWindow(unittest.TestCase):
@@ -86,14 +98,14 @@ class TestEvaluateRandomCheckinWindow(unittest.TestCase):
         self.assertEqual(result["block_reason"], "not_due_yet")
         self.assertGreater(result["next_checkin_due_secs"], 0)
 
-    def test_not_applicable_under_6_hours(self):
+    def test_not_applicable_under_4_hours(self):
         now = self._now()
         result = evaluate_random_checkin_window(
             now=now,
             scheduled_checkins=[],
             on_break=False,
             last_checkin_at=None,
-            duration_secs=5 * 3600,
+            duration_secs=3 * 3600,
             checkin_count=0,
         )
         self.assertFalse(result["applicable"])

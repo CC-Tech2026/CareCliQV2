@@ -71,3 +71,4 @@ class SafetyProtocolUpdate(BaseModel):
 
 class SafetyProtocolAcknowledge(BaseModel):
     content_version: int = Field(ge=1)
+    shift_id: Optional[str] = None

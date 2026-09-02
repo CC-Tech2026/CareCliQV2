@@ -20,6 +20,7 @@ import {
   WorkerMobileSubmitSuccess,
 } from "@/components/worker/WorkerMobileComplianceReport";
 import { WorkerMobileClockInSheet } from "@/components/worker/WorkerMobileClockInSheet";
+import { WorkerMobileSafetyCardSheet } from "@/components/worker/WorkerMobileSafetyCardSheet";
 import { WorkerMobileIncidentSheet } from "@/components/worker/WorkerMobileIncidentSheet";
 import { WorkerMobileReviewScreen } from "@/components/worker/WorkerMobileReviewScreen";
 import { WorkerMobileSessionScreen } from "@/components/worker/WorkerMobileSessionScreen";
@@ -35,6 +36,7 @@ import {
   deleteSessionNote,
   endShift,
   startShiftSession,
+  submitMissedCheckinReason,
   syncSessionNotes,
   updateShiftTasks,
   type ActiveBreakStatus,
@@ -156,6 +158,25 @@ export function WorkerMobileShiftView({
     }
   }, [shift.visual_state]);
 
+  const plannedShiftMins = useMemo(() => {
+    if (shift.scheduled_start && shift.scheduled_end) {
+      const startMs = parseIsoMs(shift.scheduled_start);
+      const endMs = parseIsoMs(shift.scheduled_end);
+      if (startMs != null && endMs != null && endMs > startMs) {
+        return (endMs - startMs) / 60000;
+      }
+    }
+    return shift.duration_minutes ?? 0;
+  }, [shift.scheduled_start, shift.scheduled_end, shift.duration_minutes]);
+
+  const notifyCheckinScheduleIfLongShift = useCallback(() => {
+    if (plannedShiftMins < 240) return;
+    showAlert(
+      "System check-ins active",
+      "This shift includes periodic system check-ins to confirm you're available. You'll get a notification when one's due — please respond within 5 minutes. If you're not able to, it's logged and you'll be asked to explain it before you submit the shift.",
+    );
+  }, [plannedShiftMins]);
+
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const participantName = shift.participant_name ?? "Participant";
   const participantFirstName = participantName.split(" ")[0];
@@ -229,6 +250,7 @@ export function WorkerMobileShiftView({
   );
 
   const [clockInSheetOpen, setClockInSheetOpen] = useState(false);
+  const [safetyCardOpen, setSafetyCardOpen] = useState(false);
 
   const submitClockIn = useCallback(
     async (method: "gps" | "qr", location: { lat: number; lng: number; accuracy?: number } | null, qrToken?: string) => {
@@ -255,6 +277,7 @@ export function WorkerMobileShiftView({
             "Clocked in offline",
             "Your clock-in is saved and will sync automatically when you're back online. You can keep working.",
           );
+          notifyCheckinScheduleIfLongShift();
           return;
         }
 
@@ -269,13 +292,22 @@ export function WorkerMobileShiftView({
         setPhase("session");
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast(`Clocked in for ${participantName}`, "success");
+        notifyCheckinScheduleIfLongShift();
       } catch (err) {
-        Alert.alert("Clock-in failed", err instanceof Error ? err.message : "Please try again.");
+        const message = err instanceof Error ? err.message : "";
+        if (message.toLowerCase().includes("acknowledge the participant safety card")) {
+          // Backend still blocked us - shift.requires_safety_ack was stale
+          // (e.g. content changed since the shift list was last fetched).
+          // Show the safety card instead of a dead-end error.
+          setSafetyCardOpen(true);
+        } else {
+          Alert.alert("Clock-in failed", message || "Please try again.");
+        }
       } finally {
         setBusy(null);
       }
     },
-    [shift.id, onRefresh, isOnline, queueWorkerUpdate],
+    [shift.id, onRefresh, isOnline, queueWorkerUpdate, notifyCheckinScheduleIfLongShift],
   );
 
   const handleGpsClockIn = useCallback(async () => {
@@ -306,8 +338,12 @@ export function WorkerMobileShiftView({
   );
 
   const handleClockIn = useCallback(() => {
+    if (shift.requires_safety_ack) {
+      setSafetyCardOpen(true);
+      return;
+    }
     setClockInSheetOpen(true);
-  }, []);
+  }, [shift.requires_safety_ack]);
 
   const handleAttemptEnd = useCallback(() => {
     if (busy) return;
@@ -537,6 +573,11 @@ export function WorkerMobileShiftView({
           notes={localNotes}
           compliance={compliance}
           busy={Boolean(busy)}
+          missedCheckins={(checkinStatus ?? shift.checkin_status)?.missed_checkins_needing_reason}
+          onSubmitMissedCheckinReason={async (scheduledCheckinId, reason) => {
+            if (!sessionId) return;
+            await submitMissedCheckinReason(sessionId, scheduledCheckinId, reason);
+          }}
           onSaveNote={handleSaveNote}
           onRemoveNote={handleRemoveNote}
           onAddMissingNote={handleAddMissingNote}
@@ -708,6 +749,26 @@ export function WorkerMobileShiftView({
           onChooseGps={() => void handleGpsClockIn()}
           onQrScanned={(token) => void handleQrClockIn(token)}
         />
+      </Modal>
+      <Modal
+        visible={safetyCardOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSafetyCardOpen(false)}
+      >
+        {shift.participant_id && (
+          <WorkerMobileSafetyCardSheet
+            participantId={shift.participant_id}
+            participantName={shift.participant_name}
+            shiftId={shift.id}
+            mandatory
+            onClose={() => setSafetyCardOpen(false)}
+            onAcknowledged={() => {
+              setSafetyCardOpen(false);
+              setClockInSheetOpen(true);
+            }}
+          />
+        )}
       </Modal>
     </View>
   );
