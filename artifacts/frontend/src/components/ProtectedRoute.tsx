@@ -25,6 +25,7 @@ const ROLE_LABEL_KEYS: Record<UserRole, string> = {
   support_coordinator: "protected.role.supportCoordinator",
   support_worker: "protected.role.supportWorker",
   managing_director: "protected.role.managingDirector",
+  super_admin: "protected.role.superAdmin",
 };
 
 /**

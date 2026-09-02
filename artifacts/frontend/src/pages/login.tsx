@@ -152,7 +152,7 @@ export default function Login() {
         return;
       }
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(result.user.id));
+      navigate(resolvePostLoginPath(result.user.id, result.user.role === "super_admin" ? "/admin/dashboard" : "/hub"));
     } catch (err) {
       if (isNetworkLoginError(err)) {
         toast({
@@ -177,7 +177,7 @@ export default function Login() {
     try {
       const authUser = await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(authUser.id));
+      navigate(resolvePostLoginPath(authUser.id, authUser.role === "super_admin" ? "/admin/dashboard" : "/hub"));
     } catch (err) {
       setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {

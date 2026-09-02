@@ -787,6 +787,36 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
     )
     account_type = profile.get("account_type") or "independent_worker"
     organization_id = profile.get("organization_id")
+
+    # Super Admin portal: a suspended/offboarded provider can't sign in at
+    # all. super_admin users have no organization_id, so this never applies
+    # to them. Mid-session cutoff (for someone already logged in when this
+    # happens) is separate — see revoke_all_sessions_for_org, called from
+    # the suspend action itself.
+    if organization_id:
+        try:
+            org_row = (
+                get_supabase_admin()
+                .table("organizations")
+                .select("status")
+                .eq("organization_id", organization_id)
+                .maybe_single()
+                .execute()
+            )
+            org_status = (org_row.data or {}).get("status") if org_row else None
+        except Exception as exc:
+            # Fails open (treat as active) — e.g. migration 151 not run yet,
+            # so the status column doesn't exist. Missing suspend enforcement
+            # briefly is a much smaller problem than breaking login entirely
+            # for every organisation on the platform.
+            logger.warning("Could not check organisation status for %s: %s", organization_id, exc)
+            org_status = None
+        if org_status and org_status != "active":
+            raise HTTPException(
+                status_code=403,
+                detail="This organisation's access has been suspended. Contact CareCliQ support.",
+            )
+
     email_verified = _is_auth_user_email_verified(auth_user)
     if not email_verified:
         email_verified = (
