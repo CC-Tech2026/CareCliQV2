@@ -275,9 +275,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 px-8 py-8">
-        <div className="mx-auto max-w-5xl">{children}</div>
-      </main>
+      {/* No max-width cap — this was leaving most of the screen empty on
+          anything wider than a laptop, centered inside a fixed max-w-5xl
+          column. The sidebar already bounds one edge; let content use the
+          rest. */}
+      <main className="flex-1 px-8 py-8">{children}</main>
     </div>
   );
 }
