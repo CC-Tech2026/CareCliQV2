@@ -10,6 +10,8 @@ import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
+import GetStarted from "@/pages/get-started";
+import PlatformBilling from "@/pages/platform-billing";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
 import ParticipantReferralPage from "@/pages/participant-referral";
@@ -133,6 +135,7 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
+      <Route path="/get-started" component={GetStarted} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/onboarding-sign" component={OnboardingSignPage} />
       <Route path="/participant-referral" component={ParticipantReferralPage} />
@@ -648,6 +651,12 @@ function Router() {
       <Route path="/billing">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Billing /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/platform-billing">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <AppLayout><PlatformBilling /></AppLayout>
         </ProtectedRoute>
       </Route>
 

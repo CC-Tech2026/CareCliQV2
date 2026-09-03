@@ -36,6 +36,10 @@ VALID_INVITE_ROLES = ("support_worker", "support_coordinator")
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
     "support_worker":     "independent_worker",
     "support_coordinator": "small_provider",
+    # Only ever inserted by the Stripe signup webhook (platform_billing_service),
+    # never reachable through POST /invitations/create — VALID_INVITE_ROLES there
+    # deliberately doesn't include this, so an existing org can't invite a second MD.
+    "managing_director":  "managing_director",
 }
 
 
@@ -976,6 +980,21 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
                 ).eq("id", user_id).execute()
         except Exception as e:
             logger.warning("accept_invite coordinator_id default error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
+    # 4c. A managing_director invite only ever comes from the Stripe signup
+    #     webhook (platform_billing_service), which creates the org before
+    #     any user exists — owner_user_id was left NULL at that point since
+    #     it couldn't be known yet. Backfill it now that the founding MD
+    #     account actually exists.
+    # ------------------------------------------------------------------
+    if role == "managing_director":
+        try:
+            supabase.table("organizations").update(
+                {"owner_user_id": user_id}
+            ).eq("id", org_id).is_("owner_user_id", "null").execute()
+        except Exception as e:
+            logger.warning("accept_invite owner_user_id backfill error (non-critical): %s", e)
 
     # ------------------------------------------------------------------
     # 5. Mark invite as accepted

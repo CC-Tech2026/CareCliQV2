@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     smtp_use_starttls: bool = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
     email_queue_workers: int = int(os.environ.get("EMAIL_QUEUE_WORKERS", "1") or 1)
     email_queue_max_size: int = int(os.environ.get("EMAIL_QUEUE_MAX_SIZE", "1000") or 1000)
+    # CareCliQ's own platform subscription billing (Stripe) — distinct from
+    # NDIS participant funding in billing.py, which doesn't touch Stripe at all.
+    stripe_secret_key: str = os.environ.get("STRIPE_SECRET_KEY", "")
+    stripe_webhook_secret: str = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     notification_scheduler_enabled: bool = os.environ.get("NOTIFICATION_SCHEDULER_ENABLED", "true").lower() == "true"
     notification_scheduler_interval_minutes: int = int(
         os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15

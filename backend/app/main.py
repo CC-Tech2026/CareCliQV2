@@ -101,6 +101,7 @@ async def _apply_startup_migrations():
             ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
             ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
             ("ai_detected_patterns", "ai_detected_patterns",  "id, organization_id, pattern_type, title, message",                           "ai_detected_patterns table OK",         "ai_detected_patterns missing — run backend/supabase/migrations/030_ai_detected_patterns.sql"),
+            ("pay_transactions",    "pay_transactions",       "id, organization_id, worker_id, shift_id, component_type, amount_cents",     "pay_transactions table OK",              "pay_transactions missing — run backend/supabase/migrations/158_schads_award_engine.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -148,6 +149,8 @@ async def _apply_startup_migrations():
                 migration_state.sessions_shift_id_column_missing = not ok
             elif key == "ai_detected_patterns":
                 migration_state.ai_detected_patterns_table_missing = not ok
+            elif key == "pay_transactions":
+                migration_state.pay_transactions_table_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -248,6 +251,8 @@ from .api import operational_feedback as operational_feedback_api
 app.include_router(operational_feedback_api.router, prefix="/api")
 from .api import admin as admin_api
 app.include_router(admin_api.router, prefix="/api")
+from .api import platform_billing as platform_billing_api
+app.include_router(platform_billing_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 
