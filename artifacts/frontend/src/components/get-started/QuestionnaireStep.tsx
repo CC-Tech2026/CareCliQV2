@@ -1,12 +1,17 @@
 import { useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import {
+  ACCENTS,
   SIGNATURE,
   INK,
   QUIET_INK,
   RULE,
   DISPLAY_FONT,
   Answers,
+  Card,
   GetStartedShell,
+  Pill,
+  PrimaryButton,
   FadeIn,
   SkipToPricingLink,
 } from "./shared";
@@ -90,7 +95,7 @@ function answerDisplay(q: QuestionDef, answers: Answers): string | null {
 
 function ProfilePanel({ answers, upToIndex }: { answers: Answers; upToIndex: number }) {
   return (
-    <div className="pl-6 border-l" style={{ borderColor: RULE }}>
+    <Card className="h-fit">
       <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: QUIET_INK }}>
         Your organisation, so far
       </p>
@@ -106,14 +111,14 @@ function ProfilePanel({ answers, upToIndex }: { answers: Answers; upToIndex: num
                 {answered ? (
                   <FadeIn animKey={answered}>{answered}</FadeIn>
                 ) : (
-                  <span style={{ color: RULE }}>—</span>
+                  <span style={{ color: RULE }}>&mdash;</span>
                 )}
               </p>
             </div>
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -150,50 +155,53 @@ export function QuestionnaireStep({ answers, onChange, onComplete, onSkip }: Pro
 
   return (
     <GetStartedShell step={4} wide>
-      <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-10">
+      <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-8">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: QUIET_INK }}>
+          <Pill accent={ACCENTS[qIndex]}>
             Question {qIndex + 1} of {QUESTIONS.length}
-          </p>
+          </Pill>
           <h1
-            className="mt-2 text-xl font-black leading-snug max-w-md"
+            className="mt-4 text-xl font-black leading-snug max-w-md"
             style={{ color: INK, fontFamily: DISPLAY_FONT }}
           >
             {question.prompt}
           </h1>
 
-          <div className="mt-6">
-            {question.options.map((opt, i) => {
+          <div className="mt-6 flex flex-col gap-2.5">
+            {question.options.map((opt) => {
               const isSelected = selected === opt.value;
               const isOther = opt.value === "other";
               return (
-                <div
-                  key={opt.value}
-                  className="py-2.5"
-                  style={{ borderTop: i === 0 ? undefined : `1px solid ${RULE}` }}
-                >
+                <div key={opt.value}>
                   <button
                     type="button"
                     onClick={() => selectOption(opt.value)}
-                    className="w-full text-left pl-3 text-[14px]"
+                    className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px]"
                     style={{
+                      border: isSelected ? `2px solid ${SIGNATURE}` : `1px solid ${RULE}`,
+                      background: isSelected ? "var(--cc-plum-subtle)" : "var(--cc-surface)",
                       color: isSelected ? INK : QUIET_INK,
-                      fontWeight: isSelected ? 600 : 500,
-                      borderLeft: isSelected ? `2px solid ${SIGNATURE}` : "2px solid transparent",
+                      fontWeight: isSelected ? 700 : 500,
                     }}
                   >
+                    <span
+                      className="h-4 w-4 shrink-0 rounded-full grid place-items-center"
+                      style={{ border: `2px solid ${isSelected ? SIGNATURE : RULE}` }}
+                    >
+                      {isSelected && <span className="h-2 w-2 rounded-full" style={{ background: SIGNATURE }} />}
+                    </span>
                     {opt.label}
                   </button>
                   {isOther && isSelected && (
-                    <div className="pl-3 mt-2">
+                    <div className="mt-2 pl-4">
                       <input
                         type="text"
                         autoFocus
                         value={otherText}
                         onChange={(e) => onChange({ ...answers, [question.otherKey]: e.target.value })}
                         placeholder="Tell us in your own words (optional)"
-                        className="w-full text-[14px] pb-1.5 outline-none bg-transparent border-0 border-b"
-                        style={{ color: INK, borderColor: RULE }}
+                        className="w-full rounded-xl px-3.5 py-2.5 text-[14px] outline-none"
+                        style={{ color: INK, border: `1px solid ${RULE}`, background: "var(--cc-surface)" }}
                       />
                     </div>
                   )}
@@ -202,27 +210,21 @@ export function QuestionnaireStep({ answers, onChange, onComplete, onSkip }: Pro
             })}
           </div>
 
-          <div className="mt-8 flex items-center justify-between gap-4 max-w-md">
+          <div className="mt-7 flex items-center justify-between gap-4 max-w-md">
             <button
               type="button"
               onClick={back}
               disabled={qIndex === 0}
-              className="text-[13px] font-semibold disabled:opacity-30 disabled:pointer-events-none"
-              style={{ color: INK }}
+              className="h-10 w-10 rounded-full grid place-items-center disabled:opacity-30 disabled:pointer-events-none"
+              style={{ border: `1px solid ${RULE}`, color: INK }}
             >
-              Back
+              <ChevronLeft size={17} />
             </button>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-3">
               <SkipToPricingLink onSkip={onSkip} />
-              <button
-                type="button"
-                onClick={next}
-                disabled={!canAdvance}
-                className="h-10 px-4 rounded-md text-white text-[13px] font-semibold disabled:opacity-40 disabled:pointer-events-none"
-                style={{ background: SIGNATURE }}
-              >
+              <PrimaryButton onClick={next} disabled={!canAdvance}>
                 {qIndex < QUESTIONS.length - 1 ? "Next" : "See my recommendation"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Building2, Loader2, Star, User, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
-import { SIGNATURE, FLAG, INK, QUIET_INK, RULE, DISPLAY_FONT, GetStartedShell } from "./shared";
+import { ACCENTS, SIGNATURE, FLAG, INK, QUIET_INK, DISPLAY_FONT, Card, GetStartedShell, Pill } from "./shared";
 
 export type PlanTier = "micro" | "small" | "medium";
 
-const TIERS: Array<{
+export const TIERS: Array<{
   tier: PlanTier;
   name: string;
+  icon: typeof User;
   range: string;
   price: number;
   perPerson?: string;
@@ -18,6 +19,7 @@ const TIERS: Array<{
   {
     tier: "micro",
     name: "Micro",
+    icon: User,
     range: "1 to 4 people",
     price: 125,
     note: "For a solo operator or a small independent team getting started.",
@@ -25,6 +27,7 @@ const TIERS: Array<{
   {
     tier: "small",
     name: "Small",
+    icon: Users,
     range: "5 to 10 people",
     price: 250,
     perPerson: "$41.67 per person",
@@ -33,6 +36,7 @@ const TIERS: Array<{
   {
     tier: "medium",
     name: "Medium",
+    icon: Building2,
     range: "11 to 25 people",
     price: 400,
     note: "For an established, multi worker provider running at scale.",
@@ -40,9 +44,10 @@ const TIERS: Array<{
 ];
 
 const SHARED_FEATURES = [
-  "The full platform on every plan",
   "Unlimited participants and notes",
-  "Exports ready for an audit any time",
+  "Shift-linked progress notes, written in the moment",
+  "Compliance and audit exports, ready any time",
+  "One record per person, visible to the whole team",
 ];
 
 type Props = {
@@ -84,7 +89,8 @@ export function PricingStep({ recommendedTier }: Props) {
 
   return (
     <GetStartedShell step={6} wide>
-      <h1 className="text-2xl sm:text-3xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+      <Pill accent={ACCENTS[0]}>Plans</Pill>
+      <h1 className="mt-4 text-3xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
         Documentation that holds up when it's checked.
       </h1>
       <p className="mt-3 max-w-md text-[14.5px] leading-relaxed" style={{ color: QUIET_INK }}>
@@ -92,37 +98,42 @@ export function PricingStep({ recommendedTier }: Props) {
         the same platform, so there's nothing to upgrade into later.
       </p>
 
-      <div className="mt-6 flex flex-wrap gap-x-6 gap-y-1.5">
-        {SHARED_FEATURES.map((f) => (
-          <span key={f} className="text-[13px]" style={{ color: INK }}>
-            <span style={{ color: SIGNATURE }}>&#10003;</span> {f}
-          </span>
-        ))}
-      </div>
-
-      <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-8">
-        {TIERS.map(({ tier, name, range, price, perPerson, note }) => {
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {TIERS.map(({ tier, name, icon: Icon, range, price, perPerson, note }, i) => {
           const isRecommended = recommendedTier === tier;
+          const accent = ACCENTS[i];
           return (
-            <div
-              key={tier}
-              className="pt-4"
-              style={{
-                borderTop: isRecommended ? `2px solid ${SIGNATURE}` : `1px solid ${RULE}`,
-              }}
-            >
-              <h2 className="text-lg font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+            <Card key={tier} selected={isRecommended} className="relative flex flex-col">
+              {isRecommended && (
+                <span
+                  className="absolute -top-3 left-5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-white"
+                  style={{ background: SIGNATURE }}
+                >
+                  <Star size={11} fill="white" /> Recommended for you
+                </span>
+              )}
+              <span
+                className="flex h-11 w-11 items-center justify-center rounded-xl"
+                style={{ background: accent.bg, color: accent.fg }}
+              >
+                <Icon size={19} />
+              </span>
+              <h2 className="mt-4 text-lg font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
                 {name}
               </h2>
               <p className="text-[12.5px] font-semibold mt-0.5" style={{ color: QUIET_INK }}>{range}</p>
-              {isRecommended && (
-                <p className="mt-1.5 text-[12.5px]" style={{ color: INK }}>
-                  This is the plan we walked through together.
-                </p>
-              )}
               <p className="mt-3 text-[13px] leading-relaxed" style={{ color: QUIET_INK }}>{note}</p>
 
-              <div className="mt-4 flex items-baseline gap-1">
+              <ul className="mt-4 flex flex-col gap-2" style={{ borderTop: "1px solid var(--auth-card-border)" }}>
+                {SHARED_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2 pt-2 text-[12.5px] leading-snug" style={{ color: INK }}>
+                    <span className="mt-0.5 shrink-0" style={{ color: SIGNATURE }}>&#10003;</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-5 flex items-baseline gap-1">
                 <span
                   className="text-4xl font-black"
                   style={{ color: FLAG, fontFamily: DISPLAY_FONT, fontVariantNumeric: "tabular-nums" }}
@@ -139,35 +150,35 @@ export function PricingStep({ recommendedTier }: Props) {
                 type="button"
                 onClick={() => void handleChoose(tier)}
                 disabled={busyTier !== null}
-                className="mt-5 w-full h-11 rounded-md text-white font-semibold text-sm disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
-                style={{ background: isRecommended ? SIGNATURE : INK }}
+                className="mt-5 w-full h-11 rounded-full text-white font-bold text-sm disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
+                style={{ background: isRecommended ? SIGNATURE : INK, boxShadow: "var(--cc-shadow-sm)" }}
               >
                 {busyTier === tier ? <Loader2 size={14} className="animate-spin" /> : null}
                 Start free trial
               </button>
-            </div>
+            </Card>
           );
         })}
       </div>
 
-      <div className="mt-14 flex items-center gap-6">
+      <Card className="mt-10 flex flex-wrap items-center gap-6 sm:gap-10 w-fit">
         <div>
-          <p className="text-4xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>5 days</p>
+          <p className="text-3xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>5 days</p>
           <p className="mt-1 text-[12px] font-medium" style={{ color: QUIET_INK }}>Without CareCliQ</p>
         </div>
         <ArrowRight size={18} style={{ color: QUIET_INK }} />
         <div>
-          <p className="text-4xl font-black" style={{ color: FLAG, fontFamily: DISPLAY_FONT }}>Same day</p>
+          <p className="text-3xl font-black" style={{ color: FLAG, fontFamily: DISPLAY_FONT }}>Same day</p>
           <p className="mt-1 text-[12px] font-medium" style={{ color: QUIET_INK }}>With CareCliQ</p>
         </div>
-      </div>
+      </Card>
 
-      <p className="text-[13px] font-medium mt-12" style={{ color: QUIET_INK }}>
+      <p className="text-[13px] font-medium mt-8" style={{ color: QUIET_INK }}>
         Already have an account?{" "}
         <button
           type="button"
           onClick={() => navigate("/login")}
-          className="font-semibold underline underline-offset-2"
+          className="font-bold underline underline-offset-2"
           style={{ color: INK }}
         >
           Sign in
