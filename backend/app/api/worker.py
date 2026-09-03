@@ -1284,6 +1284,15 @@ async def worker_update_shift_tasks(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    completed = sum(1 for t in tasks if t.get("completed"))
+    await audit_service.log_action(
+        action_type="worker.shift.tasks_updated",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"task_count": len(tasks), "completed_count": completed},
+    )
     return shift
 
 
@@ -1489,6 +1498,7 @@ async def worker_acknowledge_safety_protocol(
             participant_id=participant_id,
             organization_id=str(org_id or ""),
             content_version=body.content_version,
+            org_content_version=body.org_content_version,
             shift_id=body.shift_id,
         )
     except ValueError as exc:
@@ -1966,6 +1976,14 @@ async def worker_create_shift_note(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await audit_service.log_action(
+        action_type="worker.shift.note_created",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"category": body.category},
+    )
     return note
 
 

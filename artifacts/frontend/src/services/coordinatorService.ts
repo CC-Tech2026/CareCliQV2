@@ -1014,6 +1014,43 @@ export function getWorkerShiftHistoryDetail(workerId: string, shiftId: string) {
   );
 }
 
+export type ShiftEventTimelineEntry = {
+  action_type: string;
+  label: string;
+  actor_name: string | null;
+  details: Record<string, unknown>;
+  created_at: string | null;
+};
+
+/** Chronological clock-in-to-clock-out event log for a shift, sourced from
+ *  audit_logs - the audit-trail view behind a single shift history row. */
+export function getWorkerShiftEventTimeline(workerId: string, shiftId: string) {
+  return jsonFetch<ShiftEventTimelineEntry[]>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history/${encodeURIComponent(shiftId)}/timeline`
+  );
+}
+
+export type OrgAcknowledgementContent = {
+  organization_id: string;
+  body: string;
+  content_version: number;
+  updated_at: string | null;
+};
+
+/** Standing per-shift worker acknowledgement text (shown at every clock-in
+ *  alongside the per-participant safety card) - MD/coordinator-editable. */
+export function getOrgAcknowledgementContent() {
+  return jsonFetch<OrgAcknowledgementContent>("/api/coordinator/organization/acknowledgement-content");
+}
+
+export function updateOrgAcknowledgementContent(body: string) {
+  return jsonFetch<OrgAcknowledgementContent>("/api/coordinator/organization/acknowledgement-content", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+}
+
 /** 30-day performance trend, strengths/focus areas and badges for a worker -
  *  the detailed breakdown behind a single compliance percentage. */
 export function getWorkerPerformanceDashboard(workerId: string) {

@@ -19,7 +19,7 @@ import {
   getShiftMatchFeedback, postShiftMatchFeedback,
   getCoordinatorWorkerStats, assignWorkerCoordinator,
   getAwardClassifications, assignWorkerClassification, getShiftPayPreview,
-  markShiftSleepover, logShiftCallOut,
+  markShiftSleepover, logShiftCallOut, getWorkerShiftEventTimeline,
   getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
@@ -2229,6 +2229,10 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
   const { data: payPreview } = useOrgQuery(["shift-pay-preview", shift.id], {
     queryFn: () => getShiftPayPreview(shift.id),
   });
+  const { data: eventTimeline, isLoading: timelineLoading } = useOrgQuery(
+    ["shift-event-timeline", workerId, shift.id],
+    { queryFn: () => getWorkerShiftEventTimeline(workerId, shift.id) },
+  );
 
   const [markingSleepover, setMarkingSleepover] = useState(false);
   const [sleepoverStart, setSleepoverStart] = useState("");
@@ -2390,6 +2394,36 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
             <button type="button" onClick={() => setLoggingCallOut(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
               {translate("coordinator.shiftAssign.logCallOut")}
             </button>
+          )}
+        </div>
+
+        {/* Event timeline - every clock-in-to-clock-out event this shift
+            wrote to audit_logs (clock-in, task updates, notes, evidence,
+            acknowledgements, clock-out), for full audit-trail visibility. */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+            Event timeline
+          </p>
+          {timelineLoading ? (
+            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+          ) : !eventTimeline || eventTimeline.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED }}>No events recorded for this shift.</p>
+          ) : (
+            <div className="space-y-2">
+              {eventTimeline.map((event, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold" style={{ color: TEXT }}>{event.label}</p>
+                    {event.actor_name && (
+                      <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{event.actor_name}</p>
+                    )}
+                  </div>
+                  <p className="shrink-0 text-[11px]" style={{ color: MUTED }}>
+                    {event.created_at ? safeFormat(event.created_at, "d MMM, h:mm a") : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

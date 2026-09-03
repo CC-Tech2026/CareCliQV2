@@ -291,6 +291,82 @@ def list_completed_shifts(
     return {"shifts": filtered, "participants": participants}
 
 
+_EVENT_LABELS = {
+    "worker.shift.clocked_in": "Clocked in",
+    "worker.shift.checked_in_verified": "Clocked in (verified)",
+    "worker.shift.ended": "Clocked out / shift ended",
+    "worker.shift.tasks_updated": "Task checklist updated",
+    "worker.shift.note_created": "Visit note added",
+    "worker.session.evidence_uploaded": "Evidence uploaded",
+    "worker.session.evidence_synced": "Evidence synced",
+    "worker.session.notes_synced": "Notes synced",
+    "worker.shift.session_started": "Session started",
+    "worker.shift.signed": "Shift signed off",
+    "worker.safety_protocol.acknowledged": "Safety card acknowledged",
+    "worker.briefing.alert_acknowledged": "Pre-shift alert acknowledged",
+    "worker.briefing.acknowledged": "Pre-shift briefing acknowledged",
+    "worker.shift.risks_acknowledged": "Risks acknowledged",
+    "coordinator.shift.assigned": "Assigned by coordinator",
+    "coordinator.shift.unassigned": "Unassigned by coordinator",
+}
+
+
+def get_shift_event_timeline(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]] | None:
+    """Chronological audit_logs entries for a shift's whole lifecycle
+    (clock-in through clock-out), including its linked session's events -
+    reuses audit_logs as the source of truth rather than a parallel event
+    table, since clock-in/out, acknowledgements, task updates, notes, and
+    evidence uploads already write there (see the action_type keys in
+    _EVENT_LABELS for exactly what's covered)."""
+    shift = get_shift_by_id(shift_id)
+    if not shift:
+        return None
+    if str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+    if str(shift.get("organization_id") or "") != str(organization_id):
+        return None
+
+    session_id = shift.get("session_id")
+    supabase = get_supabase_admin()
+    try:
+        query = supabase.table("audit_logs").select(
+            "action_type, entity_type, entity_id, user_id, details, created_at"
+        )
+        if session_id:
+            query = query.or_(f"and(entity_type.eq.shift,entity_id.eq.{shift_id}),and(entity_type.eq.session,entity_id.eq.{session_id})")
+        else:
+            query = query.eq("entity_type", "shift").eq("entity_id", shift_id)
+        resp = query.order("created_at").execute()
+        rows = resp.data or []
+    except Exception:
+        return []
+
+    actor_ids = {str(r["user_id"]) for r in rows if r.get("user_id")}
+    names_by_id: dict[str, str] = {}
+    if actor_ids:
+        try:
+            profiles = supabase.table("users").select("id, full_name").in_("id", list(actor_ids)).execute()
+            names_by_id = {str(p["id"]): p.get("full_name") or "Team member" for p in (profiles.data or [])}
+        except Exception:
+            pass
+
+    timeline = []
+    for row in rows:
+        action_type = row.get("action_type") or ""
+        timeline.append({
+            "action_type": action_type,
+            "label": _EVENT_LABELS.get(action_type, action_type.replace(".", " ").replace("_", " ")),
+            "actor_name": names_by_id.get(str(row.get("user_id") or "")),
+            "details": row.get("details") or {},
+            "created_at": row.get("created_at"),
+        })
+    return timeline
+
+
 def get_shift_history_detail(
     shift_id: str,
     worker_id: str,

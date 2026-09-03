@@ -40,6 +40,7 @@ from ..services.notification_service import (
 )
 from ..services import audit_service, conversation_service, shift_offer_service, worker_matching_service
 from ..services import worker_buddy_service
+from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -990,6 +991,33 @@ async def list_award_classifications(current_user: dict = Depends(get_current_us
         .execute()
     )
     return result.data or []
+
+
+@router.get("/organization/acknowledgement-content")
+async def get_acknowledgement_content(current_user: dict = Depends(get_current_user)):
+    """The standing per-shift worker acknowledgement (shown at every clock-in
+    alongside the per-participant safety card, migration 161) - editable
+    here by a coordinator/MD, same shape as the per-participant safety-card
+    editor at PUT /participants/{id}/safety-protocol."""
+    org_id = _require_coordinator(current_user)
+    from ..services import safety_protocol_service
+
+    return safety_protocol_service.get_org_acknowledgement_content(org_id)
+
+
+@router.put("/organization/acknowledgement-content")
+async def update_acknowledgement_content(
+    body: OrgAcknowledgementContentUpdate, current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import safety_protocol_service
+
+    try:
+        return safety_protocol_service.upsert_org_acknowledgement_content(
+            org_id, body.body, updated_by=get_user_id(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class AssignClassificationBody(BaseModel):
@@ -3818,6 +3846,24 @@ async def coordinator_worker_shift_history_detail(
     if not detail:
         raise HTTPException(status_code=404, detail="Shift not found.")
     return detail
+
+
+@router.get("/workers/{worker_id}/shift-history/{shift_id}/timeline")
+async def worker_shift_event_timeline(
+    worker_id: str,
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Chronological event log for a shift (clock-in through clock-out) -
+    audit-trail view, see get_shift_event_timeline's docstring for exactly
+    what's covered."""
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    timeline = worker_shift_history_service.get_shift_event_timeline(shift_id, worker_id, org_id)
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+    return timeline
 
 
 @router.get("/workers/{worker_id}/performance-dashboard")

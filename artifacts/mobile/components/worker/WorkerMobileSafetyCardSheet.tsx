@@ -115,7 +115,7 @@ export function WorkerMobileSafetyCardSheet({
     if (!protocol) return;
     setBusy(true);
     try {
-      await acknowledgeParticipantSafetyProtocol(protocol.participant_id, protocol.content_version, shiftId);
+      await acknowledgeParticipantSafetyProtocol(protocol.participant_id, protocol.content_version, protocol.org_content_version, shiftId);
       onAcknowledged();
     } catch (err) {
       showAlert("Couldn't save", err instanceof Error ? err.message : "Please try again.");
@@ -171,14 +171,32 @@ export function WorkerMobileSafetyCardSheet({
             onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}
             onContentSizeChange={(_w, h) => setContentHeight(h)}
           >
+            {/* Standing acknowledgement - shown unconditionally, regardless of
+                whether this participant has any safety content on file, so
+                the acknowledgement is never just an empty screen tapped
+                through with nothing actually affirmed. */}
+            <View
+              style={[
+                styles.section,
+                { backgroundColor: `${colors.composerPink}14`, borderColor: `${colors.composerPink}33` },
+              ]}
+            >
+              <Text style={[styles.sectionLabel, { color: colors.composerPink, fontFamily: "Inter_700Bold" }]}>
+                BEFORE YOU START
+              </Text>
+              <Text style={[styles.sectionBody, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                {protocol?.org_content_body}
+              </Text>
+            </View>
+
             {!hasVisibleContent && (
               <View style={[styles.section, styles.emptySection, { borderColor: colors.border }]}>
                 <Feather name="shield" size={28} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  No safety notes on file
+                  No participant-specific safety notes
                 </Text>
                 <Text style={[styles.emptyBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Nothing has been added for this participant yet.
+                  Nothing has been added specifically for this participant - your standing acknowledgement above still applies.
                 </Text>
               </View>
             )}

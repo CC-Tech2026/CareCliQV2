@@ -362,6 +362,11 @@ export type SafetyProtocol = {
    * even for the same participant/content version. */
   requires_safety_ack?: boolean;
   has_safety_content?: boolean;
+  /** Standing, org-wide acknowledgement text shown at every clock-in
+   * regardless of whether this participant has any safety content on file -
+   * never empty. */
+  org_content_body: string;
+  org_content_version: number;
 };
 
 export function getParticipantSafetyProtocol(participantId: string, shiftId?: string) {
@@ -372,13 +377,18 @@ export function getParticipantSafetyProtocol(participantId: string, shiftId?: st
 export function acknowledgeParticipantSafetyProtocol(
   participantId: string,
   contentVersion: number,
+  orgContentVersion?: number,
   shiftId?: string,
 ) {
   return workerFetch<{ acknowledged_at: string; requires_safety_ack: boolean }>(
     `/api/worker/participants/${participantId}/safety-protocol/acknowledge`,
     {
       method: "POST",
-      body: JSON.stringify({ content_version: contentVersion, shift_id: shiftId }),
+      body: JSON.stringify({
+        content_version: contentVersion,
+        org_content_version: orgContentVersion,
+        shift_id: shiftId,
+      }),
     },
   );
 }
