@@ -3306,6 +3306,13 @@ def end_shift(
             return None
         raise
 
+    try:
+        from . import schads_engine
+
+        schads_engine.calculate_shift_pay(updated)
+    except Exception as exc:
+        logger.debug("SCHADS pay calculation on end_shift skipped: %s", exc)
+
     session = _get_session_for_shift(updated)
     if session:
         _track_long_shift_activity(

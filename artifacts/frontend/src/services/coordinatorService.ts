@@ -21,6 +21,8 @@ export type TeamMember = {
   training_overdue?: boolean;
   induction_overdue?: boolean;
   coordinator_id?: string | null;
+  classification_id?: string | null;
+  employment_type?: "casual" | "part_time" | "full_time" | null;
 };
 
 export type WorkerStats = TeamMember & {
@@ -181,6 +183,60 @@ export function assignWorkerCoordinator(workerId: string, coordinatorId: string 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coordinator_id: coordinatorId }),
     },
+  );
+}
+
+export type AwardClassification = {
+  id: string;
+  level: string;
+  pay_point: string;
+  base_rate: number;
+  casual_rate: number;
+};
+
+export function getAwardClassifications() {
+  return jsonFetch<AwardClassification[]>("/api/coordinator/award-classifications");
+}
+
+export function assignWorkerClassification(
+  workerId: string,
+  payload: { classification_id?: string | null; employment_type?: string | null; written_agreement_12hr?: boolean },
+) {
+  return jsonFetch<{ worker_id: string }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/assign-classification`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export type PayPreview = {
+  shift_id: string;
+  components: Array<{ component_type: string; amount_cents: number; hours_applied: number | null }>;
+  total_cents: number;
+  reason: string | null;
+  is_sleepover: boolean;
+  emergency_flagged: boolean;
+  emergency_note: string | null;
+};
+
+export function getShiftPayPreview(shiftId: string) {
+  return jsonFetch<PayPreview>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/pay-preview`);
+}
+
+export function markShiftSleepover(shiftId: string, payload: { sleepover_start: string; sleepover_end: string }) {
+  return jsonFetch<{ shift_id: string }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/sleepover`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+  );
+}
+
+export function logShiftCallOut(shiftId: string, payload: { start: string; end: string; note?: string }) {
+  return jsonFetch<{ shift_id: string }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/call-out`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
   );
 }
 
@@ -512,6 +568,10 @@ export type AssignShiftPayload = {
   scheduled_end?: string;
   duration_minutes?: number;
   shift_type?: string;
+  duty_type?: string;
+  is_sleepover?: boolean;
+  sleepover_start?: string;
+  sleepover_end?: string;
   selected_task_ids?: string[];
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string;
@@ -550,6 +610,8 @@ export type CoordinatorShiftRecord = {
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string | null;
   shadow_of_worker_name?: string | null;
+  duty_type?: string;
+  is_sleepover?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -650,7 +712,8 @@ export function deleteShiftCredentialRequirement(requirementId: string) {
 export type AvailabilityStatus = "available" | "warning" | "unavailable";
 
 export type ConflictItem = {
-  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill" | "unavailable_slot";
+  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill" | "unavailable_slot"
+    | "rest_break_violation" | "overtime_threshold" | "no_schads_classification" | "no_sleepover_agreement";
   severity: "error" | "warning" | "info";
   message: string;
 };
@@ -768,9 +831,11 @@ export function getAvailableWorkers(params: {
   shiftStart: string;
   shiftEnd: string;
   participantId?: string;
+  isSleepover?: boolean;
 }) {
   const qs = new URLSearchParams({ shift_start: params.shiftStart, shift_end: params.shiftEnd });
   if (params.participantId) qs.set("participant_id", params.participantId);
+  if (params.isSleepover) qs.set("is_sleepover", "true");
   return jsonFetch<AvailableWorker[]>(`/api/coordinator/available-workers?${qs}`);
 }
 
@@ -857,6 +922,7 @@ export function createUnassignedShift(payload: {
   scheduled_start: string;
   scheduled_end?: string;
   shift_type?: string;
+  duty_type?: string;
 }) {
   return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
     "/api/coordinator/shifts/unassigned",

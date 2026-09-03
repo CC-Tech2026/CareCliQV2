@@ -190,6 +190,10 @@ export function ShiftAssignmentModal({
   const [scheduledStart,        setScheduledStart]        = useState("");
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
+  const [dutyType,              setDutyType]              = useState("disability_services");
+  const [isSleepover,           setIsSleepover]           = useState(false);
+  const [sleepoverStart,        setSleepoverStart]        = useState("");
+  const [sleepoverEnd,          setSleepoverEnd]          = useState("");
   const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
   const [isShadowShift,         setIsShadowShift]         = useState(false);
   const [shadowOfWorkerId,      setShadowOfWorkerId]      = useState("");
@@ -224,12 +228,13 @@ export function ShiftAssignmentModal({
   // coverage and availability, never a hard filter (every team member still
   // shows up). Needs at least a start time to say anything meaningful.
   const availableWorkersQuery = useOrgQuery<AvailableWorker[]>(
-    [orgId, "coordinator-available-workers", selectedParticipantId, scheduledStart, scheduledEnd],
+    [orgId, "coordinator-available-workers", selectedParticipantId, scheduledStart, scheduledEnd, isSleepover],
     {
       queryFn: () => getAvailableWorkers({
         shiftStart: datetimeLocalValueToUtcIso(scheduledStart),
         shiftEnd: datetimeLocalValueToUtcIso(scheduledEnd || scheduledStart),
         participantId: selectedParticipantId || undefined,
+        isSleepover,
       }),
       enabled: !!scheduledStart,
       staleTime: 30_000,
@@ -288,6 +293,10 @@ export function ShiftAssignmentModal({
         scheduled_start: datetimeLocalValueToUtcIso(scheduledStart),
         scheduled_end: scheduledEnd ? datetimeLocalValueToUtcIso(scheduledEnd) : undefined,
         shift_type: shiftType,
+        duty_type: dutyType,
+        is_sleepover: isSleepover,
+        sleepover_start: isSleepover && sleepoverStart ? datetimeLocalValueToUtcIso(sleepoverStart) : undefined,
+        sleepover_end: isSleepover && sleepoverEnd ? datetimeLocalValueToUtcIso(sleepoverEnd) : undefined,
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       };
       if (selectedWorkerId) {
@@ -375,6 +384,7 @@ export function ShiftAssignmentModal({
     scheduledStart &&
     (!selectedWorkerId || !hasBlock) &&
     (!isShadowShift || shadowOfWorkerId) &&
+    (!isSleepover || (sleepoverStart && sleepoverEnd)) &&
     goalsTasksValid &&
     !assignMut.isPending
   );
@@ -552,6 +562,35 @@ export function ShiftAssignmentModal({
             </div>
           )}
 
+          {/* Sleepover - a continuous overnight stay is priced differently
+              under SCHADS (a flat allowance plus overtime-rate call-outs,
+              not ordinary continuous work) - see schads_engine.py. */}
+          {selectedWorkerId && (
+            <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] font-black" style={{ color: TEXT }}>
+                <input
+                  type="checkbox"
+                  checked={isSleepover}
+                  onChange={(e) => setIsSleepover(e.target.checked)}
+                  className="h-4 w-4 rounded"
+                />
+                {translate("coordinator.shiftAssign.sleepover")}
+              </label>
+              {isSleepover && (
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverStart")}</label>
+                    <DateTimePicker value={sleepoverStart} onChange={setSleepoverStart} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverEnd")}</label>
+                    <DateTimePicker value={sleepoverEnd} onChange={setSleepoverEnd} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Participant */}
           <div className="space-y-2">
             <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("common.participant")}</label>
@@ -623,6 +662,23 @@ export function ShiftAssignmentModal({
                   {Object.keys(SHIFT_TYPE_KEYS).map((value) => (
                     <SelectItem key={value} value={value}>{translate(SHIFT_TYPE_KEYS[value])}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* SCHADS duty type - drives minimum-engagement pay rules, separate
+              from the NDIS-facing shift type above. */}
+          {!hasGoalsTasksError && (
+            <div className="space-y-2">
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.dutyType")}</label>
+              <Select value={dutyType} onValueChange={setDutyType}>
+                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disability_services">{translate("coordinator.shiftAssign.dutyType.disabilityServices")}</SelectItem>
+                  <SelectItem value="general_sacs">{translate("coordinator.shiftAssign.dutyType.generalSacs")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -79,12 +79,13 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   });
 
   const availableWorkersQuery = useOrgQuery(
-    [orgId, "coordinator-available-workers", participantId, shift?.scheduled_start, shift?.scheduled_end],
+    [orgId, "coordinator-available-workers", participantId, shift?.scheduled_start, shift?.scheduled_end, shift?.is_sleepover],
     {
       queryFn: () => getAvailableWorkers({
         shiftStart: shift!.scheduled_start!,
         shiftEnd: shift!.scheduled_end || shift!.scheduled_start!,
         participantId,
+        isSleepover: shift?.is_sleepover,
       }),
       enabled: !!shift?.scheduled_start,
       staleTime: 30_000,

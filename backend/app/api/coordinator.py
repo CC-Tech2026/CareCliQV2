@@ -205,7 +205,8 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
                     "preferred_contact_method, phone, onboarding_completed, "
-                    "profile_summary, profile_experience_years, coordinator_id"
+                    "profile_summary, profile_experience_years, coordinator_id, "
+                    "classification_id, employment_type"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -243,6 +244,8 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "profile_experience_years": profile.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("user_id")), False),
             "induction_overdue": induction_map.get(str(row.get("user_id")), False),
+            "classification_id": profile.get("classification_id"),
+            "employment_type": profile.get("employment_type"),
         })
     return output
 
@@ -272,7 +275,8 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed, coordinator_id"
+                "preferred_contact_method, phone, onboarding_completed, coordinator_id, "
+                "classification_id, employment_type"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -305,6 +309,8 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "profile_experience_years": row.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("id")), False),
             "induction_overdue": induction_map.get(str(row.get("id")), False),
+            "classification_id": row.get("classification_id"),
+            "employment_type": row.get("employment_type"),
         })
     return output
 
@@ -969,6 +975,78 @@ async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, curren
     return {"worker_id": worker_id, "coordinator_id": body.coordinator_id}
 
 
+@router.get("/award-classifications")
+async def list_award_classifications(current_user: dict = Depends(get_current_user)):
+    """Currently-active SCHADS classifications a coordinator can assign to a
+    worker. SACS only this phase (see award_streams / migration 158) - the
+    default and only stream with rate data seeded so far."""
+    _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("award_classifications")
+        .select("id, level, pay_point, base_rate, casual_rate, stream_id")
+        .is_("valid_to", "null")
+        .order("level")
+        .execute()
+    )
+    return result.data or []
+
+
+class AssignClassificationBody(BaseModel):
+    classification_id: Optional[str] = None  # null to clear
+    employment_type: Optional[str] = None  # 'casual' | 'part_time' | 'full_time', null to clear
+    written_agreement_12hr: Optional[bool] = None
+
+
+@router.patch("/team/{worker_id}/assign-classification")
+async def assign_classification(worker_id: str, body: AssignClassificationBody, current_user: dict = Depends(get_current_user)):
+    """Coordinator or MD - sets a worker's SCHADS Award classification and
+    employment type (users.classification_id / employment_type /
+    written_agreement_12hr), the data the pay-calculation engine
+    (schads_engine.py) needs to price their shifts. Set manually here, per
+    the source reference doc's explicit guidance - never derived from a
+    worker's qualifications, since classification reflects the duties
+    actually performed, not the certificate on file."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    worker = (
+        supabase.table("users")
+        .select("id")
+        .eq("id", worker_id)
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    if not worker or not worker.data:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+
+    update: dict = {}
+    if body.classification_id is not None or "classification_id" in body.model_fields_set:
+        if body.classification_id:
+            classification = (
+                supabase.table("award_classifications")
+                .select("id")
+                .eq("id", body.classification_id)
+                .maybe_single()
+                .execute()
+            )
+            if not classification or not classification.data:
+                raise HTTPException(status_code=422, detail="classification_id must be an existing award classification.")
+        update["classification_id"] = body.classification_id
+    if "employment_type" in body.model_fields_set:
+        if body.employment_type and body.employment_type not in ("casual", "part_time", "full_time"):
+            raise HTTPException(status_code=422, detail="employment_type must be casual, part_time, or full_time.")
+        update["employment_type"] = body.employment_type
+    if body.written_agreement_12hr is not None:
+        update["written_agreement_12hr"] = body.written_agreement_12hr
+
+    if update:
+        supabase.table("users").update(update).eq("id", worker_id).execute()
+
+    return {"worker_id": worker_id, **update}
+
+
 @router.get("/team/unassigned")
 async def list_unassigned_team(current_user: dict = Depends(get_current_user)):
     """Support workers in this org with no coordinator_id set - the "claim"
@@ -1308,6 +1386,13 @@ async def cancel_shift(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift cancel failed: {exc}") from exc
 
+    try:
+        from ..services import schads_engine
+
+        schads_engine.calculate_cancellation_pay(shift, datetime.now(timezone.utc))
+    except Exception as exc:
+        logger.debug("SCHADS cancellation-pay calculation skipped for shift %s: %s", shift_id, exc)
+
     await notify_shift_cancelled(shift=updated)
     conversation_service.set_conversation_read_only_for_shift(shift_id)
     return {"shift_id": shift_id, "shift": updated}
@@ -1322,6 +1407,10 @@ class AssignShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs', drives minimum-engagement pricing
+    is_sleepover: bool = False
+    sleepover_start: Optional[str] = None
+    sleepover_end: Optional[str] = None
     selected_task_ids: Optional[list[str]] = None
     # Shadow shift: worker_id is still the trainee actually doing the shift
     # (same credential/training/induction gates apply below) — this just
@@ -1920,6 +2009,8 @@ async def assign_shift(
             "participant_id": body.participant_id,
             "participant_name": participant.get("full_name"),
             "shift_type": shift_type,
+            "duty_type": body.duty_type or "disability_services",
+            "is_sleepover": bool(body.is_sleepover and body.sleepover_start and body.sleepover_end),
             "scheduled_start": scheduled_start.isoformat(),
             "scheduled_end": scheduled_end.isoformat(),
             "duration_minutes": duration_minutes,
@@ -1940,7 +2031,17 @@ async def assign_shift(
             )
         
         shift = result.data[0]
-        
+
+        if shift_payload["is_sleepover"]:
+            try:
+                _derive_sleepover_segments(
+                    supabase, shift_id, scheduled_start,
+                    parse_shift_datetime(body.sleepover_start), parse_shift_datetime(body.sleepover_end),
+                    scheduled_end,
+                )
+            except Exception as exc:
+                logger.warning("Failed to derive sleepover segments for shift %s: %s", shift_id, exc)
+
         # Auto-generate participant_tasks from matching templates (+ shift_tasks links)
         generated_task_ids: list[str] = []
         try:
@@ -2062,6 +2163,7 @@ def _detect_worker_conflicts(
     shift_start: datetime,
     shift_end: datetime,
     exclude_shift_id: str | None = None,
+    is_sleepover: bool = False,
 ) -> list[dict]:
     """Return a list of conflict descriptions for a worker over a time window.
 
@@ -2187,7 +2289,132 @@ def _detect_worker_conflicts(
     except Exception:
         pass
 
+    # 5 — SCHADS rest-break violation (10h between shifts; the 8h sleepover
+    # exception is Phase 2, once is_sleepover exists on shifts - see the
+    # SCHADS Phase 1 plan).
+    try:
+        rest_conflict = _check_rest_break(supabase, worker_id, shift_start, exclude_shift_id)
+        if rest_conflict:
+            conflicts.append(rest_conflict)
+    except Exception:
+        pass
+
+    # 6 — SCHADS overtime threshold (warns, doesn't block - crossing into
+    # overtime is often intentional, not a scheduling mistake).
+    try:
+        overtime_conflict = _check_overtime_threshold(supabase, worker_id, shift_start, shift_end, exclude_shift_id)
+        if overtime_conflict:
+            conflicts.append(overtime_conflict)
+    except Exception:
+        pass
+
+    # 7/8 — SCHADS classification / sleepover-agreement eligibility (warns,
+    # doesn't block — matches every other signal in this flow, see
+    # _schads_eligibility_batch's docstring).
+    try:
+        user_resp = (
+            supabase.table("users")
+            .select("classification_id, written_agreement_12hr")
+            .eq("id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        user = user_resp.data if user_resp else None
+        if user and not user.get("classification_id"):
+            conflicts.append({
+                "type": "no_schads_classification",
+                "severity": "warning",
+                "message": "No SCHADS classification set — pay can't be calculated for this worker yet",
+            })
+        if is_sleepover and user and not user.get("written_agreement_12hr"):
+            conflicts.append({
+                "type": "no_sleepover_agreement",
+                "severity": "warning",
+                "message": "No written 12-hour agreement on file — required for sleepover shifts",
+            })
+    except Exception:
+        pass
+
     return conflicts
+
+
+def _check_rest_break(supabase, worker_id: str, proposed_start: datetime, exclude_shift_id: str | None) -> dict | None:
+    """SCHADS-01 - the Award requires a minimum 10h break between a worker's
+    shifts (8h by agreement where a sleepover is involved - deferred, see
+    above). Looks at the worker's most recent shift ending before the
+    proposed start."""
+    resp = (
+        supabase.table("shifts")
+        .select("id, scheduled_end, clocked_out_at")
+        .eq("worker_id", worker_id)
+        .not_.in_("status", ["cancelled"])
+        .lt("scheduled_end", proposed_start.isoformat())
+        .order("scheduled_end", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = [r for r in (resp.data or []) if r.get("id") != exclude_shift_id]
+    if not rows:
+        return None
+    prior_end = _parse_dt(rows[0].get("clocked_out_at") or rows[0].get("scheduled_end"))
+    if not prior_end:
+        return None
+    gap_hours = (proposed_start - prior_end).total_seconds() / 3600
+    if gap_hours < 10:
+        return {
+            "type": "rest_break_violation",
+            "severity": "error",
+            "message": f"Only {gap_hours:.1f}h since their last shift ended (SCHADS requires 10h)",
+        }
+    return None
+
+
+def _check_overtime_threshold(supabase, worker_id: str, proposed_start: datetime, proposed_end: datetime, exclude_shift_id: str | None) -> dict | None:
+    """SCHADS-03 - warns when a proposed shift would push a worker's ordinary
+    hours for that calendar day past their 10h (or 12h, by written agreement)
+    threshold."""
+    worker_resp = (
+        supabase.table("users")
+        .select("written_agreement_12hr")
+        .eq("id", worker_id)
+        .maybe_single()
+        .execute()
+    )
+    worker = worker_resp.data if worker_resp else None
+    threshold = 12.0 if worker and worker.get("written_agreement_12hr") else 10.0
+
+    day_start = proposed_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    resp = (
+        supabase.table("shifts")
+        .select("id, scheduled_start, scheduled_end, duration_minutes")
+        .eq("worker_id", worker_id)
+        .not_.in_("status", ["cancelled"])
+        .gte("scheduled_start", day_start.isoformat())
+        .lt("scheduled_start", day_end.isoformat())
+        .execute()
+    )
+    total_minutes = 0
+    for row in (resp.data or []):
+        if row.get("id") == exclude_shift_id:
+            continue
+        if row.get("duration_minutes"):
+            total_minutes += row["duration_minutes"]
+        else:
+            rs = _parse_dt(row.get("scheduled_start"))
+            re_ = _parse_dt(row.get("scheduled_end"))
+            if rs and re_:
+                total_minutes += int((re_ - rs).total_seconds() / 60)
+    total_minutes += int((proposed_end - proposed_start).total_seconds() / 60)
+    total_hours = total_minutes / 60
+
+    if total_hours > threshold:
+        return {
+            "type": "overtime_threshold",
+            "severity": "warning",
+            "message": f"Will push them into overtime today ({total_hours:.1f}h / {threshold:.0f}h ordinary hours)",
+        }
+    return None
 
 
 def _check_skill_match(
@@ -2341,6 +2568,118 @@ def _conflicts_batch(
     return out
 
 
+def _schads_eligibility_batch(
+    supabase, worker_ids: list[str], shift_start: datetime, shift_end: datetime, is_sleepover: bool,
+) -> dict[str, list[dict]]:
+    """Batch form of the SCHADS-aware checks used at drop-confirm time
+    (_check_rest_break, _check_overtime_threshold) plus two new ones -
+    missing classification and, for a sleepover shift, missing written
+    12-hour agreement - so the ranked /available-workers picker reflects
+    SCHADS eligibility instead of only surfacing it after a shift's already
+    been dropped on someone. Same one-bulk-query-per-check idiom as
+    _conflicts_batch, not a per-worker loop."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not worker_ids:
+        return out
+
+    # Classification / employment-type / 12hr-agreement - one bulk query.
+    users_by_id: dict[str, dict] = {}
+    try:
+        users_resp = (
+            supabase.table("users")
+            .select("id, classification_id, written_agreement_12hr")
+            .in_("id", worker_ids)
+            .execute()
+        )
+        users_by_id = {r["id"]: r for r in (users_resp.data or [])}
+    except Exception:
+        pass
+
+    for wid in worker_ids:
+        user = users_by_id.get(wid)
+        if user and not user.get("classification_id"):
+            out.setdefault(wid, []).append({
+                "type": "no_schads_classification",
+                "severity": "warning",
+                "message": "No SCHADS classification set — pay can't be calculated for this worker yet",
+            })
+        if is_sleepover and user and not user.get("written_agreement_12hr"):
+            out.setdefault(wid, []).append({
+                "type": "no_sleepover_agreement",
+                "severity": "warning",
+                "message": "No written 12-hour agreement on file — required for sleepover shifts",
+            })
+
+    # Rest-break - most recent prior shift per worker, one bulk query.
+    try:
+        prior_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_end, clocked_out_at")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled"])
+            .lt("scheduled_end", shift_start.isoformat())
+            .execute()
+        )
+        latest_prior_end: dict[str, datetime] = {}
+        for row in (prior_resp.data or []):
+            wid = row.get("worker_id")
+            end = _parse_dt(row.get("clocked_out_at") or row.get("scheduled_end"))
+            if wid and end and (wid not in latest_prior_end or end > latest_prior_end[wid]):
+                latest_prior_end[wid] = end
+        for wid, prior_end in latest_prior_end.items():
+            gap_hours = (shift_start - prior_end).total_seconds() / 3600
+            if gap_hours < 10:
+                out.setdefault(wid, []).append({
+                    "type": "rest_break_violation",
+                    "severity": "error",
+                    "message": f"Only {gap_hours:.1f}h since their last shift ended (SCHADS requires 10h)",
+                })
+    except Exception:
+        pass
+
+    # Overtime threshold - that calendar day's shifts across all workers, one bulk query.
+    try:
+        day_start = shift_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        day_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_start, scheduled_end, duration_minutes")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled"])
+            .gte("scheduled_start", day_start.isoformat())
+            .lt("scheduled_start", day_end.isoformat())
+            .execute()
+        )
+        minutes_by_worker: dict[str, int] = {}
+        for row in (day_resp.data or []):
+            wid = row.get("worker_id")
+            if not wid:
+                continue
+            if row.get("duration_minutes"):
+                minutes = row["duration_minutes"]
+            else:
+                rs = _parse_dt(row.get("scheduled_start"))
+                re_ = _parse_dt(row.get("scheduled_end"))
+                minutes = int((re_ - rs).total_seconds() / 60) if rs and re_ else 0
+            minutes_by_worker[wid] = minutes_by_worker.get(wid, 0) + minutes
+
+        proposed_minutes = int((shift_end - shift_start).total_seconds() / 60)
+        for wid in worker_ids:
+            user = users_by_id.get(wid)
+            threshold = 12.0 if user and user.get("written_agreement_12hr") else 10.0
+            total_hours = (minutes_by_worker.get(wid, 0) + proposed_minutes) / 60
+            if total_hours > threshold:
+                out.setdefault(wid, []).append({
+                    "type": "overtime_threshold",
+                    "severity": "warning",
+                    "message": f"Will push them into overtime today ({total_hours:.1f}h / {threshold:.0f}h ordinary hours)",
+                })
+    except Exception:
+        pass
+
+    return out
+
+
 def _skill_warnings_batch(
     supabase, worker_ids: list[str], participant_id: str | None
 ) -> dict[str, list[dict]]:
@@ -2416,6 +2755,7 @@ async def get_worker_conflicts(
     shift_end: str = Query(..., description="ISO datetime"),
     participant_id: Optional[str] = Query(default=None),
     exclude_shift_id: Optional[str] = Query(default=None),
+    is_sleepover: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
     """Return conflicts (overlapping shifts, blackout dates, hours) for a worker over a window.
@@ -2431,7 +2771,7 @@ async def get_worker_conflicts(
     if not s_dt or not e_dt:
         raise HTTPException(status_code=422, detail="Invalid shift_start or shift_end")
 
-    conflicts = _detect_worker_conflicts(supabase, worker_id, org_id, s_dt, e_dt, exclude_shift_id)
+    conflicts = _detect_worker_conflicts(supabase, worker_id, org_id, s_dt, e_dt, exclude_shift_id, is_sleepover=is_sleepover)
     skill_warnings = _check_skill_match(supabase, worker_id, participant_id)
     all_issues = conflicts + skill_warnings
 
@@ -2459,6 +2799,7 @@ async def get_available_workers(
     shift_start: str = Query(...),
     shift_end: str = Query(...),
     participant_id: Optional[str] = Query(default=None),
+    is_sleepover: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
     """List all team workers with their availability status for a given shift window.
@@ -2486,6 +2827,10 @@ async def get_available_workers(
     # over a hundred sequential round trips and a multi-second load. Each of
     # these now does a small constant number of queries for the whole team.
     conflicts_by_worker = _conflicts_batch(supabase, worker_ids, org_id, s_dt, e_dt)
+    schads_by_worker = _schads_eligibility_batch(supabase, worker_ids, s_dt, e_dt, is_sleepover)
+    for wid, issues in schads_by_worker.items():
+        if issues:
+            conflicts_by_worker.setdefault(wid, []).extend(issues)
     skill_warnings_by_worker = _skill_warnings_batch(supabase, worker_ids, participant_id)
     try:
         preferred_by_worker = worker_matching_service.availability_statuses_for_shift_batch(
@@ -2606,7 +2951,10 @@ async def assign_existing_shift(
 
     # Conflict detection
     participant_id = str(shift.get("participant_id") or "")
-    conflicts = _detect_worker_conflicts(supabase, body.worker_id, org_id, s_dt, e_dt, exclude_shift_id=shift_id)
+    conflicts = _detect_worker_conflicts(
+        supabase, body.worker_id, org_id, s_dt, e_dt, exclude_shift_id=shift_id,
+        is_sleepover=bool(shift.get("is_sleepover")),
+    )
     skill_warnings = _check_skill_match(supabase, body.worker_id, participant_id or None)
     hard_conflicts = [c for c in conflicts if c["severity"] == "error"]
 
@@ -2749,6 +3097,160 @@ async def unassign_existing_shift(
     )
 
     return {"shift_id": shift_id, "shift": updated, "warning": warning_msg}
+
+
+@router.get("/shifts/{shift_id}/pay-preview")
+async def shift_pay_preview(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Dry-run the SCHADS pay-calculation pipeline (schads_engine.py) against
+    a shift without writing to pay_transactions - lets a coordinator sanity-
+    check what a shift will pay before (or after) it's marked completed.
+    Returns an empty component list with a `reason` when the shift can't be
+    priced yet (e.g. the worker has no classification set) rather than an
+    error, since that's an expected, common state."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    from ..services import schads_engine
+
+    result = schads_engine.calculate_shift_pay(shift, dry_run=True)
+    return {
+        "shift_id": shift_id,
+        "components": result["components"],
+        "total_cents": result["total_cents"],
+        "reason": result["reason"],
+        "is_sleepover": bool(shift.get("is_sleepover")),
+        "emergency_flagged": bool(shift.get("emergency_flagged")),
+        "emergency_note": shift.get("emergency_note"),
+    }
+
+
+@router.get("/pay-ledger/{worker_id}")
+async def worker_pay_ledger(
+    worker_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: dict = Depends(get_current_user),
+):
+    """Paginated pay_transactions for a worker - the data behind a future pay
+    ledger screen (not built this phase - see the SCHADS Phase 1 plan)."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    query = (
+        supabase.table("pay_transactions")
+        .select("id, shift_id, component_type, amount_cents, rate_used, hours_applied, calculation_run_id, created_at")
+        .eq("organization_id", org_id)
+        .eq("worker_id", worker_id)
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+    )
+    if start_date:
+        query = query.gte("created_at", start_date)
+    if end_date:
+        query = query.lte("created_at", end_date)
+
+    result = query.execute()
+    rows = result.data or []
+    return {
+        "worker_id": worker_id,
+        "transactions": rows,
+        "total_cents": sum(r.get("amount_cents", 0) for r in rows),
+    }
+
+
+def _derive_sleepover_segments(
+    supabase, shift_id: str, scheduled_start: datetime, sleepover_start: datetime,
+    sleepover_end: datetime, scheduled_end: datetime,
+) -> None:
+    """(Re)builds the pre-work / sleepover-block / post-work shift_segments
+    rows from a single sleepover window - the coordinator only picks the
+    sleepover start/end, the three segments are derived, not entered by
+    hand. Replaces any existing non-call_out segments for this shift so
+    re-marking a sleepover with a different window doesn't leave stale rows."""
+    supabase.table("shift_segments").delete().eq("shift_id", shift_id).neq("segment_type", "call_out").execute()
+
+    rows = []
+    if sleepover_start > scheduled_start:
+        rows.append({"shift_id": shift_id, "segment_type": "active_work", "segment_start": scheduled_start.isoformat(), "segment_end": sleepover_start.isoformat()})
+    rows.append({"shift_id": shift_id, "segment_type": "sleepover_block", "segment_start": sleepover_start.isoformat(), "segment_end": sleepover_end.isoformat()})
+    if scheduled_end > sleepover_end:
+        rows.append({"shift_id": shift_id, "segment_type": "active_work", "segment_start": sleepover_end.isoformat(), "segment_end": scheduled_end.isoformat()})
+
+    if rows:
+        supabase.table("shift_segments").insert(rows).execute()
+
+
+class MarkSleepoverBody(BaseModel):
+    sleepover_start: str
+    sleepover_end: str
+
+
+@router.patch("/shifts/{shift_id}/sleepover")
+async def mark_shift_sleepover(shift_id: str, body: MarkSleepoverBody, current_user: dict = Depends(get_current_user)):
+    """Flags a shift as a sleepover and derives its pre-work/sleepover-block/
+    post-work segments from the sleepover window, per the verified Fair Work
+    Full Bench decision [2025] FWCFB 292 (effective 1 June 2026) - see
+    schads_engine.py's sleepover pricing path."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    try:
+        sleepover_start = parse_shift_datetime(body.sleepover_start)
+        sleepover_end = parse_shift_datetime(body.sleepover_end)
+        scheduled_start = parse_shift_datetime(shift["scheduled_start"])
+        scheduled_end = parse_shift_datetime(shift["scheduled_end"])
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid datetime: {exc}")
+
+    if not (scheduled_start <= sleepover_start < sleepover_end <= scheduled_end):
+        raise HTTPException(status_code=422, detail="Sleepover window must fall within the shift's scheduled start/end.")
+
+    supabase = get_supabase_admin()
+    _derive_sleepover_segments(supabase, shift_id, scheduled_start, sleepover_start, sleepover_end, scheduled_end)
+    result = supabase.table("shifts").update({"is_sleepover": True, "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", shift_id).execute()
+    updated = (result.data or [None])[0] or {**shift, "is_sleepover": True}
+    return {"shift_id": shift_id, "shift": updated}
+
+
+class LogCallOutBody(BaseModel):
+    start: str
+    end: str
+    note: Optional[str] = None
+
+
+@router.post("/shifts/{shift_id}/call-out")
+async def log_shift_call_out(shift_id: str, body: LogCallOutBody, current_user: dict = Depends(get_current_user)):
+    """Logs one call-out (active work performed during a sleepover) - paid
+    at overtime rates per FWCFB 292, priced the next time this shift's pay
+    is (re)calculated."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if not shift.get("is_sleepover"):
+        raise HTTPException(status_code=400, detail="Shift is not marked as a sleepover.")
+
+    try:
+        start = parse_shift_datetime(body.start)
+        end = parse_shift_datetime(body.end)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid datetime: {exc}")
+    if end <= start:
+        raise HTTPException(status_code=422, detail="end must be after start.")
+
+    supabase = get_supabase_admin()
+    result = supabase.table("shift_segments").insert({
+        "shift_id": shift_id, "segment_type": "call_out",
+        "segment_start": start.isoformat(), "segment_end": end.isoformat(),
+        "note": body.note,
+    }).execute()
+    return {"shift_id": shift_id, "segment": (result.data or [None])[0]}
 
 
 # ── POST /shifts/{id}/offer ───────────────────────────────────────────────────
@@ -2961,6 +3463,7 @@ class CreateUnassignedShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs'
 
 
 @router.post("/shifts/unassigned")
@@ -3006,6 +3509,7 @@ async def create_unassigned_shift(
         "participant_name": participant.get("full_name"),
         "worker_id": UNASSIGNED_SHIFT_PLACEHOLDER_ID,
         "shift_type": _normalize_shift_type(body.shift_type),
+        "duty_type": body.duty_type or "disability_services",
         "scheduled_start": s_dt.isoformat(),
         "scheduled_end": e_dt.isoformat(),
         "duration_minutes": duration,

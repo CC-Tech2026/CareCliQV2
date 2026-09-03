@@ -19,3 +19,4 @@ progress_delta_column_missing: bool = False
 shifts_table_missing: bool = False
 sessions_shift_id_column_missing: bool = False
 ai_detected_patterns_table_missing: bool = False
+pay_transactions_table_missing: bool = False   # migration 158 — SCHADS pay engine

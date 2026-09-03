@@ -18,6 +18,8 @@ import {
   getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
   getShiftMatchFeedback, postShiftMatchFeedback,
   getCoordinatorWorkerStats, assignWorkerCoordinator,
+  getAwardClassifications, assignWorkerClassification, getShiftPayPreview,
+  markShiftSleepover, logShiftCallOut,
   getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
@@ -38,6 +40,8 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { datetimeLocalValueToUtcIso } from "@/lib/datetime";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -892,9 +896,6 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
       ) : (
         <p className="text-sm" style={{ color: MUTED }}>No availability set yet.</p>
       )}
-      <p className="text-[11px] mt-1.5 italic" style={{ color: MUTED }}>
-        SCHADS classification isn't tracked in CareCliQ yet — this would need a new field before it can show here.
-      </p>
     </div>
   );
 }
@@ -1089,6 +1090,8 @@ function PersonalInfoTab({
 
       <CoordinatorAssignmentSection worker={worker} />
 
+      <ClassificationLevelSection worker={worker} />
+
       <BuddyAssignmentSection worker={worker} />
 
       <WorkerTagsSection workerId={worker.id} />
@@ -1144,6 +1147,80 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
             ))}
           </SelectContent>
         </Select>
+      </div>
+    </div>
+  );
+}
+
+/** Coordinator/MD - sets a worker's SCHADS Award classification and
+ * employment type, the data schads_engine.py needs to price their shifts.
+ * Set manually, never derived from worker.qualifications - classification
+ * reflects the duties actually performed, not the certificate on file. */
+function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
+  const { toast } = useToast();
+  const { data: classifications = [] } = useOrgQuery(["award-classifications"], {
+    queryFn: getAwardClassifications,
+  });
+  const [classificationId, setClassificationId] = useState<string | null>(worker.classification_id ?? null);
+  const [employmentType, setEmploymentType] = useState<string | null>(worker.employment_type ?? null);
+
+  const assignMutation = useMutation({
+    mutationFn: (payload: { classification_id?: string | null; employment_type?: string | null }) =>
+      assignWorkerClassification(worker.id, payload),
+    onError: (err) => toast({ title: "Could not update classification", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (worker.role !== "support_worker") return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>SCHADS classification</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Sets the Award level and employment type used to calculate this worker's pay per shift.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <div className="max-w-[220px] flex-1">
+          <Select
+            value={classificationId ?? "unset"}
+            onValueChange={(value) => {
+              const next = value === "unset" ? null : value;
+              setClassificationId(next);
+              assignMutation.mutate({ classification_id: next });
+            }}
+            disabled={assignMutation.isPending}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              {classifications.map((c) => (
+                <SelectItem key={c.id} value={c.id}>SACS Level {c.level}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="max-w-[160px] flex-1">
+          <Select
+            value={employmentType ?? "unset"}
+            onValueChange={(value) => {
+              const next = value === "unset" ? null : value;
+              setEmploymentType(next);
+              assignMutation.mutate({ employment_type: next });
+            }}
+            disabled={assignMutation.isPending}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              <SelectItem value="casual">Casual</SelectItem>
+              <SelectItem value="part_time">Part-time</SelectItem>
+              <SelectItem value="full_time">Full-time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
@@ -2138,6 +2215,9 @@ type ShiftIncidentSummary = {
 function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHistoryRow }) {
   const band = complianceBandColor(shift.compliance_band);
   const timeRange = formatShiftTimeRange(shift);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { translate } = useAccessibility();
 
   const { data, isLoading } = useOrgQuery(["worker-shift-history-detail", workerId, shift.id], {
     queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
@@ -2146,6 +2226,49 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
     ["shift-incidents", shift.id],
     { queryFn: () => listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }) },
   );
+  const { data: payPreview } = useOrgQuery(["shift-pay-preview", shift.id], {
+    queryFn: () => getShiftPayPreview(shift.id),
+  });
+
+  const [markingSleepover, setMarkingSleepover] = useState(false);
+  const [sleepoverStart, setSleepoverStart] = useState("");
+  const [sleepoverEnd, setSleepoverEnd] = useState("");
+  const [loggingCallOut, setLoggingCallOut] = useState(false);
+  const [callOutStart, setCallOutStart] = useState("");
+  const [callOutEnd, setCallOutEnd] = useState("");
+  const [callOutNote, setCallOutNote] = useState("");
+
+  const invalidatePay = () => {
+    qc.invalidateQueries({ queryKey: ["shift-pay-preview", shift.id] });
+  };
+
+  const sleepoverMut = useMutation({
+    mutationFn: () => markShiftSleepover(shift.id, {
+      sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart),
+      sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd),
+    }),
+    onSuccess: () => {
+      toast({ title: "Shift marked as sleepover" });
+      setMarkingSleepover(false);
+      invalidatePay();
+    },
+    onError: (err) => toast({ title: "Could not mark sleepover", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const callOutMut = useMutation({
+    mutationFn: () => logShiftCallOut(shift.id, {
+      start: datetimeLocalValueToUtcIso(callOutStart),
+      end: datetimeLocalValueToUtcIso(callOutEnd),
+      note: callOutNote || undefined,
+    }),
+    onSuccess: () => {
+      toast({ title: "Call-out logged" });
+      setLoggingCallOut(false);
+      setCallOutStart(""); setCallOutEnd(""); setCallOutNote("");
+      invalidatePay();
+    },
+    onError: (err) => toast({ title: "Could not log call-out", description: (err as Error).message, variant: "destructive" }),
+  });
 
   const flagged = data?.flagged_tasks ?? [];
   const tasks = (data?.tasks ?? []) as Array<{
@@ -2186,6 +2309,87 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
           </p>
           {shift.compliance_explanation && (
             <p className="pt-1.5 text-xs" style={{ color: TEXT }}>{shift.compliance_explanation}</p>
+          )}
+          {payPreview && payPreview.total_cents > 0 && (
+            <p className="pt-1.5 text-xs font-bold" style={{ color: TEXT }}>
+              SCHADS pay: ${(payPreview.total_cents / 100).toFixed(2)}
+              {payPreview.is_sleepover ? " · sleepover" : ""}
+            </p>
+          )}
+          {payPreview?.emergency_flagged && (
+            <p className="pt-1.5 text-xs" style={{ color: "var(--cc-status-danger)" }}>
+              Emergency flagged{payPreview.emergency_note ? `: ${payPreview.emergency_note}` : ""}
+            </p>
+          )}
+        </div>
+
+        {/* Sleepover marking / call-out logging - see schads_engine.py's
+            sleepover pricing path, verified against FWCFB 292. */}
+        <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: BORDER }}>
+          {!payPreview?.is_sleepover ? (
+            markingSleepover ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverStart")}</label>
+                  <DateTimePicker value={sleepoverStart} onChange={setSleepoverStart} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverEnd")}</label>
+                  <DateTimePicker value={sleepoverEnd} onChange={setSleepoverEnd} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => sleepoverMut.mutate()}
+                    disabled={!sleepoverStart || !sleepoverEnd || sleepoverMut.isPending}
+                    className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                    style={{ background: PLUM }}
+                  >
+                    {translate("coordinator.shiftAssign.markSleepover")}
+                  </button>
+                  <button type="button" onClick={() => setMarkingSleepover(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setMarkingSleepover(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+                {translate("coordinator.shiftAssign.markSleepover")}
+              </button>
+            )
+          ) : loggingCallOut ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutStart")}</label>
+                <DateTimePicker value={callOutStart} onChange={setCallOutStart} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutEnd")}</label>
+                <DateTimePicker value={callOutEnd} onChange={setCallOutEnd} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutNote")}</label>
+                <Input value={callOutNote} onChange={(e) => setCallOutNote(e.target.value)} className="h-9 text-xs" />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => callOutMut.mutate()}
+                  disabled={!callOutStart || !callOutEnd || callOutMut.isPending}
+                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                  style={{ background: PLUM }}
+                >
+                  {translate("coordinator.shiftAssign.callOutSave")}
+                </button>
+                <button type="button" onClick={() => setLoggingCallOut(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setLoggingCallOut(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+              {translate("coordinator.shiftAssign.logCallOut")}
+            </button>
           )}
         </div>
 
