@@ -43,10 +43,10 @@ function pad(n: number) {
 function CountdownPill({ value, label, tilt = 0 }: { value: number; label: string; tilt?: number }) {
   return (
     <div
-      className="relative w-[72px] sm:w-[clamp(84px,10vw,140px)] overflow-hidden rounded-2xl bg-white"
+      className="relative w-[72px] sm:w-[clamp(84px,50vw,140px)] overflow-hidden rounded-2xl bg-white"
       style={{ boxShadow: "0 14px 30px -8px rgba(27,23,69,0.5)", transform: `rotate(${tilt}deg)` }}
     >
-      <div className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 gap-3 sm:gap-[clamp(16px,2vw,24px)]">
+      <div className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 gap-3 sm:gap-[clamp(16px,2vw,60px)]">
         <span className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 rounded-full" style={{ background: "#1B1745" }} />
         <span className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 rounded-full" style={{ background: "#1B1745" }} />
       </div>
@@ -197,7 +197,7 @@ export function LaunchCountdown({ onLaunch }: { onLaunch: () => void }) {
 
         {/* Spacer sized to clear the rocket itself - short enough that the
             pills sit up in the scene's cloud layer, not below it. */}
-        <div className="h-[clamp(40px,8vw,90px)]" aria-hidden="true" />
+        <div className="h-[clamp(40px,8vw,60px)]" aria-hidden="true" />
 
         {/* Split into two pairs pushed out toward the edges - days/hours
             left, minutes/seconds right - so the rocket and its CareCliQ
@@ -206,7 +206,7 @@ export function LaunchCountdown({ onLaunch }: { onLaunch: () => void }) {
             below (not the fluid clamp used from sm up) so two groups of
             two 72px pills never out-measure a narrow phone screen and
             get clipped or forced onto their own line. */}
-        <div className="flex w-full max-w-[320px] sm:max-w-[clamp(400px,48vw,850px)] items-center justify-between">
+        <div className="flex w-full max-w-[320px] sm:max-w-[clamp(400px,75vw,850px)] items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-4">
             <CountdownPill value={days} label="days" tilt={-3} />
             <CountdownPill value={hours} label="hours" tilt={2} />
