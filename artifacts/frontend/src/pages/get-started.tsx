@@ -5,10 +5,12 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
 import { SIGNATURE, DISPLAY_FONT } from "@/components/get-started/shared";
 import { GetStartedFlow } from "@/components/get-started/GetStartedFlow";
+import { LaunchCountdown, isBeforeLaunch } from "@/components/get-started/LaunchCountdown";
 
 export default function GetStarted() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [beforeLaunch, setBeforeLaunch] = useState(isBeforeLaunch);
   const [paidSuccess, setPaidSuccess] = useState(false);
   const [signupEmail, setSignupEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
@@ -52,6 +54,10 @@ export default function GetStarted() {
     } finally {
       setResending(false);
     }
+  }
+
+  if (beforeLaunch) {
+    return <LaunchCountdown onLaunch={() => setBeforeLaunch(false)} />;
   }
 
   if (paidSuccess) {
