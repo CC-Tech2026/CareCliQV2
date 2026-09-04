@@ -43,22 +43,22 @@ function pad(n: number) {
 function CountdownPill({ value, label, tilt = 0 }: { value: number; label: string; tilt?: number }) {
   return (
     <div
-      className="relative w-[108px] sm:w-[140px] overflow-hidden rounded-2xl bg-white"
+      className="relative w-[72px] sm:w-[clamp(84px,10vw,140px)] overflow-hidden rounded-2xl bg-white"
       style={{ boxShadow: "0 14px 30px -8px rgba(27,23,69,0.5)", transform: `rotate(${tilt}deg)` }}
     >
-      <div className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 gap-5 sm:gap-6">
-        <span className="h-3.5 w-3.5 rounded-full" style={{ background: "#1B1745" }} />
-        <span className="h-3.5 w-3.5 rounded-full" style={{ background: "#1B1745" }} />
+      <div className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 gap-3 sm:gap-[clamp(16px,2vw,24px)]">
+        <span className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 rounded-full" style={{ background: "#1B1745" }} />
+        <span className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 rounded-full" style={{ background: "#1B1745" }} />
       </div>
       <div
-        className="pt-6 pb-2 text-center text-[11px] sm:text-[13px] font-black uppercase tracking-[0.14em] text-white"
+        className="pt-5 pb-1.5 sm:pt-6 sm:pb-2 text-center text-[9px] sm:text-[clamp(9px,1vw,13px)] font-black uppercase tracking-[0.14em] text-white"
         style={{ background: "var(--cc-coral)" }}
       >
         {label}
       </div>
-      <div className="flex items-center justify-center py-3.5 sm:py-5">
+      <div className="flex items-center justify-center py-3 sm:py-5">
         <span
-          className="text-5xl sm:text-7xl font-black tabular-nums leading-none"
+          className="text-[1.85rem] sm:text-[clamp(2.6rem,4.6vw,4.5rem)] font-black tabular-nums leading-none"
           style={{ fontFamily: DISPLAY_FONT, color: "#1B1745" }}
         >
           {pad(value)}
@@ -68,12 +68,15 @@ function CountdownPill({ value, label, tilt = 0 }: { value: number; label: strin
   );
 }
 
-/** The scene (public/carecliq-rocket-scene.svg) as a large backdrop, pulled
- * down via negative margin so its own painted clouds (near the bottom of
- * the illustration) extend down into the countdown-pills/notify area
- * instead of leaving a gap above them. Wrapped in a gentle CSS float so it
- * still reads as "alive" without hand-animating every element inside the
- * SVG itself. */
+/** The scene (public/carecliq-rocket-scene.svg) as a large backdrop. Sized
+ * off viewport width alone with a matching aspect-ratio (rather than
+ * independent width/height caps, which used to stretch the art out of
+ * shape and - past ~150px viewport width - lock it to one fixed pixel
+ * size regardless of screen, so it read as a different scale on a laptop
+ * vs. a large monitor or projector) so it scales continuously with the
+ * screen instead of jumping between two fixed sizes. Wrapped in a gentle
+ * CSS float so it still reads as "alive" without hand-animating every
+ * element inside the SVG itself. */
 function RocketScene() {
   return (
     <div className="pointer-events-none absolute inset-0 flex justify-center overflow-hidden">
@@ -87,8 +90,8 @@ function RocketScene() {
         src="/carecliq-rocket-scene.svg"
         alt=""
         aria-hidden="true"
-        className="w-[min(1500px,1000vw)] h-[min(800px,900vw)] max-w-none max-h-none sm:w-[min(1500px,1000vw)] select-none"
-        style={{ animation: "cc-rocket-float 4.2s ease-in-out infinite" }}
+        className="w-[clamp(760px,105vw,1900px)] max-w-none select-none"
+        style={{ aspectRatio: "1500 / 800", height: "auto", animation: "cc-rocket-float 4.2s ease-in-out infinite" }}
       />
     </div>
   );
@@ -105,16 +108,16 @@ function LaunchHeadline() {
   return (
     <div className="relative inline-flex flex-col items-center" style={{ transform: "skewY(-2deg)" }}>
       <span
-        className="relative inline-block rounded-full px-4 py-1.5 sm:px-5 sm:py-2 text-[13px] sm:text-[15px] font-black uppercase tracking-[0.35em] text-white"
+        className="relative inline-block rounded-full px-[clamp(14px,2vw,20px)] py-[clamp(5px,0.7vw,8px)] text-[clamp(12px,1.3vw,15px)] font-black uppercase tracking-[0.35em] text-white"
         style={{ background: "#1B1745", boxShadow: "0 6px 16px -4px rgba(27,23,69,0.55)" }}
       >
         Very soon
       </span>
       <span
-        className="relative mt-2 text-7xl sm:text-[8rem] font-black uppercase leading-[0.88] italic"
+        className="relative mt-2 text-[clamp(2.75rem,9vw,8rem)] font-black uppercase leading-[0.88] italic"
         style={{ fontFamily: DISPLAY_FONT, letterSpacing: "-0.04em" }}
       >
-        <span aria-hidden="true" className="absolute inset-0 translate-x-[7px] translate-y-[7px] sm:translate-x-3.5 sm:translate-y-3.5" style={{ color: "#1B1745" }}>
+        <span aria-hidden="true" className="absolute inset-0 translate-x-[clamp(5px,0.7vw,14px)] translate-y-[clamp(5px,0.7vw,14px)]" style={{ color: "#1B1745" }}>
           Launching
         </span>
         <span
@@ -183,10 +186,10 @@ export function LaunchCountdown({ onLaunch }: { onLaunch: () => void }) {
       <RocketScene />
 
       {/* Countdown */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-start px-6 pt-4 sm:pt-5 text-center">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 sm:pt-5 text-center">
         <LaunchHeadline />
         <p
-          className="relative mt-3 text-xl sm:text-3xl font-black uppercase italic"
+          className="relative mt-3 text-[clamp(1rem,2.2vw,1.875rem)] font-black uppercase italic"
           style={{ fontFamily: DISPLAY_FONT, color: "#1B1745", letterSpacing: "-0.01em" }}
         >
           CareCliQ opens for your business on 7 October 2026
@@ -194,18 +197,21 @@ export function LaunchCountdown({ onLaunch }: { onLaunch: () => void }) {
 
         {/* Spacer sized to clear the rocket itself - short enough that the
             pills sit up in the scene's cloud layer, not below it. */}
-        <div className="h-[60px] sm:h-[90px]" aria-hidden="true" />
+        <div className="h-[clamp(40px,8vw,90px)]" aria-hidden="true" />
 
         {/* Split into two pairs pushed out toward the edges - days/hours
-            far left, minutes/seconds far right - so the rocket and its
-            CareCliQ logo window show through the wide gap in the middle
-            instead of sitting underneath a solid row of pills. */}
-        <div className="flex w-full max-w-[280px] sm:max-w-[850px] items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-5">
+            left, minutes/seconds right - so the rocket and its CareCliQ
+            logo window show through the gap in the middle. The mobile
+            width is a fixed floor sized to the mobile pill/gap sizes
+            below (not the fluid clamp used from sm up) so two groups of
+            two 72px pills never out-measure a narrow phone screen and
+            get clipped or forced onto their own line. */}
+        <div className="flex w-full max-w-[320px] sm:max-w-[clamp(400px,48vw,850px)] items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-4">
             <CountdownPill value={days} label="days" tilt={-3} />
             <CountdownPill value={hours} label="hours" tilt={2} />
           </div>
-          <div className="flex items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-2 sm:gap-4">
             <CountdownPill value={minutes} label="minutes" tilt={-2} />
             <CountdownPill value={seconds} label="seconds" tilt={3} />
           </div>
