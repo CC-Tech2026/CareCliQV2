@@ -47,6 +47,7 @@ class InvoiceCreate(BaseModel):
     currency: str = "AUD"
     status: str = "draft"
     due_date: Optional[str] = None
+    payment_method: Optional[str] = None
     notes: Optional[str] = None
     generate_from_verified_tasks: bool = False
     period_start: Optional[str] = None
@@ -59,6 +60,7 @@ class InvoiceUpdate(BaseModel):
     line_items: Optional[list[InvoiceLineItem]] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
+    payment_method: Optional[str] = None
     notes: Optional[str] = None
 
 

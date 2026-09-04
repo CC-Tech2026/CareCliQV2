@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { recordShiftViewed } from "@/services/notificationService";
-import { Link, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
@@ -13,6 +13,7 @@ import {
   MapPin,
   Navigation,
   Phone,
+  Smartphone,
   Square,
   MessageCircle,
 } from "lucide-react";
@@ -55,6 +56,7 @@ import {
 } from "@/lib/shift-offline-queue";
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
+import { ShiftMatchFeedbackPrompt } from "@/components/worker/ShiftMatchFeedbackPrompt";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
 import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
@@ -76,11 +78,15 @@ import { TUTORIAL_SESSION_ID } from "@/lib/tutorial-offline";
 import { cn } from "@/lib/utils";
 import {
   acknowledgeShiftRisks,
+  acceptShiftOffer,
   clockInShift,
   clockOutShift,
+  declineShiftOffer,
   endShift,
   clearPendingStartSession,
+  getShiftOfferSummary,
   getWorkerShift,
+  markShiftCannotAttend,
   updateShiftTasks,
   type ClockInRequest,
   type ShiftTask,
@@ -246,6 +252,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const params = useParams<{ id: string }>();
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate } = useAccessibility();
   const tutorial = useWorkerTutorialOptional();
@@ -270,6 +277,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
+  const [cannotAttendOpen, setCannotAttendOpen] = useState(false);
+  const [cannotAttendReason, setCannotAttendReason] = useState("");
   const [validationOpen, setValidationOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
@@ -305,6 +314,63 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     ["worker", "shift", id],
     { queryFn: () => getWorkerShift(id), enabled: Boolean(id) },
   );
+
+  // A shift the worker has only been offered (not yet accepted/declined) has
+  // no worker_id on it yet, so getWorkerShift 403s — that's the backend
+  // correctly refusing to show full participant detail before commitment,
+  // not a real error. On exactly that 403, fall back to the safe decision-only
+  // summary instead of the generic "not found" state.
+  const shiftAccessDenied = (error as (Error & { status?: number }) | null)?.status === 403;
+  const {
+    data: offerSummary,
+    isLoading: offerLoading,
+    refetch: refetchOfferSummary,
+  } = useOrgQuery(["worker", "shift-offer", id], {
+    queryFn: () => getShiftOfferSummary(id),
+    enabled: Boolean(id) && shiftAccessDenied,
+    retry: false,
+  });
+  const [offerBusy, setOfferBusy] = useState<"accept" | "decline" | null>(null);
+  const [offerDeclining, setOfferDeclining] = useState(false);
+  const [offerDeclineReason, setOfferDeclineReason] = useState("");
+
+  const handleAcceptOffer = async () => {
+    if (!id || offerBusy) return;
+    setOfferBusy("accept");
+    try {
+      await acceptShiftOffer(id);
+      toast({ title: "Shift accepted", description: "It's now on your schedule." });
+      await refetch();
+    } catch (err) {
+      toast({
+        title: "Couldn't accept this shift",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setOfferBusy(null);
+    }
+  };
+
+  const handleDeclineOffer = async () => {
+    if (!id || offerBusy) return;
+    setOfferBusy("decline");
+    try {
+      await declineShiftOffer(id, offerDeclineReason.trim());
+      toast({ title: "Offer declined" });
+      setOfferDeclining(false);
+      setOfferDeclineReason("");
+      await refetchOfferSummary();
+    } catch (err) {
+      toast({
+        title: "Couldn't decline this shift",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setOfferBusy(null);
+    }
+  };
 
   const {
     instantSessionActive,
@@ -713,6 +779,29 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
+  const handleCannotAttend = async () => {
+    if (!shift) return;
+    setBusy("cannot_attend");
+    try {
+      await markShiftCannotAttend(shift.id, cannotAttendReason.trim());
+      setCannotAttendOpen(false);
+      setCannotAttendReason("");
+      toast({
+        title: "Your coordinator has been notified",
+        description: "This shift is now unassigned so they can arrange cover.",
+      });
+      navigate("/my-shifts");
+    } catch (err) {
+      toast({
+        title: "Could not cancel this shift",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleEndShift = async () => {
     if (!shift || busy === "end") return;
     if (isTutorialDemo) {
@@ -921,7 +1010,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (shiftAccessDenied && offerLoading)) {
     return (
       <div className="flex items-center gap-2 py-12 text-sm font-bold" style={{ color: MUTED }}>
         <Loader2 className="h-4 w-4 animate-spin" /> Loading shift details…
@@ -929,10 +1018,66 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     );
   }
 
+  if (shiftAccessDenied && offerSummary) {
+    const start = offerSummary.scheduled_start ? new Date(offerSummary.scheduled_start) : null;
+    return (
+      <div className="space-y-4 py-8">
+        <div className="rounded-2xl border p-5" style={{ borderColor: BORDER }}>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: PLUM }}>Shift offer</p>
+          <p className="mt-1 text-lg font-black" style={{ color: TEXT }}>
+            {start ? start.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "Time TBC"}
+          </p>
+          <p className="mt-1 text-sm font-semibold" style={{ color: MUTED }}>
+            with {offerSummary.participant_first_name ?? "a participant"}
+            {offerSummary.shift_type ? ` · ${offerSummary.shift_type.replace(/_/g, " ")}` : ""}
+          </p>
+          <p className="mt-3 text-xs" style={{ color: MUTED }}>
+            Full participant details unlock once you accept — decide from the essentials above.
+          </p>
+
+          {offerDeclining ? (
+            <div className="mt-4 space-y-2">
+              <textarea
+                className="w-full rounded-xl border p-3 text-sm"
+                style={{ borderColor: BORDER }}
+                rows={2}
+                placeholder="Reason (optional)"
+                value={offerDeclineReason}
+                onChange={(e) => setOfferDeclineReason(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 rounded-full" disabled={!!offerBusy} onClick={() => setOfferDeclining(false)}>
+                  Never mind
+                </Button>
+                <Button className="flex-1 rounded-full" disabled={!!offerBusy} onClick={() => void handleDeclineOffer()}>
+                  {offerBusy === "decline" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm decline"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" className="flex-1 rounded-full" disabled={!!offerBusy} onClick={() => setOfferDeclining(true)}>
+                Decline
+              </Button>
+              <Button className="flex-1 rounded-full" disabled={!!offerBusy} onClick={() => void handleAcceptOffer()}>
+                {offerBusy === "accept" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Accept"}
+              </Button>
+            </div>
+          )}
+        </div>
+        <Link href="/my-shifts">
+          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
+        </Link>
+      </div>
+    );
+  }
+
   if (error || !shift) {
     return (
       <div className="space-y-4 py-8">
-        <p className="text-sm font-bold text-red-600">{(error as Error)?.message || "Shift not found"}</p>
+        <p className="text-sm font-bold text-red-600">
+          {shiftAccessDenied ? "This offer is no longer available." : (error as Error)?.message || "Shift not found"}
+        </p>
         <Link href="/my-shifts">
           <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
         </Link>
@@ -1088,6 +1233,56 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         />
       )}
 
+      <AlertDialog
+        open={cannotAttendOpen}
+        onOpenChange={(open) => {
+          setCannotAttendOpen(open);
+          if (!open) setCannotAttendReason("");
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Can't make this shift?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This shift will be returned to unassigned and your coordinator will be notified
+              immediately so they can arrange cover. This can't be undone from here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 pb-2">
+            <label className="mb-1.5 block text-xs font-bold" style={{ color: TEXT }}>
+              Let your coordinator know why (optional)
+            </label>
+            <textarea
+              value={cannotAttendReason}
+              onChange={(e) => setCannotAttendReason(e.target.value)}
+              placeholder="e.g. Sick, car trouble, family emergency…"
+              rows={3}
+              className="w-full rounded-lg border p-2.5 text-sm outline-none focus:ring-2"
+              style={{ borderColor: BORDER, "--tw-ring-color": `${PLUM}20` } as any}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "cannot_attend"}>Never mind</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleCannotAttend();
+              }}
+              disabled={busy === "cannot_attend"}
+            >
+              {busy === "cannot_attend" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Notifying…
+                </>
+              ) : (
+                "Yes, I can't make it"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1188,6 +1383,44 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
+  /**
+   * Support workers clock in, write notes, complete tasks, and sign off
+   * exclusively from the mobile app now - the web app stays read-only for
+   * anything that isn't already completed (or cancelled, which has nothing
+   * to "do" either way). History browsing (my-shifts.tsx and this page for
+   * completed shifts) is unaffected.
+   */
+  const isDoableElsewhere =
+    !!shift && displayVisualState !== "completed" && shift.status !== "cancelled" && shift.status !== "completed";
+
+  if (isDoableElsewhere) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+        <div
+          className="flex h-16 w-16 items-center justify-center rounded-full"
+          style={{ background: "var(--cc-soft)" }}
+        >
+          <Smartphone className="h-8 w-8" style={{ color: "var(--cc-plum)" }} />
+        </div>
+        <h1 className="mt-5 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+          Use the CareCliQ mobile app for this shift
+        </h1>
+        <p className="mt-3 text-sm leading-6" style={{ color: "var(--cc-muted)" }}>
+          Clocking in, progress notes, tasks, and signing off all happen in the mobile app now. Once this shift
+          is completed, you'll be able to review it here.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-6 gap-2 rounded-xl"
+          onClick={() => navigate("/my-shifts")}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to my shifts
+        </Button>
+      </div>
+    );
+  }
+
   if (isMobile && shift) {
     return (
       <>
@@ -1217,6 +1450,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           submissionComplete={mobileSubmitDone}
           mileageDraftRef={mileageDraftRef}
         />
+        {displayVisualState === "scheduled" && (
+          <div className="px-4 pb-4 text-center">
+            <button
+              type="button"
+              onClick={() => setCannotAttendOpen(true)}
+              className="text-xs font-bold underline decoration-dotted underline-offset-4"
+              style={{ color: MUTED }}
+            >
+              Can't make this shift?
+            </button>
+          </div>
+        )}
         {dialogs}
       </>
     );
@@ -1252,6 +1497,16 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           onEndShift={isSessionActive ? handleAttemptEndShift : undefined}
           endShiftBusy={endValidating || busy === "end"}
         />
+        {displayVisualState === "scheduled" && (
+          <button
+            type="button"
+            onClick={() => setCannotAttendOpen(true)}
+            className="text-xs font-bold underline decoration-dotted underline-offset-4 transition hover:opacity-80"
+            style={{ color: MUTED }}
+          >
+            Can't make this shift?
+          </button>
+        )}
         {workflow}
       </div>
       {dialogs}
@@ -1689,7 +1944,10 @@ function ShiftWorkflow({
         />
       )}
       {isCompleted && (
-        <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
+        <>
+          <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
+          <ShiftMatchFeedbackPrompt shiftId={shift.id} />
+        </>
       )}
 
       <section

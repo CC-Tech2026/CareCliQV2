@@ -16,7 +16,7 @@ export function DashboardGreeting({ firstName, dateLabel }: Props) {
           {translate("common.supportWorker")}
         </p>
         <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl" style={{ color: TEXT }}>
-          {greetingForHour(translate)}, {firstName} 👋
+          {greetingForHour(translate)}, {firstName}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
           {dateLabel}

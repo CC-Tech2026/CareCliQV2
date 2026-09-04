@@ -33,6 +33,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftCompliancePanel } from "@/components/ShiftCompliancePanel";
+import { WorkerMobileIncidentSheet } from "@/components/worker/WorkerMobileIncidentSheet";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import { evaluateSessionTextCompliance, scoreColor } from "@workspace/worker-compliance";
@@ -83,6 +84,7 @@ export default function LiveSessionScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [incidentOpen, setIncidentOpen] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -174,7 +176,7 @@ export default function LiveSessionScreen() {
           Alert.alert("Permission needed", "Microphone access is required for voice notes.");
           return;
         }
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
         await audioRecorder.prepareToRecordAsync();
         audioRecorder.record();
         setIsRecording(true);
@@ -536,11 +538,7 @@ export default function LiveSessionScreen() {
         ]}
       >
         <Pressable
-          onPress={() => {
-            if (session?.participant_id) {
-              router.push(`/incidents/participant/${session.participant_id}`);
-            }
-          }}
+          onPress={() => setIncidentOpen(true)}
           style={[styles.incidentBtn, { borderColor: "#DC2626" }]}
         >
           <Feather name="alert-triangle" size={15} color="#DC2626" />
@@ -562,6 +560,24 @@ export default function LiveSessionScreen() {
           </Text>
         </Pressable>
       </View>
+
+      {/* REPORT INCIDENT — in-place sheet, session stays live underneath */}
+      <Modal
+        visible={incidentOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIncidentOpen(false)}
+      >
+        {incidentOpen && (
+          <WorkerMobileIncidentSheet
+            participantId={session?.participant_id}
+            participantName={participant?.full_name}
+            sessionId={id}
+            onFiled={() => setIncidentOpen(false)}
+            onClose={() => setIncidentOpen(false)}
+          />
+        )}
+      </Modal>
 
       {/* END SHIFT CONFIRMATION MODAL */}
       <Modal

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { CheckCircle2, Clock3 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -178,8 +179,9 @@ export default function Approvals() {
         {/* Left - Mobile/Approvals Panel */}
         <div className="w-full lg:w-[420px] lg:border-r" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <div className="sticky top-0 z-10 border-b px-6 py-4" style={{ borderColor: BORDER }}>
-            <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+            <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
               {translate("approvals.title")}
+              <SectionInfo text="Shift and mobile-clock-in requests waiting on your sign-off." />
             </h1>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>
               {translateParams("approvals.pendingShifts", { count: String(pendingCount) })}

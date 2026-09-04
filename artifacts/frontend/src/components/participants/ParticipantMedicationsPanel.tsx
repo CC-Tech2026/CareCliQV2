@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronLeft, FileText, Loader2, Paperclip, Pill, Plus, ShieldCheck, Trash2, Upload, X, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronLeft, FileText, Loader2, Paperclip, Pencil, Pill, Plus, ShieldCheck, Trash2, Upload, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/ui/file-dropzone";
@@ -19,6 +19,7 @@ import {
   type MedicationDocument,
   type MedicationFrequencyType,
   type MedicationHighRiskCategory,
+  type MedicationPayload,
   type MedicationRoute,
 } from "@/services/medicationService";
 
@@ -66,6 +67,42 @@ const EMPTY_DRAFT: DraftForm = {
   prn_max_per_day: "",
 };
 
+function medicationToDraft(medication: Medication): DraftForm {
+  return {
+    name: medication.name,
+    strength: medication.strength ?? "",
+    route: medication.route,
+    dosage: medication.dosage ?? "",
+    frequency_type: medication.frequency_type,
+    scheduled_times: medication.scheduled_times.join(", "),
+    prescriber_name: medication.prescriber_name ?? "",
+    prescriber_contact: medication.prescriber_contact ?? "",
+    start_date: medication.start_date ?? "",
+    end_date: medication.end_date ?? "",
+    prn_max_per_day: medication.prn_max_per_day != null ? String(medication.prn_max_per_day) : "",
+  };
+}
+
+function draftToMedicationPayload(draft: DraftForm): MedicationPayload {
+  return {
+    name: draft.name.trim(),
+    strength: draft.strength || null,
+    route: draft.route,
+    dosage: draft.dosage || null,
+    frequency_type: draft.frequency_type,
+    scheduled_times: draft.scheduled_times
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
+    prescriber_name: draft.prescriber_name || null,
+    prescriber_contact: draft.prescriber_contact || null,
+    start_date: draft.start_date || null,
+    end_date: draft.end_date || null,
+    is_prn: draft.frequency_type === "prn",
+    prn_max_per_day: draft.prn_max_per_day ? Number(draft.prn_max_per_day) : null,
+  };
+}
+
 type Props = {
   participantId: string;
 };
@@ -81,6 +118,7 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
   const [expandedDocsFor, setExpandedDocsFor] = useState<string | null>(null);
   const [loadingDocsFor, setLoadingDocsFor] = useState<string | null>(null);
   const [verifyingMedication, setVerifyingMedication] = useState<Medication | null>(null);
+  const [editingMedication, setEditingMedication] = useState<Medication | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -224,6 +262,18 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
                         <Paperclip className={`h-3.5 w-3.5 ${isExpanded ? "text-cc-plum" : ""}`} />
                       )}
                     </Button>
+                    {(m.status === "draft" || m.status === "rejected") && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingMedication(m)}
+                        title={translate("participants.medications.edit")}
+                        aria-label={translate("participants.medications.edit")}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     {m.status === "pending_verification" && (
                       <>
                         <Button
@@ -302,6 +352,12 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
         medication={verifyingMedication}
         onOpenChange={(open) => { if (!open) setVerifyingMedication(null); }}
         onVerified={() => { setVerifyingMedication(null); load(); syncComplianceCentre(); }}
+      />
+
+      <EditMedicationSheet
+        medication={editingMedication}
+        onOpenChange={(open) => { if (!open) setEditingMedication(null); }}
+        onSaved={() => { setEditingMedication(null); load(); syncComplianceCentre(); }}
       />
 
       <AddMedicationSheet
@@ -393,27 +449,11 @@ function AddMedicationSheet({
     }
     setSaving(mode);
     try {
-      const created = await createParticipantMedication(participantId, {
-        name: draft.name.trim(),
-        strength: draft.strength || null,
-        route: draft.route,
-        dosage: draft.dosage || null,
-        frequency_type: draft.frequency_type,
-        scheduled_times: draft.scheduled_times
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        prescriber_name: draft.prescriber_name || null,
-        prescriber_contact: draft.prescriber_contact || null,
-        start_date: draft.start_date || null,
-        end_date: draft.end_date || null,
-        is_prn: draft.frequency_type === "prn",
-        prn_max_per_day: draft.prn_max_per_day ? Number(draft.prn_max_per_day) : null,
+      await createParticipantMedication(participantId, {
+        ...draftToMedicationPayload(draft),
         source_document_id: pendingDocument?.id ?? null,
+        status: mode === "draft" ? "draft" : "pending_verification",
       });
-      if (mode === "draft") {
-        await updateMedication(created.id, { status: "draft" });
-      }
       toast({
         title: mode === "draft"
           ? translate("participants.medications.savedDraft")
@@ -609,6 +649,132 @@ function AddMedicationSheet({
               </Button>
             </>
           )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function EditMedicationSheet({
+  medication,
+  onOpenChange,
+  onSaved,
+}: {
+  medication: Medication | null;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { translate } = useAccessibility();
+  const { toast } = useToast();
+  const [draft, setDraft] = useState<DraftForm>(EMPTY_DRAFT);
+  const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
+
+  useEffect(() => {
+    if (medication) setDraft(medicationToDraft(medication));
+  }, [medication]);
+
+  const save = async (mode: "draft" | "submit") => {
+    if (!medication) return;
+    if (!draft.name.trim()) {
+      toast({ title: translate("participants.medications.nameRequired"), variant: "destructive" });
+      return;
+    }
+    setSaving(mode);
+    try {
+      await updateMedication(medication.id, {
+        ...draftToMedicationPayload(draft),
+        status: mode === "submit" ? "pending_verification" : "draft",
+      });
+      toast({
+        title: mode === "submit"
+          ? translate("participants.medications.submittedForVerification")
+          : translate("participants.medications.savedDraft"),
+      });
+      onSaved();
+    } catch (err) {
+      toast({
+        title: translate("common.error"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Sheet open={!!medication} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-cc-plum" />
+            {translate("participants.medications.editTitle")}
+          </SheetTitle>
+        </SheetHeader>
+
+        {medication && (
+          <div className="space-y-4 py-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <LabeledInput label={translate("participants.medications.name")} value={draft.name} onChange={(v) => setDraft((d) => ({ ...d, name: v }))} />
+              <LabeledInput label={translate("participants.medications.strength")} value={draft.strength} onChange={(v) => setDraft((d) => ({ ...d, strength: v }))} />
+              <LabeledInput label={translate("participants.medications.dosage")} value={draft.dosage} onChange={(v) => setDraft((d) => ({ ...d, dosage: v }))} />
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.medications.route")}</p>
+                <select
+                  className="cc-field h-9 w-full rounded-md px-2 text-sm"
+                  value={draft.route}
+                  onChange={(e) => setDraft((d) => ({ ...d, route: e.target.value as MedicationRoute }))}
+                >
+                  {ROUTES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.medications.frequencyType")}</p>
+                <select
+                  className="cc-field h-9 w-full rounded-md px-2 text-sm"
+                  value={draft.frequency_type}
+                  onChange={(e) => setDraft((d) => ({ ...d, frequency_type: e.target.value as MedicationFrequencyType }))}
+                >
+                  <option value="scheduled">{translate("participants.medications.scheduled")}</option>
+                  <option value="prn">{translate("participants.medications.prn")}</option>
+                </select>
+              </div>
+              {draft.frequency_type === "scheduled" ? (
+                <LabeledInput
+                  label={translate("participants.medications.scheduledTimes")}
+                  placeholder="08:00, 20:00"
+                  value={draft.scheduled_times}
+                  onChange={(v) => setDraft((d) => ({ ...d, scheduled_times: v }))}
+                />
+              ) : (
+                <LabeledInput
+                  label={translate("participants.medications.prnMaxPerDay")}
+                  value={draft.prn_max_per_day}
+                  onChange={(v) => setDraft((d) => ({ ...d, prn_max_per_day: v.replace(/[^0-9]/g, "") }))}
+                />
+              )}
+              <LabeledInput label={translate("participants.medications.prescriberName")} value={draft.prescriber_name} onChange={(v) => setDraft((d) => ({ ...d, prescriber_name: v }))} />
+              <LabeledInput label={translate("participants.medications.prescriberContact")} value={draft.prescriber_contact} onChange={(v) => setDraft((d) => ({ ...d, prescriber_contact: v }))} />
+              <LabeledInput label={translate("participants.medications.startDate")} type="date" value={draft.start_date} onChange={(v) => setDraft((d) => ({ ...d, start_date: v }))} />
+              <LabeledInput label={translate("participants.medications.endDate")} type="date" value={draft.end_date} onChange={(v) => setDraft((d) => ({ ...d, end_date: v }))} />
+            </div>
+          </div>
+        )}
+
+        <SheetFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button type="button" variant="outline" disabled={saving !== null || !draft.name.trim()} onClick={() => save("draft")} className="gap-1.5">
+            {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {translate("participants.medications.saveDraft")}
+          </Button>
+          <Button type="button" disabled={saving !== null || !draft.name.trim()} onClick={() => save("submit")} className="cc-btn-primary gap-1.5">
+            {saving === "submit" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {translate("participants.medications.submitForVerification")}
+          </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

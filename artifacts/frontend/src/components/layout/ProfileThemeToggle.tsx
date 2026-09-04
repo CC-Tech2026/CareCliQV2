@@ -1,24 +1,24 @@
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import type { ThemeMode } from "@/services/accessibilityService";
 import { MUTED, TEXT } from "@/lib/shift-utils";
 
+// "System" was removed — see accessibilityService.ts's ThemeMode comment.
 const MODES: { id: ThemeMode; labelKey: string; icon: typeof Sun }[] = [
   { id: "light", labelKey: "accessibility.theme.light", icon: Sun },
   { id: "dark", labelKey: "accessibility.theme.dark", icon: Moon },
-  { id: "system", labelKey: "accessibility.theme.system", icon: Monitor },
 ];
 
 export function ProfileThemeToggle() {
   const { prefs, setThemeMode, loading, translate } = useAccessibility();
-  const active = prefs?.theme_mode ?? "system";
+  const active = prefs?.theme_mode ?? "light";
 
   return (
     <div className="px-4 py-3 border-b border-cc-border">
       <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
         {translate("accessibility.theme")}
       </p>
-      <div className="grid grid-cols-3 gap-1 rounded-xl border border-cc-border bg-cc-bg p-1">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-cc-border bg-cc-bg p-1">
         {MODES.map(({ id, labelKey, icon: Icon }) => {
           const selected = active === id;
           return (

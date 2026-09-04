@@ -279,7 +279,7 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <ShieldCheck className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
@@ -315,7 +315,7 @@ export default function WorkerSecurity() {
         {!mfaStatus?.enabled ? (
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
-              <div className="rounded-2xl bg-[#F4EDE6] p-4">
+              <div className="rounded-2xl bg-[#ECECEC] p-4">
                 <p className="text-sm font-semibold text-[#1A1A2E]">{translate("security.setupAuthenticator")}</p>
                 <p className="mt-1 text-sm text-[#6A6A77]">
                   {translate("security.setupAuthenticatorHint")}
@@ -413,7 +413,7 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <MonitorSmartphone className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
@@ -480,7 +480,7 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <LockKeyhole className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>
@@ -554,7 +554,7 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F4EDE6]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
             <AlertTriangle className="h-5 w-5 text-[#E8457A]" />
           </div>
           <div>

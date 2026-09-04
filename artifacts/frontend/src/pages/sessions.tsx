@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
@@ -29,7 +30,7 @@ const T1          = "#1A1A2E";
 const T2          = "#374151";
 const T3          = "#6A6A77";
 const BORDER      = "#E8E8EA";
-const SOFT        = "#F4EDE6";
+const SOFT        = "#ECECEC";
 
 // -- Sort options ---------------------------------------------------------------
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
@@ -360,7 +361,7 @@ export default function Sessions() {
     return (
       <div
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
-          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-[#F4EDE6]/50"
+          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-[#ECECEC]/50"
         }`}
         style={isSelected ? { background: `${PLUM}06` } : {}}
       >
@@ -488,7 +489,10 @@ export default function Sessions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("sessions.title")}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+            {translate("sessions.title")}
+            <SectionInfo text="Clinical documentation for every support session: notes, outcomes, and progress toward goals." />
+          </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
             {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
           </p>
@@ -591,7 +595,7 @@ export default function Sessions() {
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F4EDE6]"
+                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#ECECEC]"
                   style={{ color: T3 }}
                 >
                   <X size={12} /> {translate("sessions.clearDates")}
@@ -664,7 +668,7 @@ export default function Sessions() {
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#F4EDE6] disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#ECECEC] disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -672,7 +676,7 @@ export default function Sessions() {
               </button>
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#F4EDE6]"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#ECECEC]"
                 style={{ color: T3 }}
               >
                 <X size={12} /> {translate("sessions.deselect")}

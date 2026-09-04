@@ -4,31 +4,34 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   ArrowRight,
-  LayoutDashboard,
-  Loader2,
   BarChart2,
   UserCheck,
   ShieldCheck,
   DollarSign,
   GraduationCap,
+  Briefcase,
+  Loader2,
 } from "lucide-react";
 
-const PLUM   = "var(--cc-plum)";
-const TEXT   = "var(--cc-text)";
-const MUTED  = "var(--cc-muted)";
-const SOFT   = "var(--cc-soft)";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const CORAL  = "var(--cc-coral)";
-const AMBER  = "#F59E0B";
-const GREEN  = "#10B981";
-const SKY    = "#0EA5E9";
+
+const AMBER = "#F59E0B";
+const GREEN = "#10B981";
+const SKY = "#0EA5E9";
+const CORAL = "var(--cc-coral)";
 
 interface WorkspaceDef {
   titleKey: string;
   shortKey: string;
   subtitleKey: string;
   href: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+  icon: React.ComponentType<{
+    size?: number;
+    strokeWidth?: number;
+  }>;
   allowedRoles: string[];
   accentColor: string;
 }
@@ -39,7 +42,7 @@ const WORKSPACES: WorkspaceDef[] = [
     shortKey: "hub.workspace.worker.short",
     subtitleKey: "hub.workspace.worker.subtitle",
     href: "/dashboard",
-    icon: LayoutDashboard,
+    icon: BarChart2,
     allowedRoles: ["support_worker"],
     accentColor: PLUM,
   },
@@ -48,7 +51,7 @@ const WORKSPACES: WorkspaceDef[] = [
     shortKey: "hub.workspace.coordinator.short",
     subtitleKey: "hub.workspace.coordinator.subtitle",
     href: "/dashboard",
-    icon: LayoutDashboard,
+    icon: BarChart2,
     allowedRoles: ["support_coordinator"],
     accentColor: CORAL,
   },
@@ -100,71 +103,53 @@ const MD_WORKSPACES: WorkspaceDef[] = [
     allowedRoles: ["managing_director"],
     accentColor: CORAL,
   },
+  {
+    titleKey: "hub.workspace.workerPipeline.title",
+    shortKey: "hub.workspace.workerPipeline.short",
+    subtitleKey: "hub.workspace.workerPipeline.subtitle",
+    href: "/md/staff-onboarding",
+    icon: Briefcase,
+    allowedRoles: ["managing_director"],
+    accentColor: GREEN,
+  },
 ];
 
 export function WorkspaceLauncher() {
-  const { translate } = useAccessibility();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [launching, setLaunching] = useState<WorkspaceDef | null>(null);
+
   const role = user?.role ?? "";
 
   if (role === "managing_director") {
-    return <MDWorkspaceLauncher navigate={navigate} launching={launching} setLaunching={setLaunching} />;
+    return (
+      <MDWorkspaceLauncher
+        navigate={navigate}
+        launching={launching}
+        setLaunching={setLaunching}
+      />
+    );
   }
 
-  const ws = WORKSPACES.find((w) => w.allowedRoles.includes(role));
-  if (!ws) return null;
+  const workspace = WORKSPACES.find((item) =>
+    item.allowedRoles.includes(role),
+  );
 
-  const Icon        = ws.icon;
-  const isLaunching = launching?.href === ws.href;
-
-  function handleLaunch(e: React.MouseEvent) {
-    e.preventDefault();
-    if (launching) return;
-    setLaunching(ws!);
-    setTimeout(() => navigate(ws!.href), 1400);
-  }
+  if (!workspace) return null;
 
   return (
-    <>
-      {isLaunching && <LaunchOverlay ws={ws} />}
-      <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-            {translate("hub.workspace.title")}
-          </p>
-        </div>
-        <div className="p-3">
-          <button
-            onClick={handleLaunch}
-            disabled={!!launching}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-cc-soft disabled:pointer-events-none"
-          >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: SOFT, color: ws.accentColor }}
-            >
-              {isLaunching
-                ? <Loader2 size={16} strokeWidth={2} className="animate-spin" />
-                : <Icon size={16} strokeWidth={2} />
-              }
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
-                {translate(ws.shortKey)}
-              </p>
-              <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>
-                {translate(ws.subtitleKey)}
-              </p>
-            </div>
-            <ArrowRight size={14} strokeWidth={2} style={{ color: MUTED }} />
-          </button>
-        </div>
-      </div>
-    </>
+    <WorkspaceRail
+      workspaces={[workspace]}
+      launching={launching}
+      setLaunching={setLaunching}
+      navigate={navigate}
+    />
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* MD workspace rail                                                         */
+/* -------------------------------------------------------------------------- */
 
 function MDWorkspaceLauncher({
   navigate,
@@ -175,83 +160,185 @@ function MDWorkspaceLauncher({
   launching: WorkspaceDef | null;
   setLaunching: (ws: WorkspaceDef | null) => void;
 }) {
+  return (
+    <WorkspaceRail
+      workspaces={MD_WORKSPACES}
+      launching={launching}
+      setLaunching={setLaunching}
+      navigate={navigate}
+      managingDirector
+    />
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Workspace rail                                                             */
+/* -------------------------------------------------------------------------- */
+
+function WorkspaceRail({
+  workspaces,
+  launching,
+  setLaunching,
+  navigate,
+  managingDirector = false,
+}: {
+  workspaces: WorkspaceDef[];
+  launching: WorkspaceDef | null;
+  setLaunching: (ws: WorkspaceDef | null) => void;
+  navigate: (path: string) => void;
+  managingDirector?: boolean;
+}) {
   const { translate } = useAccessibility();
-  function handleLaunch(ws: WorkspaceDef) {
+
+  function handleLaunch(workspace: WorkspaceDef) {
     if (launching) return;
-    setLaunching(ws);
-    setTimeout(() => navigate(ws.href), 1400);
+
+    setLaunching(workspace);
+
+    window.setTimeout(() => {
+      navigate(workspace.href);
+    }, 450);
   }
 
   return (
     <>
       {launching && <LaunchOverlay ws={launching} />}
-      <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-            {translate("hub.workspace.mdTitle")}
+
+      <aside
+        className="h-full min-h-[620px] border-r bg-white"
+        style={{ borderColor: BORDER }}
+      >
+        <div className="px-7 pb-5 pt-8">
+          <p
+            className="text-[11px] font-black uppercase tracking-[0.2em]"
+            style={{ color: PLUM }}
+          >
+            {managingDirector
+              ? translate("hub.workspace.mdTitle")
+              : translate("hub.workspace.title")}
+          </p>
+
+          <p
+            className="mt-2 text-[12px] leading-relaxed"
+            style={{ color: MUTED }}
+          >
+            {managingDirector
+              ? "Organisation workspaces"
+              : "Your workspace"}
           </p>
         </div>
-        <div className="p-3 space-y-0.5">
-          {MD_WORKSPACES.map((ws) => {
-            const Icon        = ws.icon;
-            const isLaunching = launching?.href === ws.href;
+
+        <nav className="px-5 pb-6">
+          {workspaces.map((workspace) => {
+            const Icon = workspace.icon;
+            const isLaunching = launching?.href === workspace.href;
+
             return (
               <button
-                key={ws.href}
-                onClick={() => handleLaunch(ws)}
+                key={workspace.href}
+                type="button"
+                onClick={() => handleLaunch(workspace)}
                 disabled={!!launching}
-                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cc-soft disabled:pointer-events-none"
+                className="group flex w-full items-center gap-4 rounded-xl px-2.5 py-3.5 text-left transition-colors hover:bg-cc-soft disabled:pointer-events-none"
               >
+                {/* Icon */}
                 <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                  style={{ background: SOFT, color: ws.accentColor }}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+                  style={{
+                    background: `${workspace.accentColor}14`,
+                    color: workspace.accentColor,
+                  }}
                 >
-                  {isLaunching
-                    ? <Loader2 size={13} strokeWidth={2} className="animate-spin" style={{ color: ws.accentColor }} />
-                    : <Icon size={13} strokeWidth={2} />
-                  }
+                  {isLaunching ? (
+                    <Loader2
+                      size={18}
+                      strokeWidth={2}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Icon size={18} strokeWidth={1.9} />
+                  )}
                 </div>
-                <span className="flex-1 text-[13px] font-bold text-left" style={{ color: TEXT }}>
-                  {translate(ws.shortKey)}
-                </span>
-                <ArrowRight size={12} strokeWidth={2} style={{ color: MUTED }} />
+
+                {/* Text */}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="text-[14px] font-black leading-snug"
+                    style={{ color: TEXT }}
+                  >
+                    {translate(workspace.shortKey)}
+                  </p>
+
+                  <p
+                    className="mt-1 text-[11px] leading-[1.4]"
+                    style={{ color: MUTED }}
+                  >
+                    {translate(workspace.subtitleKey)}
+                  </p>
+                </div>
+
+                {/* Arrow */}
+                <ArrowRight
+                  size={15}
+                  strokeWidth={1.7}
+                  className="shrink-0 transition-transform group-hover:translate-x-0.5"
+                  style={{ color: "#B8B4B0" }}
+                />
               </button>
             );
           })}
-        </div>
-      </div>
+        </nav>
+      </aside>
     </>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Launch overlay                                                             */
+/* -------------------------------------------------------------------------- */
+
 function LaunchOverlay({ ws }: { ws: WorkspaceDef }) {
   const { translate } = useAccessibility();
   const Icon = ws.icon;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6"
-      style={{ background: "rgba(245,243,252,0.97)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      style={{
+        background: "rgba(250,248,244,0.96)",
+        backdropFilter: "blur(5px)",
+      }}
     >
-      <div className="relative flex items-center justify-center">
-        <span
-          className="absolute h-20 w-20 animate-ping rounded-full opacity-10"
-          style={{ background: ws.accentColor }}
-        />
+      <div className="flex flex-col items-center">
         <div
-          className="relative flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg"
-          style={{ background: ws.accentColor }}
+          className="flex h-14 w-14 items-center justify-center rounded-full"
+          style={{
+            background: `${ws.accentColor}14`,
+            color: ws.accentColor,
+          }}
         >
-          <Icon size={28} strokeWidth={2} color="#fff" />
+          <Icon size={23} strokeWidth={1.8} />
         </div>
-      </div>
-      <div className="flex flex-col items-center gap-1.5">
-        <p className="text-[16px] font-bold" style={{ color: "var(--cc-text)" }}>
+
+        <p
+          className="mt-4 text-[15px] font-black"
+          style={{ color: TEXT }}
+        >
           {translate(ws.titleKey)}
         </p>
-        <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-          <Loader2 size={12} strokeWidth={2} className="animate-spin" />
+
+        <div
+          className="mt-2 flex items-center gap-2 text-[11px]"
+          style={{ color: MUTED }}
+        >
+          <Loader2
+            size={12}
+            strokeWidth={2}
+            className="animate-spin"
+          />
+
           {translate("hub.workspace.opening")}
-        </p>
+        </div>
       </div>
     </div>
   );

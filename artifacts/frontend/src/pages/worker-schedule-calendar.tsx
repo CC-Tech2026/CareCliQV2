@@ -22,6 +22,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { SectionInfo } from "@/components/ui/section-info";
 import { appLocalDateKey } from "@/lib/datetime";
 import {
   anonymiseName,
@@ -471,12 +472,10 @@ export default function WorkerScheduleCalendar() {
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
             {translate("common.supportWorker")}
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("calendar.title")}
+            <SectionInfo text={translate("calendar.subtitle")} />
           </h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>
-            {translate("calendar.subtitle")}
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/my-shifts">

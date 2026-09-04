@@ -44,6 +44,11 @@ class ClinicalRewriteRequest(BaseModel):
     source_language: Optional[str] = "auto"
 
 
+class TranslatePreviewRequest(BaseModel):
+    text: str
+    target_language: str
+
+
 class AssessNoteRequest(BaseModel):
     note_text: str
     session_id: Optional[str] = None
@@ -164,6 +169,24 @@ async def improve_note_endpoint(
     except Exception as e:
         logger.error(f"Improve-note error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/translate-preview")
+async def translate_preview_endpoint(
+    body: TranslatePreviewRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Best-effort, read-only translation of English text into a display
+    language for preview purposes only (never the saved legal record).
+    Always returns 200 with the original text on failure rather than
+    erroring - this is a convenience feature, not a compliance requirement.
+    """
+    try:
+        result = await ai_service.translate_for_worker_preview(body.text, body.target_language)
+        return result
+    except Exception as e:
+        logger.warning(f"Translate-preview error (non-critical): {str(e)}")
+        return {"translated": body.text, "target_language": body.target_language, "translated_ok": False}
 
 
 @router.get("/summary/{participant_id}")

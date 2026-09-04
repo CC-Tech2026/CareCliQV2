@@ -11,10 +11,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LongShiftCheckInForm } from "@/components/worker/LongShiftCheckInForm";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ShiftOfferCard } from "@/components/worker/ShiftOfferCard";
 import { WorkerMobileShiftView } from "@/components/worker/WorkerMobileShiftView";
 import { useSessionNotes } from "@/hooks/worker/useSessionNotes";
 import { markShiftComplianceCheckinNotificationsRead } from "@/hooks/worker/useWorkerNotifications";
@@ -25,12 +26,16 @@ import {
   syncLocalCheckinNotifications,
 } from "@/lib/local-checkin-notifications";
 import {
+  acceptShiftOffer,
+  declineShiftOffer,
+  getShiftOfferSummary,
   recordShiftViewed,
   submitLongShiftCheckInForm,
   type CheckinWindowStatus,
   type SessionNoteRecord,
   type WorkerShift,
 } from "@/lib/worker-api";
+import { WorkerApiError } from "@/lib/worker-fetch";
 import { goBackToShifts } from "@/lib/go-back";
 import { isShiftCompletedForList } from "@/lib/shift-utils";
 import type { LongShiftCheckInFormData } from "@workspace/worker-compliance";
@@ -74,10 +79,49 @@ export default function ShiftDetailScreen() {
   const markedCheckinNotifsRef = useRef(false);
   const checkinInFlightRef = useRef(false);
 
-  const { data: shift, isLoading, error } = useWorkerShift(id);
+  const { data: shift, isLoading, error, refetch: refetchShift } = useWorkerShift(id);
   const sessionId = shift?.session_id ?? undefined;
   const isSessionActive = shift?.visual_state === "session_active" || shift?.visual_state === "clocked_in";
   const checkinStatus = shift?.checkin_status;
+
+  // A shift the worker has only been offered (not yet accepted/declined) has
+  // no worker_id on it yet, so getWorkerShift 403s — the backend correctly
+  // refusing full participant detail before commitment, not a real error.
+  // On exactly that 403, fetch the safe decision-only summary instead.
+  const shiftAccessDenied = error instanceof WorkerApiError && error.status === 403;
+  const {
+    data: offerSummary,
+    isLoading: offerLoading,
+    refetch: refetchOfferSummary,
+  } = useQuery({
+    queryKey: ["worker", "shift-offer", id],
+    queryFn: () => getShiftOfferSummary(id!),
+    enabled: Boolean(id) && shiftAccessDenied,
+    retry: false,
+  });
+
+  const handleAcceptOffer = useCallback(async () => {
+    if (!id) return;
+    try {
+      await acceptShiftOffer(id);
+      await refetchShift();
+    } catch (err) {
+      Alert.alert("Couldn't accept this shift", err instanceof Error ? err.message : "Please try again.");
+    }
+  }, [id, refetchShift]);
+
+  const handleDeclineOffer = useCallback(
+    async (reason?: string) => {
+      if (!id) return;
+      try {
+        await declineShiftOffer(id, reason);
+        await refetchOfferSummary();
+      } catch (err) {
+        Alert.alert("Couldn't decline this shift", err instanceof Error ? err.message : "Please try again.");
+      }
+    },
+    [id, refetchOfferSummary],
+  );
 
   const { data: sessionNotes = [] } = useSessionNotes(sessionId);
 
@@ -203,6 +247,12 @@ export default function ShiftDetailScreen() {
 
   const invalidateShiftQueries = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["worker", "shift", id] });
+    // Also refresh the shifts list — every caller of this (clock-in, clock-out,
+    // end-shift, safety ack) changes this shift's status, and the list's own
+    // query key ("shifts", plural) doesn't prefix-match "shift" (singular) so
+    // it was never invalidated, leaving stale scheduled/clocked-in badges
+    // until a manual pull-to-refresh.
+    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
   }, [queryClient, id]);
 
   const invalidateNotesQuery = useCallback(() => {
@@ -284,10 +334,24 @@ export default function ShiftDetailScreen() {
     ],
   );
 
-  if (isLoading && !fromCheckinNotif) {
+  if ((isLoading || (shiftAccessDenied && offerLoading)) && !fromCheckinNotif) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (shiftAccessDenied && offerSummary && !fromCheckinNotif) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <ShiftOfferCard offer={offerSummary} onAccept={handleAcceptOffer} onDecline={handleDeclineOffer} />
+        <Pressable onPress={() => goBackToShifts(router)} style={[styles.backLink, { borderColor: colors.border }]}>
+          <Feather name="arrow-left" size={16} color={colors.primary} />
+          <Text style={[styles.backLinkText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            Go back
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -296,7 +360,7 @@ export default function ShiftDetailScreen() {
     return (
       <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-          {(error as Error)?.message ?? "Shift not found"}
+          {shiftAccessDenied ? "This offer is no longer available." : ((error as Error)?.message ?? "Shift not found")}
         </Text>
         <Pressable onPress={() => goBackToShifts(router)} style={[styles.backLink, { borderColor: colors.border }]}>
           <Feather name="arrow-left" size={16} color={colors.primary} />

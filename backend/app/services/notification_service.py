@@ -18,6 +18,12 @@ from . import user_notification_store as notification_store
 
 logger = logging.getLogger(__name__)
 
+# Mirrors coordinator.py's UNASSIGNED_SHIFT_PLACEHOLDER_ID - an unassigned
+# shift's worker_id is this placeholder, not null, so a plain "if not
+# worker_id" guard doesn't catch it. Duplicated here (not imported) to avoid
+# a circular import, since coordinator.py imports from this module.
+_UNASSIGNED_SHIFT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+
 NOTIFICATION_EVENTS = (
     "shift_reminder",
     "shift_change",
@@ -32,6 +38,12 @@ NOTIFICATION_EVENTS = (
     "training_completion_review",
     "medication_alert",
     "incident_notification_alert",
+    "worker_cannot_attend",
+    "shift_offer",
+    "shift_offer_exhausted",
+    "shift_auto_cancelled_unassigned",
+    "account_deactivated",
+    "account_reactivated",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -50,6 +62,12 @@ EVENT_ALERT_TYPES = {
     "training_completion_review": "training_completion_review",
     "medication_alert": "medication_alert",
     "incident_notification_alert": "incident_notification_alert",
+    "worker_cannot_attend": "worker_cannot_attend",
+    "shift_offer": "shift_offer",
+    "shift_offer_exhausted": "shift_offer_exhausted",
+    "shift_auto_cancelled_unassigned": "shift_auto_cancelled_unassigned",
+    "account_deactivated": "account_deactivated",
+    "account_reactivated": "account_reactivated",
 }
 
 
@@ -256,6 +274,7 @@ async def notify_worker(
             AlertCreate(
                 participant_id=participant_id,
                 session_id=session_id,
+                shift_id=shift_id,
                 alert_type=resolved_alert_type,
                 severity=severity,
                 title=title,
@@ -317,7 +336,7 @@ async def notify_shift_change(
     new_values: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
@@ -360,7 +379,7 @@ async def notify_shift_change(
 
 async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
@@ -380,13 +399,105 @@ async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str,
     )
 
 
+async def notify_worker_cannot_attend(
+    *, shift: dict[str, Any], reason: Optional[str] = None
+) -> list[dict[str, Any]]:
+    """Reverse of notify_shift_cancelled — a worker vacated a shift they were
+    assigned to, so every coordinator in the org needs to know it's now
+    unassigned. Deep-links straight into the reassignment panel rather than
+    the bare roster, since that's the whole point of the notification."""
+    org_id = str(shift.get("organization_id") or "")
+    if not org_id:
+        return []
+    participant = _participant_first_name(shift)
+    start_label = _format_shift_time(shift.get("scheduled_start"))
+    shift_id = str(shift.get("id") or "")
+    message = f"A worker can't make their shift: {start_label} with {participant}."
+    if reason:
+        message += f' Reason given: "{reason}"'
+    results = []
+    for coord_id in _org_coordinator_user_ids(org_id):
+        results.append(await notify_worker(
+            user_id=coord_id,
+            org_id=org_id,
+            event="worker_cannot_attend",
+            title="Shift needs reassigning",
+            message=message,
+            reference_key=f"shift:{shift_id}:cannot_attend",
+            severity="high",
+            action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
+            participant_id=str(shift.get("participant_id") or "") or None,
+            shift_id=shift_id,
+            banner_style="red",
+        ))
+    return results
+
+
+async def notify_shift_offer(*, shift: dict[str, Any], worker_id: str, rank: int) -> Optional[dict[str, Any]]:
+    """The worker-facing side of a ranked shift offer — lands in both the
+    in-app inbox and (via notify_worker's existing alerts write) the
+    alerts-backed notification panel, where generateMessageActions renders
+    the Accept/Decline buttons for alert_type == 'shift_offer'."""
+    participant = _participant_first_name(shift)
+    start_label = _format_shift_time(shift.get("scheduled_start"))
+    shift_id = str(shift.get("id") or "")
+    return await notify_worker(
+        user_id=worker_id,
+        org_id=str(shift.get("organization_id") or "") or None,
+        event="shift_offer",
+        title="Shift offer",
+        message=f"You've been offered a shift: {start_label} with {participant}. Accept or decline below.",
+        # rank in the key so a re-offer to the same worker after a prior
+        # decline (further down someone else's queue) is a fresh notification,
+        # not deduped as "already delivered" by _was_delivered.
+        reference_key=f"shift:{shift_id}:offer:{rank}",
+        severity="high",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
+        participant_id=str(shift.get("participant_id") or "") or None,
+        shift_id=shift_id,
+        banner_style="orange",
+    )
+
+
+async def notify_shift_offer_exhausted(
+    *, shift: dict[str, Any], reason: Optional[str] = None
+) -> list[dict[str, Any]]:
+    """Every candidate in the offer queue declined or timed out — coordinators
+    need to assign manually now."""
+    org_id = str(shift.get("organization_id") or "")
+    if not org_id:
+        return []
+    participant = _participant_first_name(shift)
+    start_label = _format_shift_time(shift.get("scheduled_start"))
+    shift_id = str(shift.get("id") or "")
+    message = f"Every suggested worker declined or didn't respond: {start_label} with {participant}. Please assign manually."
+    if reason:
+        message += f' Last decline reason: "{reason}"'
+    results = []
+    for coord_id in _org_coordinator_user_ids(org_id):
+        results.append(await notify_worker(
+            user_id=coord_id,
+            org_id=org_id,
+            event="shift_offer_exhausted",
+            title="No one accepted the shift offer",
+            message=message,
+            reference_key=f"shift:{shift_id}:offer_exhausted",
+            severity="high",
+            action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
+            participant_id=str(shift.get("participant_id") or "") or None,
+            shift_id=shift_id,
+            banner_style="red",
+        ))
+    return results
+
+
 async def notify_shift_reminder(
     *,
     shift: dict[str, Any],
     minutes_before: int = 60,
 ) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
-    if not worker_id:
+    if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
 
     if minutes_before <= 35 and shift.get("clocked_in_at"):
@@ -548,6 +659,32 @@ async def notify_coordinator_message(
         severity="medium",
         email_subject=title,
     )
+
+
+async def notify_password_reset_requested(
+    *,
+    org_id: str,
+    worker_id: str,
+    worker_name: str,
+) -> None:
+    """A support worker can't change their own password (org policy) — this
+    tells every coordinator/MD in the org that one has asked for a reset link,
+    so an admin can act via the existing send-password-reset action."""
+    title = "Password reset requested"
+    message = f"{worker_name or 'A staff member'} requested a password reset. Send them a reset link from their staff profile."
+    action_url = f"{settings.frontend_base_url.rstrip('/')}/team?worker_id={worker_id}"
+    for coordinator_id in _org_coordinator_user_ids(org_id):
+        await notify_worker(
+            user_id=coordinator_id,
+            org_id=org_id,
+            event="coordinator_message",
+            title=title,
+            message=message,
+            reference_key=f"password_reset_request:{worker_id}:{int(datetime.now(timezone.utc).timestamp())}",
+            severity="medium",
+            action_url=action_url,
+            email_subject=title,
+        )
 
 
 def _org_coordinator_user_ids(org_id: str) -> list[str]:

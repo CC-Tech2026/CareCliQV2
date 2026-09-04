@@ -13,6 +13,7 @@ Flow:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,7 @@ from pydantic import BaseModel
 from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
-from ..services.email_service import queue_invitation_email
+from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,10 @@ VALID_INVITE_ROLES = ("support_worker", "support_coordinator")
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
     "support_worker":     "independent_worker",
     "support_coordinator": "small_provider",
+    # Only ever inserted by the Stripe signup webhook (platform_billing_service),
+    # never reachable through POST /invitations/create — VALID_INVITE_ROLES there
+    # deliberately doesn't include this, so an existing org can't invite a second MD.
+    "managing_director":  "managing_director",
 }
 
 
@@ -51,6 +56,10 @@ class InviteCreateRequest(BaseModel):
 class InviteAcceptRequest(BaseModel):
     full_name: str
     password: str
+
+
+class InviteVerifyCodeRequest(BaseModel):
+    code: str
 
 
 class InviteRequestBody(BaseModel):
@@ -92,6 +101,27 @@ def _parse_iso(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _get_valid_invite(supabase, token: str) -> dict:
+    result = (
+        supabase.table("invitations")
+        .select("*")
+        .eq("token", token)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    invite = result.data[0]
+    if invite.get("accepted_at"):
+        raise HTTPException(status_code=410, detail="This invitation has already been accepted")
+    if _parse_iso(invite["expires_at"]) < _now_utc():
+        raise HTTPException(status_code=410, detail="This invitation has expired")
+    return invite
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -127,7 +157,13 @@ async def create_invite(
             raise HTTPException(status_code=403, detail="Only managing directors can send new-hire login invites.")
         from ..services import employee_onboarding_service as onboarding_svc
         hire = onboarding_svc.get_hire(body.onboarding_id, org_id)
-        if hire["status"] != "signed":
+        # "signed" is the first invite; "invited" is a resend (the candidate's original
+        # invite expired after 7 days without them logging in — see
+        # offer_letter_reminder_service.py's day-7 "hire_invite_expired" notice — or the
+        # MD just wants to re-send it). The pending-invite check below still applies: a
+        # still-live invite for this email must be revoked first, only an expired one is
+        # silently replaced.
+        if hire["status"] not in {"signed", "invited"}:
             raise HTTPException(
                 status_code=409,
                 detail="This hire's offer letter and service agreement must be signed by both sides before sending the login invite.",
@@ -152,12 +188,17 @@ async def create_invite(
         if existing.data:
             ex = existing.data[0]
             ex_expires = _parse_iso(ex["expires_at"])
-            if ex_expires > _now_utc():
+            # For the general "invite a new team member" flow, a still-live invite must be
+            # revoked explicitly first — two people getting two different valid links for
+            # the same email would be confusing. For the hire-specific "resend this
+            # candidate's login invite" flow (onboarding_id set), clicking Resend on their
+            # record IS the explicit confirmation — silently replace it instead of making
+            # the MD go find and revoke the old one first.
+            if ex_expires > _now_utc() and not body.onboarding_id:
                 raise HTTPException(
                     status_code=409,
                     detail=f"A pending invitation for {email} already exists. Revoke it first or wait for it to expire.",
                 )
-            # Expired — delete and re-issue
             supabase.table("invitations").delete().eq("id", ex["id"]).execute()
 
         short_code = _generate_short_code(supabase)
@@ -181,25 +222,23 @@ async def create_invite(
             supabase.table("employee_onboarding").update({
                 "status": "invited",
                 "invitation_id": invite["id"],
+                "invited_at": _now_utc().isoformat(),
+                "invite_reminder_sent_at": None,
+                "invite_expired_notified_at": None,
             }).eq("id", body.onboarding_id).execute()
         invite_url = f"/accept-invite?token={token}"
         full_invite_url = f"{settings.frontend_base_url.rstrip('/')}{invite_url}"
         organization_name = None
+        logo_url = None
+        brand_accent_color = None
         try:
-            org_res = (
-                supabase.table("organizations")
-                .select("organization_name, name")
-                .eq("organization_id", org_id)
-                .limit(1)
-                .execute()
-            )
-            if org_res.data:
-                organization_name = (
-                    org_res.data[0].get("organization_name")
-                    or org_res.data[0].get("name")
-                )
+            from ..services import organization_branding_service
+            branding = organization_branding_service.get_branding(org_id)
+            organization_name = branding.get("display_name")
+            logo_url = branding.get("logo_url")
+            brand_accent_color = branding.get("brand_accent_color")
         except Exception as org_error:
-            logger.debug("Could not load organization name for invite email: %s", org_error)
+            logger.debug("Could not load organization branding for invite email: %s", org_error)
 
         email_delivery = queue_invitation_email(
             background_tasks,
@@ -208,6 +247,8 @@ async def create_invite(
             organization_name=organization_name,
             role=body.role,
             short_code=short_code,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         )
         logger.info(
             "Invite created: org=%s email=%s role=%s by=%s email_status=%s",
@@ -582,7 +623,7 @@ async def validate_invite(token: str):
         supabase = get_supabase_admin()
         result = (
             supabase.table("invitations")
-            .select("id, email, role, expires_at, accepted_at, organization_id")
+            .select("id, email, role, expires_at, accepted_at, organization_id, onboarding_id, email_verified_at")
             .eq("token", token)
             .execute()
         )
@@ -621,6 +662,12 @@ async def validate_invite(token: str):
             "organization_id": invite["organization_id"],
             "organization_name": org_name,
             "expires_at": invite["expires_at"],
+            "email_verified": bool(invite.get("email_verified_at")),
+            # accept_invite no longer gates on this (see its comment) — the
+            # frontend never consumed this flag either, kept only in case a
+            # future caller wants to know an email-code flow is available
+            # (send-code/verify-code below still work, just aren't required).
+            "requires_email_code": False,
         }
 
     except HTTPException:
@@ -628,6 +675,73 @@ async def validate_invite(token: str):
     except Exception as e:
         logger.error("validate_invite error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to validate invitation")
+
+
+@router.post("/{token}/send-code", status_code=201)
+async def send_invite_code(token: str):
+    """Public — email a fresh 6-digit verification code for this invite.
+
+    A second, in-the-moment proof of inbox access before the invitee can set
+    a password, on top of the link itself. Safe to call again for a resend.
+    """
+    supabase = get_supabase_admin()
+    invite = _get_valid_invite(supabase, token)
+
+    if invite.get("email_code_sent_at"):
+        last_sent = _parse_iso(invite["email_code_sent_at"])
+        if _now_utc() - last_sent < timedelta(seconds=30):
+            return {"ok": True, "message": "Code already sent — check your inbox, or wait a moment to resend."}
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    now = _now_utc()
+    supabase.table("invitations").update({
+        "email_code_hash": _hash_code(code),
+        "email_code_expires_at": (now + timedelta(minutes=10)).isoformat(),
+        "email_code_sent_at": now.isoformat(),
+        "email_verified_at": None,
+    }).eq("id", invite["id"]).execute()
+
+    organization_name = None
+    try:
+        org_res = (
+            supabase.table("organizations")
+            .select("organization_name, name")
+            .eq("organization_id", invite["organization_id"])
+            .limit(1)
+            .execute()
+        )
+        if org_res.data:
+            organization_name = org_res.data[0].get("organization_name") or org_res.data[0].get("name")
+    except Exception:
+        pass
+
+    email_delivery = queue_invite_verification_email(
+        to_email=invite["email"],
+        code=code,
+        organization_name=organization_name,
+    )
+    return {"ok": True, "email_delivery": email_delivery}
+
+
+@router.post("/{token}/verify-code")
+async def verify_invite_code(token: str, body: InviteVerifyCodeRequest):
+    """Public — verify the 6-digit code sent via send-code."""
+    supabase = get_supabase_admin()
+    invite = _get_valid_invite(supabase, token)
+
+    code_hash = invite.get("email_code_hash")
+    expires_at = invite.get("email_code_expires_at")
+    if not code_hash or not expires_at:
+        raise HTTPException(status_code=400, detail="No verification code was sent. Request a new code.")
+    if _parse_iso(expires_at) < _now_utc():
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new one.")
+    if _hash_code((body.code or "").strip()) != code_hash:
+        raise HTTPException(status_code=400, detail="Incorrect code. Check your email and try again.")
+
+    supabase.table("invitations").update({
+        "email_verified_at": _now_utc().isoformat(),
+    }).eq("id", invite["id"]).execute()
+    return {"ok": True}
 
 
 @router.get("/members")
@@ -658,6 +772,7 @@ async def list_members(current_user: dict = Depends(get_current_user)):
                 supabase.table("users")
                 .select("id, full_name, email")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             user_map = {u["id"]: u for u in (users_res.data or [])}
@@ -747,7 +862,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # ------------------------------------------------------------------
     result = (
         supabase.table("invitations")
-        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by, onboarding_id")
+        .select("id, email, role, expires_at, accepted_at, organization_id, invited_by, onboarding_id, email_verified_at")
         .eq("token", token)
         .execute()
     )
@@ -761,6 +876,20 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
 
     if _parse_iso(invite["expires_at"]) < _now_utc():
         raise HTTPException(status_code=410, detail="This invitation has expired")
+
+    # Hire-based invites (onboarding_id set) used to require a second, invite-level
+    # email code here — but accept-invite.tsx never implemented the send-code/
+    # verify-code screen for it (only validate_invite's requires_email_code flag
+    # exists, unconsumed), so email_verified_at could never actually be set and
+    # this permanently 403'd every candidate who came through Offer -> Signed ->
+    # Invited (confirmed Aug 2026: reproducible for essentially every seeded
+    # hire, not an edge case). The candidate already proved they control this
+    # inbox to get this far — the invite link itself is only ever emailed to
+    # hire.email (queue_invitation_email), and reaching "signed"/"invited"
+    # status requires having received and acted on that same offer email
+    # earlier in the pipeline — so a second, unbuildable code gate here added
+    # friction without a corresponding security gap it closed. Removed rather
+    # than reintroduce the (already broken) code screen.
 
     email = invite["email"]
     role  = invite["role"]
@@ -832,6 +961,42 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         logger.error("accept_invite organization_members insert error: %s", e)
 
     # ------------------------------------------------------------------
+    # 4b. Default coordinator_id to whoever sent the invite, but only when
+    #     that person is a coordinator - an MD-sent invite shouldn't
+    #     auto-assign the MD as the new worker's day-to-day coordinator.
+    # ------------------------------------------------------------------
+    if invite.get("invited_by"):
+        try:
+            inviter = (
+                supabase.table("users")
+                .select("id, role")
+                .eq("id", invite["invited_by"])
+                .maybe_single()
+                .execute()
+            )
+            if inviter and inviter.data and inviter.data.get("role") == "support_coordinator":
+                supabase.table("users").update(
+                    {"coordinator_id": invite["invited_by"]}
+                ).eq("id", user_id).execute()
+        except Exception as e:
+            logger.warning("accept_invite coordinator_id default error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
+    # 4c. A managing_director invite only ever comes from the Stripe signup
+    #     webhook (platform_billing_service), which creates the org before
+    #     any user exists — owner_user_id was left NULL at that point since
+    #     it couldn't be known yet. Backfill it now that the founding MD
+    #     account actually exists.
+    # ------------------------------------------------------------------
+    if role == "managing_director":
+        try:
+            supabase.table("organizations").update(
+                {"owner_user_id": user_id}
+            ).eq("id", org_id).is_("owner_user_id", "null").execute()
+        except Exception as e:
+            logger.warning("accept_invite owner_user_id backfill error (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
     # 5. Mark invite as accepted
     # ------------------------------------------------------------------
     try:
@@ -852,6 +1017,12 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             onboarding_svc.migrate_documents_to_worker(invite["onboarding_id"], user_id, org_id)
         except Exception as e:
             logger.warning("accept_invite onboarding document handoff error (non-critical): %s", e)
+
+        try:
+            from ..services import resume_extraction_service as resume_svc
+            resume_svc.migrate_profile_to_worker(invite["onboarding_id"], user_id, org_id)
+        except Exception as e:
+            logger.warning("accept_invite resume profile handoff error (non-critical): %s", e)
 
     # ------------------------------------------------------------------
     # 5c. Auto-assign any mandatory (auto_assign_on_hire) training modules,

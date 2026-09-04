@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import zipfile
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -519,6 +520,77 @@ def create_shift_export(
         "auto_generated": auto_generated,
     }
     return _export_response(row)
+
+
+def build_shift_pdf_export(shift_id: str, worker_id: str, organization_id: str) -> tuple[str, bytes] | None:
+    """Build a shift-summary PDF in memory as (filename, pdf_bytes), without
+    creating a storage object or shift_export_requests row — used for
+    bulk/zip exports (see create_bulk_shift_export) where persisting one
+    export per shift would be wasteful. Returns None if the shift can't be
+    found."""
+    detail = get_shift_history_detail(shift_id, worker_id, organization_id)
+    if not detail:
+        return None
+    signature_png = _download_signature_png(detail.get("shift_signature"))
+    pdf_bytes = _build_shift_pdf(detail, signature_png=signature_png)
+
+    date_part = str(detail.get("shift_date") or "")[:10] or "unknown-date"
+    participant = str(detail.get("participant_first_name") or "participant")
+    worker = str(detail.get("worker_name") or "worker")
+
+    def _safe(s: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_" else "-" for c in s) or "x"
+
+    filename = f"{date_part}_{_safe(participant)}_{_safe(worker)}_{shift_id[:8]}.pdf"
+    return filename, pdf_bytes
+
+
+def create_bulk_shift_export(
+    shift_refs: list[tuple[str, str]],
+    organization_id: str,
+    *,
+    zip_label: str,
+) -> dict[str, Any]:
+    """Bundle multiple shift-summary PDFs (shift_id, worker_id) into a
+    single ZIP, store it in the same bucket single-shift exports use, and
+    return a signed download URL. Used by the chatbox's bulk progress-note
+    tools (see chatbox/tools.py) — the caller is responsible for scoping
+    shift_refs to what the requesting user is allowed to see; this function
+    does not re-check access itself."""
+    buffer = io.BytesIO()
+    included = 0
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        used_names: set[str] = set()
+        for shift_id, worker_id in shift_refs:
+            built = build_shift_pdf_export(shift_id, worker_id, organization_id)
+            if not built:
+                continue
+            filename, pdf_bytes = built
+            while filename in used_names:
+                filename = f"{shift_id[:8]}-{filename}"
+            used_names.add(filename)
+            zf.writestr(filename, pdf_bytes)
+            included += 1
+
+    if included == 0:
+        return {"error": "No matching shift progress notes were found for that request."}
+
+    export_id = str(uuid4())
+    path = f"{organization_id}/bulk/{export_id}.zip"
+    try:
+        supabase = get_supabase_admin()
+        supabase.storage.from_("shift-export-files").upload(
+            path,
+            buffer.getvalue(),
+            {"content-type": "application/zip", "upsert": "true"},
+        )
+        bucket = supabase.storage.from_("shift-export-files")
+        file_url = _signed_export_url(bucket, path)
+    except Exception as exc:
+        logger.warning("Bulk shift export upload failed: %s", exc)
+        return {"error": "Could not prepare that download right now."}
+
+    return {"file_url": file_url, "shift_count": included, "label": zip_label}
 
 
 async def notify_shift_summary_ready(worker_id: str, shift_id: str) -> None:

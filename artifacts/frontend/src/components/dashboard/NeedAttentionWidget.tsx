@@ -60,7 +60,7 @@ export function NeedAttentionWidget({ items = [], isLoading = false }: NeedAtten
           <AlertTriangle size={16} style={{ color: CORAL }} />
           <p className="font-black text-[14px]" style={{ color: TEXT }}>Need Attention</p>
         </div>
-        <p className="text-[13px]" style={{ color: MUTED }}>All participants are doing well! ✨</p>
+        <p className="text-[13px]" style={{ color: MUTED }}>All participants are doing well.</p>
       </div>
     );
   }
@@ -83,12 +83,12 @@ export function NeedAttentionWidget({ items = [], isLoading = false }: NeedAtten
         <div className="flex gap-2 flex-wrap">
           {criticalCount > 0 && (
             <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ background: '#DC2626' }}>
-              🔴 {criticalCount} Critical
+              {criticalCount} Critical
             </span>
           )}
           {warningCount > 0 && (
             <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ background: '#F59E0B' }}>
-              🟡 {warningCount} Warning
+              {warningCount} Warning
             </span>
           )}
         </div>

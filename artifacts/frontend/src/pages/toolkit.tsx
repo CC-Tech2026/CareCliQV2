@@ -260,7 +260,7 @@ export default function Toolkit() {
         )}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && items.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No toolkit items are currently assigned." : translate("toolkit.empty")}
           </p>
         )}
@@ -285,7 +285,7 @@ export default function Toolkit() {
             <h2 className="font-black" style={{ color: TEXT }}>Restock requests</h2>
           </div>
           {restockRequests.length === 0 ? (
-            <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
+            <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
           ) : (
             <div className="mt-3 divide-y divide-[#EDE3FC]">
               {restockRequests.map((request) => (
@@ -315,14 +315,14 @@ export default function Toolkit() {
           </h2>
         </div>
         {movements.length === 0 ? (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>
             {isCoordinator ? "No toolkit movements have been recorded yet." : translate("toolkit.movementEmpty")}
           </p>
         ) : (
           <div className="mt-3 divide-y divide-[#EDE3FC]">
             {movements.slice(0, 8).map((movement) => (
               <div key={movement.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                <span className="rounded-full bg-[#F4EDE6] px-3 py-1 text-xs font-black uppercase text-[#E8457A]">
+                <span className="rounded-full bg-[#ECECEC] px-3 py-1 text-xs font-black uppercase text-[#E8457A]">
                   {movement.movement_type}
                 </span>
                 <span className="font-bold text-[#1A1A2E]">{movement.quantity}</span>

@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
@@ -11,6 +11,7 @@ const DEFAULT_OFFICE_PHONE = "1300 000 000";
 type Props = {
   shiftId: string;
   officePhone?: string | null;
+  onReportIncident?: () => void;
 };
 
 type ActionItem = {
@@ -21,11 +22,18 @@ type ActionItem = {
   onPress: () => void;
 };
 
-export function DuringShiftActionsSidebar({ shiftId, officePhone }: Props) {
+export function DuringShiftActionsSidebar({ shiftId, officePhone, onReportIncident }: Props) {
   const colors = useColors();
   const router = useRouter();
+  const { height: windowHeight } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const phone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
+
+  // Percentage-based top positioning looks right on a phone but drifts into
+  // a large empty gap on a tall tablet screen — cap how far down it can go
+  // in absolute pixels rather than scaling forever with viewport height.
+  const tabTop = Math.min(windowHeight * 0.42, 380);
+  const panelTop = Math.min(windowHeight * 0.28, 260);
 
   const actions: ActionItem[] = [
     {
@@ -42,15 +50,26 @@ export function DuringShiftActionsSidebar({ shiftId, officePhone }: Props) {
       accent: "#16A34A",
       onPress: () => void Linking.openURL(`tel:${phone}`),
     },
+    ...(onReportIncident
+      ? [
+          {
+            id: "incident",
+            label: "Report incident",
+            icon: "alert-triangle" as const,
+            accent: colors.destructive,
+            onPress: onReportIncident,
+          },
+        ]
+      : []),
   ];
 
   if (!expanded) {
     return (
       <Pressable
         onPress={() => setExpanded(true)}
-        style={[styles.tab, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.tab, { top: tabTop, backgroundColor: colors.primary, borderColor: colors.primary }]}
       >
-        <Feather name="chevron-left" size={16} color={colors.mutedForeground} />
+        <Feather name="chevron-left" size={16} color="#FFFFFF" />
       </Pressable>
     );
   }
@@ -61,7 +80,7 @@ export function DuringShiftActionsSidebar({ shiftId, officePhone }: Props) {
     <BlurView
       intensity={28}
       tint={colors.scheme === "dark" ? "dark" : "light"}
-      style={[styles.panel, { borderColor: colors.border }]}
+      style={[styles.panel, { top: panelTop, borderColor: colors.border }]}
     >
       <View style={[styles.panelOverlay, { backgroundColor: overlayColor }]}>
       <Text style={[styles.header, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
@@ -99,7 +118,6 @@ const styles = StyleSheet.create({
   tab: {
     position: "absolute",
     right: 0,
-    top: "42%",
     zIndex: 15,
     width: 22,
     height: 48,
@@ -109,11 +127,15 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: -2, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   panel: {
     position: "absolute",
     right: 0,
-    top: "28%",
     zIndex: 30,
     width: 200,
     borderTopLeftRadius: 14,

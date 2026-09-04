@@ -4,11 +4,18 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
+import { DocumentationComplianceBar } from "@/components/worker/DocumentationComplianceBar";
 import { useColors } from "@/hooks/useColors";
+import type { DocumentationComplianceCheck } from "@/lib/worker-api";
 import type { ComplianceEvaluation, ComplianceRuleResult } from "@workspace/worker-compliance";
 
 type Props = {
   compliance: ComplianceEvaluation;
+  /** Real backend 12-rule documentation-quality check - shown here, right
+   * before the worker signs off, so a real issue (e.g. no goal linked) is
+   * visible at the moment it's still actionable, not just discovered later
+   * by a coordinator. Soft nudge only: never blocks continuing. */
+  documentationCompliance?: DocumentationComplianceCheck | null;
   onClose: () => void;
   onContinue?: () => void;
   onReviseNotes?: () => void;
@@ -76,6 +83,7 @@ function scoreLabel(score: number) {
 
 export function WorkerMobileComplianceReport({
   compliance,
+  documentationCompliance,
   onClose,
   onContinue,
   onReviseNotes,
@@ -139,6 +147,19 @@ export function WorkerMobileComplianceReport({
             Here's how to strengthen your notes for next time.
           </Text>
         </View>
+
+        {documentationCompliance && (
+          <View style={{ marginBottom: 18 }}>
+            <DocumentationComplianceBar check={documentationCompliance} />
+            {documentationCompliance.available && documentationCompliance.failed > 0 && (
+              <Text
+                style={[styles.summaryHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 8 }]}
+              >
+                Your coordinator will see this flagged for review - you can still submit as is.
+              </Text>
+            )}
+          </View>
+        )}
 
         <Text style={[styles.breakdownLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
           Checks breakdown

@@ -1017,6 +1017,55 @@ Respond with a JSON object:
     }
 
 
+_WORKER_PREVIEW_LANGUAGE_NAMES = {
+    "vi": "Vietnamese",
+    "zh": "Chinese (Simplified)",
+    "ar": "Arabic",
+}
+
+
+async def translate_for_worker_preview(text: str, target_language: str) -> dict:
+    """Best-effort English -> worker's app-language translation for a read-only
+    preview (e.g. showing a multilingual worker what an AI-suggested note
+    rewrite says, in a language they read comfortably).
+
+    Deliberately never raises, unlike translate_to_english: this text is never
+    saved as the legal record (the English version is what gets applied and
+    stored), so on any failure it's correct to degrade silently back to the
+    original English rather than surface an error to the worker.
+    """
+    trimmed = (text or "").strip()
+    language_name = _WORKER_PREVIEW_LANGUAGE_NAMES.get(target_language)
+    if not trimmed or not language_name or not _openai_configured():
+        return {"translated": trimmed, "target_language": target_language, "translated_ok": False}
+
+    prompt = f"""Translate the following English clinical/care note into natural, fluent {language_name}. Preserve the meaning exactly - do not add, omit, or alter any information.
+
+Text: {trimmed[:2000]}
+
+Respond with a JSON object:
+{{"translated": "the {language_name} translation"}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=600,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        translated = (result.get("translated") or "").strip()
+        if translated:
+            return {"translated": translated, "target_language": target_language, "translated_ok": True}
+    except Exception as exc:
+        logger.warning("Worker-preview translation failed (non-critical, showing English instead): %s", exc)
+    return {"translated": trimmed, "target_language": target_language, "translated_ok": False}
+
+
 async def clinical_rewrite(text: str, source_language: str = "auto") -> dict:
     """Rewrite dictated or informal text into NDIS-compliant clinical documentation.
 

@@ -22,7 +22,14 @@ export interface BarChartBlock {
   data: Record<string, string | number>[];
 }
 
-export type ChatBlock = StatBlock | TableBlock | BarChartBlock;
+export interface DownloadBlock {
+  type: "download";
+  title: string;
+  url: string;
+  count?: number | null;
+}
+
+export type ChatBlock = StatBlock | TableBlock | BarChartBlock | DownloadBlock;
 
 export interface ChatResponse {
   reply: string;
@@ -60,4 +67,8 @@ export function getChatThreadMessages(threadId: string) {
 
 export function deleteChatThread(threadId: string) {
   return jsonFetch<void>(`/api/chatbox/threads/${threadId}`, { method: "DELETE" });
+}
+
+export function clearChatHistory() {
+  return jsonFetch<void>("/api/chatbox/threads", { method: "DELETE" });
 }

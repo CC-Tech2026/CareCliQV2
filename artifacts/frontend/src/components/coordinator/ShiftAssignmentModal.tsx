@@ -13,11 +13,14 @@ import {
   checkParticipantGoalsAndTasks,
   getNdisGoals,
   getParticipantTasks,
+  getAvailableWorkers,
   type WorkerStats,
   type NdisGoal,
   type ParticipantTask,
   type GoalsAndTasksValidation,
   type AssignShiftResult,
+  type AvailableWorker,
+  type AvailabilityStatus,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,6 +32,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { DurationQuickPicks } from "@/components/ui/duration-quick-picks";
+import { WorkerMatchBadge } from "@/components/coordinator/WorkerMatchBadge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -184,7 +190,13 @@ export function ShiftAssignmentModal({
   const [scheduledStart,        setScheduledStart]        = useState("");
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
+  const [dutyType,              setDutyType]              = useState("disability_services");
+  const [isSleepover,           setIsSleepover]           = useState(false);
+  const [sleepoverStart,        setSleepoverStart]        = useState("");
+  const [sleepoverEnd,          setSleepoverEnd]          = useState("");
   const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
+  const [isShadowShift,         setIsShadowShift]         = useState(false);
+  const [shadowOfWorkerId,      setShadowOfWorkerId]      = useState("");
 
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
@@ -211,6 +223,42 @@ export function ShiftAssignmentModal({
       enabled: Boolean(selectedWorkerId),
     }
   );
+
+  // Ranked suggestions for the worker picker — sorts/badges by required-skill
+  // coverage and availability, never a hard filter (every team member still
+  // shows up). Needs at least a start time to say anything meaningful.
+  const availableWorkersQuery = useOrgQuery<AvailableWorker[]>(
+    [orgId, "coordinator-available-workers", selectedParticipantId, scheduledStart, scheduledEnd, isSleepover],
+    {
+      queryFn: () => getAvailableWorkers({
+        shiftStart: datetimeLocalValueToUtcIso(scheduledStart),
+        shiftEnd: datetimeLocalValueToUtcIso(scheduledEnd || scheduledStart),
+        participantId: selectedParticipantId || undefined,
+        isSleepover,
+      }),
+      enabled: !!scheduledStart,
+      staleTime: 30_000,
+    }
+  );
+  const workerMatchById = new Map((availableWorkersQuery.data ?? []).map((w) => [w.id, w]));
+
+  // Best matches first: available > warning > unavailable, then preferred
+  // availability, then name. Workers with no match data yet (still loading,
+  // or no start time set) rank between available/warning — original order,
+  // no visible reshuffle until real signal arrives.
+  const matchStatusRank: Record<AvailabilityStatus, number> = { available: 0, warning: 1, unavailable: 2 };
+  const sortedAssignableWorkers = [...assignableWorkers].sort((a, b) => {
+    const ma = workerMatchById.get(a.id);
+    const mb = workerMatchById.get(b.id);
+    const ra = ma ? matchStatusRank[ma.availability_status] : 0.5;
+    const rb = mb ? matchStatusRank[mb.availability_status] : 0.5;
+    if (ra !== rb) return ra - rb;
+    const pa = ma?.preferred_availability ? 0 : 1;
+    const pb = mb?.preferred_availability ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return a.full_name.localeCompare(b.full_name);
+  });
+
 
   // Check if participant has valid goals and tasks
   const goalsTasksCheckQuery = useOrgQuery<GoalsAndTasksValidation>(
@@ -245,10 +293,19 @@ export function ShiftAssignmentModal({
         scheduled_start: datetimeLocalValueToUtcIso(scheduledStart),
         scheduled_end: scheduledEnd ? datetimeLocalValueToUtcIso(scheduledEnd) : undefined,
         shift_type: shiftType,
+        duty_type: dutyType,
+        is_sleepover: isSleepover,
+        sleepover_start: isSleepover && sleepoverStart ? datetimeLocalValueToUtcIso(sleepoverStart) : undefined,
+        sleepover_end: isSleepover && sleepoverEnd ? datetimeLocalValueToUtcIso(sleepoverEnd) : undefined,
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       };
       if (selectedWorkerId) {
-        return assignShift({ ...payload, worker_id: selectedWorkerId });
+        return assignShift({
+          ...payload,
+          worker_id: selectedWorkerId,
+          is_shadow_shift: isShadowShift,
+          shadow_of_worker_id: isShadowShift ? shadowOfWorkerId : undefined,
+        });
       }
       const created = await createUnassignedShift(payload);
       return {
@@ -285,16 +342,30 @@ export function ShiftAssignmentModal({
     setScheduledEnd("");
     setShiftType("standard_support");
     setSelectedTaskIds([]);
+    setIsShadowShift(false);
+    setShadowOfWorkerId("");
   };
 
-  const handleQuickEnd = () => {
+  const handleSetDuration = (hours: number) => {
     if (!scheduledStart) return;
     try {
       const startUtc = datetimeLocalValueToUtcIso(scheduledStart);
-      const endUtc = new Date(new Date(startUtc).getTime() + 4 * 60 * 60 * 1000).toISOString();
+      const endUtc = new Date(new Date(startUtc).getTime() + hours * 60 * 60 * 1000).toISOString();
       setScheduledEnd(utcIsoToDatetimeLocalValue(endUtc));
     } catch {}
   };
+
+  const activeDurationHours = (() => {
+    if (!scheduledStart || !scheduledEnd) return null;
+    try {
+      const startMs = new Date(datetimeLocalValueToUtcIso(scheduledStart)).getTime();
+      const endMs = new Date(datetimeLocalValueToUtcIso(scheduledEnd)).getTime();
+      const diffHours = (endMs - startMs) / (60 * 60 * 1000);
+      return Number.isInteger(diffHours) && diffHours > 0 ? diffHours : null;
+    } catch {
+      return null;
+    }
+  })();
 
   const selectedWorkerData  = workers.find((w) => w.id === selectedWorkerId);
   const workerAlerts        = (credAlertsQuery.data?.alerts ?? []).filter((a) => a.user_id === selectedWorkerId);
@@ -312,6 +383,8 @@ export function ShiftAssignmentModal({
     selectedParticipantId &&
     scheduledStart &&
     (!selectedWorkerId || !hasBlock) &&
+    (!isShadowShift || shadowOfWorkerId) &&
+    (!isSleepover || (sleepoverStart && sleepoverEnd)) &&
     goalsTasksValid &&
     !assignMut.isPending
   );
@@ -384,7 +457,7 @@ export function ShiftAssignmentModal({
                     label: translate("coordinator.shiftAssign.unassigned"),
                     keywords: translate("coordinator.shiftAssign.unassigned"),
                   },
-                  ...assignableWorkers.map((w) => ({
+                  ...sortedAssignableWorkers.map((w) => ({
                     value: w.id,
                     label: w.full_name,
                     keywords: `${w.full_name} ${w.avg_compliance != null ? w.avg_compliance.toFixed(0) : ""}`,
@@ -423,14 +496,17 @@ export function ShiftAssignmentModal({
                   }
                   const w = assignableWorkers.find((worker) => worker.id === option.value);
                   return (
-                    <span className="flex items-center gap-2">
-                      <User2 size={12} />
-                      {option.label}
-                      {w?.avg_compliance != null && (
-                        <span className="text-[11px]" style={{ color: MUTED }}>
-                          {w.avg_compliance.toFixed(0)}%
-                        </span>
-                      )}
+                    <span className="flex items-center justify-between gap-2 w-full">
+                      <span className="flex items-center gap-2">
+                        <User2 size={12} />
+                        {option.label}
+                        {w?.avg_compliance != null && (
+                          <span className="text-[11px]" style={{ color: MUTED }}>
+                            {w.avg_compliance.toFixed(0)}%
+                          </span>
+                        )}
+                      </span>
+                      <WorkerMatchBadge worker={workerMatchById.get(option.value)} />
                     </span>
                   );
                 }}
@@ -451,6 +527,69 @@ export function ShiftAssignmentModal({
               </p>
             )}
           </div>
+
+          {/* Shadow shift — worker still does the shift themselves (same
+              credential/training gates apply above); this just pairs them
+              with a senior worker for support and marks it as supervised. */}
+          {selectedWorkerId && (
+            <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] font-black" style={{ color: TEXT }}>
+                <input
+                  type="checkbox"
+                  checked={isShadowShift}
+                  onChange={(e) => {
+                    setIsShadowShift(e.target.checked);
+                    if (!e.target.checked) setShadowOfWorkerId("");
+                  }}
+                  className="h-4 w-4 rounded"
+                />
+                Shadow shift — pair with a senior worker
+              </label>
+              {isShadowShift && (
+                <Select value={shadowOfWorkerId} onValueChange={setShadowOfWorkerId}>
+                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                    <SelectValue placeholder="Who are they shadowing?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignableWorkers
+                      .filter((w) => w.id !== selectedWorkerId)
+                      .map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
+          {/* Sleepover - a continuous overnight stay is priced differently
+              under SCHADS (a flat allowance plus overtime-rate call-outs,
+              not ordinary continuous work) - see schads_engine.py. */}
+          {selectedWorkerId && (
+            <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] font-black" style={{ color: TEXT }}>
+                <input
+                  type="checkbox"
+                  checked={isSleepover}
+                  onChange={(e) => setIsSleepover(e.target.checked)}
+                  className="h-4 w-4 rounded"
+                />
+                {translate("coordinator.shiftAssign.sleepover")}
+              </label>
+              {isSleepover && (
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverStart")}</label>
+                    <DateTimePicker value={sleepoverStart} onChange={setSleepoverStart} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverEnd")}</label>
+                    <DateTimePicker value={sleepoverEnd} onChange={setSleepoverEnd} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Participant */}
           <div className="space-y-2">
@@ -528,34 +667,43 @@ export function ShiftAssignmentModal({
             </div>
           )}
 
+          {/* SCHADS duty type - drives minimum-engagement pay rules, separate
+              from the NDIS-facing shift type above. */}
+          {!hasGoalsTasksError && (
+            <div className="space-y-2">
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.dutyType")}</label>
+              <Select value={dutyType} onValueChange={setDutyType}>
+                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disability_services">{translate("coordinator.shiftAssign.dutyType.disabilityServices")}</SelectItem>
+                  <SelectItem value="general_sacs">{translate("coordinator.shiftAssign.dutyType.generalSacs")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Date & time */}
           {!hasGoalsTasksError && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div className="space-y-2">
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
-                <Input
-                  type="datetime-local"
+                <DateTimePicker
                   value={scheduledStart}
-                  onChange={(e) => setScheduledStart(e.target.value)}
-                  className="rounded-xl"
-                  style={{ borderColor: BORDER }}
+                  onChange={setScheduledStart}
                 />
               </div>
+              <DurationQuickPicks
+                onSelect={handleSetDuration}
+                activeHours={activeDurationHours}
+                disabled={!scheduledStart}
+              />
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
-                  {scheduledStart && !scheduledEnd && (
-                    <button type="button" onClick={handleQuickEnd} className="text-[11px] font-bold" style={{ color: PLUM }}>
-                      +4 hrs
-                    </button>
-                  )}
-                </div>
-                <Input
-                  type="datetime-local"
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
+                <DateTimePicker
                   value={scheduledEnd}
-                  onChange={(e) => setScheduledEnd(e.target.value)}
-                  className="rounded-xl"
-                  style={{ borderColor: BORDER }}
+                  onChange={setScheduledEnd}
                 />
               </div>
             </div>

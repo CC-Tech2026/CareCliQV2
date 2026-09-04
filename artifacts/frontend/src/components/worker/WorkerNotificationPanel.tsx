@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { fetchNotifications } from "@/services/notificationService";
 import { jsonFetch } from "@/services/http";
+import { acceptShiftOffer, declineShiftOffer } from "@/services/shiftService";
 import {
   Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
   Search, Filter, Send, ChevronRight, Zap, AlertCircle,
@@ -44,6 +45,7 @@ export interface WorkerMessage {
   created_at: string;
   patient_id?: string;
   session_id?: string;
+  shift_id?: string;
   actions?: MessageAction[];
 }
 
@@ -65,6 +67,7 @@ async function fetchWorkerMessages(unread_only = false): Promise<{ messages: Wor
         created_at: msg.created_at,
         patient_id: msg.patient_id,
         session_id: msg.session_id,
+        shift_id: msg.shift_id,
       })),
       count: data.count || 0,
     };
@@ -85,7 +88,7 @@ async function markMessageRead(messageId: string): Promise<void> {
   }
 }
 
-async function replyToMessage(messageId: string, replyText: string): Promise<void> {  
+async function replyToMessage(messageId: string, replyText: string): Promise<void> {
   try {
     await jsonFetch(`/api/worker/messages/${messageId}/reply`, {
       method: "POST",
@@ -96,7 +99,11 @@ async function replyToMessage(messageId: string, replyText: string): Promise<voi
   }
 }
 
-function generateMessageActions(message: WorkerMessage, translate: (key: string) => string): MessageAction[] {
+function generateMessageActions(
+  message: WorkerMessage,
+  translate: (key: string) => string,
+  handlers?: { onAcceptOffer?: () => void; onDeclineOffer?: () => void },
+): MessageAction[] {
   const actions: MessageAction[] = [];
 
   if (message.alert_type === "credential_expiry") {
@@ -124,6 +131,23 @@ function generateMessageActions(message: WorkerMessage, translate: (key: string)
       label: translate("notifications.panel.replyCoordinator"),
       icon: <Send size={16} />,
       variant: "primary",
+    });
+  } else if (message.alert_type === "shift_offer" && message.shift_id) {
+    actions.push({
+      id: "accept-offer",
+      type: "action",
+      label: translate("notifications.panel.acceptShift"),
+      icon: <CheckCircle2 size={16} />,
+      onClick: handlers?.onAcceptOffer,
+      variant: "primary",
+    });
+    actions.push({
+      id: "decline-offer",
+      type: "action",
+      label: translate("notifications.panel.declineShift"),
+      icon: <X size={16} />,
+      onClick: handlers?.onDeclineOffer,
+      variant: "secondary",
     });
   }
 
@@ -164,15 +188,40 @@ function MessageDetailModal({
   onRefresh?: () => void;
 }) {
   const { translate } = useAccessibility();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const relativeTime = useRelativeTime();
   const meta = getSeverityMeta(message.severity);
   const [replyText, setReplyText] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [replySent, setReplySent] = useState(false);
-  
-  const actions = generateMessageActions(message, translate);
+  const [isDeclining, setIsDeclining] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+
   const qc = useQueryClient();
-  
+
+  const acceptOfferMut = useMutation({
+    mutationFn: () => acceptShiftOffer(message.shift_id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "worker"] });
+      onRead();
+      onClose();
+    },
+  });
+  const declineOfferMut = useMutation({
+    mutationFn: () => declineShiftOffer(message.shift_id!, declineReason.trim()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "worker"] });
+      onRead();
+      onClose();
+    },
+  });
+
+  const actions = generateMessageActions(message, translate, {
+    onAcceptOffer: () => acceptOfferMut.mutate(),
+    onDeclineOffer: () => setIsDeclining(true),
+  });
+
   const icon =
     message.severity === "urgent" ? (
       <AlertTriangle size={24} />
@@ -347,6 +396,47 @@ function MessageDetailModal({
                     style={{ background: PLUM }}
                   >
                     {replySent ? translate("notifications.panel.sent") : translate("notifications.panel.sendReply")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Decline Offer Form */}
+            {isDeclining && message.alert_type === "shift_offer" && (
+              <div
+                className="mb-4 p-3 rounded-lg border"
+                style={{ background: SOFT, borderColor: BORDER }}
+              >
+                <p className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>
+                  {translate("notifications.panel.declineReasonTitle")}
+                </p>
+                <textarea
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder={translate("notifications.panel.declineReasonPlaceholder")}
+                  className="w-full p-2.5 rounded border text-[13px] resize-none focus:outline-none focus:ring-2"
+                  style={{
+                    borderColor: BORDER,
+                    "--tw-ring-color": `${PLUM}20`,
+                  } as any}
+                  rows={2}
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => { setIsDeclining(false); setDeclineReason(""); }}
+                    disabled={declineOfferMut.isPending}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors disabled:opacity-50"
+                    style={{ background: BORDER, color: TEXT }}
+                  >
+                    {translate("common.cancel")}
+                  </button>
+                  <button
+                    onClick={() => declineOfferMut.mutate()}
+                    disabled={declineOfferMut.isPending}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors text-white disabled:opacity-50"
+                    style={{ background: PLUM }}
+                  >
+                    {translate("notifications.panel.declineShift")}
                   </button>
                 </div>
               </div>

@@ -11,6 +11,7 @@ import {
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -18,7 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO } from "date-fns";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Search,
   UserPlus,
@@ -49,6 +50,8 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  Maximize2,
+  Minimize2,
   LayoutTemplate,
   Sunrise,
   Sun,
@@ -191,6 +194,7 @@ export type ParticipantRecord = {
   used_budget?: number | string | null;
   goals?: Array<Record<string, unknown>>;
   assigned_worker_id?: string | null;
+  assigned_worker_name?: string | null;
   allied_health_id?: string | null;
 };
 
@@ -210,6 +214,8 @@ export type SessionRecord = {
   translation_provider?: string | null;
   goals_addressed?: unknown;
   participant_name?: string | null;
+  worker_id?: string | null;
+  worker_name?: string | null;
 };
 
 export type BudgetSummary = {
@@ -970,7 +976,7 @@ function SetupPlanPanel({
 
 type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile";
 
-function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
+function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void }) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
@@ -1002,10 +1008,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
   const qc = useQueryClient();
 
-  // UI state — collapsible header + inline shift detail
+  const [, navigate] = useLocation();
+
+  // UI state — collapsible header
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  // Session detail panel — opens full session detail in-context instead of navigating away
-  const [sessionPanelId, setSessionPanelId] = useState<string | null>(null);
 
   // Assign Shift — coordinator only
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -1179,6 +1185,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [planGoalsSection, setPlanGoalsSection] = useState<"plan" | "goals">("plan");
   const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
 
+  // Keep ?id=&tab= in sync with what's actually on screen, replacing (not
+  // pushing) so tab clicks don't pollute history - browser back only needs
+  // to restore the CURRENT entry, not step through every tab switch. Without
+  // this, navigating away (e.g. to a session's full detail page) and back
+  // always landed on the participant list with nothing selected, since this
+  // page's real state (which participant, which tab) never made it into the
+  // URL despite the deep-link *read* side already existing below.
+  useEffect(() => {
+    navigate(`/patients?id=${id}&tab=${activeTab}`, { replace: true });
+  }, [id, activeTab]);
+
   // Form state for creating / editing goals & tasks
   const [createMode, setCreateMode] = useState<'goal' | 'edit_goal' | 'tasks' | null>(null);
   const [editingGoal, setEditingGoal] = useState<NdisGoal | null>(null);
@@ -1340,7 +1357,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
       <div
-        className="sticky top-0 z-10 border-b border-purple-100/60 px-3 pt-3 pb-0 sm:px-5 sm:pt-5"
+        className="sticky top-0 z-10 px-3 pt-3 sm:px-5 sm:pt-5"
         style={{ background: "var(--cc-bg)" }}
       >
 
@@ -1362,19 +1379,36 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               {participant.plan_start_date && participant.plan_end_date && (
                 <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
               )}
+              {participant.assigned_worker_name && (
+                <> &middot; Assigned: {participant.assigned_worker_name}</>
+              )}
             </p>
-            
+
              {/* NDIS number + plan dates — desktop */}
               <p className="hidden sm:block text-[11px] text-[#6A6A77] leading-relaxed mt-2" style={{ color: "var(--cc-muted)" }}>
                 {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
                 {participant.plan_start_date && participant.plan_end_date && (
                   <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
                 )}
+                {participant.assigned_worker_name && (
+                  <> &middot; Assigned: {participant.assigned_worker_name}</>
+                )}
               </p>
           </div>
 
           {/* Action buttons — desktop: inline right */}
           <div className="hidden sm:flex items-center gap-2 shrink-0">
+            {onToggleFullScreen && (
+              <button
+                type="button"
+                onClick={onToggleFullScreen}
+                className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+              >
+                {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                {fullScreen ? "Exit full screen" : "Full screen"}
+              </button>
+            )}
             <EditParticipantPanel
               participant={participant}
               hasPlan={hasPlan}
@@ -1442,8 +1476,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           </>
         )}
 
-        {/* Tab bar */}
-        <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none scroll-px-3">
+        {/* Tab bar - flush with the content panel below, same language as the
+            roster page's tabs and the onboarding area switcher: rounded top
+            corners only, matching background (var(--cc-surface)) and zero
+            gap so the active tab visually continues straight into the panel
+            beneath it. No box-shadow on the active tab on purpose - a shadow
+            projects downward and draws a visible line right at the seam,
+            which breaks the "one continuous shape" illusion (this bit it
+            twice already; OnboardingAreaSwitcher's shipped code has the same
+            note). The content wrapper right below carries the matching
+            var(--cc-surface) background that completes the illusion. */}
+        <div className="flex items-end gap-1.5 overflow-x-auto scrollbar-none scroll-px-3">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1451,13 +1494,20 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 min-h-[44px] ${
-                  active
-                    ? "border-[#E8457A] text-[#E8457A]"
-                    : "border-transparent text-[#6A6A77] hover:text-[#1A1A2E] hover:border-[#E8E8EA]"
-                }`}
+                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold transition-opacity min-h-[44px]"
+                style={{
+                  borderRadius: active ? "14px 14px 0 0" : "0",
+                  background: active ? "var(--cc-surface)" : "transparent",
+                  color: "var(--cc-text)",
+                  opacity: active ? 1 : 0.75,
+                }}
               >
-                <Icon size={14} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: active ? "var(--cc-coral)" : "#C7C7CE" }}
+                >
+                  <Icon size={11} style={{ color: "#fff" }} />
+                </span>
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
                 {"isNew" in tab && tab.isNew && (
@@ -1475,7 +1525,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6" style={{ background: "var(--cc-surface)" }}>
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
@@ -2486,8 +2536,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           <ParticipantSessionsTab
             sessions={sessions}
             isLoading={sessionsQuery.isLoading}
-            sessionPanelId={sessionPanelId}
-            onSessionPanelIdChange={setSessionPanelId}
           />
         )}
         {activeTab === "compliance" && (
@@ -2495,10 +2543,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             complianceHistory={complianceHistory}
             averageCompliance={averageCompliance}
             isLoading={complianceQuery.isLoading}
-            onSelectSession={(sessionId) => {
-              setSessionPanelId(sessionId);
-              setActiveTab("sessions");
-            }}
+            onSelectSession={(sessionId) => navigate(`/sessions/${sessionId}`)}
             breakdown={complianceBreakdownQuery.data ?? null}
             breakdownLoading={complianceBreakdownQuery.isLoading}
           />
@@ -2597,6 +2642,7 @@ export default function Patients() {
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [detailFullScreen, setDetailFullScreen] = useState(false);
 
   // Deep-link support: "Back to Participant" from session/shift detail pages
   // passes ?id=<participantId>&tab=<tab> so the coordinator lands back on the
@@ -2638,7 +2684,7 @@ export default function Patients() {
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
+        className={`${detailFullScreen ? "hidden" : showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
         style={{ background: "var(--cc-bg)", border: showMobileDetail ? "none" : "1px solid var(--cc-border)" }}
       >
         {sidebarCollapsed ? (
@@ -2674,7 +2720,10 @@ export default function Patients() {
           {/* Title row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>{translate("patients.title")}</h2>
+              <h2 className="flex items-center gap-1.5 text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
+                {translate("patients.title")}
+                <SectionInfo text="Everyone you support: their plans, goals, sessions, and compliance, in one place." />
+              </h2>
               {!participantsLoading && (
                 <span
                   className="text-[10px] font-black px-2 py-0.5 rounded-full"
@@ -2889,8 +2938,16 @@ export default function Patients() {
               </svg>
               {translate("patients.backToList")}
             </button>
+
             <div className="flex-1 overflow-y-auto">
-              <ParticipantDetail key={selectedId} id={selectedId} onRefreshList={refetch} initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined} />
+              <ParticipantDetail
+                key={selectedId}
+                id={selectedId}
+                onRefreshList={refetch}
+                initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined}
+                fullScreen={detailFullScreen}
+                onToggleFullScreen={() => setDetailFullScreen((v) => !v)}
+              />
             </div>
           </>
         ) : (

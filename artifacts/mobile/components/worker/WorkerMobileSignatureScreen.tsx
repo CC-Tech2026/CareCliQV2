@@ -14,17 +14,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ShiftSignatureForm } from "@/components/worker/ShiftSignatureForm";
 import { useColors } from "@/hooks/useColors";
 import { useT } from "@/context/PreferencesContext";
+import type { ShiftSignaturePayload } from "@/lib/worker-api";
 
 type Props = {
-  shiftId: string;
   participantName: string;
   busy?: boolean;
-  onSigned: () => void | Promise<void>;
+  onSigned: (payload: ShiftSignaturePayload) => void | Promise<void>;
   onBack: () => void;
 };
 
 export function WorkerMobileSignatureScreen({
-  shiftId,
   participantName,
   busy,
   onSigned,
@@ -65,7 +64,7 @@ export function WorkerMobileSignatureScreen({
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        <ShiftSignatureForm shiftId={shiftId} busy={busy} onSigned={onSigned} />
+        <ShiftSignatureForm busy={busy} onSigned={onSigned} />
       </ScrollView>
 
       <Modal visible={blocked || Boolean(busy)} transparent animationType="fade">

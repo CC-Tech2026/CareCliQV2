@@ -20,6 +20,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppSplash } from "@/components/auth/AppSplash";
+import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { OfflineProvider } from "@/context/OfflineContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
@@ -75,7 +76,9 @@ function RootLayoutNav() {
   }, [isAuthenticated, isLoading, segments, router]);
 
   return (
-    <Stack>
+    <>
+      <OnboardingCompleteGate />
+      <Stack>
       <Stack.Screen name="splash" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -166,11 +169,8 @@ function RootLayoutNav() {
         name="incidents/[id]"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
-      <Stack.Screen
-        name="incidents/participant/[id]"
-        options={{ headerShown: false, animation: "slide_from_bottom" }}
-      />
-    </Stack>
+      </Stack>
+    </>
   );
 }
 

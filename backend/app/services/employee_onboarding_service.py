@@ -4,18 +4,31 @@ offer letter + service agreement, both sides sign, then an invite is sent.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .email_service import queue_onboarding_sign_email
+from .email_service import queue_onboarding_sign_email, queue_signing_verification_email
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
 
 DOCUMENT_TYPES = {"offer_letter", "service_agreement", "other"}
 ALLOWED_FILE_TYPES = {
@@ -205,27 +218,17 @@ def delete_document(document_id: str) -> None:
     supabase.table("employee_onboarding_documents").delete().eq("id", document_id).execute()
 
 
-def _organization_name(organization_id: str) -> str | None:
-    try:
-        resp = (
-            get_supabase_admin()
-            .table("organizations")
-            .select("organization_name, name")
-            .eq("organization_id", organization_id)
-            .limit(1)
-            .execute()
-        )
-        if resp.data:
-            return resp.data[0].get("organization_name") or resp.data[0].get("name")
-    except Exception:
-        pass
-    return None
-
-
 def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str, employer_name: str) -> dict[str, Any]:
     hire = get_hire(hire_id, organization_id)
-    if hire["status"] not in {"draft"}:
-        raise HTTPException(status_code=409, detail="This hire has already been sent for signature.")
+    # "draft" is the first send; "awaiting_signatures"/"expired" are a resend — the MD
+    # asking for a fresh link (their own session expired, they lost the email, or the
+    # 14-day auto-expiry in offer_letter_reminder_service.py already fired). A resend
+    # always issues a brand-new sign_token so the old link stops working, and restarts
+    # both the employer_signed_at clock (offer_letter_reminder_service's 14-day expiry)
+    # and the day-3 reminder (offer_reminder_sent_at reset to None) — otherwise a resend
+    # right before the old 14-day window closed would expire again almost immediately.
+    if hire["status"] not in {"draft", "awaiting_signatures", "expired"}:
+        raise HTTPException(status_code=409, detail="This hire isn't awaiting a signature.")
     docs = list_documents(hire_id)
     if not docs:
         raise HTTPException(status_code=422, detail="Attach at least one document (e.g. offer letter) before sending for signature.")
@@ -237,6 +240,7 @@ def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str
         "employer_signed_by": employer_user_id,
         "employer_signed_name": employer_name,
         "employer_signed_at": _now(),
+        "offer_reminder_sent_at": None,
         "updated_at": _now(),
     }
     result = (
@@ -249,41 +253,167 @@ def send_for_signature(hire_id: str, organization_id: str, employer_user_id: str
     updated = result.data[0] if result.data else {**hire, **update}
 
     from ..core.config import settings
+    from . import organization_branding_service
+    branding = organization_branding_service.get_branding(organization_id)
     sign_url = f"{settings.frontend_base_url.rstrip('/')}/onboarding-sign?token={sign_token}"
     email_delivery = queue_onboarding_sign_email(
         to_email=hire["email"],
         full_name=hire["full_name"],
         sign_url=sign_url,
-        organization_name=_organization_name(organization_id),
+        organization_name=branding.get("display_name"),
         document_titles=[d["title"] for d in docs],
+        logo_url=branding.get("logo_url"),
+        brand_accent_color=branding.get("brand_accent_color"),
     )
     updated["email_delivery"] = email_delivery
     return updated
 
 
 # ── Public signing (no auth — applicant uses sign_token) ───────────────────
+#
+# Offer letter / service agreement documents carry sensitive content (salary,
+# terms, policies). The sign_token alone (a link in an email that could be
+# forwarded or intercepted) isn't proof of inbox access, so the actual
+# document contents and the ability to sign are gated behind a second,
+# in-the-moment 6-digit email code — same pattern already used for
+# invitations (invitations.py send-code/verify-code), mirrored here.
 
-def get_hire_by_sign_token(token: str) -> dict[str, Any]:
-    resp = (
-        get_supabase_admin()
-        .table("employee_onboarding")
-        .select("id, full_name, email, role, status, employer_signed_name, employer_signed_at, worker_signed_name, worker_signed_at")
-        .eq("sign_token", token)
-        .limit(1)
-        .execute()
-    )
+_SIGNING_CODE_RESEND_COOLDOWN = timedelta(seconds=30)
+_SIGNING_CODE_TTL = timedelta(minutes=10)
+
+
+def _get_hire_for_signing_raw(token: str) -> dict[str, Any]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("employee_onboarding")
+            .select(
+                "id, organization_id, full_name, email, role, status, "
+                "employer_signed_name, employer_signed_at, worker_signed_name, worker_signed_at, "
+                "signing_code_hash, signing_code_expires_at, signing_code_sent_at, signing_email_verified_at"
+            )
+            .eq("sign_token", token)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            # Migration 136 (signing_code_* columns) hasn't been applied yet —
+            # a real candidate must never see this as "your link is invalid."
+            raise HTTPException(
+                status_code=503,
+                detail="Signing isn't available right now. Please try again shortly.",
+            ) from exc
+        raise
     if not resp.data:
         raise HTTPException(status_code=404, detail="Signing link not found or expired.")
-    hire = resp.data[0]
-    hire["documents"] = list_documents(hire["id"])
-    return hire
+    return resp.data[0]
 
 
-def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
+def get_hire_by_sign_token(token: str) -> dict[str, Any]:
+    hire = _get_hire_for_signing_raw(token)
+    verified = bool(hire.get("signing_email_verified_at"))
+
+    result = {
+        "id": hire["id"],
+        "full_name": hire["full_name"],
+        "email": hire["email"],
+        "role": hire["role"],
+        "status": hire["status"],
+        "employer_signed_name": hire.get("employer_signed_name"),
+        "employer_signed_at": hire.get("employer_signed_at"),
+        "worker_signed_name": hire.get("worker_signed_name"),
+        "worker_signed_at": hire.get("worker_signed_at"),
+        "email_verified": verified,
+    }
+    # Document contents (including file_url — the actual sensitive files) are
+    # withheld entirely until the email code is verified. A signed offer is
+    # already past the point of needing to re-verify to view a receipt of
+    # what was signed.
+    if verified or hire["status"] not in {"awaiting_signatures"}:
+        result["documents"] = list_documents(hire["id"])
+    else:
+        result["documents"] = []
+    return result
+
+
+def send_signing_code(token: str) -> dict[str, Any]:
+    hire = _get_hire_for_signing_raw(token)
+    if hire["status"] != "awaiting_signatures":
+        raise HTTPException(status_code=409, detail="This offer is not awaiting a signature.")
+
+    sent_at = hire.get("signing_code_sent_at")
+    if sent_at and _now_utc() - _parse_iso(sent_at) < _SIGNING_CODE_RESEND_COOLDOWN:
+        return {"ok": True, "message": "Code already sent — check your inbox, or wait a moment to resend."}
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    now = _now_utc()
+    get_supabase_admin().table("employee_onboarding").update({
+        "signing_code_hash": _hash_code(code),
+        "signing_code_expires_at": (now + _SIGNING_CODE_TTL).isoformat(),
+        "signing_code_sent_at": now.isoformat(),
+        "signing_email_verified_at": None,
+    }).eq("id", hire["id"]).execute()
+
+    organization_name = None
+    try:
+        from . import organization_branding_service
+        branding = organization_branding_service.get_branding(hire["organization_id"])
+        organization_name = branding.get("display_name")
+    except Exception:
+        pass
+
+    email_delivery = queue_signing_verification_email(
+        to_email=hire["email"],
+        code=code,
+        organization_name=organization_name,
+    )
+    return {"ok": True, "email_delivery": email_delivery}
+
+
+def verify_signing_code(token: str, code: str) -> dict[str, Any]:
+    hire = _get_hire_for_signing_raw(token)
+    code_hash = hire.get("signing_code_hash")
+    expires_at = hire.get("signing_code_expires_at")
+    if not code_hash or not expires_at:
+        raise HTTPException(status_code=400, detail="No verification code was sent. Request a new code.")
+    if _parse_iso(expires_at) < _now_utc():
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new one.")
+    if _hash_code((code or "").strip()) != code_hash:
+        raise HTTPException(status_code=400, detail="Incorrect code. Check your email and try again.")
+
+    get_supabase_admin().table("employee_onboarding").update({
+        "signing_email_verified_at": _now_utc().isoformat(),
+    }).eq("id", hire["id"]).execute()
+    return {"ok": True}
+
+
+def _document_version_hash(hire_id: str) -> str:
+    """Fingerprints exactly which stored documents (by id + storage path, not
+    just title) are attached at the moment of signing — confirms what was
+    actually accepted, distinct from the acceptance timestamp itself."""
+    docs = (
+        get_supabase_admin()
+        .table("employee_onboarding_documents")
+        .select("id, file_path")
+        .eq("onboarding_id", hire_id)
+        .order("id")
+        .execute()
+    )
+    fingerprint = "|".join(f"{d['id']}:{d.get('file_path') or ''}" for d in (docs.data or []))
+    return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+
+
+def sign_as_worker(
+    token: str,
+    full_name: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> dict[str, Any]:
     resp = (
         get_supabase_admin()
         .table("employee_onboarding")
-        .select("id, status")
+        .select("id, status, signing_email_verified_at")
         .eq("sign_token", token)
         .limit(1)
         .execute()
@@ -293,6 +423,8 @@ def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
     hire = resp.data[0]
     if hire["status"] not in {"awaiting_signatures"}:
         raise HTTPException(status_code=409, detail="This offer is not awaiting a signature.")
+    if not hire.get("signing_email_verified_at"):
+        raise HTTPException(status_code=403, detail="Please verify your email before signing.")
     if not full_name.strip():
         raise HTTPException(status_code=422, detail="Please type your full name to sign.")
 
@@ -300,6 +432,9 @@ def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
         "status": "signed",
         "worker_signed_name": full_name.strip(),
         "worker_signed_at": _now(),
+        "worker_signed_ip": ip_address,
+        "worker_signed_user_agent": user_agent,
+        "worker_signed_document_version_hash": _document_version_hash(hire["id"]),
         "updated_at": _now(),
     }
     result = (
@@ -309,6 +444,16 @@ def sign_as_worker(token: str, full_name: str) -> dict[str, Any]:
         .eq("id", hire["id"])
         .execute()
     )
+
+    # If this hire originated from the Applicants Board, the signature itself
+    # is what moves the card to Hired — not a separate coordinator action.
+    # No-ops silently if it didn't (an MD-created hire has no applicant row).
+    try:
+        from . import applicant_service
+        applicant_service.mark_applicant_hired_by_onboarding_id(hire["id"])
+    except Exception:
+        logger.warning("Could not mark applicant hired for onboarding %s", hire["id"])
+
     return result.data[0] if result.data else {**hire, **update}
 
 

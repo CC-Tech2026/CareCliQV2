@@ -17,7 +17,18 @@ from ..core.access import (
     get_user_role,
     is_coordinator_role,
 )
-from .supabase_client import get_supabase_admin
+from .supabase_client import get_supabase_admin, signed_storage_url
+
+INVOICE_FILES_BUCKET = "invoice-files"
+
+
+def _with_signed_pdf_url(invoice: dict) -> dict:
+    """invoice-files is a private bucket — never trust a stored pdf_url (it may be a
+    stale public link from before the bucket was locked down, or simply expired);
+    always regenerate a fresh signed URL from pdf_path on read."""
+    invoice = dict(invoice)
+    invoice["pdf_url"] = signed_storage_url(INVOICE_FILES_BUCKET, invoice.get("pdf_path"))
+    return invoice
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
@@ -213,6 +224,29 @@ def _invoice_select_query(supabase, user: dict):
     return query
 
 
+async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[dict]:
+    """Attach each invoice's participant.service_category (Aged Care/Disability) —
+    the ledger's "Service Type" column — via a single batched lookup rather
+    than one query per row."""
+    participant_ids = list({str(inv["participant_id"]) for inv in invoices if inv.get("participant_id")})
+    if not participant_ids:
+        return invoices
+    try:
+        result = (
+            supabase.table("patients")
+            .select("id, service_category")
+            .in_("id", participant_ids)
+            .execute()
+        )
+        category_by_id = {str(r["id"]): r.get("service_category") for r in (result.data or [])}
+    except Exception:
+        category_by_id = {}
+    for inv in invoices:
+        pid = inv.get("participant_id")
+        inv["service_category"] = category_by_id.get(str(pid)) if pid else None
+    return invoices
+
+
 async def list_invoices(user: dict, status_filter: str | None = None) -> list[dict]:
     _require_billing_role(user)
     supabase = get_supabase_admin()
@@ -222,7 +256,8 @@ async def list_invoices(user: dict, status_filter: str | None = None) -> list[di
             raise HTTPException(status_code=422, detail="Invalid invoice status.")
         query = query.eq("status", status_filter)
     result = query.order("created_at", desc=True).limit(200).execute()
-    return result.data or []
+    invoices = [_with_signed_pdf_url(row) for row in (result.data or [])]
+    return await _enrich_with_service_category(supabase, invoices)
 
 
 async def get_invoice(invoice_id: str, user: dict) -> dict:
@@ -231,7 +266,9 @@ async def get_invoice(invoice_id: str, user: dict) -> dict:
     result = _invoice_select_query(supabase, user).eq("id", invoice_id).limit(1).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Invoice not found.")
-    return result.data[0]
+    invoice = _with_signed_pdf_url(result.data[0])
+    enriched = await _enrich_with_service_category(supabase, [invoice])
+    return enriched[0]
 
 
 async def _verify_invoice_scope(user: dict, data: dict) -> None:
@@ -404,6 +441,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
         "paid_at": _now_iso() if status_value == "paid" else None,
         "payment_date": data.get("payment_date") or None,
         "payment_reference": data.get("payment_reference") or None,
+        "payment_method": data.get("payment_method") or None,
         "notes": data.get("notes") or None,
     }
     supabase = get_supabase_admin()
@@ -452,6 +490,7 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         "recipient_email": data.get("recipient_email", existing.get("recipient_email")),
         "status": status_value,
         "due_date": data.get("due_date", existing.get("due_date")),
+        "payment_method": data.get("payment_method", existing.get("payment_method")),
         "notes": data.get("notes", existing.get("notes")),
         "updated_at": _now_iso(),
     }
@@ -807,22 +846,24 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
     path = f"{invoice['organization_id']}/{invoice['id']}/{invoice['invoice_number']}.pdf"
     supabase = get_supabase_admin()
     try:
-        supabase.storage.from_("invoice-files").upload(
+        supabase.storage.from_(INVOICE_FILES_BUCKET).upload(
             path,
             pdf_bytes,
             {"content-type": "application/pdf", "upsert": "true"},
         )
-        url = supabase.storage.from_("invoice-files").get_public_url(path)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Invoice PDF storage is not configured: {exc}")
     result = (
         supabase.table("invoices")
-        .update({"pdf_path": path, "pdf_url": url, "updated_at": _now_iso()})
+        # pdf_url is intentionally not stored — invoice-files is a private bucket, so
+        # the URL must be a freshly-signed one generated at read time (see
+        # _with_signed_pdf_url), never a persisted link that can outlive its signature.
+        .update({"pdf_path": path, "pdf_url": None, "updated_at": _now_iso()})
         .eq("id", invoice_id)
         .eq("organization_id", invoice["organization_id"])
         .execute()
     )
-    updated = result.data[0] if result.data else {**invoice, "pdf_path": path, "pdf_url": url}
+    updated = result.data[0] if result.data else {**invoice, "pdf_path": path}
     await audit_service.log_action(
         action_type="invoice.pdf_generated",
         entity_type="invoice",
@@ -831,7 +872,7 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
         organization_id=invoice.get("organization_id"),
         after_state={"pdf_path": path},
     )
-    return updated
+    return _with_signed_pdf_url(updated)
 
 
 async def get_revenue_report(user: dict) -> dict:

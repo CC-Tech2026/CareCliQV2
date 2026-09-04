@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Loader2, ArrowRight, ShieldCheck, ArrowLeft, Quote } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { OtpInput } from "@/components/auth/OtpInput";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 import {
@@ -47,76 +48,6 @@ async function withNetworkRetry<T>(attempt: () => Promise<T>): Promise<T> {
     }
   }
   throw lastErr;
-}
-
-// -- 6-box OTP input -----------------------------------------------------------
-function OtpInput({
-  value, onChange, disabled, error, ariaLabelledBy,
-}: {
-  value: string; onChange: (v: string) => void; disabled: boolean; error?: boolean; ariaLabelledBy?: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const getDigit = (i: number) => value[i] ?? "";
-
-  function focus(i: number) {
-    (containerRef.current?.querySelectorAll("input")[i] as HTMLInputElement | undefined)?.focus();
-  }
-
-  function handleChange(i: number, raw: string) {
-    const char = raw.replace(/\D/g, "").slice(-1);
-    const arr = Array.from({ length: 6 }, (_, k) => getDigit(k));
-    arr[i] = char;
-    onChange(arr.join(""));
-    if (char) focus(Math.min(i + 1, 5));
-  }
-
-  function handleKey(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !getDigit(i) && i > 0) {
-      const arr = Array.from({ length: 6 }, (_, k) => getDigit(k));
-      arr[i - 1] = "";
-      onChange(arr.join("").trimEnd());
-      focus(i - 1);
-    }
-    if (e.key === "ArrowLeft"  && i > 0) focus(i - 1);
-    if (e.key === "ArrowRight" && i < 5) focus(i + 1);
-  }
-
-  function handlePaste(e: React.ClipboardEvent) {
-    e.preventDefault();
-    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    onChange(text);
-    focus(Math.min(text.length, 5));
-  }
-
-  return (
-    <div ref={containerRef} role="group" aria-labelledby={ariaLabelledBy} className="flex gap-2 sm:gap-3" onPaste={handlePaste}>
-      {Array.from({ length: 6 }, (_, i) => {
-        const filled = !!getDigit(i);
-        return (
-          <input
-            key={i}
-            type="text"
-            aria-label={`Digit ${i + 1} of 6`}
-            inputMode="numeric"
-            autoComplete={i === 0 ? "one-time-code" : "off"}
-            maxLength={1}
-            value={getDigit(i)}
-            onChange={(e) => handleChange(i, e.target.value)}
-            onKeyDown={(e) => handleKey(i, e)}
-            onFocus={(e) => e.target.select()}
-            disabled={disabled}
-            className="flex-1 aspect-square max-w-[56px] text-center text-[22px] font-black rounded-xl border outline-none transition-all duration-150 focus:bg-cc-surface"
-            style={{
-              background: INPUT_BG,
-              borderColor: error ? CORAL : filled ? PLUM : BORDER,
-              boxShadow: filled && !error ? "0 0 0 3px color-mix(in srgb, var(--cc-plum) 10%, transparent)" : "none",
-              color: "var(--cc-text)",
-            }}
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 // -- Field wrapper -------------------------------------------------------------
@@ -221,7 +152,7 @@ export default function Login() {
         return;
       }
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(result.user.id));
+      navigate(resolvePostLoginPath(result.user.id, result.user.role === "super_admin" ? "/admin/dashboard" : "/hub"));
     } catch (err) {
       if (isNetworkLoginError(err)) {
         toast({
@@ -246,7 +177,7 @@ export default function Login() {
     try {
       const authUser = await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(authUser.id));
+      navigate(resolvePostLoginPath(authUser.id, authUser.role === "super_admin" ? "/admin/dashboard" : "/hub"));
     } catch (err) {
       setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {
@@ -255,10 +186,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex flex-col lg:flex-row font-sans bg-[var(--auth-shell-bg)] text-cc-text">
-      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
-        <AuthThemeToggle />
-      </div>
+    <div className="relative min-h-[100dvh] w-full flex flex-col lg:h-[100dvh] lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden lg:p-6 font-sans bg-[var(--auth-shell-bg)] lg:bg-[#7C3AED] text-cc-text">
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes authEnter    { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
         @keyframes fieldShake   { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
@@ -268,41 +196,36 @@ export default function Login() {
         .auth-headline-line { display: block; opacity: 0; animation: headlineLineIn 0.55s ease-out forwards; }
         @keyframes authGlowPulse { 0%,100% { opacity:0.75 } 50% { opacity:1 } }
         .auth-glow { animation: authGlowPulse 9s ease-in-out infinite; }
+        @keyframes authHeroZoom { from { transform: scale(1) } to { transform: scale(1.045) } }
+        .auth-hero-photo { animation: authHeroZoom 22s ease-in-out infinite alternate; }
+        .auth-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .auth-scroll-hide::-webkit-scrollbar { display: none; }
       ` }} />
 
       {/* -- Mobile-only brand header -------------------------------------- */}
-      <div className="lg:hidden relative overflow-hidden" style={{ background: "var(--auth-marketing-bg)" }}>
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      <div className="lg:hidden relative overflow-hidden">
+        <img
+          src="/auth-hero-login.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
         <div className="relative z-10 px-6 pt-12 pb-9">
           {/* Logo row */}
           <CareCliQLogo size={96} />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "var(--auth-marketing-muted)" }}>
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
             {t("auth.login.marketing.tagline")}
           </p>
 
           {/* Hero copy */}
-          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "90ms" }}>{t("auth.login.marketing.headline2")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "180ms", color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
+            <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-
-          {/* Stats row */}
-          <div className="mt-5 flex items-center gap-4">
-            {[["2,400+", t("auth.login.marketing.statShifts")], ["97%", t("auth.login.marketing.statCompliance")], ["200+", t("auth.login.marketing.statProviders")]].map(([n, l], i) => (
-              <div key={n} className="flex items-center gap-4">
-                {i > 0 && <div className="h-6 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
-                <div>
-                  <p className="text-[16px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
-                  <p className="text-[10px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="mt-3 text-[13px] font-medium leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
+            {t("auth.login.marketing.description")}
+          </p>
 
           {/* Testimonial */}
           <div
@@ -324,24 +247,28 @@ export default function Login() {
                 <div
                   key={a.i}
                   className="h-7 w-7 rounded-full border-2 flex items-center justify-center text-[9px] font-black text-white"
-                  style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
+                  style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
                 >
                   {a.i}
                 </div>
               ))}
             </div>
-            <p className="text-[12px] font-bold" style={{ color: "var(--auth-headline)" }}>
+            <p className="text-[12px] font-bold" style={{ color: "#FFFFFF" }}>
               {t("auth.login.marketing.trustedBy")}
             </p>
           </div>
         </div>
       </div>
 
-      {/* -- Form panel --------------------------------------------------- */}
+      {/* -- Form panel (left, desktop) ------------------------------------ */}
       <div
-        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10 bg-[var(--auth-form-bg)]"
-        style={{ borderRight: "1px solid var(--cc-border)", animation: "panelIn 0.38s ease-out" }}
+        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[600px] lg:min-h-0 lg:shrink-0 rounded-t-[28px] lg:rounded-[28px] -mt-5 lg:mt-0 relative z-10 overflow-hidden bg-[var(--auth-form-bg)]"
+        style={{ border: "1px solid var(--auth-card-border)", boxShadow: "var(--cc-shadow-lg)", animation: "panelIn 0.38s ease-out" }}
       >
+        <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+          <AuthThemeToggle />
+        </div>
+
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
           <CareCliQLogo size={120} />
@@ -353,7 +280,7 @@ export default function Login() {
         </div>
 
         {/* Form body */}
-        <div className="flex flex-1 items-center justify-center px-4 sm:px-8 md:px-10 lg:px-12 py-8 lg:py-10">
+        <div className="auth-scroll-hide flex flex-1 items-center justify-center overflow-y-auto px-4 sm:px-8 md:px-10 lg:px-12 py-8 lg:py-10">
           <div className="w-full max-w-[480px]">
 
             <div className="mb-7">
@@ -557,51 +484,41 @@ export default function Login() {
         </div>
       </div>
 
-      {/* -- Product panel (desktop only) --------------------------------- */}
-      <div
-        className="hidden lg:flex flex-1 flex-col p-12 xl:p-16 overflow-hidden relative"
-        style={{ background: "var(--auth-marketing-bg)" }}
-      >
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      {/* -- Product panel (photo, right, desktop only) --------------------- */}
+      <div className="hidden lg:flex flex-1 lg:min-h-0 flex-col p-12 xl:p-16 overflow-hidden relative lg:rounded-[28px]">
+        {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
+            scrim, so colours here are hardcoded light values instead of the
+            theme-conditional --auth-* vars — the backdrop is always a dark
+            photo now, regardless of light/dark mode. */}
+        <img
+          src="/auth-hero-login.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
 
-        <div className="relative z-10 flex flex-col justify-between h-full">
-        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "var(--auth-marketing-muted)" }}>
+        <div className="relative z-10 flex max-w-[460px] flex-col justify-between h-full">
+        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
           {t("auth.login.marketing.brandLine")}
         </p>
 
         <div>
-          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "90ms" }}>{t("auth.login.marketing.headline2")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "180ms", color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
+            <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-          <p className="mt-4 text-[14px] font-medium max-w-[340px] leading-relaxed" style={{ color: "var(--auth-marketing-body)" }}>
+          <p className="mt-4 text-[14px] font-medium max-w-[400px] leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
             {t("auth.login.marketing.description")}
           </p>
 
-          <div className="mt-6 flex items-center gap-5">
-            {[["2,400+", t("auth.login.marketing.statShiftsLogged")], ["97%", t("auth.login.marketing.statNdisCompliance")], ["200+", t("auth.login.marketing.statNdisProviders")]].map(([n, l], i) => (
-              <div key={n} className="flex items-center gap-5">
-                {i > 0 && <div className="h-8 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
-                <div>
-                  <p className="text-[20px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
-                  <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8 max-w-[400px] space-y-3">
+          <div className="mt-8 max-w-[420px]">
             <div
-              className="rounded-2xl p-5"
+              className="rounded-2xl p-6"
               style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
-              <Quote size={18} style={{ color: LOGO_PURPLE }} />
-              <p className="mt-3 text-[14px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
+              <Quote size={20} style={{ color: LOGO_PURPLE }} />
+              <p className="mt-3 text-[15px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
                 {t("auth.login.marketing.testimonialQuote")}
               </p>
               <div className="mt-4 flex items-center gap-3">
@@ -621,20 +538,6 @@ export default function Login() {
                 </div>
               </div>
             </div>
-
-            <div className="flex gap-3">
-              {[[t("auth.login.marketing.compliance"),"94%", t("auth.login.marketing.ndisScore")], [t("auth.login.marketing.participants"),"38", t("auth.login.marketing.activePlans")]].map(([label, v, s]) => (
-                <div
-                  key={String(label)}
-                  className="flex-1 rounded-2xl px-4 py-3"
-                  style={{ background: "var(--auth-stat-card-bg)", border: "1px solid var(--auth-stat-card-border)" }}
-                >
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "var(--auth-marketing-muted)" }}>{label}</p>
-                  <p className="text-[24px] font-black mt-0.5" style={{ color: "var(--auth-stat-value)" }}>{v}</p>
-                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{s}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -644,15 +547,15 @@ export default function Login() {
               <div
                 key={a.i}
                 className="h-9 w-9 rounded-full border-2 flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
+                style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
               >
                 {a.i}
               </div>
             ))}
           </div>
           <div>
-            <p className="text-[14px] font-black" style={{ color: "var(--auth-headline)" }}>{t("auth.login.marketing.providersCount")}</p>
-            <p className="text-[12px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
+            <p className="text-[14px] font-black" style={{ color: "#FFFFFF" }}>{t("auth.login.marketing.providersCount")}</p>
+            <p className="text-[12px] font-medium" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
               {t("auth.login.marketing.trustAustralia")}
             </p>
           </div>

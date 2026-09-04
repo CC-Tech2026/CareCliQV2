@@ -76,6 +76,7 @@ export function WorkerMobileIncidentSheet({
         initialWorkerActions={
           isRp ? "Followed participant safety protocol and documented the incident." : ""
         }
+        bottomInset={insets.bottom}
         onSubmitted={() => onFiled(sourceNoteId)}
         onCancel={onClose}
       />

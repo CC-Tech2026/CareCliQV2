@@ -8,6 +8,7 @@ import {
   RefreshCw, Filter, Eye, MoreVertical, Search, Phone, Mail, LogIn, Clock3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SectionInfo } from "@/components/ui/section-info";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -22,6 +23,7 @@ import {
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useLiveShiftsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -246,9 +248,11 @@ function MessageModal({
 function ShiftSpecialInstructionsEditor({
   shiftId,
   initialValue,
+  readOnly = false,
 }: {
   shiftId: string;
   initialValue?: string | null;
+  readOnly?: boolean;
 }) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
@@ -274,6 +278,18 @@ function ShiftSpecialInstructionsEditor({
       setSaving(false);
     }
   };
+
+  if (readOnly) {
+    if (!initialValue) return null;
+    return (
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>
+          {translate("coordinator.live.specialInstructions")}
+        </p>
+        <p className="text-[13px] rounded-xl p-3" style={{ background: SOFT, color: TEXT }}>{initialValue}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -372,10 +388,12 @@ function ShiftDetailPanel({
   shift,
   open,
   onClose,
+  readOnly = false,
 }: {
   shift: LiveShift;
   open: boolean;
   onClose: () => void;
+  readOnly?: boolean;
 }) {
   const { translate } = useAccessibility();
   const s = liveStatusLabel(shift.live_status, translate);
@@ -465,7 +483,7 @@ function ShiftDetailPanel({
               </p>
             </div>
           )}
-          <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} />
+          <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} readOnly={readOnly} />
         </div>
       </SheetContent>
     </Sheet>
@@ -479,12 +497,14 @@ function LiveShiftCard({
   onFlag,
   onEmergency,
   onDetail,
+  readOnly = false,
 }: {
   shift: LiveShift;
   onMessage: (s: LiveShift) => void;
   onFlag: (s: LiveShift) => void;
   onEmergency: (s: LiveShift) => void;
   onDetail: (s: LiveShift) => void;
+  readOnly?: boolean;
 }) {
   const { translate, translateParams } = useAccessibility();
   const s = liveStatusLabel(shift.live_status, translate);
@@ -618,7 +638,7 @@ function LiveShiftCard({
         </div>
       )}
 
-      {/* Actions — three-dots dropdown */}
+      {/* Actions — three-dots dropdown (coordinator only; MD is read-only) */}
       <div className="flex items-center justify-between mt-1" onClick={(e) => e.stopPropagation()}>
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-colors hover:bg-black/5"
@@ -627,32 +647,34 @@ function LiveShiftCard({
         >
           <Eye size={12} /> View details
         </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="h-8 w-8 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors"
-              style={{ color: MUTED }}
-              aria-label="Shift actions"
-            >
-              <MoreVertical size={16} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onMessage(shift)}>
-              <MessageSquare size={13} className="mr-2" /> Message worker
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onFlag(shift)}>
-              <Flag size={13} className="mr-2" /> Flag issue
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600 focus:bg-red-50"
-              onClick={() => onEmergency(shift)}
-            >
-              <Zap size={13} className="mr-2" /> Emergency stop
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!readOnly && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="h-8 w-8 rounded-xl flex items-center justify-center hover:bg-black/5 transition-colors"
+                style={{ color: MUTED }}
+                aria-label="Shift actions"
+              >
+                <MoreVertical size={16} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => onMessage(shift)}>
+                <MessageSquare size={13} className="mr-2" /> Message worker
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onFlag(shift)}>
+                <Flag size={13} className="mr-2" /> Flag issue
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                onClick={() => onEmergency(shift)}
+              >
+                <Zap size={13} className="mr-2" /> Emergency stop
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );
@@ -789,7 +811,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-export default function CoordinatorLivePage({ embedded = false, externalSearch }: { embedded?: boolean; externalSearch?: string } = {}) {
+export default function CoordinatorLivePage({ embedded = false, externalSearch, readOnly = false }: { embedded?: boolean; externalSearch?: string; readOnly?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
@@ -804,6 +826,10 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
   const [detailShift, setDetailShift] = useState<LiveShift | null>(null);
 
   const { data: shifts = [], isLoading, dataUpdatedAt, refetch } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], { queryFn: getLiveShifts, refetchInterval: 30_000 });
+  // Realtime push on top of the 30s poll - the poll stays as a fallback in
+  // case the websocket silently drops, but most updates now land within a
+  // second or two of a worker's phone syncing instead of waiting for the tick.
+  useLiveShiftsRealtime(true);
 
   // Derive time-of-day from scheduled_start (6–12 morning, 12–17 afternoon, 17–22 evening, else night)
   const getTimeSlot = (iso?: string | null): "morning" | "afternoon" | "evening" | "night" | null => {
@@ -869,7 +895,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
       {/* Header — full when standalone, compact toolbar when embedded */}
       {/* When embedded the parent (rostering page) owns search + refresh — just show refresh timestamp */}
       {embedded ? (
-        <p className="text-[11px] mb-4" style={{ color: MUTED }}>Auto-updating every 30s · Last refresh {lastRefresh}</p>
+        <p className="text-[11px] mb-4" style={{ color: MUTED }}>Live · updates as workers document · Last refresh {lastRefresh}</p>
       ) : (
         <div className="flex items-center mb-5 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -880,8 +906,9 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
               <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
                 {translate("coordinator.live.eyebrow")}
               </p>
-              <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+              <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
                 {translate("coordinator.live.title")}
+                <SectionInfo text="Workers currently on shift, right now: who's clocked in, what stage they're at, and anything that needs attention." />
               </h1>
               <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
                 {translateParams("coordinator.live.subtitle", { time: lastRefresh })}
@@ -1070,6 +1097,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
                       onFlag={setFlagShiftState}
                       onEmergency={setEmergShift}
                       onDetail={setDetailShift}
+                      readOnly={readOnly}
                     />
                   ))}
                 </div>
@@ -1102,6 +1130,7 @@ export default function CoordinatorLivePage({ embedded = false, externalSearch }
           shift={detailShift}
           open={!!detailShift}
           onClose={() => setDetailShift(null)}
+          readOnly={readOnly}
         />
       )}
     </div>

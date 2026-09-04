@@ -54,6 +54,66 @@ def slot_for_hour(hour: int) -> str:
     return "evening"
 
 
+def raw_slot_statuses_batch(
+    user_ids: list[str], day_of_week: int, time_slots: list[str]
+) -> dict[str, dict[str, str]]:
+    """user_id -> {time_slot: status}, for one day-of-week and only the given
+    slots, across many users. One query, read-only (unlike get_availability,
+    doesn't create default rows for users who've never touched their
+    settings - a missing row just means the caller falls back to "available",
+    which is what the defaults would have been anyway). Used by
+    worker_matching_service.availability_statuses_for_shift_batch, the batch
+    form of availability_status_for_shift."""
+    out: dict[str, dict[str, str]] = {}
+    if not user_ids:
+        return out
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("worker_weekly_availability_slots")
+            .select("user_id, time_slot, status")
+            .in_("user_id", user_ids)
+            .eq("day_of_week", day_of_week)
+            .in_("time_slot", time_slots)
+            .execute()
+        )
+        for row in (resp.data or []):
+            out.setdefault(row["user_id"], {})[row["time_slot"]] = row.get("status")
+    except Exception:
+        pass
+    return out
+
+
+def emergency_overrides_batch(user_ids: list[str], date_iso: str) -> set[str]:
+    """user_ids whose emergency_override_date matches date_iso and hasn't
+    expired - one query for the whole list instead of one per user."""
+    out: set[str] = set()
+    if not user_ids:
+        return out
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("worker_availability_preferences")
+            .select("user_id, emergency_override_date, emergency_override_expires_at")
+            .in_("user_id", user_ids)
+            .eq("emergency_override_date", date_iso)
+            .execute()
+        )
+        for row in (resp.data or []):
+            expires_at = row.get("emergency_override_expires_at")
+            if not expires_at:
+                continue
+            try:
+                exp = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if datetime.now(timezone.utc) < exp:
+                out.add(row["user_id"])
+    except Exception:
+        pass
+    return out
+
+
 def get_availability(user_id: str, organization_id: str) -> dict[str, Any]:
     supabase = get_supabase_admin()
     try:

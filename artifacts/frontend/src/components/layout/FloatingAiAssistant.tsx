@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Send, GripHorizontal, Plus, MessageSquare, Trash2 } from "lucide-react";
+import { X, Send, GripHorizontal, Plus, MessageSquare, Trash2, Settings, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import {
   sendChatMessage,
   listChatThreads,
   getChatThreadMessages,
   deleteChatThread,
+  clearChatHistory,
   type ChatBlock,
   type ThreadSummary,
 } from "@/services/chatboxService";
@@ -93,10 +94,31 @@ function BarChartBlockView({ block }: { block: Extract<ChatBlock, { type: "bar_c
   );
 }
 
+function DownloadBlockView({ block }: { block: Extract<ChatBlock, { type: "download" }> }) {
+  return (
+    <a
+      href={block.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors hover:bg-black/5"
+      style={{ borderColor: BORDER, color: PLUM, background: "var(--cc-bg)" }}
+    >
+      <Download size={14} className="shrink-0" />
+      <span className="flex-1 truncate">{block.title}</span>
+      {block.count != null && (
+        <span className="shrink-0 text-[10px] font-semibold" style={{ color: MUTED }}>
+          {block.count} file{block.count === 1 ? "" : "s"}
+        </span>
+      )}
+    </a>
+  );
+}
+
 function BlockView({ block }: { block: ChatBlock }) {
   if (block.type === "stat") return <StatBlockView block={block} />;
   if (block.type === "table") return <TableBlockView block={block} />;
   if (block.type === "bar_chart") return <BarChartBlockView block={block} />;
+  if (block.type === "download") return <DownloadBlockView block={block} />;
   return null;
 }
 
@@ -127,6 +149,8 @@ function formatThreadDate(iso: string): string {
     : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+const LOADING_PHRASES = ["Thinking", "Looking that up", "Checking the data", "Putting it together", "Almost there"];
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "bot",
@@ -152,15 +176,18 @@ export function FloatingAiAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingPhrase, setLoadingPhrase] = useState(LOADING_PHRASES[0]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [threadsLoaded, setThreadsLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const dragState = useRef<{ dragging: boolean; moved: boolean; offsetX: number; offsetY: number }>({
     dragging: false, moved: false, offsetX: 0, offsetY: 0,
   });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const isFreshConversation = messages.length === 1 && messages[0].id === "welcome";
 
@@ -192,6 +219,29 @@ export function FloatingAiAssistant() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
+
+  useEffect(() => {
+    if (!sending) return;
+    setLoadingPhrase(LOADING_PHRASES[0]);
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % LOADING_PHRASES.length;
+      setLoadingPhrase(LOADING_PHRASES[i]);
+    }, 1600);
+    return () => clearInterval(interval);
+  }, [sending]);
+
+  // Close the settings popover on an outside click.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onClick(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [settingsOpen]);
 
   function clampToViewport(x: number, y: number) {
     return {
@@ -247,6 +297,18 @@ export function FloatingAiAssistant() {
       await deleteChatThread(id);
     } catch {
       refreshThreads(); // put it back in the list if the delete actually failed server-side
+    }
+  }
+
+  async function handleClearHistory() {
+    if (!window.confirm("Clear all conversation history? This deletes every past chat and can't be undone.")) return;
+    setSettingsOpen(false);
+    setThreads([]);
+    startNewChat();
+    try {
+      await clearChatHistory();
+    } catch {
+      refreshThreads(); // restore the list if the delete actually failed server-side
     }
   }
 
@@ -338,6 +400,31 @@ export function FloatingAiAssistant() {
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-black text-white leading-tight tracking-tight">Quill</p>
               <p className="text-[10px] font-semibold text-white/70">CareCliQ Assistant · Demo</p>
+            </div>
+            <div className="relative shrink-0" ref={settingsRef}>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-label="Chat settings"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15"
+              >
+                <Settings size={15} />
+              </button>
+              {settingsOpen && (
+                <div
+                  className="absolute right-0 top-9 z-10 w-44 rounded-xl border shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-150"
+                  style={{ background: "var(--cc-bg)", borderColor: BORDER }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleClearHistory}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-[12px] font-semibold text-left transition-colors hover:bg-black/5"
+                    style={{ color: "#DC2626" }}
+                  >
+                    <Trash2 size={13} /> Clear history
+                  </button>
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -448,20 +535,19 @@ export function FloatingAiAssistant() {
                 ))}
                 {sending && (
                   <div className="flex items-end justify-start gap-2 animate-in fade-in-0 duration-200">
-                    <span className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
+                    <span
+                      className="mb-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full shadow-sm animate-bounce"
+                      style={{ border: `1.5px solid ${BORDER}` }}
+                    >
                       <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
                     </span>
                     <div
-                      className="flex items-center gap-1 rounded-2xl px-3 py-2.5"
+                      className="flex items-center rounded-2xl px-3 py-2.5"
                       style={{ background: "var(--cc-soft)", border: `1px solid ${BORDER}` }}
                     >
-                      {[0, 1, 2].map((i) => (
-                        <span
-                          key={i}
-                          className="h-1.5 w-1.5 rounded-full animate-bounce"
-                          style={{ background: MUTED, animationDelay: `${i * 120}ms` }}
-                        />
-                      ))}
+                      <span className="text-[11.5px] font-medium" style={{ color: MUTED }}>
+                        {loadingPhrase}…
+                      </span>
                     </div>
                   </div>
                 )}

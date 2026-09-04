@@ -152,3 +152,56 @@ export function createMyClientNote(id: string, body: CreateWorkerNoteInput) {
     body: JSON.stringify(body),
   });
 }
+
+// ── Worker-Participant Matching Enhancement, Phase 1 — self-service tags ────
+
+export type Tag = { id: string; label: string; is_active: boolean };
+export type TagCategory = { id: string; name: string; is_active: boolean; tags: Tag[] };
+export type MyTag = {
+  id: string;
+  tag_id: string;
+  label?: string;
+  category_id?: string;
+  added_at: string;
+  notes?: string | null;
+  visible_to_coordinator_only: boolean;
+};
+
+/** The org's tag catalog, for a worker choosing what to add to their own profile. */
+export function getWorkerTagCatalog() {
+  return jsonFetch<TagCategory[]>("/api/worker/tag-catalog");
+}
+
+export function getMyTags() {
+  return jsonFetch<MyTag[]>("/api/worker/tags");
+}
+
+export function addMyTag(tagId: string, notes?: string, visibleToCoordinatorOnly = false) {
+  return jsonFetch<MyTag>("/api/worker/tags", {
+    method: "POST",
+    body: JSON.stringify({ tag_id: tagId, notes: notes ?? null, visible_to_coordinator_only: visibleToCoordinatorOnly }),
+  });
+}
+
+export function removeMyTag(tagId: string) {
+  return jsonFetch<void>(`/api/worker/tags/${encodeURIComponent(tagId)}`, { method: "DELETE" });
+}
+
+/** Opt out of interest/lived-experience-based shift ranking entirely, keeping tags on file. */
+export function setMatchingOptIn(optIn: boolean) {
+  return jsonFetch<{ ok: boolean }>("/api/worker/matching-preferences", {
+    method: "PATCH",
+    body: JSON.stringify({ matching_opt_in: optIn }),
+  });
+}
+
+// ── Worker-Participant Matching Enhancement, Phase 3 — worker-side feedback ─
+
+/** Optional, light-touch reflection on a completed shift, independent of the
+ * coordinator's own rating - either side can leave feedback first. */
+export function submitShiftMatchFeedback(shiftId: string, workerFeedback: string) {
+  return jsonFetch<{ id: string }>(`/api/worker/shifts/${encodeURIComponent(shiftId)}/match-feedback`, {
+    method: "POST",
+    body: JSON.stringify({ worker_feedback: workerFeedback }),
+  });
+}

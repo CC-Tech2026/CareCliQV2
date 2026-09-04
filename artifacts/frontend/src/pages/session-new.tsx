@@ -24,6 +24,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { TimePicker } from "@/components/ui/time-picker";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // -- Design tokens -------------------------------------------------------------
@@ -220,15 +221,12 @@ export default function SessionNew() {
                 render={({ field }) => (
                   <FormItem>
                     <FieldLabel>{translate("sessions.new.time")}</FieldLabel>
-                    <div className="relative">
-                      <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: T3 }} />
-                      <Input
-                        type="time"
-                        {...field}
-                        className="pl-9 h-[42px] rounded-xl text-[13px]"
-                        style={{ borderColor: BORDER }}
-                      />
-                    </div>
+                    <TimePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      className="h-[42px] rounded-xl text-[13px]"
+                      style={{ borderColor: BORDER }}
+                    />
                   </FormItem>
                 )}
               />

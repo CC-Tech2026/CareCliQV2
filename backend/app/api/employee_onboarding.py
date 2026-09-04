@@ -5,9 +5,10 @@ signed, sends the account-activation invite.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from ..core.security import get_current_user
+from ..services import applicant_service, applicant_documents_service
 from ..services import employee_onboarding_service as svc
 from pydantic import BaseModel
 
@@ -25,13 +26,6 @@ def _require_hire_manager(user: dict) -> tuple[str, str]:
     return org_id, user.get("sub")
 
 
-class HireCreateBody(BaseModel):
-    full_name: str
-    email: str
-    phone: str | None = None
-    role: str = "support_worker"
-
-
 class DocumentCreateBody(BaseModel):
     document_type: str
     title: str
@@ -42,16 +36,8 @@ class SignBody(BaseModel):
     full_name: str
 
 
-@router.get("/hires")
-async def list_hires(current_user: dict = Depends(get_current_user)):
-    org_id, _ = _require_hire_manager(current_user)
-    return svc.list_hires(org_id)
-
-
-@router.post("/hires", status_code=201)
-async def create_hire(body: HireCreateBody, current_user: dict = Depends(get_current_user)):
-    org_id, user_id = _require_hire_manager(current_user)
-    return svc.create_hire(org_id, user_id, body.full_name, body.email, body.phone, body.role)
+class VerifyCodeBody(BaseModel):
+    code: str
 
 
 @router.get("/hires/{hire_id}")
@@ -59,6 +45,17 @@ async def get_hire(hire_id: str, current_user: dict = Depends(get_current_user))
     org_id, _ = _require_hire_manager(current_user)
     hire = svc.get_hire(hire_id, org_id)
     hire["documents"] = svc.list_documents(hire_id)
+
+    # If this hire originated from the Applicants Board, surface their resume
+    # profile and intake documents (resume/cover letter/ID) too — otherwise the
+    # panel only shows offer-stage paperwork with nothing else about the candidate.
+    applicant = applicant_service.get_applicant_by_onboarding_id(hire_id, org_id)
+    if applicant:
+        hire["resume_summary"] = applicant.get("resume_summary")
+        hire["resume_skills"] = applicant.get("resume_skills")
+        hire["resume_experience_years"] = applicant.get("resume_experience_years")
+        hire["credentials_claimed"] = applicant.get("credentials_claimed")
+        hire["candidate_documents"] = applicant_documents_service.list_applicant_documents(applicant["id"], org_id)
     return hire
 
 
@@ -100,6 +97,22 @@ async def get_hire_for_signing(token: str):
     return svc.get_hire_by_sign_token(token)
 
 
+@router.post("/sign/{token}/send-code", status_code=201)
+async def send_signing_code(token: str):
+    """Public — email a fresh 6-digit code proving inbox access before the
+    offer documents (and the ability to sign) unlock. Safe to call again
+    for a resend."""
+    return svc.send_signing_code(token)
+
+
+@router.post("/sign/{token}/verify-code")
+async def verify_signing_code(token: str, body: VerifyCodeBody):
+    """Public — verify the 6-digit code sent via send-code."""
+    return svc.verify_signing_code(token, body.code)
+
+
 @router.post("/sign/{token}")
-async def sign_hire(token: str, body: SignBody):
-    return svc.sign_as_worker(token, body.full_name)
+async def sign_hire(token: str, body: SignBody, request: Request):
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    return svc.sign_as_worker(token, body.full_name, ip_address, user_agent)

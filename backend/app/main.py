@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
@@ -101,6 +101,7 @@ async def _apply_startup_migrations():
             ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
             ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
             ("ai_detected_patterns", "ai_detected_patterns",  "id, organization_id, pattern_type, title, message",                           "ai_detected_patterns table OK",         "ai_detected_patterns missing — run backend/supabase/migrations/030_ai_detected_patterns.sql"),
+            ("pay_transactions",    "pay_transactions",       "id, organization_id, worker_id, shift_id, component_type, amount_cents",     "pay_transactions table OK",              "pay_transactions missing — run backend/supabase/migrations/158_schads_award_engine.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -148,6 +149,8 @@ async def _apply_startup_migrations():
                 migration_state.sessions_shift_id_column_missing = not ok
             elif key == "ai_detected_patterns":
                 migration_state.ai_detected_patterns_table_missing = not ok
+            elif key == "pay_transactions":
+                migration_state.pay_transactions_table_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -208,7 +211,6 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(ai_suggestions.router)  # Uses /api/ai prefix internally
 app.include_router(compliance.router, prefix="/api")
-app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
@@ -241,6 +243,16 @@ from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 from .api import employee_onboarding as employee_onboarding_api
 app.include_router(employee_onboarding_api.router, prefix="/api")
+from .api import applicants as applicants_api
+app.include_router(applicants_api.router, prefix="/api")
+from .api import organization_branding as organization_branding_api
+app.include_router(organization_branding_api.router, prefix="/api")
+from .api import operational_feedback as operational_feedback_api
+app.include_router(operational_feedback_api.router, prefix="/api")
+from .api import admin as admin_api
+app.include_router(admin_api.router, prefix="/api")
+from .api import platform_billing as platform_billing_api
+app.include_router(platform_billing_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

@@ -4,6 +4,7 @@ import { Bus, Car, Check, Loader2, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SectionInfo } from "@/components/ui/section-info";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -96,12 +97,10 @@ export default function CoordinatorTravelExpenses() {
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           {translate("coordinator.travel.eyebrow")}
         </p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
           {translate("coordinator.travel.title")}
+          <SectionInfo text={translate("coordinator.travel.subtitle")} />
         </h1>
-        <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
-          {translate("coordinator.travel.subtitle")}
-        </p>
       </header>
 
       <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>

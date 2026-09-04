@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
 import jsPDF from "jspdf";
 import {
@@ -25,6 +25,9 @@ import { getIncident, updateIncident, getIncidentAuditTrail, type IncidentAuditT
 import { IncidentAccordionCard } from "@/components/incidents/IncidentAccordionCard";
 import { MedicationRegisterPanel } from "@/components/compliance/MedicationRegisterPanel";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { SectionInfo } from "@/components/ui/section-info";
+import { getOrgAcknowledgementContent, updateOrgAcknowledgementContent } from "@/services/coordinatorService";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -45,6 +48,7 @@ const TEXT     = "var(--cc-text)";
 const MUTED    = "var(--cc-muted)";
 const BORDER   = "var(--cc-border)";
 const SOFT     = "var(--cc-soft)";
+const SURFACE  = "var(--cc-surface)";
 const SUCCESS  = "var(--cc-status-success)";
 const WARNING  = "var(--cc-status-warning)";
 // Real red — deliberately not var(--cc-coral)/var(--cc-status-critical): those are the
@@ -326,11 +330,10 @@ export default function Compliance() {
     <div className="flex flex-col gap-5 pb-10">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-            {translate("compliance.page.eyebrow")}
-          </p>
-          <h1 className="mt-1 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("compliance.page.title")}</h1>
-          <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>{translate("compliance.centre.subtitle")}</p>
+          <h1 className="flex items-center gap-2 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>
+            {translate("compliance.page.title")}
+            <SectionInfo text={translate("compliance.centre.subtitle")} />
+          </h1>
         </div>
         <div className="flex items-start gap-2 shrink-0">
         {(overallScore != null || urgentCount > 0) && (
@@ -374,59 +377,152 @@ export default function Compliance() {
         </div>
       </div>
 
-      <div
-        role="tablist"
-        className="flex w-full max-w-full gap-5 overflow-x-auto scrollbar-none border-b"
-        style={{ borderColor: BORDER }}
-      >
-        {SUB_TABS.map((tab) => {
-          const active = activeTab === tab;
-          const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
-          return (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={active ? "true" : "false"}
-              onClick={() => setActiveTab(tab)}
-              onKeyDown={(e) => {
-                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-                e.preventDefault();
-                const idx = SUB_TABS.indexOf(tab);
-                const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
-                setActiveTab(SUB_TABS[next]);
-              }}
-              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
-            >
-              {tabLabels[tab]}
-              {badge > 0 && (
+      {/* Tabs + content wrapped together (not left as siblings of the page's
+          gap-5 flex-col) so that utility can't put a forced gap between the
+          tab bar and its panel - same fix as the roster and participant
+          detail pages needed. Active tab: rounded top corners only, no
+          box-shadow (a shadow draws a visible seam and breaks the "one
+          continuous shape" look), background matches the panel directly
+          below it. Icon badges give each tab a visual identity the same way
+          the roster/participant tabs now do. */}
+      <div>
+        <div
+          role="tablist"
+          className="flex w-full max-w-full items-end gap-1.5 overflow-x-auto scrollbar-none"
+        >
+          {SUB_TABS.map((tab) => {
+            const active = activeTab === tab;
+            const badge = tab === "incidents" ? (headerOverview?.kpis.open_incidents ?? 0) : 0;
+            const Icon = TAB_ICONS[tab];
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={active ? "true" : "false"}
+                onClick={() => setActiveTab(tab)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                  e.preventDefault();
+                  const idx = SUB_TABS.indexOf(tab);
+                  const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
+                  setActiveTab(SUB_TABS[next]);
+                }}
+                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-[13px] font-bold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{
+                  borderRadius: active ? "12px 12px 0 0" : "0",
+                  background: active ? SURFACE : "transparent",
+                  color: TEXT,
+                  opacity: active ? 1 : 0.75,
+                  outlineColor: PLUM,
+                }}
+              >
                 <span
-                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
-                  style={{ background: CRITICAL }}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: active ? PLUM : "#C7C7CE" }}
                 >
-                  {badge}
+                  <Icon size={11} style={{ color: "#fff" }} />
                 </span>
-              )}
-              {active && (
-                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {tabLabels[tab]}
+                {badge > 0 && (
+                  <span
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                    style={{ background: CRITICAL }}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-      {activeTab === "overview" && <OverviewPanel onNavigateTab={setActiveTab} />}
-      {activeTab === "staff" && <StaffPanel />}
-      {activeTab === "participants" && <ParticipantsPanel />}
-      {activeTab === "incidents" && <IncidentsPanel />}
-      {activeTab === "medications" && <MedicationRegisterPanel />}
-      {activeTab === "audit_pack" && <AuditPackPanel embedded />}
+        <div className="rounded-2xl rounded-tl-none p-4 sm:p-5" style={{ background: SURFACE }}>
+          {activeTab === "overview" && <OverviewPanel onNavigateTab={setActiveTab} />}
+          {activeTab === "staff" && <StaffPanel />}
+          {activeTab === "participants" && <ParticipantsPanel />}
+          {activeTab === "incidents" && <IncidentsPanel />}
+          {activeTab === "medications" && <MedicationRegisterPanel />}
+          {activeTab === "audit_pack" && <AuditPackPanel embedded />}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
+/** Standing per-shift worker acknowledgement (shown at every clock-in
+ * alongside the per-participant safety card, so a participant with no
+ * special notes on file still gets a substantive acknowledgement). Seeded
+ * with a starting draft - this card is exactly where that draft gets
+ * reviewed and edited before an org relies on it. */
+function AcknowledgementContentCard() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["compliance-centre", "acknowledgement-content"],
+    queryFn: getOrgAcknowledgementContent,
+  });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const saveMut = useMutation({
+    mutationFn: (body: string) => updateOrgAcknowledgementContent(body),
+    onSuccess: () => {
+      toast({ title: "Acknowledgement content updated" });
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["compliance-centre", "acknowledgement-content"] });
+    },
+    onError: (err) => toast({ title: "Could not save", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-bold" style={{ color: TEXT }}>Clock-in acknowledgement</p>
+          <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
+            Standing text every worker reads and confirms at every clock-in, alongside any participant-specific safety notes. Review and adjust before relying on this as a compliance record.
+          </p>
+        </div>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => { setDraft(data?.body ?? ""); setEditing(true); }}
+            className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full"
+            style={{ background: "var(--cc-surface)", color: PLUM, border: `1px solid ${BORDER}` }}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={10} className="text-xs" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!draft.trim() || saveMut.isPending}
+              onClick={() => saveMut.mutate(draft)}
+              className="text-[12px] font-bold px-3.5 py-1.5 rounded-full text-white disabled:opacity-50"
+              style={{ background: PLUM }}
+            >
+              Save
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs whitespace-pre-wrap" style={{ color: TEXT }}>{data?.body}</p>
+      )}
+    </Card>
+  );
+}
+
 function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void }) {
   const { translate, translateParams } = useAccessibility();
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "overview"], queryFn: getComplianceCentreOverview });
@@ -446,6 +542,8 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
         <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
       </KpiGrid>
+
+      <AcknowledgementContentCard />
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
         <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>

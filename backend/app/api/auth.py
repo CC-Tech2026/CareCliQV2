@@ -13,7 +13,9 @@ import urllib.request
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status, Depends
 from pydantic import BaseModel, Field, model_validator
 from ..core.config import settings
-from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
+
+PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
 from ..services import email_service
 from ..services import device_security_service as dss
@@ -340,14 +342,20 @@ async def _get_user_profile(user_id: str) -> dict:
             .select(
                 "role, full_name, account_type, onboarding_complete, organization_id, "
                 "email_verified, profile_completed, onboarding_completed, "
-                "role_specific_profile_completed, profile_photo_url"
+                "role_specific_profile_completed, profile_photo_url, profile_photo_path, "
+                "is_active, deactivation_reason, deactivation_note"
             )
             .eq("id", user_id)
             .maybe_single()
             .execute()
         )
         if result is not None and result.data:
-            return result.data
+            # profile-photos is a private bucket — never trust a stored profile_photo_url
+            # (stale public link or expired signature); always regenerate from
+            # profile_photo_path on read.
+            data = dict(result.data)
+            data["profile_photo_url"] = signed_storage_url(PROFILE_PHOTOS_BUCKET, data.get("profile_photo_path"))
+            return data
         if result is not None and result.data is None:
             # Row simply doesn't exist yet — return empty dict
             return {}
@@ -704,6 +712,9 @@ async def _finalize_login_response(
                 profile.get("role_specific_profile_completed")
             ),
             "profile_photo_url": profile.get("profile_photo_url"),
+            "is_active": profile.get("is_active") is not False,
+            "deactivation_reason": profile.get("deactivation_reason"),
+            "deactivation_note": profile.get("deactivation_note"),
         },
     }
     supabase_payload = _serialize_supabase_session(supabase_session)
@@ -776,6 +787,36 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
     )
     account_type = profile.get("account_type") or "independent_worker"
     organization_id = profile.get("organization_id")
+
+    # Super Admin portal: a suspended/offboarded provider can't sign in at
+    # all. super_admin users have no organization_id, so this never applies
+    # to them. Mid-session cutoff (for someone already logged in when this
+    # happens) is separate — see revoke_all_sessions_for_org, called from
+    # the suspend action itself.
+    if organization_id:
+        try:
+            org_row = (
+                get_supabase_admin()
+                .table("organizations")
+                .select("status")
+                .eq("organization_id", organization_id)
+                .maybe_single()
+                .execute()
+            )
+            org_status = (org_row.data or {}).get("status") if org_row else None
+        except Exception as exc:
+            # Fails open (treat as active) — e.g. migration 151 not run yet,
+            # so the status column doesn't exist. Missing suspend enforcement
+            # briefly is a much smaller problem than breaking login entirely
+            # for every organisation on the platform.
+            logger.warning("Could not check organisation status for %s: %s", organization_id, exc)
+            org_status = None
+        if org_status and org_status != "active":
+            raise HTTPException(
+                status_code=403,
+                detail="This organisation's access has been suspended. Contact CareCliQ support.",
+            )
+
     email_verified = _is_auth_user_email_verified(auth_user)
     if not email_verified:
         email_verified = (
@@ -1143,5 +1184,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
                 profile.get("role_specific_profile_completed")
             ),
             "profile_photo_url": profile.get("profile_photo_url"),
+            "is_active": profile.get("is_active") is not False,
+            "deactivation_reason": profile.get("deactivation_reason"),
+            "deactivation_note": profile.get("deactivation_note"),
         }
     }

@@ -2,6 +2,7 @@ import { jsonFetch } from "@/services/http";
 import { apiFetch } from "@/lib/api-fetch";
 import type { DashboardSession } from "@/services/dashboardService";
 import type { Credential } from "@/services/credentialsService";
+import type { ShiftHistoryRow, ShiftHistoryDetail, PerformanceDashboard } from "@/services/workerPerformanceService";
 
 export type TeamMember = {
   id: string;
@@ -15,7 +16,13 @@ export type TeamMember = {
   phone?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
+  profile_summary?: string | null;
+  profile_experience_years?: string | null;
   training_overdue?: boolean;
+  induction_overdue?: boolean;
+  coordinator_id?: string | null;
+  classification_id?: string | null;
+  employment_type?: "casual" | "part_time" | "full_time" | null;
 };
 
 export type WorkerStats = TeamMember & {
@@ -122,8 +129,150 @@ export function getCoordinatorTeam() {
   return jsonFetch<TeamMember[]>("/api/coordinator/team");
 }
 
+export type PipelinePerson = {
+  id: string;
+  full_name: string;
+  email?: string;
+  role?: string;
+  flag?: "new" | "ok" | "warn" | "complete";
+  // Applicant fields
+  stage?: string;
+  stage_entered_at?: string;
+  // Hire fields
+  status?: string;
+  employer_signed_at?: string | null;
+  // Worker fields
+  joined_at?: string | null;
+  is_active?: boolean;
+};
+
+export type WorkerPipelineOverview = {
+  kpis: {
+    in_pipeline: number;
+    credentials_overdue: number;
+    starting_this_week: number;
+    auto_deactivated_month: number;
+  };
+  columns: {
+    interview: PipelinePerson[];
+    offer_letter: PipelinePerson[];
+    credentials: PipelinePerson[];
+    training: PipelinePerson[];
+    active: PipelinePerson[];
+  };
+  not_proceeding: {
+    rejected_applicants: PipelinePerson[];
+    expired_offers: PipelinePerson[];
+    auto_deactivated_workers: PipelinePerson[];
+  };
+};
+
+export function getWorkerPipelineOverview() {
+  return jsonFetch<WorkerPipelineOverview>("/api/coordinator/workers/pipeline");
+}
+
 export function getCoordinatorWorkerStats() {
   return jsonFetch<WorkerStats[]>("/api/coordinator/worker-stats");
+}
+
+export function assignWorkerCoordinator(workerId: string, coordinatorId: string | null) {
+  return jsonFetch<{ worker_id: string; coordinator_id: string | null }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/assign-coordinator`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinator_id: coordinatorId }),
+    },
+  );
+}
+
+export type AwardClassification = {
+  id: string;
+  level: string;
+  pay_point: string;
+  base_rate: number;
+  casual_rate: number;
+};
+
+export function getAwardClassifications() {
+  return jsonFetch<AwardClassification[]>("/api/coordinator/award-classifications");
+}
+
+export function assignWorkerClassification(
+  workerId: string,
+  payload: { classification_id?: string | null; employment_type?: string | null; written_agreement_12hr?: boolean },
+) {
+  return jsonFetch<{ worker_id: string }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/assign-classification`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export type PayPreview = {
+  shift_id: string;
+  components: Array<{ component_type: string; amount_cents: number; hours_applied: number | null }>;
+  total_cents: number;
+  reason: string | null;
+  is_sleepover: boolean;
+  emergency_flagged: boolean;
+  emergency_note: string | null;
+};
+
+export function getShiftPayPreview(shiftId: string) {
+  return jsonFetch<PayPreview>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/pay-preview`);
+}
+
+export function markShiftSleepover(shiftId: string, payload: { sleepover_start: string; sleepover_end: string }) {
+  return jsonFetch<{ shift_id: string }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/sleepover`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+  );
+}
+
+export function logShiftCallOut(shiftId: string, payload: { start: string; end: string; note?: string }) {
+  return jsonFetch<{ shift_id: string }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/call-out`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+  );
+}
+
+export function getUnassignedTeam() {
+  return jsonFetch<Array<{ id: string; full_name: string; email: string }>>("/api/coordinator/team/unassigned");
+}
+
+export type BuddySuggestion = { id: string; full_name: string; same_suburb: boolean };
+
+export type WorkerBuddy = {
+  id?: string;
+  buddy_worker_id?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  status?: string;
+  assigned_at?: string;
+};
+
+export function getWorkerBuddy(workerId: string) {
+  return jsonFetch<WorkerBuddy>(`/api/coordinator/team/${encodeURIComponent(workerId)}/buddy`);
+}
+
+export function getBuddySuggestions(workerId: string) {
+  return jsonFetch<BuddySuggestion[]>(`/api/coordinator/team/${encodeURIComponent(workerId)}/buddy-suggestions`);
+}
+
+export function assignWorkerBuddy(workerId: string, buddyWorkerId: string | null) {
+  return jsonFetch<{ new_worker_id?: string; buddy_worker_id: string | null }>(
+    `/api/coordinator/team/${encodeURIComponent(workerId)}/buddy`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buddy_worker_id: buddyWorkerId }),
+    },
+  );
 }
 
 export function getCoordinatorSessions() {
@@ -183,12 +332,34 @@ export function flagSessionForReview(sessionId: string, flagged: boolean, review
   });
 }
 
-export function deactivateWorker(workerId: string) {
-  return jsonFetch<{ worker_id: string; is_active: boolean }>(`/api/coordinator/workers/${workerId}/deactivate`, { method: "POST" });
+export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
+
+export function deactivateWorker(workerId: string, reason: DeactivationReason, note?: string) {
+  return jsonFetch<{ worker_id: string; is_active: boolean; deactivation_reason: DeactivationReason }>(
+    `/api/coordinator/workers/${workerId}/deactivate`,
+    { method: "POST", body: JSON.stringify({ reason, note: note || null }) },
+  );
 }
 
 export function activateWorker(workerId: string) {
   return jsonFetch<{ worker_id: string; is_active: boolean }>(`/api/coordinator/workers/${workerId}/activate`, { method: "POST" });
+}
+
+/** Sends the worker a real Supabase recovery email so they set their own new
+ *  password — never sets or reveals a password directly. */
+export function sendWorkerPasswordReset(workerId: string) {
+  return jsonFetch<{ worker_id: string; email: string; message: string }>(
+    `/api/coordinator/workers/${workerId}/send-password-reset`,
+    { method: "POST" },
+  );
+}
+
+/** MD-only - queues a pending account-removal request for a staff member (see coordinator.py). */
+export function deleteWorkerAccount(workerId: string) {
+  return jsonFetch<{ id: string; status: string }>(
+    `/api/coordinator/workers/${workerId}/delete-account`,
+    { method: "POST" },
+  );
 }
 
 export function assignWorkerToClient(workerId: string, patientId: string, role = "support_worker") {
@@ -397,7 +568,13 @@ export type AssignShiftPayload = {
   scheduled_end?: string;
   duration_minutes?: number;
   shift_type?: string;
+  duty_type?: string;
+  is_sleepover?: boolean;
+  sleepover_start?: string;
+  sleepover_end?: string;
   selected_task_ids?: string[];
+  is_shadow_shift?: boolean;
+  shadow_of_worker_id?: string;
 };
 
 export type AssignShiftResult = {
@@ -427,6 +604,14 @@ export type CoordinatorShiftRecord = {
   participant_name?: string;
   worker_name?: string;
   worker_email?: string;
+  cannot_attend_reason?: string | null;
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
+  is_shadow_shift?: boolean;
+  shadow_of_worker_id?: string | null;
+  shadow_of_worker_name?: string | null;
+  duty_type?: string;
+  is_sleepover?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -458,6 +643,31 @@ export function assignShift(payload: AssignShiftPayload) {
 export function getCoordinatorWorkerCredentialStatus(workerId: string, shiftType: string) {
   const qs = new URLSearchParams({ shift_type: shiftType || "standard_support" });
   return jsonFetch<WorkerCredentialStatusResponse>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/credential-status?${qs.toString()}`);
+}
+
+export type ShiftDetail = CoordinatorShiftRecord & {
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
+  confirmation_status?: string;
+  visual_state?: string;
+  coordinator_notes?: string | null;
+  visit_notes?: string | null;
+  session_notes?: string | null;
+  session_status?: string | null;
+  entry_instructions?: string | null;
+  access_instructions?: string | null;
+  risks_acknowledged?: boolean;
+  risks_acknowledged_at?: string | null;
+  risks_acknowledged_by?: string | null;
+  health_alerts?: unknown[];
+  has_risk_alerts?: boolean;
+  tasks?: Array<{ id?: string; label?: string; title?: string; completed?: boolean; mandatory?: boolean }>;
+  conversation_id?: string;
+};
+
+/** Full single-shift drill-down for the Master Schedule page (org-wide, read-only). */
+export function getShiftDetail(shiftId: string) {
+  return jsonFetch<ShiftDetail>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/detail`);
 }
 
 export function listCoordinatorShifts(params?: {
@@ -502,7 +712,8 @@ export function deleteShiftCredentialRequirement(requirementId: string) {
 export type AvailabilityStatus = "available" | "warning" | "unavailable";
 
 export type ConflictItem = {
-  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill";
+  type: "shift_overlap" | "blackout" | "max_hours" | "approaching_hours" | "missing_skill" | "unavailable_slot"
+    | "rest_break_violation" | "overtime_threshold" | "no_schads_classification" | "no_sleepover_agreement";
   severity: "error" | "warning" | "info";
   message: string;
 };
@@ -518,6 +729,13 @@ export type AvailableWorker = WorkerStats & {
   availability_status: AvailabilityStatus;
   conflicts: ConflictItem[];
   skill_warnings: ConflictItem[];
+  preferred_availability: boolean;
+  /** Phase 2 (ranking) — null when no participant was given to score fit against. */
+  match_score: number | null;
+  match_reasons: string[];
+  /** Phase 4 — a coordinator recorded would_repeat=false for this exact pair.
+   * Never hidden, sorted last, still selectable — see WorkerMatchBadge. */
+  excluded?: boolean;
 };
 
 export type AssignExistingShiftPayload = {
@@ -613,9 +831,11 @@ export function getAvailableWorkers(params: {
   shiftStart: string;
   shiftEnd: string;
   participantId?: string;
+  isSleepover?: boolean;
 }) {
   const qs = new URLSearchParams({ shift_start: params.shiftStart, shift_end: params.shiftEnd });
   if (params.participantId) qs.set("participant_id", params.participantId);
+  if (params.isSleepover) qs.set("is_sleepover", "true");
   return jsonFetch<AvailableWorker[]>(`/api/coordinator/available-workers?${qs}`);
 }
 
@@ -631,11 +851,47 @@ export function assignExistingShift(shiftId: string, payload: AssignExistingShif
   );
 }
 
+/** Send a ranked shift offer — the worker must accept before it's assigned.
+ * `candidateQueue` is the rest of the ranked suggestion list, tried in order
+ * on decline or timeout. */
+export function sendShiftOffer(shiftId: string, payload: { workerId: string; candidateQueue: string[] }) {
+  return jsonFetch<{ shift_id: string; offer: Record<string, unknown> }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/offer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worker_id: payload.workerId, candidate_queue: payload.candidateQueue }),
+    }
+  );
+}
+
 /** Remove the worker from a shift (return to unassigned) */
 export function unassignShift(shiftId: string) {
   return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord; warning?: string }>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/unassign`,
     { method: "PUT" }
+  );
+}
+
+/** Change a shift's start and/or end time (assigned or unassigned) and
+ * notify the assigned worker, if any. */
+export function rescheduleShift(shiftId: string, payload: { scheduled_start?: string; scheduled_end?: string }) {
+  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/schedule`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+/** Cancel a shift outright (assigned or unassigned) and notify the assigned
+ * worker, if any. Idempotent - cancelling an already-cancelled shift is a no-op. */
+export function cancelShift(shiftId: string) {
+  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/cancel`,
+    { method: "PATCH" }
   );
 }
 
@@ -666,6 +922,7 @@ export function createUnassignedShift(payload: {
   scheduled_start: string;
   scheduled_end?: string;
   shift_type?: string;
+  duty_type?: string;
 }) {
   return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
     "/api/coordinator/shifts/unassigned",
@@ -675,6 +932,24 @@ export function createUnassignedShift(payload: {
       body: JSON.stringify(payload),
     }
   );
+}
+
+export type OverdueUnassignedShift = {
+  id: string;
+  participant_id: string;
+  participant_name?: string | null;
+  scheduled_start: string;
+  scheduled_end?: string | null;
+  shift_type?: string | null;
+  worker_id?: string | null;
+  status?: string | null;
+};
+
+/** Unassigned shifts whose start time has already passed - independent of
+ * whatever week/month range the roster board happens to be showing, since
+ * that view is range-scoped and these otherwise silently fall out of it. */
+export function getOverdueUnassignedShifts() {
+  return jsonFetch<OverdueUnassignedShift[]>("/api/coordinator/shifts/overdue-unassigned");
 }
 
 /** Get in-app notifications for a worker */
@@ -722,6 +997,83 @@ export function getWorkerSkills(workerId: string) {
   );
 }
 
+/** Completed-shift history for a worker (which participants, when, how it went) -
+ *  same shape as the worker's own self-service shift history, viewed by a
+ *  coordinator or managing director instead. */
+export function getWorkerShiftHistory(workerId: string) {
+  return jsonFetch<{ shifts: ShiftHistoryRow[]; participants: Array<{ id: string; first_name: string }> }>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history`
+  );
+}
+
+/** Full per-shift breakdown (tasks, flagged items, notes, evidence, signature) -
+ *  the coordinator/MD drill-down behind a single shift history row. */
+export function getWorkerShiftHistoryDetail(workerId: string, shiftId: string) {
+  return jsonFetch<ShiftHistoryDetail>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history/${encodeURIComponent(shiftId)}`
+  );
+}
+
+export type ShiftEventTimelineEntry = {
+  action_type: string;
+  label: string;
+  actor_name: string | null;
+  details: Record<string, unknown>;
+  created_at: string | null;
+};
+
+/** Chronological clock-in-to-clock-out event log for a shift, sourced from
+ *  audit_logs - the audit-trail view behind a single shift history row. */
+export function getWorkerShiftEventTimeline(workerId: string, shiftId: string) {
+  return jsonFetch<ShiftEventTimelineEntry[]>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/shift-history/${encodeURIComponent(shiftId)}/timeline`
+  );
+}
+
+export type OrgAcknowledgementContent = {
+  organization_id: string;
+  body: string;
+  content_version: number;
+  updated_at: string | null;
+};
+
+/** Standing per-shift worker acknowledgement text (shown at every clock-in
+ *  alongside the per-participant safety card) - MD/coordinator-editable. */
+export function getOrgAcknowledgementContent() {
+  return jsonFetch<OrgAcknowledgementContent>("/api/coordinator/organization/acknowledgement-content");
+}
+
+export function updateOrgAcknowledgementContent(body: string) {
+  return jsonFetch<OrgAcknowledgementContent>("/api/coordinator/organization/acknowledgement-content", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+}
+
+/** 30-day performance trend, strengths/focus areas and badges for a worker -
+ *  the detailed breakdown behind a single compliance percentage. */
+export function getWorkerPerformanceDashboard(workerId: string) {
+  return jsonFetch<PerformanceDashboard>(
+    `/api/coordinator/workers/${encodeURIComponent(workerId)}/performance-dashboard`
+  );
+}
+
+export type WorkerAssignment = {
+  id: string;
+  patient_id: string;
+  user_id: string;
+  allocated_role: string;
+  is_active: boolean;
+  assigned_at?: string;
+  participant?: { id: string; full_name: string; ndis_number?: string | null } | null;
+};
+
+/** Which participants a specific worker is currently assigned to. */
+export function getWorkerAssignments(workerId: string) {
+  return jsonFetch<WorkerAssignment[]>(`/api/assignments?worker_id=${encodeURIComponent(workerId)}`);
+}
+
 /** Add or update a skill for a worker */
 export function addWorkerSkill(workerId: string, skill: WorkerSkill) {
   return jsonFetch<WorkerSkill>(
@@ -747,6 +1099,138 @@ export function getParticipantRequiredSkills(participantId: string) {
   return jsonFetch<Array<{ id: string; skill: string; is_mandatory: boolean }>>(
     `/api/coordinator/participants/${encodeURIComponent(participantId)}/required-skills`
   );
+}
+
+// ── Worker-Participant Matching Enhancement, Phase 1 — tag taxonomy ─────────
+
+export type Tag = { id: string; label: string; is_active: boolean };
+/** matching_role (Phase 2): which fit-score component this category feeds.
+ * null means descriptive only — doesn't affect ranking. */
+export type TagMatchingRole = "interests" | "lived_experience" | null;
+export type TagCategory = { id: string; name: string; is_active: boolean; matching_role: TagMatchingRole; tags: Tag[] };
+export type AssignedTag = {
+  id: string;
+  tag_id: string;
+  label?: string;
+  category_id?: string;
+  added_by_user_id?: string | null;
+  added_at: string;
+  notes?: string | null;
+  visible_to_coordinator_only?: boolean;
+};
+
+/** Full tag taxonomy (categories + nested tags) for the org. */
+export function getTagCatalog() {
+  return jsonFetch<TagCategory[]>("/api/coordinator/tags");
+}
+
+export function createTagCategory(name: string, matchingRole?: TagMatchingRole) {
+  return jsonFetch<TagCategory>("/api/coordinator/tag-categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, matching_role: matchingRole ?? null }),
+  });
+}
+
+export function setTagCategoryMatchingRole(categoryId: string, matchingRole: TagMatchingRole) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tag-categories/${encodeURIComponent(categoryId)}/matching-role`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ matching_role: matchingRole }),
+  });
+}
+
+export function setTagCategoryActive(categoryId: string, isActive: boolean) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tag-categories/${encodeURIComponent(categoryId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export function createTag(categoryId: string, label: string) {
+  return jsonFetch<Tag>("/api/coordinator/tags", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category_id: categoryId, label }),
+  });
+}
+
+export function setTagActive(tagId: string, isActive: boolean) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/tags/${encodeURIComponent(tagId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export function getParticipantTags(participantId: string) {
+  return jsonFetch<AssignedTag[]>(`/api/coordinator/participants/${encodeURIComponent(participantId)}/tags`);
+}
+
+export function addParticipantTag(participantId: string, tagId: string, notes?: string) {
+  return jsonFetch<AssignedTag>(`/api/coordinator/participants/${encodeURIComponent(participantId)}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag_id: tagId, notes: notes ?? null }),
+  });
+}
+
+export function removeParticipantTag(participantId: string, tagId: string) {
+  return jsonFetch<void>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/tags/${encodeURIComponent(tagId)}`,
+    { method: "DELETE" }
+  );
+}
+
+/** A worker's tags as seen by a coordinator/MD - includes visible_to_coordinator_only entries. */
+export function getWorkerTags(workerId: string) {
+  return jsonFetch<AssignedTag[]>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags`);
+}
+
+export function addWorkerTag(workerId: string, tagId: string, notes?: string, visibleToCoordinatorOnly = false) {
+  return jsonFetch<AssignedTag>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag_id: tagId, notes: notes ?? null, visible_to_coordinator_only: visibleToCoordinatorOnly }),
+  });
+}
+
+export function removeWorkerTag(workerId: string, tagId: string) {
+  return jsonFetch<void>(`/api/coordinator/workers/${encodeURIComponent(workerId)}/tags/${encodeURIComponent(tagId)}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Worker-Participant Matching Enhancement, Phase 3 — shift outcome feedback
+
+export type ShiftMatchFeedback = {
+  id: string;
+  shift_id: string;
+  participant_id: string;
+  worker_id: string;
+  recorded_by_user_id?: string | null;
+  recorded_at?: string | null;
+  participant_response?: string | null;
+  outcome_rating?: number | null;
+  would_repeat?: boolean | null;
+  worker_feedback?: string | null;
+  worker_feedback_recorded_at?: string | null;
+};
+
+export function getShiftMatchFeedback(shiftId: string) {
+  return jsonFetch<ShiftMatchFeedback | null>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/match-feedback`);
+}
+
+export function postShiftMatchFeedback(
+  shiftId: string,
+  payload: { participant_response?: string | null; outcome_rating?: number | null; would_repeat?: boolean | null }
+) {
+  return jsonFetch<ShiftMatchFeedback>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/match-feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Add a required skill to a participant */
@@ -1692,7 +2176,6 @@ export type TrainingCompletion = {
   users?: { full_name: string };
 };
 
-export type TeamTrainingStatus = Record<string, { assigned: number; completed: number; pending_review: number }>;
 
 export function getTrainingModules() {
   return jsonFetch<TrainingModule[]>("/api/coordinator/training-modules");
@@ -1728,10 +2211,6 @@ export function updateTrainingModule(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-}
-
-export function getTeamTrainingStatus() {
-  return jsonFetch<TeamTrainingStatus>("/api/coordinator/team-training-status");
 }
 
 export function getPendingTrainingCompletions() {

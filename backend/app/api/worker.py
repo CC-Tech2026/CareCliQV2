@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
@@ -25,14 +25,17 @@ from ..services import (
     medication_service,
     participant_service,
     session_service,
+    shift_offer_service,
     shift_service,
     travel_expense_service,
 )
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
+from ..services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
-from ..services.notification_service import notify_office_worker_message
+from ..services.notification_service import notify_office_worker_message, notify_password_reset_requested
+from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -196,6 +199,142 @@ class UploadEvidenceBody(BaseModel):
 def _require_worker(user: dict) -> None:
     if not is_support_worker(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
+
+
+def _require_worker_active(user: dict) -> None:
+    """Blocks a deactivated worker from starting/documenting a shift or
+    taking on new work, even with a still-valid token - the frontend already
+    keeps them off these pages during normal use (ProtectedRoute.tsx gates on
+    is_active), but this is the real enforcement boundary against a direct
+    API call, since is_active isn't part of the JWT and a deactivated
+    worker's existing session isn't revoked. Deliberately narrow: only the
+    handful of endpoints that represent actually performing paid support
+    work call this (clock-in/out, session creation, shift-offer accept) -
+    self-service pages (credentials, training) never do, since a worker
+    deactivated for a self-fixable reason still needs those to work."""
+    result = (
+        get_supabase_admin()
+        .table("users")
+        .select("is_active, deactivation_reason")
+        .eq("id", get_user_id(user))
+        .maybe_single()
+        .execute()
+    )
+    profile = result.data if result else {}
+    if profile.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Contact your organisation admin.",
+        )
+
+
+# ── Worker-Participant Matching Enhancement, Phase 1 — self-service tags ──────
+# A worker can browse the org's tag catalog, add/remove tags describing their
+# own interests or (consented) lived experience, and mark any tag
+# visible_to_coordinator_only. Coordinators/MD manage the catalog itself and
+# can also tag a worker on their behalf (coordinator.py) - this is the
+# worker's own door onto the same participant_tags/worker_tags data.
+
+@router.get("/tag-catalog")
+async def worker_tag_catalog(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    from ..services import tag_service
+
+    return tag_service.list_tag_catalog(org_id)
+
+
+@router.get("/tags")
+async def worker_own_tags(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_worker_tags(get_user_id(current_user), include_private=True)
+
+
+class WorkerOwnTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+    visible_to_coordinator_only: bool = False
+
+
+@router.post("/tags", status_code=201)
+async def add_worker_own_tag(body: WorkerOwnTagBody, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    worker_id = get_user_id(current_user)
+    return tag_service.add_worker_tag(worker_id, body.tag_id, worker_id, body.notes, body.visible_to_coordinator_only)
+
+
+@router.delete("/tags/{tag_id}", status_code=204)
+async def remove_worker_own_tag(tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_worker_tag(get_user_id(current_user), tag_id)
+    return None
+
+
+class MatchingPreferencesBody(BaseModel):
+    matching_opt_in: bool
+
+
+@router.patch("/matching-preferences")
+async def update_matching_preferences(body: MatchingPreferencesBody, current_user: dict = Depends(get_current_user)):
+    """Lets a worker opt out of interest/lived-experience-based shift ranking
+    (Phase 2) entirely, while keeping any tags already on file for their own
+    reference."""
+    _require_worker(current_user)
+    from ..services import tag_service
+
+    tag_service.set_matching_opt_in(get_user_id(current_user), body.matching_opt_in)
+    return {"ok": True}
+
+
+# ── Worker-Participant Matching Enhancement, Phase 3 — worker-side feedback ──
+# Worker's own optional reflection on a completed shift, independent of the
+# coordinator's outcome_rating/participant_response - either side can arrive
+# first (see migration 146's comment on shift_match_feedback).
+
+class ShiftMatchWorkerFeedbackBody(BaseModel):
+    worker_feedback: str
+
+
+@router.post("/shifts/{shift_id}/match-feedback")
+async def submit_shift_match_worker_feedback(
+    shift_id: str, body: ShiftMatchWorkerFeedbackBody, current_user: dict = Depends(get_current_user)
+):
+    _require_worker(current_user)
+    if not body.worker_feedback.strip():
+        raise HTTPException(status_code=422, detail="worker_feedback is required.")
+    from ..services import shift_match_feedback_service
+
+    try:
+        return shift_match_feedback_service.record_worker_feedback(
+            shift_id, get_user_id(current_user), body.worker_feedback.strip()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/account/request-password-reset")
+async def request_password_reset(current_user: dict = Depends(get_current_user)):
+    """Support workers can't change their own password (org policy) — this
+    notifies their coordinators/MD, who can send a reset link from the
+    worker's staff profile (see coordinator.py's send-password-reset)."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    await notify_password_reset_requested(
+        org_id=org_id,
+        worker_id=get_user_id(current_user),
+        worker_name=current_user.get("full_name") or current_user.get("email") or "",
+    )
+    return {"message": "Your coordinator has been notified and will send you a reset link."}
 
 
 def _require_worker_ready_for_sessions(user: dict) -> None:
@@ -645,6 +784,7 @@ async def create_my_client_session(
     current_user: dict = Depends(get_current_user),
 ):
     await _assigned_participant(participant_id, current_user)
+    _require_worker_active(current_user)
     _require_worker_ready_for_sessions(current_user)
     # Auto-populate goals_addressed from goal_progress_notes if not explicitly provided
     goals_addressed = body.goals_addressed or [
@@ -760,6 +900,125 @@ async def worker_shift_participant_profile(shift_id: str, current_user: dict = D
     if not payload:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return payload
+
+
+class CannotAttendBody(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.patch("/shifts/{shift_id}/cannot-attend")
+async def worker_shift_cannot_attend(
+    shift_id: str,
+    body: CannotAttendBody = CannotAttendBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """Worker-initiated cancellation — vacates the shift back to 'unassigned'
+    and notifies coordinators, the reverse of a coordinator cancelling on the
+    worker (notify_shift_cancelled)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        updated = await shift_offer_service.mark_cannot_attend(
+            shift_id=shift_id, worker_id=worker_id, org_id=org_id, reason=body.reason,
+        )
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.cannot_attend",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"reason": body.reason},
+    )
+    return {"shift_id": shift_id, "shift": updated}
+
+
+@router.post("/shifts/{shift_id}/offer/accept")
+async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Accept a pending ranked shift offer — assigns the shift to this
+    worker. Never triggered automatically; this is the only path that
+    confirms an offer into an actual assignment."""
+    _require_worker(current_user)
+    _require_worker_active(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        updated = await shift_offer_service.accept_offer(shift_id=shift_id, worker_id=worker_id, org_id=org_id)
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift_offer.accepted",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return {"shift_id": shift_id, "shift": updated}
+
+
+class DeclineOfferBody(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.post("/shifts/{shift_id}/offer/decline")
+async def worker_shift_offer_decline(
+    shift_id: str,
+    body: DeclineOfferBody = DeclineOfferBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """Decline a pending ranked shift offer — auto-advances to the next
+    ranked candidate, or notifies coordinators if none remain."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        await shift_offer_service.decline_offer(
+            shift_id=shift_id, worker_id=worker_id, org_id=org_id, reason=body.reason,
+        )
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift_offer.declined",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"reason": body.reason},
+    )
+    return {"shift_id": shift_id}
+
+
+@router.get("/shifts/{shift_id}/offer")
+async def worker_shift_offer_summary(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Safe, decision-only summary for a shift this worker has been offered
+    but not yet accepted or declined. Deliberately does NOT reuse
+    get_shift_detail_for_worker (worker_id-gated, full participant profile) —
+    a pending offer has no worker_id on the shift yet, so that endpoint
+    always 403s here, and even if it didn't, the full profile shouldn't be
+    visible before the worker has committed to the shift. Returns just
+    enough to decide: first name, timing, shift type."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        offer = shift_offer_service._get_pending_offer(shift_id=shift_id, worker_id=worker_id)
+    except shift_offer_service.ShiftOfferError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending offer found for this shift")
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    participant_name = (shift.get("participant_name") or "").strip()
+    return {
+        "offer_id": offer.get("id"),
+        "shift_id": shift_id,
+        "participant_first_name": participant_name.split()[0] if participant_name else None,
+        "scheduled_start": shift.get("scheduled_start"),
+        "scheduled_end": shift.get("scheduled_end"),
+        "shift_type": shift.get("shift_type"),
+        "offered_at": offer.get("offered_at"),
+    }
 
 
 def _require_shift_owner(shift_id: str, current_user: dict) -> dict:
@@ -948,6 +1207,7 @@ async def worker_clock_in(
 ):
     """Clock in to a shift with GPS/QR verification (CARECLIQV2-197)."""
     _require_worker(current_user)
+    _require_worker_active(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     location = body.location.model_dump() if body.location else None
@@ -1024,6 +1284,15 @@ async def worker_update_shift_tasks(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    completed = sum(1 for t in tasks if t.get("completed"))
+    await audit_service.log_action(
+        action_type="worker.shift.tasks_updated",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"task_count": len(tasks), "completed_count": completed},
+    )
     return shift
 
 
@@ -1196,6 +1465,7 @@ async def _worker_can_access_participant(
 @router.get("/participants/{participant_id}/safety-protocol")
 async def worker_get_safety_protocol(
     participant_id: str,
+    shift_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     """Participant safety protocols for worker (read-only)."""
@@ -1205,7 +1475,9 @@ async def worker_get_safety_protocol(
     if not await _worker_can_access_participant(participant_id, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
     protocol = safety_protocol_service.get_protocol(participant_id, str(org_id or ""))
-    return safety_protocol_service.enrich_protocol_for_worker(protocol, worker_id=worker_id)
+    return safety_protocol_service.enrich_protocol_for_worker(
+        protocol, worker_id=worker_id, shift_id=shift_id
+    )
 
 
 @router.post("/participants/{participant_id}/safety-protocol/acknowledge")
@@ -1226,6 +1498,8 @@ async def worker_acknowledge_safety_protocol(
             participant_id=participant_id,
             organization_id=str(org_id or ""),
             content_version=body.content_version,
+            org_content_version=body.org_content_version,
+            shift_id=body.shift_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
@@ -1290,6 +1564,133 @@ async def worker_clock_out(shift_id: str, current_user: dict = Depends(get_curre
     return shift
 
 
+async def _run_shift_documentation_compliance_check(
+    shift: dict,
+    current_user: dict,
+    *,
+    persist: bool,
+) -> dict:
+    """Run the real R1-R12 rules engine (compliance_engine.run_compliance_check)
+    against a shift's documentation so far.
+
+    Distinct from compute_shift_validation's compliance_score (task evidence -
+    did the worker document each required task): this is the documentation-
+    quality axis (is the note itself NDIS-compliant - length, language, goal
+    references, incident/RP handling, etc). The engine expects one
+    consolidated note; the current per-task mobile composer writes many small
+    notes to shift_visit_notes instead, so those get aggregated first via
+    shift_service.aggregate_shift_visit_notes_text - this is the bridge that
+    lets the existing rules engine run for shift-based work at all, since
+    nothing previously called it outside the legacy single-note session flow.
+
+    When persist=True (end-of-shift), the result is saved into
+    sessions.ai_insights.rules_result / compliance_checked_at - the exact
+    field the worker's existing /compliance-detail dashboard already reads
+    via _latest_rule_results, so no dashboard changes were needed, only real
+    data reaching it.
+    """
+    session_id = shift.get("session_id")
+    if not session_id:
+        return {"available": False, "reason": "This shift hasn't started a session yet."}
+
+    session = await session_service.get_session_by_id(str(session_id), current_user)
+    if not session:
+        return {"available": False, "reason": "Session not found."}
+
+    notes_text = shift_service.aggregate_shift_visit_notes_text(str(shift.get("id") or ""))
+    if not notes_text.strip():
+        return {"available": False, "reason": "No documentation recorded yet for this shift."}
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+
+    session_for_analysis = {
+        **session,
+        "notes": notes_text,
+        "compliance_input_text": notes_text,
+        "activities_performed": "",
+        "outcomes": "",
+        "participant_response": "",
+        "progress_toward_goals": "",
+    }
+
+    existing_sessions: list[dict] = []
+    if participant_id:
+        existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
+    custom_physical_types = await get_physical_exam_session_types()
+
+    budget_context = None
+    if participant_id:
+        plan = await funding_service.get_plan_for_participant(participant_id)
+        budget_context = funding_service.build_budget_alignment_context(session_for_analysis, plan)
+
+    duration_context = shift_service.build_duration_consistency_context(session_for_analysis)
+
+    try:
+        rules_result = run_compliance_check(
+            session_for_analysis,
+            participant,
+            existing_sessions,
+            custom_physical_types,
+            budget_context=budget_context,
+            duration_context=duration_context,
+        )
+    except ComplianceBlockedError:
+        return {"available": False, "reason": "Not enough documentation recorded yet to check."}
+
+    enriched_rules = enrich_rule_results(rules_result.get("rules"))
+    result = {
+        "available": True,
+        "score": rules_result.get("score"),
+        "passed": rules_result.get("passed"),
+        "warnings": rules_result.get("warnings"),
+        "failed": rules_result.get("failed"),
+        "total_rules": rules_result.get("total_rules"),
+        "rules": enriched_rules,
+        "failed_rules": [r for r in enriched_rules if r.get("status") in {"fail", "warning"}],
+    }
+
+    if persist:
+        try:
+            existing_ai = session.get("ai_insights") or {}
+            if isinstance(existing_ai, str):
+                existing_ai = json.loads(existing_ai) if existing_ai.strip() else {}
+            if not isinstance(existing_ai, dict):
+                existing_ai = {}
+            existing_ai["rules_result"] = rules_result
+            get_supabase_admin().table("sessions").update({
+                "ai_insights": json.dumps(existing_ai),
+                "compliance_checked_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", str(session_id)).execute()
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist shift documentation compliance check for session %s: %s",
+                session_id, exc,
+            )
+
+    return result
+
+
+@router.get("/shifts/{shift_id}/documentation-compliance-check")
+async def worker_shift_documentation_compliance_check(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only, no-side-effect preview of the real 12-rule documentation
+    check against a shift's notes so far - safe to poll periodically while a
+    shift is in progress (unlike /sessions/{id}/save-with-ai, this makes no AI
+    call and never mutates session status)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("worker_id") or "") != str(worker_id) or str(shift.get("organization_id") or "") != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return await _run_shift_documentation_compliance_check(shift, current_user, persist=False)
+
+
 @router.post("/shifts/{shift_id}/end-shift")
 async def worker_end_shift(
     shift_id: str,
@@ -1325,7 +1726,21 @@ async def worker_end_shift(
         except Exception as exc:
             logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
 
+    async def _documentation_check() -> None:
+        # Off the critical path deliberately: this does several DB round-trips
+        # (note aggregation, goal/budget/duration context, the rules engine
+        # itself) that used to sit in front of the end-shift response the
+        # worker is waiting on - often on a weak connection right as they
+        # leave a client's home. It's supplementary to the task-evidence
+        # score end_shift() already computed synchronously above, so nothing
+        # worker-facing depends on this finishing before the response returns.
+        try:
+            await _run_shift_documentation_compliance_check(shift, current_user, persist=True)
+        except Exception as exc:
+            logger.warning("Documentation compliance check failed for shift %s: %s", shift_id, exc)
+
     background_tasks.add_task(_auto_summary_and_notify)
+    background_tasks.add_task(_documentation_check)
     return shift
 
 
@@ -1561,6 +1976,14 @@ async def worker_create_shift_note(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await audit_service.log_action(
+        action_type="worker.shift.note_created",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"category": body.category},
+    )
     return note
 
 
@@ -1639,7 +2062,7 @@ async def get_worker_messages(
         # Get coordinator messages and credential reminders targeted at this worker
         query = (
             supabase.table("alerts")
-            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id")
+            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id, shift_id")
             .eq("organization_id", org_id)
             .eq("recipient_user_id", worker_id)
             .order("created_at", desc=True)
@@ -1897,6 +2320,35 @@ async def worker_submit_checkin(
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     return result
+
+
+class MissedCheckinReasonBody(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/sessions/{session_id}/checkins/{scheduled_checkin_id}/missed-reason")
+async def worker_submit_missed_checkin_reason(
+    session_id: str,
+    scheduled_checkin_id: str,
+    body: MissedCheckinReasonBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Explain why a random compliance check-in was missed (required before shift submission)."""
+    _require_worker(current_user)
+    from ..services import random_checkin_service
+
+    worker_id = get_user_id(current_user)
+    try:
+        ok = random_checkin_service.submit_missed_checkin_reason(
+            scheduled_checkin_id=scheduled_checkin_id,
+            worker_id=worker_id,
+            reason=body.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check-in not found")
+    return {"ok": True}
 
 
 @router.get("/sessions/{session_id}/checkins/status")

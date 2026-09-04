@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
@@ -20,7 +20,7 @@ from ..services.pattern_detection_service import (
     get_active_patterns,
     run_pattern_detection_for_org,
 )
-from ..services import participant_service, session_service, shift_service
+from ..services import participant_service, privacy_service, session_service, shift_service
 from ..services.funding_service import (
     normalize_goal_support_category,
     require_active_plan_for_participant,
@@ -36,17 +36,38 @@ from ..services.notification_service import (
     notify_feedback_received,
     notify_shift_cancelled,
     notify_shift_change,
+    notify_worker,
 )
-from ..services import conversation_service
+from ..services import audit_service, conversation_service, shift_offer_service, worker_matching_service
+from ..services import worker_buddy_service
+from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
 from ..services.supabase_client import get_supabase_admin
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
 
+# Mirrors RosterBoard.tsx's UNASSIGNED_PLACEHOLDER_ID — shifts.worker_id is
+# NOT NULL, so an unassigned shift gets this all-zeros UUID instead of a real
+# worker id (see create_unassigned_shift below for where it's set).
+UNASSIGNED_SHIFT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+
 
 def _require_coordinator(user: dict) -> str:
     if not is_coordinator_role(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support coordinator access required.")
+    org_id = get_user_organization_id(user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return org_id
+
+
+# Same org_id-or-403 shape as _require_coordinator, but for read-only worker-detail
+# endpoints the managing director should also see (staff profile tabs) - mutations
+# on these same resources stay _require_coordinator-only, matching the read/write
+# split already established for /workers/pipeline and account-management actions.
+def _require_org_read(user: dict) -> str:
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
@@ -184,7 +205,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, onboarding_completed"
+                    "preferred_contact_method, phone, onboarding_completed, "
+                    "profile_summary, profile_experience_years, coordinator_id, "
+                    "classification_id, employment_type"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -199,7 +222,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             profiles_by_id = {}
 
     from ..services import worker_training_service as training
+    from ..services import induction_service
     overdue_map = training.team_training_overdue_map(org_id)
+    induction_map = induction_service.team_induction_incomplete_map(org_id)
 
     output = []
     for row in rows:
@@ -216,7 +241,12 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
             "onboarding_completed": profile.get("onboarding_completed"),
+            "profile_summary": profile.get("profile_summary"),
+            "profile_experience_years": profile.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("user_id")), False),
+            "induction_overdue": induction_map.get(str(row.get("user_id")), False),
+            "classification_id": profile.get("classification_id"),
+            "employment_type": profile.get("employment_type"),
         })
     return output
 
@@ -246,7 +276,8 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed"
+                "preferred_contact_method, phone, onboarding_completed, coordinator_id, "
+                "classification_id, employment_type"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -258,7 +289,9 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
         return []
 
     from ..services import worker_training_service as training
+    from ..services import induction_service
     overdue_map = training.team_training_overdue_map(org_id)
+    induction_map = induction_service.team_induction_incomplete_map(org_id)
 
     output = []
     for row in profiles.data or []:
@@ -273,7 +306,12 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "joined_at": None,
             "last_login": row.get("last_login"),
             "onboarding_completed": row.get("onboarding_completed"),
+            "profile_summary": row.get("profile_summary"),
+            "profile_experience_years": row.get("profile_experience_years"),
             "training_overdue": overdue_map.get(str(row.get("id")), False),
+            "induction_overdue": induction_map.get(str(row.get("id")), False),
+            "classification_id": row.get("classification_id"),
+            "employment_type": row.get("employment_type"),
         })
     return output
 
@@ -282,6 +320,22 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
 async def team(current_user: dict = Depends(get_current_user)):
     org_id = _require_coordinator(current_user)
     return await _team(org_id, coordinator_user=current_user)
+
+
+@router.get("/workers/pipeline")
+async def worker_pipeline_overview(current_user: dict = Depends(get_current_user)):
+    """Read-only Worker Onboarding Pipeline board — Interview through Active.
+    Reuses the Applicants Board, Hires, credentials, training, and induction
+    data models; never writes anything. Coordinators and MD both get org-wide
+    read access here, same as team.tsx."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    from ..services import worker_pipeline_service
+
+    return worker_pipeline_service.get_pipeline_overview(org_id)
 
 
 @router.get("/all-sessions")
@@ -354,7 +408,7 @@ async def rp_flags(current_user: dict = Depends(get_current_user)):
 
 @router.get("/credential-alerts")
 async def credential_alerts(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     today = date.today()
@@ -381,6 +435,7 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
                 supabase.table("users")
                 .select("id, full_name, email, role")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             users_by_id = {
@@ -444,9 +499,16 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
 
 @router.get("/worker-stats")
 async def worker_stats(current_user: dict = Depends(get_current_user)):
-    """Per-worker aggregated stats: sessions, compliance, drafts, flagged."""
-    org_id = _require_coordinator(current_user)
-    members = await _team(org_id, coordinator_user=current_user)
+    """Per-worker aggregated stats: sessions, compliance, drafts, flagged.
+
+    Coordinators get their own team-scoped list (unchanged). A managing
+    director isn't anyone's assigned coordinator, so passing their own user
+    through as coordinator_user would resolve to zero linked workers once
+    coordinator_id rollout is complete - MD gets the unscoped org-wide list
+    instead (coordinator_user=None skips the team-scoping filter entirely).
+    """
+    org_id = _require_org_read(current_user)
+    members = await _team(org_id, coordinator_user=current_user if is_coordinator_role(current_user) else None)
     all_sessions = await session_service.get_sessions_for_dashboard(2000, current_user)
 
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
@@ -687,29 +749,427 @@ async def flagged_sessions(current_user: dict = Depends(get_current_user)):
 
 
 # ── Worker Activation / Deactivation ─────────────────────────────────────────
+# Coordinators and MD both get account-management access here — this is org
+# oversight (who can log in, password resets), not shift-delivery mutation,
+# so it follows the same has_org_wide_access pattern as /workers/pipeline.
+
+def _require_org_account_access(user: dict) -> str:
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return org_id
+
+
+DEACTIVATION_REASONS = ("credentials", "training", "credentials_training", "manual")
+
+# Human copy for the worker-facing locked-account screen, mirrored on the
+# frontend's account-deactivated page (kept here too so notification text and
+# the audit trail read the same as what the worker actually sees).
+_DEACTIVATION_REASON_LABELS = {
+    "credentials": "your credentials are incomplete",
+    "training": "your mandatory training is incomplete",
+    "credentials_training": "your credentials and mandatory training are incomplete",
+    "manual": None,
+}
+
+
+def _require_target_support_worker(supabase, worker_id: str, org_id: str) -> dict:
+    """Account lifecycle actions (deactivate/activate/delete) only ever target
+    a support_worker - a coordinator managing a fellow coordinator's or the
+    MD's account isn't a case this feature covers, and allowing it would be a
+    real privilege-escalation gap."""
+    try:
+        row = (
+            supabase.table("users")
+            .select("id, role, full_name, email")
+            .eq("id", worker_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+    target = row.data if row else None
+    if not target:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+    if target.get("role") != "support_worker":
+        raise HTTPException(status_code=403, detail="Only support worker accounts can be managed here.")
+    return target
+
+
+class DeactivateWorkerBody(BaseModel):
+    reason: str = "manual"  # one of DEACTIVATION_REASONS
+    note: Optional[str] = None
+
 
 @router.post("/workers/{worker_id}/deactivate")
-async def deactivate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+async def deactivate_worker(
+    worker_id: str, body: DeactivateWorkerBody, current_user: dict = Depends(get_current_user)
+):
+    """Reversible: is_active flips to False, but the worker can still log in
+    to a locked-down portal (frontend gates on is_active + deactivation_reason
+    - see ProtectedRoute.tsx). Distinct from delete-account below, which is a
+    one-way request queued for removal. Coordinators and MD both have access
+    here (has_org_wide_access) - only delete is MD-only."""
+    org_id = _require_org_account_access(current_user)
+    if body.reason not in DEACTIVATION_REASONS:
+        raise HTTPException(status_code=422, detail=f"reason must be one of {DEACTIVATION_REASONS}")
     supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    now = datetime.now(timezone.utc).isoformat()
+    actor_id = get_user_id(current_user)
     try:
-        supabase.table("users").update({"is_active": False}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        supabase.table("users").update({
+            "is_active": False,
+            "deactivated_at": now,
+            "deactivated_by": actor_id,
+            "deactivation_reason": body.reason,
+            "deactivation_note": body.note,
+        }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": False}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Deactivation failed: {e}")
-    return {"worker_id": worker_id, "is_active": False}
+
+    await audit_service.log_action(
+        action_type="coordinator.worker.deactivated",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=actor_id,
+        organization_id=org_id,
+        before_state={"is_active": True},
+        after_state={"is_active": False, "deactivation_reason": body.reason},
+        details={"note": body.note},
+    )
+    reason_label = _DEACTIVATION_REASON_LABELS.get(body.reason)
+    message = (
+        f"Your account has been deactivated because {reason_label}. Complete it to regain full access."
+        if reason_label
+        else "Your account has been deactivated. Contact your organisation admin for details."
+    )
+    try:
+        await notify_worker(
+            user_id=worker_id,
+            org_id=org_id,
+            event="account_deactivated",
+            title="Your account has been deactivated",
+            message=message,
+            reference_key=f"account_deactivated:{worker_id}:{now}",
+            severity="high",
+            alert_type="account_deactivated",
+        )
+    except Exception:
+        pass
+    return {"worker_id": worker_id, "is_active": False, "deactivation_reason": body.reason}
 
 
 @router.post("/workers/{worker_id}/activate")
 async def activate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_account_access(current_user)
     supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    actor_id = get_user_id(current_user)
     try:
-        supabase.table("users").update({"is_active": True}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        supabase.table("users").update({
+            "is_active": True,
+            "deactivated_at": None,
+            "deactivated_by": None,
+            "deactivation_reason": None,
+            "deactivation_note": None,
+        }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
+
+    await audit_service.log_action(
+        action_type="coordinator.worker.activated",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=actor_id,
+        organization_id=org_id,
+        before_state={"is_active": False},
+        after_state={"is_active": True},
+    )
+    try:
+        await notify_worker(
+            user_id=worker_id,
+            org_id=org_id,
+            event="account_reactivated",
+            title="Your account has been reactivated",
+            message="Your account is active again - you have full access to CareCliQ.",
+            reference_key=f"account_reactivated:{worker_id}:{datetime.now(timezone.utc).isoformat()}",
+            severity="medium",
+            alert_type="account_reactivated",
+        )
+    except Exception:
+        pass
     return {"worker_id": worker_id, "is_active": True}
+
+
+@router.post("/workers/{worker_id}/delete-account")
+async def delete_worker_account(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """MD-only - removing a staff member's account is a step up from
+    deactivation (which both coordinators and MD can do), so it's gated to
+    the managing director specifically. Queues the same pending deletion
+    request record self-service deletion uses, for manual processing."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    supabase = get_supabase_admin()
+    target = _require_target_support_worker(supabase, worker_id, org_id)
+    result = privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
+    await audit_service.log_action(
+        action_type="coordinator.worker.delete_requested",
+        entity_type="user",
+        entity_id=worker_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        details={"email": target.get("email")},
+    )
+    return result
+
+
+class AssignCoordinatorBody(BaseModel):
+    coordinator_id: Optional[str] = None  # null to unassign, back to "unassigned"
+
+
+@router.patch("/team/{worker_id}/assign-coordinator")
+async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, current_user: dict = Depends(get_current_user)):
+    """MD-only - sets which coordinator a support worker is scoped under for
+    dashboard/session-review/credential-alert purposes (users.coordinator_id).
+    Not gated to support_coordinator like most team-management endpoints: this
+    is org structure, an MD decision, not day-to-day coordinator work."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+
+    supabase = get_supabase_admin()
+    worker = (
+        supabase.table("users")
+        .select("id")
+        .eq("id", worker_id)
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    if not worker or not worker.data:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+
+    if body.coordinator_id:
+        coordinator = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("id", body.coordinator_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        if not coordinator or not coordinator.data or coordinator.data.get("role") != "support_coordinator":
+            raise HTTPException(status_code=422, detail="coordinator_id must be an existing coordinator in this organization.")
+
+    supabase.table("users").update({"coordinator_id": body.coordinator_id}).eq("id", worker_id).execute()
+    return {"worker_id": worker_id, "coordinator_id": body.coordinator_id}
+
+
+@router.get("/award-classifications")
+async def list_award_classifications(current_user: dict = Depends(get_current_user)):
+    """Currently-active SCHADS classifications a coordinator can assign to a
+    worker. SACS only this phase (see award_streams / migration 158) - the
+    default and only stream with rate data seeded so far."""
+    _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("award_classifications")
+        .select("id, level, pay_point, base_rate, casual_rate, stream_id")
+        .is_("valid_to", "null")
+        .order("level")
+        .execute()
+    )
+    return result.data or []
+
+
+@router.get("/organization/acknowledgement-content")
+async def get_acknowledgement_content(current_user: dict = Depends(get_current_user)):
+    """The standing per-shift worker acknowledgement (shown at every clock-in
+    alongside the per-participant safety card, migration 161) - editable
+    here by a coordinator/MD, same shape as the per-participant safety-card
+    editor at PUT /participants/{id}/safety-protocol."""
+    org_id = _require_coordinator(current_user)
+    from ..services import safety_protocol_service
+
+    return safety_protocol_service.get_org_acknowledgement_content(org_id)
+
+
+@router.put("/organization/acknowledgement-content")
+async def update_acknowledgement_content(
+    body: OrgAcknowledgementContentUpdate, current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import safety_protocol_service
+
+    try:
+        return safety_protocol_service.upsert_org_acknowledgement_content(
+            org_id, body.body, updated_by=get_user_id(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class AssignClassificationBody(BaseModel):
+    classification_id: Optional[str] = None  # null to clear
+    employment_type: Optional[str] = None  # 'casual' | 'part_time' | 'full_time', null to clear
+    written_agreement_12hr: Optional[bool] = None
+
+
+@router.patch("/team/{worker_id}/assign-classification")
+async def assign_classification(worker_id: str, body: AssignClassificationBody, current_user: dict = Depends(get_current_user)):
+    """Coordinator or MD - sets a worker's SCHADS Award classification and
+    employment type (users.classification_id / employment_type /
+    written_agreement_12hr), the data the pay-calculation engine
+    (schads_engine.py) needs to price their shifts. Set manually here, per
+    the source reference doc's explicit guidance - never derived from a
+    worker's qualifications, since classification reflects the duties
+    actually performed, not the certificate on file."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    worker = (
+        supabase.table("users")
+        .select("id")
+        .eq("id", worker_id)
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    if not worker or not worker.data:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+
+    update: dict = {}
+    if body.classification_id is not None or "classification_id" in body.model_fields_set:
+        if body.classification_id:
+            classification = (
+                supabase.table("award_classifications")
+                .select("id")
+                .eq("id", body.classification_id)
+                .maybe_single()
+                .execute()
+            )
+            if not classification or not classification.data:
+                raise HTTPException(status_code=422, detail="classification_id must be an existing award classification.")
+        update["classification_id"] = body.classification_id
+    if "employment_type" in body.model_fields_set:
+        if body.employment_type and body.employment_type not in ("casual", "part_time", "full_time"):
+            raise HTTPException(status_code=422, detail="employment_type must be casual, part_time, or full_time.")
+        update["employment_type"] = body.employment_type
+    if body.written_agreement_12hr is not None:
+        update["written_agreement_12hr"] = body.written_agreement_12hr
+
+    if update:
+        supabase.table("users").update(update).eq("id", worker_id).execute()
+
+    return {"worker_id": worker_id, **update}
+
+
+@router.get("/team/unassigned")
+async def list_unassigned_team(current_user: dict = Depends(get_current_user)):
+    """Support workers in this org with no coordinator_id set - the "claim"
+    view any coordinator can use once coordinator_id assignment has started
+    rolling out, so a worker never silently drops out of every coordinator's
+    view (see get_coordinator_team_ids's org-wide rollout fallback)."""
+    org_id = _require_org_read(current_user)
+    result = (
+        get_supabase_admin()
+        .table("users")
+        .select("id, full_name, email")
+        .eq("organization_id", org_id)
+        .eq("role", "support_worker")
+        .is_("coordinator_id", "null")
+        .execute()
+    )
+    return result.data or []
+
+
+class AssignBuddyBody(BaseModel):
+    buddy_worker_id: Optional[str] = None  # null to clear
+
+
+@router.get("/team/{worker_id}/buddy")
+async def get_worker_buddy(worker_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    return worker_buddy_service.get_buddy(worker_id) or {}
+
+
+@router.get("/team/{worker_id}/buddy-suggestions")
+async def get_buddy_suggestions(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    return worker_buddy_service.suggest_buddies(worker_id, org_id)
+
+
+@router.post("/team/{worker_id}/buddy")
+async def assign_worker_buddy(worker_id: str, body: AssignBuddyBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    result = await worker_buddy_service.assign_buddy(
+        new_worker_id=worker_id,
+        buddy_worker_id=body.buddy_worker_id,
+        organization_id=org_id,
+        assigned_by_user_id=get_user_id(current_user),
+    )
+    return result or {"new_worker_id": worker_id, "buddy_worker_id": None}
+
+
+def _send_recovery_email(email: str) -> None:
+    from .auth import _supabase_auth_request
+    from ..core.config import settings
+    import urllib.parse
+
+    redirect_to = f"{settings.frontend_base_url.rstrip('/')}/reset-password"
+    encoded_redirect = urllib.parse.quote(redirect_to, safe="")
+    _supabase_auth_request(
+        f"recover?redirect_to={encoded_redirect}",
+        {"email": email},
+        method="POST",
+    )
+
+
+def _lookup_worker_email(supabase, worker_id: str, org_id: str) -> str:
+    try:
+        row = (
+            supabase.table("users")
+            .select("email")
+            .eq("id", worker_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+
+    email = ((row.data or [None])[0] or {}).get("email")
+    if not email:
+        raise HTTPException(status_code=404, detail="Worker not found in this organization.")
+    return email
+
+
+@router.post("/workers/{worker_id}/send-password-reset")
+async def send_worker_password_reset(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """Send the worker a real Supabase recovery email so they set their own new
+    password. Deliberately does not accept or set a password directly here —
+    an admin choosing a worker's login credential is a security posture this
+    app doesn't take on."""
+    org_id = _require_org_account_access(current_user)
+    supabase = get_supabase_admin()
+    email = _lookup_worker_email(supabase, worker_id, org_id)
+    try:
+        _send_recovery_email(email)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not send reset email: {e}")
+
+    return {"worker_id": worker_id, "email": email, "message": "Password reset email sent."}
 
 
 # ── Worker ↔ Client Assignments ───────────────────────────────────────────────
@@ -954,6 +1414,13 @@ async def cancel_shift(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift cancel failed: {exc}") from exc
 
+    try:
+        from ..services import schads_engine
+
+        schads_engine.calculate_cancellation_pay(shift, datetime.now(timezone.utc))
+    except Exception as exc:
+        logger.debug("SCHADS cancellation-pay calculation skipped for shift %s: %s", shift_id, exc)
+
     await notify_shift_cancelled(shift=updated)
     conversation_service.set_conversation_read_only_for_shift(shift_id)
     return {"shift_id": shift_id, "shift": updated}
@@ -968,7 +1435,16 @@ class AssignShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs', drives minimum-engagement pricing
+    is_sleepover: bool = False
+    sleepover_start: Optional[str] = None
+    sleepover_end: Optional[str] = None
     selected_task_ids: Optional[list[str]] = None
+    # Shadow shift: worker_id is still the trainee actually doing the shift
+    # (same credential/training/induction gates apply below) — this just
+    # flags it as supervised and records who's supervising.
+    is_shadow_shift: bool = False
+    shadow_of_worker_id: Optional[str] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1017,8 +1493,15 @@ async def coordinator_shifts(
     limit: int = Query(default=500, ge=1, le=2000),
     current_user: dict = Depends(get_current_user),
 ):
-    """List organization shifts for coordinator roster/calendar management."""
-    org_id = _require_coordinator(current_user)
+    """List organization shifts for coordinator roster/calendar management.
+    Read-only — coordinators and MD both get org-wide read access here (MD's
+    Master Schedule view), same pattern as /workers/pipeline. Shift mutation
+    endpoints (assign/create/bulk) stay coordinator-only."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     supabase = get_supabase_admin()
 
     try:
@@ -1034,7 +1517,12 @@ async def coordinator_shifts(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
 
-    worker_ids = sorted({str(r.get("worker_id")) for r in rows if r.get("worker_id")})
+    worker_ids = sorted({
+        str(r.get(key))
+        for r in rows
+        for key in ("worker_id", "shadow_of_worker_id")
+        if r.get(key)
+    })
     participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
 
     workers_by_id: dict[str, dict] = {}
@@ -1079,6 +1567,10 @@ async def coordinator_shifts(
             **row,
             "worker_name": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("full_name") or "Worker",
             "worker_email": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("email"),
+            "shadow_of_worker_name": (
+                (workers_by_id.get(str(row.get("shadow_of_worker_id")), {}) or {}).get("full_name")
+                if row.get("shadow_of_worker_id") else None
+            ),
             "participant_name": row.get("participant_name")
             or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
             or "Participant",
@@ -1119,12 +1611,13 @@ def _execute_shift_query_with_legacy_fallback(
     full_columns = (
         "id, organization_id, worker_id, participant_id, session_id, shift_type, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "created_at, updated_at"
+        "cannot_attend_reason, clocked_in_at, clocked_out_at, "
+        "is_shadow_shift, shadow_of_worker_id, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, session_id, "
         "scheduled_start, scheduled_end, duration_minutes, status, participant_name, "
-        "created_at, updated_at"
+        "clocked_in_at, clocked_out_at, created_at, updated_at"
     )
 
     def _run(select_columns: str):
@@ -1169,6 +1662,8 @@ def _insert_shift_with_legacy_fallback(supabase, payload: dict[str, Any]):
         fallback_payload = dict(payload)
         fallback_payload.pop("created_by", None)
         fallback_payload.pop("shift_type", None)
+        fallback_payload.pop("is_shadow_shift", None)
+        fallback_payload.pop("shadow_of_worker_id", None)
         return supabase.table("shifts").insert(fallback_payload).execute()
 
 
@@ -1435,7 +1930,25 @@ async def assign_shift(
             status_code=500,
             detail=f"Worker lookup failed: {exc}"
         )
-    
+
+    if body.is_shadow_shift:
+        if not body.shadow_of_worker_id:
+            raise HTTPException(status_code=422, detail="shadow_of_worker_id is required for a shadow shift")
+        if body.shadow_of_worker_id == body.worker_id:
+            raise HTTPException(status_code=422, detail="A worker can't shadow themselves")
+        try:
+            shadow_resp = supabase.table("users").select("id, is_active").eq(
+                "id", body.shadow_of_worker_id
+            ).eq("organization_id", org_id).execute()
+            if not shadow_resp.data:
+                raise HTTPException(status_code=404, detail="Shadowed worker not found in your organization")
+            if not shadow_resp.data[0].get("is_active"):
+                raise HTTPException(status_code=400, detail="Cannot shadow an inactive worker")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Shadowed worker lookup failed: {exc}")
+
     # Verify participant exists and belongs to organization
     try:
         participant_resp = supabase.table("patients").select(
@@ -1483,6 +1996,16 @@ async def assign_shift(
                    "Please ensure mandatory training is completed before assigning shifts."
         )
 
+    # Same hard gate for mandatory induction — a separate, one-time checklist
+    # from ongoing training, but equally blocking for rostering.
+    from ..services import induction_service
+    if induction_service.is_induction_incomplete(body.worker_id, org_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Worker has incomplete mandatory induction. "
+                   "Please ensure induction is completed before assigning shifts."
+        )
+
     # Parse timestamps and calculate duration if needed
     try:
         scheduled_start = parse_shift_datetime(body.scheduled_start)
@@ -1514,6 +2037,8 @@ async def assign_shift(
             "participant_id": body.participant_id,
             "participant_name": participant.get("full_name"),
             "shift_type": shift_type,
+            "duty_type": body.duty_type or "disability_services",
+            "is_sleepover": bool(body.is_sleepover and body.sleepover_start and body.sleepover_end),
             "scheduled_start": scheduled_start.isoformat(),
             "scheduled_end": scheduled_end.isoformat(),
             "duration_minutes": duration_minutes,
@@ -1521,8 +2046,10 @@ async def assign_shift(
             "created_by": get_user_id(current_user),
             "created_at": now,
             "updated_at": now,
+            "is_shadow_shift": body.is_shadow_shift,
+            "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
         }
-        
+
         result = _insert_shift_with_legacy_fallback(supabase, shift_payload)
         
         if not result.data:
@@ -1532,7 +2059,17 @@ async def assign_shift(
             )
         
         shift = result.data[0]
-        
+
+        if shift_payload["is_sleepover"]:
+            try:
+                _derive_sleepover_segments(
+                    supabase, shift_id, scheduled_start,
+                    parse_shift_datetime(body.sleepover_start), parse_shift_datetime(body.sleepover_end),
+                    scheduled_end,
+                )
+            except Exception as exc:
+                logger.warning("Failed to derive sleepover segments for shift %s: %s", shift_id, exc)
+
         # Auto-generate participant_tasks from matching templates (+ shift_tasks links)
         generated_task_ids: list[str] = []
         try:
@@ -1654,6 +2191,7 @@ def _detect_worker_conflicts(
     shift_start: datetime,
     shift_end: datetime,
     exclude_shift_id: str | None = None,
+    is_sleepover: bool = False,
 ) -> list[dict]:
     """Return a list of conflict descriptions for a worker over a time window.
 
@@ -1763,7 +2301,148 @@ def _detect_worker_conflicts(
     except Exception:
         pass
 
+    # 4 — Weekly availability-slot preference (worker_weekly_availability_slots) —
+    # the one signal not covered above: a worker can mark a day/time-of-day as
+    # unavailable or preferred independent of blackout dates and shift overlaps.
+    try:
+        slot_status = worker_matching_service.availability_status_for_shift(
+            worker_id, shift_start.isoformat(), shift_end.isoformat()
+        )
+        if slot_status == "unavailable":
+            conflicts.append({
+                "type": "unavailable_slot",
+                "severity": "warning",
+                "message": "Not usually available then",
+            })
+    except Exception:
+        pass
+
+    # 5 — SCHADS rest-break violation (10h between shifts; the 8h sleepover
+    # exception is Phase 2, once is_sleepover exists on shifts - see the
+    # SCHADS Phase 1 plan).
+    try:
+        rest_conflict = _check_rest_break(supabase, worker_id, shift_start, exclude_shift_id)
+        if rest_conflict:
+            conflicts.append(rest_conflict)
+    except Exception:
+        pass
+
+    # 6 — SCHADS overtime threshold (warns, doesn't block - crossing into
+    # overtime is often intentional, not a scheduling mistake).
+    try:
+        overtime_conflict = _check_overtime_threshold(supabase, worker_id, shift_start, shift_end, exclude_shift_id)
+        if overtime_conflict:
+            conflicts.append(overtime_conflict)
+    except Exception:
+        pass
+
+    # 7/8 — SCHADS classification / sleepover-agreement eligibility (warns,
+    # doesn't block — matches every other signal in this flow, see
+    # _schads_eligibility_batch's docstring).
+    try:
+        user_resp = (
+            supabase.table("users")
+            .select("classification_id, written_agreement_12hr")
+            .eq("id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        user = user_resp.data if user_resp else None
+        if user and not user.get("classification_id"):
+            conflicts.append({
+                "type": "no_schads_classification",
+                "severity": "warning",
+                "message": "No SCHADS classification set — pay can't be calculated for this worker yet",
+            })
+        if is_sleepover and user and not user.get("written_agreement_12hr"):
+            conflicts.append({
+                "type": "no_sleepover_agreement",
+                "severity": "warning",
+                "message": "No written 12-hour agreement on file — required for sleepover shifts",
+            })
+    except Exception:
+        pass
+
     return conflicts
+
+
+def _check_rest_break(supabase, worker_id: str, proposed_start: datetime, exclude_shift_id: str | None) -> dict | None:
+    """SCHADS-01 - the Award requires a minimum 10h break between a worker's
+    shifts (8h by agreement where a sleepover is involved - deferred, see
+    above). Looks at the worker's most recent shift ending before the
+    proposed start."""
+    resp = (
+        supabase.table("shifts")
+        .select("id, scheduled_end, clocked_out_at")
+        .eq("worker_id", worker_id)
+        .not_.in_("status", ["cancelled"])
+        .lt("scheduled_end", proposed_start.isoformat())
+        .order("scheduled_end", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = [r for r in (resp.data or []) if r.get("id") != exclude_shift_id]
+    if not rows:
+        return None
+    prior_end = _parse_dt(rows[0].get("clocked_out_at") or rows[0].get("scheduled_end"))
+    if not prior_end:
+        return None
+    gap_hours = (proposed_start - prior_end).total_seconds() / 3600
+    if gap_hours < 10:
+        return {
+            "type": "rest_break_violation",
+            "severity": "error",
+            "message": f"Only {gap_hours:.1f}h since their last shift ended (SCHADS requires 10h)",
+        }
+    return None
+
+
+def _check_overtime_threshold(supabase, worker_id: str, proposed_start: datetime, proposed_end: datetime, exclude_shift_id: str | None) -> dict | None:
+    """SCHADS-03 - warns when a proposed shift would push a worker's ordinary
+    hours for that calendar day past their 10h (or 12h, by written agreement)
+    threshold."""
+    worker_resp = (
+        supabase.table("users")
+        .select("written_agreement_12hr")
+        .eq("id", worker_id)
+        .maybe_single()
+        .execute()
+    )
+    worker = worker_resp.data if worker_resp else None
+    threshold = 12.0 if worker and worker.get("written_agreement_12hr") else 10.0
+
+    day_start = proposed_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    resp = (
+        supabase.table("shifts")
+        .select("id, scheduled_start, scheduled_end, duration_minutes")
+        .eq("worker_id", worker_id)
+        .not_.in_("status", ["cancelled"])
+        .gte("scheduled_start", day_start.isoformat())
+        .lt("scheduled_start", day_end.isoformat())
+        .execute()
+    )
+    total_minutes = 0
+    for row in (resp.data or []):
+        if row.get("id") == exclude_shift_id:
+            continue
+        if row.get("duration_minutes"):
+            total_minutes += row["duration_minutes"]
+        else:
+            rs = _parse_dt(row.get("scheduled_start"))
+            re_ = _parse_dt(row.get("scheduled_end"))
+            if rs and re_:
+                total_minutes += int((re_ - rs).total_seconds() / 60)
+    total_minutes += int((proposed_end - proposed_start).total_seconds() / 60)
+    total_hours = total_minutes / 60
+
+    if total_hours > threshold:
+        return {
+            "type": "overtime_threshold",
+            "severity": "warning",
+            "message": f"Will push them into overtime today ({total_hours:.1f}h / {threshold:.0f}h ordinary hours)",
+        }
+    return None
 
 
 def _check_skill_match(
@@ -1802,6 +2481,276 @@ def _check_skill_match(
     return warnings
 
 
+def _conflicts_batch(
+    supabase, worker_ids: list[str], org_id: str, shift_start: datetime, shift_end: datetime,
+) -> dict[str, list[dict]]:
+    """Batch form of _detect_worker_conflicts for many workers against one
+    shift window - same three checks, but each hits Supabase once for the
+    whole team instead of once per worker. Used by get_available_workers,
+    whose per-worker loop calling _detect_worker_conflicts directly used to
+    turn a team of a dozen workers into dozens of sequential round trips."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not worker_ids:
+        return out
+
+    # 1 — Overlapping shifts
+    try:
+        resp = (
+            supabase.table("shifts")
+            .select("id, worker_id, scheduled_start, scheduled_end, participant_name, status")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled", "completed"])
+            .execute()
+        )
+        for row in (resp.data or []):
+            rs = _parse_dt(row.get("scheduled_start"))
+            re = _parse_dt(row.get("scheduled_end") or row.get("scheduled_start"))
+            if rs and re and _shifts_overlap(shift_start, shift_end, rs, re):
+                ts = rs.strftime("%I:%M %p").lstrip("0")
+                te = re.strftime("%I:%M %p").lstrip("0")
+                out.setdefault(row["worker_id"], []).append({
+                    "type": "shift_overlap",
+                    "severity": "error",
+                    "message": f"Has shift {ts}–{te} ({row.get('participant_name', 'Participant')})",
+                })
+    except Exception:
+        pass
+
+    # 2 — Blackout dates
+    try:
+        day_str = shift_start.date().isoformat()
+        bo_resp = (
+            supabase.table("worker_blackout_dates")
+            .select("user_id, start_date, end_date, reason")
+            .in_("user_id", worker_ids)
+            .lte("start_date", day_str)
+            .gte("end_date", day_str)
+            .execute()
+        )
+        for row in (bo_resp.data or []):
+            reason = row.get("reason") or "Blackout date"
+            out.setdefault(row["user_id"], []).append({
+                "type": "blackout",
+                "severity": "warning",
+                "message": f"Off-schedule: {reason} ({row['start_date']} – {row['end_date']})",
+            })
+    except Exception:
+        pass
+
+    # 3 — Weekly hours check
+    try:
+        avail_resp = (
+            supabase.table("worker_availability")
+            .select("user_id, max_hours_per_week")
+            .in_("user_id", worker_ids)
+            .execute()
+        )
+        # A worker with no row here gets no max-hours check at all, matching
+        # _detect_worker_conflicts' original per-worker behaviour.
+        max_hours_by_worker = {r["user_id"]: (r.get("max_hours_per_week") or 40) for r in (avail_resp.data or [])}
+
+        week_start = (shift_start - timedelta(days=shift_start.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        week_end = week_start + timedelta(days=7)
+        week_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_start, scheduled_end, duration_minutes")
+            .in_("worker_id", worker_ids)
+            .gte("scheduled_start", week_start.isoformat())
+            .lt("scheduled_start", week_end.isoformat())
+            .not_.in_("status", ["cancelled"])
+            .execute()
+        )
+        minutes_by_worker: dict[str, int] = {}
+        for row in (week_resp.data or []):
+            wid = row.get("worker_id")
+            if not wid:
+                continue
+            if row.get("duration_minutes"):
+                minutes = row["duration_minutes"]
+            else:
+                rs = _parse_dt(row.get("scheduled_start"))
+                re = _parse_dt(row.get("scheduled_end"))
+                minutes = int((re - rs).total_seconds() / 60) if rs and re else 0
+            minutes_by_worker[wid] = minutes_by_worker.get(wid, 0) + minutes
+
+        proposed_minutes = int((shift_end - shift_start).total_seconds() / 60)
+        for wid, max_hours in max_hours_by_worker.items():
+            total_hours = (minutes_by_worker.get(wid, 0) + proposed_minutes) / 60
+            if total_hours > max_hours:
+                out.setdefault(wid, []).append({
+                    "type": "max_hours",
+                    "severity": "warning",
+                    "message": f"Will exceed max hours ({total_hours:.1f}h / {max_hours}h this week)",
+                })
+            elif total_hours > max_hours * 0.9:
+                out.setdefault(wid, []).append({
+                    "type": "approaching_hours",
+                    "severity": "info",
+                    "message": f"Approaching max hours ({total_hours:.1f}h / {max_hours}h this week)",
+                })
+    except Exception:
+        pass
+
+    return out
+
+
+def _schads_eligibility_batch(
+    supabase, worker_ids: list[str], shift_start: datetime, shift_end: datetime, is_sleepover: bool,
+) -> dict[str, list[dict]]:
+    """Batch form of the SCHADS-aware checks used at drop-confirm time
+    (_check_rest_break, _check_overtime_threshold) plus two new ones -
+    missing classification and, for a sleepover shift, missing written
+    12-hour agreement - so the ranked /available-workers picker reflects
+    SCHADS eligibility instead of only surfacing it after a shift's already
+    been dropped on someone. Same one-bulk-query-per-check idiom as
+    _conflicts_batch, not a per-worker loop."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not worker_ids:
+        return out
+
+    # Classification / employment-type / 12hr-agreement - one bulk query.
+    users_by_id: dict[str, dict] = {}
+    try:
+        users_resp = (
+            supabase.table("users")
+            .select("id, classification_id, written_agreement_12hr")
+            .in_("id", worker_ids)
+            .execute()
+        )
+        users_by_id = {r["id"]: r for r in (users_resp.data or [])}
+    except Exception:
+        pass
+
+    for wid in worker_ids:
+        user = users_by_id.get(wid)
+        if user and not user.get("classification_id"):
+            out.setdefault(wid, []).append({
+                "type": "no_schads_classification",
+                "severity": "warning",
+                "message": "No SCHADS classification set — pay can't be calculated for this worker yet",
+            })
+        if is_sleepover and user and not user.get("written_agreement_12hr"):
+            out.setdefault(wid, []).append({
+                "type": "no_sleepover_agreement",
+                "severity": "warning",
+                "message": "No written 12-hour agreement on file — required for sleepover shifts",
+            })
+
+    # Rest-break - most recent prior shift per worker, one bulk query.
+    try:
+        prior_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_end, clocked_out_at")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled"])
+            .lt("scheduled_end", shift_start.isoformat())
+            .execute()
+        )
+        latest_prior_end: dict[str, datetime] = {}
+        for row in (prior_resp.data or []):
+            wid = row.get("worker_id")
+            end = _parse_dt(row.get("clocked_out_at") or row.get("scheduled_end"))
+            if wid and end and (wid not in latest_prior_end or end > latest_prior_end[wid]):
+                latest_prior_end[wid] = end
+        for wid, prior_end in latest_prior_end.items():
+            gap_hours = (shift_start - prior_end).total_seconds() / 3600
+            if gap_hours < 10:
+                out.setdefault(wid, []).append({
+                    "type": "rest_break_violation",
+                    "severity": "error",
+                    "message": f"Only {gap_hours:.1f}h since their last shift ended (SCHADS requires 10h)",
+                })
+    except Exception:
+        pass
+
+    # Overtime threshold - that calendar day's shifts across all workers, one bulk query.
+    try:
+        day_start = shift_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        day_resp = (
+            supabase.table("shifts")
+            .select("worker_id, scheduled_start, scheduled_end, duration_minutes")
+            .in_("worker_id", worker_ids)
+            .not_.in_("status", ["cancelled"])
+            .gte("scheduled_start", day_start.isoformat())
+            .lt("scheduled_start", day_end.isoformat())
+            .execute()
+        )
+        minutes_by_worker: dict[str, int] = {}
+        for row in (day_resp.data or []):
+            wid = row.get("worker_id")
+            if not wid:
+                continue
+            if row.get("duration_minutes"):
+                minutes = row["duration_minutes"]
+            else:
+                rs = _parse_dt(row.get("scheduled_start"))
+                re_ = _parse_dt(row.get("scheduled_end"))
+                minutes = int((re_ - rs).total_seconds() / 60) if rs and re_ else 0
+            minutes_by_worker[wid] = minutes_by_worker.get(wid, 0) + minutes
+
+        proposed_minutes = int((shift_end - shift_start).total_seconds() / 60)
+        for wid in worker_ids:
+            user = users_by_id.get(wid)
+            threshold = 12.0 if user and user.get("written_agreement_12hr") else 10.0
+            total_hours = (minutes_by_worker.get(wid, 0) + proposed_minutes) / 60
+            if total_hours > threshold:
+                out.setdefault(wid, []).append({
+                    "type": "overtime_threshold",
+                    "severity": "warning",
+                    "message": f"Will push them into overtime today ({total_hours:.1f}h / {threshold:.0f}h ordinary hours)",
+                })
+    except Exception:
+        pass
+
+    return out
+
+
+def _skill_warnings_batch(
+    supabase, worker_ids: list[str], participant_id: str | None
+) -> dict[str, list[dict]]:
+    """Batch form of _check_skill_match - the participant's required skills
+    are fetched once (not once per worker, as the original per-worker loop
+    did - that query doesn't even vary by worker)."""
+    out: dict[str, list[dict]] = {wid: [] for wid in worker_ids}
+    if not participant_id or not worker_ids:
+        return out
+    try:
+        req_resp = (
+            supabase.table("participant_required_skills")
+            .select("skill, is_mandatory")
+            .eq("participant_id", participant_id)
+            .execute()
+        )
+        required = {r["skill"]: r.get("is_mandatory", True) for r in (req_resp.data or [])}
+        if not required:
+            return out
+        skill_resp = (
+            supabase.table("worker_skills")
+            .select("user_id, skill, is_certified")
+            .in_("user_id", worker_ids)
+            .execute()
+        )
+        certified_by_worker: dict[str, set[str]] = {}
+        for r in (skill_resp.data or []):
+            if r.get("is_certified"):
+                certified_by_worker.setdefault(r["user_id"], set()).add(r["skill"])
+        for wid in worker_ids:
+            have = certified_by_worker.get(wid, set())
+            for skill, mandatory in required.items():
+                if skill not in have:
+                    out[wid].append({
+                        "type": "missing_skill",
+                        "severity": "error" if mandatory else "warning",
+                        "message": f"Missing required skill: {skill}",
+                    })
+    except Exception:
+        pass
+    return out
+
+
 async def _send_worker_notification(
     supabase,
     user_id: str,
@@ -1834,6 +2783,7 @@ async def get_worker_conflicts(
     shift_end: str = Query(..., description="ISO datetime"),
     participant_id: Optional[str] = Query(default=None),
     exclude_shift_id: Optional[str] = Query(default=None),
+    is_sleepover: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
     """Return conflicts (overlapping shifts, blackout dates, hours) for a worker over a window.
@@ -1849,7 +2799,7 @@ async def get_worker_conflicts(
     if not s_dt or not e_dt:
         raise HTTPException(status_code=422, detail="Invalid shift_start or shift_end")
 
-    conflicts = _detect_worker_conflicts(supabase, worker_id, org_id, s_dt, e_dt, exclude_shift_id)
+    conflicts = _detect_worker_conflicts(supabase, worker_id, org_id, s_dt, e_dt, exclude_shift_id, is_sleepover=is_sleepover)
     skill_warnings = _check_skill_match(supabase, worker_id, participant_id)
     all_issues = conflicts + skill_warnings
 
@@ -1877,11 +2827,13 @@ async def get_available_workers(
     shift_start: str = Query(...),
     shift_end: str = Query(...),
     participant_id: Optional[str] = Query(default=None),
+    is_sleepover: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
     """List all team workers with their availability status for a given shift window.
 
-    Returns workers sorted by: available → warning → unavailable, then by name.
+    Returns workers sorted by: available → warning → unavailable, then (Phase 2)
+    by match score with the given participant, then preferred-availability, then name.
     """
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
@@ -1891,17 +2843,37 @@ async def get_available_workers(
     if not s_dt or not e_dt:
         raise HTTPException(status_code=422, detail="Invalid shift_start or shift_end")
 
-    # Fetch all active workers in org
-    team = await _team(org_id)
+    # Fetch this coordinator's own team (falls back to org-wide per _team's own
+    # rollout rules — see _team's docstring), matching worker_stats' scoping.
+    team = await _team(org_id, coordinator_user=current_user if is_coordinator_role(current_user) else None)
     active_workers = [w for w in team if w.get("is_active", True)]
+    worker_ids = [wid for wid in (w.get("id") or w.get("user_id") or "" for w in active_workers) if wid]
+
+    # Batched up front: this loop used to hit Supabase several times PER
+    # worker (conflicts, skill checks, preferred-availability each did their
+    # own per-worker queries), which for a team of a dozen or so meant well
+    # over a hundred sequential round trips and a multi-second load. Each of
+    # these now does a small constant number of queries for the whole team.
+    conflicts_by_worker = _conflicts_batch(supabase, worker_ids, org_id, s_dt, e_dt)
+    schads_by_worker = _schads_eligibility_batch(supabase, worker_ids, s_dt, e_dt, is_sleepover)
+    for wid, issues in schads_by_worker.items():
+        if issues:
+            conflicts_by_worker.setdefault(wid, []).extend(issues)
+    skill_warnings_by_worker = _skill_warnings_batch(supabase, worker_ids, participant_id)
+    try:
+        preferred_by_worker = worker_matching_service.availability_statuses_for_shift_batch(
+            worker_ids, s_dt.isoformat(), e_dt.isoformat()
+        )
+    except Exception:
+        preferred_by_worker = {}
 
     results = []
     for worker in active_workers:
         wid = worker.get("id") or worker.get("user_id") or ""
         if not wid:
             continue
-        conflicts = _detect_worker_conflicts(supabase, wid, org_id, s_dt, e_dt)
-        skill_warnings = _check_skill_match(supabase, wid, participant_id)
+        conflicts = conflicts_by_worker.get(wid, [])
+        skill_warnings = skill_warnings_by_worker.get(wid, [])
         all_issues = conflicts + skill_warnings
         hard = any(i["severity"] == "error" for i in all_issues)
         soft = any(i["severity"] in ("warning", "info") for i in all_issues)
@@ -1911,10 +2883,31 @@ async def get_available_workers(
             "availability_status": status,
             "conflicts": conflicts,
             "skill_warnings": skill_warnings,
+            "preferred_availability": preferred_by_worker.get(wid) == "preferred",
         })
 
+    # Phase 2 (ranking): a soft fit score + explanatory reasons on top of the
+    # hard filters above — never changes availability_status, purely a
+    # suggestion the coordinator can ignore. Only computed when there's a
+    # participant to score fit against.
+    from ..services import worker_match_scoring_service
+
+    match_by_worker = worker_match_scoring_service.score_candidates(worker_ids, participant_id, org_id)
+    for w in results:
+        wid = w.get("id") or w.get("user_id") or ""
+        match = match_by_worker.get(wid)
+        w["match_score"] = match["score"] if match else None
+        w["match_reasons"] = match["reasons"] if match else []
+        w["excluded"] = bool(match.get("excluded")) if match else False
+
     order = {"available": 0, "warning": 1, "unavailable": 2}
-    results.sort(key=lambda w: (order.get(w["availability_status"], 3), (w.get("full_name") or "").lower()))
+    results.sort(key=lambda w: (
+        1 if w["excluded"] else 0,  # do-not-repeat sorts below even "unavailable" — never hidden, always last
+        order.get(w["availability_status"], 3),
+        -(w["match_score"] if w["match_score"] is not None else -1),
+        0 if w["preferred_availability"] else 1,
+        (w.get("full_name") or "").lower(),
+    ))
     return results
 
 
@@ -1923,6 +2916,8 @@ async def get_available_workers(
 class ShiftAssignBody(BaseModel):
     worker_id: str
     confirm_conflicts: bool = False
+    is_shadow_shift: bool = False
+    shadow_of_worker_id: Optional[str] = None
 
 
 @router.put("/shifts/{shift_id}/assign")
@@ -1964,9 +2959,30 @@ async def assign_existing_shift(
     if not worker.get("is_active", True):
         raise HTTPException(status_code=400, detail="Worker is inactive")
 
+    if body.is_shadow_shift:
+        if not body.shadow_of_worker_id:
+            raise HTTPException(status_code=422, detail="shadow_of_worker_id is required for a shadow shift")
+        if body.shadow_of_worker_id == body.worker_id:
+            raise HTTPException(status_code=422, detail="A worker can't shadow themselves")
+        shadow_resp = (
+            supabase.table("users")
+            .select("id, is_active")
+            .eq("id", body.shadow_of_worker_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+        if not shadow_resp.data:
+            raise HTTPException(status_code=404, detail="Shadowed worker not found in your organization")
+        if not shadow_resp.data[0].get("is_active"):
+            raise HTTPException(status_code=400, detail="Cannot shadow an inactive worker")
+
     # Conflict detection
     participant_id = str(shift.get("participant_id") or "")
-    conflicts = _detect_worker_conflicts(supabase, body.worker_id, org_id, s_dt, e_dt, exclude_shift_id=shift_id)
+    conflicts = _detect_worker_conflicts(
+        supabase, body.worker_id, org_id, s_dt, e_dt, exclude_shift_id=shift_id,
+        is_sleepover=bool(shift.get("is_sleepover")),
+    )
     skill_warnings = _check_skill_match(supabase, body.worker_id, participant_id or None)
     hard_conflicts = [c for c in conflicts if c["severity"] == "error"]
 
@@ -1985,15 +3001,41 @@ async def assign_existing_shift(
     # Assign
     try:
         now = datetime.now(timezone.utc).isoformat()
-        result = (
-            supabase.table("shifts")
-            .update({"worker_id": body.worker_id, "status": "scheduled", "updated_at": now})
-            .eq("id", shift_id)
-            .execute()
-        )
+        update_payload = {
+            "worker_id": body.worker_id,
+            "status": "scheduled",
+            "cannot_attend_reason": None,
+            "updated_at": now,
+            "is_shadow_shift": body.is_shadow_shift,
+            "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
+        }
+        try:
+            result = supabase.table("shifts").update(update_payload).eq("id", shift_id).execute()
+        except Exception as exc:
+            if not _is_missing_schema_error(exc):
+                raise
+            # Migration 151 not applied yet on this deployment — assign without the
+            # shadow-shift fields rather than 500ing every shift assignment.
+            update_payload.pop("is_shadow_shift", None)
+            update_payload.pop("shadow_of_worker_id", None)
+            result = supabase.table("shifts").update(update_payload).eq("id", shift_id).execute()
         updated = (result.data or [None])[0] or {**shift, "worker_id": body.worker_id, "status": "scheduled"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+
+    await audit_service.log_action(
+        action_type="coordinator.shift.assigned",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        before_state={
+            "worker_id": old_worker_id if old_worker_id != UNASSIGNED_SHIFT_PLACEHOLDER_ID else None,
+            "status": shift.get("status"),
+        },
+        after_state={"worker_id": body.worker_id, "status": "scheduled"},
+        details={"scheduled_start": shift.get("scheduled_start"), "participant_id": participant_id or None},
+    )
 
     # Notify new worker
     await _send_worker_notification(
@@ -2003,8 +3045,12 @@ async def assign_existing_shift(
         f"You've been assigned to a shift on {s_dt.strftime('%d %b %Y at %I:%M %p')}",
     )
 
-    # Notify old worker if reassignment
-    if old_worker_id and old_worker_id != body.worker_id:
+    # Notify old worker if reassignment - old_worker_id is the placeholder
+    # UUID (not a real user) the first time a shift goes from unassigned to
+    # assigned, which is the most common case; sending "you've been removed"
+    # to that placeholder isn't just pointless, it fails a foreign-key
+    # constraint against users and logs an error on every such assignment.
+    if old_worker_id and old_worker_id != body.worker_id and old_worker_id != UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         await _send_worker_notification(
             supabase, old_worker_id, org_id,
             "shift_unassigned", shift_id,
@@ -2037,7 +3083,7 @@ async def unassign_existing_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     old_worker_id = shift.get("worker_id")
-    if not old_worker_id:
+    if not old_worker_id or old_worker_id == UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         raise HTTPException(status_code=400, detail="Shift has no assigned worker")
 
     # Block unassignment if shift starts within 2 hours
@@ -2052,13 +3098,24 @@ async def unassign_existing_shift(
         now = datetime.now(timezone.utc).isoformat()
         result = (
             supabase.table("shifts")
-            .update({"worker_id": None, "status": "unassigned", "updated_at": now})
+            .update({"worker_id": None, "status": "unassigned", "cannot_attend_reason": None, "updated_at": now})
             .eq("id", shift_id)
             .execute()
         )
         updated = (result.data or [None])[0] or {**shift, "worker_id": None, "status": "unassigned"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+
+    await audit_service.log_action(
+        action_type="coordinator.shift.unassigned",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=get_user_id(current_user),
+        organization_id=org_id,
+        before_state={"worker_id": old_worker_id, "status": shift.get("status")},
+        after_state={"worker_id": None, "status": "unassigned"},
+        details={"scheduled_start": shift.get("scheduled_start"), "started_within_2h": bool(warning_msg)},
+    )
 
     await _send_worker_notification(
         supabase, old_worker_id, org_id,
@@ -2068,6 +3125,191 @@ async def unassign_existing_shift(
     )
 
     return {"shift_id": shift_id, "shift": updated, "warning": warning_msg}
+
+
+@router.get("/shifts/{shift_id}/pay-preview")
+async def shift_pay_preview(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Dry-run the SCHADS pay-calculation pipeline (schads_engine.py) against
+    a shift without writing to pay_transactions - lets a coordinator sanity-
+    check what a shift will pay before (or after) it's marked completed.
+    Returns an empty component list with a `reason` when the shift can't be
+    priced yet (e.g. the worker has no classification set) rather than an
+    error, since that's an expected, common state."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    from ..services import schads_engine
+
+    result = schads_engine.calculate_shift_pay(shift, dry_run=True)
+    return {
+        "shift_id": shift_id,
+        "components": result["components"],
+        "total_cents": result["total_cents"],
+        "reason": result["reason"],
+        "is_sleepover": bool(shift.get("is_sleepover")),
+        "emergency_flagged": bool(shift.get("emergency_flagged")),
+        "emergency_note": shift.get("emergency_note"),
+    }
+
+
+@router.get("/pay-ledger/{worker_id}")
+async def worker_pay_ledger(
+    worker_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: dict = Depends(get_current_user),
+):
+    """Paginated pay_transactions for a worker - the data behind a future pay
+    ledger screen (not built this phase - see the SCHADS Phase 1 plan)."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    query = (
+        supabase.table("pay_transactions")
+        .select("id, shift_id, component_type, amount_cents, rate_used, hours_applied, calculation_run_id, created_at")
+        .eq("organization_id", org_id)
+        .eq("worker_id", worker_id)
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+    )
+    if start_date:
+        query = query.gte("created_at", start_date)
+    if end_date:
+        query = query.lte("created_at", end_date)
+
+    result = query.execute()
+    rows = result.data or []
+    return {
+        "worker_id": worker_id,
+        "transactions": rows,
+        "total_cents": sum(r.get("amount_cents", 0) for r in rows),
+    }
+
+
+def _derive_sleepover_segments(
+    supabase, shift_id: str, scheduled_start: datetime, sleepover_start: datetime,
+    sleepover_end: datetime, scheduled_end: datetime,
+) -> None:
+    """(Re)builds the pre-work / sleepover-block / post-work shift_segments
+    rows from a single sleepover window - the coordinator only picks the
+    sleepover start/end, the three segments are derived, not entered by
+    hand. Replaces any existing non-call_out segments for this shift so
+    re-marking a sleepover with a different window doesn't leave stale rows."""
+    supabase.table("shift_segments").delete().eq("shift_id", shift_id).neq("segment_type", "call_out").execute()
+
+    rows = []
+    if sleepover_start > scheduled_start:
+        rows.append({"shift_id": shift_id, "segment_type": "active_work", "segment_start": scheduled_start.isoformat(), "segment_end": sleepover_start.isoformat()})
+    rows.append({"shift_id": shift_id, "segment_type": "sleepover_block", "segment_start": sleepover_start.isoformat(), "segment_end": sleepover_end.isoformat()})
+    if scheduled_end > sleepover_end:
+        rows.append({"shift_id": shift_id, "segment_type": "active_work", "segment_start": sleepover_end.isoformat(), "segment_end": scheduled_end.isoformat()})
+
+    if rows:
+        supabase.table("shift_segments").insert(rows).execute()
+
+
+class MarkSleepoverBody(BaseModel):
+    sleepover_start: str
+    sleepover_end: str
+
+
+@router.patch("/shifts/{shift_id}/sleepover")
+async def mark_shift_sleepover(shift_id: str, body: MarkSleepoverBody, current_user: dict = Depends(get_current_user)):
+    """Flags a shift as a sleepover and derives its pre-work/sleepover-block/
+    post-work segments from the sleepover window, per the verified Fair Work
+    Full Bench decision [2025] FWCFB 292 (effective 1 June 2026) - see
+    schads_engine.py's sleepover pricing path."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    try:
+        sleepover_start = parse_shift_datetime(body.sleepover_start)
+        sleepover_end = parse_shift_datetime(body.sleepover_end)
+        scheduled_start = parse_shift_datetime(shift["scheduled_start"])
+        scheduled_end = parse_shift_datetime(shift["scheduled_end"])
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid datetime: {exc}")
+
+    if not (scheduled_start <= sleepover_start < sleepover_end <= scheduled_end):
+        raise HTTPException(status_code=422, detail="Sleepover window must fall within the shift's scheduled start/end.")
+
+    supabase = get_supabase_admin()
+    _derive_sleepover_segments(supabase, shift_id, scheduled_start, sleepover_start, sleepover_end, scheduled_end)
+    result = supabase.table("shifts").update({"is_sleepover": True, "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", shift_id).execute()
+    updated = (result.data or [None])[0] or {**shift, "is_sleepover": True}
+    return {"shift_id": shift_id, "shift": updated}
+
+
+class LogCallOutBody(BaseModel):
+    start: str
+    end: str
+    note: Optional[str] = None
+
+
+@router.post("/shifts/{shift_id}/call-out")
+async def log_shift_call_out(shift_id: str, body: LogCallOutBody, current_user: dict = Depends(get_current_user)):
+    """Logs one call-out (active work performed during a sleepover) - paid
+    at overtime rates per FWCFB 292, priced the next time this shift's pay
+    is (re)calculated."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if not shift.get("is_sleepover"):
+        raise HTTPException(status_code=400, detail="Shift is not marked as a sleepover.")
+
+    try:
+        start = parse_shift_datetime(body.start)
+        end = parse_shift_datetime(body.end)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid datetime: {exc}")
+    if end <= start:
+        raise HTTPException(status_code=422, detail="end must be after start.")
+
+    supabase = get_supabase_admin()
+    result = supabase.table("shift_segments").insert({
+        "shift_id": shift_id, "segment_type": "call_out",
+        "segment_start": start.isoformat(), "segment_end": end.isoformat(),
+        "note": body.note,
+    }).execute()
+    return {"shift_id": shift_id, "segment": (result.data or [None])[0]}
+
+
+# ── POST /shifts/{id}/offer ───────────────────────────────────────────────────
+
+class SendShiftOfferBody(BaseModel):
+    worker_id: str
+    candidate_queue: list[str] = []
+
+
+@router.post("/shifts/{shift_id}/offer")
+async def send_shift_offer(
+    shift_id: str,
+    body: SendShiftOfferBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a ranked shift offer instead of assigning directly — the worker
+    must accept before the shift is assigned. `candidate_queue` is the rest
+    of the ranked suggestion list (already computed client-side via
+    get_available_workers), tried in order on decline or timeout."""
+    org_id = _require_coordinator(current_user)
+    try:
+        offer = await shift_offer_service.send_offer(
+            shift_id=shift_id,
+            worker_id=body.worker_id,
+            candidate_queue=body.candidate_queue,
+            offered_by=get_user_id(current_user),
+            org_id=org_id,
+        )
+    except shift_offer_service.ShiftOfferError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"shift_id": shift_id, "offer": offer}
 
 
 # ── PUT /shifts/{id}/reassign ─────────────────────────────────────────────────
@@ -2249,6 +3491,7 @@ class CreateUnassignedShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs'
 
 
 @router.post("/shifts/unassigned")
@@ -2256,11 +3499,7 @@ async def create_unassigned_shift(
     body: CreateUnassignedShiftBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a shift without an assigned worker (status = 'unassigned').
-    
-    NOTE: This endpoint requires migration 043 to be applied.
-    The 'unassigned' status must be in the shifts_status_check constraint.
-    """
+    """Create a shift without an assigned worker (status = 'unassigned')."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
 
@@ -2291,20 +3530,18 @@ async def create_unassigned_shift(
 
     shift_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Use a special placeholder worker_id for unassigned shifts (all zeros UUID)
-    # This satisfies the NOT NULL constraint while marking the shift as unassigned
-    unassigned_placeholder_id = "00000000-0000-0000-0000-000000000000"
     payload = {
         "id": shift_id,
         "organization_id": org_id,
         "participant_id": body.participant_id,
         "participant_name": participant.get("full_name"),
-        "worker_id": unassigned_placeholder_id,
+        "worker_id": UNASSIGNED_SHIFT_PLACEHOLDER_ID,
         "shift_type": _normalize_shift_type(body.shift_type),
+        "duty_type": body.duty_type or "disability_services",
         "scheduled_start": s_dt.isoformat(),
         "scheduled_end": e_dt.isoformat(),
         "duration_minutes": duration,
-        "status": "scheduled",  # Use 'scheduled' temporarily until migration 043 is applied
+        "status": "unassigned",
         "created_by": get_user_id(current_user),
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -2315,6 +3552,52 @@ async def create_unassigned_shift(
     if shift:
         shift["is_unassigned"] = True
     return {"shift_id": shift_id, "shift": shift}
+
+
+@router.get("/shifts/overdue-unassigned")
+async def get_overdue_unassigned_shifts(current_user: dict = Depends(get_current_user)):
+    """Unassigned shifts whose scheduled_start has already passed.
+
+    The roster board's shift list is week/month-range-scoped (coordinator-
+    rostering.tsx) - once a coordinator navigates away from the week an
+    unassigned shift was in, it silently disappears from view with no
+    escalation, notification, or KPI anywhere (confirmed gap, Aug 2026). This
+    is a standalone, always-current list independent of whatever range the
+    roster board happens to be showing, so a coordinator/MD can see these
+    regardless of where they've navigated to.
+
+    A shift only stays in this list for so long: unassigned_shift_expiry_service
+    auto-cancels anything still sitting here 24h after its scheduled_start (see
+    that module's docstring), so this list also doubles as the warning window
+    before that safety net kicks in.
+    """
+    org_id = _require_org_read(current_user)
+    supabase = get_supabase_admin()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        resp = (
+            supabase.table("shifts")
+            # shift_type is deliberately not selected here - it's absent on
+            # this deployment's shifts table (see _insert_shift_with_legacy_
+            # fallback, which already strips it on insert for the same
+            # reason), and selecting it made this query 500 on every call,
+            # silently swallowed below into an always-empty list - the
+            # overdue-unassigned banner never showed anything as a result.
+            .select("id, participant_id, participant_name, scheduled_start, scheduled_end, worker_id, status")
+            .eq("organization_id", org_id)
+            .lt("scheduled_start", now_iso)
+            .not_.in_("status", ["cancelled", "completed"])
+            .order("scheduled_start")
+            .limit(200)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as exc:
+        logger.warning("get_overdue_unassigned_shifts query failed: %s", exc)
+        rows = []
+
+    return [r for r in rows if not r.get("worker_id") or r["worker_id"] == UNASSIGNED_SHIFT_PLACEHOLDER_ID]
 
 
 # ── Worker notifications ──────────────────────────────────────────────────────
@@ -2377,7 +3660,7 @@ async def get_worker_availability(
     current_user: dict = Depends(get_current_user),
 ):
     """Get availability settings and blackout dates for a worker."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         avail = (
@@ -2456,7 +3739,7 @@ async def get_worker_skills(
     current_user: dict = Depends(get_current_user),
 ):
     """Get certified skills for a worker."""
-    _require_coordinator(current_user)
+    _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         resp = (
@@ -2524,6 +3807,76 @@ async def remove_worker_skill(
         raise HTTPException(status_code=500, detail=f"Skill delete failed: {exc}")
 
 
+# ── Worker shift history & performance (read-only, coordinator/MD) ────────────
+# Reuses the exact same worker_id/organization_id-scoped service functions the
+# support worker's own self-service endpoints call (backend/app/api/worker_performance.py)
+# rather than re-deriving the shift/compliance logic — this is a second, org-facing
+# door onto the same data, not a new source of truth.
+
+@router.get("/workers/{worker_id}/shift-history")
+async def coordinator_worker_shift_history(
+    worker_id: str,
+    participant_id: list[str] | None = Query(default=None),
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    return worker_shift_history_service.list_completed_shifts(
+        worker_id, org_id,
+        participant_ids=participant_id, date_from=date_from, date_to=date_to,
+    )
+
+
+@router.get("/workers/{worker_id}/shift-history/{shift_id}")
+async def coordinator_worker_shift_history_detail(
+    worker_id: str,
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full per-shift breakdown (tasks, flagged items, notes, evidence,
+    signature) - the coordinator/MD-facing counterpart to the worker's own
+    GET /worker/shift-history/{shift_id}, same underlying service call."""
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    detail = worker_shift_history_service.get_shift_history_detail(shift_id, worker_id, org_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+    return detail
+
+
+@router.get("/workers/{worker_id}/shift-history/{shift_id}/timeline")
+async def worker_shift_event_timeline(
+    worker_id: str,
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Chronological event log for a shift (clock-in through clock-out) -
+    audit-trail view, see get_shift_event_timeline's docstring for exactly
+    what's covered."""
+    org_id = _require_org_read(current_user)
+    from ..services import worker_shift_history_service
+
+    timeline = worker_shift_history_service.get_shift_event_timeline(shift_id, worker_id, org_id)
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+    return timeline
+
+
+@router.get("/workers/{worker_id}/performance-dashboard")
+async def coordinator_worker_performance_dashboard(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    from ..services import worker_performance_dashboard_service
+
+    return worker_performance_dashboard_service.get_performance_dashboard(worker_id, org_id)
+
+
 # ── Participant required skills ───────────────────────────────────────────────
 
 @router.get("/participants/{participant_id}/required-skills")
@@ -2577,6 +3930,205 @@ async def add_participant_required_skill(
         return (resp.data or [payload])[0]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Required skill add failed: {exc}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Worker-Participant Matching Enhancement, Phase 1 (Foundation) — Aug 2026
+#
+# Structured tag taxonomy (interests, lived experience, communication style,
+# ...) and its assignment to participants/workers. No scoring here - this is
+# the data foundation the Phase 2 ranking service will read from.
+#
+# Tag taxonomy management (categories/tags themselves) is gated on
+# has_org_wide_access rather than the usual _require_coordinator-only-mutation
+# convention used elsewhere in this file: this is deliberately MD-or-coordinator,
+# same as the design spec's stated access model, because curating an org's
+# shared tag list is an org-level admin concern the MD should be able to shape
+# directly, not a routine day-to-day coordinator action.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/tags")
+async def list_tags(current_user: dict = Depends(get_current_user)):
+    """Full tag taxonomy (categories + nested tags) for this org."""
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_tag_catalog(org_id)
+
+
+class TagCategoryBody(BaseModel):
+    name: str
+    # Phase 2 (ranking): which scoring component this category feeds, if any.
+    # None (the default) means "descriptive only" - doesn't affect the match
+    # score. See migration 145's comment for why this is explicit rather than
+    # matched on the free-text name.
+    matching_role: Optional[str] = None
+
+
+@router.post("/tag-categories", status_code=201)
+async def create_tag_category(body: TagCategoryBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if not body.name.strip():
+        raise HTTPException(status_code=422, detail="Category name is required.")
+    if body.matching_role and body.matching_role not in ("interests", "lived_experience"):
+        raise HTTPException(status_code=422, detail="matching_role must be 'interests', 'lived_experience', or omitted.")
+    from ..services import tag_service
+
+    return tag_service.create_tag_category(org_id, body.name, body.matching_role)
+
+
+class TagActiveBody(BaseModel):
+    is_active: bool
+
+
+@router.patch("/tag-categories/{category_id}")
+async def update_tag_category_active(category_id: str, body: TagActiveBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.set_tag_category_active(org_id, category_id, body.is_active)
+    return {"ok": True}
+
+
+class TagCategoryRoleBody(BaseModel):
+    matching_role: Optional[str] = None
+
+
+@router.patch("/tag-categories/{category_id}/matching-role")
+async def update_tag_category_role(category_id: str, body: TagCategoryRoleBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if body.matching_role and body.matching_role not in ("interests", "lived_experience"):
+        raise HTTPException(status_code=422, detail="matching_role must be 'interests', 'lived_experience', or omitted.")
+    from ..services import tag_service
+
+    tag_service.set_tag_category_matching_role(org_id, category_id, body.matching_role)
+    return {"ok": True}
+
+
+class TagBody(BaseModel):
+    category_id: str
+    label: str
+
+
+@router.post("/tags", status_code=201)
+async def create_tag(body: TagBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    if not body.label.strip():
+        raise HTTPException(status_code=422, detail="Tag label is required.")
+    from ..services import tag_service
+
+    return tag_service.create_tag(org_id, body.category_id, body.label)
+
+
+@router.patch("/tags/{tag_id}")
+async def update_tag_active(tag_id: str, body: TagActiveBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.set_tag_active(org_id, tag_id, body.is_active)
+    return {"ok": True}
+
+
+@router.get("/participants/{participant_id}/tags")
+async def get_participant_tags(participant_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_participant_tags(participant_id)
+
+
+class ParticipantTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+
+
+@router.post("/participants/{participant_id}/tags", status_code=201)
+async def add_participant_tag(participant_id: str, body: ParticipantTagBody, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.add_participant_tag(participant_id, body.tag_id, get_user_id(current_user), body.notes)
+
+
+@router.delete("/participants/{participant_id}/tags/{tag_id}", status_code=204)
+async def remove_participant_tag(participant_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_participant_tag(participant_id, tag_id)
+    return None
+
+
+@router.get("/workers/{worker_id}/tags")
+async def get_worker_tags(worker_id: str, current_user: dict = Depends(get_current_user)):
+    """Coordinators and the MD see a worker's full tag list, including entries
+    the worker marked visible_to_coordinator_only - see migration 144's comment
+    on worker_tags for why that flag doesn't further restrict within this role."""
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.list_worker_tags(worker_id, include_private=True)
+
+
+class WorkerTagBody(BaseModel):
+    tag_id: str
+    notes: Optional[str] = None
+    visible_to_coordinator_only: bool = False
+
+
+@router.post("/workers/{worker_id}/tags", status_code=201)
+async def add_worker_tag(worker_id: str, body: WorkerTagBody, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    return tag_service.add_worker_tag(
+        worker_id, body.tag_id, get_user_id(current_user), body.notes, body.visible_to_coordinator_only
+    )
+
+
+@router.delete("/workers/{worker_id}/tags/{tag_id}", status_code=204)
+async def remove_worker_tag(worker_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import tag_service
+
+    tag_service.remove_worker_tag(worker_id, tag_id)
+    return None
+
+
+# ── Worker-Participant Matching Enhancement, Phase 3 (Feedback loop) ─────────
+# Coordinator side of shift_match_feedback. Recording an outcome is a routine
+# operational action (not org-wide admin config like the tag taxonomy above),
+# so this follows the usual _require_coordinator-mutation / _require_org_read
+# convention rather than the tags' deliberate has_org_wide_access-for-writes
+# exception.
+
+@router.get("/shifts/{shift_id}/match-feedback")
+async def get_shift_match_feedback(shift_id: str, current_user: dict = Depends(get_current_user)):
+    _require_org_read(current_user)
+    from ..services import shift_match_feedback_service
+
+    return shift_match_feedback_service.get_feedback_for_shift(shift_id)
+
+
+class ShiftMatchFeedbackBody(BaseModel):
+    participant_response: Optional[str] = None
+    outcome_rating: Optional[int] = None
+    would_repeat: Optional[bool] = None
+
+
+@router.post("/shifts/{shift_id}/match-feedback")
+async def post_shift_match_feedback(shift_id: str, body: ShiftMatchFeedbackBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    if body.outcome_rating is not None and not (1 <= body.outcome_rating <= 5):
+        raise HTTPException(status_code=422, detail="outcome_rating must be between 1 and 5.")
+    from ..services import shift_match_feedback_service
+
+    try:
+        return shift_match_feedback_service.record_coordinator_feedback(
+            shift_id, org_id, get_user_id(current_user), body.participant_response, body.outcome_rating, body.would_repeat
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2697,8 +4249,9 @@ async def get_live_shifts(
 ):
     """Return all in-progress and recently-clocked-in shifts for real-time monitoring.
     Also auto-generates alerts for shifts that meet alert conditions.
-    """
-    org_id = _require_coordinator(current_user)
+    Read-only — coordinators and MD both get access, same _require_org_read
+    pattern as /workers/pipeline. Nothing here mutates shift state."""
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc)
     window_start = (now - timedelta(hours=12)).isoformat()
@@ -2948,6 +4501,21 @@ async def get_shift_messages(
         return conversation_service.get_conversation_messages(str(conv_id), user_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Messages fetch failed: {exc}") from exc
+
+
+@router.get("/shifts/{shift_id}/detail")
+async def coordinator_shift_detail(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full single-shift drill-down for Master Schedule (tasks, notes, clock
+    in/out, risk acknowledgement, messages) - org-wide read for coordinator
+    and MD alike, same access shape as the /shifts list endpoint."""
+    org_id = _require_org_read(current_user)
+    detail = shift_service.get_shift_detail_for_org(shift_id, org_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return detail
 
 
 # ── POST /shifts/{id}/flag ────────────────────────────────────────────────────
@@ -3948,6 +5516,74 @@ async def coordinator_update_training_module(
     )
 
 
+class InductionItemBody(BaseModel):
+    title: str
+    description: Optional[str] = None
+    content_url: Optional[str] = None
+    is_mandatory: bool = True
+    sort_order: int = 0
+
+
+class InductionItemUpdateBody(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    content_url: Optional[str] = None
+    is_mandatory: Optional[bool] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/induction-items")
+async def coordinator_list_induction_items(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.list_induction_items(org_id)
+
+
+@router.post("/induction-items")
+async def coordinator_create_induction_item(
+    body: InductionItemBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.create_induction_item(
+        organization_id=org_id,
+        created_by=get_user_id(current_user),
+        title=body.title,
+        description=body.description,
+        content_url=body.content_url,
+        is_mandatory=body.is_mandatory,
+        sort_order=body.sort_order,
+    )
+
+
+@router.patch("/induction-items/{item_id}")
+async def coordinator_update_induction_item(
+    item_id: str,
+    body: InductionItemUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import induction_service
+
+    return induction_service.update_induction_item(
+        organization_id=org_id,
+        item_id=item_id,
+        updates=body.model_dump(exclude_unset=True),
+    )
+
+
+@router.get("/workers/{worker_id}/induction")
+async def coordinator_get_worker_induction(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services import induction_service
+
+    return induction_service.get_my_induction_progress(worker_id, org_id)
+
+
 @router.get("/team-training-status")
 async def coordinator_team_training_status(current_user: dict = Depends(get_current_user)):
     """Per-worker assigned/completed/pending-review training counts, for list badges."""
@@ -3959,7 +5595,7 @@ async def coordinator_team_training_status(current_user: dict = Depends(get_curr
 
 @router.get("/training-completions/pending")
 async def coordinator_pending_training_completions(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.list_pending_completions(org_id)
@@ -3988,7 +5624,7 @@ async def coordinator_list_worker_training(
     worker_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     recommendations = training.list_worker_recommendations(worker_id, org_id)
@@ -4034,7 +5670,7 @@ async def coordinator_list_worker_onboarding_documents(
     worker_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_onboarding_documents_service as onboarding_docs
 
     return onboarding_docs.list_worker_documents(worker_id, org_id)

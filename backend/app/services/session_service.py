@@ -475,6 +475,30 @@ def _fetch_patient_name_map(
         return {}
 
 
+def _fetch_worker_name_map(supabase, worker_ids: List[str]) -> Dict[str, str]:
+    """Batch fetch worker display names for the "shift worked by" field on
+    session history - sessions.worker_id is populated correctly, it was just
+    never resolved to a name for any of the participant/session detail views."""
+    if not worker_ids:
+        return {}
+    try:
+        result = (
+            supabase.table("users")
+            .select("id, full_name, email")
+            .in_("id", worker_ids)
+            .execute()
+        )
+        rows = _safe_rows(result.data)
+        return {
+            str(r.get("id")): str(r.get("full_name") or r.get("email") or "").strip()
+            for r in rows
+            if r.get("id")
+        }
+    except Exception as e:
+        logger.warning(f"Could not fetch worker names: {e}")
+        return {}
+
+
 def _normalize(row: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize DB session row."""
     if not isinstance(row, dict):
@@ -738,6 +762,49 @@ async def get_sessions_by_participant(
         if _can_access_legacy_session(row, current_user, participant)
     ]
 
+    # Same gap as get_session_by_id above: sessions.notes is never populated
+    # by the current mobile per-task composer, which writes to
+    # shift_visit_notes instead - without this, every session documented via
+    # that flow showed an empty notes preview in the participant's session
+    # history list. One batched query for the whole page rather than one per
+    # session.
+    session_ids = [str(r.get("id")) for r in rows if r.get("id")]
+    if session_ids:
+        try:
+            vn_resp = (
+                supabase.table("shift_visit_notes")
+                .select("session_id, content, created_at")
+                .in_("session_id", session_ids)
+                .order("created_at")
+                .execute()
+            )
+            notes_by_session: dict[str, list[str]] = {}
+            for note_row in vn_resp.data or []:
+                content = (note_row.get("content") or "").strip()
+                if not content:
+                    continue
+                sid = str(note_row.get("session_id") or "")
+                timestamp = str(note_row.get("created_at") or "")[:16].replace("T", " ")
+                notes_by_session.setdefault(sid, []).append(f"[{timestamp}] {content}")
+            for r in rows:
+                sid = str(r.get("id") or "")
+                lines = notes_by_session.get(sid)
+                if not lines:
+                    continue
+                existing = (r.get("notes") or "").strip()
+                r["notes"] = "\n\n".join(part for part in (existing, "\n\n".join(lines)) if part)
+        except Exception as exc:
+            if not _is_missing_column_error(exc):
+                logger.debug("shift_visit_notes batch lookup failed for participant %s: %s", participant_id, exc)
+
+    worker_ids = list({str(r.get("worker_id")) for r in rows if r.get("worker_id")})
+    if worker_ids:
+        worker_names = _fetch_worker_name_map(supabase, worker_ids)
+        for r in rows:
+            wid = str(r.get("worker_id") or "")
+            if wid in worker_names:
+                r["worker_name"] = worker_names[wid]
+
     return [_normalize(r) for r in rows]
 
 
@@ -904,6 +971,64 @@ async def get_session_by_id(
         return None
 
     row = _normalize(scoped_raw)
+
+    # sessions.notes/compliance_input_text is a legacy single free-text field
+    # from before the mobile per-task chatbox redesign - the current worker
+    # app writes documentation exclusively to shift_visit_notes, which this
+    # row never included. Coordinators/MD viewing a session here (this is the
+    # page /session-detail hits) saw a real shift with real documentation
+    # look completely empty. Same fix as get_shift_history_detail in
+    # worker_shift_history_service.py - merge the actual notes in, with each
+    # one's original capture timestamp so this also serves as an audit trail
+    # of when things happened, not just what was written.
+    try:
+        vn_resp = (
+            supabase.table("shift_visit_notes")
+            .select("id, content, task_id, category, created_at")
+            .eq("session_id", session_id)
+            .order("created_at")
+            .execute()
+        )
+        visit_note_rows = vn_resp.data or []
+    except Exception as exc:
+        visit_note_rows = []
+        if not _is_missing_column_error(exc):
+            logger.debug("shift_visit_notes lookup failed for session %s: %s", session_id, exc)
+
+    if visit_note_rows:
+        visit_note_lines = []
+        session_notes: list[dict[str, Any]] = []
+        for note_row in visit_note_rows:
+            content = (note_row.get("content") or "").strip()
+            if not content:
+                continue
+            timestamp = str(note_row.get("created_at") or "")[:16].replace("T", " ")
+            visit_note_lines.append(f"[{timestamp}] {content}")
+            session_notes.append({
+                "id": note_row.get("id"),
+                "task_id": note_row.get("task_id"),
+                "content": content,
+                "category": note_row.get("category"),
+                "created_at": note_row.get("created_at"),
+            })
+        existing_notes = (row.get("notes") or "").strip()
+        row["notes"] = "\n\n".join(part for part in (existing_notes, "\n\n".join(visit_note_lines)) if part)
+        row["session_notes"] = session_notes
+
+        # compliance_input_text is the field /save-with-ai and /audit actually
+        # gate on ("Analyze with AI" was hard-failing with the compliance-
+        # blocked error for every shift-based session, since this field - not
+        # notes - is what those endpoints check, and it was never populated
+        # here either). Only fill it when genuinely empty, so a session that
+        # already went through real translation/legal-text processing keeps
+        # that value rather than being overwritten by the raw aggregation.
+        if not (row.get("compliance_input_text") or "").strip():
+            row["compliance_input_text"] = row["notes"]
+
+    worker_id = row.get("worker_id")
+    if worker_id:
+        worker_names = _fetch_worker_name_map(supabase, [str(worker_id)])
+        row["worker_name"] = worker_names.get(str(worker_id))
 
     if patient_id:
         name_map = _fetch_patient_name_map(

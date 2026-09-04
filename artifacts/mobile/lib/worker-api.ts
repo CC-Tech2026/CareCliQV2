@@ -35,6 +35,9 @@ export type ShiftTask = {
   evidence_required?: string | null;
   marked_na?: boolean;
   na_reason?: string | null;
+  /** "medication" identifies the structured medication-administration task
+   * (WorkerMobileTaskList embeds the real dosing checklist for it). */
+  category?: string | null;
 };
 
 export type ParticipantProfile = {
@@ -274,6 +277,7 @@ export type ShiftSignature = {
 export type ClockInRequest = {
   method: "gps" | "qr";
   location?: { lat: number; lng: number; accuracy?: number } | null;
+  qr_token?: string | null;
   client_timestamp?: string;
 };
 
@@ -291,6 +295,37 @@ export function getWorkerShift(id: string) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}`);
 }
 
+export type ShiftOfferSummary = {
+  offer_id: string;
+  shift_id: string;
+  participant_first_name: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  shift_type: string | null;
+  offered_at: string | null;
+};
+
+/** Decision-only summary for a shift this worker has been offered but not
+ * yet accepted/declined — deliberately excludes the full participant
+ * profile, which stays locked until the worker actually commits to the
+ * shift (getWorkerShift 403s until then; that's intentional, not a bug). */
+export function getShiftOfferSummary(id: string) {
+  return workerFetch<ShiftOfferSummary>(`/api/worker/shifts/${id}/offer`);
+}
+
+export function acceptShiftOffer(id: string) {
+  return workerFetch<{ shift_id: string; shift: WorkerShift }>(`/api/worker/shifts/${id}/offer/accept`, {
+    method: "POST",
+  });
+}
+
+export function declineShiftOffer(id: string, reason?: string) {
+  return workerFetch<{ shift_id: string }>(`/api/worker/shifts/${id}/offer/decline`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || null }),
+  });
+}
+
 export function clockInShift(id: string, body: ClockInRequest) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-in`, {
     method: "POST",
@@ -304,6 +339,60 @@ export function acknowledgeShiftRisks(id: string) {
   });
 }
 
+export type SafetyScenario = { trigger: string; response: string; sort_order?: number };
+export type DeescalationTechnique = { title: string; steps: string[]; sort_order?: number };
+export type PhysicalSafetyNote = { note: string; sort_order?: number };
+export type EscalationContact = {
+  role: "coordinator" | "on_call" | "emergency";
+  label: string;
+  phone: string;
+  sort_order?: number;
+};
+
+export type SafetyProtocol = {
+  participant_id: string;
+  organization_id: string;
+  safety_card_body: string;
+  scenarios: SafetyScenario[];
+  deescalation_techniques: DeescalationTechnique[];
+  physical_safety_notes: PhysicalSafetyNote[];
+  escalation_contacts: EscalationContact[];
+  content_version: number;
+  /** Always required fresh per shift — never satisfied by a past acknowledgement,
+   * even for the same participant/content version. */
+  requires_safety_ack?: boolean;
+  has_safety_content?: boolean;
+  /** Standing, org-wide acknowledgement text shown at every clock-in
+   * regardless of whether this participant has any safety content on file -
+   * never empty. */
+  org_content_body: string;
+  org_content_version: number;
+};
+
+export function getParticipantSafetyProtocol(participantId: string, shiftId?: string) {
+  const query = shiftId ? `?shift_id=${encodeURIComponent(shiftId)}` : "";
+  return workerFetch<SafetyProtocol>(`/api/worker/participants/${participantId}/safety-protocol${query}`);
+}
+
+export function acknowledgeParticipantSafetyProtocol(
+  participantId: string,
+  contentVersion: number,
+  orgContentVersion?: number,
+  shiftId?: string,
+) {
+  return workerFetch<{ acknowledged_at: string; requires_safety_ack: boolean }>(
+    `/api/worker/participants/${participantId}/safety-protocol/acknowledge`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        content_version: contentVersion,
+        org_content_version: orgContentVersion,
+        shift_id: shiftId,
+      }),
+    },
+  );
+}
+
 export function startShiftSession(id: string) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/start-session`, {
     method: "POST",
@@ -315,6 +404,44 @@ export function endShift(id: string, options?: { force?: boolean }) {
     method: "POST",
     body: JSON.stringify({ force: options?.force ?? false }),
   });
+}
+
+export type DocumentationComplianceRule = {
+  rule: string;
+  label: string;
+  status: "pass" | "warning" | "fail";
+  message: string;
+  severity?: string;
+  explanation?: string;
+  is_blocking?: boolean;
+  enforcement_tier?: string;
+  category?: string;
+};
+
+export type DocumentationComplianceCheck =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      score: number;
+      passed: number;
+      warnings: number;
+      failed: number;
+      total_rules: number;
+      rules: DocumentationComplianceRule[];
+      failed_rules: DocumentationComplianceRule[];
+    };
+
+/**
+ * Real 12-rule NDIS documentation-quality check (compliance_engine.
+ * run_compliance_check on the backend) run against this shift's notes so
+ * far. Read-only, no AI call, safe to poll periodically while the shift is
+ * in progress - distinct from the task-evidence compliance_score computed
+ * at end_shift().
+ */
+export function checkShiftDocumentationCompliance(shiftId: string) {
+  return workerFetch<DocumentationComplianceCheck>(
+    `/api/worker/shifts/${shiftId}/documentation-compliance-check`,
+  );
 }
 
 export function updateShiftTasks(id: string, tasks: ShiftTask[]) {
@@ -555,16 +682,15 @@ export function deleteSessionNote(sessionId: string, noteId: string) {
   });
 }
 
-export function submitShiftSignature(
-  shiftId: string,
-  body: {
-    confirm_tasks_accurate: boolean;
-    confirm_safety_followed: boolean;
-    confirm_no_unreported_incidents: boolean;
-    signature_svg: string;
-    signature_png_data_url: string;
-  },
-) {
+export type ShiftSignaturePayload = {
+  confirm_tasks_accurate: boolean;
+  confirm_safety_followed: boolean;
+  confirm_no_unreported_incidents: boolean;
+  signature_svg: string;
+  signature_png_data_url: string;
+};
+
+export function submitShiftSignature(shiftId: string, body: ShiftSignaturePayload) {
   return workerFetch<ShiftSignature>(`/api/worker/shifts/${shiftId}/sign`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -636,6 +762,52 @@ export function clinicalRewriteText(text: string, sourceLanguage = "auto") {
   );
 }
 
+export type ImproveNoteResult = {
+  improved_note: string;
+  rule_suggestions: { rule: string; issue: string; suggestion: string }[];
+};
+
+/**
+ * Rewrites a draft note to fix specific issues (word count, vagueness,
+ * missing participant reference, etc.) using the same AI capability already
+ * used coordinator-side for full session notes (ai_service.improve_note) -
+ * here scoped to a single in-progress task note rather than a whole shift.
+ */
+export function improveNote(
+  notes: string,
+  failedRules: { rule: string; message: string }[],
+  participantId?: string | null,
+) {
+  return workerFetch<ImproveNoteResult>("/api/ai/improve-note", {
+    method: "POST",
+    body: JSON.stringify({
+      notes,
+      failed_rules: failedRules,
+      participant_id: participantId ?? undefined,
+    }),
+  });
+}
+
+export type TranslatePreviewResult = {
+  translated: string;
+  target_language: string;
+  translated_ok: boolean;
+};
+
+/**
+ * Best-effort English -> display-language translation for a read-only
+ * preview only (e.g. showing what an AI-suggested note rewrite says in the
+ * worker's own app language) - never the saved legal record, which stays
+ * English. Always resolves (backend degrades to the original text on
+ * failure rather than erroring), so this never needs its own error UI.
+ */
+export function translateForWorkerPreview(text: string, targetLanguage: string) {
+  return workerFetch<TranslatePreviewResult>("/api/ai/translate-preview", {
+    method: "POST",
+    body: JSON.stringify({ text, target_language: targetLanguage }),
+  });
+}
+
 export function getMyCompliance(params?: { sessionsLimit?: number; sessionsOffset?: number }) {
   const q = new URLSearchParams();
   if (params?.sessionsLimit != null) q.set("sessions_limit", String(params.sessionsLimit));
@@ -653,6 +825,12 @@ export type UpcomingCheckin = {
   status?: string;
 };
 
+export type MissedCheckin = {
+  id: string;
+  sequence_number?: number;
+  scheduled_at: string | null;
+};
+
 export type CheckinWindowStatus = {
   applicable?: boolean;
   can_submit_checkin?: boolean;
@@ -667,6 +845,8 @@ export type CheckinWindowStatus = {
   checkin_response_window_secs?: number;
   /** Pending/prompted check-ins — used to schedule offline-capable local notifications. */
   upcoming_checkins?: UpcomingCheckin[];
+  /** Missed check-ins the worker hasn't explained yet — blocks shift submission until each has a reason. */
+  missed_checkins_needing_reason?: MissedCheckin[];
 };
 
 export type UserNotification = {
@@ -706,6 +886,16 @@ export type WorkerComplianceDetail = {
 
 export function getCheckinStatusByShift(shiftId: string) {
   return workerFetch<CheckinWindowStatus>(`/api/worker/shifts/${shiftId}/checkins/status`);
+}
+
+export function submitMissedCheckinReason(sessionId: string, scheduledCheckinId: string, reason: string) {
+  return workerFetch<{ ok: boolean }>(
+    `/api/worker/sessions/${sessionId}/checkins/${scheduledCheckinId}/missed-reason`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+  );
 }
 
 export function submitLongShiftCheckin(
@@ -803,6 +993,30 @@ export function fetchNotifications(params?: {
   if (params?.offset != null) q.set("offset", String(params.offset));
   return workerFetch<{ notifications: UserNotification[]; count: number }>(
     `/api/worker/notifications?${q}`,
+  );
+}
+
+export type MyCompletionStats = {
+  credentials_verified: number;
+  training_completed: number;
+};
+
+export type MyCompletionStatus = {
+  onboarding_completed: boolean;
+  onboarding_completed_seen_at: string | null;
+  stats: MyCompletionStats;
+};
+
+/** Fires once when a worker reaches Active (cleared Credentials and Training) —
+ * the mobile mirror of the web app's OnboardingCompleteGate. */
+export function getMyCompletionStatus() {
+  return workerFetch<MyCompletionStatus>("/api/onboarding/me/completion-status");
+}
+
+export function markMyCompletionSeen() {
+  return workerFetch<{ onboarding_completed_seen_at: string | null }>(
+    "/api/onboarding/me/completion-seen",
+    { method: "POST" },
   );
 }
 

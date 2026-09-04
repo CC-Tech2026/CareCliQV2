@@ -17,9 +17,31 @@ import {
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
 import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
 import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
+import { clearCachedSettings } from "@/lib/use-settings";
+import { clearSignature } from "@/lib/signature-store";
+import { clearAllSessionNoteStorage } from "@/lib/session-notes-storage";
+import { deleteTaskEvidenceDb } from "@/lib/task-evidence-storage";
+import { deleteShiftOfflineDb } from "@/lib/shift-offline-queue";
 
-export type UserRole = "support_coordinator" | "support_worker" | "managing_director";
+/** Every on-device cache that isn't already covered by queryClient.clear() or
+ * clearAuthSessionStorage() — settings/signature caches keyed by a single fixed
+ * localStorage key shared by every user of the device, plus the offline-sync
+ * IndexedDB stores and session-note drafts, none of which are namespaced by user
+ * or org. Without this, a different account logging in on the same device could
+ * still see — and offline-sync could still resubmit under the new session — the
+ * previous user's cached data. */
+function clearDeviceLocalCaches(): void {
+  clearCachedSettings();
+  clearSignature();
+  clearAllSessionNoteStorage();
+  void deleteTaskEvidenceDb();
+  void deleteShiftOfflineDb();
+}
+
+export type UserRole = "support_coordinator" | "support_worker" | "managing_director" | "super_admin";
 export type AccountType = "independent_worker" | "small_provider";
+
+export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
 
 export interface AuthUser {
   id: string;
@@ -34,6 +56,9 @@ export interface AuthUser {
   role_specific_profile_completed?: boolean;
   profile_photo_url?: string | null;
   organizationId?: string;
+  is_active?: boolean;
+  deactivation_reason?: DeactivationReason | null;
+  deactivation_note?: string | null;
 }
 
 export type LoginResult =
@@ -98,6 +123,9 @@ function mapAuthUser(data: { user: Record<string, unknown> }): AuthUser {
       user.role_specific_profile_completed ?? user.onboarding_complete ?? false,
     ),
     profile_photo_url: (user.profile_photo_url as string | null | undefined) ?? null,
+    is_active: user.is_active === false ? false : true,
+    deactivation_reason: (user.deactivation_reason as DeactivationReason | null | undefined) ?? null,
+    deactivation_note: (user.deactivation_note as string | null | undefined) ?? null,
   };
 }
 
@@ -139,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAppliedSupabaseSession();
     clearPresentedNotifications();
     clearAuthSessionStorage();
+    clearDeviceLocalCaches();
     queryClient.clear();
     setToken(null);
     setUser(null);
@@ -154,7 +183,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): AuthUser => {
     endVoluntaryLogout();
     const authUser = mapAuthUser(data);
-    if (!authUser.organizationId) {
+    // super_admin is CareCliQ's own vendor-side role — deliberately not
+    // scoped to any organization (see access.py's SUPER_ADMIN_ROLES), so
+    // it's the one legitimate exception to "every user belongs to an org".
+    if (!authUser.organizationId && authUser.role !== "super_admin") {
       throw new Error("Organisation not found. Contact your administrator.");
     }
     persistSession(data.access_token, authUser, rememberDevice);

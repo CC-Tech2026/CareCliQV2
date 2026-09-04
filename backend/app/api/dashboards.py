@@ -231,6 +231,7 @@ async def _team_members(org_id: str, scoped_user_ids: set[str] | None = None) ->
                 supabase.table("users")
                 .select("id, email, full_name, role, is_active, last_login, organization_id")
                 .in_("id", user_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             profiles_by_id = {
@@ -243,7 +244,14 @@ async def _team_members(org_id: str, scoped_user_ids: set[str] | None = None) ->
 
     output: list[dict] = []
     for row in rows:
-        profile = profiles_by_id.get(str(row.get("user_id")), {})
+        profile = profiles_by_id.get(str(row.get("user_id")))
+        if not profile:
+            # organization_members can include a user whose "home" users.organization_id
+            # points at a different org (e.g. a dual-org test account). The profile lookup
+            # above is deliberately scoped to this org, so a miss here means this member
+            # doesn't actually belong to this org's roster — skip rather than surface a
+            # nameless placeholder row that leaks their existence/role across orgs.
+            continue
         output.append({
             "id": row.get("user_id"),
             "role": row.get("role") or profile.get("role"),
@@ -487,6 +495,23 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
     today = _today_iso()
     active_workers = [m for m in team if m.get("is_active")]
     support_workers = [m for m in active_workers if m.get("role") == "support_worker"]
+    coordinators = [m for m in active_workers if m.get("role") == "support_coordinator"]
+
+    # Participant composition — gender split and NDIS plan status breakdown,
+    # for the Hub's participant overview card.
+    participants_by_sex = {"male": 0, "female": 0, "unspecified": 0}
+    for p in participants:
+        sex = p.get("biological_sex") or "unspecified"
+        if sex not in participants_by_sex:
+            sex = "unspecified"
+        participants_by_sex[sex] += 1
+
+    participants_by_plan_status = {"active": 0, "pending": 0, "review": 0, "expired": 0, "inactive": 0}
+    for p in participants:
+        plan_status = p.get("plan_status") or "active"
+        if plan_status not in participants_by_plan_status:
+            plan_status = "active"
+        participants_by_plan_status[plan_status] += 1
 
     # Sessions this week
     from datetime import timedelta
@@ -532,17 +557,33 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
     # Goal achievement rate
     goal_rate = _goal_achievement_rate(participants)
 
-    # Retention rate — query ALL org members (including inactive) for a correct denominator
+    # Retention rate — query ALL org members (including inactive) for a correct denominator.
+    # Cross-check against users scoped to this org so a member whose "home" org is
+    # elsewhere (e.g. a dual-org test account) doesn't inflate this org's headcount —
+    # same fix as _team_members above.
     supabase = get_supabase_admin()
     try:
         all_members_result = (
             supabase.table("organization_members")
-            .select("user_id, is_active", count="exact")
+            .select("user_id, is_active")
             .eq("organization_id", org_id)
             .execute()
         )
-        total_member_count = all_members_result.count or len(all_members_result.data or [])
-        inactive_count = sum(1 for m in (all_members_result.data or []) if not m.get("is_active"))
+        member_rows = all_members_result.data or []
+        member_user_ids = [str(m.get("user_id")) for m in member_rows if m.get("user_id")]
+        org_scoped_ids: set[str] = set()
+        if member_user_ids:
+            org_profiles = (
+                supabase.table("users")
+                .select("id")
+                .in_("id", member_user_ids)
+                .eq("organization_id", org_id)
+                .execute()
+            )
+            org_scoped_ids = {str(p.get("id")) for p in (org_profiles.data or []) if p.get("id")}
+        member_rows = [m for m in member_rows if str(m.get("user_id")) in org_scoped_ids]
+        total_member_count = len(member_rows)
+        inactive_count = sum(1 for m in member_rows if not m.get("is_active"))
     except Exception:
         total_member_count = len(team)
         inactive_count = 0
@@ -639,6 +680,9 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
         "active_participants": len(participants),
         "active_staff": len(active_workers),
         "support_workers": len(support_workers),
+        "coordinators": len(coordinators),
+        "participants_by_sex": participants_by_sex,
+        "participants_by_plan_status": participants_by_plan_status,
         "staff_retention_rate": retention_rate,
         "sessions_this_week": len(sessions_this_week),
         "compliance_score": compliance_score,

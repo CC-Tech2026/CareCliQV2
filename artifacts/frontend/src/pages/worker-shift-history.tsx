@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   Tooltip as UiTooltip,
   TooltipContent,
@@ -595,12 +596,10 @@ export default function WorkerShiftHistoryPage() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("nav.performance")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("shiftHistory.title")}
+          <SectionInfo text={translate("shiftHistory.subtitle")} />
         </h1>
-        <p className="mt-2 max-w-xl text-sm font-medium" style={{ color: MUTED }}>
-          {translate("shiftHistory.subtitle")}
-        </p>
       </header>
 
       <ShiftTrendChart

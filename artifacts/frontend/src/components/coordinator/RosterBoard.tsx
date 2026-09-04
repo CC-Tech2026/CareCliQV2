@@ -5,7 +5,7 @@
  * drag a card between workers/days (same day only) to reassign, availability
  * shading shows where a coordinator can safely drop a shift.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clock3, GripVertical,
-  Loader2, Minus, Plus, Sparkles, User2, XCircle, MinusCircle,
+  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle,
 } from "lucide-react";
 import {
   assignExistingShift,
@@ -37,6 +37,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
+import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPanel";
+import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -92,7 +94,7 @@ function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
 }
 
 // ── Draggable shift chip (unassigned tray + assigned cells) ──────────────────
-function ShiftCard({ shift, dimmed = false }: { shift: CoordinatorShiftRecord; dimmed?: boolean }) {
+function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShiftRecord; dimmed?: boolean; onClick?: () => void }) {
   const { translate } = useAccessibility();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: shift.id,
@@ -109,16 +111,25 @@ function ShiftCard({ shift, dimmed = false }: { shift: CoordinatorShiftRecord; d
         opacity: isDragging ? 0.25 : dimmed ? 0.5 : 1,
         borderLeftColor: clrs.border,
         background: clrs.bg,
-        cursor: "grab",
+        cursor: onClick ? "pointer" : "grab",
       }}
       {...listeners}
       {...attributes}
+      onClick={onClick}
       className="group flex items-start gap-1 rounded-lg border-l-[3px] px-2 py-1.5 select-none shadow-sm transition-shadow hover:shadow-md"
     >
       <GripVertical size={10} className="mt-0.5 shrink-0 opacity-40 group-hover:opacity-80" style={{ color: clrs.color }} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10.5px] font-black leading-tight" style={{ color: clrs.color }}>
-          {shift.participant_name || translate("common.participant")}
+        <p className="flex items-center gap-1 truncate text-[10.5px] font-black leading-tight" style={{ color: clrs.color }}>
+          {shift.is_shadow_shift && (
+            <span
+              className="inline-flex shrink-0"
+              title={shift.shadow_of_worker_name ? `Shadowing ${shift.shadow_of_worker_name}` : "Shadow shift"}
+            >
+              <Users size={10} aria-label="Shadow shift" />
+            </span>
+          )}
+          <span className="truncate">{shift.participant_name || translate("common.participant")}</span>
         </p>
         {start && (
           <p className="truncate text-[9.5px] font-medium opacity-80" style={{ color: clrs.color }}>
@@ -183,68 +194,9 @@ function DayCell({
   );
 }
 
-// ── Conflict + unassign confirmation modals ───────────────────────────────────
-interface PendingDrop {
-  shift: CoordinatorShiftRecord;
-  workerId: string;
-  workerName: string;
-  conflicts: ConflictItem[];
-  skillWarnings: ConflictItem[];
-}
-
-function ConflictModal({
-  pending, onConfirm, onCancel, confirming,
-}: { pending: PendingDrop; onConfirm: () => void; onCancel: () => void; confirming: boolean }) {
-  const { translate, translateParams } = useAccessibility();
-  const hard = pending.conflicts.filter((c) => c.severity === "error");
-  const soft = [...pending.conflicts.filter((c) => c.severity !== "error"), ...pending.skillWarnings];
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
-        <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50">
-              <AlertTriangle size={18} className="text-amber-600" />
-            </div>
-            <div>
-              <h2 className="text-[16px] font-black" style={{ color: TEXT }}>
-                {hard.length > 0 ? translate("coordinator.dnd.schedulingConflict") : translate("coordinator.dnd.assignmentWarning")}
-              </h2>
-              <p className="text-[12px]" style={{ color: MUTED }}>{translateParams("coordinator.dnd.assignTo", { name: pending.workerName })}</p>
-            </div>
-          </div>
-        </div>
-        <div className="px-6 py-4 space-y-3 max-h-64 overflow-y-auto">
-          {hard.map((c, i) => (
-            <div key={i} className="flex items-start gap-2.5 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-red-600" />
-              <p className="text-[12px] font-medium text-red-800">{c.message}</p>
-            </div>
-          ))}
-          {soft.map((c, i) => (
-            <div key={i} className="flex items-start gap-2.5 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
-              <p className="text-[12px] font-medium text-amber-800">{c.message}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-end gap-2.5 px-6 py-4" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <button onClick={onCancel} className="rounded-full px-4 py-2 text-[12px] font-bold" style={{ background: SOFT, color: MUTED }}>
-            {translate("common.cancel")}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={confirming}
-            className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold text-white"
-            style={{ background: hard.length > 0 ? CORAL : PLUM, opacity: confirming ? 0.65 : 1 }}
-          >
-            {confirming ? (<><Loader2 size={12} className="animate-spin" /> {translate("coordinator.dnd.assigning")}</>) : (<><ChevronRight size={12} /> {translate("coordinator.dnd.assignAnyway")}</>)}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Unassign confirmation modal ───────────────────────────────────────────────
+// (ConflictModal + PendingDrop now live in ./ConflictModal.tsx — shared with
+// UnassignedShiftPanel so every assign-a-worker entry point confirms the same way.)
 
 function UnassignModal({
   shift, workerName, onConfirm, onCancel, confirming, warning,
@@ -312,6 +264,25 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [pendingUnassign, setPendingUnassign] = useState<{ shift: CoordinatorShiftRecord; workerName: string; warning?: string } | null>(null);
+  const [detailShift, setDetailShift] = useState<CoordinatorShiftRecord | null>(null);
+
+  // Deep-link from a coordinator notification (worker cancelled / offer queue
+  // exhausted) — opens the reassignment panel for that shift once it's loaded,
+  // then strips the param so it doesn't reopen on refetch or reload.
+  const openedFromQueryRef = useRef(false);
+  useEffect(() => {
+    if (openedFromQueryRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("openShift");
+    if (!openId) return;
+    const match = shifts.find((s) => s.id === openId);
+    if (!match) return;
+    openedFromQueryRef.current = true;
+    setDetailShift(match);
+    params.delete("openShift");
+    const next = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+  }, [shifts]);
 
   const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
@@ -455,24 +426,23 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
         />
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-4 py-2.5" style={{ borderColor: BORDER }}>
-        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>{translate("coordinator.rostering.availability")}</span>
+      {/* Legend — a lightweight caption, not a competing card: no border/box,
+          solid dots instead of bordered swatches, and no persistent "click or
+          drag to assign" instructional copy (that's onboarding-style text
+          that just becomes noise once a coordinator already knows the UI). */}
+      <div className="flex flex-wrap items-center gap-3 px-1">
         {[
-          { color: "#DCFCE7", border: "#86EFAC", label: translate("coordinator.rostering.legend.available") },
-          { color: "#FCE3EB", border: "#F3A8C4", label: translate("coordinator.rostering.legend.assigned") },
-          { color: "#FEF3C7", border: "#FCD34D", label: translate("coordinator.rostering.legend.onLeave") },
-          { color: "#F1F5F9", border: "#CBD5E1", label: translate("coordinator.rostering.legend.notRostered") },
+          { color: "#86EFAC", label: translate("coordinator.rostering.legend.available") },
+          { color: "#F3A8C4", label: translate("coordinator.rostering.legend.assigned") },
+          { color: "#FCD34D", label: translate("coordinator.rostering.legend.onLeave") },
+          { color: "#CBD5E1", label: translate("coordinator.rostering.legend.notRostered") },
         ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded" style={{ background: l.color, border: `1px solid ${l.border}` }} />
-            <span className="text-[11px]" style={{ color: MUTED }}>{l.label}</span>
+          <div key={l.label} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: l.color }} />
+            <span className="text-[10.5px] font-medium" style={{ color: MUTED }}>{l.label}</span>
           </div>
         ))}
-        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-medium" style={{ color: MUTED }}>
-          <Sparkles size={12} style={{ color: PLUM }} /> {translate("coordinator.rostering.dragToAssign")}
-        </span>
-        {loadingAvail && <Loader2 size={12} className="animate-spin" style={{ color: MUTED }} />}
+        {loadingAvail && <Loader2 size={11} className="animate-spin" style={{ color: MUTED }} />}
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -493,7 +463,7 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} /></div>)}
+              {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} onClick={() => setDetailShift(s)} /></div>)}
             </div>
           )}
         </div>
@@ -653,6 +623,14 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
           {activeShift ? <ShiftDragClone shift={activeShift} /> : null}
         </DragOverlay>
       </DndContext>
+
+      <UnassignedShiftPanel
+        shift={detailShift}
+        open={!!detailShift}
+        onOpenChange={(open) => { if (!open) setDetailShift(null); }}
+        workers={workers}
+        onAssigned={onRefresh}
+      />
     </div>
   );
 }

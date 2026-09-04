@@ -3,9 +3,10 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, GraduationCap, Users, CheckCircle2, Clock, AlertTriangle,
   ThumbsUp, Send, Plus, Grip, Pencil, Trash2, Upload, FileText,
-  FileVideo, Link2, X, Loader2,
+  FileVideo, Link2, X, Loader2, ClipboardCheck,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +16,12 @@ import {
   updateTrainingModule,
   type TrainingModule as CoordinatorTrainingModule,
 } from "@/services/coordinatorService";
+import {
+  getInductionItems,
+  createInductionItem,
+  updateInductionItem,
+  type InductionItem,
+} from "@/services/inductionService";
 import {
   DndContext,
   closestCenter,
@@ -39,10 +46,10 @@ const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
-const GREEN  = "#10B981";
-const AMBER  = "#F59E0B";
+const GREEN  = "#0F7B57";
+const AMBER  = "#9A5B0A";
 
-type Tab = "overview" | "builder" | "modules" | "resources" | "approvals";
+type Tab = "overview" | "builder" | "modules" | "induction" | "resources" | "approvals";
 
 interface KpiData {
   new_starters: number;
@@ -106,7 +113,7 @@ function KpiCard({
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   accent?: string; warn?: boolean;
 }) {
-  const color = warn ? "#EF4444" : accent ?? PLUM;
+  const color = warn ? "#B3261E" : accent ?? PLUM;
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between mb-3">
@@ -115,16 +122,16 @@ function KpiCard({
           <Icon size={14} strokeWidth={2.5} />
         </div>
       </div>
-      <p className="text-2xl font-black leading-none" style={{ color: warn ? "#EF4444" : TEXT }}>{value}</p>
+      <p className="text-2xl font-black leading-none" style={{ color: warn ? "#B3261E" : TEXT }}>{value}</p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
-    active:    { label: "In Progress", bg: "#EFF6FF", color: "#2563EB" },
-    completed: { label: "Completed",   bg: "#D1FAE5", color: "#065F46" },
-    overdue:   { label: "Overdue",     bg: "#FEE2E2", color: "#991B1B" },
+    active:    { label: "In Progress", bg: "#EAF1F7", color: "#2A5C8A" },
+    completed: { label: "Completed",   bg: "#E9F5F0", color: "#0B5F44" },
+    overdue:   { label: "Overdue",     bg: "#FBEAE9", color: "#8F211B" },
   };
   const s = map[status] ?? { label: status, bg: SOFT, color: MUTED };
   return (
@@ -187,7 +194,7 @@ function OverviewTab() {
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label="New Starters"      value={data.new_starters}      icon={Users}         accent={PLUM} />
-        <KpiCard label="In Progress"       value={data.in_progress}       icon={Clock}         accent="#0EA5E9" />
+        <KpiCard label="In Progress"       value={data.in_progress}       icon={Clock}         accent="#2A5C8A" />
         <KpiCard label="Completed"         value={data.completed}         icon={CheckCircle2}  accent={GREEN} />
         <KpiCard label="Overdue"           value={data.overdue}           icon={AlertTriangle} warn={data.overdue > 0} />
         <KpiCard label="Awaiting Approval" value={data.awaiting_approval} icon={ThumbsUp}      accent={AMBER} />
@@ -335,6 +342,7 @@ function StageSheet({
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
           <h3 className="text-[15px] font-black" style={{ color: TEXT }}>Edit Stage</h3>
           <button onClick={onClose} aria-label="Close panel" className="rounded-lg p-1 hover:bg-gray-100">
+            <X size={16} />
           </button>
         </div>
 
@@ -377,7 +385,7 @@ function StageSheet({
                     type="checkbox"
                     checked={!!reqs[key]}
                     onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#E8457A]"
+                    className="h-4 w-4 rounded accent-[#1E3A5F]"
                   />
                   <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
                 </label>
@@ -411,7 +419,7 @@ function StageSheet({
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#E8457A] shrink-0"
+                      className="h-4 w-4 rounded accent-[#1E3A5F] shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
@@ -756,9 +764,9 @@ function BuilderTab() {
 }
 
 function ResourceTypeIcon({ type }: { type: string }) {
-  if (type === "video") return <FileVideo size={20} strokeWidth={2} style={{ color: "#E8457A" }} />;
+  if (type === "video") return <FileVideo size={20} strokeWidth={2} style={{ color: "#1E3A5F" }} />;
   if (type === "pdf")   return <FileText  size={20} strokeWidth={2} style={{ color: CORAL }} />;
-  if (type === "link")  return <Link2     size={20} strokeWidth={2} style={{ color: "#0EA5E9" }} />;
+  if (type === "link")  return <Link2     size={20} strokeWidth={2} style={{ color: "#2A5C8A" }} />;
   return <FileText size={20} strokeWidth={2} style={{ color: PLUM }} />;
 }
 
@@ -1038,7 +1046,7 @@ function ApprovalsTab() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Approval Queue</h2>
-        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black" style={{ background: items.length > 0 ? "#FEF3C7" : SOFT, color: items.length > 0 ? "#92400E" : MUTED }}>
+        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black" style={{ background: items.length > 0 ? "#FBF2E6" : SOFT, color: items.length > 0 ? "#7A4A08" : MUTED }}>
           {items.length} pending
         </span>
       </div>
@@ -1263,7 +1271,7 @@ function ModuleFormSheet({
               type="checkbox"
               checked={requiresCertification}
               onChange={(e) => setRequiresCertification(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#E8457A]"
+              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
             />
             <span className="text-[13px] font-medium" style={{ color: TEXT }}>
               Requires certification
@@ -1278,7 +1286,7 @@ function ModuleFormSheet({
               type="checkbox"
               checked={autoAssignOnHire}
               onChange={(e) => setAutoAssignOnHire(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#E8457A]"
+              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
             />
             <span className="text-[13px] font-medium" style={{ color: TEXT }}>
               Auto-assign to every new hire
@@ -1430,10 +1438,256 @@ function ModulesTab() {
   );
 }
 
+function InductionFormSheet({
+  onClose,
+  onSaved,
+  nextSortOrder,
+}: {
+  onClose: () => void;
+  onSaved: (item: InductionItem) => void;
+  nextSortOrder: number;
+}) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [contentUrl, setContentUrl] = useState("");
+  const [isMandatory, setIsMandatory] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      const created = await createInductionItem({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        content_url: contentUrl.trim() || undefined,
+        is_mandatory: isMandatory,
+        sort_order: nextSortOrder,
+      });
+      toast({ title: "Induction item created" });
+      onSaved(created);
+    } catch {
+      toast({ title: "Failed to create induction item", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
+      <div className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col" style={{ borderLeft: `1px solid ${BORDER}` }}>
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
+          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>New Induction Item</h3>
+          <button onClick={onClose} aria-label="Close panel" className="rounded-lg p-1 hover:bg-gray-100">
+            <X size={16} style={{ color: MUTED }} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-5 p-5">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+              Title
+            </label>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Meet your team"
+              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
+              style={{ borderColor: BORDER }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
+              style={{ borderColor: BORDER }}
+              placeholder="What should a new worker do for this item?"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+              Resource link
+            </label>
+            <input
+              value={contentUrl}
+              onChange={(e) => setContentUrl(e.target.value)}
+              placeholder="Optional — a reading, video, or policy link"
+              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
+              style={{ borderColor: BORDER }}
+            />
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isMandatory}
+              onChange={(e) => setIsMandatory(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
+            />
+            <span className="text-[13px] font-medium" style={{ color: TEXT }}>
+              Mandatory
+              <span className="mt-0.5 block text-[11px] font-normal" style={{ color: MUTED }}>
+                Applies to every worker in the org. Rostering is blocked until it's complete. Uncheck for optional/informational items that never block anything.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: BORDER }}>
+          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-[13px] font-bold" style={{ borderColor: BORDER, color: MUTED }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !title.trim()}
+            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
+            style={{ background: "var(--cc-cta)" }}
+          >
+            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+            Create Item
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InductionItemsTab() {
+  const { toast } = useToast();
+  const [items, setItems] = useState<InductionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(false);
+    getInductionItems()
+      .then((d) => setItems([...d].sort((a, b) => a.sort_order - b.sort_order)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function toggleMandatory(item: InductionItem) {
+    setUpdatingId(item.id);
+    try {
+      const updated = await updateInductionItem(item.id, { is_mandatory: !item.is_mandatory });
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...updated } : i)));
+    } catch {
+      toast({ title: "Failed to update induction item", variant: "destructive" });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Induction Items</h2>
+          <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>
+            A one-time first-day checklist, separate from ongoing training. Every mandatory item applies to every worker and blocks rostering until complete.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-black text-white shrink-0"
+          style={{ background: "var(--cc-cta)" }}
+        >
+          <Plus size={12} strokeWidth={2.5} /> New Item
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl" style={{ background: SOFT }} />)}
+        </div>
+      ) : error ? (
+        <div className="rounded-xl border p-10 text-center" style={{ borderColor: BORDER }}>
+          <AlertTriangle size={32} className="mx-auto mb-3" style={{ color: CORAL }} />
+          <p className="font-black" style={{ color: TEXT }}>Could not load induction items</p>
+          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Reload the page to try again.</p>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border p-10 text-center" style={{ borderColor: BORDER }}>
+          <ClipboardCheck size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
+          <p className="font-black" style={{ color: TEXT }}>No induction items yet</p>
+          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Create the first-day checklist every new hire sees.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-black" style={{ color: TEXT }}>{item.title}</p>
+                  {item.description && (
+                    <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>{item.description}</p>
+                  )}
+                  {item.content_url && (
+                    <a
+                      href={item.content_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1.5 inline-block text-[11px] font-bold underline"
+                      style={{ color: PLUM }}
+                    >
+                      Resource link
+                    </a>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => toggleMandatory(item)}
+                  disabled={updatingId === item.id}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition disabled:opacity-50"
+                  style={{
+                    background: item.is_mandatory ? "var(--cc-plum-soft)" : SOFT,
+                    color: item.is_mandatory ? PLUM : MUTED,
+                    border: `1px solid ${item.is_mandatory ? PLUM : BORDER}`,
+                  }}
+                  title="Toggle mandatory"
+                >
+                  {updatingId === item.id ? <Loader2 size={11} className="animate-spin" /> : null}
+                  {item.is_mandatory ? "Mandatory" : "Optional"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <InductionFormSheet
+          onClose={() => setShowForm(false)}
+          nextSortOrder={items.length}
+          onSaved={(created) => {
+            setItems((prev) => [...prev, created]);
+            setShowForm(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 const TAB_KEYS: { id: Tab; labelKey: string }[] = [
   { id: "overview", labelKey: "md.onboarding.tab.overview" },
   { id: "builder", labelKey: "md.onboarding.tab.builder" },
   { id: "modules", labelKey: "md.onboarding.tab.modules" },
+  { id: "induction", labelKey: "md.onboarding.tab.induction" },
   { id: "resources", labelKey: "md.onboarding.tab.resources" },
   { id: "approvals", labelKey: "md.onboarding.tab.approvals" },
 ];
@@ -1455,8 +1709,10 @@ export default function MDOnboardingTrainingPage() {
             <ArrowLeft size={13} strokeWidth={2.5} /> Back to Onboarding
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.onboarding.subtitle")}</p>
+            <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
+              {translate("md.onboarding.title")}
+              <SectionInfo text={translate("md.onboarding.subtitle")} />
+            </h1>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
             <GraduationCap size={16} strokeWidth={2.5} />
@@ -1483,6 +1739,7 @@ export default function MDOnboardingTrainingPage() {
         {activeTab === "overview"  && <OverviewTab />}
         {activeTab === "builder"   && <BuilderTab />}
         {activeTab === "modules"   && <ModulesTab />}
+        {activeTab === "induction" && <InductionItemsTab />}
         {activeTab === "resources" && <ResourcesTab />}
         {activeTab === "approvals" && <ApprovalsTab />}
       </div>

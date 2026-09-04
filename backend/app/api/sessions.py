@@ -591,9 +591,27 @@ async def save_session_with_ai(
 
         # Gate approval: block-tier failures always stop the save.
         # Warn-tier failures stop the save until each failing rule is acknowledged.
-        # Compliance data has already been persisted above so both the worker
-        # and coordinator can review the score and failure details.
+        # Compliance data is persisted to compliance_rule_results above, but
+        # the "Must Fix" panel on /session-detail actually reads
+        # ai_insights.rules_result, which - unlike that table - was only ever
+        # written on a full successful save. So a blocking failure returned
+        # the right detail in this error response, but the on-screen panel
+        # stayed stale/empty instead of showing the same reason. Write a
+        # minimal snapshot here too so the two stay in sync.
         if block_failures:
+            try:
+                existing_ai = session.get("ai_insights") or {}
+                if isinstance(existing_ai, str):
+                    existing_ai = json.loads(existing_ai) if existing_ai.strip() else {}
+                if not isinstance(existing_ai, dict):
+                    existing_ai = {}
+                existing_ai["rules_result"] = rules_result
+                supabase.table("sessions").update({
+                    "ai_insights": json.dumps(existing_ai),
+                    "compliance_checked_at": compliance_checked_at,
+                }).eq("id", session_id).execute()
+            except Exception as snapshot_err:
+                logger.warning(f"Blocking-failure rules snapshot persist failed (non-critical): {snapshot_err}")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -1025,12 +1043,79 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
     # Blocking: score too low, content gate not met, OR no goals linked (all are hard NDIS requirements)
     det_blocking = det_score < 50 or not (duration_ok and (has_activities or any_note_filled)) or not has_goals
 
+    # practitioner_name/credentials columns are never written anywhere in the
+    # codebase, so this always fell through to a generic "NDIS Support
+    # Practitioner" placeholder - a real signed-off audit record showing a
+    # fake generic name instead of who actually worked the shift. The real
+    # worker is already resolved onto the session (session_service.
+    # get_session_by_id -> worker_name, from sessions.worker_id).
+    practitioner_name = session.get("practitioner_name") or session.get("worker_name") or None
+    practitioner_credentials = session.get("practitioner_credentials") or None
+    sign_off_date = datetime.now(timezone.utc).strftime("%d %B %Y")
+
+    # Signature + acknowledgements: the actual audit evidence of sign-off -
+    # never surfaced here before, despite already being fully built
+    # (shift_signature_service already resolves the signer's name and a
+    # signed image URL; this endpoint just never called it).
+    shift_id = session.get("shift_id")
+    signature = None
+    risk_ack = None
+    safety_acks: list[dict] = []
+    if shift_id:
+        try:
+            from ..services import shift_signature_service
+
+            signature = shift_signature_service.get_shift_signature(str(shift_id))
+        except Exception:
+            signature = None
+        try:
+            shift_row = (
+                get_supabase_admin()
+                .table("shifts")
+                .select("risks_acknowledged_at, risks_acknowledged_by")
+                .eq("id", str(shift_id))
+                .maybe_single()
+                .execute()
+            )
+            if shift_row and shift_row.data and shift_row.data.get("risks_acknowledged_at"):
+                ack_by = shift_row.data.get("risks_acknowledged_by")
+                ack_by_name = None
+                if ack_by:
+                    try:
+                        u = get_supabase_admin().table("users").select("full_name").eq("id", ack_by).maybe_single().execute()
+                        ack_by_name = (u.data or {}).get("full_name") if u and u.data else None
+                    except Exception:
+                        ack_by_name = None
+                risk_ack = {
+                    "acknowledged_at": shift_row.data.get("risks_acknowledged_at"),
+                    "acknowledged_by": ack_by,
+                    "acknowledged_by_name": ack_by_name,
+                }
+        except Exception:
+            risk_ack = None
+    worker_id_for_ack = session.get("worker_id")
+    if worker_id_for_ack and participant_id:
+        try:
+            ack_resp = (
+                get_supabase_admin()
+                .table("worker_safety_acknowledgements")
+                .select("content_version, acknowledged_at")
+                .eq("worker_id", worker_id_for_ack)
+                .eq("participant_id", participant_id)
+                .order("acknowledged_at", desc=True)
+                .execute()
+            )
+            safety_acks = ack_resp.data or []
+        except Exception:
+            safety_acks = []
+
     # Human-readable formatted text for auditors
     separator = "=" * 50
     formatted_lines = [
         "NDIS SESSION AUDIT RECORD",
         separator,
         f"Participant : {participant_name or 'Unknown'} | NDIS: {participant_ndis or 'Not recorded'}",
+        f"Support Worker: {practitioner_name or 'Not recorded'}",
         f"Session Date: {session.get('session_date') or 'N/A'} | Type: {session.get('session_type') or 'N/A'} | Duration: {session.get('duration_minutes') or 0} min",
         f"Status      : {session.get('status') or 'draft'} | Generated: {generated_at}",
         separator,
@@ -1079,16 +1164,41 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
         formatted_lines.append(f"  (AI-blended score: {compliance_score:.0f}% \u2014 {compliance_status})")
     formatted_lines.append("")
 
+    if signature:
+        checks = "".join([
+            "TASKS " + ("\u2713" if signature.get("confirm_tasks_accurate") else "\u2717"),
+            "  SAFETY " + ("\u2713" if signature.get("confirm_safety_followed") else "\u2717"),
+            "  NO UNREPORTED INCIDENTS " + ("\u2713" if signature.get("confirm_no_unreported_incidents") else "\u2717"),
+        ])
+        formatted_lines.extend([
+            f"SIGNED OFF: {signature.get('signer_name') or 'Unknown'} at {signature.get('signed_at') or 'unknown time'}",
+            f"  {checks}",
+            f"  Content hash: {signature.get('content_hash') or 'n/a'}",
+            "",
+        ])
+    else:
+        formatted_lines.append("SIGN-OFF: not yet signed")
+        formatted_lines.append("")
+
+    if risk_ack:
+        formatted_lines.append(
+            f"RISK ACKNOWLEDGEMENT: {risk_ack.get('acknowledged_by_name') or 'worker'} at {risk_ack.get('acknowledged_at')}"
+        )
+        formatted_lines.append("")
+
+    if safety_acks:
+        formatted_lines.append(f"SAFETY PROTOCOL ACKNOWLEDGEMENTS: {len(safety_acks)} on file")
+        for ack in safety_acks:
+            formatted_lines.append(
+                f"  \u2022 v{ack.get('content_version')} acknowledged {ack.get('acknowledged_at')}"
+            )
+        formatted_lines.append("")
+
     formatted_lines.extend([
         separator,
         'NDIS Principle: "If it cannot be evidenced, it cannot be claimed."',
     ])
     formatted_text = "\n".join(formatted_lines)
-
-    import os
-    practitioner_name = session.get("practitioner_name") or os.environ.get("PRACTITIONER_NAME", "NDIS Support Practitioner")
-    practitioner_credentials = session.get("practitioner_credentials") or os.environ.get("PRACTITIONER_CREDENTIALS", "Support Worker")
-    sign_off_date = datetime.now(timezone.utc).strftime("%d %B %Y")
 
     audit = {
         "audit_version": "1.0",
@@ -1114,6 +1224,13 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
             "credentials": practitioner_credentials,
             "sign_off_date": sign_off_date,
         },
+        "worker": {
+            "id": session.get("worker_id"),
+            "name": session.get("worker_name"),
+        },
+        "signature": signature,
+        "risk_acknowledgement": risk_ack,
+        "safety_acknowledgements": safety_acks,
         "structured_notes": structured_notes,
         "clinical_notes": notes_text,
         "legal_record_text": legal_record_text,

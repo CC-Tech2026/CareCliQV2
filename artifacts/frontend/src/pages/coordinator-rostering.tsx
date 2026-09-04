@@ -3,16 +3,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
-  eachDayOfInterval, isToday, isSameMonth, addDays,
+  eachDayOfInterval, isToday, isSameMonth, addDays, differenceInCalendarDays,
 } from "date-fns";
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
-  Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
+  CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
+  Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
   Activity, Search, RefreshCw,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { SectionInfo } from "@/components/ui/section-info";
 import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -24,10 +25,12 @@ import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
   getWorkerAvailability,
+  getOverdueUnassignedShifts,
   type CoordinatorShiftRecord,
   type WorkerStats,
   type WorkerAvailability,
   type BlackoutDate,
+  type OverdueUnassignedShift,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { RosterBoard }           from "@/components/coordinator/RosterBoard";
@@ -40,9 +43,9 @@ import CoordinatorLivePage from "./coordinator-live";
 import CoordinatorMonitorPage from "./coordinator-monitor";
 
 type ScheduleTab = "roster" | "live";
-const SCHEDULE_TABS: { id: ScheduleTab; label: string }[] = [
-  { id: "roster", label: "Roster"         },
-  { id: "live",   label: "Live Monitor" },
+const SCHEDULE_TABS: { id: ScheduleTab; label: string; icon: typeof CalendarDays }[] = [
+  { id: "roster", label: "Roster",       icon: CalendarDays },
+  { id: "live",   label: "Live Monitor", icon: Activity },
 ];
 
 const PLUM   = "var(--cc-plum)";
@@ -274,6 +277,13 @@ function DayPanel({
   );
 }
 
+// Overdue unassigned shifts silently fall out of view once a coordinator
+// navigates the week/month-scoped roster board away from wherever the shift
+// was scheduled - there's no other alert, escalation, or KPI for this
+// anywhere in the app (confirmed gap, Aug 2026). Surfaced via a stat card in
+// the page's existing stat strip (only rendered when count > 0), not a
+// standing banner - see overdueUnassignedShifts below.
+
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
   const { user: currentUser } = useAuth();
@@ -324,8 +334,18 @@ export default function CoordinatorRosteringPage() {
     }
   );
 
+  // Independent of rangeStart/rangeEnd on purpose - shiftsQuery above only
+  // covers the currently-viewed week/month, so an unassigned shift whose
+  // time has passed silently falls out of view once the coordinator moves
+  // on. This stays visible regardless of what's currently shown.
+  const overdueUnassignedQuery = useOrgQuery(
+    ["coordinator", "overdue-unassigned-shifts"],
+    { queryFn: getOverdueUnassignedShifts, refetchInterval: 5 * 60_000 }
+  );
+
   const workers = workersQuery.data ?? [];
   const shifts  = shiftsQuery.data  ?? [];
+  const overdueUnassignedShifts = overdueUnassignedQuery.data ?? [];
 
   // Load availability for all workers when the list changes
   useEffect(() => {
@@ -365,6 +385,15 @@ export default function CoordinatorRosteringPage() {
     setSelectedDay(now);
   };
 
+  const handleJumpToOverdueShift = (shift: OverdueUnassignedShift) => {
+    setPageTab("roster");
+    setViewMode("roster");
+    const target = parseISO(shift.scheduled_start);
+    setCurrentMonth(target);
+    setWeekStart(startOfWeek(target, { weekStartsOn: 1 }));
+    setSelectedDay(target);
+  };
+
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
@@ -375,7 +404,10 @@ export default function CoordinatorRosteringPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>{translate("coordinator.rostering.title")}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
+            {translate("coordinator.rostering.title")}
+            <SectionInfo text="Build and adjust the shift roster for your team, week by week or month by month." />
+          </h1>
         </div>
         {pageTab === "roster" ? (
         <div className="flex items-center gap-2">
@@ -428,10 +460,24 @@ export default function CoordinatorRosteringPage() {
         ) : null}
       </div>
 
-      {/* Page-level tabs: Roster | Live | Monitor */}
-      <div role="tablist" className="flex gap-5 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
+      {/* Page-level tabs: Roster | Live Monitor - same raised-pill language as
+          the onboarding area switcher (OnboardingAreaSwitcher: rounded-top
+          active tab flush with the panel below, circular icon badge, flat
+          unelevated inactive tab), adapted to local state instead of a route
+          change since both live on this one page.
+
+          Tabs + panel are wrapped together in one div rather than left as
+          two siblings of the page's space-y-4 container - that utility puts
+          a margin between every child, which put a visible gap between the
+          tab and the panel it's supposed to sit flush against, breaking the
+          "one continuous shape" illusion (the rounded-top-only tab looked
+          like an isolated, oddly-clipped shape floating on its own instead
+          of merging into the panel below). */}
+      <div>
+      <div role="tablist" className="flex items-end gap-3">
         {SCHEDULE_TABS.map((tab) => {
           const active = pageTab === tab.id;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
@@ -439,17 +485,26 @@ export default function CoordinatorRosteringPage() {
               role="tab"
               aria-selected={active ? "true" : "false"}
               onClick={() => setPageTab(tab.id)}
-              className="relative flex shrink-0 items-center gap-1.5 pb-3 pt-1 text-[14px] font-bold whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: active ? TEXT : MUTED, outlineColor: active ? PLUM : "transparent" }}
+              className="relative flex items-center gap-2 px-6 py-3 text-[14px] font-black transition-opacity"
+              style={{
+                borderRadius: active ? "14px 14px 0 0" : "0",
+                background: active ? "var(--cc-surface)" : "transparent",
+                color: TEXT,
+                opacity: active ? 1 : 0.75,
+              }}
             >
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                style={{ background: PLUM }}
+              >
+                <Icon size={13} style={{ color: "#fff" }} />
+              </span>
               {tab.label}
-              {active && (
-                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
-              )}
             </button>
           );
         })}
       </div>
+      <div className="rounded-2xl rounded-tl-none" style={{ background: "var(--cc-surface)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
       {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
 
@@ -465,6 +520,25 @@ export default function CoordinatorRosteringPage() {
           value={workers.length}
           icon={<Users2 size={16} />}
         />
+        {/* Only appears when something needs attention - an unassigned shift
+            whose start time has already passed, possibly outside the week/
+            month currently in view. Was previously a standing red banner
+            pinned above the page; folded into this existing stat strip
+            instead so it doesn't compete for space when there's nothing to
+            flag, and stays proportionate (a number, not a list) when there is. */}
+        {overdueUnassignedShifts.length > 0 && (
+          <StatCard
+            label={translate("coordinator.rostering.overdueUnassigned")}
+            value={overdueUnassignedShifts.length}
+            tone="danger"
+            icon={<AlertTriangle size={16} />}
+            role="button"
+            tabIndex={0}
+            onClick={() => handleJumpToOverdueShift(overdueUnassignedShifts[0])}
+            onKeyDown={(e) => { if (e.key === "Enter") handleJumpToOverdueShift(overdueUnassignedShifts[0]); }}
+            className="cursor-pointer"
+          />
+        )}
       </StatCardGroup>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
@@ -592,7 +666,7 @@ export default function CoordinatorRosteringPage() {
                   <button
                     key={w.id}
                     onClick={() => setAvailWorker(w)}
-                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F4EDE6]"
+                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#ECECEC]"
                     style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
                   >
                     <div
@@ -632,6 +706,8 @@ export default function CoordinatorRosteringPage() {
       />
       </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

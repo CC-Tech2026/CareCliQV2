@@ -20,6 +20,7 @@ import {
   User,
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { OtpInput } from "@/components/auth/OtpInput";
 import { uploadProfilePhoto } from "@/services/userService";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -253,6 +254,7 @@ interface InviteInfo {
   organization_id?: string;
   organization_name: string | null;
   expires_at: string;
+  requires_email_code?: boolean;
 }
 
 export default function Signup() {
@@ -271,6 +273,12 @@ export default function Signup() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteLoading, setInviteLoading] = useState(Boolean(urlInviteToken));
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [emailCodeVerified, setEmailCodeVerified] = useState(false);
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeError, setEmailCodeError] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
@@ -294,7 +302,7 @@ export default function Signup() {
             typeof detail === "string" ? detail : t("auth.invite.invalidOrExpired"),
           );
         }
-        return r.json() as Promise<Omit<InviteInfo, "token"> & { token?: string }>;
+        return r.json() as Promise<Omit<InviteInfo, "token"> & { token?: string; email_verified?: boolean }>;
       })
       .then((data) => {
         if (cancelled) return;
@@ -305,7 +313,9 @@ export default function Signup() {
           organization_id: data.organization_id,
           organization_name: data.organization_name,
           expires_at: data.expires_at,
+          requires_email_code: data.requires_email_code,
         });
+        setEmailCodeVerified(Boolean(data.email_verified));
         setForm((prev) => ({
           ...prev,
           email: data.email || "",
@@ -325,6 +335,51 @@ export default function Signup() {
       cancelled = true;
     };
   }, [urlInviteToken, t]);
+
+  const needsEmailCode = Boolean(invite?.requires_email_code) && !emailCodeVerified;
+
+  const sendEmailCode = useCallback(async () => {
+    if (!invite?.token) return;
+    setCodeBusy(true);
+    setEmailCodeError(null);
+    try {
+      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/send-code`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("auth.invite.codeSendFailed"));
+      setCodeSent(true);
+      setCodeMessage(data.message || null);
+    } catch (e) {
+      setEmailCodeError(e instanceof Error ? e.message : t("auth.invite.codeSendFailed"));
+    } finally {
+      setCodeBusy(false);
+    }
+  }, [invite?.token, t]);
+
+  useEffect(() => {
+    if (needsEmailCode && !codeSent && !codeBusy) {
+      sendEmailCode();
+    }
+  }, [needsEmailCode, codeSent, codeBusy, sendEmailCode]);
+
+  async function handleVerifyCode() {
+    if (!invite?.token || emailCode.length !== 6 || codeBusy) return;
+    setCodeBusy(true);
+    setEmailCodeError(null);
+    try {
+      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/verify-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: emailCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("auth.invite.codeInvalid"));
+      setEmailCodeVerified(true);
+    } catch (e) {
+      setEmailCodeError(e instanceof Error ? e.message : t("auth.invite.codeInvalid"));
+    } finally {
+      setCodeBusy(false);
+    }
+  }
 
   const updateField = useCallback((f: keyof FormData, v: string) => {
     setForm((p) => ({
@@ -712,17 +767,71 @@ export default function Signup() {
     );
   }
 
+  if (invite && needsEmailCode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--auth-shell-bg)] px-4">
+        <div
+          className="w-full max-w-md rounded-3xl p-8 space-y-5 border bg-[var(--auth-form-bg)]"
+          style={{ borderColor: "var(--auth-card-border)" }}
+        >
+          <div className="text-center space-y-1.5">
+            <h2 className="text-xl font-bold" style={{ color: "var(--cc-text)" }}>{t("auth.invite.verifyTitle")}</h2>
+            <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+              {translateParams("auth.invite.verifySubtitle", { email: invite.email })}
+            </p>
+          </div>
+
+          <div>
+            <label id="invite-code-label" className="text-[11px] font-black uppercase tracking-wider mb-3 block" style={{ color: "var(--cc-muted)" }}>
+              {t("auth.invite.verificationCode")}
+            </label>
+            <OtpInput
+              ariaLabelledBy="invite-code-label"
+              value={emailCode}
+              onChange={(v) => { setEmailCode(v); if (emailCodeError) setEmailCodeError(null); }}
+              disabled={codeBusy}
+              error={!!emailCodeError}
+            />
+            {emailCodeError && (
+              <p className="mt-2 text-[12px] font-medium" style={{ color: CORAL }}>{emailCodeError}</p>
+            )}
+            {!emailCodeError && codeMessage && (
+              <p className="mt-2 text-[12px] font-medium" style={{ color: "var(--cc-muted)" }}>{codeMessage}</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleVerifyCode}
+            disabled={codeBusy || emailCode.length !== 6}
+            className="w-full h-12 rounded-xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
+            style={{ background: "var(--cc-cta)" }}
+          >
+            {codeBusy
+              ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.invite.verifying")}</span></>
+              : <><span>{t("auth.invite.verify")}</span><ArrowRight size={16} strokeWidth={2.5} /></>
+            }
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setCodeSent(false); sendEmailCode(); }}
+            disabled={codeBusy}
+            className="w-full text-center text-[13px] font-bold transition-opacity hover:opacity-75 disabled:opacity-40"
+            style={{ color: PLUM }}
+          >
+            {t("auth.invite.resendCode")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const progressStep = isJoin ? Math.min(step, 4) : Math.min(step, 2);
   const showFooter = isJoin ? step < 5 : step < 3;
 
   return (
-    <div
-      className="relative h-screen w-screen flex overflow-hidden bg-[var(--auth-shell-bg)] text-cc-text"
-      style={{ animation: "authPageEnter 0.3s ease-out" }}
-    >
-      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
-        <AuthThemeToggle />
-      </div>
+    <div className="relative h-screen w-screen flex overflow-hidden md:gap-6 md:p-6 bg-[var(--auth-shell-bg)] md:bg-[#7C3AED] text-cc-text">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -753,58 +862,52 @@ export default function Signup() {
         .auth-glow {
           animation: authGlowPulse 9s ease-in-out infinite;
         }
+        @keyframes authHeroZoom {
+          from { transform: scale(1); }
+          to   { transform: scale(1.045); }
+        }
+        .auth-hero-photo {
+          animation: authHeroZoom 22s ease-in-out infinite alternate;
+        }
+        .auth-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .auth-scroll-hide::-webkit-scrollbar { display: none; }
       `,
         }}
       />
       {/* LEFT */}
-      <div
-        className="hidden md:flex md:w-1/2 relative h-full overflow-hidden flex-col justify-between p-12"
-        style={{ background: "var(--auth-marketing-bg)" }}
-      >
-        {/* Subtle radial glow */}
-        <div
-          className="absolute inset-0 pointer-events-none auth-glow"
-          style={{ background: "var(--auth-marketing-glow)" }}
+      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 md:rounded-[28px]">
+        {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
+            scrim, so colours here are hardcoded light values instead of the
+            theme-conditional --auth-* vars — the backdrop is always a dark
+            photo now, regardless of light/dark mode. */}
+        <img
+          src="/auth-hero-signup.jpg"
+          alt=""
+          aria-hidden="true"
+          className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 pointer-events-none auth-motif" />
+        <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
 
-        <div className="relative z-10 flex flex-col justify-between h-full">
+        <div className="relative z-10 flex max-w-[440px] flex-col justify-between h-full">
           <div>
             <CareCliQLogo size={96} />
-            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "var(--auth-marketing-muted)" }}>
+            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
               {t("auth.signup.marketing.tagline")}
             </p>
           </div>
 
           <div>
-            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "#FFFFFF" }}>
               <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>
                 {t("auth.signup.marketing.headline1")}
               </span>
-              <span className="auth-headline-line" style={{ animationDelay: "100ms", color: "var(--auth-accent)" }}>
+              <span className="auth-headline-line" style={{ animationDelay: "100ms", color: "#C4B5FD" }}>
                 {t("auth.signup.marketing.headline2")}
               </span>
             </h1>
-            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "var(--auth-marketing-body)" }}>
+            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
               {t("auth.signup.marketing.description")}
             </p>
-
-            <div className="mt-10 flex items-center gap-6">
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>24 hr</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.noteDeadline")}</p>
-              </div>
-              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>100%</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.complianceTracked")}</p>
-              </div>
-              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
-              <div>
-                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>AU</p>
-                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.ndisRegistered")}</p>
-              </div>
-            </div>
 
             {/* Testimonial */}
             <div
@@ -834,14 +937,17 @@ export default function Signup() {
             </div>
           </div>
 
-          <div className="text-[11px] font-bold tracking-wider" style={{ color: "var(--auth-marketing-muted)" }}>
+          <div className="text-[11px] font-bold tracking-wider" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
             {t("auth.signup.marketing.copyright")}
           </div>
         </div>
       </div>
 
       {/* RIGHT */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
+      <div className="auth-scroll-hide relative w-full md:w-[600px] md:shrink-0 flex items-center justify-center overflow-y-auto p-4 sm:p-8 md:p-12 lg:px-16 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
+        <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+          <AuthThemeToggle />
+        </div>
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
@@ -903,7 +1009,7 @@ export default function Signup() {
                 <button
                   type="submit"
                   disabled={inviteCode.length !== 6 || busy}
-                  className="w-full h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                  className="w-full h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                   style={{ background: PLUM }}
                 >
                   {busy ? <Loader2 className="animate-spin" size={18} /> : null}
@@ -1005,7 +1111,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1013,7 +1119,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!accountDetailsValid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1133,7 +1239,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1141,7 +1247,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!profileValid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1197,7 +1303,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(3)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1206,7 +1312,7 @@ export default function Signup() {
                     type="button"
                     onClick={() => void handleJoinComplete()}
                     disabled={busy}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                     style={{ background: PLUM }}
                   >
                     {busy ? (
@@ -1339,7 +1445,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => navigate("/login")}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1347,7 +1453,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!step1Valid()}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
                     {t("auth.signup.continue")}
@@ -1379,7 +1485,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black"
+                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1387,7 +1493,7 @@ export default function Signup() {
                   <button
                     type="submit"
                     disabled={!step2Valid() || busy}
-                    className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                     style={{ background: PLUM }}
                   >
                     {busy ? (

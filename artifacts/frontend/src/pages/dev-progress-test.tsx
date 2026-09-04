@@ -29,7 +29,7 @@ import {
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
-const APP_BG = "#F4EDE6";
+const APP_BG = "#ECECEC";
 const ACTIVE = "var(--cc-active-bg)";
 const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;

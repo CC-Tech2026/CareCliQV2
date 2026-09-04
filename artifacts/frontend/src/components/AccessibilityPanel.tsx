@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Accessibility, Globe, Loader2, Monitor, Moon, Sun, Type } from "lucide-react";
+import { Accessibility, Globe, Loader2, Moon, Sun, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,8 +16,11 @@ const FONT_OPTIONS: { id: FontSize; labelKey: string }[] = [
   { id: "xl", labelKey: "accessibility.font.xl" },
 ];
 
+// "System" was intentionally removed as an option — it's the reason theme
+// colours would shift depending on which device/screen you were on
+// (each device's own OS preference silently changed the app's palette).
+// Colour is fixed per the Color Consistency Directive: pick Light or Dark.
 const THEME_OPTIONS: { id: ThemeMode; labelKey: string; icon: typeof Sun }[] = [
-  { id: "system", labelKey: "accessibility.theme.system", icon: Monitor },
   { id: "light", labelKey: "accessibility.theme.light", icon: Sun },
   { id: "dark", labelKey: "accessibility.theme.dark", icon: Moon },
 ];

@@ -111,14 +111,15 @@ async def get_entity_audit_trail(
     names: dict[str, str] = {}
     if user_ids:
         try:
-            users = (
+            users_query = (
                 get_supabase_admin()
                 .table("users")
                 .select("id, full_name, email")
                 .in_("id", user_ids)
-                .execute()
-                .data
-            ) or []
+            )
+            if organization_id:
+                users_query = users_query.eq("organization_id", organization_id)
+            users = (users_query.execute().data) or []
             names = {u["id"]: (u.get("full_name") or u.get("email") or u["id"]) for u in users}
         except Exception as exc:
             logger.warning("audit_service.get_entity_audit_trail user lookup failed (non-fatal): %s", exc)

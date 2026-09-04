@@ -15,18 +15,23 @@ from .notification_service import (
 )
 from .incident_notification_service import run_incident_notification_pass
 from .medication_pattern_service import run_medication_pattern_pass
+from .applicant_stage_reminder_service import run_applicant_stage_reminder_pass
 from .medication_reminder_service import run_medication_reminder_pass, send_pending_dose_reminders
+from .offer_letter_reminder_service import run_offer_letter_reminder_pass
 from .onboarding_escalation_service import run_onboarding_escalation_pass
 from .retention_service import run_retention_pass
 from .screening_recheck_service import run_screening_recheck_pass
+from .shift_offer_service import run_shift_offer_pass
 from .supabase_client import get_supabase_admin
 from .task_reminder_service import run_task_reminder_pass
+from .unassigned_shift_expiry_service import run_unassigned_shift_expiry_pass
 
 logger = logging.getLogger(__name__)
 
 _scheduler_task: Optional[asyncio.Task] = None
 _long_shift_task: Optional[asyncio.Task] = None
 _random_checkin_task: Optional[asyncio.Task] = None
+_stripe_reconciliation_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -160,6 +165,8 @@ async def run_notification_pass() -> dict[str, int]:
         random_checkin_count, medication_count, incident_notification_count,
         medication_pattern_count, dose_reminder_count, retention_count,
         screening_recheck_count, onboarding_escalation_stats,
+        offer_letter_stats, applicant_stage_reminder_count,
+        shift_offer_stats, unassigned_shift_expiry_count,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -173,6 +180,10 @@ async def run_notification_pass() -> dict[str, int]:
         run_retention_pass(),
         run_screening_recheck_pass(),
         run_onboarding_escalation_pass(),
+        run_offer_letter_reminder_pass(),
+        run_applicant_stage_reminder_pass(),
+        run_shift_offer_pass(),
+        run_unassigned_shift_expiry_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -188,6 +199,13 @@ async def run_notification_pass() -> dict[str, int]:
         "screening_recheck_reminders": screening_recheck_count,
         "onboarding_stage_reminders": onboarding_escalation_stats["reminders"],
         "onboarding_stage_escalations": onboarding_escalation_stats["escalations"],
+        "offer_letter_reminders": offer_letter_stats["reminders"],
+        "offer_letter_expirations": offer_letter_stats["expirations"],
+        "applicant_stage_reminders": applicant_stage_reminder_count,
+        "shift_offers_expired": shift_offer_stats["expired"],
+        "shift_offers_advanced": shift_offer_stats["advanced"],
+        "shift_offers_exhausted": shift_offer_stats["exhausted"],
+        "unassigned_shift_expirations": unassigned_shift_expiry_count,
     }
 
 
@@ -210,7 +228,7 @@ async def _scheduler_loop() -> None:
 
 
 def start_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task, _random_checkin_task
+    global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -218,6 +236,7 @@ def start_notification_scheduler() -> None:
     _scheduler_task = asyncio.create_task(_scheduler_loop())
     _long_shift_task = asyncio.create_task(_long_shift_monitor_loop())
     _random_checkin_task = asyncio.create_task(_random_checkin_loop())
+    _stripe_reconciliation_task = asyncio.create_task(_stripe_reconciliation_loop())
 
 
 async def _random_checkin_loop() -> None:
@@ -250,9 +269,33 @@ async def _long_shift_monitor_loop() -> None:
         await asyncio.sleep(300)
 
 
+async def _stripe_reconciliation_loop() -> None:
+    """Hourly pass checking for signup Checkout sessions that completed
+    payment with no matching organization - a missed/failed webhook
+    delivery. Not sub-hourly like the shift-monitoring loops above: this
+    only matters when Stripe's own retries (which run over hours/days) have
+    already been exhausted."""
+    from .stripe_service import find_orphaned_signup_sessions
+
+    logger.info("Stripe signup reconciliation loop started (every 60 min)")
+    while True:
+        try:
+            orphaned = find_orphaned_signup_sessions()
+            for session in orphaned:
+                logger.error(
+                    "Orphaned signup Checkout session (paid, no organization created): "
+                    "session_id=%s email=%s amount=%s %s",
+                    session.get("session_id"), session.get("email"),
+                    session.get("amount_total"), session.get("currency"),
+                )
+        except Exception as exc:
+            logger.warning("Stripe reconciliation loop failed: %s", exc)
+        await asyncio.sleep(3600)
+
+
 async def stop_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task, _random_checkin_task
-    for task in (_scheduler_task, _long_shift_task, _random_checkin_task):
+    global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
+    for task in (_scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task):
         if not task:
             continue
         task.cancel()
@@ -263,3 +306,4 @@ async def stop_notification_scheduler() -> None:
     _scheduler_task = None
     _long_shift_task = None
     _random_checkin_task = None
+    _stripe_reconciliation_task = None

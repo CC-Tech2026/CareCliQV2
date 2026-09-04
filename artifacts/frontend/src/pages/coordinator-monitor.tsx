@@ -3,6 +3,7 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import { Activity, AlertTriangle, Radio, Users, CheckCircle2, ShieldAlert } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { Card } from "@/components/ui/card";
+import { SectionInfo } from "@/components/ui/section-info";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import {
   getMonitorLive,
@@ -124,10 +125,8 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
         </p>
         <h1 className="mt-1 flex items-center gap-2 text-xl font-black" style={{ color: "var(--cc-text)" }}>
           <Radio size={22} /> Long shift monitor
+          <SectionInfo text="Tracks engagement for shifts 4 hours or longer, per NDIS Practice Standard Check 16. Refreshes every 30 seconds." />
         </h1>
-        <p className="mt-1 text-sm" style={{ color: MUTED }}>
-          Live engagement for shifts ≥ 4 hours (NDIS Check 16). Refreshes every 30 seconds.
-        </p>
       </div>
       )}
 

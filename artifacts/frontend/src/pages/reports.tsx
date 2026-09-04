@@ -7,6 +7,7 @@ import {
   useGetComplianceOverview,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SectionInfo } from "@/components/ui/section-info";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
@@ -1174,12 +1175,10 @@ export default function Reports() {
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
             Reports &amp; Documentation
           </p>
-          <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
             {translate(activeTab_.labelKey)}
+            <SectionInfo text="Build and export reports for audits, funding bodies, and your own records. Pick a report type from the tabs below." />
           </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: "var(--cc-muted)" }}>
-            Export NDIS-ready reports and audit documentation
-          </p>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">

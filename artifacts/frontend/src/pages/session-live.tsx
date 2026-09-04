@@ -214,7 +214,7 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-[#F4EDE6] text-[#6A6A77] border-[#E8E8EA]", icon: Circle },
+  not_started: { label: "Not Started", cls: "bg-[#ECECEC] text-[#6A6A77] border-[#E8E8EA]", icon: Circle },
   in_progress: { label: "In Progress", cls: "bg-[#FDF0F4] text-[#7C3AED] border-[#F8C0CE]", icon: Activity },
   achieved: { label: "Achieved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
   needs_review: { label: "Needs Review", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: AlertCircle },
@@ -374,7 +374,7 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#F4EDE6] rounded-lg flex items-center justify-center shrink-0">
+              <div className="h-9 w-9 bg-[#ECECEC] rounded-lg flex items-center justify-center shrink-0">
                 <FileText className="h-4 w-4 text-[#E8457A]" />
               </div>
               <div className="min-w-0">
@@ -392,7 +392,7 @@ function MessageBubble({
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
                   {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
-                    <span className="text-[9px] bg-[#F4EDE6] text-[#6A6A77] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] bg-[#ECECEC] text-[#6A6A77] px-1.5 py-0.5 rounded-full">
                       {msg.detectedLanguage.toUpperCase()}
                     </span>
                   )}
@@ -1555,7 +1555,7 @@ export default function SessionLive() {
                 languageManuallySelectedRef.current = true;
                 setSelectedDocumentationLanguage(event.target.value);
               }}
-              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E8E8EA] bg-[#F4EDE6] px-3 text-[12px] font-bold text-[#1A1A2E] outline-none hover:bg-white disabled:opacity-50"
+              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E8E8EA] bg-[#ECECEC] px-3 text-[12px] font-bold text-[#1A1A2E] outline-none hover:bg-white disabled:opacity-50"
             >
               {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
                 <option key={language.code} value={language.code}>
@@ -1566,7 +1566,7 @@ export default function SessionLive() {
 
             <div className="hidden sm:flex items-center gap-1">
               <Globe className="h-3.5 w-3.5 text-[#6A6A77] shrink-0" />
-              <div className="flex rounded-full border border-[#E8E8EA] bg-[#F4EDE6] p-0.5 overflow-hidden">
+              <div className="flex rounded-full border border-[#E8E8EA] bg-[#ECECEC] p-0.5 overflow-hidden">
                 {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                   <button
                     key={v}
@@ -1590,7 +1590,7 @@ export default function SessionLive() {
               disabled={!isActive || isUploadingAttachment}
               aria-label="Add photo evidence"
               title="Add photo evidence"
-              className="h-9 w-9 rounded-full border border-[#E8E8EA] bg-white text-[#E8457A] hover:bg-[#F4EDE6] disabled:opacity-40 flex items-center justify-center transition-colors"
+              className="h-9 w-9 rounded-full border border-[#E8E8EA] bg-white text-[#E8457A] hover:bg-[#ECECEC] disabled:opacity-40 flex items-center justify-center transition-colors"
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
@@ -1598,7 +1598,7 @@ export default function SessionLive() {
             {elapsed > 0 && (
               <button
                 onClick={() => setShowRestartConfirm(true)}
-                className="hidden sm:inline-flex text-[#6A6A77] hover:text-[#E8457A] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F4EDE6] transition-colors"
+                className="hidden sm:inline-flex text-[#6A6A77] hover:text-[#E8457A] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#ECECEC] transition-colors"
               >
                 Restart
               </button>
@@ -1846,7 +1846,7 @@ export default function SessionLive() {
               aria-label={translate("sessions.live.input.attach")}
               onClick={() => fileAttachRef.current?.click()}
               disabled={!isActive || isUploadingAttachment}
-              className="h-10 w-10 rounded-full flex items-center justify-center text-[#E8457A] hover:bg-[#F4EDE6] transition-colors disabled:opacity-40 shrink-0"
+              className="h-10 w-10 rounded-full flex items-center justify-center text-[#E8457A] hover:bg-[#ECECEC] transition-colors disabled:opacity-40 shrink-0"
             >
               {isUploadingAttachment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
             </button>

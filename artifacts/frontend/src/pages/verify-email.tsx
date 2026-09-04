@@ -39,7 +39,7 @@ export default function VerifyEmail() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center">
       <section className="w-full rounded-[2rem] border border-[#E8E8EA] bg-white p-8 text-center shadow-sm">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F4EDE6] text-[#E8457A]">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#ECECEC] text-[#E8457A]">
           <Mail className="h-8 w-8" />
         </div>
         <h1 className="mt-5 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>

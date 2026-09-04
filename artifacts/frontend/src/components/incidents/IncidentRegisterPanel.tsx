@@ -11,6 +11,7 @@ import { listIncidents, getIncidentStats, updateIncident } from "@/services/inci
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { IncidentAccordionCard, type IncidentCardData } from "./IncidentAccordionCard";
+import { SectionInfo } from "@/components/ui/section-info";
 
 type SubTab = "all" | "open" | "review" | "resolved" | "rp";
 type TypeFilter = "all" | "restrictive_practice" | "auto" | "manual";
@@ -191,12 +192,10 @@ export function IncidentRegisterPanel() {
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--cc-coral)]">
             {translate("incidents.new.standard")}
           </p>
-          <h1 className="mt-1 text-xl font-black tracking-tight text-[var(--cc-text)]">
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight text-[var(--cc-text)]">
             {translate("incidents.register.title")}
+            <SectionInfo text="Every incident recorded across your organisation, from all sources, aligned to NDIS Practice Standard Core." />
           </h1>
-          <p className="mt-1 text-sm font-medium text-[var(--cc-muted)]">
-            {translate("incidents.register.subtitle")}
-          </p>
         </div>
         <div className="flex gap-2">
           <button

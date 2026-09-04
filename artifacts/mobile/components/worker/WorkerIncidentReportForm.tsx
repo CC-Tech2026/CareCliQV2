@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { useOffline } from "@/context/OfflineContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -24,6 +25,7 @@ import {
   type IncidentPhotoItem,
 } from "@/lib/resource-api";
 import { transcribeSessionAudio } from "@/lib/worker-api";
+import { newClientNoteId } from "@/lib/shift-utils";
 import { ActiveVoiceRecording, type VoiceRecordingControls } from "@/components/worker/WorkerMobileComposer";
 
 const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?: string }> = {
@@ -58,6 +60,11 @@ type Props = {
   initialWorkerActions?: string;
   onSubmitted?: (referenceNumber?: string) => void;
   onCancel?: () => void;
+  /** Extra bottom padding for presentation contexts that don't already
+   * handle safe-area insets themselves (e.g. WorkerMobileIncidentSheet's
+   * bottom sheet) — the full-screen route (WorkerStackScreen) already pads
+   * for the device's bottom inset, so this defaults to 0 there. */
+  bottomInset?: number;
 };
 
 /** Text field with a mic button that records, transcribes via the shared voice pipeline, and appends the result. */
@@ -147,6 +154,7 @@ export function WorkerIncidentReportForm({
   initialWorkerActions = "",
   onSubmitted,
   onCancel,
+  bottomInset = 0,
 }: Props) {
   const colors = useColors();
   const t = useT();
@@ -162,6 +170,8 @@ export function WorkerIncidentReportForm({
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationRef, setConfirmationRef] = useState<string | null>(null);
+  const [queuedOffline, setQueuedOffline] = useState(false);
+  const { isOnline, queueWorkerUpdate } = useOffline();
 
   const descLen = description.trim().length;
   const descValid = descLen >= 20 && descLen <= 2000;
@@ -208,57 +218,93 @@ export function WorkerIncidentReportForm({
   const handleSubmit = async () => {
     if (!descValid || submitting) return;
     setSubmitting(true);
-    try {
-      const result = await createWorkerIncident({
-        shift_id: shiftId,
-        participant_id: participantId,
-        session_id: sessionId ?? undefined,
-        worker_report_type: reportType,
-        behaviour_subtype:
-          reportType === "participant_behaviour" ? behaviourSubtype || undefined : undefined,
-        severity,
-        description: description.trim(),
-        worker_actions: workerActions.trim() || undefined,
-        incident_date: new Date().toISOString(),
-        location: shiftAddress,
-        participant_present: participantPresent ?? undefined,
-        participant_harmed:
-          participantPresent && participantHarmed
-            ? (participantHarmed as "yes" | "no" | "unknown")
-            : undefined,
-        photo_items: photos.map(({ data, captured_at, latitude, longitude }) => ({
-          data,
-          captured_at,
-          latitude,
-          longitude,
-        })),
-      });
-      const ref = result.reference_number ?? result.id.slice(0, 8).toUpperCase();
-      setConfirmationRef(ref);
-      onSubmitted?.(ref);
-    } catch (err) {
+
+    const payload = {
+      shift_id: shiftId,
+      participant_id: participantId,
+      session_id: sessionId ?? undefined,
+      worker_report_type: reportType,
+      behaviour_subtype:
+        reportType === "participant_behaviour" ? behaviourSubtype || undefined : undefined,
+      severity,
+      description: description.trim(),
+      worker_actions: workerActions.trim() || undefined,
+      incident_date: new Date().toISOString(),
+      location: shiftAddress,
+      participant_present: participantPresent ?? undefined,
+      participant_harmed:
+        participantPresent && participantHarmed
+          ? (participantHarmed as "yes" | "no" | "unknown")
+          : undefined,
+      photo_items: photos.map(({ data, captured_at, latitude, longitude }) => ({
+        data,
+        captured_at,
+        latitude,
+        longitude,
+      })),
+    };
+
+    // Incident reports previously had no offline/retry path at all: a failed
+    // submit just showed an alert, and if the worker navigated away or the
+    // app was killed before retrying, the whole report (including photos,
+    // only ever held in local component state) was gone with no trace. Now
+    // any failure - offline or a live request that fails - queues the full
+    // payload the same way notes/attachments do, rather than only queuing
+    // when already known-offline.
+    if (isOnline) {
+      try {
+        const result = await createWorkerIncident(payload);
+        const ref = result.reference_number ?? result.id.slice(0, 8).toUpperCase();
+        setConfirmationRef(ref);
+        onSubmitted?.(ref);
+        setSubmitting(false);
+        return;
+      } catch {
+        /* fall through to queue below */
+      }
+    }
+
+    const queued = await queueWorkerUpdate({
+      type: "submit_incident",
+      id: newClientNoteId(),
+      payload,
+      timestamp: Date.now(),
+    });
+    setSubmitting(false);
+    if (queued) {
+      setQueuedOffline(true);
+      setConfirmationRef("PENDING");
+      onSubmitted?.();
+    } else {
       Alert.alert(
         "Submit failed",
-        err instanceof Error ? err.message : "Please try again.",
+        "This report couldn't be saved. Please try submitting again before leaving this screen.",
       );
-    } finally {
-      setSubmitting(false);
     }
   };
 
   if (confirmationRef) {
     return (
       <View style={[styles.confirmCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-        <Feather name="check-circle" size={32} color={colors.primary} />
+        <Feather name={queuedOffline ? "clock" : "check-circle"} size={32} color={colors.primary} />
         <Text style={[styles.confirmTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          {t("incidents.form.submitted")}
+          {queuedOffline ? "Saved - will submit automatically" : t("incidents.form.submitted")}
         </Text>
-        <Text style={[styles.confirmRef, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-          {confirmationRef}
-        </Text>
-        <Text style={[styles.confirmHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {t("incidents.form.keepRef")}
-        </Text>
+        {queuedOffline ? (
+          <Text style={[styles.confirmHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            Couldn't reach the server just now, so this report is saved on your device and will submit on its own
+            once you're back online. You don't need to redo anything.
+          </Text>
+        ) : (
+          <>
+            <Text style={[styles.confirmRef, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+              {confirmationRef}
+            </Text>
+            <Text style={[styles.confirmHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("incidents.form.keepRef")}
+            </Text>
+          </>
+        )}
         <Pressable
           onPress={onCancel}
           style={[styles.submitBtn, { backgroundColor: colors.primary }]}
@@ -328,7 +374,7 @@ export function WorkerIncidentReportForm({
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: 40 + bottomInset }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >

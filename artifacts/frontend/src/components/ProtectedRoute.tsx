@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
@@ -24,6 +25,7 @@ const ROLE_LABEL_KEYS: Record<UserRole, string> = {
   support_coordinator: "protected.role.supportCoordinator",
   support_worker: "protected.role.supportWorker",
   managing_director: "protected.role.managingDirector",
+  super_admin: "protected.role.superAdmin",
 };
 
 /**
@@ -55,6 +57,29 @@ export function ProtectedRoute({
 
   if (user.email_verified === false && location !== "/verify-email") {
     return <Redirect to="/verify-email" />;
+  }
+
+  /**
+   * Deactivated account lockdown.
+   *
+   * A deactivated worker can still log in (their account isn't deleted),
+   * but the portal is locked down: everything redirects to
+   * /account-deactivated except the one page (if any) that resolves a
+   * self-fixable reason. "manual" (and any reason not listed below) has no
+   * self-service path at all - only the admin can reactivate that account.
+   */
+  const DEACTIVATED_ALLOWED_PATHS: Record<string, string[]> = {
+    credentials: ["/worker-onboarding"],
+    training: ["/worker/training"],
+    credentials_training: ["/worker-onboarding", "/worker/training"],
+  };
+  const isDeactivated = user.role === "support_worker" && user.is_active === false;
+  if (isDeactivated) {
+    const allowedPaths = ["/account-deactivated", ...(DEACTIVATED_ALLOWED_PATHS[user.deactivation_reason ?? ""] ?? [])];
+    const isAllowedWhileDeactivated = allowedPaths.some((p) => location === p || location.startsWith(p + "/"));
+    if (!isAllowedWhileDeactivated) {
+      return <Redirect to="/account-deactivated" />;
+    }
   }
 
   const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/worker/profile", "/settings"];
@@ -90,8 +115,8 @@ export function ProtectedRoute({
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-cc-surface p-8 shadow-sm text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-3xl">
-            🔒
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <Lock size={28} className="text-gray-500" />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">

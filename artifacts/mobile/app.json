@@ -23,6 +23,7 @@
         "NSMicrophoneUsageDescription": "Record voice notes during clinical sessions",
         "NSPhotoLibraryUsageDescription": "Access photos to attach evidence to sessions",
         "NSFaceIDUsageDescription": "Unlock CareCliQ and sign in with Face ID.",
+        "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -102,7 +103,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow CareCliQ to access your microphone to record voice notes during sessions."
+          "microphonePermission": "Allow CareCliQ to access your microphone to record voice notes during sessions.",
+          "enableBackgroundRecording": true
         }
       ],
       [

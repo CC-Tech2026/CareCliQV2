@@ -392,6 +392,23 @@ def revoke_all_sessions(user_id: str) -> None:
     _admin().table("user_trusted_devices").delete().eq("user_id", user_id).execute()
 
 
+def revoke_all_sessions_for_org(organization_id: str) -> int:
+    """Immediately logs out every user in a provider organisation — used when
+    the Super Admin suspends it. Reuses the same revoked_at check every
+    request already goes through (is_session_active above), so this takes
+    effect on each user's very next request, not just their next login."""
+    users_result = (
+        _admin().table("users").select("id").eq("organization_id", organization_id).execute()
+    )
+    user_ids = [row["id"] for row in (users_result.data or []) if row.get("id")]
+    if not user_ids:
+        return 0
+    _admin().table("user_sessions").update({"revoked_at": _now().isoformat()}).in_(
+        "user_id", user_ids
+    ).is_("revoked_at", "null").execute()
+    return len(user_ids)
+
+
 async def _persist_login_event(
     user_id: str,
     *,

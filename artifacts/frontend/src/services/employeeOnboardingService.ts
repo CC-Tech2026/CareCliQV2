@@ -12,6 +12,17 @@ export type OnboardingDocument = {
   created_at: string;
 };
 
+export type CandidateDocument = {
+  id: string;
+  applicant_id: string;
+  document_type: "resume" | "cover_letter" | "id_document" | "other";
+  title: string;
+  notes?: string | null;
+  file_path?: string | null;
+  file_url?: string | null;
+  created_at: string;
+};
+
 export type EmployeeHire = {
   id: string;
   organization_id: string;
@@ -20,32 +31,34 @@ export type EmployeeHire = {
   email: string;
   phone?: string | null;
   role: "support_worker" | "support_coordinator";
-  status: "draft" | "awaiting_signatures" | "signed" | "invited" | "completed";
+  status: "draft" | "awaiting_signatures" | "signed" | "invited" | "completed" | "expired";
   sign_token?: string | null;
   employer_signed_name?: string | null;
   employer_signed_at?: string | null;
   worker_signed_name?: string | null;
   worker_signed_at?: string | null;
   invitation_id?: string | null;
+  /** Whether the day-3 nudge for this send has already gone out — reset to
+   *  null on every (re)send so a resend gets its own fresh reminder cycle. */
+  offer_reminder_sent_at?: string | null;
+  /** Set when the login invite is (re)sent — employer_signed_at drives the
+   *  offer link's own 14-day expiry (offer_letter_reminder_service.py); this
+   *  drives the invite token's 7-day expiry (invitations.py's fixed TTL). */
+  invited_at?: string | null;
+  invite_reminder_sent_at?: string | null;
+  invite_expired_notified_at?: string | null;
   created_at: string;
   documents?: OnboardingDocument[];
   email_delivery?: { status?: string; message?: string };
+  resume_summary?: string | null;
+  resume_skills?: string[] | null;
+  resume_experience_years?: string | null;
+  credentials_claimed?: { type: string; mentioned_as: string }[] | null;
+  candidate_documents?: CandidateDocument[];
 };
-
-export function listHires() {
-  return jsonFetch<EmployeeHire[]>("/api/employee-onboarding/hires");
-}
 
 export function getHire(hireId: string) {
   return jsonFetch<EmployeeHire>(`/api/employee-onboarding/hires/${encodeURIComponent(hireId)}`);
-}
-
-export function createHire(payload: { full_name: string; email: string; phone?: string; role: string }) {
-  return jsonFetch<EmployeeHire>("/api/employee-onboarding/hires", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
 }
 
 export function addHireDocument(hireId: string, payload: { document_type: string; title: string; notes?: string }) {
@@ -92,6 +105,10 @@ export type SignPreview = {
   employer_signed_at?: string | null;
   worker_signed_name?: string | null;
   worker_signed_at?: string | null;
+  /** Document contents (including file URLs) are withheld until the email
+   *  code is verified — this is the flag to check before assuming
+   *  `documents` has anything in it. */
+  email_verified: boolean;
   documents: OnboardingDocument[];
 };
 
@@ -116,4 +133,22 @@ export function signHire(token: string, fullName: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ full_name: fullName }),
   });
+}
+
+export function sendSigningCode(token: string) {
+  return jsonFetch<{ ok: boolean; message?: string }>(
+    `/api/employee-onboarding/sign/${encodeURIComponent(token)}/send-code`,
+    { method: "POST" },
+  );
+}
+
+export function verifySigningCode(token: string, code: string) {
+  return jsonFetch<{ ok: boolean }>(
+    `/api/employee-onboarding/sign/${encodeURIComponent(token)}/verify-code`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    },
+  );
 }

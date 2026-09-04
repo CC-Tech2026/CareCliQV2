@@ -374,6 +374,49 @@ export function clockOutShift(id: string) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-out`, { method: "POST" });
 }
 
+/** Worker-initiated cancellation — vacates the shift back to unassigned and
+ * notifies coordinators. Never auto-reassigns; a coordinator has to pick
+ * (or offer) a replacement from the roster. */
+export function markShiftCannotAttend(id: string, reason?: string) {
+  return jsonFetch<{ shift_id: string; shift: Record<string, unknown> }>(
+    `/api/worker/shifts/${id}/cannot-attend`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason || null }) },
+  );
+}
+
+export type ShiftOfferSummary = {
+  offer_id: string;
+  shift_id: string;
+  participant_first_name: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  shift_type: string | null;
+  offered_at: string | null;
+};
+
+/** Decision-only summary for a shift this worker has been offered but not
+ * yet accepted/declined — deliberately excludes the full participant
+ * profile (address, health info, etc.), which stays locked until the
+ * worker actually commits to the shift. 404s once there's no pending
+ * offer (already responded, or never offered to this worker). */
+export function getShiftOfferSummary(shiftId: string) {
+  return jsonFetch<ShiftOfferSummary>(`/api/worker/shifts/${shiftId}/offer`);
+}
+
+export function acceptShiftOffer(shiftId: string) {
+  return jsonFetch<{ shift_id: string; shift: Record<string, unknown> }>(
+    `/api/worker/shifts/${shiftId}/offer/accept`,
+    { method: "POST" },
+  );
+}
+
+export function declineShiftOffer(shiftId: string, reason?: string) {
+  return jsonFetch<{ shift_id: string }>(
+    `/api/worker/shifts/${shiftId}/offer/decline`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason || null }) },
+  );
+}
+
 export function endShift(id: string, options?: { force?: boolean }) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/end-shift`, {
     method: "POST",

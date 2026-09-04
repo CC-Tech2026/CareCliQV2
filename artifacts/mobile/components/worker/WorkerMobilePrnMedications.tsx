@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ActiveVoiceRecording, type VoiceRecordingControls } from "@/components/worker/WorkerMobileComposer";
 import { useOffline } from "@/context/OfflineContext";
@@ -108,6 +108,10 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
   const [effectText, setEffectText] = useState("");
   const [verificationPhotoUrl, setVerificationPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Kept on a failed upload so retrying doesn't require re-taking the photo -
+  // for a high-risk med, that photo documents a moment that's already
+  // passed and can't be recreated.
+  const [failedPhotoUri, setFailedPhotoUri] = useState<string | null>(null);
 
   const { data } = useQuery({
     queryKey: ["worker", "prn-medications", shiftId],
@@ -138,12 +142,38 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
       setReason("");
       setDoseGiven("");
       setVerificationPhotoUrl(null);
+      setFailedPhotoUri(null);
     },
     onError: (e: Error) => showToast(e.message || "Could not log PRN dose.", "error"),
   });
 
+  const uploadVerificationPhoto = async (uri: string) => {
+    if (!doseTarget) return;
+    setUploadingPhoto(true);
+    try {
+      const { url } = await uploadMedicationVerificationPhoto(shiftId, doseTarget.id, {
+        uri,
+        name: "verification-photo.jpg",
+        type: "image/jpeg",
+      });
+      setVerificationPhotoUrl(url);
+      setFailedPhotoUri(null);
+    } catch (e) {
+      // Keep the local uri so retrying re-uploads the same photo instead of
+      // forcing the worker to take a new one of a moment that's now passed.
+      setFailedPhotoUri(uri);
+      showToast((e as Error).message || "Could not upload verification photo - tap to retry.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const captureVerificationPhoto = async () => {
     if (!doseTarget) return;
+    if (failedPhotoUri) {
+      await uploadVerificationPhoto(failedPhotoUri);
+      return;
+    }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
       showToast("Camera access is required to verify this medication.", "error");
@@ -151,19 +181,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 });
     if (result.canceled || !result.assets[0]?.uri) return;
-    setUploadingPhoto(true);
-    try {
-      const { url } = await uploadMedicationVerificationPhoto(shiftId, doseTarget.id, {
-        uri: result.assets[0].uri,
-        name: "verification-photo.jpg",
-        type: "image/jpeg",
-      });
-      setVerificationPhotoUrl(url);
-    } catch (e) {
-      showToast((e as Error).message || "Could not upload verification photo.", "error");
-    } finally {
-      setUploadingPhoto(false);
-    }
+    await uploadVerificationPhoto(result.assets[0].uri);
   };
 
   const effectMutation = useMutation({
@@ -183,11 +201,11 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
   if (medications.length === 0 && pendingEffects.length === 0) return null;
 
   return (
-    <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <View style={[styles.wrap, { borderTopColor: colors.border }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Feather name="zap" size={14} color={colors.foreground} />
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          As-needed (PRN) medications
+        <Feather name="zap" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.headerTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          As-needed (PRN)
         </Text>
       </View>
 
@@ -227,6 +245,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
               if (disabled) return;
               setDoseTarget(med);
               setVerificationPhotoUrl(null);
+              setFailedPhotoUri(null);
             }}
             disabled={disabled}
             style={[styles.smallBtn, { backgroundColor: med.at_or_over_max ? colors.destructive : colors.primary }]}
@@ -237,7 +256,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
       ))}
 
       <Modal visible={!!doseTarget} transparent animationType="fade" onRequestClose={() => setDoseTarget(null)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               {doseTarget?.name}
@@ -263,9 +282,9 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
                 disabled={uploadingPhoto}
                 style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: uploadingPhoto ? 0.6 : 1 }]}
               >
-                <Feather name="camera" size={15} color="#FFFFFF" />
+                <Feather name={failedPhotoUri ? "refresh-cw" : "camera"} size={15} color="#FFFFFF" />
                 <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
-                  {uploadingPhoto ? "Uploading photo…" : "Take verification photo"}
+                  {uploadingPhoto ? "Uploading photo…" : failedPhotoUri ? "Retry upload" : "Take verification photo"}
                 </Text>
               </Pressable>
             ) : (
@@ -285,15 +304,15 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
                 </Pressable>
               </>
             )}
-            <Pressable onPress={() => { setDoseTarget(null); setVerificationPhotoUrl(null); }} style={styles.cancelBtn}>
+            <Pressable onPress={() => { setDoseTarget(null); setVerificationPhotoUrl(null); setFailedPhotoUri(null); }} style={styles.cancelBtn}>
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!effectTarget} transparent animationType="fade" onRequestClose={() => setEffectTarget(null)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Effect observed</Text>
             <Text style={[styles.modalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -312,16 +331,16 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 12 },
+  wrap: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4 },
   header: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 13 },
+  headerTitle: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   rowCopy: { flex: 1, gap: 2 },
   rowTitle: { fontSize: 14 },
@@ -329,7 +348,7 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   smallBtnText: { fontSize: 11, color: "#FFFFFF" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalCard: { width: "100%", borderRadius: 16, borderWidth: 1, padding: 18, gap: 8 },
+  modalCard: { width: "100%", maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18, gap: 8 },
   modalTitle: { fontSize: 16 },
   modalSubtitle: { fontSize: 13, marginBottom: 4 },
   warningText: { fontSize: 12, marginBottom: 4 },

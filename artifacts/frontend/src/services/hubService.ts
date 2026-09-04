@@ -10,6 +10,8 @@ export type HubComplianceAlert = {
   affected_staff?: string[];
   action_label: string;
   source?: string;
+  /** "urgent" = needs action today/this week. "exposure" = builds into a future finding if ignored. */
+  category?: "urgent" | "exposure";
 };
 
 export type OrgEvent = {
@@ -20,6 +22,9 @@ export type OrgEvent = {
   event_type: "audit" | "training" | "meeting" | "review";
   location?: string | null;
   participants_desc?: string | null;
+  /** "HH:MM", 24h. Null on events created before this field existed —
+   *  those render in the calendar's all-day strip instead of the hour grid. */
+  start_time?: string | null;
   organization_id?: string;
   created_by?: string;
   created_at?: string;
@@ -51,6 +56,18 @@ export type CommunityItem = {
 
 export async function getHubComplianceAlerts(): Promise<HubComplianceAlert[]> {
   return jsonFetch<HubComplianceAlert[]>("/api/hub/compliance-alerts");
+}
+
+/** Same alert shape as compliance-alerts, scoped to care delivery/participant
+ *  engagement instead of compliance/credentialing — see Operations & Care tab. */
+export async function getCareAlerts(): Promise<HubComplianceAlert[]> {
+  return jsonFetch<HubComplianceAlert[]>("/api/hub/care-alerts");
+}
+
+/** Same alert shape again, scoped to "who's stuck" in the staff onboarding
+ *  pipeline — applicants, unsigned offers, pending invites, blocked workers. */
+export async function getOnboardingAlerts(): Promise<HubComplianceAlert[]> {
+  return jsonFetch<HubComplianceAlert[]>("/api/hub/onboarding-alerts");
 }
 
 export async function getOrgEvents(): Promise<OrgEvent[]> {

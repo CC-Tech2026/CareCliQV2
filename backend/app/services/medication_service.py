@@ -138,6 +138,7 @@ def create_medication(
     is_prn: bool,
     prn_max_per_day: int | None,
     source_document_id: str | None = None,
+    status: str | None = None,
 ) -> dict[str, Any]:
     if not name.strip():
         raise HTTPException(status_code=422, detail="Medication name is required.")
@@ -147,6 +148,9 @@ def create_medication(
         raise HTTPException(status_code=422, detail="frequency_type must be 'scheduled' or 'prn'.")
     if frequency_type == "prn" and not is_prn:
         is_prn = True
+    initial_status = status or "pending_verification"
+    if initial_status not in {"draft", "pending_verification"}:
+        raise HTTPException(status_code=422, detail="New medications can only be saved as draft or submitted for verification.")
 
     payload = {
         "id": str(uuid4()),
@@ -163,9 +167,9 @@ def create_medication(
         "end_date": end_date,
         "is_prn": is_prn,
         "prn_max_per_day": prn_max_per_day,
-        # Submitted, not yet confirmed by a named reviewer against the source document —
-        # it will not appear on any worker's shift checklist until verify_medication() runs.
-        "status": "pending_verification",
+        # Drafts and pending records stay off worker shift checklists; only
+        # verify_medication() can make a new medication active.
+        "status": initial_status,
         "source_document_id": source_document_id,
         "created_by": created_by,
         "updated_by": created_by,
@@ -181,7 +185,7 @@ def create_medication(
             raise HTTPException(status_code=503, detail="Medication service unavailable.") from exc
         raise
     medication = result.data[0] if result.data else payload
-    _record_status_change(medication["id"], organization_id, None, "pending_verification", created_by, "Created")
+    _record_status_change(medication["id"], organization_id, None, initial_status, created_by, "Created")
     return medication
 
 
@@ -413,6 +417,8 @@ def update_medication(
         raise HTTPException(status_code=422, detail=f"Invalid route. Must be one of: {', '.join(sorted(ROUTES))}.")
     if "status" in updates and updates["status"] not in STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(STATUSES))}.")
+    if "name" in updates and not str(updates["name"] or "").strip():
+        raise HTTPException(status_code=422, detail="Medication name is required.")
 
     existing = get_medication(medication_id, organization_id)  # 404s if not found / wrong org
 
@@ -423,9 +429,12 @@ def update_medication(
             detail="This medication must go through verification before it can be made active.",
         )
 
-    clean = {k: v for k, v in updates.items() if v is not None}
+    required_fields = {"name", "route", "frequency_type", "scheduled_times", "is_prn", "status", "start_date"}
+    clean = {k: v for k, v in updates.items() if not (v is None and k in required_fields)}
     if not clean:
         raise HTTPException(status_code=422, detail="No fields to update.")
+    if "name" in clean:
+        clean["name"] = str(clean["name"]).strip()
     clean["updated_by"] = updated_by
 
     result = (

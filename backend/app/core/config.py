@@ -1,9 +1,33 @@
 import os
+import sys
 from pathlib import Path
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 _REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
+# Every field below reads via a plain os.environ.get(...) at class-definition
+# time, evaluated once when this module is first imported — that only ever
+# sees real shell-exported variables. pydantic-settings' own `env_file`
+# loading (Config.env_file below) is a *separate* mechanism that only bridges
+# the gap for fields whose Python attribute name matches their env var name
+# case-insensitively (e.g. supabase_url <-> SUPABASE_URL); secret_key's env
+# var is SESSION_SECRET, which doesn't match, so it silently fell through to
+# the hardcoded default in any local run that hadn't manually exported
+# SESSION_SECRET first. Loading .env into the real environment here, before
+# any field default is evaluated, fixes that for every field, not just this
+# one. Production is unaffected — Render injects real env vars directly.
+#
+# Skipped under pytest deliberately: this repo's .env points at the real
+# hosted Supabase project. Several existing tests have unmocked network-call
+# gaps that previously failed safely against an empty SUPABASE_URL default;
+# auto-loading real production credentials here would turn that into tests
+# silently reaching the live database instead. Tests that actually want a
+# real database opt in explicitly via INTEGRATION_REAL_DB (see
+# backend/tests/integration/), never via this file.
+if "pytest" not in sys.modules:
+    load_dotenv(_REPO_ROOT_ENV_FILE)
 
 
 class Settings(BaseSettings):
@@ -35,6 +59,23 @@ class Settings(BaseSettings):
         os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000")),
     )
     secret_key: str = os.environ.get("SESSION_SECRET", "changeme-in-production")
+
+    @field_validator("secret_key")
+    @classmethod
+    def _require_real_secret_key(cls, v):
+        # Every application JWT — including the organization_id claim that
+        # OrgContextMiddleware trusts absolutely for tenant isolation — is signed
+        # with this key. An unset, default, or short value means anyone who can
+        # compute an HS256 signature can forge a token for any organisation, so
+        # this must fail loudly at startup rather than silently accept a weak key.
+        if not v or v == "changeme-in-production" or len(v) < 32:
+            raise ValueError(
+                "SESSION_SECRET is missing, using the placeholder default, or too short "
+                "(need 32+ chars). Set a real generated value, e.g.: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+        return v
+
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
     reauth_token_expire_minutes: int = int(os.environ.get("REAUTH_TOKEN_EXPIRE_MINUTES", "10") or 10)
@@ -66,6 +107,10 @@ class Settings(BaseSettings):
     smtp_use_starttls: bool = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
     email_queue_workers: int = int(os.environ.get("EMAIL_QUEUE_WORKERS", "1") or 1)
     email_queue_max_size: int = int(os.environ.get("EMAIL_QUEUE_MAX_SIZE", "1000") or 1000)
+    # CareCliQ's own platform subscription billing (Stripe) — distinct from
+    # NDIS participant funding in billing.py, which doesn't touch Stripe at all.
+    stripe_secret_key: str = os.environ.get("STRIPE_SECRET_KEY", "")
+    stripe_webhook_secret: str = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     notification_scheduler_enabled: bool = os.environ.get("NOTIFICATION_SCHEDULER_ENABLED", "true").lower() == "true"
     notification_scheduler_interval_minutes: int = int(
         os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15

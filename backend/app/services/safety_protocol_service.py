@@ -11,6 +11,19 @@ logger = logging.getLogger(__name__)
 
 PROTOCOLS_TABLE = "participant_safety_protocols"
 ACK_TABLE = "worker_safety_acknowledgements"
+ORG_CONTENT_TABLE = "organization_acknowledgement_content"
+
+_DEFAULT_ORG_ACKNOWLEDGEMENT_BODY = """Before starting this shift, you confirm:
+
+- You will provide supports strictly within this participant's plan and your own training and scope of practice.
+- You will treat the participant with respect and dignity, including their right to make their own choices and take on reasonable risk (dignity of risk) - you will not make decisions for them.
+- You will keep all personal and health information about the participant confidential, and only discuss it in a professional context.
+- You will act honestly and with integrity in all records and communications about this shift.
+- You will not have unsupervised or one-on-one contact with the participant outside your rostered, approved duties without your coordinator's prior authorisation.
+- You will report any incident, hazard, safeguarding concern, or suspected abuse, neglect, exploitation, or violence immediately through the organisation's reporting channels - never ignore or delay a concern.
+- You understand this acknowledgement is in addition to, and does not replace, the NDIS Code of Conduct you separately confirmed during onboarding.
+
+This is a starting draft - your organisation should review and adjust this wording before relying on it as a compliance record."""
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -70,27 +83,88 @@ def get_protocol(participant_id: str, organization_id: str) -> dict[str, Any]:
     return row
 
 
-def get_worker_ack_version(worker_id: str, participant_id: str) -> Optional[int]:
+def _empty_org_content(organization_id: str) -> dict[str, Any]:
+    return {
+        "organization_id": organization_id,
+        "body": _DEFAULT_ORG_ACKNOWLEDGEMENT_BODY,
+        "content_version": 1,
+        "updated_at": None,
+        "updated_by": None,
+    }
+
+
+def get_org_acknowledgement_content(organization_id: str) -> dict[str, Any]:
+    """Standing per-shift acknowledgement content, org-wide. Same lazy-default
+    pattern as get_protocol(): returns the starting draft in-memory until an
+    org's row is first read-created or someone edits it - never blocks on a
+    missing row."""
+    try:
+        resp = (
+            get_supabase_admin()
+            .table(ORG_CONTENT_TABLE)
+            .select("*")
+            .eq("organization_id", organization_id)
+            .maybe_single()
+            .execute()
+        )
+        row = resp.data if resp else None
+        if not isinstance(row, dict):
+            row = None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return _empty_org_content(organization_id)
+        raise
+    if not row:
+        return _empty_org_content(organization_id)
+    return row
+
+
+def upsert_org_acknowledgement_content(
+    organization_id: str, body: str, updated_by: Optional[str],
+) -> dict[str, Any]:
+    existing = get_org_acknowledgement_content(organization_id)
+    content_changed = body != (existing.get("body") or "")
+    current_version = int(existing.get("content_version") or 1)
+    payload = {
+        "organization_id": organization_id,
+        "body": body,
+        "content_version": (current_version + 1) if (content_changed and existing.get("updated_at")) else current_version,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": updated_by,
+    }
+    try:
+        resp = (
+            get_supabase_admin()
+            .table(ORG_CONTENT_TABLE)
+            .upsert(payload, on_conflict="organization_id")
+            .execute()
+        )
+        rows = resp.data or []
+        return rows[0] if rows else payload
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            raise ValueError("Acknowledgement content is not available — run database migrations.") from exc
+        raise
+
+
+def _has_shift_acknowledgement(worker_id: str, participant_id: str, shift_id: str) -> bool:
     try:
         resp = (
             get_supabase_admin()
             .table(ACK_TABLE)
-            .select("content_version")
+            .select("id")
             .eq("worker_id", worker_id)
             .eq("participant_id", participant_id)
-            .order("content_version", desc=True)
+            .eq("shift_id", shift_id)
             .limit(1)
             .execute()
         )
-        rows = (resp.data if resp else None) or []
-        if not rows:
-            return None
-        return int(rows[0].get("content_version") or 0) or None
+        return bool(resp.data)
     except Exception as exc:
         if _is_missing_schema_error(exc):
-            return None
+            return False
         logger.debug("Safety ack lookup failed: %s", exc)
-        return None
+        return False
 
 
 def build_worker_safety_status(
@@ -98,19 +172,24 @@ def build_worker_safety_status(
     participant_id: str,
     organization_id: str,
     worker_id: str,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
+    """Safety card status for a worker. Acknowledgement is scoped to a single shift -
+    it's always required again on the next clock-in, never reused from a prior shift,
+    and required even when the card has no content on file (nothing to skip on)."""
     protocol = get_protocol(participant_id, organization_id)
     content_version = int(protocol.get("content_version") or 1)
-    acknowledged_version = get_worker_ack_version(worker_id, participant_id)
     has_content = _has_safety_content(protocol)
-    requires_ack = has_content and (
-        acknowledged_version is None or acknowledged_version < content_version
+    acknowledged_for_shift = bool(shift_id) and _has_shift_acknowledgement(
+        worker_id, participant_id, str(shift_id)
     )
+    org_content = get_org_acknowledgement_content(organization_id)
     return {
         "content_version": content_version,
-        "acknowledged_version": acknowledged_version,
-        "requires_safety_ack": requires_ack,
+        "requires_safety_ack": not acknowledged_for_shift,
         "has_safety_content": has_content,
+        "org_content_body": org_content.get("body") or _DEFAULT_ORG_ACKNOWLEDGEMENT_BODY,
+        "org_content_version": int(org_content.get("content_version") or 1),
     }
 
 
@@ -118,6 +197,7 @@ def enrich_protocol_for_worker(
     protocol: dict[str, Any],
     *,
     worker_id: str,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
     participant_id = str(protocol.get("participant_id") or "")
     organization_id = str(protocol.get("organization_id") or "")
@@ -125,6 +205,7 @@ def enrich_protocol_for_worker(
         participant_id=participant_id,
         organization_id=organization_id,
         worker_id=worker_id,
+        shift_id=shift_id,
     )
     return {**protocol, **status}
 
@@ -196,6 +277,8 @@ def acknowledge_protocol(
     participant_id: str,
     organization_id: str,
     content_version: int,
+    org_content_version: Optional[int] = None,
+    shift_id: Optional[str] = None,
 ) -> dict[str, Any]:
     protocol = get_protocol(participant_id, organization_id)
     current_version = int(protocol.get("content_version") or 1)
@@ -203,22 +286,34 @@ def acknowledge_protocol(
         raise ValueError(
             "Safety content was updated. Please read the latest version before acknowledging."
         )
-    if not _has_safety_content(protocol):
-        raise ValueError("No safety content to acknowledge for this participant.")
+    if org_content_version is not None:
+        current_org_version = int(get_org_acknowledgement_content(organization_id).get("content_version") or 1)
+        if org_content_version != current_org_version:
+            raise ValueError(
+                "Acknowledgement content was updated. Please read the latest version before acknowledging."
+            )
+    # No has-content check here: acknowledgement is required every clock-in
+    # regardless of whether a safety card has been filled in - the worker is
+    # confirming they checked, not just clearing a rich-content prompt.
 
     now = datetime.now(timezone.utc).isoformat()
-    row = {
+    row: dict[str, Any] = {
         "worker_id": worker_id,
         "participant_id": participant_id,
         "organization_id": organization_id,
         "content_version": content_version,
+        "org_content_version": org_content_version,
         "acknowledged_at": now,
+        "shift_id": shift_id,
     }
     try:
-        get_supabase_admin().table(ACK_TABLE).upsert(
-            row,
-            on_conflict="worker_id,participant_id,content_version",
-        ).execute()
+        if shift_id:
+            get_supabase_admin().table(ACK_TABLE).upsert(
+                row,
+                on_conflict="worker_id,participant_id,shift_id",
+            ).execute()
+        else:
+            get_supabase_admin().table(ACK_TABLE).insert(row).execute()
     except Exception as exc:
         if _is_missing_schema_error(exc):
             raise ValueError("Safety acknowledgements are not available — run database migrations.") from exc
@@ -226,6 +321,7 @@ def acknowledge_protocol(
     return {
         "participant_id": participant_id,
         "content_version": content_version,
+        "org_content_version": org_content_version,
         "acknowledged_at": now,
         "requires_safety_ack": False,
     }

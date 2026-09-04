@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { BadgeCheck, ChevronDown, FileUp, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, BadgeCheck, ChevronDown, ExternalLink, FileUp, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,46 +15,19 @@ import {
   uploadCredentialFile,
   type Credential,
 } from "@/services/credentialsService";
+import { CREDENTIAL_TYPES, credentialTypeLabel, credentialTypeMeta, isCredentialMandatory } from "@/lib/credential-types";
 
 const PLUM = "var(--cc-plum)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
+const WARNING = "var(--cc-status-warning)";
+const WARNING_BG = "var(--cc-status-warning-bg)";
 
-const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
-  ndis_screening: "NDIS Worker Screening",
-  wwcc: "Working with Children Check (WWCC)",
-  code_of_conduct: "Code of Conduct acknowledgement",
-  first_aid: "First Aid",
-  cpr: "CPR",
-  manual_handling: "Manual handling",
-  infection_control: "Infection control",
-  medication_admin: "Medication administration",
-  drivers_licence: "Driver Licence",
-  vehicle_registration: "Vehicle registration",
-  vehicle_insurance: "Vehicle insurance (comprehensive)",
-  qualification: "Qualification",
-};
-
-function credentialTypeLabel(type: string): string {
-  return CREDENTIAL_TYPE_LABELS[type] ?? type;
-}
-
-const WORKER_TYPES = [
-  "ndis_screening",
-  "wwcc",
-  "code_of_conduct",
-  "Police Check",
-  "first_aid",
-  "cpr",
-  "manual_handling",
-  "infection_control",
-  "medication_admin",
-  "drivers_licence",
-  "vehicle_registration",
-  "vehicle_insurance",
-  "qualification",
-  "Other",
-];
+// "Police Check" and "Other" are free-text pseudo-types (the display label doubles
+// as the stored credential_type value) rather than entries in the canonical
+// registry - kept exactly as before so existing saved credentials with these
+// literal values keep matching.
+const WORKER_TYPES = [...CREDENTIAL_TYPES.map((c) => c.type), "Police Check", "Other"];
 
 const STATUS_FILTERS = ["all", "pending_review", "expiring", "expired", "valid", "rejected"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -63,7 +36,7 @@ function statusClass(status: string) {
   if (status === "valid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "expiring") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "expired" || status === "rejected") return "bg-red-50 text-red-700 border-red-200";
-  return "bg-[#F4EDE6] text-[#E8457A] border-[#E8E8EA]";
+  return "bg-[#ECECEC] text-[#E8457A] border-[#E8E8EA]";
 }
 
 function statusLabel(status: string, translate: (key: string) => string) {
@@ -93,6 +66,11 @@ function CredentialRow({
           <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black uppercase ${statusClass(credential.status)}`}>
             {statusLabel(credential.status, translate)}
           </span>
+          {isCredentialMandatory(credential.credential_type) && (
+            <span className="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase" style={{ borderColor: WARNING_BG, background: WARNING_BG, color: WARNING }}>
+              Required
+            </span>
+          )}
         </div>
         <p className="mt-1 text-xs font-medium text-[#6A6A77]">
           {credentialTypeLabel(credential.credential_type)}
@@ -104,6 +82,23 @@ function CredentialRow({
             {translate("credentials.viewDocument")}
           </a>
         )}
+        {credential.status !== "valid" && (() => {
+          const meta = credentialTypeMeta(credential.credential_type);
+          if (!meta) return null;
+          return (
+            <p className="mt-2 text-xs leading-relaxed" style={{ color: MUTED }}>
+              {meta.guidance}
+              {meta.externalUrl && (
+                <>
+                  {" "}
+                  <a href={meta.externalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-[#E8457A]">
+                    {meta.externalLabel ?? "Learn more"} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+            </p>
+          );
+        })()}
       </div>
       <div className="flex flex-wrap gap-2">
         {credential.status !== "valid" && (
@@ -221,6 +216,19 @@ export function MyCredentialsCard() {
   const needsAttention = summary.pending + summary.expiring + summary.expired;
   const allGood = !isLoading && data.length > 0 && needsAttention === 0;
 
+  // Mandatory credential types with nothing on file yet - the gap that has to be
+  // closed before this worker can be rostered with a participant, surfaced with
+  // guidance on how to actually get each one instead of a bare "missing" flag.
+  const missingMandatory = useMemo(() => {
+    const onFile = new Set(data.map((item) => item.credential_type));
+    return CREDENTIAL_TYPES.filter((c) => c.mandatory && !onFile.has(c.type));
+  }, [data]);
+
+  function startAdding(type: string) {
+    setForm((prev) => ({ ...prev, credential_type: type }));
+    setAddOpenOverride(true);
+  }
+
   return (
     <div className="space-y-4 rounded-2xl border border-[#E8E8EA] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
@@ -241,6 +249,43 @@ export function MyCredentialsCard() {
         )}
       </div>
 
+      {!isLoading && missingMandatory.length > 0 && (
+        <div className="rounded-2xl border p-4" style={{ borderColor: WARNING_BG, background: WARNING_BG }}>
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" style={{ color: WARNING }} />
+            <p className="text-xs font-black uppercase tracking-wide" style={{ color: WARNING }}>
+              {missingMandatory.length} mandatory credential{missingMandatory.length === 1 ? "" : "s"} still needed
+            </p>
+          </div>
+          <p className="mt-1 text-xs" style={{ color: "#1A1A2E" }}>
+            These have to be on file and verified before you can be rostered with a participant. The rest can be completed after you start.
+          </p>
+          <div className="mt-3 space-y-2">
+            {missingMandatory.map((meta) => (
+              <div key={meta.type} className="rounded-xl border bg-white p-3" style={{ borderColor: BORDER }}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-black" style={{ color: "#1A1A2E" }}>{meta.label}</p>
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 rounded-lg px-2.5 text-xs font-bold text-[#E8457A]" onClick={() => startAdding(meta.type)}>
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </Button>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed" style={{ color: MUTED }}>{meta.guidance}</p>
+                {meta.externalUrl && (
+                  <a
+                    href={meta.externalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-[#E8457A]"
+                  >
+                    <ExternalLink className="h-3 w-3" /> {meta.externalLabel ?? "Learn more"}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border" style={{ borderColor: BORDER }}>
         <button
           type="button"
@@ -255,7 +300,7 @@ export function MyCredentialsCard() {
         {addOpen && (
       <form onSubmit={submit} className="px-4 pb-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div>
+          <div className="sm:col-span-2">
             <Label>{translate("credentials.type")}</Label>
             <select
               title="Credential type"
@@ -263,8 +308,32 @@ export function MyCredentialsCard() {
               onChange={(event) => setForm({ ...form, credential_type: event.target.value })}
               className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
             >
-              {WORKER_TYPES.map((type) => <option key={type} value={type}>{credentialTypeLabel(type)}</option>)}
+              {WORKER_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {credentialTypeLabel(type)}{isCredentialMandatory(type) ? " — Required" : ""}
+                </option>
+              ))}
             </select>
+            {(() => {
+              const meta = credentialTypeMeta(form.credential_type);
+              if (!meta) return null;
+              return (
+                <div className="mt-2 rounded-xl border p-3" style={{ borderColor: BORDER, background: "var(--cc-soft)" }}>
+                  <p className="text-xs font-black" style={{ color: "#1A1A2E" }}>How to get this</p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: MUTED }}>{meta.guidance}</p>
+                  {meta.externalUrl && (
+                    <a
+                      href={meta.externalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-[#E8457A]"
+                    >
+                      <ExternalLink className="h-3 w-3" /> {meta.externalLabel ?? "Learn more"}
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div>
             <Label>{translate("credentials.credentialTitle")}</Label>
@@ -342,10 +411,10 @@ export function MyCredentialsCard() {
         {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>{translate("credentials.loading")}</p>}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && data.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.empty")}</p>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.empty")}</p>
         )}
         {!isLoading && data.length > 0 && filteredData.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F4EDE6] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.noMatch")}</p>
+          <p className="mt-4 rounded-2xl bg-[#ECECEC] p-4 text-sm font-medium" style={{ color: MUTED }}>{translate("credentials.noMatch")}</p>
         )}
         <div className="mt-3">
           {filteredData.map((credential) => (

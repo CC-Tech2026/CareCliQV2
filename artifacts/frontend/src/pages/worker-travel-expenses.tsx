@@ -4,6 +4,7 @@ import { Bus, Car, ChevronDown, ChevronRight, Download, Loader2, RefreshCw, Send
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SectionInfo } from "@/components/ui/section-info";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -240,12 +241,10 @@ export default function WorkerTravelExpenses() {
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           {translate("travel.eyebrow")}
         </p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
           {translate("travel.title")}
+          <SectionInfo text={translate("travel.subtitle")} />
         </h1>
-        <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
-          {translate("travel.subtitle")}
-        </p>
         {rate?.rate_display && (
           <p className="mt-3 inline-flex rounded-full bg-cc-bg px-3 py-1 text-sm font-bold" style={{ color: TEXT }}>
             {rate.rate_display}

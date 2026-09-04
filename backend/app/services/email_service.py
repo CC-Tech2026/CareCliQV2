@@ -86,6 +86,35 @@ def queue_email_job(*, label: str, send: Any) -> dict[str, str]:
     return _merge_queue_result(state, queue_result)
 
 
+def _employer_sender_name(org_label: str | None) -> str | None:
+    """Sender display name for onboarding-facing mail — reads as coming from
+    the employer the candidate actually applied to, not CareCliQ."""
+    if not org_label:
+        return None
+    return f"{org_label} via CareCliQ"
+
+
+def _branded_header_html(*, logo_url: str | None, org_label: str, heading: str, accent_color: str | None) -> str:
+    """Header block for onboarding emails. Falls back to a neutral, unbranded
+    header (not CareCliQ's own logo) when the org hasn't set a logo — a
+    missing logo should look intentionally blank, not silently replaced."""
+    color = accent_color or "#5533CC"
+    if logo_url:
+        return (
+            f'<img src="{escape(logo_url, quote=True)}" alt="{escape(org_label)}" '
+            f'style="max-height:48px;max-width:220px;margin:0 0 16px;display:block;">'
+            f'<h1 style="margin:0 0 12px;color:{escape(color, quote=True)};font-size:22px;">{escape(heading)}</h1>'
+        )
+    return f'<h1 style="margin:0 0 12px;color:{escape(color, quote=True)};font-size:22px;">{escape(heading)}</h1>'
+
+
+def _branded_footer_html() -> str:
+    return (
+        '<p style="font-size:11px;line-height:1.6;color:#B3ABCE;margin:24px 0 0;text-align:center;">'
+        "Powered by CareCliQ</p>"
+    )
+
+
 def queue_invitation_email(
     _background_tasks: Any | None = None,
     *,
@@ -94,6 +123,8 @@ def queue_invitation_email(
     organization_name: str | None,
     role: str,
     short_code: str | None = None,
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> dict[str, str]:
     return queue_email_job(
         label=f"invitation:{to_email}",
@@ -103,6 +134,8 @@ def queue_invitation_email(
             organization_name=organization_name,
             role=role,
             short_code=short_code,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         ),
     )
 
@@ -114,6 +147,8 @@ def _send_invitation_email_safe(
     organization_name: str | None,
     role: str,
     short_code: str | None = None,
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> None:
     try:
         send_invitation_email(
@@ -122,6 +157,8 @@ def _send_invitation_email_safe(
             organization_name=organization_name,
             role=role,
             short_code=short_code,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         )
     except Exception as exc:
         logger.error("Invitation email failed for %s: %s", to_email, exc)
@@ -134,10 +171,12 @@ def send_invitation_email(
     organization_name: str | None,
     role: str,
     short_code: str | None = None,
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> None:
     role_label = ROLE_LABELS.get(role, role.replace("_", " ").title())
     org_label = organization_name or "CareCliQ"
-    subject = f"You're invited to {org_label} on CareCliQ"
+    subject = f"You're invited to join {org_label}"
     code_line = (
         f"\nYour mobile join code is: {short_code}\n"
         if short_code
@@ -154,7 +193,147 @@ def send_invitation_email(
         organization_name=org_label,
         role_label=role_label,
         short_code=short_code,
+        logo_url=logo_url,
+        accent_color=brand_accent_color,
     )
+    send_email(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        from_display_name=_employer_sender_name(organization_name),
+    )
+
+
+def queue_signing_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"signing-code:{to_email}",
+        send=lambda: _send_signing_verification_email_safe(
+            to_email=to_email,
+            code=code,
+            organization_name=organization_name,
+        ),
+    )
+
+
+def _send_signing_verification_email_safe(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    try:
+        send_signing_verification_email(to_email=to_email, code=code, organization_name=organization_name)
+    except Exception as exc:
+        logger.error("Signing verification email failed for %s: %s", to_email, exc)
+
+
+def send_signing_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    org_label = organization_name or "CareCliQ"
+    subject = f"Your verification code to view your offer: {code}"
+    text_body = (
+        f"Before you can view and sign your offer documents from {org_label}, "
+        f"we need to confirm this is really your inbox.\n\n"
+        f"Your verification code is:\n\n"
+        f"    {code}\n\n"
+        "This code expires in 10 minutes. If you didn't request this, you can ignore this email."
+    )
+    safe_org = escape(org_label)
+    safe_code = escape(code)
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">Verify your email</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Before you can view and sign your offer documents from {safe_org}, enter this code to confirm it's really you:
+        </p>
+        <p style="font-size:32px;font-weight:800;letter-spacing:0.16em;color:#1E1640;margin:0 0 18px;">{safe_code}</p>
+        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:0;">
+          This code expires in 10 minutes. If you didn't request this, you can ignore this email.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+
+
+def queue_invite_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"invite-code:{to_email}",
+        send=lambda: _send_invite_verification_email_safe(
+            to_email=to_email,
+            code=code,
+            organization_name=organization_name,
+        ),
+    )
+
+
+def _send_invite_verification_email_safe(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    try:
+        send_invite_verification_email(to_email=to_email, code=code, organization_name=organization_name)
+    except Exception as exc:
+        logger.error("Invite verification email failed for %s: %s", to_email, exc)
+
+
+def send_invite_verification_email(
+    *,
+    to_email: str,
+    code: str,
+    organization_name: str | None,
+) -> None:
+    org_label = organization_name or "CareCliQ"
+    subject = f"Your CareCliQ verification code: {code}"
+    text_body = (
+        f"Your verification code to finish setting up your {org_label} account is:\n\n"
+        f"    {code}\n\n"
+        "This code expires in 10 minutes. If you didn't request this, you can ignore this email."
+    )
+    safe_org = escape(org_label)
+    safe_code = escape(code)
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">Verify your email</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Enter this code to finish setting up your {safe_org} account:
+        </p>
+        <p style="font-size:32px;font-weight:800;letter-spacing:0.16em;color:#1E1640;margin:0 0 18px;">{safe_code}</p>
+        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:0;">
+          This code expires in 10 minutes. If you didn't request this, you can ignore this email.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
     send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
 
 
@@ -165,6 +344,8 @@ def queue_onboarding_sign_email(
     sign_url: str,
     organization_name: str | None,
     document_titles: list[str],
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> dict[str, str]:
     return queue_email_job(
         label=f"onboarding-sign:{to_email}",
@@ -174,6 +355,8 @@ def queue_onboarding_sign_email(
             sign_url=sign_url,
             organization_name=organization_name,
             document_titles=document_titles,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         ),
     )
 
@@ -185,6 +368,8 @@ def _send_onboarding_sign_email_safe(
     sign_url: str,
     organization_name: str | None,
     document_titles: list[str],
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> None:
     try:
         send_onboarding_sign_email(
@@ -193,6 +378,8 @@ def _send_onboarding_sign_email_safe(
             sign_url=sign_url,
             organization_name=organization_name,
             document_titles=document_titles,
+            logo_url=logo_url,
+            brand_accent_color=brand_accent_color,
         )
     except Exception as exc:
         logger.error("Onboarding sign-request email failed for %s: %s", to_email, exc)
@@ -205,6 +392,8 @@ def send_onboarding_sign_email(
     sign_url: str,
     organization_name: str | None,
     document_titles: list[str],
+    logo_url: str | None = None,
+    brand_accent_color: str | None = None,
 ) -> None:
     org_label = organization_name or "CareCliQ"
     subject = f"Your offer from {org_label} — please review and sign"
@@ -221,8 +410,16 @@ def send_onboarding_sign_email(
         sign_url=sign_url,
         organization_name=org_label,
         document_titles=document_titles,
+        logo_url=logo_url,
+        accent_color=brand_accent_color,
     )
-    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+    send_email(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        from_display_name=_employer_sender_name(organization_name),
+    )
 
 
 def _build_onboarding_sign_html(
@@ -231,20 +428,25 @@ def _build_onboarding_sign_html(
     sign_url: str,
     organization_name: str,
     document_titles: list[str],
+    logo_url: str | None = None,
+    accent_color: str | None = None,
 ) -> str:
     safe_name = escape(full_name)
-    safe_org = escape(organization_name)
     safe_url = escape(sign_url, quote=True)
     doc_items = "".join(
         f'<li style="margin:0 0 6px;">{escape(title)}</li>' for title in document_titles
     ) or '<li style="margin:0 0 6px;">Onboarding documents</li>'
+    header = _branded_header_html(
+        logo_url=logo_url, org_label=organization_name, heading=f"Your offer from {organization_name}",
+        accent_color=accent_color,
+    )
     return f"""\
 <!doctype html>
 <html>
   <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
     <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
       <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
-        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">Your offer from {safe_org}</h1>
+        {header}
         <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
           Hi {safe_name}, please review and sign the following before we get you set up:
         </p>
@@ -255,10 +457,11 @@ def _build_onboarding_sign_html(
           Review &amp; sign
         </a>
         <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:24px 0 0;">
-          Once you've signed, you'll receive a separate email with an invite to set up your CareCliQ login.
+          Once you've signed, you'll receive a separate email with an invite to set up your login.
           If the button does not work, copy this URL into your browser:<br>
           <span style="word-break:break-all;">{safe_url}</span>
         </p>
+        {_branded_footer_html()}
       </div>
     </div>
   </body>
@@ -266,7 +469,14 @@ def _build_onboarding_sign_html(
 """
 
 
-def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+def send_email(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    from_display_name: str | None = None,
+) -> None:
     if not settings.email_enabled:
         logger.info("Email disabled; skipping outbound email to %s", to_email)
         return
@@ -275,7 +485,7 @@ def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | 
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = formataddr((settings.smtp_from_name, settings.smtp_from_email))
+    message["From"] = formataddr((from_display_name or settings.smtp_from_name, settings.smtp_from_email))
     message["To"] = to_email
     message.set_content(text_body)
     if html_body:
@@ -514,6 +724,8 @@ def _build_invitation_html(
     organization_name: str,
     role_label: str,
     short_code: str | None = None,
+    logo_url: str | None = None,
+    accent_color: str | None = None,
 ) -> str:
     safe_org = escape(organization_name)
     safe_role = escape(role_label)
@@ -526,13 +738,17 @@ def _build_invitation_html(
           Mobile join code: <strong style="letter-spacing:0.12em;">{safe_code}</strong>
         </p>
         """
+    header = _branded_header_html(
+        logo_url=logo_url, org_label=organization_name, heading=f"You're invited to join {organization_name}",
+        accent_color=accent_color,
+    )
     return f"""\
 <!doctype html>
 <html>
   <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
     <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
       <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
-        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">CareCliQ invitation</h1>
+        {header}
         <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
           You have been invited to join <strong>{safe_org}</strong> as <strong>{safe_role}</strong>.
         </p>
@@ -547,6 +763,7 @@ def _build_invitation_html(
           This link expires in 7 days. If the button does not work, copy this URL into your browser:<br>
           <span style="word-break:break-all;">{safe_url}</span>
         </p>
+        {_branded_footer_html()}
       </div>
     </div>
   </body>

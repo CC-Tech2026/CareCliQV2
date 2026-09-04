@@ -11,3 +11,9 @@ performance/
 *.pdf
 artifacts/mobile/android/
 artifacts/mobile/ios/
+artifacts/mobile/.expo/
+artifacts/frontend/.expo/
+**/.expo/
+backend/
+**/__pycache__/
+*.pyc

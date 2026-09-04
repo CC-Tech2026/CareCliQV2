@@ -10,12 +10,18 @@ import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
+import GetStarted from "@/pages/get-started";
+import PlatformBilling from "@/pages/platform-billing";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
-import OnboardEmployeePage from "@/pages/onboard-employee";
+import ParticipantReferralPage from "@/pages/participant-referral";
+import OnboardingWorkspace from "@/pages/md/onboarding-workspace";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
+import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
+import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -25,6 +31,7 @@ import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
 import Incidents from "@/pages/incidents";
 import IncidentNew from "@/pages/incident-new";
+import FeedbackReports from "@/pages/feedback-reports";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
@@ -44,16 +51,29 @@ import SessionReview from "@/pages/session-review";
 import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
+import AccountDeactivated from "@/pages/account-deactivated";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import HubPage from "@/pages/hub/HubPage";
 import MDExecutivePage from "@/pages/md/executive";
+import MDSchedulePage from "@/pages/md/schedule";
+import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
+import MDCalendarPage from "@/pages/md/md-calendar";
+import AdminDashboardPage from "@/pages/admin/dashboard";
+import AdminProvidersPage from "@/pages/admin/providers";
+import AdminProviderDetailPage from "@/pages/admin/provider-detail";
+import AdminOnboardingPage from "@/pages/admin/onboarding";
+import AdminFeedbackPage from "@/pages/admin/feedback";
+import AdminBugReportsPage from "@/pages/admin/bug-reports";
+import AdminLayoutSettingsPage from "@/pages/admin/settings-layout";
+import AdminAccessibilitySettingsPage from "@/pages/admin/settings-accessibility";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
+import TagManagementPage from "@/pages/md/tag-management";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
@@ -74,6 +94,7 @@ import WorkerHelp from "@/pages/worker-help";
 import WorkerShiftHistory from "@/pages/worker-shift-history";
 import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
 import WorkerTraining from "@/pages/worker-training";
+import WorkerInduction from "@/pages/worker-induction";
 import WorkerFeedback from "@/pages/worker-feedback";
 import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
 import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
@@ -92,6 +113,20 @@ const WORKER_ROLES = ["support_worker"] as const;
 // Managing Director only
 const MD_ROLES = ["managing_director"] as const;
 
+// CareCliQ vendor-side only — the Super Admin portal, not scoped to any org
+const ADMIN_ROLES = ["super_admin"] as const;
+
+// Managing directors live in HubLayout everywhere (a distinct shell befitting
+// their org-wide privileges); everyone else uses the standard AppLayout
+// sidebar. Used for shared pages like Settings that both reach.
+function RoleAwareShell({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "managing_director") {
+    return <HubLayout>{children}</HubLayout>;
+  }
+  return <AppLayout>{children}</AppLayout>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -100,26 +135,34 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
+      <Route path="/get-started" component={GetStarted} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/onboarding-sign" component={OnboardingSignPage} />
+      <Route path="/participant-referral" component={ParticipantReferralPage} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
       <Route path="/design-system">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><DesignSystem /></AppLayout>
+          <RoleAwareShell><DesignSystem /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/verify-email">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><VerifyEmail /></AppLayout>
+          <RoleAwareShell><VerifyEmail /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/account-deactivated">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <RoleAwareShell><AccountDeactivated /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/profile-completion">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><ProfileCompletion /></AppLayout>
+          <RoleAwareShell><ProfileCompletion /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -142,10 +185,71 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* ── Super Admin Portal — CareCliQ vendor-side, not org-scoped ───────── */}
+      <Route path="/admin/dashboard">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminDashboardPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/organizations/:organizationId">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminProviderDetailPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/organizations">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminProvidersPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/onboarding">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminOnboardingPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/feedback">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminFeedbackPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/bug-reports">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminBugReportsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/settings/layout">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminLayoutSettingsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/settings/accessibility">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminAccessibilitySettingsPage />
+        </ProtectedRoute>
+      </Route>
+
       {/* ── Managing Director Workspaces ──────────────────────────────────── */}
       <Route path="/md/executive">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDExecutivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/schedule">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDSchedulePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/service-delivery">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDServiceDeliveryPage />
         </ProtectedRoute>
       </Route>
 
@@ -167,6 +271,12 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/md/calendar">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDCalendarPage />
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/md/onboarding">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDOnboardingPage />
@@ -179,17 +289,47 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── New-hire onboarding — Managing Director only ─────────────────── */}
-      <Route path="/onboard-employee">
+      {/* Worker-Participant Matching Enhancement, Phase 1 — shared tag taxonomy,
+             same coordinator+MD access as /md/staff-onboarding. */}
+      <Route path="/md/tags">
+        <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
+          <TagManagementPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Staff / Participant Onboarding — both routes render the same
+             OnboardingWorkspace shell so HubLayout mounts once and the
+             Staff/Participants toggle switches without remounting the
+             sidebar. Coordinators and MD both get staff read access;
+             participant onboarding is MD-only. ─────────────────────────── */}
+      <Route path="/md/staff-onboarding">
+        <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/onboard-participant">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
-          <OnboardEmployeePage />
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/onboard-participant/active">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <OnboardingWorkspace />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/onboard-participant/complaints">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <OnboardingWorkspace />
         </ProtectedRoute>
       </Route>
 
       {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Dashboard /></AppLayout>
+          <RoleAwareShell><Dashboard /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -233,7 +373,7 @@ function Router() {
 
       <Route path="/accessibility">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerAccessibility /></AppLayout>
+          <RoleAwareShell><WorkerAccessibility /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -246,6 +386,12 @@ function Router() {
       <Route path="/worker/training">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerTraining /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker-induction">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerInduction /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -343,7 +489,7 @@ function Router() {
 
       <Route path="/toolkit">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Toolkit /></AppLayout>
+          <RoleAwareShell><Toolkit /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -396,8 +542,8 @@ function Router() {
       </Route>
 
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><Patients /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><Patients /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -441,7 +587,7 @@ function Router() {
       <Route path="/sessions/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <AppLayout><SessionDetail id={params.id} /></AppLayout>
+            <RoleAwareShell><SessionDetail id={params.id} /></RoleAwareShell>
           </ProtectedRoute>
         )}
       </Route>
@@ -450,13 +596,13 @@ function Router() {
       {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Incidents /></AppLayout>
+          <RoleAwareShell><Incidents /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/new">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><IncidentNew /></AppLayout>
+          <RoleAwareShell><IncidentNew /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -465,10 +611,19 @@ function Router() {
         <Redirect to="/incidents/new" />
       </Route>
 
+      {/* ── Feedback & Reports ───────────────────────────────────────────── */}
+      {/* All roles — any staff member can submit; backend scopes the list to
+          own reports for support_worker, org-wide for coordinator/MD. */}
+      <Route path="/feedback-reports">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <RoleAwareShell><FeedbackReports /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/incidents/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <AppLayout><IncidentDetail id={params.id} /></AppLayout>
+            <RoleAwareShell><IncidentDetail id={params.id} /></RoleAwareShell>
           </ProtectedRoute>
         )}
       </Route>
@@ -499,15 +654,21 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/platform-billing">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <AppLayout><PlatformBilling /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/worker/profile">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerProfile /></AppLayout>
+          <RoleAwareShell><WorkerProfile /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/worker/security">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><WorkerSecurity /></AppLayout>
+          <RoleAwareShell><WorkerSecurity /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -520,7 +681,7 @@ function Router() {
       {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><Settings /></AppLayout>
+          <RoleAwareShell><Settings /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -544,6 +705,8 @@ function App() {
             <OfflineSyncProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <AuthSessionGuards />
+                <WelcomeScreenGate />
+                <OnboardingCompleteGate />
                 <Router />
               </WouterRouter>
             </OfflineSyncProvider>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,14 +14,25 @@ from .supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 
 VALID_FONT_SIZES = frozenset({"small", "default", "large", "xl"})
-VALID_THEME_MODES = frozenset({"system", "light", "dark"})
+# "system" intentionally excluded — Color Consistency Directive rule 1: no
+# OS/device-dependent theming. Theme is a fixed, explicit Light/Dark choice
+# so the same account doesn't render different colours on different screens.
+VALID_THEME_MODES = frozenset({"light", "dark"})
 VALID_LANGUAGES = frozenset({"en", "vi", "ar", "zh-Hans"})
+VALID_NAV_LAYOUTS = frozenset({"topbar", "sidebar", "bottombar"})
+
+# Color Consistency Directive: exact 6-digit hex only, no named colors,
+# no alpha channel (rgba/#RRGGBBAA) — the same rule applied everywhere
+# else colors are user-editable in this app.
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 DEFAULT_PREFS = {
     "font_size": "default",
-    "theme_mode": "system",
+    "theme_mode": "light",
     "high_contrast": False,
     "dyslexia_font": False,
+    "nav_layout": "topbar",
+    "nav_color": None,
 }
 
 
@@ -44,9 +56,11 @@ def get_accessibility_preferences(user_id: str, device_id: str) -> dict[str, Any
         if row:
             return {
                 "font_size": row.get("font_size") or "default",
-                "theme_mode": row.get("theme_mode") or "system",
+                "theme_mode": row.get("theme_mode") if row.get("theme_mode") in VALID_THEME_MODES else "light",
                 "high_contrast": bool(row.get("high_contrast")),
                 "dyslexia_font": bool(row.get("dyslexia_font")),
+                "nav_layout": row.get("nav_layout") or "topbar",
+                "nav_color": row.get("nav_color"),
                 "device_id": device_id,
             }
     except Exception as exc:
@@ -63,6 +77,9 @@ def save_accessibility_preferences(
     theme_mode: str | None = None,
     high_contrast: bool | None = None,
     dyslexia_font: bool | None = None,
+    nav_layout: str | None = None,
+    nav_color: str | None = None,
+    nav_color_clear: bool = False,
 ) -> dict[str, Any]:
     current = get_accessibility_preferences(user_id, device_id)
     if font_size is not None:
@@ -77,6 +94,16 @@ def save_accessibility_preferences(
         current["high_contrast"] = high_contrast
     if dyslexia_font is not None:
         current["dyslexia_font"] = dyslexia_font
+    if nav_layout is not None:
+        if nav_layout not in VALID_NAV_LAYOUTS:
+            raise HTTPException(status_code=422, detail="Invalid nav layout.")
+        current["nav_layout"] = nav_layout
+    if nav_color_clear:
+        current["nav_color"] = None
+    elif nav_color is not None:
+        if not HEX_COLOR_RE.match(nav_color):
+            raise HTTPException(status_code=422, detail="Nav color must be a 6-digit hex code, e.g. #E8457A.")
+        current["nav_color"] = nav_color
 
     record = {
         "user_id": user_id,
@@ -85,6 +112,8 @@ def save_accessibility_preferences(
         "theme_mode": current["theme_mode"],
         "high_contrast": current["high_contrast"],
         "dyslexia_font": current["dyslexia_font"],
+        "nav_layout": current["nav_layout"],
+        "nav_color": current["nav_color"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     try:

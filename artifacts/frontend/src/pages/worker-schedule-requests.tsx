@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
+import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { getWorkerShifts, type WorkerShift } from "@/services/shiftService";
 import {
@@ -261,7 +262,10 @@ export default function WorkerScheduleRequests() {
     <div className="w-full space-y-5 pb-10">
       <header>
         <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{translate("scheduleRequests.title")}</h1>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
+          {translate("scheduleRequests.title")}
+          <SectionInfo text="Ask for time off or a schedule change, and track the status of requests you've already sent." />
+        </h1>
         <Link href="/calendar" className="mt-2 inline-block text-xs font-black" style={{ color: PLUM }}>
           {translate("scheduleRequests.backToCalendar")}
         </Link>

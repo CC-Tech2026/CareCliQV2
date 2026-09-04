@@ -193,7 +193,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                     },
                   ]}
                 >
-                  <Text style={styles.moodEmoji}>🚨</Text>
+                  <Feather name="alert-triangle" size={16} color={colors.destructive} />
                   <Text style={[styles.incidentText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                     Yes — report
                   </Text>
@@ -258,6 +258,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: "hidden",

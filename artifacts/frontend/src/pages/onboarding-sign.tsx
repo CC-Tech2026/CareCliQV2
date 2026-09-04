@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Check, FileText, Loader2, Briefcase, ClipboardCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, FileText, Loader2, Briefcase, ClipboardCheck, Mail, ShieldCheck } from "lucide-react";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getHireForSigning, signHire } from "@/services/employeeOnboardingService";
+import { OtpInput } from "@/components/auth/OtpInput";
+import { getHireForSigning, sendSigningCode, signHire, verifySigningCode } from "@/services/employeeOnboardingService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -20,7 +21,7 @@ const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = 
   other: { label: "Other", icon: FileText },
 };
 
-const STEPS = ["Review documents", "Sign & confirm", "All done"];
+const STEPS = ["Verify email", "Review & sign", "All done"];
 
 function SidebarStep({ index, label, active, done }: { index: number; label: string; active: boolean; done: boolean }) {
   return (
@@ -44,6 +45,10 @@ export default function OnboardingSignPage() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token") ?? "";
   const [fullName, setFullName] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["onboarding-sign", token],
@@ -57,6 +62,36 @@ export default function OnboardingSignPage() {
     onSuccess: () => query.refetch(),
   });
 
+  const hire = query.data;
+  const alreadySigned = !!hire?.worker_signed_at || hire?.status !== "awaiting_signatures" || signMut.isSuccess;
+  const needsVerification = !!hire && hire.status === "awaiting_signatures" && !hire.email_verified && !alreadySigned;
+
+  const sendCodeMut = useMutation({
+    mutationFn: () => sendSigningCode(token),
+    onSuccess: (data) => {
+      setCodeSent(true);
+      setCodeMessage(data.message ?? "We've sent a 6-digit code to your email.");
+      setCodeError(null);
+    },
+    onError: (e) => setCodeError(e instanceof Error ? e.message : "Could not send code — please try again."),
+  });
+
+  const verifyCodeMut = useMutation({
+    mutationFn: () => verifySigningCode(token, emailCode),
+    onSuccess: () => {
+      setCodeError(null);
+      query.refetch();
+    },
+    onError: (e) => setCodeError(e instanceof Error ? e.message : "Incorrect code — please try again."),
+  });
+
+  useEffect(() => {
+    if (needsVerification && !codeSent && !sendCodeMut.isPending) {
+      sendCodeMut.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsVerification, codeSent]);
+
   if (!token) {
     return <CenterMessage title="Missing signing link" body="This link is invalid. Please check the email you were sent." />;
   }
@@ -65,13 +100,23 @@ export default function OnboardingSignPage() {
     return <CenterMessage title="Loading…" body="" icon={<Loader2 size={28} className="animate-spin" style={{ color: PLUM }} />} />;
   }
 
-  if (query.isError || !query.data) {
-    return <CenterMessage title="Link not found or expired" body="Please contact whoever sent you this invitation." />;
+  if (query.isError || !hire) {
+    // A missing/expired token is a 404 — genuinely the visitor's link. Anything
+    // else (500, network) is our side breaking, not theirs; don't tell someone
+    // their real invitation is invalid when the actual problem is a server error.
+    const status = (query.error as (Error & { status?: number }) | null)?.status;
+    if (status === 404) {
+      return <CenterMessage title="Link not found or expired" body="Please contact whoever sent you this invitation." />;
+    }
+    return (
+      <CenterMessage
+        title="Something went wrong"
+        body="We couldn't load your offer right now — this is on our end, not your link. Please try again in a few minutes, or contact whoever sent you this invitation if it keeps happening."
+      />
+    );
   }
 
-  const hire = query.data;
-  const alreadySigned = !!hire.worker_signed_at || hire.status !== "awaiting_signatures" || signMut.isSuccess;
-  const currentStep = alreadySigned ? 2 : 1;
+  const currentStep = alreadySigned ? 2 : needsVerification ? 0 : 1;
 
   return (
     <div className="min-h-screen flex" style={{ background: SURFACE }}>
@@ -107,6 +152,53 @@ export default function OnboardingSignPage() {
                 We'll be in touch shortly with an email to set up your CareCliQ login.
               </p>
             </div>
+          ) : needsVerification ? (
+            <>
+              <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>Step 1 of {STEPS.length}</p>
+              <div className="mx-auto mt-3 h-12 w-12 rounded-full flex items-center justify-center" style={{ background: "var(--cc-soft)" }}>
+                <Mail size={20} style={{ color: PLUM }} />
+              </div>
+              <h1 className="text-2xl font-black mt-3 text-center" style={{ color: TEXT }}>Verify it's you</h1>
+              <p className="text-sm mt-2 text-center" style={{ color: MUTED }}>
+                This offer contains sensitive documents, so before you can view or sign them we need to confirm
+                it's really you. Enter the 6-digit code we sent to <strong style={{ color: TEXT }}>{hire.email}</strong>.
+              </p>
+
+              <div className="mt-6">
+                <label id="signing-code-label" className="text-[11px] font-black uppercase tracking-wider mb-3 block" style={{ color: MUTED }}>
+                  Verification code
+                </label>
+                <OtpInput
+                  ariaLabelledBy="signing-code-label"
+                  value={emailCode}
+                  onChange={(v) => { setEmailCode(v); if (codeError) setCodeError(null); }}
+                  disabled={verifyCodeMut.isPending}
+                  error={!!codeError}
+                />
+                {codeError && <p className="mt-2 text-[12px] font-medium" style={{ color: "var(--cc-status-danger)" }}>{codeError}</p>}
+                {!codeError && codeMessage && <p className="mt-2 text-[12px] font-medium" style={{ color: MUTED }}>{codeMessage}</p>}
+              </div>
+
+              <Button
+                variant="navy"
+                className="w-full rounded-lg gap-2 h-11 mt-5"
+                onClick={() => verifyCodeMut.mutate()}
+                disabled={emailCode.length !== 6 || verifyCodeMut.isPending}
+              >
+                {verifyCodeMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null} Verify &amp; continue
+                {!verifyCodeMut.isPending && <ArrowRight size={14} />}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => sendCodeMut.mutate()}
+                disabled={sendCodeMut.isPending}
+                className="w-full text-center text-[12px] font-bold mt-4 disabled:opacity-50"
+                style={{ color: PLUM }}
+              >
+                {sendCodeMut.isPending ? "Sending…" : "Resend code"}
+              </button>
+            </>
           ) : (
             <>
               <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>Step {currentStep + 1} of {STEPS.length}</p>

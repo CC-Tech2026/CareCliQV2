@@ -104,7 +104,7 @@ export function ParticipantComplianceTab({
                 onClick={() => onSelectSession(item.session_id)}
                 className="cursor-pointer"
               >
-                <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#F4EDE6] transition-colors">
+                <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#E8457A]/30 hover:bg-[#ECECEC] transition-colors">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-bold text-[#1A1A2E] capitalize truncate">

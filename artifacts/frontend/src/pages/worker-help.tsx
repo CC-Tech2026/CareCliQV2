@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { Loader2, Mail, MessageCircle, Phone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SectionInfo } from "@/components/ui/section-info";
 import { WORKER_FAQ_FALLBACK } from "@/content/worker-faq-fallback";
 import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -140,12 +141,10 @@ export default function WorkerHelp() {
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
           {translate("nav.help")}
         </p>
-        <h1 className="mt-1 text-3xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black" style={{ color: TEXT }}>
           {translate("help.title")}
+          <SectionInfo text={translate("help.subtitle")} />
         </h1>
-        <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
-          {translate("help.subtitle")}
-        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">

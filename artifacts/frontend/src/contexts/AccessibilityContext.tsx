@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { ThemeProvider, useTheme } from "next-themes";
-import { getDeviceId } from "@/lib/device-id";
 import { useAuth } from "@/contexts/AuthContext";
 import { t, tParams, type AppLanguage } from "@/lib/i18n/translations";
 import {
@@ -19,6 +18,7 @@ import {
   type AccessibilityPreferences,
   type FontSize,
   type ThemeMode,
+  type NavLayout,
 } from "@/services/accessibilityService";
 import {
   applyThemeModeImmediate,
@@ -34,6 +34,8 @@ type AccessibilityContextValue = {
   setThemeMode: (mode: ThemeMode) => void;
   setHighContrast: (enabled: boolean) => Promise<void>;
   setDyslexiaFont: (enabled: boolean) => Promise<void>;
+  setNavLayout: (layout: NavLayout) => Promise<void>;
+  setNavColor: (hex: string | null) => Promise<void>;
   setLanguage: (lang: AppLanguage) => Promise<void>;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
@@ -71,14 +73,23 @@ function ThemeSync({ themeMode }: { themeMode: ThemeMode | undefined }) {
   return null;
 }
 
+// Deliberately NOT the real per-browser getDeviceId() (used elsewhere for
+// genuine device fingerprinting/security tracking). Appearance preferences
+// (theme, nav layout, nav color) must follow the ACCOUNT, not the browser —
+// otherwise the same user sees different colours every time they open the
+// app on a different screen/device, which is exactly what the Color
+// Consistency Directive rules out. A fixed key makes every device read/write
+// the same single preferences row for a given user.
+const ACCOUNT_PREFS_KEY = "account-preferences";
+
 export function AccessibilityProvider({ children }: { children: ReactNode }) {
-  const deviceId = useMemo(() => getDeviceId(), []);
+  const deviceId = ACCOUNT_PREFS_KEY;
   const { isAuthenticated } = useAuth();
   const [prefs, setPrefs] = useState<AccessibilityPreferences | null>(null);
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [loading, setLoading] = useState(true);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingPatchRef = useRef<Partial<AccessibilityPreferences>>({});
+  const pendingPatchRef = useRef<Partial<AccessibilityPreferences> & { nav_color_clear?: boolean }>({});
 
   useEffect(() => {
     let active = true;
@@ -90,6 +101,8 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       theme_mode: bootTheme,
       high_contrast: false,
       dyslexia_font: false,
+      nav_layout: "topbar",
+      nav_color: null,
       device_id: deviceId,
     };
     setPrefs(defaults);
@@ -108,7 +121,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
         setPrefs(res.preferences);
         setLanguageState(res.preferred_language || "en");
         applyDocumentClasses(res.preferences, res.preferred_language || "en");
-        applyThemeModeImmediate(res.preferences.theme_mode ?? "system");
+        applyThemeModeImmediate(res.preferences.theme_mode ?? "light");
       })
       .catch(() => {
         if (!active) return;
@@ -123,17 +136,8 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     };
   }, [deviceId, isAuthenticated]);
 
-  /** Re-apply theme when OS preference changes while in system mode. */
-  useEffect(() => {
-    if (prefs?.theme_mode !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyThemeModeImmediate("system");
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [prefs?.theme_mode]);
-
   const persist = useCallback(
-    async (patch: Partial<AccessibilityPreferences>) => {
+    async (patch: Partial<AccessibilityPreferences> & { nav_color_clear?: boolean }) => {
       const res = await saveAccessibilityPreferences(deviceId, patch);
       setPrefs(res.preferences);
       applyDocumentClasses(res.preferences, language);
@@ -143,7 +147,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   );
 
   const schedulePersist = useCallback(
-    (patch: Partial<AccessibilityPreferences>) => {
+    (patch: Partial<AccessibilityPreferences> & { nav_color_clear?: boolean }) => {
       pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
       persistTimerRef.current = setTimeout(() => {
@@ -178,9 +182,11 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
           ? { ...prev, ...patch }
           : {
               font_size: "default",
-              theme_mode: "system",
+              theme_mode: "light",
               high_contrast: false,
               dyslexia_font: false,
+              nav_layout: "topbar",
+              nav_color: null,
               device_id: deviceId,
               ...patch,
             };
@@ -207,6 +213,8 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
               theme_mode,
               high_contrast: false,
               dyslexia_font: false,
+              nav_layout: "topbar",
+              nav_color: null,
               device_id: deviceId,
             };
         return next;
@@ -234,6 +242,17 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
         applyPrefsPatch({ dyslexia_font });
         if (isAuthenticated) schedulePersist({ dyslexia_font });
       },
+      setNavLayout: async (nav_layout) => {
+        applyPrefsPatch({ nav_layout });
+        if (isAuthenticated) schedulePersist({ nav_layout });
+      },
+      setNavColor: async (hex) => {
+        applyPrefsPatch({ nav_color: hex });
+        if (isAuthenticated) {
+          if (hex === null) schedulePersist({ nav_color_clear: true });
+          else schedulePersist({ nav_color: hex });
+        }
+      },
       setLanguage: async (lang) => {
         await updatePreferredLanguage(lang);
         setLanguageState(lang);
@@ -247,7 +266,11 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
 
   return (
     <AccessibilityContext.Provider value={value}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey={THEME_STORAGE_KEY} disableTransitionOnChange>
+      {/* enableSystem intentionally off — theme is a fixed, explicit choice
+          (Light/Dark only), not auto-detected from the device/OS. Prevents
+          colours silently shifting when the same account is opened on a
+          different screen/device with a different OS theme preference. */}
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey={THEME_STORAGE_KEY} disableTransitionOnChange>
         <ThemeSync themeMode={prefs?.theme_mode} />
         {children}
       </ThemeProvider>

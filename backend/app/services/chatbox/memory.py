@@ -109,6 +109,21 @@ async def delete_thread(current_user: dict, thread_id: str) -> None:
         logger.warning("Failed to delete chatbox thread %s: %s", thread_id, exc)
 
 
+async def delete_all_threads(current_user: dict) -> None:
+    """Delete every saved conversation for this user. Scoped to the current
+    user AND their org, same boundary as delete_thread()."""
+    user_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not user_id or not org_id:
+        return
+
+    try:
+        supabase = get_supabase_admin()
+        supabase.table(TABLE).delete().eq("user_id", user_id).eq("organization_id", org_id).execute()
+    except Exception as exc:
+        logger.warning("Failed to clear chatbox history for user %s: %s", user_id, exc)
+
+
 async def save_turn(current_user: dict, thread_id: str, role: str, content: str) -> None:
     """Persist a single turn (one user message or one assistant reply)."""
     user_id = get_user_id(current_user)

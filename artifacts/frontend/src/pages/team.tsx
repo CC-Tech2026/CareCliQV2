@@ -16,12 +16,13 @@ import {
   getCoordinatorCredentialAlerts, sendBulkReminders,
   getTeamCredentials, getPendingTrainingCompletions,
   createShiftCredentialRequirement, deleteShiftCredentialRequirement, listShiftCredentialRequirements,
-  type WorkerStats, type ShiftCredentialRequirement,
+  type WorkerStats, type ShiftCredentialRequirement, type DeactivationReason,
 } from "@/services/coordinatorService";
 import { getTeamOnboarding } from "@/services/onboardingService";
 import { useToast } from "@/hooks/use-toast";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { WorkerDetail, isWorkerCredentialsComplete } from "@/components/team/WorkerDetail";
+import { DeactivateWorkerPanel } from "@/components/team/DeactivateWorkerPanel";
 import { IndexTemplate, IndexHeader } from "@/components/layout/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -224,7 +225,8 @@ export default function Team() {
   const participants = useGetParticipants();
 
   const deactivateMut = useMutation({
-    mutationFn: (id: string) => deactivateWorker(id),
+    mutationFn: ({ id, reason, note }: { id: string; reason: DeactivationReason; note: string }) =>
+      deactivateWorker(id, reason, note),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: translate("team.toast.deactivated") }); setDeactivateTarget(null); },
     onError: () => toast({ title: translate("team.toast.deactivateFailed"), variant: "destructive" }),
   });
@@ -539,6 +541,7 @@ export default function Team() {
       <IndexHeader
         title={translate("team.title")}
         count={workers.length}
+        info="Your support workers: compliance, credentials, availability, and shift history, all in one place."
         primaryAction={
           <Button
             variant="navy"
@@ -560,7 +563,7 @@ export default function Team() {
       {pendingTrainingCount > 0 && (
         <div
           className="flex items-center gap-3 rounded-2xl px-4 py-3"
-          style={{ background: "linear-gradient(90deg, var(--cc-status-info-bg), transparent)", border: `1px solid var(--cc-border)` }}
+          style={{ background: "var(--cc-status-info-bg)", border: `1px solid var(--cc-border)` }}
         >
           <span className="flex items-center justify-center h-9 w-9 rounded-full shrink-0" style={{ background: "var(--cc-status-info-bg)", color: "var(--cc-status-info)" }}>
             <GraduationCap size={16} />
@@ -1010,22 +1013,12 @@ export default function Team() {
       </Sheet>
 
       {deactivateTarget && (
-        <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}>
-          <h3 className="text-base font-black" style={{ color: "var(--cc-status-danger)" }}>{translateParams("team.deactivate.title", { name: deactivateTarget.full_name })}</h3>
-          <p className="text-sm" style={{ color: "var(--cc-status-danger)" }}>
-            {translate("team.deactivate.body")}
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>{translate("common.cancel")}</Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={() => deactivateMut.mutate(deactivateTarget.id)}
-              disabled={deactivateMut.isPending}
-            >
-              {deactivateMut.isPending ? translate("team.deactivate.deactivating") : translate("team.deactivate.confirm")}
-            </Button>
-          </div>
-        </section>
+        <DeactivateWorkerPanel
+          workerName={deactivateTarget.full_name}
+          pending={deactivateMut.isPending}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={(reason, note) => deactivateMut.mutate({ id: deactivateTarget.id, reason, note })}
+        />
       )}
 
       {assignWorker && (

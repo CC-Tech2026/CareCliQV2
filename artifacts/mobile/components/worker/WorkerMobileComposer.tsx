@@ -4,6 +4,7 @@ import {
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
+  useAudioRecorderState,
 } from "expo-audio";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -22,12 +23,46 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useOffline } from "@/context/OfflineContext";
-import { useT } from "@/context/PreferencesContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
-import { syncSessionNotes, translateNoteToEnglish, transcribeSessionAudio, uploadSessionAttachment } from "@/lib/worker-api";
+import {
+  improveNote,
+  syncSessionNotes,
+  translateForWorkerPreview,
+  translateNoteToEnglish,
+  transcribeSessionAudio,
+  uploadSessionAttachment,
+} from "@/lib/worker-api";
 import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import { checkDraftNoteHints, type DraftNoteHint } from "@workspace/worker-compliance";
+
+type Translator = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
+const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
+  "word-count": "composer.hint.wordCount",
+  "specific-observation": "composer.hint.specificObservation",
+  "participant-reference": "composer.hint.participantReference",
+};
+
+/**
+ * checkDraftNoteHints (shared, locale-agnostic lib) always returns English
+ * messages - localized here at the UI layer against the worker's app-wide
+ * language preference (the same one every other screen already uses), so a
+ * multilingual worker gets note-writing guidance in a language they've
+ * already told the app they read comfortably, not just the raw note-input
+ * language picker below (which covers more languages than the app has
+ * translations for, and only describes the note content, not app chrome).
+ */
+function localizeHint(hint: DraftNoteHint, t: Translator): string {
+  if (hint.id === "restrictive-practice") {
+    return t("composer.hint.restrictivePractice", { phrase: hint.phrase ?? "" });
+  }
+  const key = HINT_TRANSLATION_KEYS[hint.id];
+  return key ? t(key) : hint.message;
+}
 
 const LANGUAGE_OPTIONS = [
   { value: "auto", label: "Auto detect" },
@@ -132,9 +167,14 @@ export function ActiveVoiceRecording({
   onSave: (secs: number, uri: string | null) => void | Promise<void>;
 }) {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder, 500);
   const [recordSecs, setRecordSecs] = useState(0);
   const recordSecsRef = useRef(0);
   const finishedRef = useRef(false);
+  const startedRef = useRef(false);
+  const resumeAttemptedRef = useRef(false);
+  const wasInterruptedRef = useRef(false);
+  const sawRecordingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onSaveRef = useRef(onSave);
   const onEndedRef = useRef(onEnded);
@@ -166,8 +206,17 @@ export function ActiveVoiceRecording({
       /* ignore */
     }
     const secs = recordSecsRef.current;
-    if (save) await onSaveRef.current(secs, uri);
-    else onEndedRef.current();
+    if (save) {
+      if (wasInterruptedRef.current) {
+        showAlert(
+          "Recording interrupted",
+          "Something interrupted the recording (e.g. a phone call). What was captured up to that point has been saved - review it and add anything you missed.",
+        );
+      }
+      await onSaveRef.current(secs, uri);
+    } else {
+      onEndedRef.current();
+    }
   };
 
   useEffect(() => {
@@ -179,11 +228,16 @@ export function ActiveVoiceRecording({
           onEndedRef.current();
           return;
         }
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        // allowsBackgroundRecording matters here specifically: without it, the
+        // recording is silently torn down the moment the screen locks or the
+        // worker briefly switches apps (both routine mid-shift interruptions) -
+        // the single biggest real-world cause of a recording getting cut off.
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
         if (cancelled) return;
         await audioRecorder.prepareToRecordAsync();
         if (cancelled || finishedRef.current) return;
         audioRecorder.record();
+        startedRef.current = true;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         timerRef.current = setInterval(() => {
           setRecordSecs((s) => {
@@ -212,6 +266,46 @@ export function ActiveVoiceRecording({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Detects a genuine system interruption (a phone call, Siri, the OS
+  // reclaiming the mic - mediaServicesDidReset is expo-audio's documented
+  // signal for exactly this) and tries once to resume automatically, rather
+  // than letting the recording just silently die. If resuming doesn't stick,
+  // finalize with whatever was captured instead of discarding it - the
+  // worker is told, not left guessing why their note looks short.
+  useEffect(() => {
+    if (!startedRef.current || finishedRef.current || !timerRef.current) return;
+    // Don't trust a "not recording" reading until the poller has confirmed
+    // recording actually started at least once - the poll and record() are
+    // on independent timers, so right at startup a stale/early tick could
+    // otherwise look identical to a genuine interruption.
+    if (recorderState.isRecording) sawRecordingRef.current = true;
+    if (!sawRecordingRef.current) return;
+    const interrupted = recorderState.mediaServicesDidReset || !recorderState.isRecording;
+    if (!interrupted) {
+      resumeAttemptedRef.current = false;
+      return;
+    }
+    if (resumeAttemptedRef.current) return;
+    resumeAttemptedRef.current = true;
+    wasInterruptedRef.current = true;
+
+    (async () => {
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
+        audioRecorder.record();
+      } catch {
+        /* checked below regardless */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (finishedRef.current) return;
+      if (audioRecorder.isRecording) {
+        resumeAttemptedRef.current = false;
+      } else {
+        void finishRef.current(true);
+      }
+    })();
+  }, [recorderState.isRecording, recorderState.mediaServicesDidReset, audioRecorder]);
 
   useEffect(() => {
     controlsRef.current = {
@@ -252,6 +346,7 @@ type Props = {
   taskId?: string | null;
   taskLabel?: string;
   participantName?: string;
+  participantId?: string | null;
   disabled?: boolean;
   onNoteSaved?: (note: SessionNoteRecord) => void;
 };
@@ -261,12 +356,13 @@ export function WorkerMobileComposer({
   taskId,
   taskLabel,
   participantName,
+  participantId,
   disabled,
   onNoteSaved,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const t = useT();
+  const { t, language: appLanguage } = usePreferences();
   const { isOnline, queueWorkerUpdate } = useOffline();
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -274,6 +370,13 @@ export function WorkerMobileComposer({
   const [langOpen, setLangOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
+  const [draftHints, setDraftHints] = useState<DraftNoteHint[]>([]);
+  const [suggestion, setSuggestion] = useState<{ text: string; preview?: string; source: "manual" | "auto" } | null>(null);
+  const [improving, setImproving] = useState(false);
+  const [translatingPreview, setTranslatingPreview] = useState(false);
+  const [manualPending, setManualPending] = useState(false);
+  const lastAutoSuggestRef = useRef<string>("");
+  const autoFiredRef = useRef(false);
 
   const disabledInput = disabled || !taskId;
   const voiceUnavailable = !isOnline;
@@ -284,6 +387,122 @@ export function WorkerMobileComposer({
     LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? "Auto detect";
   const hasText = value.trim().length > 0;
   const showTranslateBadge = hasText && language !== "en";
+
+  // Live, debounced compliance nudge while typing - soft/advisory only (see
+  // checkDraftNoteHints' own docstring), so the note already reads as
+  // compliant by the time it's actually saved rather than surprising the
+  // worker with a warning after the fact. Never blocks typing or sending.
+  useEffect(() => {
+    if (!hasText) {
+      setDraftHints([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      setDraftHints(checkDraftNoteHints(value, participantName?.split(" ")[0]));
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [value, hasText, participantName]);
+
+  // Reset any pending suggestion when switching tasks - a suggestion for one
+  // task's note has no business appearing against a different task's draft.
+  useEffect(() => {
+    setSuggestion(null);
+    lastAutoSuggestRef.current = "";
+    autoFiredRef.current = false;
+  }, [taskId]);
+
+  const runImprove = async (text: string, hints: DraftNoteHint[], source: "manual" | "auto") => {
+    if (improving) return;
+    setImproving(true);
+    if (source === "manual") setManualPending(true);
+    try {
+      const failedRules = hints.length
+        ? hints.map((h) => ({ rule: h.id, message: h.message }))
+        : [{ rule: "clarity", message: "Make this note more specific and audit-ready." }];
+      const result = await improveNote(text, failedRules, participantId);
+      const improved = (result?.improved_note || "").trim();
+      if (improved && improved !== text.trim()) {
+        // Show the English suggestion immediately rather than waiting on the
+        // translated preview too - the preview streams in a moment later
+        // without blocking the primary suggestion the worker actually acts on.
+        setSuggestion({ text: improved, source });
+        if (appLanguage !== "en") {
+          setTranslatingPreview(true);
+          translateForWorkerPreview(improved, appLanguage)
+            .then((previewResult) => {
+              const translated = previewResult?.translated?.trim();
+              if (previewResult?.translated_ok && translated) {
+                // Guard against a stale response landing after the worker
+                // dismissed/replaced/edited past this suggestion.
+                setSuggestion((prev) => (prev && prev.text === improved ? { ...prev, preview: translated } : prev));
+              }
+            })
+            .catch(() => {
+              /* best-effort only - the English suggestion is still shown and usable */
+            })
+            .finally(() => setTranslatingPreview(false));
+        }
+      } else if (source === "manual") {
+        showAlert("No changes suggested", "Your note already looks clear and complete.");
+      }
+    } catch {
+      if (source === "manual") {
+        showAlert("Couldn't get a suggestion", "Please try again in a moment.");
+      }
+      // Auto-triggered calls fail silently - non-critical, no need to
+      // interrupt the worker over a background suggestion that didn't land.
+    } finally {
+      setImproving(false);
+      if (source === "manual") setManualPending(false);
+    }
+  };
+
+  const handleImprovePress = () => {
+    if (!hasText || improving || disabled) return;
+    Haptics.selectionAsync();
+    void runImprove(value, draftHints, "manual");
+  };
+
+  const applySuggestion = () => {
+    if (!suggestion) return;
+    setValue(suggestion.text);
+    // The suggestion is always English (improve_note's output) - if the
+    // input-language picker was left on something else, sending would
+    // otherwise re-run this already-correct English text through the
+    // translate-to-English step as if it were still in that language.
+    setLanguage("en");
+    setSuggestion(null);
+    Haptics.selectionAsync();
+  };
+
+  // Auto-suggest is deliberately narrow to keep AI spend bounded: at most
+  // once per task while the composer is open (autoFiredRef), only once a
+  // note is substantial (15+ words) and the worker has paused typing for a
+  // while, and only when a real quality issue remains - not a "word-count"
+  // hint alone, which resolves itself the moment the worker keeps typing.
+  // Restrictive-practice is excluded on purpose: that hint means an incident
+  // report is required, and auto-offering a smoothed-over rewrite there
+  // would risk encouraging language that quietly obscures it rather than
+  // documenting it - the static warning + manual "Improve" button (which the
+  // worker actively chooses to use) are the right tools for that case, not
+  // an unprompted AI suggestion.
+  useEffect(() => {
+    if (!hasText || recording || disabled || autoFiredRef.current) return;
+    const words = value.trim().split(/\s+/).filter(Boolean).length;
+    if (words < 15) return;
+    if (value === lastAutoSuggestRef.current) return;
+    const timer = setTimeout(() => {
+      const hints = checkDraftNoteHints(value, participantName?.split(" ")[0])
+        .filter((h) => h.id !== "restrictive-practice");
+      const meaningfulHints = hints.filter((h) => h.id !== "word-count");
+      if (meaningfulHints.length === 0) return;
+      autoFiredRef.current = true;
+      lastAutoSuggestRef.current = value;
+      void runImprove(value, meaningfulHints, "auto");
+    }, 3200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, hasText, recording, disabled, participantName]);
 
   const saveNote = async (
     content: string,
@@ -313,28 +532,51 @@ export function WorkerMobileComposer({
 
     onNoteSaved?.(payload);
     setValue("");
+    setSuggestion(null);
 
-    if (!isOnline) {
-      await queueWorkerUpdate({
-        type: "sync_notes",
-        id: noteId,
-        sessionId,
-        notes: [payload],
-        timestamp: Date.now(),
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSubmitting(false);
-      return;
+    // Queue on ANY failure, not just when the device is offline - isOnline
+    // is device-link connectivity, not "the CareCliQ API actually accepted
+    // this request" (a weak cell signal, a timeout, or a 5xx all look
+    // "online" but still fail the request). Previously an online-but-failed
+    // save was silently dropped: the note stayed visible locally looking
+    // saved, but nothing was ever persisted server-side.
+    const trySync = isOnline;
+    let syncFailed = false;
+    if (trySync) {
+      try {
+        await syncSessionNotes(sessionId, [payload]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setSubmitting(false);
+        return;
+      } catch {
+        syncFailed = true;
+      }
     }
 
-    try {
-      await syncSessionNotes(sessionId, [payload]);
+    const queued = await queueWorkerUpdate({
+      type: "sync_notes",
+      id: noteId,
+      sessionId,
+      notes: [payload],
+      timestamp: Date.now(),
+    });
+    if (queued) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      /* optimistic — note already shown locally */
-    } finally {
-      setSubmitting(false);
+      if (syncFailed) {
+        showAlert(
+          "Saved locally",
+          "Couldn't reach the server just now - this note will sync automatically once you're back online.",
+        );
+      }
+    } else {
+      // The queue write itself failed too - this note genuinely isn't saved
+      // anywhere yet. Say so plainly rather than a false "saved" haptic.
+      showAlert(
+        "Not saved yet",
+        "This note couldn't be saved. Please try sending it again before leaving this task.",
+      );
     }
+    setSubmitting(false);
   };
 
   const handleSend = async () => {
@@ -419,32 +661,60 @@ export function WorkerMobileComposer({
       taskTitle: taskLabel,
       originalName: asset.fileName ?? fallbackName,
     });
+    const mimeType = asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream");
     setSubmitting(true);
-    try {
-      const uploaded = await uploadSessionAttachment(sessionId, {
-        uri: asset.uri,
-        name,
-        type: asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream"),
-      });
-      await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
-    } catch (err) {
+
+    // The captured/picked file is already safely on local disk regardless of
+    // connectivity - only the upload needs a connection. Queue on any
+    // failure (not just when already known-offline) rather than discarding
+    // the local file reference and forcing the worker to redo the capture -
+    // previously a failed upload lost the photo/file entirely, no retry.
+    const attemptUpload = isOnline;
+    let uploadFailed = false;
+    if (attemptUpload) {
+      try {
+        const uploaded = await uploadSessionAttachment(sessionId, { uri: asset.uri, name, type: mimeType });
+        await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
+        setSubmitting(false);
+        return;
+      } catch {
+        uploadFailed = true;
+      }
+    }
+
+    const queued = await queueWorkerUpdate({
+      type: "upload_attachment",
+      id: newClientNoteId(),
+      sessionId,
+      taskId: taskId ?? undefined,
+      taskLabel,
+      uri: asset.uri,
+      name,
+      mimeType,
+      noteType: noteType === "photo" ? "photo" : "file",
+      timestamp: Date.now(),
+    });
+    if (queued) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(
+        "Saved locally",
+        uploadFailed
+          ? "Couldn't reach the server just now - this will upload automatically once you're back online."
+          : "You're offline - this will upload automatically once you're back online.",
+      );
+    } else {
       Alert.alert(
         "Upload failed",
-        err instanceof Error ? err.message : "Could not upload the attachment. Please try again.",
+        "Could not save this attachment. Please try again before leaving this task.",
       );
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   const handleAttach = async () => {
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before attaching a file.");
-      return;
-    }
-    if (!isOnline) {
-      Alert.alert("You're offline", "Attachments need a connection to upload. Try again once you're back online.");
       return;
     }
     try {
@@ -468,10 +738,6 @@ export function WorkerMobileComposer({
     if (disabled || submitting) return;
     if (!taskId) {
       Alert.alert("Select a task", "Select a task above before taking a photo note.");
-      return;
-    }
-    if (!isOnline) {
-      Alert.alert("You're offline", "Photos need a connection to upload. Try again once you're back online.");
       return;
     }
     try {
@@ -555,6 +821,19 @@ export function WorkerMobileComposer({
             <Pressable onPress={handleCamera} disabled={disabled || submitting} style={styles.iconBtn}>
               <Feather name="camera" size={17} color={colors.mutedForeground} />
             </Pressable>
+            {hasText && (
+              <Pressable
+                onPress={handleImprovePress}
+                disabled={disabled || submitting || improving}
+                style={styles.iconBtn}
+              >
+                {manualPending ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Feather name="zap" size={17} color={colors.primary} />
+                )}
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -595,15 +874,64 @@ export function WorkerMobileComposer({
         </Pressable>
       </View>
 
-      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-        {!taskId
-          ? "Select a task above to start noting."
-          : recording
-            ? "Recording… tap send to save, or cancel."
-            : voiceUnavailable && !hasText
-              ? t("composer.voice.offlineHint")
-              : "Hold mic to record · tap to send when typing."}
-      </Text>
+      {suggestion && (
+        <View style={[styles.suggestionCard, { borderColor: colors.primary + "40", backgroundColor: colors.activeBg }]}>
+          <View style={styles.suggestionHeader}>
+            <Feather name="zap" size={13} color={colors.primary} />
+            <Text style={[styles.suggestionLabel, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+              {suggestion.source === "auto" ? t("composer.suggestion.auto") : t("composer.suggestion.manual")}
+            </Text>
+          </View>
+          <Text style={[styles.suggestionText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+            {suggestion.text}
+          </Text>
+          {(suggestion.preview || (translatingPreview && appLanguage !== "en")) && (
+            <View style={[styles.suggestionPreviewBox, { borderTopColor: colors.primary + "26" }]}>
+              <Text style={[styles.suggestionPreviewLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
+                {t("composer.suggestion.previewLabel")}
+              </Text>
+              <Text style={[styles.suggestionPreviewText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                {suggestion.preview ?? t("composer.suggestion.translating")}
+              </Text>
+            </View>
+          )}
+          <View style={styles.suggestionActions}>
+            <Pressable onPress={applySuggestion} style={[styles.suggestionBtn, { backgroundColor: colors.composerPurple }]}>
+              <Text style={[styles.suggestionBtnText, { color: "#FFFFFF", fontFamily: "Inter_600SemiBold" }]}>
+                {t("composer.suggestion.useThis")}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => setSuggestion(null)} style={styles.suggestionDismiss} hitSlop={8}>
+              <Text style={[styles.suggestionDismissText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                {t("composer.suggestion.dismiss")}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {(() => {
+        const topHint = !recording
+          ? draftHints.find((h) => h.severity === "fail") ?? draftHints[0]
+          : undefined;
+        // Only the restrictive-practice hint gets a stronger color - everything
+        // else stays the same muted tone as the default caption, so it reads
+        // as a gentle nudge rather than a warning (less intrusive by design).
+        const hintColor = topHint?.severity === "fail" ? colors.destructive : colors.mutedForeground;
+        return (
+          <Text style={[styles.hint, { color: hintColor, fontFamily: "Inter_500Medium" }]}>
+            {topHint
+              ? localizeHint(topHint, t)
+              : !taskId
+                ? t("composer.hint.selectTask")
+                : recording
+                  ? t("composer.hint.recording")
+                  : voiceUnavailable && !hasText
+                    ? t("composer.voice.offlineHint")
+                    : t("composer.hint.idle")}
+          </Text>
+        );
+      })()}
 
       <Modal visible={langOpen} transparent animationType="slide" onRequestClose={() => setLangOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setLangOpen(false)}>
@@ -765,6 +1093,62 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 11,
     textAlign: "center",
+  },
+  suggestionCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+  },
+  suggestionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  suggestionLabel: {
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  suggestionText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  suggestionPreviewBox: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+    gap: 3,
+  },
+  suggestionPreviewLabel: {
+    fontSize: 10,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  suggestionPreviewText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  suggestionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  suggestionBtn: {
+    height: 32,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  suggestionBtnText: {
+    fontSize: 12,
+  },
+  suggestionDismiss: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  suggestionDismissText: {
+    fontSize: 12,
   },
   sheetBackdrop: {
     flex: 1,

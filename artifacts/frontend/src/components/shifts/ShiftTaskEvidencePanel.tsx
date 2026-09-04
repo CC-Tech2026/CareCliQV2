@@ -1147,7 +1147,7 @@ export function ShiftTaskEvidencePanel({
               type="button"
               disabled={disabled || recording}
               onClick={() => void startRecording()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8EA] bg-[#F4EDE6] py-3.5 text-sm font-bold"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8EA] bg-[#ECECEC] py-3.5 text-sm font-bold"
               style={{ color: PLUM }}
             >
               <Mic size={18} /> {translate("shift.evidence.startVoice")}

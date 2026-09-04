@@ -71,3 +71,9 @@ class SafetyProtocolUpdate(BaseModel):
 
 class SafetyProtocolAcknowledge(BaseModel):
     content_version: int = Field(ge=1)
+    org_content_version: Optional[int] = Field(default=None, ge=1)
+    shift_id: Optional[str] = None
+
+
+class OrgAcknowledgementContentUpdate(BaseModel):
+    body: str = Field(min_length=1, max_length=8000)

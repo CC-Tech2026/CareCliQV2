@@ -1,20 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
-  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck,
+  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
-  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy,
+  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
+  Maximize2, Minimize2, Star, User, HeartHandshake, CalendarClock,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments, getWorkerAvailability,
   assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
   getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
+  getWorkerSkills, getWorkerShiftHistory, getWorkerShiftHistoryDetail, getWorkerPerformanceDashboard, getWorkerAssignments,
+  getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
+  getShiftMatchFeedback, postShiftMatchFeedback,
+  getCoordinatorWorkerStats, assignWorkerCoordinator,
+  getAwardClassifications, assignWorkerClassification, getShiftPayPreview,
+  markShiftSleepover, logShiftCallOut, getWorkerShiftEventTimeline,
+  getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
   type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
+import type { ShiftHistoryRow, ShiftHistoryDetail } from "@/services/workerPerformanceService";
+import { listIncidents } from "@/services/incidentService";
+import { getWorkerInduction } from "@/services/inductionService";
 import { reviewCredential, type Credential } from "@/services/credentialsService";
 import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
 import { getWorkerCoachingSignal } from "@/services/medicationService";
@@ -29,6 +40,8 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { datetimeLocalValueToUtcIso } from "@/lib/datetime";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -41,7 +54,27 @@ const SOFT = "var(--cc-soft)";
 const SURFACE = "var(--cc-surface)";
 const CARD_SHADOW = "var(--cc-card-shadow)";
 
-type WorkerDetailTab = "overview" | "documents" | "credentials" | "availability" | "training";
+// "overview" stays a valid value (not in ALL_WORKER_DETAIL_TABS, so no tab
+// button renders for it) purely so an old bookmarked ?tab=overview deep link
+// still resolves to something - it's treated as an alias for "personal"
+// wherever tab is read, rather than the two staying separate tabs.
+export type WorkerDetailTab = "overview" | "personal" | "documents" | "credentials" | "availability" | "training" | "induction" | "shifts" | "participants";
+
+const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
+  "personal", "shifts", "participants", "documents", "credentials", "availability", "training", "induction",
+];
+
+const TAB_ICON: Record<WorkerDetailTab, typeof User> = {
+  overview: User,
+  personal: User,
+  shifts: CalendarDays,
+  participants: HeartHandshake,
+  documents: FileText,
+  credentials: ShieldCheck,
+  availability: CalendarClock,
+  training: GraduationCap,
+  induction: ClipboardCheck,
+};
 
 /** Mandatory credential types every worker is expected to have on file. */
 export const REQUIRED_CREDENTIAL_TYPES = [
@@ -161,7 +194,7 @@ function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: st
 /** Turns a static phone/email row into something you can act on: click the value to call/email
  * (tel:/mailto:), or copy it without leaving the page. Mirrors ParticipantProfileCard's
  * conditional-link convention so contact info reads consistently across the app. */
-function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
+export function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
   const { toast } = useToast();
   return (
     <span className="group inline-flex items-center gap-1">
@@ -300,7 +333,8 @@ function translateFlagged(count: number, translate: (k: string) => string): stri
 
 export function WorkerDetail({
   worker, onBack, initialTab,
-  onAssignShift, onAssignClient, onReminder, onDeactivate, onActivate,
+  onAssignShift, onAssignClient, onReminder, onDeactivate, onActivate, onSendPasswordReset, onDeleteAccount,
+  fullScreen, onToggleFullScreen,
 }: {
   worker: WorkerStats;
   onBack: () => void;
@@ -313,9 +347,17 @@ export function WorkerDetail({
   onReminder?: () => void;
   onDeactivate?: () => void;
   onActivate?: () => void;
+  onSendPasswordReset?: () => void;
+  /** MD-only - deactivation covers "can't log in" for both roles, but only the
+   * MD has authority to remove a staff member's account entirely. */
+  onDeleteAccount?: () => void;
+  /** Optional — only set when this profile is rendered inside a Sheet whose
+   * parent controls the panel width (e.g. md/staff.tsx). */
+  fullScreen?: boolean;
+  onToggleFullScreen?: () => void;
 }) {
   const { translate } = useAccessibility();
-  const [tab, setTab] = useState<WorkerDetailTab>(initialTab ?? "overview");
+  const [tab, setTab] = useState<WorkerDetailTab>(!initialTab || initialTab === "overview" ? "personal" : initialTab);
   const [focusCredentialType, setFocusCredentialType] = useState<string | null>(null);
 
   // Next Steps rows for missing credentials jump straight to that specific row in the
@@ -374,12 +416,14 @@ export function WorkerDetail({
   ];
   const avatar = avatarColor(worker.full_name || "?");
 
-  const hasQuickActions = onAssignShift || onAssignClient || onReminder || onDeactivate || onActivate;
+  const hasQuickActions = onAssignShift || onAssignClient || onReminder || onDeactivate || onActivate || onSendPasswordReset || onDeleteAccount;
 
   return (
-    <div className="space-y-4">
-      {/* Back + quick actions */}
-      <div className="flex items-center justify-between">
+    <div className={fullScreen ? "mx-auto w-full max-w-[1400px] space-y-4 xl:px-6" : "space-y-4"}>
+      {/* Back + quick actions - pr-8 keeps the "..." trigger clear of a Sheet's
+          own built-in close (X) button, which sits fixed top-right whenever
+          this panel is opened inside one (e.g. md/staff.tsx). */}
+      <div className="flex items-center justify-between pr-8">
         <button
           type="button"
           onClick={onBack}
@@ -388,7 +432,19 @@ export function WorkerDetail({
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
         </button>
-        {hasQuickActions && (
+        <div className="flex items-center gap-2">
+          {onToggleFullScreen && (
+            <button
+              type="button"
+              onClick={onToggleFullScreen}
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+              style={{ borderColor: BORDER, color: PLUM }}
+            >
+              {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              {fullScreen ? "Exit full screen" : "Full screen"}
+            </button>
+          )}
+          {hasQuickActions && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -415,6 +471,11 @@ export function WorkerDetail({
                   <Mail size={13} className="mr-1.5" /> {translate("team.reminder")}
                 </DropdownMenuItem>
               )}
+              {onSendPasswordReset && (
+                <DropdownMenuItem onClick={onSendPasswordReset}>
+                  <KeyRound size={13} className="mr-1.5" /> Send password reset email
+                </DropdownMenuItem>
+              )}
               {(onDeactivate || onActivate) && <DropdownMenuSeparator />}
               {onDeactivate && worker.is_active !== false && (
                 <DropdownMenuItem onClick={onDeactivate} className="text-red-600 focus:text-red-600">
@@ -426,23 +487,32 @@ export function WorkerDetail({
                   <UserCheck size={13} className="mr-1.5" /> {translate("team.reactivate")}
                 </DropdownMenuItem>
               )}
+              {onDeleteAccount && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onDeleteAccount} className="text-red-600 focus:text-red-600">
+                    <Trash2 size={13} className="mr-1.5" /> Remove account
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Identity + at-a-glance header */}
       <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-5">
+        <div className={`flex flex-col sm:flex-row sm:items-start gap-4 ${fullScreen ? "p-6 xl:p-7" : "p-5"}`}>
           <div
-            className="h-16 w-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black shadow-sm"
+            className={`${fullScreen ? "h-20 w-20 text-2xl" : "h-16 w-16 text-xl"} rounded-full shrink-0 flex items-center justify-center font-black shadow-sm`}
             style={{ background: avatar.bg, color: avatar.fg }}
           >
             {(worker.full_name || "?").charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-black truncate" style={{ color: TEXT }}>{worker.full_name}</h2>
+              <h2 className={`${fullScreen ? "text-2xl" : "text-lg"} font-black truncate`} style={{ color: TEXT }}>{worker.full_name}</h2>
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{
@@ -493,84 +563,278 @@ export function WorkerDetail({
         {/* At-a-glance stat strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
           {statCells.map((cell) => (
-            <div key={cell.label} className="px-4 py-3" style={{ borderColor: BORDER }}>
+            <div key={cell.label} className={fullScreen ? "px-5 py-4" : "px-4 py-3"} style={{ borderColor: BORDER }}>
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{cell.label}</p>
-              <p className="text-base font-black tabular-nums mt-0.5" style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
+              <p className={`${fullScreen ? "text-lg" : "text-base"} font-black tabular-nums mt-0.5`} style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b" style={{ borderColor: BORDER }}>
-        {(["overview", "documents", "credentials", "availability", "training"] as WorkerDetailTab[]).map((t) => {
-          const badge = tabBadges[t];
-          const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
-          const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
-          return (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t ? "true" : "false"}
-              onClick={() => setTab(t)}
-              className="relative shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 pb-3 pt-1 text-sm font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded-t-lg"
-              style={{ color: tab === t ? TEXT : MUTED, outlineColor: PLUM }}
-            >
-              {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
-              {badge && (
-                <span
-                  className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
-                  style={{ background: badgeBg, color: badgeColor }}
-                >
-                  {badge.text}
-                </span>
-              )}
-              {tab === t && (
-                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Tabs + content - vertical sidebar tabs on wide screens (this panel is
+          wide enough now to earn it, and 8 tabs was starting to overflow a
+          horizontal scroller), falling back to the original horizontal
+          scrollable strip on narrow/mobile widths. */}
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b lg:hidden" style={{ borderColor: BORDER }}>
+          {ALL_WORKER_DETAIL_TABS.map((t) => {
+            const badge = tabBadges[t];
+            const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
+            const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
+            return (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t ? "true" : "false"}
+                onClick={() => setTab(t)}
+                className="relative shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 pb-3 pt-1 text-sm font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded-t-lg"
+                style={{ color: tab === t ? TEXT : MUTED, outlineColor: PLUM }}
+              >
+                {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
+                {badge && (
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: badgeBg, color: badgeColor }}>
+                    {badge.text}
+                  </span>
+                )}
+                {tab === t && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />}
+              </button>
+            );
+          })}
+        </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          {tab === "overview" && (
-            <OverviewTab
-              worker={worker}
-              translate={translate}
-              missingCredentialTypes={missingCredentialTypes}
-              trainingPendingCount={trainingPendingCount}
-              onJumpToTab={jumpToTab}
-            />
-          )}
-          {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
-          {tab === "credentials" && (
-            <CredentialsTab
-              credentials={workerCredentials}
-              isLoading={credentialsQuery.isLoading}
-              credentialsCompleteCount={credentialsCompleteCount}
-              focusCredentialType={focusCredentialType}
-              topReason={topReason}
-              translate={translate}
-            />
-          )}
-          {tab === "availability" && (
-            <div className="space-y-4">
-              <AvailabilitySummaryStrip worker={worker} />
-              <WorkerAvailabilityPanel worker={worker} />
-            </div>
-          )}
-          {tab === "training" && <TrainingTab worker={worker} topReason={topReason} translate={translate} />}
-        </motion.div>
-      </AnimatePresence>
+        <div role="tablist" className={`hidden shrink-0 flex-col gap-1 lg:flex ${fullScreen ? "lg:w-56 xl:w-64" : "lg:w-52"}`}>
+          {ALL_WORKER_DETAIL_TABS.map((t) => {
+            const badge = tabBadges[t];
+            const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
+            const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
+            const active = tab === t;
+            const Icon = TAB_ICON[t];
+            return (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={active ? "true" : "false"}
+                onClick={() => setTab(t)}
+                className="relative flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
+                style={{
+                  // Deliberately NOT trying to visually merge with the content
+                  // column beside it - that cross-column "bleed" technique
+                  // (matching background + negative margin) went through
+                  // several rounds here without landing right, and this repo
+                  // has no way to render/verify it live. A plain
+                  // self-contained pill is a safer, more predictable choice:
+                  // it doesn't depend on precise alignment with a sibling
+                  // column to look correct.
+                  background: active ? SOFT : "transparent",
+                  color: active ? TEXT : MUTED,
+                  outlineColor: PLUM,
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
+                    style={{ background: active ? PLUM : SOFT, color: active ? "#fff" : MUTED }}
+                  >
+                    <Icon size={13} />
+                  </span>
+                  <span className="truncate">{translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}</span>
+                </span>
+                {badge && (
+                  <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: badgeBg, color: badgeColor }}>
+                    {badge.text}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={`min-w-0 flex-1 ${fullScreen ? "xl:max-w-3xl" : ""}`}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {(tab === "personal" || tab === "overview") && (
+                <PersonalInfoTab
+                  worker={worker}
+                  translate={translate}
+                  missingCredentialTypes={missingCredentialTypes}
+                  trainingPendingCount={trainingPendingCount}
+                  onJumpToTab={jumpToTab}
+                />
+              )}
+              {tab === "shifts" && <ShiftsTab worker={worker} translate={translate} />}
+              {tab === "participants" && <ParticipantsTab worker={worker} />}
+              {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
+              {tab === "credentials" && (
+                <CredentialsTab
+                  credentials={workerCredentials}
+                  isLoading={credentialsQuery.isLoading}
+                  credentialsCompleteCount={credentialsCompleteCount}
+                  focusCredentialType={focusCredentialType}
+                  topReason={topReason}
+                  translate={translate}
+                />
+              )}
+              {tab === "availability" && (
+                <div className="space-y-4">
+                  <AvailabilitySummaryStrip worker={worker} />
+                  <WorkerAvailabilityPanel worker={worker} />
+                </div>
+              )}
+              {tab === "training" && <TrainingTab worker={worker} topReason={topReason} translate={translate} />}
+              {tab === "induction" && <InductionTab worker={worker} translate={translate} />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {fullScreen && (
+          <div className="hidden xl:flex xl:w-80 xl:shrink-0 xl:flex-col gap-4">
+            <RailCard title="Contact">
+              <RailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
+              <RailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
+              <RailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
+              <RailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
+              <RailRow icon={LogIn} label={translate("team.detail.lastLogin")} value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined} emptyText={translate("team.detail.noLoginYet")} />
+            </RailCard>
+
+            <RailCard title="Compliance snapshot">
+              <RailStatusRow
+                label="Credentials"
+                value={`${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`}
+                tone={credentialsComplete ? "success" : credentialsCompleteCount === 0 ? "danger" : "warning"}
+                onClick={() => setTab("credentials")}
+              />
+              <RailStatusRow
+                label="Training"
+                value={worker.training_overdue ? "Overdue" : trainingPendingCount > 0 ? `${trainingPendingCount} to review` : "Up to date"}
+                tone={worker.training_overdue ? "danger" : trainingPendingCount > 0 ? "warning" : "success"}
+                onClick={() => setTab("training")}
+              />
+              <RailStatusRow
+                label="Documents"
+                value={`${documentsCount} on file`}
+                tone="neutral"
+                onClick={() => setTab("documents")}
+              />
+              {onboardingPending && (
+                <RailStatusRow
+                  label="Onboarding"
+                  value="In progress"
+                  tone="warning"
+                  onClick={() => setTab("personal")}
+                />
+              )}
+            </RailCard>
+
+            {hasQuickActions && (
+              <RailCard title="Quick actions">
+                <div className="flex flex-col gap-1.5">
+                  {onAssignShift && <RailActionButton icon={Clock} label={translate("team.assignShift")} onClick={onAssignShift} />}
+                  {onAssignClient && <RailActionButton icon={Link2} label={translate("team.assignClient")} onClick={onAssignClient} />}
+                  {onReminder && <RailActionButton icon={Mail} label={translate("team.reminder")} onClick={onReminder} />}
+                  {onSendPasswordReset && <RailActionButton icon={KeyRound} label="Send password reset email" onClick={onSendPasswordReset} />}
+                  {onDeactivate && worker.is_active !== false && (
+                    <RailActionButton icon={UserX} label={translate("team.deactivate")} onClick={onDeactivate} tone="danger" />
+                  )}
+                  {onActivate && worker.is_active === false && (
+                    <RailActionButton icon={UserCheck} label={translate("team.reactivate")} onClick={onActivate} tone="success" />
+                  )}
+                  {onDeleteAccount && (
+                    <RailActionButton icon={Trash2} label="Remove account" onClick={onDeleteAccount} tone="danger" />
+                  )}
+                </div>
+              </RailCard>
+            )}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Compact card shell for the full-screen right rail — same visual language as the
+ * main content cards (SURFACE/BORDER/CARD_SHADOW), just tighter padding since it's
+ * secondary, at-a-glance context rather than primary content. */
+function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border overflow-hidden" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="px-4 pt-3.5 pb-2 text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{title}</p>
+      <div className="divide-y" style={{ borderColor: BORDER }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RailRow({
+  icon: Icon, label, value, emptyText,
+}: {
+  icon: typeof Mail;
+  label: string;
+  value?: string | null;
+  emptyText: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 px-4 py-2.5">
+      <Icon size={13} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        <p className={`text-[13px] font-semibold mt-0.5 truncate ${value ? "" : "italic"}`} style={{ color: value ? TEXT : MUTED }}>
+          {value || emptyText}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RailStatusRow({
+  label, value, tone, onClick,
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  onClick: () => void;
+}) {
+  const color = tone === "success" ? "var(--cc-status-success)" : tone === "warning" ? "var(--cc-status-warning)" : tone === "danger" ? "var(--cc-status-danger)" : TEXT;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
+    >
+      <span className="text-[13px] font-bold" style={{ color: TEXT }}>{label}</span>
+      <span className="flex items-center gap-1 text-[12px] font-black" style={{ color }}>
+        {value}
+        <ArrowRight size={11} />
+      </span>
+    </button>
+  );
+}
+
+function RailActionButton({
+  icon: Icon, label, onClick, tone,
+}: {
+  icon: typeof Mail;
+  label: string;
+  onClick: () => void;
+  tone?: "danger" | "success";
+}) {
+  const color = tone === "danger" ? "var(--cc-status-danger)" : tone === "success" ? "var(--cc-status-success)" : PLUM;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-bold transition-colors hover:bg-black/[0.04]"
+      style={{ color }}
+    >
+      <Icon size={13} className="shrink-0" />
+      {label}
+    </button>
   );
 }
 
@@ -632,14 +896,51 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
       ) : (
         <p className="text-sm" style={{ color: MUTED }}>No availability set yet.</p>
       )}
-      <p className="text-[11px] mt-1.5 italic" style={{ color: MUTED }}>
-        SCHADS classification isn't tracked in CareCliQ yet — this would need a new field before it can show here.
-      </p>
     </div>
   );
 }
 
-function OverviewTab({
+function ProfileCard({ worker }: { worker: WorkerStats }) {
+  const skillsQuery = useOrgQuery(["worker-skills", worker.id], {
+    queryFn: () => getWorkerSkills(worker.id),
+  });
+  const skills = skillsQuery.data ?? [];
+
+  if (!worker.profile_summary && !worker.profile_experience_years && skills.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="flex items-center gap-2">
+        <Sparkles size={14} style={{ color: PLUM }} />
+        <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+      </div>
+      {worker.profile_summary && (
+        <p className="mt-2.5 text-sm leading-relaxed" style={{ color: TEXT }}>{worker.profile_summary}</p>
+      )}
+      {worker.profile_experience_years && (
+        <p className="mt-2 text-xs font-semibold" style={{ color: TEXT }}>{worker.profile_experience_years}</p>
+      )}
+      {skills.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {skills.map((s) => (
+            <span
+              key={s.skill}
+              className="rounded-full px-2.5 py-1 text-[10px] font-bold"
+              style={{ background: s.is_certified ? "var(--cc-status-success-bg)" : SOFT, color: s.is_certified ? "var(--cc-status-success)" : MUTED }}
+              title={s.is_certified ? "Certified" : "Unverified — from resume"}
+            >
+              {s.skill}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PersonalInfoTab({
   worker, translate, missingCredentialTypes, trainingPendingCount, onJumpToTab,
 }: {
   worker: WorkerStats;
@@ -669,6 +970,8 @@ function OverviewTab({
     : undefined;
   const currentStepLabel = currentStepKey ? CHECKLIST_LABELS[currentStepKey] : undefined;
 
+  const [nextStepsOpen, setNextStepsOpen] = useState(true);
+
   const nextSteps: { label: string; onClick?: () => void }[] = [];
   if (onboardingPending) {
     nextSteps.push({
@@ -696,30 +999,44 @@ function OverviewTab({
   return (
     <div className="space-y-4">
       {/* Concrete, clickable next steps instead of a generic "needs attention" status —
-          each row names the actual gap and jumps straight to where it's fixed. */}
+          each row names the actual gap and jumps straight to where it's fixed. Collapsible
+          since once reviewed it's mostly reference, not something to keep taking up space. */}
       {nextSteps.length > 0 ? (
-        <div className="rounded-2xl border divide-y" style={{ borderColor: "var(--cc-status-warning)", background: "var(--cc-status-warning-bg)" }}>
-          <div className="flex items-center gap-2 px-4 py-3">
-            <AlertCircle size={15} style={{ color: "var(--cc-status-warning)" }} />
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>Next steps</p>
-          </div>
-          {nextSteps.map((step) => (
-            step.onClick ? (
-              <button
-                key={step.label}
-                type="button"
-                onClick={step.onClick}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-black/[0.03]"
-              >
-                <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
-                <ArrowRight size={14} className="shrink-0" style={{ color: "var(--cc-status-warning)" }} />
-              </button>
-            ) : (
-              <div key={step.label} className="px-4 py-3">
-                <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
-              </div>
-            )
-          ))}
+        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: "var(--cc-status-warning)", background: "var(--cc-status-warning-bg)" }}>
+          <button
+            type="button"
+            onClick={() => setNextStepsOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-4 py-3"
+          >
+            <span className="flex items-center gap-2">
+              <AlertCircle size={15} style={{ color: "var(--cc-status-warning)" }} />
+              <span className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>
+                Next steps ({nextSteps.length})
+              </span>
+            </span>
+            {nextStepsOpen ? <ChevronUp size={14} style={{ color: "var(--cc-status-warning)" }} /> : <ChevronDown size={14} style={{ color: "var(--cc-status-warning)" }} />}
+          </button>
+          {nextStepsOpen && (
+            <div className="divide-y" style={{ borderColor: "var(--cc-status-warning)" }}>
+              {nextSteps.map((step) => (
+                step.onClick ? (
+                  <button
+                    key={step.label}
+                    type="button"
+                    onClick={step.onClick}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-black/[0.03]"
+                  >
+                    <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
+                    <ArrowRight size={14} className="shrink-0" style={{ color: "var(--cc-status-warning)" }} />
+                  </button>
+                ) : (
+                  <div key={step.label} className="px-4 py-3">
+                    <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border p-4 flex items-center gap-2.5" style={{ borderColor: "var(--cc-status-success)", background: "var(--cc-status-success-bg)" }}>
@@ -727,33 +1044,6 @@ function OverviewTab({
           <p className="text-sm font-bold" style={{ color: "var(--cc-status-success)" }}>Nothing outstanding — fully up to date.</p>
         </div>
       )}
-
-      {/* Grid-gap-as-divider: outer background is the border color, gap-px reveals it as thin lines between cells */}
-      <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
-        <DetailRow
-          icon={LogIn}
-          label={translate("team.detail.lastLogin")}
-          value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined}
-          emptyText={translate("team.detail.noLoginYet")}
-        />
-        <DetailRow
-          icon={MessageCircle}
-          label={translate("team.detail.preferredContact")}
-          value={worker.preferred_contact_method}
-          emptyText={translate("team.detail.contactNotSet")}
-        />
-        {/* Never repeats the header badge's "Onboarding Pending" wording — this row exists only
-            to say something the badge doesn't: which specific step they're on. If that step
-            hasn't loaded/isn't known yet, the row is dropped rather than showing the duplicate. */}
-        {onboardingPending
-          ? (currentStepLabel && (
-              <DetailRow icon={Hourglass} tone="warning" label="Current onboarding step" value={currentStepLabel} />
-            ))
-          : (
-            <DetailRow icon={CheckCircle2} tone="success" label={translate("team.detail.onboardingStatus")} value={translate("team.detail.onboardingComplete")} />
-          )}
-      </div>
 
       {/* Coaching input, not a compliance flag — deliberately its own card, never mixed
           into the stat strip or any compliance-facing surface. */}
@@ -768,6 +1058,319 @@ function OverviewTab({
           <p className="text-sm" style={{ color: TEXT }}>{coaching.trigger_reason}</p>
         </div>
       )}
+
+      {/* Contact + employment basics */}
+      <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <DetailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
+        <DetailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
+        <DetailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
+        <DetailRow
+          icon={MessageCircle}
+          label={translate("team.detail.preferredContact")}
+          value={worker.preferred_contact_method}
+          emptyText={translate("team.detail.contactNotSet")}
+        />
+        <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
+        <DetailRow
+          icon={LogIn}
+          label={translate("team.detail.lastLogin")}
+          value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined}
+          emptyText={translate("team.detail.noLoginYet")}
+        />
+        {onboardingPending ? (
+          <DetailRow icon={Hourglass} tone="warning" label="Onboarding" value="In progress" />
+        ) : (
+          <DetailRow icon={CheckCircle2} tone="success" label={translate("team.detail.onboardingStatus")} value={translate("team.detail.onboardingComplete")} />
+        )}
+      </div>
+
+      {/* Resume-derived bio, experience and skills - captured at onboarding and kept on
+          their live profile permanently, not just during the hiring process. */}
+      <ProfileCard worker={worker} />
+
+      <CoordinatorAssignmentSection worker={worker} />
+
+      <ClassificationLevelSection worker={worker} />
+
+      <BuddyAssignmentSection worker={worker} />
+
+      <WorkerTagsSection workerId={worker.id} />
+    </div>
+  );
+}
+
+/** Worker-Participant Matching Enhancement, Phase 1 — coordinator view of a
+ * worker's self-reported interests/lived-experience tags, including any
+ * marked visible_to_coordinator_only (every coordinator/MD in the org sees
+ * those, not just an assigned coordinator - see migration 144's comment on
+ * worker_tags). A coordinator can also add a tag on the worker's behalf. */
+/** MD-only - who this worker's dashboard/session-review/credential-alert
+ * scoping is under (users.coordinator_id). Local optimistic state rather
+ * than invalidating md/staff.tsx's own worker-stats fetch (a plain useEffect
+ * fetch, not react-query) so the dropdown reflects the change immediately
+ * without needing that page's whole list to refetch. */
+function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const { data: coordinators = [] } = useOrgQuery(["org-coordinators"], {
+    queryFn: () => getCoordinatorWorkerStats().then((list) => list.filter((w) => w.role === "support_coordinator")),
+  });
+  const [coordinatorId, setCoordinatorId] = useState<string | null>(worker.coordinator_id ?? null);
+
+  const assignMutation = useMutation({
+    mutationFn: (nextId: string | null) => assignWorkerCoordinator(worker.id, nextId),
+    onSuccess: (_, nextId) => setCoordinatorId(nextId),
+    onError: (err) => toast({ title: "Could not update coordinator", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (user?.role !== "managing_director" || worker.role !== "support_worker") return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Assigned coordinator</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Who this worker's dashboard, session review, and credential alerts are scoped to.
+      </p>
+      <div className="mt-3 max-w-xs">
+        <Select
+          value={coordinatorId ?? "unassigned"}
+          onValueChange={(value) => assignMutation.mutate(value === "unassigned" ? null : value)}
+          disabled={assignMutation.isPending}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Unassigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {coordinators.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+/** Coordinator/MD - sets a worker's SCHADS Award classification and
+ * employment type, the data schads_engine.py needs to price their shifts.
+ * Set manually, never derived from worker.qualifications - classification
+ * reflects the duties actually performed, not the certificate on file. */
+function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
+  const { toast } = useToast();
+  const { data: classifications = [] } = useOrgQuery(["award-classifications"], {
+    queryFn: getAwardClassifications,
+  });
+  const [classificationId, setClassificationId] = useState<string | null>(worker.classification_id ?? null);
+  const [employmentType, setEmploymentType] = useState<string | null>(worker.employment_type ?? null);
+
+  const assignMutation = useMutation({
+    mutationFn: (payload: { classification_id?: string | null; employment_type?: string | null }) =>
+      assignWorkerClassification(worker.id, payload),
+    onError: (err) => toast({ title: "Could not update classification", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (worker.role !== "support_worker") return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>SCHADS classification</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Sets the Award level and employment type used to calculate this worker's pay per shift.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <div className="max-w-[220px] flex-1">
+          <Select
+            value={classificationId ?? "unset"}
+            onValueChange={(value) => {
+              const next = value === "unset" ? null : value;
+              setClassificationId(next);
+              assignMutation.mutate({ classification_id: next });
+            }}
+            disabled={assignMutation.isPending}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              {classifications.map((c) => (
+                <SelectItem key={c.id} value={c.id}>SACS Level {c.level}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="max-w-[160px] flex-1">
+          <Select
+            value={employmentType ?? "unset"}
+            onValueChange={(value) => {
+              const next = value === "unset" ? null : value;
+              setEmploymentType(next);
+              assignMutation.mutate({ employment_type: next });
+            }}
+            disabled={assignMutation.isPending}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              <SelectItem value="casual">Casual</SelectItem>
+              <SelectItem value="part_time">Part-time</SelectItem>
+              <SelectItem value="full_time">Full-time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Coordinator/MD - pairs a new worker with an experienced, active worker
+ * before their first shift. Suggestions come from a simple heuristic
+ * (matching_opt_in workers, most recently active, same suburb favoured) —
+ * the coordinator always makes the final call, same as every other match in
+ * this system, so a hand-picked buddy outside the suggestion list is also
+ * shown once assigned. */
+function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
+  const { toast } = useToast();
+  const { data: currentBuddy } = useOrgQuery(["worker-buddy", worker.id], {
+    queryFn: () => getWorkerBuddy(worker.id),
+  });
+  const { data: suggestions = [] } = useOrgQuery(["buddy-suggestions", worker.id], {
+    queryFn: () => getBuddySuggestions(worker.id),
+  });
+
+  const [buddyId, setBuddyId] = useState<string | null>(null);
+  useEffect(() => {
+    setBuddyId(currentBuddy?.buddy_worker_id ?? null);
+  }, [currentBuddy?.buddy_worker_id]);
+
+  const assignMutation = useMutation({
+    mutationFn: (nextId: string | null) => assignWorkerBuddy(worker.id, nextId),
+    onSuccess: (_, nextId) => setBuddyId(nextId),
+    onError: (err) => toast({ title: "Could not update buddy", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (worker.role !== "support_worker") return null;
+
+  const options = [...suggestions];
+  if (buddyId && currentBuddy?.full_name && !options.some((o) => o.id === buddyId)) {
+    options.unshift({ id: buddyId, full_name: currentBuddy.full_name, same_suburb: false });
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Buddy</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        An experienced worker to help them settle in before their first shift.
+      </p>
+      <div className="mt-3 max-w-xs">
+        <Select
+          value={buddyId ?? "none"}
+          onValueChange={(value) => assignMutation.mutate(value === "none" ? null : value)}
+          disabled={assignMutation.isPending}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="No buddy assigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No buddy assigned</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.full_name}{o.same_suburb ? " · same suburb" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+function WorkerTagsSection({ workerId }: { workerId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const tagsKey = ["worker-tags", workerId];
+  const catalogKey = ["coordinator-tags"];
+
+  const { data: tags = [], isLoading } = useOrgQuery(tagsKey, { queryFn: () => getWorkerTags(workerId) });
+  const { data: catalog = [] } = useOrgQuery(catalogKey, { queryFn: getTagCatalog });
+
+  const [selectedTagId, setSelectedTagId] = useState("");
+
+  const availableTags = (() => {
+    const already = new Set(tags.map((t) => t.tag_id));
+    return catalog.flatMap((category) =>
+      category.tags.filter((t) => t.is_active && !already.has(t.id)).map((t) => ({ ...t, categoryName: category.name }))
+    );
+  })();
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: tagsKey });
+
+  const addMutation = useMutation({
+    mutationFn: (tagId: string) => addWorkerTag(workerId, tagId),
+    onSuccess: () => { setSelectedTagId(""); invalidate(); },
+    onError: (err) => toast({ title: "Could not add tag", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (tagId: string) => removeWorkerTag(workerId, tagId),
+    onSuccess: invalidate,
+    onError: (err) => toast({ title: "Could not remove tag", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Interests & lived experience</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Self-reported by the worker (or added here) - used to suggest a better-fitting participant match.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {tags.length === 0 && <p className="text-xs italic" style={{ color: MUTED }}>Nothing on file yet.</p>}
+        {tags.map((tag) => (
+          <span
+            key={tag.id}
+            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+            style={{ borderColor: BORDER, background: SOFT, color: TEXT }}
+          >
+            {tag.label}
+            {tag.visible_to_coordinator_only && (
+              <span className="text-[9px] font-black uppercase" style={{ color: PLUM }}>Private</span>
+            )}
+            <button type="button" onClick={() => removeMutation.mutate(tag.tag_id)} aria-label={`Remove ${tag.label}`} className="opacity-60 hover:opacity-100">
+              <XIcon size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <select
+          title="Add a tag"
+          value={selectedTagId}
+          onChange={(event) => setSelectedTagId(event.target.value)}
+          className="h-8 flex-1 rounded-lg border px-2 text-xs"
+          style={{ borderColor: BORDER }}
+        >
+          <option value="">Add an interest...</option>
+          {availableTags.map((tag) => (
+            <option key={tag.id} value={tag.id}>{tag.categoryName} · {tag.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!selectedTagId || addMutation.isPending}
+          onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
+          className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
+          style={{ background: PLUM }}
+        >
+          Add
+        </button>
+      </div>
     </div>
   );
 }
@@ -1321,6 +1924,822 @@ function TrainingTab({
       )}
 
       <AssignTrainingDialog open={assignOpen} onOpenChange={setAssignOpen} worker={worker} translate={translate} />
+    </div>
+  );
+}
+
+/** One-time first-day checklist, distinct from ongoing TrainingTab — read-only
+ * here (the worker ticks items off themselves), no assign/dismiss/review
+ * actions since induction has no coordinator-review workflow. */
+function InductionTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+  const progressQuery = useOrgQuery(["worker-induction", worker.id], {
+    queryFn: () => getWorkerInduction(worker.id),
+  });
+
+  const items = [...(progressQuery.data?.items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  const mandatoryTotal = progressQuery.data?.mandatory_total ?? 0;
+  const mandatoryComplete = progressQuery.data?.mandatory_complete ?? 0;
+  const allDone = mandatoryTotal > 0 && mandatoryComplete >= mandatoryTotal;
+  const stripBg = mandatoryTotal === 0 ? SOFT : allDone ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
+  const stripColor = mandatoryTotal === 0 ? MUTED : allDone ? "var(--cc-status-success)" : "var(--cc-status-warning)";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
+        <div>
+          <p className="text-lg font-black">{mandatoryComplete} / {mandatoryTotal} mandatory complete</p>
+          <p className="text-xs font-bold mt-0.5">
+            {mandatoryTotal === 0 ? "No induction items set up yet" : allDone ? "Induction complete" : "Induction in progress"}
+          </p>
+        </div>
+        {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+      </div>
+
+      {progressQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
+
+      {!progressQuery.isLoading && items.length === 0 && (
+        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <ClipboardCheck size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
+          <p className="text-sm font-bold" style={{ color: MUTED }}>No induction items configured for this organisation yet.</p>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 px-5 py-4">
+              <IconBadge
+                icon={ClipboardCheck}
+                color={item.completed_at ? "var(--cc-status-success)" : "var(--cc-status-warning)"}
+                bg={item.completed_at ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)"}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold" style={{ color: TEXT }}>{item.title}</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  {item.completed_at ? "Completed" : item.is_mandatory ? "Mandatory — not yet completed" : "Optional"}
+                </p>
+              </div>
+              {item.completed_at ? (
+                <CheckCircle2 size={16} style={{ color: "var(--cc-status-success)" }} />
+              ) : !item.is_mandatory ? (
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>Optional</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function complianceBandColor(band: string | undefined) {
+  if (band === "green") return { color: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" };
+  if (band === "amber") return { color: "var(--cc-status-warning)", bg: "var(--cc-status-warning-bg)" };
+  if (band === "red") return { color: "var(--cc-status-danger)", bg: "var(--cc-status-danger-bg)" };
+  return { color: MUTED, bg: SOFT };
+}
+
+function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+  const historyQuery = useOrgQuery(["worker-shift-history", worker.id], {
+    queryFn: () => getWorkerShiftHistory(worker.id),
+  });
+  const dashboardQuery = useOrgQuery(["worker-performance-dashboard", worker.id], {
+    queryFn: () => getWorkerPerformanceDashboard(worker.id),
+  });
+  const [openShiftId, setOpenShiftId] = useState<string | null>(null);
+
+  const shifts = historyQuery.data?.shifts ?? [];
+  const dashboard = dashboardQuery.data;
+  const openShift = openShiftId ? shifts.find((s) => s.id === openShiftId) ?? null : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Performance breakdown - the detail behind a single compliance number */}
+      <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Last 30 days</p>
+            <p className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
+              {dashboard?.average_score_30d != null ? `${Math.round(dashboard.average_score_30d)}%` : "—"}
+            </p>
+          </div>
+          {dashboard?.trend && (
+            <div className="text-right">
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-black"
+                style={complianceBandColor(dashboard.compliance_band)}
+              >
+                <TrendingUp size={11} style={{ transform: dashboard.trend.direction === "down" ? "scaleY(-1)" : undefined }} />
+                {dashboard.trend.direction === "up" ? "Improving" : dashboard.trend.direction === "down" ? "Declining" : "Steady"}
+              </span>
+            </div>
+          )}
+        </div>
+        {dashboard?.trend?.sentence && (
+          <p className="mt-2 text-xs" style={{ color: MUTED }}>{dashboard.trend.sentence}</p>
+        )}
+
+        {(!!dashboard?.strengths?.length || !!dashboard?.focus_areas?.length) && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {!!dashboard?.strengths?.length && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-success)" }}>Strengths</p>
+                <ul className="mt-1.5 space-y-1">
+                  {dashboard.strengths.map((s) => (
+                    <li key={s.label} className="text-xs" style={{ color: TEXT }}>{s.label} <span style={{ color: MUTED }}>({s.count})</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!!dashboard?.focus_areas?.length && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>Focus areas</p>
+                <ul className="mt-1.5 space-y-1">
+                  {dashboard.focus_areas.map((s) => (
+                    <li key={s.label} className="text-xs" style={{ color: TEXT }}>{s.label} <span style={{ color: MUTED }}>({s.count})</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!!dashboard?.badges?.some((b) => b.unlocked) && (
+          <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3" style={{ borderColor: BORDER }}>
+            {dashboard.badges.filter((b) => b.unlocked).map((b) => (
+              <span key={b.key} title={b.description} className="rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+                {b.title}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Shift-by-shift history */}
+      <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+          <p className="text-sm font-black" style={{ color: TEXT }}>Completed shifts</p>
+          <span className="text-xs font-bold" style={{ color: MUTED }}>{shifts.length}</span>
+        </div>
+        {historyQuery.isLoading ? (
+          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
+        ) : shifts.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>No completed shifts on file yet.</p>
+        ) : (
+          <ShiftHistoryList shifts={shifts} onOpenShift={setOpenShiftId} />
+        )}
+      </div>
+
+      {/* Per-shift audit trail - a side panel rather than an inline dropdown,
+          so a shift with a lot to show (incidents, flagged tasks, notes) gets
+          real room instead of squeezing into an expanding row. */}
+      <Sheet open={!!openShift} onOpenChange={(open) => { if (!open) setOpenShiftId(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto" style={{ background: SURFACE }}>
+          {openShift && <ShiftAuditPanel workerId={worker.id} shift={openShift} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+/** Worker-Participant Matching Enhancement, Phase 3 — the first completed
+ * shift for each participant this worker has worked with gets a "First
+ * shift" badge, prompting the coordinator toward the light-touch check-in
+ * the design spec calls for on new pairings. Computed client-side from the
+ * already-fetched shift list rather than a new backend field. */
+function ShiftHistoryList({ shifts, onOpenShift }: { shifts: ShiftHistoryRow[]; onOpenShift: (id: string) => void }) {
+  const firstPairingShiftIds = useMemo(() => {
+    const earliestByParticipant = new Map<string, { id: string; time: number }>();
+    for (const s of shifts) {
+      if (!s.participant_id || !s.scheduled_start) continue;
+      const time = new Date(s.scheduled_start).getTime();
+      const current = earliestByParticipant.get(s.participant_id);
+      if (!current || time < current.time) earliestByParticipant.set(s.participant_id, { id: s.id, time });
+    }
+    return new Set(Array.from(earliestByParticipant.values()).map((v) => v.id));
+  }, [shifts]);
+
+  return (
+    <div className="divide-y" style={{ borderColor: BORDER }}>
+      {shifts.slice(0, 30).map((s) => (
+        <ShiftHistoryRowItem key={s.id} shift={s} isFirstPairing={firstPairingShiftIds.has(s.id)} onOpen={() => onOpenShift(s.id)} />
+      ))}
+    </div>
+  );
+}
+
+/** clocked_in_at/clocked_out_at when available (what actually happened),
+ * falling back to scheduled_start/end - a completed shift almost always has
+ * the real clock times, but older/backfilled rows may not. */
+function formatShiftTimeRange(s: ShiftHistoryRow): string | null {
+  const start = s.clocked_in_at || s.scheduled_start;
+  const end = s.clocked_out_at || s.scheduled_end;
+  if (!start || !end) return null;
+  const startLabel = safeFormat(start, "h:mm a");
+  const endLabel = safeFormat(end, "h:mm a");
+  if (!startLabel || !endLabel) return null;
+  return `${startLabel} – ${endLabel}`;
+}
+
+/** A plain summary row - clicking it opens the full audit trail as a side
+ * panel (ShiftAuditPanel) rather than expanding inline, so incidents,
+ * flagged tasks, and notes all get proper room instead of a cramped dropdown. */
+function ShiftHistoryRowItem({
+  shift: s, isFirstPairing, onOpen,
+}: {
+  shift: ShiftHistoryRow;
+  isFirstPairing: boolean;
+  onOpen: () => void;
+}) {
+  const band = complianceBandColor(s.compliance_band);
+  const timeRange = formatShiftTimeRange(s);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-black/[0.02]"
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
+          {isFirstPairing && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+              First shift
+            </span>
+          )}
+        </div>
+        <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+          {safeFormat(s.scheduled_start, "d MMM yyyy")}
+          {timeRange ? ` · ${timeRange}` : ""}
+          {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
+        </p>
+        {s.compliance_explanation && (
+          <p className="mt-1 text-xs truncate" style={{ color: MUTED }}>{s.compliance_explanation}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="rounded-full px-2 py-1 text-[10px] font-black" style={band}>
+          {s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : s.compliance_band}
+        </span>
+        <ChevronRight size={14} style={{ color: MUTED }} />
+      </div>
+    </button>
+  );
+}
+
+const FLAG_TYPE_LABEL: Record<string, string> = {
+  no_evidence: "completed without evidence",
+  incomplete: "not completed",
+  low_compliance: "low overall compliance",
+};
+
+type ShiftIncidentSummary = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  incident_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  worker_actions?: string | null;
+  corrective_actions?: string | null;
+  incident_date?: string | null;
+  resolved_date?: string | null;
+  ndis_reportable?: boolean | null;
+};
+
+/** Full per-shift audit trail, opened as a side panel: outcome/score,
+ * incidents reported during this shift (what happened, action taken, when),
+ * flagged tasks, what went well, shift notes, and coordinator feedback. This
+ * is the "what did they actually do" view behind a single shift's score. */
+function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHistoryRow }) {
+  const band = complianceBandColor(shift.compliance_band);
+  const timeRange = formatShiftTimeRange(shift);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { translate } = useAccessibility();
+
+  const { data, isLoading } = useOrgQuery(["worker-shift-history-detail", workerId, shift.id], {
+    queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
+  });
+  const { data: incidents, isLoading: incidentsLoading } = useOrgQuery(
+    ["shift-incidents", shift.id],
+    { queryFn: () => listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }) },
+  );
+  const { data: payPreview } = useOrgQuery(["shift-pay-preview", shift.id], {
+    queryFn: () => getShiftPayPreview(shift.id),
+  });
+  const { data: eventTimeline, isLoading: timelineLoading } = useOrgQuery(
+    ["shift-event-timeline", workerId, shift.id],
+    { queryFn: () => getWorkerShiftEventTimeline(workerId, shift.id) },
+  );
+
+  const [markingSleepover, setMarkingSleepover] = useState(false);
+  const [sleepoverStart, setSleepoverStart] = useState("");
+  const [sleepoverEnd, setSleepoverEnd] = useState("");
+  const [loggingCallOut, setLoggingCallOut] = useState(false);
+  const [callOutStart, setCallOutStart] = useState("");
+  const [callOutEnd, setCallOutEnd] = useState("");
+  const [callOutNote, setCallOutNote] = useState("");
+
+  const invalidatePay = () => {
+    qc.invalidateQueries({ queryKey: ["shift-pay-preview", shift.id] });
+  };
+
+  const sleepoverMut = useMutation({
+    mutationFn: () => markShiftSleepover(shift.id, {
+      sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart),
+      sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd),
+    }),
+    onSuccess: () => {
+      toast({ title: "Shift marked as sleepover" });
+      setMarkingSleepover(false);
+      invalidatePay();
+    },
+    onError: (err) => toast({ title: "Could not mark sleepover", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const callOutMut = useMutation({
+    mutationFn: () => logShiftCallOut(shift.id, {
+      start: datetimeLocalValueToUtcIso(callOutStart),
+      end: datetimeLocalValueToUtcIso(callOutEnd),
+      note: callOutNote || undefined,
+    }),
+    onSuccess: () => {
+      toast({ title: "Call-out logged" });
+      setLoggingCallOut(false);
+      setCallOutStart(""); setCallOutEnd(""); setCallOutNote("");
+      invalidatePay();
+    },
+    onError: (err) => toast({ title: "Could not log call-out", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const flagged = data?.flagged_tasks ?? [];
+  const tasks = (data?.tasks ?? []) as Array<{
+    task_id?: string; label?: string; completed?: boolean; marked_na?: boolean;
+    has_photo?: boolean; has_voice?: boolean; note?: string;
+  }>;
+  const doneWell = tasks.filter(
+    (t) => !t.marked_na && t.completed
+      && (t.has_photo || t.has_voice || (t.note && t.note.trim().length >= 20)),
+  );
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
+          <ClipboardCheck size={18} style={{ color: PLUM }} />
+          Shift audit — {shift.participant_name || "Participant"}
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="mt-4 space-y-5">
+        {/* Summary: date, time, duration, participant, score, outcome */}
+        <div className="rounded-xl border p-4 space-y-1.5" style={{ borderColor: BORDER, background: SOFT }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-black" style={{ color: TEXT }}>
+              {safeFormat(shift.scheduled_start, "EEEE d MMM yyyy")}
+            </p>
+            <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black" style={band}>
+              {shift.compliance_score != null ? `${Math.round(shift.compliance_score)}%` : shift.compliance_band}
+            </span>
+          </div>
+          <p className="text-xs" style={{ color: MUTED }}>
+            {timeRange || "Clock in/out not recorded"}
+            {shift.duration_minutes ? ` · ${Math.round(shift.duration_minutes / 60 * 10) / 10}h` : ""}
+          </p>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Participant: <span style={{ color: TEXT }}>{shift.participant_name || "Not recorded"}</span>
+          </p>
+          {shift.compliance_explanation && (
+            <p className="pt-1.5 text-xs" style={{ color: TEXT }}>{shift.compliance_explanation}</p>
+          )}
+          {payPreview && payPreview.total_cents > 0 && (
+            <p className="pt-1.5 text-xs font-bold" style={{ color: TEXT }}>
+              SCHADS pay: ${(payPreview.total_cents / 100).toFixed(2)}
+              {payPreview.is_sleepover ? " · sleepover" : ""}
+            </p>
+          )}
+          {payPreview?.emergency_flagged && (
+            <p className="pt-1.5 text-xs" style={{ color: "var(--cc-status-danger)" }}>
+              Emergency flagged{payPreview.emergency_note ? `: ${payPreview.emergency_note}` : ""}
+            </p>
+          )}
+        </div>
+
+        {/* Sleepover marking / call-out logging - see schads_engine.py's
+            sleepover pricing path, verified against FWCFB 292. */}
+        <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: BORDER }}>
+          {!payPreview?.is_sleepover ? (
+            markingSleepover ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverStart")}</label>
+                  <DateTimePicker value={sleepoverStart} onChange={setSleepoverStart} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverEnd")}</label>
+                  <DateTimePicker value={sleepoverEnd} onChange={setSleepoverEnd} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => sleepoverMut.mutate()}
+                    disabled={!sleepoverStart || !sleepoverEnd || sleepoverMut.isPending}
+                    className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                    style={{ background: PLUM }}
+                  >
+                    {translate("coordinator.shiftAssign.markSleepover")}
+                  </button>
+                  <button type="button" onClick={() => setMarkingSleepover(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setMarkingSleepover(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+                {translate("coordinator.shiftAssign.markSleepover")}
+              </button>
+            )
+          ) : loggingCallOut ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutStart")}</label>
+                <DateTimePicker value={callOutStart} onChange={setCallOutStart} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutEnd")}</label>
+                <DateTimePicker value={callOutEnd} onChange={setCallOutEnd} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutNote")}</label>
+                <Input value={callOutNote} onChange={(e) => setCallOutNote(e.target.value)} className="h-9 text-xs" />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => callOutMut.mutate()}
+                  disabled={!callOutStart || !callOutEnd || callOutMut.isPending}
+                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                  style={{ background: PLUM }}
+                >
+                  {translate("coordinator.shiftAssign.callOutSave")}
+                </button>
+                <button type="button" onClick={() => setLoggingCallOut(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setLoggingCallOut(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+              {translate("coordinator.shiftAssign.logCallOut")}
+            </button>
+          )}
+        </div>
+
+        {/* Event timeline - every clock-in-to-clock-out event this shift
+            wrote to audit_logs (clock-in, task updates, notes, evidence,
+            acknowledgements, clock-out), for full audit-trail visibility. */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+            Event timeline
+          </p>
+          {timelineLoading ? (
+            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+          ) : !eventTimeline || eventTimeline.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED }}>No events recorded for this shift.</p>
+          ) : (
+            <div className="space-y-2">
+              {eventTimeline.map((event, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold" style={{ color: TEXT }}>{event.label}</p>
+                    {event.actor_name && (
+                      <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{event.actor_name}</p>
+                    )}
+                  </div>
+                  <p className="shrink-0 text-[11px]" style={{ color: MUTED }}>
+                    {event.created_at ? safeFormat(event.created_at, "d MMM, h:mm a") : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Incidents - explicit audit-trail requirement: what happened, what
+            action was taken, and when, for anything reported off this shift. */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+            Incidents this shift
+          </p>
+          {incidentsLoading ? (
+            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+          ) : !incidents || incidents.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED }}>No incidents reported for this shift.</p>
+          ) : (
+            <div className="space-y-2">
+              {incidents.map((inc) => (
+                <div
+                  key={inc.id}
+                  className="rounded-xl border p-3"
+                  style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-black" style={{ color: TEXT }}>
+                      {inc.title || (inc.incident_type ?? "incident").replace(/_/g, " ")}
+                    </p>
+                    {inc.severity && (
+                      <span className="shrink-0 text-[9px] font-black uppercase" style={{ color: "var(--cc-status-danger)" }}>
+                        {inc.severity}
+                      </span>
+                    )}
+                  </div>
+                  {inc.description && (
+                    <p className="mt-1 text-xs" style={{ color: TEXT }}>{inc.description}</p>
+                  )}
+                  {(inc.worker_actions || inc.corrective_actions) && (
+                    <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                      <span className="font-bold" style={{ color: TEXT }}>Action taken: </span>
+                      {inc.worker_actions || inc.corrective_actions}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>
+                    {inc.incident_date ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a") : "Date not recorded"}
+                    {" · "}
+                    {inc.status ? String(inc.status).replace(/_/g, " ") : "Status not set"}
+                    {inc.resolved_date ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}` : ""}
+                    {inc.ndis_reportable ? " · NDIS reportable" : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isLoading ? (
+          <p className="text-xs" style={{ color: MUTED }}>Loading shift detail…</p>
+        ) : (
+          <>
+            {flagged.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-danger)" }}>Flagged</p>
+                <ul className="space-y-1">
+                  {flagged.map((f, i) => (
+                    <li key={`${f.task_id ?? "overall"}-${i}`} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
+                      <AlertTriangle size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-danger)" }} />
+                      <span>
+                        {(f.label as string) || "Overall compliance"}
+                        {f.flag_type ? ` — ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {doneWell.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-success)" }}>Done well</p>
+                <ul className="space-y-1">
+                  {doneWell.map((t) => (
+                    <li key={t.task_id} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
+                      <CheckCircle2 size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-success)" }} />
+                      {t.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {data?.notes && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Shift notes</p>
+                <p className="whitespace-pre-wrap text-xs" style={{ color: TEXT }}>{data.notes}</p>
+              </div>
+            )}
+
+            {data?.feedback && data.feedback.length > 0 && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Coordinator feedback</p>
+                <ul className="space-y-1.5">
+                  {data.feedback.map((f) => (
+                    <li key={f.id} className="text-xs" style={{ color: TEXT }}>
+                      <span className="font-bold">{f.coordinator_name ?? "Coordinator"}:</span> {f.strengths}
+                      {f.areas_to_improve ? ` · ${f.areas_to_improve}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="border-t pt-4" style={{ borderColor: BORDER }}>
+          <ShiftMatchFeedbackForm shiftId={shift.id} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Compact coordinator-side match feedback: 1-5 rating, would-repeat, and an
+ * optional note on how the participant responded. Independent of the
+ * worker's own reflection (worker.py's /shifts/{id}/match-feedback) - either
+ * side can record first. */
+function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const feedbackKey = ["shift-match-feedback", shiftId];
+  const { data: feedback, isLoading } = useOrgQuery(feedbackKey, { queryFn: () => getShiftMatchFeedback(shiftId) });
+
+  const [rating, setRating] = useState<number | null>(null);
+  const [wouldRepeat, setWouldRepeat] = useState<boolean | null>(null);
+  const [note, setNote] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  if (feedback && !hydrated) {
+    setRating(feedback.outcome_rating ?? null);
+    setWouldRepeat(feedback.would_repeat ?? null);
+    setNote(feedback.participant_response ?? "");
+    setHydrated(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => postShiftMatchFeedback(shiftId, { outcome_rating: rating, would_repeat: wouldRepeat, participant_response: note || null }),
+    onSuccess: () => {
+      toast({ title: "Saved" });
+      queryClient.invalidateQueries({ queryKey: feedbackKey });
+    },
+    onError: (err) => toast({ title: "Could not save", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>How did this pairing go?</p>
+      <div className="mt-2 flex items-center gap-3">
+        <div className="flex items-center gap-0.5">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setRating(n)}
+              aria-label={`${n} star${n === 1 ? "" : "s"}`}
+              className="p-0.5"
+            >
+              <Star size={16} fill={rating != null && n <= rating ? PLUM : "none"} style={{ color: PLUM }} />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWouldRepeat(true)}
+            className="rounded-lg px-2 py-1 text-[11px] font-bold"
+            style={{ background: wouldRepeat === true ? "var(--cc-status-success-bg)" : "transparent", color: wouldRepeat === true ? "var(--cc-status-success)" : MUTED }}
+          >
+            Would repeat
+          </button>
+          <button
+            type="button"
+            onClick={() => setWouldRepeat(false)}
+            className="rounded-lg px-2 py-1 text-[11px] font-bold"
+            style={{ background: wouldRepeat === false ? "var(--cc-status-danger-bg)" : "transparent", color: wouldRepeat === false ? "var(--cc-status-danger)" : MUTED }}
+          >
+            Wouldn't repeat
+          </button>
+        </div>
+      </div>
+      <textarea
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="How did the participant respond? (optional)"
+        rows={2}
+        className="mt-2 w-full resize-none rounded-lg border p-2 text-xs"
+        style={{ borderColor: BORDER, background: SURFACE }}
+      />
+      {feedback?.worker_feedback && (
+        <p className="mt-2 text-xs italic" style={{ color: MUTED }}>Worker's note: "{feedback.worker_feedback}"</p>
+      )}
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          disabled={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
+          style={{ background: PLUM }}
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** practitioner_allocations (the formal roster) and actual completed shifts
+ * are two independent facts - a worker can genuinely have worked with a
+ * participant many times without ever being formally "assigned" to them
+ * (e.g. one-off cover, pre-assignment-rollout history). Showing only the
+ * formal list made this tab look broken/empty for a worker who clearly has
+ * real participant relationships - the "worked with" section below is
+ * derived straight from real shift history so that history is never hidden. */
+function ParticipantsTab({ worker }: { worker: WorkerStats }) {
+  const assignmentsQuery = useOrgQuery(["worker-assignments", worker.id], {
+    queryFn: () => getWorkerAssignments(worker.id),
+  });
+  const assignments = assignmentsQuery.data ?? [];
+
+  const historyQuery = useOrgQuery(["worker-shift-history", worker.id], {
+    queryFn: () => getWorkerShiftHistory(worker.id),
+  });
+  const shifts = historyQuery.data?.shifts ?? [];
+
+  const workedWith = useMemo(() => {
+    const assignedIds = new Set(assignments.map((a) => a.patient_id));
+    const byParticipant = new Map<string, { id: string; name: string; count: number; lastShift: string }>();
+    for (const s of shifts) {
+      if (!s.participant_id || assignedIds.has(s.participant_id)) continue;
+      const shiftDate = s.scheduled_start ?? "";
+      const existing = byParticipant.get(s.participant_id);
+      if (existing) {
+        existing.count += 1;
+        if (shiftDate > existing.lastShift) existing.lastShift = shiftDate;
+      } else {
+        byParticipant.set(s.participant_id, {
+          id: s.participant_id,
+          name: s.participant_name || "Participant",
+          count: 1,
+          lastShift: shiftDate,
+        });
+      }
+    }
+    return Array.from(byParticipant.values()).sort((a, b) => (b.lastShift || "").localeCompare(a.lastShift || ""));
+  }, [shifts, assignments]);
+
+  const isLoading = assignmentsQuery.isLoading || historyQuery.isLoading;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+          <p className="text-sm font-black" style={{ color: TEXT }}>Assigned participants</p>
+          <span className="text-xs font-bold" style={{ color: MUTED }}>{assignments.length}</span>
+        </div>
+        {assignmentsQuery.isLoading ? (
+          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>Loading…</p>
+        ) : assignments.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>Not currently assigned to any participant.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {assignments.map((a) => (
+              <a
+                key={a.id}
+                href={`/patients?id=${encodeURIComponent(a.patient_id)}`}
+                className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{a.participant?.full_name || "Participant"}</p>
+                  {a.participant?.ndis_number && (
+                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>NDIS {a.participant.ndis_number}</p>
+                  )}
+                </div>
+                <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black capitalize" style={{ background: SOFT, color: MUTED }}>
+                  {a.allocated_role.replace(/_/g, " ")}
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!isLoading && workedWith.length > 0 && (
+        <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-black" style={{ color: TEXT }}>Also worked with</p>
+              <span className="text-xs font-bold" style={{ color: MUTED }}>{workedWith.length}</span>
+            </div>
+            <p className="mt-0.5 text-xs" style={{ color: MUTED }}>From completed shifts, not a standing assignment.</p>
+          </div>
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {workedWith.map((p) => (
+              <a
+                key={p.id}
+                href={`/patients?id=${encodeURIComponent(p.id)}`}
+                className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+              >
+                <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{p.name}</p>
+                <span className="shrink-0 text-xs" style={{ color: MUTED }}>
+                  {p.count} shift{p.count !== 1 ? "s" : ""}
+                  {p.lastShift ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}` : ""}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

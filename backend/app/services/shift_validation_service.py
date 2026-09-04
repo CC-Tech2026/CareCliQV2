@@ -6,9 +6,17 @@ from typing import Any
 
 
 def _has_strong_evidence(task: dict[str, Any]) -> bool:
-    if task.get("photo_evidence") or (task.get("photo_thumbnails") or []):
+    # has_photo/has_voice are what the mobile client actually sends (see
+    # ShiftTask in artifacts/mobile/lib/worker-api.ts) - photo_evidence/
+    # voice_evidence/etc are a richer legacy shape this function used to
+    # check exclusively, which meant every task documented via the mobile
+    # per-task composer looked like it had zero evidence here even when
+    # _mandatory_task_satisfied() (the gate for marking a task complete,
+    # just below in shift_service.py) already recognized has_photo/has_voice
+    # as valid. Keep both shapes so older/richer evidence payloads still work.
+    if task.get("photo_evidence") or (task.get("photo_thumbnails") or []) or task.get("has_photo"):
         return True
-    if task.get("voice_evidence") or task.get("voice_duration_seconds"):
+    if task.get("voice_evidence") or task.get("voice_duration_seconds") or task.get("has_voice"):
         return True
     return False
 
@@ -38,8 +46,11 @@ def compute_shift_validation(tasks: list[dict[str, Any]]) -> dict[str, Any]:
     without_evidence = [t for t in completed if not _has_task_evidence(t)]
     not_completed = [t for t in active if not t.get("completed")]
 
-    strong_count = sum(1 for t in active if _has_strong_evidence(t))
-    compliance_score = round((strong_count / total) * 100) if total else 100
+    # Same fix as mandatory_with_evidence below - a qualifying note counts,
+    # not just photo/voice. Only used as the ticket_score fallback for shifts
+    # with no mandatory tasks at all.
+    evidence_count = sum(1 for t in active if _has_task_evidence(t))
+    compliance_score = round((evidence_count / total) * 100) if total else 100
 
     flagged: list[dict[str, Any]] = []
     for task in not_completed:
@@ -59,8 +70,16 @@ def compute_shift_validation(tasks: list[dict[str, Any]]) -> dict[str, Any]:
 
     mandatory = [t for t in active if _is_mandatory(t)]
     mandatory_completed = [t for t in mandatory if t.get("completed")]
-    mandatory_with_evidence = [t for t in mandatory_completed if _has_strong_evidence(t)]
-    mandatory_without_evidence = [t for t in mandatory_completed if not _has_strong_evidence(t)]
+    # _has_task_evidence (strong evidence OR a qualifying ≥20-char note), not
+    # _has_strong_evidence alone - this is the same bar _mandatory_task_
+    # satisfied() in shift_service.py already uses to let a worker mark a
+    # mandatory task complete in the first place. Scoring it against a
+    # stricter "photo/voice only" bar here meant a worker could properly
+    # document every mandatory task with a real note (exactly what the app
+    # lets them do, and what its own MIN_EVIDENCE_NOTE_CHARS threshold is
+    # built around) and still land on a 0% compliance score at the end.
+    mandatory_with_evidence = [t for t in mandatory_completed if _has_task_evidence(t)]
+    mandatory_without_evidence = [t for t in mandatory_completed if not _has_task_evidence(t)]
 
     if mandatory:
         ticket_score = round((len(mandatory_with_evidence) / len(mandatory)) * 100)
@@ -110,9 +129,16 @@ def build_compliance_explanation(validation: dict[str, Any]) -> str:
         return "Compliance score is not available for this shift."
 
     mandatory_total = int(validation.get("mandatory_total") or 0)
+    mandatory_completed = int(validation.get("mandatory_completed") or 0)
     with_evidence = int(validation.get("mandatory_with_evidence") or 0)
     without_evidence = int(validation.get("mandatory_without_evidence") or 0)
-    not_completed = int(validation.get("tasks_not_completed") or 0)
+    # Mandatory tasks specifically left incomplete - NOT tasks_not_completed,
+    # which counts every incomplete task including optional ones. Using the
+    # all-tasks count here previously mislabeled optional tasks as "mandatory
+    # task(s) not completed", producing contradictory text like "6 of 6
+    # mandatory tasks completed... 4 mandatory tasks not completed" in the
+    # same sentence whenever only optional tasks were left undone.
+    mandatory_not_completed = max(0, mandatory_total - mandatory_completed)
 
     if mandatory_total:
         parts = [
@@ -123,9 +149,9 @@ def build_compliance_explanation(validation: dict[str, Any]) -> str:
                 f"{without_evidence} task{'s' if without_evidence != 1 else ''} "
                 f"completed without evidence (-6pts each)."
             )
-        if not_completed:
+        if mandatory_not_completed:
             parts.append(
-                f"{not_completed} mandatory task{'s' if not_completed != 1 else ''} not completed."
+                f"{mandatory_not_completed} mandatory task{'s' if mandatory_not_completed != 1 else ''} not completed."
             )
         return " ".join(parts)
 

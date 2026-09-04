@@ -94,38 +94,40 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  /* These now resolve straight to --cc-* tokens (see :root/.dark above),
+     not HSL triples, so they're read directly rather than wrapped in hsl(). */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-card-border: hsl(var(--card-border));
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-border: var(--card-border);
 
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-popover-border: hsl(var(--popover-border));
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover-border: var(--popover-border);
 
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
   --color-primary-border: var(--primary-border);
 
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary-border: var(--secondary-border);
 
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-muted-border: var(--muted-border);
 
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-accent-border: var(--accent-border);
 
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-border: var(--destructive-border);
 
   --color-chart-1: hsl(var(--chart-1));
@@ -216,12 +218,12 @@
   --cc-muted:      #6A6A77;   /* Charcoal Navy @ 65% over white */
   --cc-border:     #E0DDD0;   /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md) */
   /* ── Surfaces ── */
-  --cc-bg:         #FCFBF0;   /* Warm Off-White — page canvas */
-  --cc-surface:    #FFFFFF;   /* Pure white — cards/panels lift off the warm off-white page canvas via colour + shadow */
-  --cc-soft:       #F4EDE6;   /* warm off-white tint — hover/secondary bg */
+  --cc-bg:         #F5F5F5;   /* Light Grey — page canvas (was warm cream #FCFBF0) */
+  --cc-surface:    #FFFFFF;   /* Pure white — cards/panels lift off the grey page canvas via colour + shadow */
+  --cc-soft:       #ECECEC;   /* Light Grey tint — hover/secondary/muted bg (was warm off-white #F4EDE6) */
   --cc-ring-track: #FCE5EC;
   /* ── Nav state ── */
-  --cc-active-bg:  #FCFBF0;
+  --cc-active-bg:  #E5E5E5;   /* Light Grey — was warm cream #FCFBF0 */
   /* ── Sidebar ── */
   --cc-sidebar-bg: #1a1a18;   /* Deep dark navy — matches reference image */
   /* ── Alert pill ── */
@@ -295,7 +297,7 @@
   /* Auth pages (login / signup) */
   --auth-shell-bg: #FFFFFF;
   --auth-form-bg: #FFFFFF;
-  --auth-marketing-bg: #FDF6EE;
+  --auth-marketing-bg: #F5F5F5;   /* Light Grey — was warm off-white #FDF6EE */
   --auth-marketing-glow: none;
   /* Faint node-and-line motif tiled across the auth marketing panels — texture, not decoration */
   --auth-motif-svg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22220%22%20height%3D%22220%22%3E%0A%20%20%3Ccircle%20cx%3D%2226%22%20cy%3D%22150%22%20r%3D%222.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2250%22%20cy%3D%22172%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2226%22%20y1%3D%22150%22%20x2%3D%2250%22%20y2%3D%22172%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22158%22%20cy%3D%2234%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22130%22%20cy%3D%2218%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22158%22%20y1%3D%2234%22%20x2%3D%22130%22%20y2%3D%2218%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2296%22%20r%3D%222.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2296%22%20cy%3D%2264%22%20r%3D%221.8%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%2296%22%20y1%3D%2296%22%20x2%3D%2296%22%20y2%3D%2264%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22176%22%20cy%3D%22148%22%20r%3D%222%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22198%22%20cy%3D%22170%22%20r%3D%222.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Cline%20x1%3D%22176%22%20y1%3D%22148%22%20x2%3D%22198%22%20y2%3D%22170%22%20stroke%3D%22white%22%20stroke-width%3D%221.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2264%22%20cy%3D%2238%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2234%22%20cy%3D%22100%22%20r%3D%221.4%22%20fill%3D%22white%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%22196%22%20r%3D%221.6%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E%0A");
@@ -305,7 +307,7 @@
   --auth-marketing-body: #33334A;
   --auth-accent: #6E79C2;   /* headline emphasis text — Purple, distinct from Pink CTAs/links */
   --auth-input-border: #E8E8EA;
-  --auth-input-bg: #F4EDE6;
+  --auth-input-bg: #ECECEC;   /* Light Grey — was warm off-white #F4EDE6 */
   --auth-card-bg: rgba(255, 255, 255, 0.7);
   --auth-card-border: rgba(26, 26, 46, 0.10);
   --auth-stat-card-bg: rgba(26, 26, 46, 0.04);
@@ -656,22 +658,24 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Page surface — ivory, matches --cc-bg so modals/toasts/dropdowns (which read
-     this token directly) don't stand out white against the app's ivory canvas */
-  --background: 60 100% 97%;
-  --foreground: 240 15% 21%;   /* Dark Navy text (APPLAYOUT_REDESIGN_REFERENCE.md #2D2D3D) */
+  /* Page surface — same token AppLayout/HubLayout already read directly via
+     --cc-bg, so shadcn primitives (modals/toasts/dropdowns) stay identical
+     to the rest of the app instead of drifting from a second definition. */
+  --background: var(--cc-bg);
+  --foreground: var(--cc-text);
 
   /* Borders & inputs */
-  --border: 49 21% 85%;        /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md #E0DDD0) */
-  --input: 49 21% 85%;
-  --ring: 340 78% 59%;         /* CareCliQ Pink ring */
+  --border: var(--cc-border);
+  --input: var(--cc-border);
+  --ring: var(--cc-plum);
 
-  /* Cards — ivory, matching the page canvas; lift comes from shadow-sm, not colour */
-  --card: 60 100% 97%;
-  --card-foreground: 240 15% 21%;
-  --card-border: 49 21% 85%;
+  /* Cards — pure white, lifting off the grey page canvas via shadow-sm, not colour */
+  --card: var(--cc-surface);
+  --card-foreground: var(--cc-text);
+  --card-border: var(--cc-border);
 
-  /* ── Pink sidebar (#FA879F) ── */
+  /* ── Pink sidebar (#FA879F) — components/ui/sidebar.tsx has no consumers
+     anywhere in the app; left as its own values since nothing renders it. ── */
   --sidebar: 348 92% 75%;
   --sidebar-foreground: 240 73% 15%;       /* navy text on pink */
   --sidebar-border: 348 60% 65%;
@@ -682,29 +686,33 @@
   --sidebar-ring: 229 100% 66%;
 
   /* Popovers */
-  --popover: 60 100% 97%;
-  --popover-foreground: 240 15% 21%;
-  --popover-border: 49 21% 85%;
+  --popover: var(--cc-surface);
+  --popover-foreground: var(--cc-text);
+  --popover-border: var(--cc-border);
 
-  /* Primary — CareCliQ Pink #E8457A (dominant brand colour) */
-  --primary: 340 78% 59%;
-  --primary-foreground: 0 0% 100%;
+  /* Primary — CareCliQ Pink (dominant brand colour) */
+  --primary: var(--cc-plum);
+  --primary-foreground: #FFFFFF;
 
   /* Secondary — warm neutral tint */
-  --secondary: 32 25% 93%;
-  --secondary-foreground: 240 28% 20%;
+  --secondary: var(--cc-soft);
+  --secondary-foreground: var(--cc-text);
 
   /* Muted — Charcoal Navy tinted neutral */
-  --muted: 240 10% 93%;
-  --muted-foreground: 240 8% 44%;
+  --muted: var(--cc-soft);
+  --muted-foreground: var(--cc-muted);
 
   /* Accent — light CareCliQ Purple tint */
-  --accent: 262 40% 94%;
-  --accent-foreground: 262 60% 28%;
+  --accent: var(--cc-plum-soft);
+  --accent-foreground: var(--cc-plum);
 
-  /* Destructive — CareCliQ Purple #7C3AED (sparing accent) */
-  --destructive: 262 83% 58%;
-  --destructive-foreground: 0 0% 100%;
+  /* Destructive — CareCliQ Purple, the brand's destructive-ACTION colour
+     (delete buttons etc). Deliberately --cc-status-critical, not
+     --cc-status-danger — the latter is reserved for real safety/compliance
+     severity (see that token's own comment): "pink = brand/action, red =
+     danger, users must never confuse the two." */
+  --destructive: var(--cc-status-critical);
+  --destructive-foreground: #FFFFFF;
 
   /* Charts — brand palette */
   --chart-1: 340 78% 59%;  /* CareCliQ Pink   */
@@ -742,25 +750,24 @@
   --sidebar-accent-border: hsl(var(--sidebar-accent));
   --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  /* Fallback for older browsers */
-  --primary-border: hsl(var(--primary));
-  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  /* --primary/--secondary/--muted/--accent/--destructive now hold --cc-*
+     values directly (hex), not HSL triples, so these read the source colour
+     via relative-colour syntax (hsl(from <any-color> ...)) instead of
+     double-wrapping in hsl(). Flat fallback for browsers without support. */
+  --primary-border: var(--primary);
+  --primary-border: hsl(from var(--primary) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  /* Fallback for older browsers */
-  --secondary-border: hsl(var(--secondary));
-  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: var(--secondary);
+  --secondary-border: hsl(from var(--secondary) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  /* Fallback for older browsers */
-  --muted-border: hsl(var(--muted));
-  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: var(--muted);
+  --muted-border: hsl(from var(--muted) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  /* Fallback for older browsers */
-  --accent-border: hsl(var(--accent));
-  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: var(--accent);
+  --accent-border: hsl(from var(--accent) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  /* Fallback for older browsers */
-  --destructive-border: hsl(var(--destructive));
-  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: var(--destructive);
+  --destructive-border: hsl(from var(--destructive) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
 .dark {
@@ -772,15 +779,15 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 240 30% 8%;
-  --foreground: 0 0% 95%;
-  --border: 240 20% 20%;
-  --input: 240 20% 20%;
-  --ring: 329 86% 70%;
+  --background: var(--cc-bg);
+  --foreground: var(--cc-text);
+  --border: var(--cc-border);
+  --input: var(--cc-border);
+  --ring: var(--cc-plum);
 
-  --card: 240 25% 13%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 240 20% 20%;
+  --card: var(--cc-surface);
+  --card-foreground: var(--cc-text);
+  --card-border: var(--cc-border);
 
   --sidebar: 229 60% 7%;
   --sidebar-foreground: 0 0% 94%;
@@ -791,24 +798,24 @@
   --sidebar-accent-foreground: 0 0% 96%;
   --sidebar-ring: 229 81% 65%;
 
-  --popover: 240 25% 13%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 240 20% 20%;
+  --popover: var(--cc-surface);
+  --popover-foreground: var(--cc-text);
+  --popover-border: var(--cc-border);
 
-  --primary: 329 86% 70%;
-  --primary-foreground: 0 0% 100%;
+  --primary: var(--cc-plum);
+  --primary-foreground: #FFFFFF;
 
-  --secondary: 240 20% 20%;
-  --secondary-foreground: 0 0% 92%;
+  --secondary: var(--cc-soft);
+  --secondary-foreground: var(--cc-text);
 
-  --muted: 240 18% 18%;
-  --muted-foreground: 240 12% 62%;
+  --muted: var(--cc-soft);
+  --muted-foreground: var(--cc-muted);
 
-  --accent: 255 40% 24%;
-  --accent-foreground: 255 75% 85%;
+  --accent: var(--cc-plum-soft);
+  --accent-foreground: var(--cc-plum);
 
-  --destructive: 255 92% 76%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: var(--cc-status-critical);
+  --destructive-foreground: #FFFFFF;
 
   --chart-1: 329 86% 70%;
   --chart-2: 255 92% 76%;

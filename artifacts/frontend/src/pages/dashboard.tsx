@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
@@ -148,7 +148,7 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
-          <p className="rounded-lg bg-[#F4EDE6] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg bg-[#ECECEC] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             {translate("dashboard.noClientsToday")}
           </p>
         )}
@@ -356,7 +356,7 @@ function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
           <div className="divide-y" style={{ borderColor: BORDER }}>
             {data.workers_needing_attention.slice(0, 7).map((worker) => (
               <Link key={worker.id} href="/team">
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#ECECEC] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div
                     className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-black text-white"
                     style={{ background: "var(--cc-text)" }}
@@ -408,7 +408,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
             const scoreColor = cs == null ? MUTED      : cs >= 85 ? "#059669"                : cs >= 60 ? "#D97706"                  : "#DC2626";
             return (
               <Link key={s.id} href="/session-review">
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#ECECEC] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
                     {initials(s.participant_name)}
                   </div>
@@ -496,7 +496,7 @@ function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, un
             const open        = status === "open" || status === "pending";
             return (
               <Link key={id || idx} href={id ? `/incidents/${id}` : "/incidents"}>
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#ECECEC] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.10)" }}>
                     <AlertTriangle size={13} style={{ color: DS.STATUS.warning }} />
                   </div>
@@ -589,7 +589,7 @@ function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
             const alertColor = expired ? DS.STATUS.critical       : DS.STATUS.warning;
             return (
               <Link key={alert.credential_id ?? idx} href={alert.user_id ? `/team?workerId=${alert.user_id}&tab=credentials` : "/team"}>
-                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F4EDE6] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#ECECEC] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: alertBg }}>
                     <BadgeCheck size={13} style={{ color: alertColor }} />
                   </div>
@@ -711,7 +711,7 @@ function TrainingTabContent({
             return (
               <Link key={alert.credential_id ?? idx} href="/toolkit">
                 <div
-                  className="flex items-center gap-3 p-3 rounded-xl border transition cursor-pointer hover:bg-[#F4EDE6]"
+                  className="flex items-center gap-3 p-3 rounded-xl border transition cursor-pointer hover:bg-[#ECECEC]"
                   style={{ borderColor: BORDER }}
                 >
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.08)" }}>
@@ -799,7 +799,7 @@ function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
               style={{
                 borderBottomColor: active ? PLUM : "transparent",
                 color: active ? PLUM : alert ? fg : MUTED,
-                background: active ? "#F4EDE6" : "transparent",
+                background: active ? "#ECECEC" : "transparent",
               }}
             >
               <Icon size={13} strokeWidth={2.5} />
@@ -1200,6 +1200,19 @@ export default function Dashboard() {
     if (coordinatorQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
     if (coordinatorQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(coordinatorQuery.error as Error).message}</div>;
     return <CoordinatorDashboardView data={coordinatorQuery.data as CoordinatorDashboard} />;
+  }
+
+  // Super admins (CareCliQ vendor-side) have no org-scoped home at all —
+  // send them straight to the provider list.
+  if (user?.role === "super_admin") {
+    return <Redirect to="/admin/dashboard" />;
+  }
+
+  // Managing directors have their own home at /hub — this generic fallback
+  // view below is not tailored to them, so send them to the real one instead
+  // of showing a page that looks like a second, unrelated "home".
+  if (user?.role === "managing_director") {
+    return <Redirect to="/hub" />;
   }
 
   return <AlliedFallbackDashboard />;

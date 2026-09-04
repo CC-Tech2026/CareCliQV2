@@ -15,12 +15,17 @@ from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
-RANDOM_CHECKIN_MIN_SHIFT_SECS = 6 * 3600
+# Must stay equal to long_shift_service.LONG_SHIFT_THRESHOLD_SECS - this is what makes
+# uses_random_checkins() cover the entire long-shift range instead of just 6h+.
+RANDOM_CHECKIN_MIN_SHIFT_SECS = 4 * 3600
 RANDOM_CHECKIN_RESPONSE_SECS = 5 * 60
 RANDOM_CHECKIN_MIN_GAP_SECS = 60 * 60
 RANDOM_CHECKIN_MAX_GAP_SECS = 120 * 60
+RANDOM_CHECKIN_ABS_MIN_GAP_SECS = 15 * 60
 RANDOM_CHECKIN_START_BUFFER_SECS = 90 * 60
 RANDOM_CHECKIN_END_BUFFER_SECS = 30 * 60
+RANDOM_CHECKIN_BAND_SECS = 6 * 3600
+RANDOM_CHECKIN_COUNT_OPTIONS_SHORT_BAND = (1, 2)
 RANDOM_CHECKIN_COUNT_OPTIONS = (2, 3)
 
 COMPLIANCE_CHECKIN_TITLE = "Compliance Check-in Required"
@@ -72,6 +77,15 @@ def uses_random_checkins(duration_secs: int) -> bool:
     return duration_secs >= RANDOM_CHECKIN_MIN_SHIFT_SECS
 
 
+def _pick_checkin_count(duration_secs: int) -> int:
+    options = (
+        RANDOM_CHECKIN_COUNT_OPTIONS
+        if duration_secs >= RANDOM_CHECKIN_BAND_SECS
+        else RANDOM_CHECKIN_COUNT_OPTIONS_SHORT_BAND
+    )
+    return secrets.choice(options)
+
+
 def _shift_end_estimate(shift: dict, clock_in: datetime) -> datetime:
     scheduled_end = _parse_dt(shift.get("scheduled_end"))
     if scheduled_end and scheduled_end > clock_in:
@@ -103,12 +117,22 @@ def generate_random_checkin_times(
         usable_end = shift_end - timedelta(minutes=15)
         usable_start = clock_in + timedelta(minutes=30)
     if usable_end <= usable_start:
+        # No usable window at all - a single check-in is all that fits without
+        # violating the minimum gap (duplicating the midpoint for count > 1 would
+        # put two check-ins at the same instant).
         midpoint = clock_in + (shift_end - clock_in) / 2
-        return [midpoint] * count
+        return [midpoint]
 
     span_secs = (usable_end - usable_start).total_seconds()
     min_gap = float(RANDOM_CHECKIN_MIN_GAP_SECS)
     max_gap = float(min(RANDOM_CHECKIN_MAX_GAP_SECS, span_secs))
+
+    # Never pack check-ins closer than the absolute floor, even in a pathologically
+    # short window - reduce how many we actually place rather than violate it. The
+    # -1 accounts for the tightest downstream fallback, which spaces `count` points
+    # using `count + 1` intervals across the window.
+    max_count_for_gap = max(1, int(span_secs // RANDOM_CHECKIN_ABS_MIN_GAP_SECS) - 1)
+    count = min(count, max_count_for_gap)
 
     if span_secs < min_gap * max(0, count - 1):
         step = span_secs / count
@@ -177,7 +201,7 @@ def ensure_random_checkin_schedule(
     shift: dict,
     clock_in: datetime,
 ) -> list[dict[str, Any]]:
-    """Create 2–3 random check-in times for a 6+ hour shift if not already scheduled."""
+    """Create random check-in times (1-3, band-dependent) for a 4+ hour shift if not already scheduled."""
     if not _schema_available():
         return []
 
@@ -190,7 +214,7 @@ def ensure_random_checkin_schedule(
     if duration_secs < RANDOM_CHECKIN_MIN_SHIFT_SECS:
         return []
 
-    count = secrets.choice(RANDOM_CHECKIN_COUNT_OPTIONS)
+    count = _pick_checkin_count(duration_secs)
     times = generate_random_checkin_times(clock_in, shift_end, count)
     rows: list[dict[str, Any]] = []
     now = _now().isoformat()
@@ -228,7 +252,12 @@ def required_random_checkins(session_id: str, duration_secs: int) -> int:
     scheduled = _list_scheduled_checkins(session_id)
     if scheduled:
         return len(scheduled)
-    return min(RANDOM_CHECKIN_COUNT_OPTIONS)
+    options = (
+        RANDOM_CHECKIN_COUNT_OPTIONS
+        if duration_secs >= RANDOM_CHECKIN_BAND_SECS
+        else RANDOM_CHECKIN_COUNT_OPTIONS_SHORT_BAND
+    )
+    return min(options)
 
 
 def evaluate_random_checkin_window(
@@ -240,9 +269,17 @@ def evaluate_random_checkin_window(
     duration_secs: int,
     checkin_count: int,
 ) -> dict[str, Any]:
-    """Eligibility for random compliance check-ins (6+ hour shifts)."""
+    """Eligibility for random compliance check-ins (4+ hour shifts)."""
     applicable = uses_random_checkins(duration_secs)
-    required = len(scheduled_checkins) if scheduled_checkins else min(RANDOM_CHECKIN_COUNT_OPTIONS)
+    if scheduled_checkins:
+        required = len(scheduled_checkins)
+    else:
+        options = (
+            RANDOM_CHECKIN_COUNT_OPTIONS
+            if duration_secs >= RANDOM_CHECKIN_BAND_SECS
+            else RANDOM_CHECKIN_COUNT_OPTIONS_SHORT_BAND
+        )
+        required = min(options)
     completed = sum(1 for row in scheduled_checkins if row.get("status") == "completed")
 
     upcoming_checkins: list[dict[str, Any]] = []
@@ -260,6 +297,17 @@ def evaluate_random_checkin_window(
             "status": status,
         })
 
+    missed_needing_reason: list[dict[str, Any]] = []
+    for row in scheduled_checkins:
+        if str(row.get("status") or "") != "missed" or row.get("missed_reason"):
+            continue
+        scheduled_at = _parse_dt(row.get("scheduled_at"))
+        missed_needing_reason.append({
+            "id": str(row.get("id") or ""),
+            "sequence_number": int(row.get("sequence_number") or 0),
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+        })
+
     base: dict[str, Any] = {
         "applicable": applicable,
         "can_submit_checkin": False,
@@ -273,6 +321,7 @@ def evaluate_random_checkin_window(
         "checkin_response_window_secs": RANDOM_CHECKIN_RESPONSE_SECS,
         "uses_random_schedule": True,
         "upcoming_checkins": upcoming_checkins,
+        "missed_checkins_needing_reason": missed_needing_reason,
     }
     if not applicable:
         return base
@@ -514,6 +563,57 @@ def complete_scheduled_checkin(
     except Exception as exc:
         if not _is_missing_schema_error(exc):
             logger.debug("complete_scheduled_checkin failed: %s", exc)
+
+
+def list_unexplained_missed_checkins(session_id: str) -> list[dict[str, Any]]:
+    """Missed check-ins the worker hasn't given a reason for yet."""
+    return [
+        row for row in _list_scheduled_checkins(session_id)
+        if row.get("status") == "missed" and not row.get("missed_reason")
+    ]
+
+
+def submit_missed_checkin_reason(
+    *,
+    scheduled_checkin_id: str,
+    worker_id: str,
+    reason: str,
+) -> bool:
+    """Record why a worker couldn't respond to a missed check-in, required before shift submission."""
+    if not _schema_available() or not _is_valid_uuid(scheduled_checkin_id):
+        return False
+    reason_text = (reason or "").strip()
+    if len(reason_text) < 3:
+        raise ValueError("Please provide a short reason.")
+
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shift_scheduled_checkins")
+            .select("id, worker_id, status")
+            .eq("id", scheduled_checkin_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows or str(rows[0].get("worker_id")) != str(worker_id):
+            return False
+        if rows[0].get("status") != "missed":
+            raise ValueError("This check-in is not marked as missed.")
+
+        now = _now().isoformat()
+        get_supabase_admin().table("shift_scheduled_checkins").update({
+            "missed_reason": reason_text[:500],
+            "missed_reason_submitted_at": now,
+            "updated_at": now,
+        }).eq("id", scheduled_checkin_id).execute()
+        return True
+    except ValueError:
+        raise
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return False
+        raise
 
 
 async def run_random_checkin_pass() -> int:

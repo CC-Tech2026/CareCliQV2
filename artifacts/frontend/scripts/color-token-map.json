@@ -1,0 +1,46 @@
+{
+  "_readme": [
+    "Phase 2 codemod input for the Color Consistency Directive migration.",
+    "Scope: exact-match, case-insensitive hex swaps only — every entry here is a hex value that is IDENTICAL to a light-mode --cc-* token in index.css, so swapping it for var(--cc-*) is lossless with zero ambiguity.",
+    "NOT included: Tailwind palette utility classes (text-blue-600, bg-emerald-500/10, etc). Those don't have a single correct --cc-* target without knowing the author's intent per call site (status? brand accent? arbitrary?) — that's Phase 3 manual triage, not a safe mechanical swap.",
+    "NOT included: near-match hex values that are close-but-not-identical to a --cc-* token (e.g. #E8457B vs #E8457A) — those are almost always someone's hand-typed approximation and deserve a human glance, not a silent swap to a slightly different shade.",
+    "Dark-mode note: --cc-* tokens have separate values under .dark in index.css, resolved automatically at paint time via the CSS custom property. Swapping a literal light-mode hex for var(--cc-plum) makes that value dark-mode-aware for free — this IS the actual bug being fixed (hardcoded hex never adapted to dark mode; the var reference now will).",
+    "Recommended codemod behavior: for each hexToVar entry, replace exact string matches of the hex (case-insensitive, both #rrggbb forms) found inside style={{ color: '...' }} / style={{ background: '...' }} object literals and inside Tailwind arbitrary-value classes like text-[#E8457A] / bg-[#E8457A] with the corresponding cssVar. Do not touch hex values inside comments, non-color contexts (e.g. a hex-looking string in unrelated data), or index.css itself (already the source of truth)."
+  ],
+  "hexToVar": {
+    "#E8457A": { "cssVar": "var(--cc-plum)", "tailwindClass": "cc-plum", "name": "CareCliQ Pink — primary actions, active states" },
+    "#6E79C2": { "cssVar": "var(--cc-coral)", "tailwindClass": "cc-coral", "name": "CareCliQ Purple — incidents, destructive, alerts" },
+    "#166534": { "cssVar": "var(--cc-green)", "tailwindClass": null, "name": "Forest green — compliance success" },
+    "#B45309": { "cssVar": "var(--cc-amber)", "tailwindClass": null, "name": "Amber-700 — warnings, shift-related actions" },
+    "#FFFBEB": { "cssVar": "var(--cc-amber-tint)", "tailwindClass": null, "name": "Amber tint background (also matches --cc-status-warning-bg — check surrounding context to pick the right one)" },
+    "#0369A1": { "cssVar": "var(--cc-sky)", "tailwindClass": null, "name": "Sky-700 — informational states" },
+    "#F0F9FF": { "cssVar": "var(--cc-sky-tint)", "tailwindClass": null, "name": "Sky tint background (also matches --cc-status-info-bg — check context)" },
+    "#2D2D3D": { "cssVar": "var(--cc-text)", "tailwindClass": "cc-text", "name": "Primary text colour" },
+    "#6A6A77": { "cssVar": "var(--cc-muted)", "tailwindClass": "cc-muted", "name": "Muted/secondary text colour" },
+    "#E0DDD0": { "cssVar": "var(--cc-border)", "tailwindClass": "cc-border", "name": "Default border colour" },
+    "#FCFBF0": { "cssVar": "var(--cc-bg)", "tailwindClass": "cc-bg", "name": "Page canvas background" },
+    "#FFFFFF": { "cssVar": "var(--cc-surface)", "tailwindClass": "cc-surface", "name": "Card/panel surface — CAUTION: #FFFFFF is also used deliberately as literal white text-on-color in many places (e.g. white text on a plum button). Only swap when it's clearly a card/page background, not a foreground/text colour." },
+    "#F4EDE6": { "cssVar": "var(--cc-soft)", "tailwindClass": "cc-soft", "name": "Warm hover/secondary background tint" },
+    "#FCE5EC": { "cssVar": "var(--cc-ring-track)", "tailwindClass": null, "name": "Focus ring track" },
+    "#1a1a18": { "cssVar": "var(--cc-sidebar-bg)", "tailwindClass": null, "name": "Deep dark navy sidebar background" },
+    "#F5EFFE": { "cssVar": "var(--cc-alert-bg)", "tailwindClass": null, "name": "Alert pill background (also matches --cc-status-critical-bg — check context)" },
+    "#10B981": { "cssVar": "var(--cc-status-success)", "tailwindClass": null, "name": "Status: success" },
+    "#ECFDF5": { "cssVar": "var(--cc-status-success-bg)", "tailwindClass": null, "name": "Status: success background tint" },
+    "#F59E0B": { "cssVar": "var(--cc-status-warning)", "tailwindClass": null, "name": "Status: warning" },
+    "#7C3AED": { "cssVar": "var(--cc-status-critical)", "tailwindClass": null, "name": "Status/destructive-action: brand purple (NOT the same concept as danger/red below — see index.css comment: 'pink = brand/action, red = danger, users must never confuse the two')" },
+    "#3B82F6": { "cssVar": "var(--cc-status-info)", "tailwindClass": null, "name": "Status: info" },
+    "#EF4444": { "cssVar": "var(--cc-status-danger)", "tailwindClass": null, "name": "Status: real danger/safety-critical severity — deliberately distinct from --cc-status-critical (see above)" },
+    "#FEF2F2": { "cssVar": "var(--cc-status-danger-bg)", "tailwindClass": null, "name": "Status: danger background tint" }
+  },
+  "tailwindPaletteClassesNotMigrated": {
+    "_note": "These showed up hundreds of times in the audit (text-blue-600, bg-emerald-500/10, text-rose-500, bg-slate-400, etc). Each one needs a human decision about which --cc-* concept it's actually standing in for at that call site — status color? brand accent? pure decoration? There is no single correct global answer, so Phase 2 should skip these entirely and leave them for Phase 3's manual triage of the worst-offending files.",
+    "commonIntentMapping (for a human doing Phase 3 triage, not a mechanical rule)": {
+      "blue-*": "usually meant 'informational' → var(--cc-status-info) / var(--cc-status-info-bg)",
+      "emerald-*/green-*": "usually meant 'success' → var(--cc-status-success) / var(--cc-status-success-bg)",
+      "amber-*/yellow-*": "usually meant 'warning' → var(--cc-status-warning) / var(--cc-status-warning-bg)",
+      "red-*/rose-*": "check intent carefully: real danger/safety severity → var(--cc-status-danger); a brand-styled destructive ACTION (delete button etc) → var(--cc-status-critical), which is purple, not red, in this design system",
+      "slate-*/gray-*": "usually meant a neutral → var(--cc-muted) (text) or var(--cc-border) (borders/dividers)",
+      "sky-*/indigo-*/violet-*/purple-*": "check whether it's standing in for the brand accent → var(--cc-coral), or informational → var(--cc-status-info)"
+    }
+  }
+}

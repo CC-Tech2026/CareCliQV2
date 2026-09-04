@@ -9,8 +9,8 @@
 export const Brand = {
   /** CareCliQ Purple — primary buttons, tabs, links, focus, splash, selected */
   purple: "#4B3F91",
-  /** Warm Ivory — app background (never use white for screen bg) */
-  ivory: "#FFFEF0",
+  /** Light Grey — app background (never use white for screen bg) */
+  ivory: "#F2F3F5",
   /** Card White — cards, sheets, inputs, tab bar */
   white: "#FFFFFF",
   /** Dark Navy — body/heading ink + home hero card */

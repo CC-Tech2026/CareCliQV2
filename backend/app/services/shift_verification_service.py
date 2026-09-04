@@ -353,6 +353,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 supabase.table("users")
                 .select("id, full_name")
                 .in_("id", worker_ids)
+                .eq("organization_id", org_id)
                 .execute()
             )
             worker_names = {
