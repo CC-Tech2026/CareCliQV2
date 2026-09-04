@@ -83,23 +83,23 @@ function StepRail({ current }: { current: number }) {
   const pct = Math.round((current / STEP_LABELS.length) * 100);
   return (
     <div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-5">
         <div
-          className="relative h-16 w-16 shrink-0 rounded-full grid place-items-center"
+          className="relative h-24 w-24 shrink-0 rounded-full grid place-items-center"
           style={{ background: `conic-gradient(${SIGNATURE} ${pct}%, ${RAIL_LINE} 0)` }}
         >
           <div
-            className="h-[50px] w-[50px] rounded-full grid place-items-center text-[13px] font-black"
+            className="h-[76px] w-[76px] rounded-full grid place-items-center text-[18px] font-black"
             style={{ background: "var(--cc-sidebar-bg)", color: RAIL_TEXT }}
           >
             {current}/{STEP_LABELS.length}
           </div>
         </div>
         <div>
-          <p className="text-[17px] font-black" style={{ color: RAIL_TEXT }}>
+          <p className="text-[26px] leading-tight font-black" style={{ color: RAIL_TEXT }}>
             Getting started
           </p>
-          <p className="text-[13px] font-medium" style={{ color: RAIL_MUTED }}>
+          <p className="text-[15px] font-medium" style={{ color: RAIL_MUTED }}>
             with CareCliQ
           </p>
         </div>
@@ -158,10 +158,10 @@ export function GetStartedShell({
         className="hidden sm:flex w-[420px] shrink-0 flex-col p-12"
         style={{ background: "var(--cc-sidebar-bg)" }}
       >
-        <CareCliQLogo size={40} />
         <div className="flex-1 flex items-center">
           <StepRail current={step} />
         </div>
+
         <div className="pt-8" style={{ borderTop: `1px solid ${RAIL_LINE}` }}>
           <p className="text-[13px] leading-relaxed" style={{ color: RAIL_MUTED }}>
             &ldquo;Documentation software built for NDIS providers, around what actually
@@ -171,13 +171,23 @@ export function GetStartedShell({
       </div>
 
       <div className="flex-1 flex flex-col" style={{ background: "var(--cc-surface)" }}>
+        {/* Logo lives here now - the right-hand panel's header, not the dark
+            sidebar - on the left of this bar with its "Powered by" caption,
+            with the theme toggle at the opposite end so the two aren't
+            crowding each other. */}
         <div
-          className="flex items-center justify-between sm:justify-end px-6 sm:px-14 py-5"
+          className="flex items-center justify-between px-6 sm:px-14 py-6 gap-4"
           style={{ borderBottom: `1px solid ${RULE}` }}
         >
           <span className="sm:hidden">
             <CareCliQLogo size={34} />
           </span>
+          <div className="hidden sm:flex items-center gap-3">
+            <CareCliQLogo size={64} />
+            <p className="text-[11px] font-semibold tracking-wide" style={{ color: QUIET_INK }}>
+              Powered by CC Tech Australia Pty Ltd
+            </p>
+          </div>
           <AuthThemeToggle />
         </div>
         <div className="flex-1 flex items-center px-6 sm:px-14 py-10">

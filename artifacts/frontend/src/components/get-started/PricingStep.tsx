@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Building2, Loader2, Star, User, Users } from "lucide-react";
+import { Building2, Loader2, Star, User, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { ACCENTS, SIGNATURE, FLAG, INK, QUIET_INK, DISPLAY_FONT, Card, GetStartedShell, Pill } from "./shared";
@@ -90,70 +90,73 @@ export function PricingStep({ recommendedTier }: Props) {
   return (
     <GetStartedShell step={6} wide>
       <Pill accent={ACCENTS[0]}>Plans</Pill>
-      <h1 className="mt-4 text-3xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+      <h1 className="mt-2 text-2xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
         Documentation that holds up when it's checked.
       </h1>
-      <p className="mt-3 max-w-md text-[14.5px] leading-relaxed" style={{ color: QUIET_INK }}>
+      <p className="mt-2 max-w-md text-[13px] leading-snug" style={{ color: QUIET_INK }}>
         The first month is free. After that, pick the plan sized to your team. Every plan runs
         the same platform, so there's nothing to upgrade into later.
       </p>
 
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {TIERS.map(({ tier, name, icon: Icon, range, price, perPerson, note }, i) => {
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {TIERS.map(({ tier, name, icon: Icon, range, price, perPerson }, i) => {
           const isRecommended = recommendedTier === tier;
           const accent = ACCENTS[i];
           return (
-            <Card key={tier} selected={isRecommended} className="relative flex flex-col">
+            <Card key={tier} selected={isRecommended} className="relative flex flex-col !p-4">
               {isRecommended && (
                 <span
-                  className="absolute -top-3 left-5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-white"
+                  className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
                   style={{ background: SIGNATURE }}
                 >
-                  <Star size={11} fill="white" /> Recommended for you
+                  <Star size={10} fill="white" /> Recommended
                 </span>
               )}
-              <span
-                className="flex h-11 w-11 items-center justify-center rounded-xl"
-                style={{ background: accent.bg, color: accent.fg }}
-              >
-                <Icon size={19} />
-              </span>
-              <h2 className="mt-4 text-lg font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
-                {name}
-              </h2>
-              <p className="text-[12.5px] font-semibold mt-0.5" style={{ color: QUIET_INK }}>{range}</p>
-              <p className="mt-3 text-[13px] leading-relaxed" style={{ color: QUIET_INK }}>{note}</p>
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ background: accent.bg, color: accent.fg }}
+                >
+                  <Icon size={16} />
+                </span>
+                <div>
+                  <h2 className="text-[15px] font-black leading-tight" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+                    {name}
+                  </h2>
+                  <p className="text-[11px] font-semibold" style={{ color: QUIET_INK }}>{range}</p>
+                </div>
+              </div>
 
-              <ul className="mt-4 flex flex-col gap-2" style={{ borderTop: "1px solid var(--auth-card-border)" }}>
+              <ul className="mt-3 flex flex-col gap-1.5" style={{ borderTop: "1px solid var(--auth-card-border)" }}>
                 {SHARED_FEATURES.map((f) => (
-                  <li key={f} className="flex items-start gap-2 pt-2 text-[12.5px] leading-snug" style={{ color: INK }}>
+                  <li key={f} className="flex items-start gap-1.5 pt-1.5 text-[11.5px] leading-snug" style={{ color: INK }}>
                     <span className="mt-0.5 shrink-0" style={{ color: SIGNATURE }}>&#10003;</span>
                     {f}
                   </li>
                 ))}
               </ul>
 
-              <div className="mt-5 flex items-baseline gap-1">
+              <div className="mt-3 flex items-baseline gap-1">
                 <span
-                  className="text-4xl font-black"
+                  className="text-3xl font-black"
                   style={{ color: FLAG, fontFamily: DISPLAY_FONT, fontVariantNumeric: "tabular-nums" }}
                 >
                   ${price}
                 </span>
-                <span className="text-sm font-semibold" style={{ color: QUIET_INK }}>/ month</span>
+                <span className="text-[13px] font-semibold" style={{ color: QUIET_INK }}>/ month</span>
+                {perPerson && (
+                  <span className="text-[10.5px] font-semibold" style={{ color: QUIET_INK }}>&nbsp;· {perPerson}</span>
+                )}
               </div>
-              {perPerson && (
-                <p className="text-[11.5px] font-semibold mt-0.5" style={{ color: QUIET_INK }}>{perPerson}</p>
-              )}
 
               <button
                 type="button"
                 onClick={() => void handleChoose(tier)}
                 disabled={busyTier !== null}
-                className="mt-5 w-full h-11 rounded-full text-white font-bold text-sm disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
-                style={{ background: isRecommended ? SIGNATURE : INK, boxShadow: "var(--cc-shadow-sm)" }}
+                className="mt-3 w-full h-9 rounded-full text-white font-bold text-[13px] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
+                style={{ background: SIGNATURE, boxShadow: "var(--cc-shadow-sm)" }}
               >
-                {busyTier === tier ? <Loader2 size={14} className="animate-spin" /> : null}
+                {busyTier === tier ? <Loader2 size={13} className="animate-spin" /> : null}
                 Start free trial
               </button>
             </Card>
@@ -161,19 +164,7 @@ export function PricingStep({ recommendedTier }: Props) {
         })}
       </div>
 
-      <Card className="mt-10 flex flex-wrap items-center gap-6 sm:gap-10 w-fit">
-        <div>
-          <p className="text-3xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>5 days</p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: QUIET_INK }}>Without CareCliQ</p>
-        </div>
-        <ArrowRight size={18} style={{ color: QUIET_INK }} />
-        <div>
-          <p className="text-3xl font-black" style={{ color: FLAG, fontFamily: DISPLAY_FONT }}>Same day</p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: QUIET_INK }}>With CareCliQ</p>
-        </div>
-      </Card>
-
-      <p className="text-[13px] font-medium mt-8" style={{ color: QUIET_INK }}>
+      <p className="text-[12.5px] font-medium mt-5" style={{ color: QUIET_INK }}>
         Already have an account?{" "}
         <button
           type="button"

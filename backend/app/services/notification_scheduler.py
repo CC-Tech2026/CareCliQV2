@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 _scheduler_task: Optional[asyncio.Task] = None
 _long_shift_task: Optional[asyncio.Task] = None
 _random_checkin_task: Optional[asyncio.Task] = None
+_stripe_reconciliation_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -227,7 +228,7 @@ async def _scheduler_loop() -> None:
 
 
 def start_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task, _random_checkin_task
+    global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -235,6 +236,7 @@ def start_notification_scheduler() -> None:
     _scheduler_task = asyncio.create_task(_scheduler_loop())
     _long_shift_task = asyncio.create_task(_long_shift_monitor_loop())
     _random_checkin_task = asyncio.create_task(_random_checkin_loop())
+    _stripe_reconciliation_task = asyncio.create_task(_stripe_reconciliation_loop())
 
 
 async def _random_checkin_loop() -> None:
@@ -267,9 +269,33 @@ async def _long_shift_monitor_loop() -> None:
         await asyncio.sleep(300)
 
 
+async def _stripe_reconciliation_loop() -> None:
+    """Hourly pass checking for signup Checkout sessions that completed
+    payment with no matching organization - a missed/failed webhook
+    delivery. Not sub-hourly like the shift-monitoring loops above: this
+    only matters when Stripe's own retries (which run over hours/days) have
+    already been exhausted."""
+    from .stripe_service import find_orphaned_signup_sessions
+
+    logger.info("Stripe signup reconciliation loop started (every 60 min)")
+    while True:
+        try:
+            orphaned = find_orphaned_signup_sessions()
+            for session in orphaned:
+                logger.error(
+                    "Orphaned signup Checkout session (paid, no organization created): "
+                    "session_id=%s email=%s amount=%s %s",
+                    session.get("session_id"), session.get("email"),
+                    session.get("amount_total"), session.get("currency"),
+                )
+        except Exception as exc:
+            logger.warning("Stripe reconciliation loop failed: %s", exc)
+        await asyncio.sleep(3600)
+
+
 async def stop_notification_scheduler() -> None:
-    global _scheduler_task, _long_shift_task, _random_checkin_task
-    for task in (_scheduler_task, _long_shift_task, _random_checkin_task):
+    global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
+    for task in (_scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task):
         if not task:
             continue
         task.cancel()
@@ -280,3 +306,4 @@ async def stop_notification_scheduler() -> None:
     _scheduler_task = None
     _long_shift_task = None
     _random_checkin_task = None
+    _stripe_reconciliation_task = None

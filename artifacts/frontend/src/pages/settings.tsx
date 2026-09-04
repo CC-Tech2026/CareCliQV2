@@ -1071,122 +1071,93 @@ function OrganizationBrandingSection() {
 // Master System admin portal's Account → Settings → Layout screen.
 
 // -----------------------------------------------------------------------------
-// Billing & Subscription: UI PREVIEW ONLY. No payment provider or subscription
-// backend exists yet; every control here is inert (local state / disabled),
-// built to show what the section could look like once that backend lands.
+// Billing & Subscription: real CareCliQ platform subscription status
+// (backend/app/api/platform_billing.py, Stripe-backed) — the full plan
+// picker and Stripe billing portal live at /platform-billing already; this
+// section shows the current status and links straight there rather than
+// duplicating that page's logic inline.
 // -----------------------------------------------------------------------------
 
-function PreviewBadge() {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
-      style={{ background: "var(--cc-amber-tint)", color: "var(--cc-amber)" }}
-    >
-      <Sparkles className="h-3 w-3" /> Preview
-    </span>
-  );
-}
-
-const PLAN_OPTIONS = [
-  { id: "starter", name: "Starter", price: "$0", cadence: "/mo", seats: "Up to 5 staff", blurb: "Core rostering and compliance for small teams." },
-  { id: "growth", name: "Growth", price: "$149", cadence: "/mo", seats: "Up to 25 staff", blurb: "Full Master Schedule, MD portal, and priority support." },
-  { id: "enterprise", name: "Enterprise", price: "Custom", cadence: "", seats: "Unlimited staff", blurb: "Dedicated onboarding, custom integrations, SLA." },
-] as const;
+const BILLING_TIER_LABELS: Record<string, string> = { micro: "Micro", small: "Small", medium: "Medium" };
+const BILLING_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  trialing: { label: "Free trial", color: "var(--cc-coral)" },
+  active: { label: "Active", color: "#22C55E" },
+  past_due: { label: "Payment failed", color: "#EF4444" },
+  canceled: { label: "Cancelled", color: "var(--cc-muted)" },
+  unpaid: { label: "Unpaid", color: "#EF4444" },
+};
 
 function BillingSection() {
   const { toast } = useToast();
-  const [selectedPlan, setSelectedPlan] = useState<(typeof PLAN_OPTIONS)[number]["id"]>("growth");
+  const [status, setStatus] = useState<{
+    plan_tier: string | null;
+    subscription_status: string | null;
+    trial_ends_at: string | null;
+    stripe_customer_id: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  function notConnected() {
-    toast({ title: "Not connected yet", description: "This is a design preview. No payment provider is wired up." });
-  }
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/api/platform-billing/status")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Could not load subscription status."))))
+      .then((data) => { if (!cancelled) setStatus(data); })
+      .catch((err) => {
+        if (!cancelled) toast({ title: "Couldn't load billing", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const statusInfo = status?.subscription_status ? BILLING_STATUS_LABELS[status.subscription_status] : null;
+  const hasSubscription = Boolean(status?.stripe_customer_id);
 
   return (
     <div className="space-y-6">
       <div className="pb-1">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>Billing &amp; Subscription</h2>
-          <PreviewBadge />
-        </div>
+        <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>Billing &amp; Subscription</h2>
         <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
-          A look at how plan management could work. Nothing here is connected to a real payment provider yet.
+          Manage CareCliQ's platform subscription for your organisation.
         </p>
       </div>
 
       <PanelCard label="Current plan">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {PLAN_OPTIONS.map((plan) => {
-            const selected = selectedPlan === plan.id;
-            return (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => setSelectedPlan(plan.id)}
-                className="rounded-xl border p-4 text-left transition-all"
-                style={{
-                  borderColor: selected ? "var(--cc-plum)" : "var(--cc-border)",
-                  boxShadow: selected ? "0 0 0 2px var(--cc-plum-ring)" : "none",
-                  background: "var(--cc-soft)",
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-black" style={{ color: "var(--cc-text)" }}>{plan.name}</span>
-                  {selected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-plum)" }} />}
-                </div>
-                <p className="mt-1.5 text-[20px] font-black" style={{ color: "var(--cc-text)" }}>
-                  {plan.price}<span className="text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>{plan.cadence}</span>
-                </p>
-                <p className="mt-1 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{plan.seats}</p>
-                <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>{plan.blurb}</p>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl px-4 py-3" style={{ background: "var(--cc-soft)" }}>
-          <div>
-            <p className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>Staff seats used</p>
-            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>18 of 25 seats</p>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cc-plum)" }} />
           </div>
-          <div className="h-2 w-32 overflow-hidden rounded-full" style={{ background: "var(--cc-border)" }}>
-            <div className="h-full rounded-full" style={{ width: "72%", background: "var(--cc-plum)" }} />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Button size="sm" onClick={notConnected} className="gap-1.5">Save plan selection</Button>
-        </div>
-      </PanelCard>
-
-      <PanelCard label="Payment method">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-14 items-center justify-center rounded-lg" style={{ background: "var(--cc-soft)" }}>
-              <CreditCard className="h-5 w-5" style={{ color: "var(--cc-muted)" }} />
-            </div>
+        ) : hasSubscription ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>No payment method on file</p>
-              <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Add a card to keep your subscription active.</p>
+              <p className="text-[20px] font-black" style={{ color: "var(--cc-text)" }}>
+                {status?.plan_tier ? BILLING_TIER_LABELS[status.plan_tier] ?? status.plan_tier : "—"}
+                {statusInfo && (
+                  <span className="ml-2 text-[12px] font-bold" style={{ color: statusInfo.color }}>{statusInfo.label}</span>
+                )}
+              </p>
+              {status?.trial_ends_at && status.subscription_status === "trialing" && (
+                <p className="text-[12px] mt-1" style={{ color: "var(--cc-muted)" }}>
+                  Trial ends {new Date(status.trial_ends_at).toLocaleDateString("en-AU")}
+                </p>
+              )}
             </div>
+            <Link href="/platform-billing">
+              <Button size="sm" className="gap-1.5">
+                <CreditCard className="h-3.5 w-3.5" /> Manage plan &amp; billing
+              </Button>
+            </Link>
           </div>
-          <Button size="sm" variant="outline" onClick={notConnected}>Add payment method</Button>
-        </div>
-      </PanelCard>
-
-      <PanelCard label="Invoice history">
-        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-          <Receipt className="h-6 w-6" style={{ color: "var(--cc-muted)" }} />
-          <p className="text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>No invoices yet</p>
-          <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Invoices will appear here once billing is connected.</p>
-        </div>
-      </PanelCard>
-
-      <PanelCard label="Danger zone">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>Cancel subscription</p>
-            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>Your organisation loses access to paid features at the end of the billing period.</p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-[13px]" style={{ color: "var(--cc-muted)" }}>No subscription on file yet.</p>
+            <Link href="/platform-billing">
+              <Button size="sm" className="gap-1.5">
+                <CreditCard className="h-3.5 w-3.5" /> Choose a plan
+              </Button>
+            </Link>
           </div>
-          <Button size="sm" variant="outline" onClick={notConnected} className="border-red-200 text-red-700 hover:bg-red-50">Cancel subscription</Button>
-        </div>
+        )}
       </PanelCard>
     </div>
   );

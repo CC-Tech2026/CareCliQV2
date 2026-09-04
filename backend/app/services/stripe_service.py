@@ -4,6 +4,18 @@ Distinct from backend/app/api/billing.py, which is NDIS participant funding
 (revenue reports, billing periods, NDIS price catalog) and never touches
 Stripe — this module is CareCliQ charging the provider organizations that
 use the platform.
+
+Trial-start timing (deliberate decision, not an oversight): the 30-day
+trial (SIGNUP_TRIAL_DAYS, set via subscription_data.trial_period_days in
+create_signup_checkout_session) starts the moment Checkout completes and
+the card is authorised — not when the founding MD actually opens their
+invite email and sets a password. A slow invite-open genuinely costs trial
+days. Deliberately left as-is: changing it would mean granting the trial
+via a separate Subscription update at invite-acceptance time instead of at
+Checkout, a real change to how the subscription itself is created. The
+webhook reconciliation pass and the resend-invite path (both below) bound
+how long anyone could plausibly go without noticing the invite arrived;
+revisit this only if it becomes a real support complaint.
 """
 
 from __future__ import annotations
@@ -61,6 +73,13 @@ def create_signup_checkout_session(
     confirms payment, so no half-signed-up org/user rows pile up from
     abandoned checkouts."""
     price_id = _price_id_for_tier(plan_tier)
+    # {CHECKOUT_SESSION_ID} is Stripe's own template variable, substituted
+    # into the redirect URL - lets the success screen look up which email
+    # Checkout collected (get_signup_session_email) without asking the
+    # person to retype it, e.g. for the resend-invite action.
+    if "{CHECKOUT_SESSION_ID}" not in success_url:
+        separator = "&" if "?" in success_url else "?"
+        success_url = f"{success_url}{separator}session_id={{CHECKOUT_SESSION_ID}}"
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=[{"price": price_id, "quantity": 1}],
@@ -85,6 +104,22 @@ def create_signup_checkout_session(
     if not session.url:
         raise RuntimeError("Stripe did not return a Checkout URL")
     return session.url
+
+
+def get_signup_session_email(session_id: str) -> Optional[str]:
+    """The email a signup Checkout session collected - just enough for the
+    resend-invite action to know who to email, without exposing anything
+    else about the session. Public-facing (the /get-started success screen
+    calls this with no auth), so this deliberately returns nothing beyond
+    the email string."""
+    try:
+        session = stripe.checkout.Session.retrieve(session_id).to_dict()
+    except Exception:
+        return None
+    if (session.get("metadata") or {}).get("signup") != "true":
+        return None
+    email = ((session.get("customer_details") or {}).get("email") or "").strip().lower()
+    return email or None
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +188,25 @@ def create_portal_session(*, organization_id: str, return_url: str) -> str:
 def handle_webhook_event(payload: bytes, sig_header: str) -> None:
     event = stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
     event_type = event["type"]
+    event_id = event["id"]
+
+    # Idempotency: Stripe retries a delivery it didn't get a 2xx for, so the
+    # same event can arrive more than once. Recording the event id first and
+    # bailing on a duplicate-key conflict means every handler below stays
+    # simple (no per-handler dedup logic needed) - migration 162.
+    try:
+        get_supabase_admin().table("stripe_webhook_events").insert({
+            "stripe_event_id": event_id, "event_type": event_type,
+        }).execute()
+    except Exception as exc:
+        if "duplicate key" in str(exc).lower() or "23505" in str(exc):
+            logger.info("Stripe webhook %s (%s) already processed - skipping", event_id, event_type)
+            return
+        # Table missing (migration not yet applied) or some other transient
+        # error - don't silently drop a real webhook over a bookkeeping
+        # failure, just process it without the idempotency guarantee.
+        logger.warning("Could not record webhook event %s for idempotency: %s", event_id, exc)
+
     # .to_dict() up front, once - stripe-python 15.x's Session/Subscription/
     # Invoice resource objects don't support .get() (they're no longer dict
     # subclasses), but every handler below relies on plain dict access.
@@ -335,6 +389,118 @@ def _sync_from_customer(customer_id: Optional[str], *, organization_id: Optional
         query.eq("organization_id", organization_id).execute()
     else:
         query.eq("stripe_customer_id", customer_id).execute()
+
+
+def find_orphaned_signup_sessions(hours: int = 48) -> list[dict[str, Any]]:
+    """Signup Checkout sessions that completed payment but have no matching
+    organization - the case a missed/failed webhook delivery leaves behind:
+    a customer who paid, with no org and no invite email ever sent. Checked
+    periodically (notification_scheduler.py) and available on demand via
+    the admin reconcile endpoints (platform_billing.py)."""
+    since = int((datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp())
+    sessions = stripe.checkout.Session.list(status="complete", created={"gte": since}, limit=100)
+    supabase = get_supabase_admin()
+    orphaned: list[dict[str, Any]] = []
+    for raw in sessions.auto_paging_iter():
+        session = raw.to_dict()
+        if (session.get("metadata") or {}).get("signup") != "true":
+            continue
+        customer_id = session.get("customer")
+        if not customer_id:
+            continue
+        existing = (
+            supabase.table("organizations")
+            .select("organization_id")
+            .eq("stripe_customer_id", customer_id)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            continue
+        orphaned.append({
+            "session_id": session.get("id"),
+            "email": (session.get("customer_details") or {}).get("email"),
+            "amount_total": session.get("amount_total"),
+            "currency": session.get("currency"),
+            "created": session.get("created"),
+        })
+    return orphaned
+
+
+def reconcile_signup_session(session_id: str) -> bool:
+    """Manually replay org creation for one signup Checkout session - the
+    support-runbook action for "customer says they paid but got no email",
+    made real instead of a written procedure. Returns False if the session
+    isn't a completed signup session or an org already exists for it
+    (safe to call again - _create_org_from_signup's own guard handles that)."""
+    session = stripe.checkout.Session.retrieve(session_id).to_dict()
+    if session.get("status") != "complete" or (session.get("metadata") or {}).get("signup") != "true":
+        return False
+    _create_org_from_signup(session)
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Resend-invite (founding MD never got, or lost, the welcome email)
+# ---------------------------------------------------------------------------
+
+RESEND_INVITE_COOLDOWN_MINUTES = 2
+
+
+def resend_signup_invite(email: str) -> None:
+    """Re-sends the existing, still-valid invite for a pending founding-MD
+    signup - never creates a new invitation row or token, just re-delivers
+    the same email. Silently does nothing if there's no matching pending
+    invite or a resend was already sent recently - the caller (the API
+    endpoint) always returns the same generic response either way, so this
+    can't be used to probe which emails have a pending signup."""
+    from .email_service import queue_invitation_email
+
+    supabase = get_supabase_admin()
+    normalized = email.strip().lower()
+    resp = (
+        supabase.table("invitations")
+        .select("id, organization_id, token, short_code, created_at, last_resent_at")
+        .eq("email", normalized)
+        .eq("role", "managing_director")
+        .is_("accepted_at", "null")
+        .gt("expires_at", datetime.now(timezone.utc).isoformat())
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        return
+    invite = rows[0]
+    last_sent = invite.get("last_resent_at") or invite.get("created_at")
+    if last_sent:
+        age_minutes = (datetime.now(timezone.utc) - datetime.fromisoformat(last_sent.replace("Z", "+00:00"))).total_seconds() / 60
+        if age_minutes < RESEND_INVITE_COOLDOWN_MINUTES:
+            return
+
+    supabase.table("invitations").update(
+        {"last_resent_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", invite["id"]).execute()
+
+    org_resp = (
+        supabase.table("organizations")
+        .select("organization_name")
+        .eq("organization_id", invite["organization_id"])
+        .limit(1)
+        .execute()
+    )
+    organization_name = (org_resp.data or [{}])[0].get("organization_name") or "your organisation"
+
+    invite_url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={invite['token']}"
+    queue_invitation_email(
+        None,
+        to_email=normalized,
+        invite_url=invite_url,
+        organization_name=organization_name,
+        role="managing_director",
+        short_code=invite.get("short_code"),
+    )
 
 
 def _set_status_by_customer(

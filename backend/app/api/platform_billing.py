@@ -26,6 +26,11 @@ def _require_md(current_user: dict) -> str:
     return org_id
 
 
+def _require_super_admin(current_user: dict) -> None:
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required.")
+
+
 class SignupCheckoutBody(BaseModel):
     plan_tier: str
 
@@ -51,6 +56,33 @@ async def create_signup_checkout(body: SignupCheckoutBody):
         logger.error("create_signup_checkout failed: %s", exc)
         raise HTTPException(status_code=500, detail="Could not start checkout. Please try again.")
     return {"checkout_url": url}
+
+
+class ResendInviteBody(BaseModel):
+    email: str
+
+
+@router.post("/signup/resend-invite")
+async def resend_signup_invite(body: ResendInviteBody):
+    """Public — re-sends a pending founding-MD invite. Always returns the
+    same generic response whether or not a matching invite exists, and is
+    rate-limited server-side (resend_signup_invite), so this can't be used
+    to discover which emails have signed up."""
+    try:
+        stripe_service.resend_signup_invite(body.email)
+    except Exception as exc:
+        logger.error("resend_signup_invite failed: %s", exc)
+    return {"message": "If that email has a pending invite, we've sent it again."}
+
+
+@router.get("/signup/session-email")
+async def get_signup_session_email(session_id: str):
+    """Public — the email a signup Checkout session collected, so the
+    post-payment 'Check your email' screen can offer a resend without
+    asking the person to retype their address. Returns nothing beyond the
+    email string."""
+    email = stripe_service.get_signup_session_email(session_id)
+    return {"email": email}
 
 
 @router.get("/status")
@@ -102,6 +134,35 @@ async def create_portal(current_user: dict = Depends(get_current_user)):
         logger.error("create_portal failed for org %s: %s", org_id, exc)
         raise HTTPException(status_code=500, detail="Could not open the billing portal. Please try again.")
     return {"portal_url": url}
+
+
+@router.get("/admin/orphaned-sessions")
+async def list_orphaned_signup_sessions(current_user: dict = Depends(get_current_user)):
+    """Signup Checkout sessions that completed payment with no matching
+    organization - a missed/failed webhook delivery. Platform-level, not
+    org-level, so gated to super_admin rather than _require_md."""
+    _require_super_admin(current_user)
+    try:
+        return {"sessions": stripe_service.find_orphaned_signup_sessions()}
+    except Exception as exc:
+        logger.error("find_orphaned_signup_sessions failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not check for orphaned sessions.")
+
+
+@router.post("/admin/reconcile/{checkout_session_id}")
+async def reconcile_signup_session(checkout_session_id: str, current_user: dict = Depends(get_current_user)):
+    """Manually replays org creation for one orphaned signup session - the
+    support-runbook action for 'customer says they paid but got no email',
+    made real instead of a written procedure."""
+    _require_super_admin(current_user)
+    try:
+        ok = stripe_service.reconcile_signup_session(checkout_session_id)
+    except Exception as exc:
+        logger.error("reconcile_signup_session failed for %s: %s", checkout_session_id, exc)
+        raise HTTPException(status_code=500, detail="Could not reconcile this session.")
+    if not ok:
+        raise HTTPException(status_code=400, detail="Not a completed signup session, or an organization already exists for it.")
+    return {"reconciled": True}
 
 
 @router.post("/webhook")
