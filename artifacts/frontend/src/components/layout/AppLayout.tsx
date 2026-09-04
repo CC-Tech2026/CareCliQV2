@@ -13,6 +13,7 @@ import { NotificationBell, NotificationPanel } from "@/components/coordinator/No
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
+import { PaymentIssueBanner } from "@/components/layout/PaymentIssueBanner";
 import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 import { AutoBreadcrumb } from "@/components/layout/AutoBreadcrumb";
 import { RightRail } from "@/components/layout/RightRail";
@@ -910,6 +911,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
             <div className="md:hidden">
               <AutoBreadcrumb />
             </div>
+            <PaymentIssueBanner isMD={userRole === "managing_director"} />
             {children}
           </main>
 
