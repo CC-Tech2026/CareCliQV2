@@ -113,7 +113,11 @@ export async function fetchDocumentFile(
 ): Promise<{ filename: string; blob: Blob }> {
   const res = await apiFetch(documentFileUrl(category, id, excludeFields));
   if (!res.ok) {
-    throw new Error("Could not download this document.");
+    // 404 specifically means "no file has ever been attached to this
+    // record" (e.g. a credential logged with no scan uploaded) rather than
+    // "this file type can't be previewed" — callers that show a preview
+    // distinguish the two, so surface which one this was.
+    throw new Error(res.status === 404 ? "not_found" : "Could not download this document.");
   }
   const disposition = res.headers.get("content-disposition") || "";
   const match = /filename="([^"]+)"/.exec(disposition);

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fetchDocumentFile, type VaultDocument } from "@/services/vaultService";
 
-type PreviewKind = "pdf" | "image" | "unsupported";
+type PreviewKind = "pdf" | "image" | "unsupported" | "not_found";
 
 function formatDate(iso: string): string {
   if (!iso) return "N/A";
@@ -68,8 +68,10 @@ export function DocumentPreviewPane({
         else if (blob.type.startsWith("image/")) setPreviewKind("image");
         else setPreviewKind("unsupported");
       })
-      .catch(() => {
-        if (!cancelled) setPreviewKind("unsupported");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const notFound = err instanceof Error && err.message === "not_found";
+        setPreviewKind(notFound ? "not_found" : "unsupported");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -157,7 +159,11 @@ export function DocumentPreviewPane({
                 >
                   <FileText size={22} style={{ color: "var(--cc-muted)" }} />
                   <p className="px-4 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                    No inline preview for this file type.
+                    {previewKind === "not_found"
+                      ? "No file has been uploaded for this record yet."
+                      : previewUrl
+                        ? "No inline preview for this file type."
+                        : "Couldn't load a preview for this document."}
                   </p>
                   {previewUrl && (
                     <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}>
