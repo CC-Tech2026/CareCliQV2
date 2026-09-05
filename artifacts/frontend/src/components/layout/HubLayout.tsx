@@ -14,6 +14,7 @@ import {
   UserPlus,
   HeartHandshake,
   ShieldCheck,
+  FolderLock,
   AlertTriangle,
   Mail,
   DollarSign,
@@ -101,6 +102,7 @@ const MD_NAV_GROUPS = [
     label: "Oversight & Risk",
     items: [
       { href: "/md/compliance", label: "Audit & Compliance", icon: ShieldCheck },
+      { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
       { href: "/md/incidents", label: "Critical Incidents", icon: AlertTriangle },
       { href: "/onboard-participant/complaints", label: "Participant Complaints", icon: Mail },
       { href: "/feedback-reports", label: "Feedback & Reports", icon: MessageSquareWarning },

@@ -61,6 +61,8 @@ import MDSchedulePage from "@/pages/md/schedule";
 import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
+import MDVaultHomePage from "@/pages/md/vault/VaultHome";
+import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
 import MDFinancialPage from "@/pages/md/financial";
 import MDCalendarPage from "@/pages/md/md-calendar";
 import AdminDashboardPage from "@/pages/admin/dashboard";
@@ -263,6 +265,20 @@ function Router() {
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDCompliancePage />
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/vault">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDVaultHomePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/vault/:category">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+            <MDVaultFolderPage category={params.category} />
+          </ProtectedRoute>
+        )}
       </Route>
 
       <Route path="/md/financial">
