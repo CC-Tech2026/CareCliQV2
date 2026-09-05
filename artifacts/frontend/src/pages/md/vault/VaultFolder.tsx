@@ -10,6 +10,7 @@ import {
   fetchFolderDocuments,
   fetchDocumentFile,
   fetchVaultFolders,
+  fetchCustomizableFields,
   uploadGovernanceDocument,
   uploadCustomFolderDocument,
   type VaultDocument,
@@ -17,6 +18,7 @@ import {
 } from "@/services/vaultService";
 import { triggerBlobDownload } from "@/lib/vaultZip";
 import { DocumentTable } from "./components/DocumentTable";
+import { DocumentPreviewPane } from "./components/DocumentPreviewPane";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { FolderUploadDialog } from "./components/FolderUploadDialog";
 
@@ -64,6 +66,9 @@ export default function VaultFolderPage({ category }: { category: string }) {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [docExclusions, setDocExclusions] = useState<Record<string, Set<string>>>({});
+  const [customizableFields, setCustomizableFields] = useState<Record<string, string[]>>({});
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -74,6 +79,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
 
   useEffect(() => {
     setSelectedIds(new Set());
+    setPreviewId(null);
     void loadMeta();
     void loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +89,12 @@ export default function VaultFolderPage({ category }: { category: string }) {
     void loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, person, datePreset, customFrom, customTo]);
+
+  useEffect(() => {
+    fetchCustomizableFields()
+      .then(setCustomizableFields)
+      .catch(() => setCustomizableFields({}));
+  }, []);
 
   async function loadMeta() {
     try {
@@ -133,14 +145,27 @@ export default function VaultFolderPage({ category }: { category: string }) {
 
   async function handleDownloadOne(doc: VaultDocument) {
     try {
-      const { filename, blob } = await fetchDocumentFile(doc.category, doc.id);
+      const exclude = Array.from(docExclusions[doc.id] ?? []);
+      const { filename, blob } = await fetchDocumentFile(doc.category, doc.id, exclude);
       triggerBlobDownload(blob, filename);
     } catch {
       toast({ title: "Couldn't download this document", variant: "destructive" });
     }
   }
 
-  const selectedRefs = documents.filter((d) => selectedIds.has(d.id)).map((d) => ({ category: d.category, id: d.id }));
+  function toggleExcludedField(field: string) {
+    if (!previewId) return;
+    setDocExclusions((prev) => {
+      const current = new Set(prev[previewId] ?? []);
+      if (current.has(field)) current.delete(field);
+      else current.add(field);
+      return { ...prev, [previewId]: current };
+    });
+  }
+
+  const selectedRefs = documents
+    .filter((d) => selectedIds.has(d.id))
+    .map((d) => ({ category: d.category, id: d.id, exclude_fields: Array.from(docExclusions[d.id] ?? []) }));
   const label = meta?.label || documents[0]?.folder_label || category.replace(/_/g, " ");
 
   return (
@@ -230,41 +255,40 @@ export default function VaultFolderPage({ category }: { category: string }) {
           </div>
         </div>
 
-        {selectedIds.size > 0 && (
-          <div
-            className="mt-3 flex items-center justify-between rounded-xl border px-4 py-2.5"
-            style={{ borderColor: "var(--cc-border)", background: "var(--cc-active-bg)" }}
-          >
-            <p className="text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
-              {selectedIds.size} selected
-            </p>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setSelectedIds(new Set())} className="text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
-                Clear
-              </button>
-              <Button size="sm" onClick={() => setShareOpen(true)} style={{ background: "var(--cc-plum)", color: "white" }}>
-                Share with auditor
-              </Button>
-            </div>
+        <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            {loading ? (
+              <div className="space-y-2">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-11 animate-pulse rounded-lg" style={{ background: "var(--cc-soft)" }} />
+                ))}
+              </div>
+            ) : (
+              <DocumentTable
+                documents={documents}
+                selectedIds={selectedIds}
+                onToggle={toggle}
+                onToggleAll={toggleAll}
+                onDownload={(d) => void handleDownloadOne(d)}
+                onPreview={(d) => setPreviewId(d.id)}
+                focusedId={previewId}
+              />
+            )}
           </div>
-        )}
 
-        <div className="mt-3">
-          {loading ? (
-            <div className="space-y-2">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-11 animate-pulse rounded-lg" style={{ background: "var(--cc-soft)" }} />
-              ))}
-            </div>
-          ) : (
-            <DocumentTable
-              documents={documents}
-              selectedIds={selectedIds}
-              onToggle={toggle}
-              onToggleAll={toggleAll}
-              onDownload={(d) => void handleDownloadOne(d)}
+          <div className="w-full shrink-0 lg:w-[520px] lg:sticky lg:top-4">
+            <DocumentPreviewPane
+              doc={documents.find((d) => d.id === previewId) ?? null}
+              isSelected={previewId ? selectedIds.has(previewId) : false}
+              onToggleSelected={() => previewId && toggle(previewId)}
+              customizableFields={customizableFields[category] ?? []}
+              excludedFields={(previewId && docExclusions[previewId]) || new Set()}
+              onToggleExcludedField={toggleExcludedField}
+              selectedDocs={documents.filter((d) => selectedIds.has(d.id))}
+              onRemoveSelected={toggle}
+              onShare={() => setShareOpen(true)}
             />
-          )}
+          </div>
         </div>
       </div>
 

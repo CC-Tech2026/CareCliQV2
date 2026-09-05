@@ -22,7 +22,8 @@ export async function buildVaultZip(
 
   for (let i = 0; i < plan.length; i++) {
     const item = plan[i];
-    const { filename, blob } = await fetchDocumentFile(item.category, item.id);
+    const originalRef = refs.find((r) => r.category === item.category && r.id === item.id);
+    const { filename, blob } = await fetchDocumentFile(item.category, item.id, originalRef?.exclude_fields ?? []);
     zip.file(dedupeFilename(filename, usedNames), blob);
     onProgress?.({ done: i + 1, total: plan.length });
   }

@@ -33,6 +33,9 @@ export interface VaultStats {
 export interface DocRef {
   category: string;
   id: string;
+  /** Field/section labels to leave out of this specific share - only has
+   * an effect on categories rendered on demand (see CUSTOMIZABLE_FIELDS). */
+  exclude_fields?: string[];
 }
 
 export interface AuditPackExport {
@@ -64,6 +67,15 @@ export async function fetchVaultFolders(): Promise<VaultFolder[]> {
   return data.folders;
 }
 
+/** Which field/section labels can be individually left out of a share, per
+ * category — empty/absent for categories with no structured content to
+ * customize (real uploaded files). */
+export async function fetchCustomizableFields(): Promise<Record<string, string[]>> {
+  const res = await apiFetch("/api/md-vault/customizable-fields");
+  const data = await parseJson<{ fields: Record<string, string[]> }>(res);
+  return data.fields;
+}
+
 export async function fetchFolderDocuments(
   category: string,
   filters: { search?: string; person?: string; date_from?: string; date_to?: string } = {}
@@ -81,18 +93,25 @@ export async function fetchFolderDocuments(
   return data.documents;
 }
 
-export function documentFileUrl(category: string, id: string): string {
-  return `/api/md-vault/folders/${encodeURIComponent(category)}/documents/${encodeURIComponent(id)}/file`;
+export function documentFileUrl(category: string, id: string, excludeFields: string[] = []): string {
+  const base = `/api/md-vault/folders/${encodeURIComponent(category)}/documents/${encodeURIComponent(id)}/file`;
+  if (excludeFields.length === 0) return base;
+  const params = new URLSearchParams();
+  excludeFields.forEach((f) => params.append("exclude", f));
+  return `${base}?${params.toString()}`;
 }
 
 /** Fetches one document's real bytes + the filename the server assigned it
  * (via Content-Disposition) — used both for a single-row download and, in a
- * loop, to assemble the ZIP pack with real per-file progress. */
+ * loop, to assemble the ZIP pack with real per-file progress. `excludeFields`
+ * leaves specific fields/sections out of the rendered file, for categories
+ * that support it (see fetchCustomizableFields). */
 export async function fetchDocumentFile(
   category: string,
-  id: string
+  id: string,
+  excludeFields: string[] = []
 ): Promise<{ filename: string; blob: Blob }> {
-  const res = await apiFetch(documentFileUrl(category, id));
+  const res = await apiFetch(documentFileUrl(category, id, excludeFields));
   if (!res.ok) {
     throw new Error("Could not download this document.");
   }

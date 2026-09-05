@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_managing_director
@@ -38,6 +38,12 @@ async def get_vault_stats(current_user: dict = Depends(get_current_user)):
 async def get_vault_folders(current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     return {"folders": vault_service.list_folders(org_id)}
+
+
+@router.get("/customizable-fields")
+async def get_customizable_fields(current_user: dict = Depends(get_current_user)):
+    _require_md(current_user)
+    return {"fields": vault_service.CUSTOMIZABLE_FIELDS}
 
 
 class FolderOrderRequest(BaseModel):
@@ -111,10 +117,11 @@ async def get_folder_documents(
 async def get_folder_document_file(
     category: str,
     document_id: str,
+    exclude: list[str] = Query(default=[]),
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
-    filename, data = vault_service.render_document_file(org_id, category, document_id)
+    filename, data = vault_service.render_document_file(org_id, category, document_id, set(exclude) or None)
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     return Response(
         content=data,

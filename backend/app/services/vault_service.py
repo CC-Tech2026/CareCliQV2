@@ -86,6 +86,25 @@ FLAGGED_STATUSES = {
     "refused", "missed", "withheld", "overdue", "pending", "in-review",
 }
 
+# Field/section labels an MD can choose to leave out of a specific share,
+# per category - only categories rendered on demand from structured DB rows
+# have anything here; file-backed categories (credentials, governance docs,
+# custom-folder uploads...) have no structured content to redact this way.
+# Labels here must exactly match the meta/section labels each _render_*
+# function actually builds.
+CUSTOMIZABLE_FIELDS: dict[str, list[str]] = {
+    "session_notes": ["Compliance score", "Notes", "Outcomes"],
+    "incident_reports": ["Severity", "Description", "Corrective actions"],
+    "ndis_plans": ["Total funding"],
+    "medication_records": ["Dose given", "Notes"],
+    "invoices": ["Total"],
+    "consent_onboarding": ["Consent method"],
+}
+
+
+def get_customizable_fields(category: str) -> list[str]:
+    return CUSTOMIZABLE_FIELDS.get(category, [])
+
 GOVERNANCE_BUCKET = "governance-documents"
 GOVERNANCE_ALLOWED_TYPES = {
     "application/pdf": ".pdf",
@@ -164,19 +183,46 @@ def _download_stored_file(bucket_name: str, file_path: str) -> bytes:
 # Mirrors shift_pdf_export_service's reportlab pattern, without the
 # signature-block machinery that's specific to shift PDFs.
 
-def _render_record_pdf(title: str, meta_rows: list[tuple[str, str]], body_text: str = "") -> bytes:
+def _filter_meta(meta_rows: list[tuple[str, str]], exclude: set[str] | None) -> list[tuple[str, str]]:
+    if not exclude:
+        return meta_rows
+    return [(k, v) for k, v in meta_rows if k not in exclude]
+
+
+def _filter_sections(sections: list[tuple[str, str]], exclude: set[str] | None) -> list[tuple[str, str]]:
+    if not exclude:
+        return [s for s in sections if s[1] and s[1].strip()]
+    return [s for s in sections if s[0] not in exclude and s[1] and s[1].strip()]
+
+
+def _render_record_pdf(
+    title: str,
+    meta_rows: list[tuple[str, str]],
+    sections: list[tuple[str, str]] | None = None,
+    *,
+    exclude: set[str] | None = None,
+) -> bytes:
+    """Build a lightweight per-record PDF from labelled meta rows (a small
+    key/value table) and labelled body sections. Both are filtered by
+    `exclude` (field labels the MD chose to leave out of this particular
+    share) before anything is rendered, so an excluded field never actually
+    reaches the PDF bytes - not just hidden in a viewer."""
+    meta_rows = _filter_meta(meta_rows, exclude)
+    sections = _filter_sections(sections or [], exclude)
+
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ImportError:
-        return _minimal_record_pdf(title, meta_rows, body_text)
+        return _minimal_record_pdf(title, meta_rows, sections)
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, title=title, author="CareCliQ", lang="en-AU")
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=15, spaceAfter=8)
+    heading_style = ParagraphStyle("Section", parent=styles["Heading2"], fontSize=11, spaceBefore=8, spaceAfter=3)
     body_style = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14)
 
     story: list[Any] = [Paragraph(title, title_style), Spacer(1, 3 * mm)]
@@ -192,17 +238,20 @@ def _render_record_pdf(title: str, meta_rows: list[tuple[str, str]], body_text: 
             )
         )
         story.append(table)
-    if body_text and body_text.strip():
-        story.append(Spacer(1, 4 * mm))
-        for line in body_text.splitlines() or [body_text]:
+    for label, text_value in sections:
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph(label, heading_style))
+        for line in text_value.splitlines() or [text_value]:
             story.append(Paragraph(line or " ", body_style))
 
     doc.build(story)
     return buffer.getvalue()
 
 
-def _minimal_record_pdf(title: str, meta_rows: list[tuple[str, str]], body_text: str = "") -> bytes:
-    lines = [title, ""] + [f"{k}: {v}" for k, v in meta_rows] + ["", body_text]
+def _minimal_record_pdf(title: str, meta_rows: list[tuple[str, str]], sections: list[tuple[str, str]] | None = None) -> bytes:
+    lines = [title, ""] + [f"{k}: {v}" for k, v in meta_rows]
+    for label, text_value in sections or []:
+        lines += ["", f"{label}:", text_value]
     text = "\\n".join(lines).replace("(", "\\(").replace(")", "\\)")
     stream = f"BT /F1 11 Tf 50 750 Td ({text[:3500]}) Tj ET"
     pdf = (
@@ -251,7 +300,7 @@ def _list_sessions(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_session(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("sessions")
@@ -272,10 +321,11 @@ def _render_session(org_id: str, document_id: str) -> tuple[str, bytes]:
         ("Status", row.get("status") or "—"),
         ("Compliance score", f"{row.get('compliance_score')}%" if row.get("compliance_score") is not None else "—"),
     ]
-    body = (row.get("notes") or "").strip()
-    if row.get("outcomes"):
-        body = f"{body}\n\nOutcomes: {row['outcomes']}"
-    pdf = _render_record_pdf("CareCliQ Session Note", meta, body)
+    sections = [
+        ("Notes", (row.get("notes") or "").strip()),
+        ("Outcomes", (row.get("outcomes") or "").strip()),
+    ]
+    pdf = _render_record_pdf("CareCliQ Session Note", meta, sections, exclude=exclude_fields)
     return f"session-note-{document_id[:8]}.pdf", pdf
 
 
@@ -311,7 +361,7 @@ def _list_incidents(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_incident(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_incident(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("incidents")
@@ -332,10 +382,11 @@ def _render_incident(org_id: str, document_id: str) -> tuple[str, bytes]:
         ("Severity", row.get("severity") or "—"),
         ("Status", row.get("status") or "—"),
     ]
-    body = (row.get("description") or "").strip()
-    if row.get("corrective_actions"):
-        body = f"{body}\n\nCorrective actions: {row['corrective_actions']}"
-    pdf = _render_record_pdf(row.get("title") or "CareCliQ Incident Report", meta, body)
+    sections = [
+        ("Description", (row.get("description") or "").strip()),
+        ("Corrective actions", (row.get("corrective_actions") or "").strip()),
+    ]
+    pdf = _render_record_pdf(row.get("title") or "CareCliQ Incident Report", meta, sections, exclude=exclude_fields)
     return f"incident-{document_id[:8]}.pdf", pdf
 
 
@@ -371,7 +422,7 @@ def _list_ndis_plans(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_ndis_plan(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_ndis_plan(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("ndis_plans")
@@ -392,7 +443,7 @@ def _render_ndis_plan(org_id: str, document_id: str) -> tuple[str, bytes]:
         ("Total funding", f"${row.get('total_funding')}" if row.get("total_funding") is not None else "—"),
         ("Status", row.get("status") or "—"),
     ]
-    pdf = _render_record_pdf("CareCliQ NDIS Plan Summary", meta)
+    pdf = _render_record_pdf("CareCliQ NDIS Plan Summary", meta, exclude=exclude_fields)
     return f"ndis-plan-{document_id[:8]}.pdf", pdf
 
 
@@ -461,7 +512,7 @@ def _list_medication_records(org_id: str) -> list[VaultDocument]:
     return docs
 
 
-def _render_medication_record(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_medication_record(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("medication_documents")
@@ -495,8 +546,8 @@ def _render_medication_record(org_id: str, document_id: str) -> tuple[str, bytes
         ("Status", row.get("status") or "—"),
         ("Dose given", row.get("dose_given") or "—"),
     ]
-    body = row.get("notes") or row.get("prn_reason") or ""
-    pdf = _render_record_pdf("CareCliQ Medication Administration Record", meta, body)
+    sections = [("Notes", (row.get("notes") or row.get("prn_reason") or "").strip())]
+    pdf = _render_record_pdf("CareCliQ Medication Administration Record", meta, sections, exclude=exclude_fields)
     return f"medication-admin-{document_id[:8]}.pdf", pdf
 
 
@@ -532,7 +583,7 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_credential(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_credential(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("credentials")
@@ -583,7 +634,7 @@ def _list_invoices(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_invoice(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("invoices")
@@ -605,7 +656,7 @@ def _render_invoice(org_id: str, document_id: str) -> tuple[str, bytes]:
         ("Total", f"${row.get('total_amount')}" if row.get("total_amount") is not None else "—"),
         ("Status", row.get("status") or "—"),
     ]
-    pdf = _render_record_pdf("CareCliQ Invoice Summary", meta)
+    pdf = _render_record_pdf("CareCliQ Invoice Summary", meta, exclude=exclude_fields)
     return f"invoice-{row.get('invoice_number') or document_id[:8]}.pdf", pdf
 
 
@@ -706,7 +757,7 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
     return docs
 
 
-def _render_consent_onboarding(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("worker_onboarding_documents")
@@ -758,7 +809,7 @@ def _render_consent_onboarding(org_id: str, document_id: str) -> tuple[str, byte
         ("Consent method", row.get("consent_method") or "—"),
         ("Confirmed at", str(row.get("consent_confirmed_at") or "")[:19]),
     ]
-    pdf = _render_record_pdf("CareCliQ Plan Meeting Consent Record", meta)
+    pdf = _render_record_pdf("CareCliQ Plan Meeting Consent Record", meta, exclude=exclude_fields)
     return f"consent-{document_id[:8]}.pdf", pdf
 
 
@@ -794,7 +845,7 @@ def _list_audit_packs(org_id: str) -> list[VaultDocument]:
     ]
 
 
-def _render_audit_pack(org_id: str, document_id: str) -> tuple[str, bytes]:
+def _render_audit_pack(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     resp = (
         get_supabase_admin()
         .table("audit_pack_exports")
@@ -1169,7 +1220,19 @@ def list_folder_documents(
     return _apply_filters(docs, search=search, person=person, date_from=date_from, date_to=date_to)
 
 
-def render_document_file(org_id: str, category: str, document_id: str) -> tuple[str, bytes]:
+def render_document_file(
+    org_id: str,
+    category: str,
+    document_id: str,
+    exclude_fields: set[str] | None = None,
+) -> tuple[str, bytes]:
+    """`exclude_fields` only applies to categories rendered on demand from
+    structured DB rows (session notes, incidents, etc.) - it lets an MD
+    leave a specific field/section out of a particular share without
+    touching the underlying record. Categories backed by an already-stored
+    file (credentials, governance docs, custom-folder uploads...) have no
+    structured content to redact this way, so the parameter is accepted
+    for a uniform call signature but has no effect there."""
     if category.startswith(CUSTOM_FOLDER_PREFIX):
         return _render_custom_folder_file(org_id, _custom_folder_id(category), document_id)
     if category not in CATEGORY_META:
@@ -1179,7 +1242,7 @@ def render_document_file(org_id: str, category: str, document_id: str) -> tuple[
     renderer = _RECORD_RENDERERS.get(category)
     if not renderer:
         raise HTTPException(status_code=404, detail="Document not found.")
-    return renderer(org_id, document_id)
+    return renderer(org_id, document_id, exclude_fields)
 
 
 def list_folders(org_id: str) -> list[dict[str, Any]]:

@@ -34,6 +34,8 @@ export function DocumentTable({
   onToggle,
   onToggleAll,
   onDownload,
+  onPreview,
+  focusedId,
 }: {
   documents: VaultDocument[];
   showCategoryColumn?: boolean;
@@ -41,6 +43,8 @@ export function DocumentTable({
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onDownload: (doc: VaultDocument) => void;
+  onPreview?: (doc: VaultDocument) => void;
+  focusedId?: string | null;
 }) {
   const allSelected = documents.length > 0 && documents.every((d) => selectedIds.has(d.id));
   const someSelected = documents.some((d) => selectedIds.has(d.id));
@@ -82,9 +86,19 @@ export function DocumentTable({
         <tbody>
           {documents.map((doc) => {
             const tone = statusTone(doc.status);
+            const isFocused = focusedId === doc.id;
             return (
-              <tr key={`${doc.category}:${doc.id}`} className="border-t" style={{ borderColor: "var(--cc-border)" }}>
-                <td className="px-3 py-2.5">
+              <tr
+                key={`${doc.category}:${doc.id}`}
+                className="border-t"
+                onClick={() => onPreview?.(doc)}
+                style={{
+                  borderColor: "var(--cc-border)",
+                  background: isFocused ? "var(--cc-active-bg)" : undefined,
+                  cursor: onPreview ? "pointer" : undefined,
+                }}
+              >
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={selectedIds.has(doc.id)} onCheckedChange={() => onToggle(doc.id)} />
                 </td>
                 <td className="px-3 py-2.5">
@@ -121,7 +135,7 @@ export function DocumentTable({
                     {doc.status.replace(/_/g, " ")}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-right">
+                <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => onDownload(doc)}
