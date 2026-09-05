@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   DndContext,
@@ -7,7 +7,13 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   FileText,
@@ -30,6 +36,10 @@ import {
   Folder,
   FolderPlus,
   Share2,
+  LayoutGrid,
+  List as ListIcon,
+  ChevronRight,
+  GripVertical,
   type LucideIcon,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
@@ -60,6 +70,18 @@ const FOLDER_ICONS: Record<string, LucideIcon> = {
   emergency_disaster_management: Flame,
 };
 
+type ViewMode = "grid" | "list";
+const VIEW_MODE_KEY = "cc-vault-view-mode";
+
+function readStoredViewMode(): ViewMode {
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_KEY);
+    return stored === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
+
 function formatUpdated(iso: string | null): string {
   if (!iso) return "empty";
   const d = new Date(iso);
@@ -71,35 +93,44 @@ function formatUpdated(iso: string | null): string {
  * card — record folders carry solid Charcoal Navy, governance/policy
  * folders carry a lighter navy tint, so the two groups read as distinct at
  * a glance using only neutral tones, not brand accent colour. */
-function FolderGlyph({ tint, Icon }: { tint: string; Icon: LucideIcon }) {
+function FolderGlyph({ tint, Icon, size = "lg" }: { tint: string; Icon: LucideIcon; size?: "lg" | "sm" }) {
+  const dims = size === "lg" ? { w: "w-16", h: "h-14", tabW: "w-7", tabH: "h-3", icon: 20 } : { w: "w-10", h: "h-9", tabW: "w-4", tabH: "h-2", icon: 14 };
   return (
-    <div className="relative h-14 w-16 shrink-0">
-      <div className="absolute left-0 top-0 h-3 w-7 rounded-t-[4px]" style={{ background: tint }} />
+    <div className={`relative ${dims.h} ${dims.w} shrink-0`}>
+      <div className={`absolute left-0 top-0 ${dims.tabH} ${dims.tabW} rounded-t-[3px]`} style={{ background: tint }} />
       <div
-        className="absolute inset-x-0 bottom-0 top-2 flex items-center justify-center rounded-lg rounded-tl-none"
-        style={{ background: tint }}
+        className="absolute inset-x-0 bottom-0 top-1.5 flex items-center justify-center rounded-lg rounded-tl-none"
+        style={{ background: tint, top: size === "lg" ? 8 : 6 }}
       >
-        <Icon size={20} color="white" />
+        <Icon size={dims.icon} color="white" />
       </div>
     </div>
   );
 }
 
+function folderTint(folder: VaultFolder): string {
+  return folder.group === "governance" ? "var(--cc-muted)" : "var(--cc-text)";
+}
+
+function FlaggedBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+      style={{ background: "var(--cc-status-warning)" }}
+    >
+      {count}
+    </span>
+  );
+}
+
 function FolderTileContent({ folder }: { folder: VaultFolder }) {
   const Icon = FOLDER_ICONS[folder.category] || Folder;
-  const tint = folder.group === "governance" ? "var(--cc-muted)" : "var(--cc-text)";
   return (
-    <div className="group flex flex-col items-center gap-1.5 rounded-xl p-3 text-center transition" style={{ cursor: "grab" }}>
+    <div className="flex flex-col items-center gap-1.5 rounded-xl p-3 text-center" style={{ cursor: "grab" }}>
       <div className="relative">
-        <FolderGlyph tint={tint} Icon={Icon} />
-        {folder.flagged_count > 0 && (
-          <span
-            className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
-            style={{ background: "var(--cc-status-warning)" }}
-          >
-            {folder.flagged_count}
-          </span>
-        )}
+        <FolderGlyph tint={folderTint(folder)} Icon={Icon} />
+        <FlaggedBadge count={folder.flagged_count} />
       </div>
       <p className="line-clamp-2 text-[12.5px] font-bold leading-tight" style={{ color: "var(--cc-text)" }}>
         {folder.label}
@@ -111,23 +142,64 @@ function FolderTileContent({ folder }: { folder: VaultFolder }) {
   );
 }
 
-function SortableFolderTile({ folder, onOpen }: { folder: VaultFolder; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: folder.category });
+/** File-explorer-style row — Name / Files / Updated columns, one folder per
+ * row in a divide-y list, for MDs who'd rather scan a dense list than an
+ * icon grid (the same "Details view vs. icon view" choice OneDrive/Explorer
+ * offer). */
+function FolderListRowContent({ folder }: { folder: VaultFolder }) {
+  const Icon = FOLDER_ICONS[folder.category] || Folder;
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-      className="rounded-xl hover:bg-[var(--cc-active-bg)]"
-      onClick={onOpen}
-      {...attributes}
-      {...listeners}
-    >
+    <div className="flex items-center gap-3 px-3 py-2.5" style={{ cursor: "grab" }}>
+      <GripVertical size={14} style={{ color: "var(--cc-border)" }} className="shrink-0" />
+      <div className="relative shrink-0">
+        <FolderGlyph tint={folderTint(folder)} Icon={Icon} size="sm" />
+        <FlaggedBadge count={folder.flagged_count} />
+      </div>
+      <p className="min-w-0 flex-1 truncate text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>
+        {folder.label}
+      </p>
+      <p className="hidden w-24 shrink-0 text-[12px] sm:block" style={{ color: "var(--cc-muted)" }}>
+        {folder.count} file{folder.count === 1 ? "" : "s"}
+      </p>
+      <p className="hidden w-32 shrink-0 text-[12px] sm:block" style={{ color: "var(--cc-muted)" }}>
+        {formatUpdated(folder.updated_at)}
+      </p>
+      <ChevronRight size={15} className="shrink-0" style={{ color: "var(--cc-muted)" }} />
+    </div>
+  );
+}
+
+function SortableFolderItem({ folder, mode, onOpen }: { folder: VaultFolder; mode: ViewMode; onOpen: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: folder.category });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  if (mode === "list") {
+    return (
+      <div ref={setNodeRef} style={style} className="hover:bg-[var(--cc-active-bg)]" onClick={onOpen} {...attributes} {...listeners}>
+        <FolderListRowContent folder={folder} />
+      </div>
+    );
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-xl hover:bg-[var(--cc-active-bg)]" onClick={onOpen} {...attributes} {...listeners}>
       <FolderTileContent folder={folder} />
     </div>
   );
 }
 
-function NewFolderTile({ onClick }: { onClick: () => void }) {
+function NewFolderControl({ mode, onClick }: { mode: ViewMode; onClick: () => void }) {
+  if (mode === "list") {
+    return (
+      <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
+        <span className="w-[14px] shrink-0" />
+        <span className="flex h-9 w-10 shrink-0 items-center justify-center">
+          <FolderPlus size={18} style={{ color: "var(--cc-muted)" }} />
+        </span>
+        <span className="text-[13px] font-bold" style={{ color: "var(--cc-muted)" }}>
+          New folder
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -145,7 +217,86 @@ function NewFolderTile({ onClick }: { onClick: () => void }) {
   );
 }
 
+function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewMode) => void }) {
+  return (
+    <div className="flex items-center rounded-lg border p-0.5" style={{ borderColor: "var(--cc-border)" }}>
+      {(
+        [
+          ["grid", LayoutGrid],
+          ["list", ListIcon],
+        ] as const
+      ).map(([key, Icon]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          aria-label={key === "grid" ? "Grid view" : "List view"}
+          className="flex h-7 w-7 items-center justify-center rounded-md"
+          style={{
+            background: mode === key ? "var(--cc-active-bg)" : "transparent",
+            color: mode === key ? "var(--cc-text)" : "var(--cc-muted)",
+          }}
+        >
+          <Icon size={14} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const GRID_CLASS = "grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8";
+
+function FolderGroup({
+  title,
+  subtitle,
+  folders,
+  mode,
+  onDragEnd,
+  navigate,
+  trailing,
+}: {
+  title: string;
+  subtitle: string;
+  folders: VaultFolder[];
+  mode: ViewMode;
+  onDragEnd: (event: DragEndEvent) => void;
+  navigate: (path: string) => void;
+  trailing?: ReactNode;
+}) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  return (
+    <div>
+      <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
+        {title}
+      </h2>
+      <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+        {subtitle}
+      </p>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <SortableContext
+          items={folders.map((f) => f.category)}
+          strategy={mode === "grid" ? rectSortingStrategy : verticalListSortingStrategy}
+        >
+          {mode === "grid" ? (
+            <div className={`mt-3 ${GRID_CLASS}`}>
+              {folders.map((f) => (
+                <SortableFolderItem key={f.category} folder={f} mode={mode} onOpen={() => navigate(`/md/vault/${f.category}`)} />
+              ))}
+              {trailing}
+            </div>
+          ) : (
+            <div className="mt-3 divide-y rounded-xl border" style={{ borderColor: "var(--cc-border)" }}>
+              {folders.map((f) => (
+                <SortableFolderItem key={f.category} folder={f} mode={mode} onOpen={() => navigate(`/md/vault/${f.category}`)} />
+              ))}
+              {trailing}
+            </div>
+          )}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
 
 export default function VaultHome() {
   const [, navigate] = useLocation();
@@ -155,12 +306,20 @@ export default function VaultHome() {
   const [loading, setLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
 
   useEffect(() => {
     void refresh();
   }, []);
+
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      // per-viewer convenience only — fine if storage is unavailable
+    }
+  }
 
   async function refresh() {
     setLoading(true);
@@ -253,43 +412,28 @@ export default function VaultHome() {
           />
         </StatCardGroup>
 
-        <div>
-          <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
-            Browse by record type
-          </h2>
-          <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--cc-muted)" }}>
-            Drag a folder to reorder it.
-          </p>
-          <DndContext sensors={sensors} onDragEnd={handleRecordDragEnd}>
-            <SortableContext items={recordFolders.map((f) => f.category)} strategy={rectSortingStrategy}>
-              <div className={`mt-3 ${GRID_CLASS}`}>
-                {recordFolders.map((f) => (
-                  <SortableFolderTile key={f.category} folder={f} onOpen={() => navigate(`/md/vault/${f.category}`)} />
-                ))}
-                <NewFolderTile onClick={() => setCreateFolderOpen(true)} />
-              </div>
-            </SortableContext>
-          </DndContext>
+        <div className="flex items-center justify-end">
+          <ViewModeToggle mode={viewMode} onChange={changeViewMode} />
         </div>
 
-        <div>
-          <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
-            Organisational governance & policies
-          </h2>
-          <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--cc-muted)" }}>
-            Business-level records tied to your organisation itself, mapped to the NDIS Practice
-            Standards Core Module, as distinct from records tied to a specific participant or worker.
-          </p>
-          <DndContext sensors={sensors} onDragEnd={handleGovernanceDragEnd}>
-            <SortableContext items={governanceFolders.map((f) => f.category)} strategy={rectSortingStrategy}>
-              <div className={`mt-3 ${GRID_CLASS}`}>
-                {governanceFolders.map((f) => (
-                  <SortableFolderTile key={f.category} folder={f} onOpen={() => navigate(`/md/vault/${f.category}`)} />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
+        <FolderGroup
+          title="Browse by record type"
+          subtitle="Drag a folder to reorder it."
+          folders={recordFolders}
+          mode={viewMode}
+          onDragEnd={handleRecordDragEnd}
+          navigate={navigate}
+          trailing={<NewFolderControl mode={viewMode} onClick={() => setCreateFolderOpen(true)} />}
+        />
+
+        <FolderGroup
+          title="Organisational governance & policies"
+          subtitle="Business-level records tied to your organisation itself, as distinct from records tied to a specific participant or worker."
+          folders={governanceFolders}
+          mode={viewMode}
+          onDragEnd={handleGovernanceDragEnd}
+          navigate={navigate}
+        />
       </div>
 
       <ShareAuditorDialog open={shareOpen} onOpenChange={setShareOpen} documents={[]} folderKeys={[]} targetDescription="Documents across the vault" />
