@@ -85,6 +85,7 @@ CATEGORY_META: dict[str, dict[str, str]] = {
 FLAGGED_STATUSES = {
     "reported", "under_investigation", "expiring", "expired", "pending_review",
     "refused", "missed", "withheld", "overdue", "pending", "in-review",
+    "administration_error", "cancelled",
 }
 
 # Field/section labels an MD can choose to leave out of a specific share,
@@ -543,10 +544,14 @@ def _list_medication_records(org_id: str) -> list[VaultDocument]:
         pass
 
     try:
+        # NOTE: this table has no `status` column (migration 114 replaced it
+        # with `outcome`, e.g. "given_on_time"/"refused"/"administration_error"
+        # - confirmed against the live schema, which had drifted from the
+        # table's original 105_medication_management.sql definition).
         resp = (
             get_supabase_admin()
             .table("medication_administrations")
-            .select("id, participant_id, status, administered_time")
+            .select("id, participant_id, outcome, administered_time")
             .eq("organization_id", org_id)
             .order("administered_time", desc=True)
             .limit(300)
@@ -562,14 +567,14 @@ def _list_medication_records(org_id: str) -> list[VaultDocument]:
                     person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
                     person_type="Participant",
                     date=str(row.get("administered_time") or ""),
-                    status=row.get("status") or "given",
+                    status=row.get("outcome") or "given_on_time",
                     source_table="medication_administrations",
                     source_id=row["id"],
                     has_stored_file=False,
                 )
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("medication_administrations adapter failed for org %s: %s", org_id, exc)
 
     return docs
 
@@ -592,7 +597,7 @@ def _render_medication_record(org_id: str, document_id: str, exclude_fields: set
     resp = (
         get_supabase_admin()
         .table("medication_administrations")
-        .select("id, participant_id, status, administered_time, dose_given, notes, prn_reason")
+        .select("id, participant_id, outcome, administered_time, dose_given, notes, prn_reason, prn_effect_observed")
         .eq("id", document_id)
         .eq("organization_id", org_id)
         .limit(1)
@@ -605,10 +610,15 @@ def _render_medication_record(org_id: str, document_id: str, exclude_fields: set
     meta = [
         ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
         ("Administered", str(row.get("administered_time") or "")[:19]),
-        ("Status", row.get("status") or "—"),
+        ("Outcome", (row.get("outcome") or "—").replace("_", " ").title()),
         ("Dose given", row.get("dose_given") or "—"),
     ]
-    sections = [("Notes", (row.get("notes") or row.get("prn_reason") or "").strip())]
+    notes_text = row.get("notes") or ""
+    if row.get("prn_reason"):
+        notes_text = f"{notes_text}\n\nPRN reason: {row['prn_reason']}".strip()
+    if row.get("prn_effect_observed"):
+        notes_text = f"{notes_text}\n\nEffect observed: {row['prn_effect_observed']}".strip()
+    sections = [("Notes", notes_text.strip())]
     pdf = _render_record_pdf(org_id, "Medication Administration Record", meta, sections, exclude=exclude_fields)
     return f"medication-admin-{document_id[:8]}.pdf", pdf
 
@@ -665,42 +675,79 @@ def _render_credential(org_id: str, document_id: str, exclude_fields: set[str] |
 
 
 def _list_invoices(org_id: str) -> list[VaultDocument]:
+    # NOTE: this table's real live schema (participant_id nullable,
+    # recipient_name/email, cents-based totals, issued_at/pdf_path) has
+    # drifted well past 073_task_pricing_evidence_invoicing.sql's original
+    # definition - confirmed directly against the live database, since the
+    # old column names (invoice_date, total_amount, period_start/end) don't
+    # exist anymore and silently returned zero invoices to every MD.
     try:
         resp = (
             get_supabase_admin()
             .table("invoices")
-            .select("id, participant_id, invoice_number, invoice_date, status")
+            .select(
+                "id, participant_id, invoice_number, recipient_name, status, "
+                "total_cents, issued_at, finalized_at, created_at, pdf_path"
+            )
             .eq("organization_id", org_id)
-            .order("invoice_date", desc=True)
+            .order("created_at", desc=True)
             .limit(500)
             .execute()
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("invoices adapter failed for org %s: %s", org_id, exc)
         return []
     patients = _patient_name_map(org_id)
-    return [
-        VaultDocument(
-            id=row["id"],
-            category="invoices",
-            folder_label=CATEGORY_META["invoices"]["label"],
-            title=(f"Invoice {row.get('invoice_number')}" if row.get("invoice_number") else "Invoice"),
-            person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
-            person_type="Participant",
-            date=str(row.get("invoice_date") or ""),
-            status=row.get("status") or "draft",
-            source_table="invoices",
-            source_id=row["id"],
-            has_stored_file=False,
+    docs: list[VaultDocument] = []
+    for row in resp.data or []:
+        participant_id = row.get("participant_id")
+        person_name = (patients.get(participant_id) if participant_id else None) or row.get("recipient_name") or "Unknown recipient"
+        date_value = row.get("issued_at") or row.get("finalized_at") or row.get("created_at") or ""
+        docs.append(
+            VaultDocument(
+                id=row["id"],
+                category="invoices",
+                folder_label=CATEGORY_META["invoices"]["label"],
+                title=(f"Invoice {row.get('invoice_number')}" if row.get("invoice_number") else "Invoice"),
+                person_name=person_name,
+                person_type="Participant",
+                date=str(date_value),
+                status=row.get("status") or "draft",
+                source_table="invoices",
+                source_id=row["id"],
+                has_stored_file=bool(row.get("pdf_path")),
+            )
         )
-        for row in (resp.data or [])
-    ]
+    return docs
 
 
 def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    # Invoices already get a real, fully laid-out PDF generated at
+    # finalize-time (backend/app/templates/invoice.html via billing_service)
+    # and stored in the invoice-files bucket - prefer that actual document
+    # over a bare summary whenever it exists.
     resp = (
         get_supabase_admin()
         .table("invoices")
-        .select("id, participant_id, invoice_number, invoice_date, period_start, period_end, total_amount, status")
+        .select("id, invoice_number, pdf_path")
+        .eq("id", document_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    row = (resp.data or [None])[0]
+    if row and row.get("pdf_path"):
+        data = _download_stored_file("invoice-files", row["pdf_path"])
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row.get("invoice_number") or "invoice").strip("-")
+        return f"{safe}.pdf", data
+
+    resp = (
+        get_supabase_admin()
+        .table("invoices")
+        .select(
+            "id, participant_id, invoice_number, recipient_name, status, "
+            "total_cents, due_date, issued_at, created_at"
+        )
         .eq("id", document_id)
         .eq("organization_id", org_id)
         .limit(1)
@@ -710,16 +757,20 @@ def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | No
     if not row:
         raise HTTPException(status_code=404, detail="Invoice not found.")
     patients = _patient_name_map(org_id)
+    participant_id = row.get("participant_id")
+    person_name = (patients.get(participant_id) if participant_id else None) or row.get("recipient_name") or "Unknown recipient"
+    total = row.get("total_cents")
     meta = [
-        ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
+        ("Participant", person_name),
         ("Invoice number", row.get("invoice_number") or "—"),
-        ("Invoice date", str(row.get("invoice_date") or "")[:10]),
-        ("Period", f"{row.get('period_start')} to {row.get('period_end')}"),
-        ("Total", f"${row.get('total_amount')}" if row.get("total_amount") is not None else "—"),
-        ("Status", row.get("status") or "—"),
+        ("Issued", str(row.get("issued_at") or row.get("created_at") or "")[:10]),
+        ("Due date", str(row.get("due_date") or "")[:10] or "—"),
+        ("Total", f"${total / 100:.2f}" if total is not None else "—"),
+        ("Status", (row.get("status") or "draft").replace("_", " ").title()),
     ]
     pdf = _render_record_pdf(org_id, "Invoice Summary", meta, exclude=exclude_fields)
-    return f"invoice-{row.get('invoice_number') or document_id[:8]}.pdf", pdf
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row.get("invoice_number") or document_id[:8]).strip("-")
+    return f"{safe}.pdf", pdf
 
 
 def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
