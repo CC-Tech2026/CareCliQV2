@@ -163,6 +163,33 @@ export default function VaultFolderPage({ category }: { category: string }) {
     });
   }
 
+  const selectedDocIds = documents.filter((d) => selectedIds.has(d.id)).map((d) => d.id);
+
+  // A field only shows as "on" for the bulk row once every selected
+  // document already has it excluded - toggling it then flips all of them
+  // together in one direction, so it can't leave some selected docs
+  // redacted and others not without the MD explicitly seeing that state.
+  const bulkExcludedFields = new Set(
+    (customizableFields[category] ?? []).filter(
+      (field) => selectedDocIds.length > 0 && selectedDocIds.every((id) => docExclusions[id]?.has(field))
+    )
+  );
+
+  function toggleExcludedFieldForSelected(field: string) {
+    if (selectedDocIds.length === 0) return;
+    const allExcluded = selectedDocIds.every((id) => docExclusions[id]?.has(field));
+    setDocExclusions((prev) => {
+      const next = { ...prev };
+      for (const id of selectedDocIds) {
+        const current = new Set(next[id] ?? []);
+        if (allExcluded) current.delete(field);
+        else current.add(field);
+        next[id] = current;
+      }
+      return next;
+    });
+  }
+
   const selectedRefs = documents
     .filter((d) => selectedIds.has(d.id))
     .map((d) => ({ category: d.category, id: d.id, exclude_fields: Array.from(docExclusions[d.id] ?? []) }));
@@ -204,10 +231,10 @@ export default function VaultFolderPage({ category }: { category: string }) {
             </div>
             <Select value={person} onValueChange={setPerson}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All people" />
+                <SelectValue placeholder="All participants" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All people</SelectItem>
+                <SelectItem value="all">All participants</SelectItem>
                 {people.map((p) => (
                   <SelectItem key={p} value={p}>
                     {p}
@@ -256,7 +283,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
         </div>
 
         <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 lg:w-[40%]">
             {loading ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -276,7 +303,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
           </div>
 
-          <div className="w-full shrink-0 lg:w-[520px] lg:sticky lg:top-4">
+          <div className="w-full lg:w-[60%] lg:sticky lg:top-4">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
               isSelected={previewId ? selectedIds.has(previewId) : false}
@@ -286,6 +313,8 @@ export default function VaultFolderPage({ category }: { category: string }) {
               onToggleExcludedField={toggleExcludedField}
               selectedDocs={documents.filter((d) => selectedIds.has(d.id))}
               onRemoveSelected={toggle}
+              bulkExcludedFields={bulkExcludedFields}
+              onToggleExcludedFieldForAll={toggleExcludedFieldForSelected}
               onShare={() => setShareOpen(true)}
             />
           </div>

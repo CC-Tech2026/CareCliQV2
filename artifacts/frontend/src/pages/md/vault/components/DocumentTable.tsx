@@ -72,7 +72,7 @@ export function DocumentTable({
               Document
             </th>
             <th className="px-3 py-2.5 font-bold" style={{ color: "var(--cc-muted)" }}>
-              Person
+              Participant
             </th>
             <th className="px-3 py-2.5 font-bold" style={{ color: "var(--cc-muted)" }}>
               Date

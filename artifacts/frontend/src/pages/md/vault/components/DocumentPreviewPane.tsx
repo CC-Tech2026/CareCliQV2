@@ -29,6 +29,8 @@ export function DocumentPreviewPane({
   onToggleExcludedField,
   selectedDocs,
   onRemoveSelected,
+  bulkExcludedFields,
+  onToggleExcludedFieldForAll,
   onShare,
 }: {
   doc: VaultDocument | null;
@@ -39,6 +41,8 @@ export function DocumentPreviewPane({
   onToggleExcludedField: (field: string) => void;
   selectedDocs: VaultDocument[];
   onRemoveSelected: (id: string) => void;
+  bulkExcludedFields: Set<string>;
+  onToggleExcludedFieldForAll: (field: string) => void;
   onShare: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -189,6 +193,36 @@ export function DocumentPreviewPane({
             ))}
           </div>
         )}
+
+        {selectedDocs.length > 1 && customizableFields.length > 0 && (
+          <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--cc-border)" }}>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>
+              Redact for all {selectedDocs.length} selected
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {customizableFields.map((field) => {
+                const excluded = bulkExcludedFields.has(field);
+                return (
+                  <button
+                    key={field}
+                    type="button"
+                    onClick={() => onToggleExcludedFieldForAll(field)}
+                    className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                    style={{
+                      borderColor: excluded ? "var(--cc-status-danger)" : "var(--cc-border)",
+                      color: excluded ? "var(--cc-status-danger)" : "var(--cc-text)",
+                      background: excluded ? "var(--cc-status-danger-bg)" : "transparent",
+                      textDecoration: excluded ? "line-through" : "none",
+                    }}
+                  >
+                    {field}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <Button
           disabled={selectedDocs.length === 0}
           className="mt-1 w-full gap-2"
