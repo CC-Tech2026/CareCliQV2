@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.vault_custom_folders (
     organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     label            TEXT        NOT NULL,
     description      TEXT,
+    folder_group     TEXT        NOT NULL DEFAULT 'record'
+                     CHECK (folder_group IN ('record', 'governance')),
     created_by       UUID        REFERENCES public.users(id) ON DELETE SET NULL,
     deleted_at       TIMESTAMPTZ,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()

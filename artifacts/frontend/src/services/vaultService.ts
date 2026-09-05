@@ -189,11 +189,15 @@ export async function setFolderOrder(order: string[]): Promise<void> {
   });
 }
 
-export async function createCustomFolder(label: string, description?: string): Promise<{ category: string; label: string }> {
+export async function createCustomFolder(
+  label: string,
+  description?: string,
+  group: "record" | "governance" = "record"
+): Promise<{ category: string; label: string }> {
   const res = await apiFetch("/api/md-vault/custom-folders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ label, description: description || null }),
+    body: JSON.stringify({ label, description: description || null, group }),
   });
   return parseJson(res);
 }

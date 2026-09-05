@@ -911,7 +911,7 @@ def list_custom_folders(org_id: str) -> list[dict[str, Any]]:
         resp = (
             get_supabase_admin()
             .table("vault_custom_folders")
-            .select("id, label, description, created_at")
+            .select("id, label, description, folder_group, created_at")
             .eq("organization_id", org_id)
             .is_("deleted_at", "null")
             .order("created_at")
@@ -922,13 +922,22 @@ def list_custom_folders(org_id: str) -> list[dict[str, Any]]:
         return []
 
 
-def create_custom_folder(org_id: str, label: str, description: str | None, created_by: str) -> dict[str, Any]:
+def create_custom_folder(
+    org_id: str,
+    label: str,
+    description: str | None,
+    created_by: str,
+    group: str = "record",
+) -> dict[str, Any]:
     if not label.strip():
         raise HTTPException(status_code=422, detail="Folder name is required.")
+    if group not in ("record", "governance"):
+        raise HTTPException(status_code=422, detail="Folder group must be 'record' or 'governance'.")
     payload = {
         "organization_id": org_id,
         "label": label.strip(),
         "description": (description or "").strip() or None,
+        "folder_group": group,
         "created_by": created_by,
     }
     result = get_supabase_admin().table("vault_custom_folders").insert(payload).execute()
@@ -1197,7 +1206,7 @@ def list_folders(org_id: str) -> list[dict[str, Any]]:
             {
                 "category": category,
                 "label": custom["label"],
-                "group": "record",
+                "group": custom.get("folder_group") or "record",
                 "count": len(docs),
                 "flagged_count": 0,
                 "updated_at": docs[0]["date"] if docs else custom.get("created_at"),

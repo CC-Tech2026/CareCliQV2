@@ -54,13 +54,14 @@ async def put_folder_order(body: FolderOrderRequest, current_user: dict = Depend
 class CustomFolderRequest(BaseModel):
     label: str
     description: str | None = None
+    group: str = "record"
 
 
 @router.post("/custom-folders", status_code=201)
 async def post_custom_folder(body: CustomFolderRequest, current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     user_id = get_user_id(current_user)
-    return vault_service.create_custom_folder(org_id, body.label, body.description, user_id)
+    return vault_service.create_custom_folder(org_id, body.label, body.description, user_id, body.group)
 
 
 @router.post("/custom-folders/{folder_id}/documents", status_code=201)

@@ -306,6 +306,7 @@ export default function VaultHome() {
   const [loading, setLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [createFolderGroup, setCreateFolderGroup] = useState<"record" | "governance">("record");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
 
   useEffect(() => {
@@ -423,7 +424,15 @@ export default function VaultHome() {
           mode={viewMode}
           onDragEnd={handleRecordDragEnd}
           navigate={navigate}
-          trailing={<NewFolderControl mode={viewMode} onClick={() => setCreateFolderOpen(true)} />}
+          trailing={
+            <NewFolderControl
+              mode={viewMode}
+              onClick={() => {
+                setCreateFolderGroup("record");
+                setCreateFolderOpen(true);
+              }}
+            />
+          }
         />
 
         <FolderGroup
@@ -433,11 +442,25 @@ export default function VaultHome() {
           mode={viewMode}
           onDragEnd={handleGovernanceDragEnd}
           navigate={navigate}
+          trailing={
+            <NewFolderControl
+              mode={viewMode}
+              onClick={() => {
+                setCreateFolderGroup("governance");
+                setCreateFolderOpen(true);
+              }}
+            />
+          }
         />
       </div>
 
       <ShareAuditorDialog open={shareOpen} onOpenChange={setShareOpen} documents={[]} folderKeys={[]} targetDescription="Documents across the vault" />
-      <CreateFolderDialog open={createFolderOpen} onOpenChange={setCreateFolderOpen} onCreated={() => void refresh()} />
+      <CreateFolderDialog
+        open={createFolderOpen}
+        onOpenChange={setCreateFolderOpen}
+        onCreated={() => void refresh()}
+        initialGroup={createFolderGroup}
+      />
     </HubLayout>
   );
 }
