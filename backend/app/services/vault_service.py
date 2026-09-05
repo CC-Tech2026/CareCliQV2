@@ -1095,9 +1095,17 @@ def get_folder_order(org_id: str) -> dict[str, int]:
 
 
 def set_folder_order(org_id: str, ordered_keys: list[str]) -> None:
+    # Only ever persist keys that genuinely belong to this org (a built-in
+    # category, or one of this org's own custom folders) - silently drop
+    # anything else rather than writing an ordering row that references
+    # another organisation's folder id.
+    valid_keys = set(CATEGORY_META) | {
+        _custom_folder_category(f["id"]) for f in list_custom_folders(org_id)
+    }
     rows = [
         {"organization_id": org_id, "folder_key": key, "sort_order": index}
         for index, key in enumerate(ordered_keys)
+        if key in valid_keys
     ]
     if not rows:
         return
