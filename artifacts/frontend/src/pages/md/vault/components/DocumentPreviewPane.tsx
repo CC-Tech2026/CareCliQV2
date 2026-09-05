@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
-import { Eye, FileText, Share2, SlidersHorizontal, X } from "lucide-react";
+import { Download, Eye, FileText, History, Share2, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { fetchDocumentFile, type VaultDocument } from "@/services/vaultService";
+import {
+  fetchDocumentFile,
+  fetchGovernanceDocumentVersions,
+  type GovernanceDocumentVersion,
+  type VaultDocument,
+} from "@/services/vaultService";
 
 type PreviewKind = "pdf" | "image" | "unsupported" | "not_found";
 
@@ -22,8 +26,7 @@ function formatDate(iso: string): string {
  * instead of ticking boxes blind in a list. */
 export function DocumentPreviewPane({
   doc,
-  isSelected,
-  onToggleSelected,
+  showVersionHistory = false,
   customizableFields,
   excludedFields,
   onToggleExcludedField,
@@ -34,8 +37,9 @@ export function DocumentPreviewPane({
   onShare,
 }: {
   doc: VaultDocument | null;
-  isSelected: boolean;
-  onToggleSelected: () => void;
+  /** Governance folders only — offers a "version history" toggle showing
+   * every prior version this document supersedes. */
+  showVersionHistory?: boolean;
   customizableFields: string[];
   excludedFields: Set<string>;
   onToggleExcludedField: (field: string) => void;
@@ -48,8 +52,29 @@ export function DocumentPreviewPane({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewKind, setPreviewKind] = useState<PreviewKind | null>(null);
   const [loading, setLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versions, setVersions] = useState<GovernanceDocumentVersion[] | null>(null);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   const excludedKey = Array.from(excludedFields).sort().join("|");
+
+  useEffect(() => {
+    setHistoryOpen(false);
+    setVersions(null);
+  }, [doc?.id]);
+
+  function toggleHistory() {
+    if (!doc) return;
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (next && versions === null) {
+      setVersionsLoading(true);
+      fetchGovernanceDocumentVersions(doc.id)
+        .then(setVersions)
+        .catch(() => setVersions([]))
+        .finally(() => setVersionsLoading(false));
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -105,11 +130,63 @@ export function DocumentPreviewPane({
                   {doc.person_name} · {formatDate(doc.date)}
                 </p>
               </div>
-              <label className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold" style={{ color: "var(--cc-text)" }}>
-                <Checkbox checked={isSelected} onCheckedChange={onToggleSelected} />
-                Include
-              </label>
+              {showVersionHistory && (
+                <button
+                  type="button"
+                  onClick={toggleHistory}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                  style={{
+                    borderColor: historyOpen ? "var(--cc-plum)" : "var(--cc-border)",
+                    color: historyOpen ? "var(--cc-plum)" : "var(--cc-muted)",
+                  }}
+                >
+                  <History size={12} />
+                  Version history
+                </button>
+              )}
             </div>
+
+            {historyOpen && (
+              <div className="border-t px-3.5 py-2.5" style={{ borderColor: "var(--cc-border)" }}>
+                {versionsLoading ? (
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    Loading version history…
+                  </p>
+                ) : !versions || versions.length === 0 ? (
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    No version history yet.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {versions.map((v) => (
+                      <div key={v.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: "var(--cc-soft)" }}>
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                            {v.title}
+                            {v.version_label ? ` · ${v.version_label}` : ""}
+                          </p>
+                          <p className="text-[10.5px]" style={{ color: "var(--cc-muted)" }}>
+                            {v.is_current ? "Current" : "Superseded"} · {formatDate(v.created_at)}
+                          </p>
+                        </div>
+                        {v.file_url && (
+                          <a
+                            href={v.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 rounded-md p-1.5"
+                            style={{ color: "var(--cc-muted)" }}
+                            aria-label={`Open ${v.title}`}
+                          >
+                            <Download size={13} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {customizableFields.length > 0 && (
               <div className="border-t px-3.5 py-2.5" style={{ borderColor: "var(--cc-border)" }}>

@@ -977,6 +977,10 @@ def _render_audit_pack(org_id: str, document_id: str, exclude_fields: set[str] |
 
 
 def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
+    # Only current versions - a superseded row stays in the database (its
+    # own version-history entry, reachable via list_governance_document_versions)
+    # but is deliberately excluded from the folder's day-to-day list so an
+    # MD always lands on the version that's actually in force.
     try:
         resp = (
             get_supabase_admin()
@@ -985,6 +989,7 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
             .eq("organization_id", org_id)
             .eq("folder_key", folder_key)
             .is_("deleted_at", "null")
+            .is_("superseded_at", "null")
             .order("created_at", desc=True)
             .limit(300)
             .execute()
@@ -1486,6 +1491,8 @@ async def upload_governance_document(
     uploaded_by: str,
     file_bytes: bytes,
     content_type: str,
+    supersedes_document_id: str | None = None,
+    version_label: str | None = None,
 ) -> dict[str, Any]:
     if folder_key not in GOVERNANCE_FOLDER_KEYS:
         raise HTTPException(status_code=422, detail="Invalid governance folder.")
@@ -1496,10 +1503,25 @@ async def upload_governance_document(
     if len(file_bytes) > GOVERNANCE_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Document must be 20MB or smaller.")
 
+    supabase = get_supabase_admin()
+
+    if supersedes_document_id:
+        existing = (
+            supabase.table("governance_documents")
+            .select("id")
+            .eq("id", supersedes_document_id)
+            .eq("organization_id", org_id)
+            .eq("folder_key", folder_key)
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="The policy you're replacing was not found.")
+
     doc_id = str(uuid4())
     ext = GOVERNANCE_ALLOWED_TYPES[content_type]
     path = f"{org_id}/{folder_key}/{doc_id}-{uuid4().hex}{ext}"
-    supabase = get_supabase_admin()
     try:
         supabase.storage.from_(GOVERNANCE_BUCKET).upload(
             path, file_bytes, {"content-type": content_type, "upsert": "true"}
@@ -1513,6 +1535,7 @@ async def upload_governance_document(
         "folder_key": folder_key,
         "title": title.strip(),
         "description": (description or "").strip() or None,
+        "version_label": (version_label or "").strip() or None,
         "file_path": path,
         "file_url": signed_storage_url(GOVERNANCE_BUCKET, path),
         "mime_type": content_type,
@@ -1520,7 +1543,83 @@ async def upload_governance_document(
         "uploaded_by": uploaded_by,
     }
     result = supabase.table("governance_documents").insert(payload).execute()
-    return result.data[0] if result.data else payload
+    new_doc = result.data[0] if result.data else payload
+
+    if supersedes_document_id:
+        # The old row is never deleted - just marked as superseded, so it
+        # stays reachable through list_governance_document_versions() as
+        # audit history of what this policy used to say.
+        supabase.table("governance_documents").update(
+            {
+                "superseded_by_document_id": new_doc["id"],
+                "superseded_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", supersedes_document_id).execute()
+
+    return new_doc
+
+
+def list_governance_document_versions(org_id: str, document_id: str) -> list[dict[str, Any]]:
+    """The full version lineage a document belongs to, newest first -
+    resolves to the current version first (whether `document_id` given is
+    itself current or an old superseded one), then walks backward through
+    superseded_by_document_id to collect every prior version."""
+    supabase = get_supabase_admin()
+    fields = (
+        "id, title, description, version_label, file_path, created_at, "
+        "uploaded_by, superseded_by_document_id, superseded_at"
+    )
+
+    def _fetch(doc_id: str) -> dict[str, Any] | None:
+        resp = (
+            supabase.table("governance_documents")
+            .select(fields)
+            .eq("id", doc_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+        return (resp.data or [None])[0]
+
+    start = _fetch(document_id)
+    if not start:
+        return []
+
+    current = start
+    seen = {current["id"]}
+    for _ in range(50):
+        next_id = current.get("superseded_by_document_id")
+        if not next_id or next_id in seen:
+            break
+        nxt = _fetch(next_id)
+        if not nxt:
+            break
+        current = nxt
+        seen.add(current["id"])
+
+    chain = [current]
+    seen2 = {current["id"]}
+    cursor = current["id"]
+    for _ in range(50):
+        resp = (
+            supabase.table("governance_documents")
+            .select(fields)
+            .eq("organization_id", org_id)
+            .eq("superseded_by_document_id", cursor)
+            .limit(1)
+            .execute()
+        )
+        prev = (resp.data or [None])[0]
+        if not prev or prev["id"] in seen2:
+            break
+        chain.append(prev)
+        seen2.add(prev["id"])
+        cursor = prev["id"]
+
+    for row in chain:
+        row["file_url"] = signed_storage_url(GOVERNANCE_BUCKET, row["file_path"]) if row.get("file_path") else None
+        row["is_current"] = row.get("superseded_at") is None
+    return chain
 
 
 def delete_governance_document(org_id: str, document_id: str) -> None:

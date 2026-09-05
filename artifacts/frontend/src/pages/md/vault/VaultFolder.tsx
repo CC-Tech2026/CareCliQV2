@@ -303,11 +303,10 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
           </div>
 
-          <div className="w-full lg:w-[60%] lg:sticky lg:top-4">
+          <div className="w-full lg:w-[60%]">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
-              isSelected={previewId ? selectedIds.has(previewId) : false}
-              onToggleSelected={() => previewId && toggle(previewId)}
+              showVersionHistory={isGovernance}
               customizableFields={customizableFields[category] ?? []}
               excludedFields={(previewId && docExclusions[previewId]) || new Set()}
               onToggleExcludedField={toggleExcludedField}
@@ -335,10 +334,18 @@ export default function VaultFolderPage({ category }: { category: string }) {
           onOpenChange={setUploadOpen}
           folderLabel={label}
           withDescription={isGovernance}
-          onUpload={({ title, description, file }) =>
+          existingDocuments={isGovernance ? documents.map((d) => ({ id: d.id, title: d.title })) : undefined}
+          onUpload={({ title, description, file, supersedesDocumentId, versionLabel }) =>
             isCustom && customFolderId
               ? uploadCustomFolderDocument({ folderId: customFolderId, title, file })
-              : uploadGovernanceDocument({ folderKey: category, title, description, file })
+              : uploadGovernanceDocument({
+                  folderKey: category,
+                  title,
+                  description,
+                  file,
+                  supersedesDocumentId,
+                  versionLabel,
+                })
           }
           onUploaded={() => {
             void loadDocuments();

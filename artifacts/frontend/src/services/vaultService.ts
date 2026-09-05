@@ -167,14 +167,34 @@ export async function uploadGovernanceDocument(params: {
   title: string;
   description?: string;
   file: File;
+  supersedesDocumentId?: string;
+  versionLabel?: string;
 }): Promise<VaultDocument> {
   const form = new FormData();
   form.set("folder_key", params.folderKey);
   form.set("title", params.title);
   if (params.description) form.set("description", params.description);
+  if (params.supersedesDocumentId) form.set("supersedes_document_id", params.supersedesDocumentId);
+  if (params.versionLabel) form.set("version_label", params.versionLabel);
   form.set("file", params.file);
   const res = await apiFetch("/api/md-vault/governance-documents", { method: "POST", body: form });
   return parseJson(res);
+}
+
+export interface GovernanceDocumentVersion {
+  id: string;
+  title: string;
+  description: string | null;
+  version_label: string | null;
+  file_url: string | null;
+  created_at: string;
+  is_current: boolean;
+}
+
+export async function fetchGovernanceDocumentVersions(documentId: string): Promise<GovernanceDocumentVersion[]> {
+  const res = await apiFetch(`/api/md-vault/governance-documents/${encodeURIComponent(documentId)}/versions`);
+  const data = await parseJson<{ versions: GovernanceDocumentVersion[] }>(res);
+  return data.versions;
 }
 
 export async function deleteGovernanceDocument(id: string): Promise<void> {

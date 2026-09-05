@@ -194,6 +194,8 @@ async def post_governance_document(
     title: str = Form(...),
     description: str | None = Form(None),
     file: UploadFile = File(...),
+    supersedes_document_id: str | None = Form(None),
+    version_label: str | None = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
@@ -203,8 +205,16 @@ async def post_governance_document(
     content_type = file.content_type or ""
     raw = await file.read()
     return await vault_service.upload_governance_document(
-        org_id, folder_key, title, description, user_id, raw, content_type
+        org_id, folder_key, title, description, user_id, raw, content_type,
+        supersedes_document_id=supersedes_document_id or None,
+        version_label=version_label or None,
     )
+
+
+@router.get("/governance-documents/{document_id}/versions")
+async def get_governance_document_versions(document_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"versions": vault_service.list_governance_document_versions(org_id, document_id)}
 
 
 @router.delete("/governance-documents/{document_id}", status_code=204)
