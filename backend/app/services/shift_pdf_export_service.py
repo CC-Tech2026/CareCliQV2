@@ -103,9 +103,10 @@ def _download_signature_png(signature: dict[str, Any] | None) -> bytes | None:
             return None
 
 
-def _build_shift_pdf(detail: dict[str, Any], *, signature_png: bytes | None = None) -> bytes:
+def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: bytes | None = None) -> bytes:
     try:
         from reportlab.lib import colors
+        from reportlab.lib.colors import HexColor
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
@@ -172,11 +173,23 @@ def _build_shift_pdf(detail: dict[str, Any], *, signature_png: bytes | None = No
         lang="en-AU",
     )
     styles = getSampleStyleSheet()
+
+    story: list[Any] = []
+    try:
+        from .organization_branding_service import build_pdf_letterhead
+
+        letterhead_flowables, accent = build_pdf_letterhead(org_id)
+        story.extend(letterhead_flowables)
+    except Exception as exc:
+        logger.warning("Could not build PDF letterhead for org %s: %s", org_id, exc)
+        accent = "#1B1745"
+
     title_style = ParagraphStyle(
         "Title",
         parent=styles["Heading1"],
         fontSize=16,
         spaceAfter=8,
+        textColor=HexColor(accent),
     )
     heading_style = ParagraphStyle(
         "Section",
@@ -192,8 +205,7 @@ def _build_shift_pdf(detail: dict[str, Any], *, signature_png: bytes | None = No
         fontName="Helvetica-Bold",
     )
 
-    story: list[Any] = []
-    story.append(Paragraph("CareCliQ Shift Summary", title_style))
+    story.append(Paragraph("Shift Summary", title_style))
     story.append(Spacer(1, 4 * mm))
 
     meta_rows = [
@@ -485,7 +497,7 @@ def create_shift_export(
         raise
 
     signature_png = _download_signature_png(detail.get("shift_signature"))
-    pdf_bytes = _build_shift_pdf(detail, signature_png=signature_png)
+    pdf_bytes = _build_shift_pdf(detail, organization_id, signature_png=signature_png)
     path = f"{organization_id}/{shift_id}/{export_id}.pdf"
     file_url = None
     try:
@@ -532,7 +544,7 @@ def build_shift_pdf_export(shift_id: str, worker_id: str, organization_id: str) 
     if not detail:
         return None
     signature_png = _download_signature_png(detail.get("shift_signature"))
-    pdf_bytes = _build_shift_pdf(detail, signature_png=signature_png)
+    pdf_bytes = _build_shift_pdf(detail, organization_id, signature_png=signature_png)
 
     date_part = str(detail.get("shift_date") or "")[:10] or "unknown-date"
     participant = str(detail.get("participant_first_name") or "participant")

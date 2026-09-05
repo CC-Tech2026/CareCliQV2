@@ -28,6 +28,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from .organization_branding_service import build_pdf_letterhead
 from .supabase_client import get_supabase_admin, signed_storage_url
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,15 @@ FLAGGED_STATUSES = {
 # Labels here must exactly match the meta/section labels each _render_*
 # function actually builds.
 CUSTOMIZABLE_FIELDS: dict[str, list[str]] = {
-    "session_notes": ["Compliance score", "Notes", "Outcomes"],
+    "session_notes": [
+        "Compliance score",
+        "Support worker",
+        "Activities performed",
+        "Participant response and presentation",
+        "Progress toward NDIS goals",
+        "Notes",
+        "Outcomes",
+    ],
     "incident_reports": ["Severity", "Description", "Corrective actions"],
     "ndis_plans": ["Total funding"],
     "medication_records": ["Dose given", "Notes"],
@@ -196,6 +205,7 @@ def _filter_sections(sections: list[tuple[str, str]], exclude: set[str] | None) 
 
 
 def _render_record_pdf(
+    org_id: str,
     title: str,
     meta_rows: list[tuple[str, str]],
     sections: list[tuple[str, str]] | None = None,
@@ -211,6 +221,7 @@ def _render_record_pdf(
     sections = _filter_sections(sections or [], exclude)
 
     try:
+        from reportlab.lib.colors import HexColor
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
@@ -221,11 +232,20 @@ def _render_record_pdf(
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, title=title, author="CareCliQ", lang="en-AU")
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=15, spaceAfter=8)
+
+    story: list[Any] = []
+    try:
+        letterhead_flowables, accent = build_pdf_letterhead(org_id)
+        story.extend(letterhead_flowables)
+    except Exception as exc:
+        logger.warning("Could not build PDF letterhead for org %s: %s", org_id, exc)
+        accent = "#1B1745"
+
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=15, spaceAfter=8, textColor=HexColor(accent))
     heading_style = ParagraphStyle("Section", parent=styles["Heading2"], fontSize=11, spaceBefore=8, spaceAfter=3)
     body_style = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14)
 
-    story: list[Any] = [Paragraph(title, title_style), Spacer(1, 3 * mm)]
+    story.extend([Paragraph(title, title_style), Spacer(1, 3 * mm)])
     if meta_rows:
         table = Table([[k, v] for k, v in meta_rows], colWidths=[40 * mm, 125 * mm])
         table.setStyle(
@@ -304,7 +324,11 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
     resp = (
         get_supabase_admin()
         .table("sessions")
-        .select("id, patient_id, session_date, session_type, status, notes, outcomes, compliance_score")
+        .select(
+            "id, patient_id, session_date, session_type, duration_minutes, status, "
+            "worker_id, support_worker_id, notes, outcomes, activities_performed, "
+            "participant_response, progress_toward_goals, goals_addressed, compliance_score"
+        )
         .eq("id", document_id)
         .eq("organization_id", org_id)
         .limit(1)
@@ -314,18 +338,56 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
     if not row:
         raise HTTPException(status_code=404, detail="Session note not found.")
     patients = _patient_name_map(org_id)
+
+    # Worker's name AND role - a progress note needs to say who provided the
+    # support and in what capacity, not just link an id.
+    worker_id = row.get("worker_id") or row.get("support_worker_id")
+    worker_display = "—"
+    if worker_id:
+        try:
+            wresp = (
+                get_supabase_admin()
+                .table("users")
+                .select("full_name, role")
+                .eq("id", worker_id)
+                .limit(1)
+                .execute()
+            )
+            wrow = (wresp.data or [None])[0]
+            if wrow:
+                name = wrow.get("full_name") or "Unknown worker"
+                role = wrow.get("role")
+                worker_display = f"{name} ({role.replace('_', ' ').title()})" if role else name
+        except Exception:
+            pass
+
+    session_dt = str(row.get("session_date") or "")
+    duration = row.get("duration_minutes")
+
+    goals = row.get("goals_addressed")
+    if isinstance(goals, list):
+        goals_text = ", ".join(str(g) for g in goals)
+    else:
+        goals_text = str(goals or "")
+
     meta = [
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
-        ("Date", str(row.get("session_date") or "")[:10]),
+        ("Date", session_dt[:10]),
+        ("Time", session_dt[11:16] if len(session_dt) >= 16 else "—"),
+        ("Duration", f"{duration} minutes" if duration else "—"),
+        ("Support worker", worker_display),
         ("Type", row.get("session_type") or "—"),
         ("Status", row.get("status") or "—"),
         ("Compliance score", f"{row.get('compliance_score')}%" if row.get("compliance_score") is not None else "—"),
     ]
     sections = [
+        ("Activities performed", (row.get("activities_performed") or "").strip()),
+        ("Participant response and presentation", (row.get("participant_response") or "").strip()),
+        ("Progress toward NDIS goals", (row.get("progress_toward_goals") or "").strip() or goals_text),
         ("Notes", (row.get("notes") or "").strip()),
         ("Outcomes", (row.get("outcomes") or "").strip()),
     ]
-    pdf = _render_record_pdf("CareCliQ Session Note", meta, sections, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, "Session Note", meta, sections, exclude=exclude_fields)
     return f"session-note-{document_id[:8]}.pdf", pdf
 
 
@@ -386,7 +448,7 @@ def _render_incident(org_id: str, document_id: str, exclude_fields: set[str] | N
         ("Description", (row.get("description") or "").strip()),
         ("Corrective actions", (row.get("corrective_actions") or "").strip()),
     ]
-    pdf = _render_record_pdf(row.get("title") or "CareCliQ Incident Report", meta, sections, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, row.get("title") or "Incident Report", meta, sections, exclude=exclude_fields)
     return f"incident-{document_id[:8]}.pdf", pdf
 
 
@@ -443,7 +505,7 @@ def _render_ndis_plan(org_id: str, document_id: str, exclude_fields: set[str] | 
         ("Total funding", f"${row.get('total_funding')}" if row.get("total_funding") is not None else "—"),
         ("Status", row.get("status") or "—"),
     ]
-    pdf = _render_record_pdf("CareCliQ NDIS Plan Summary", meta, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, "NDIS Plan Summary", meta, exclude=exclude_fields)
     return f"ndis-plan-{document_id[:8]}.pdf", pdf
 
 
@@ -547,7 +609,7 @@ def _render_medication_record(org_id: str, document_id: str, exclude_fields: set
         ("Dose given", row.get("dose_given") or "—"),
     ]
     sections = [("Notes", (row.get("notes") or row.get("prn_reason") or "").strip())]
-    pdf = _render_record_pdf("CareCliQ Medication Administration Record", meta, sections, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, "Medication Administration Record", meta, sections, exclude=exclude_fields)
     return f"medication-admin-{document_id[:8]}.pdf", pdf
 
 
@@ -656,7 +718,7 @@ def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | No
         ("Total", f"${row.get('total_amount')}" if row.get("total_amount") is not None else "—"),
         ("Status", row.get("status") or "—"),
     ]
-    pdf = _render_record_pdf("CareCliQ Invoice Summary", meta, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, "Invoice Summary", meta, exclude=exclude_fields)
     return f"invoice-{row.get('invoice_number') or document_id[:8]}.pdf", pdf
 
 
@@ -809,7 +871,7 @@ def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: se
         ("Consent method", row.get("consent_method") or "—"),
         ("Confirmed at", str(row.get("consent_confirmed_at") or "")[:19]),
     ]
-    pdf = _render_record_pdf("CareCliQ Plan Meeting Consent Record", meta, exclude=exclude_fields)
+    pdf = _render_record_pdf(org_id, "Plan Meeting Consent Record", meta, exclude=exclude_fields)
     return f"consent-{document_id[:8]}.pdf", pdf
 
 

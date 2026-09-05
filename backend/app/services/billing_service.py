@@ -18,6 +18,7 @@ from ..core.access import (
     is_coordinator_role,
 )
 from .supabase_client import get_supabase_admin, signed_storage_url
+from .organization_branding_service import get_letterhead
 
 INVOICE_FILES_BUCKET = "invoice-files"
 
@@ -613,17 +614,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
     org_id = invoice.get("organization_id", "")
 
     # ── Provider (organizations) ──────────────────────────────────────────
-    org: dict = {}
-    for key in ("organization_id", "id"):
-        try:
-            r = supabase.table("organizations").select(
-                "organization_name, abn, contact_number, email, org_address, ndis_provider_number"
-            ).eq(key, org_id).limit(1).execute()
-            if r.data:
-                org = r.data[0]
-                break
-        except Exception:
-            pass
+    letterhead = get_letterhead(org_id)
 
     # ── Participant ────────────────────────────────────────────────────────
     participant: dict = {}
@@ -776,12 +767,14 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
 
     return {
         # Provider
-        "provider_name": org.get("organization_name") or "",
-        "provider_address": org.get("org_address") or "",
-        "provider_email": org.get("email") or "",
-        "provider_phone": org.get("contact_number") or "",
-        "provider_abn": org.get("abn") or "",
-        "provider_ndis_registration": org.get("ndis_provider_number") or "",
+        "provider_name": letterhead["provider_name"],
+        "provider_address": letterhead["address"] or "",
+        "provider_email": letterhead["email"] or "",
+        "provider_phone": letterhead["phone"] or "",
+        "provider_abn": letterhead["abn"] or "",
+        "provider_ndis_registration": letterhead["ndis_provider_number"] or "",
+        "logo_url": letterhead["logo_url"],
+        "brand_accent_color": letterhead["brand_accent_color"],
         # Invoice meta
         "invoice_number": invoice.get("invoice_number") or "",
         "date_issued": date_issued,

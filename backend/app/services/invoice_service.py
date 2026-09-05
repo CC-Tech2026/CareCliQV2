@@ -15,6 +15,7 @@ import pathlib
 
 from .supabase_client import get_supabase_admin
 from . import billing_period_service
+from .organization_branding_service import get_letterhead
 
 logger = logging.getLogger(__name__)
 
@@ -454,17 +455,10 @@ def assemble_invoice_data(
     line_items_raw: List[Dict] = invoice.get("invoice_line_items") or []
 
     # ── Organization (provider) ─────────────────────────────────────────────
-    org_resp = (
-        supabase.table("organizations")
-        .select(
-            "organization_name, abn, contact_number, email, "
-            "org_address, ndis_provider_number"
-        )
-        .eq("id", org_id)
-        .single()
-        .execute()
-    )
-    org = org_resp.data or {}
+    # get_letterhead() is organization_id-scoped - querying by `id` here
+    # previously silently returned no row (a known PostgREST quirk on this
+    # deployment), leaving every invoice's provider name/ABN/address blank.
+    letterhead = get_letterhead(org_id)
 
     # ── Participant ─────────────────────────────────────────────────────────
     participant_id = invoice.get("participant_id")
@@ -533,12 +527,18 @@ def assemble_invoice_data(
         "status": invoice.get("status", "draft"),
         "due_date": due_date,
         # provider
-        "provider_name": org.get("organization_name", ""),
-        "provider_abn": org.get("abn", ""),
-        "provider_ndis_number": org.get("ndis_provider_number", ""),
-        "provider_address": org.get("org_address", ""),
-        "provider_email": org.get("email", ""),
-        "provider_phone": org.get("contact_number", ""),
+        "provider_name": letterhead["provider_name"],
+        "provider_abn": letterhead["abn"] or "",
+        # Template checks provider_ndis_registration (matching billing_service.py's
+        # naming) - this key previously said provider_ndis_number, which the
+        # template never read, so the NDIS registration number silently never
+        # appeared on an invoice generated through this path.
+        "provider_ndis_registration": letterhead["ndis_provider_number"] or "",
+        "provider_address": letterhead["address"] or "",
+        "provider_email": letterhead["email"] or "",
+        "provider_phone": letterhead["phone"] or "",
+        "logo_url": letterhead["logo_url"],
+        "brand_accent_color": letterhead["brand_accent_color"],
         # participant
         "participant_name": participant.get("full_name", ""),
         "participant_ndis_number": participant.get("ndis_number", ""),
