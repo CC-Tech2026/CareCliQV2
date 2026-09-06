@@ -227,6 +227,54 @@ async def get_participants_list_light(
     return await _list_accessible_participants(current_user)
 
 
+async def get_participant_validation_context(
+    participant_id: str,
+    organization_id_: str,
+) -> dict:
+    """Minimal participant context for the real-time note-validation check
+    (ai_service.validate_note_content) — deliberately not get_participant_by_id,
+    which does full plan/goal enrichment and writes a "Participant Record
+    Access" audit row on every call. This is called on every note save, so it
+    stays to a direct, unlogged, minimal select instead."""
+    if not participant_id or not organization_id_:
+        return {}
+
+    supabase = get_supabase_admin()
+    try:
+        participant_result = (
+            supabase.table(TABLE)
+            .select("id, full_name, primary_disability")
+            .eq("id", participant_id)
+            .eq("organization_id", organization_id_)
+            .limit(1)
+            .execute()
+        )
+        rows = participant_result.data or []
+        if not rows:
+            return {}
+        participant = rows[0]
+
+        goals_result = (
+            supabase.table("ndis_goals")
+            .select("name")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id_)
+            .eq("status", "active")
+            .limit(5)
+            .execute()
+        )
+        goal_titles = [g["name"] for g in (goals_result.data or []) if g.get("name")]
+
+        return {
+            "full_name": participant.get("full_name"),
+            "primary_disability": participant.get("primary_disability"),
+            "goal_titles": goal_titles,
+        }
+    except Exception:
+        logger.warning("get_participant_validation_context failed for %s", participant_id, exc_info=True)
+        return {}
+
+
 async def get_participant_by_id(
     participant_id: str,
     current_user: Optional[dict] = None,

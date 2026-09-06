@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   fetchFolderDocuments,
   fetchDocumentFile,
-  fetchVaultFolders,
+  fetchFolderMeta,
   fetchCustomizableFields,
   uploadGovernanceDocument,
   uploadCustomFolderDocument,
@@ -23,6 +23,7 @@ import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { FolderUploadDialog } from "./components/FolderUploadDialog";
 
 const CUSTOM_FOLDER_PREFIX = "custom:";
+const PAGE_SIZE = 20;
 
 const GOVERNANCE_FOLDER_KEYS = new Set([
   "governance_operational",
@@ -66,6 +67,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [docExclusions, setDocExclusions] = useState<Record<string, Set<string>>>({});
   const [customizableFields, setCustomizableFields] = useState<Record<string, string[]>>({});
@@ -80,12 +82,14 @@ export default function VaultFolderPage({ category }: { category: string }) {
   useEffect(() => {
     setSelectedIds(new Set());
     setPreviewId(null);
+    setPage(1);
     void loadMeta();
     void loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category]);
 
   useEffect(() => {
+    setPage(1);
     void loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, person, datePreset, customFrom, customTo]);
@@ -98,8 +102,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
 
   async function loadMeta() {
     try {
-      const folders = await fetchVaultFolders();
-      setMeta(folders.find((f) => f.category === category) ?? null);
+      setMeta(await fetchFolderMeta(category));
     } catch {
       // non-fatal — the page still works without the header count/label refreshing
     }
@@ -139,8 +142,17 @@ export default function VaultFolderPage({ category }: { category: string }) {
   }
 
   function toggleAll() {
-    const allSelected = documents.length > 0 && documents.every((d) => selectedIds.has(d.id));
-    setSelectedIds(allSelected ? new Set() : new Set(documents.map((d) => d.id)));
+    // Scoped to the visible page, matching the checkbox's own visual state
+    // (DocumentTable computes "all selected" from whatever slice it's given).
+    const allSelected = pagedDocuments.length > 0 && pagedDocuments.every((d) => selectedIds.has(d.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const d of pagedDocuments) {
+        if (allSelected) next.delete(d.id);
+        else next.add(d.id);
+      }
+      return next;
+    });
   }
 
   async function handleDownloadOne(doc: VaultDocument) {
@@ -194,6 +206,11 @@ export default function VaultFolderPage({ category }: { category: string }) {
     .filter((d) => selectedIds.has(d.id))
     .map((d) => ({ category: d.category, id: d.id, exclude_fields: Array.from(docExclusions[d.id] ?? []) }));
   const label = meta?.label || documents[0]?.folder_label || category.replace(/_/g, " ");
+
+  const totalPages = Math.max(1, Math.ceil(documents.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedDocuments = documents.slice(pageStart, pageStart + PAGE_SIZE);
 
   return (
     <HubLayout>
@@ -282,8 +299,8 @@ export default function VaultFolderPage({ category }: { category: string }) {
           </div>
         </div>
 
-        <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="min-w-0 lg:w-[40%]">
+        <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:h-[calc(100vh-260px)] lg:min-h-[560px]">
+          <div className="min-w-0 lg:flex lg:h-full lg:w-[40%] lg:flex-col">
             {loading ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -292,18 +309,26 @@ export default function VaultFolderPage({ category }: { category: string }) {
               </div>
             ) : (
               <DocumentTable
-                documents={documents}
+                documents={pagedDocuments}
                 selectedIds={selectedIds}
                 onToggle={toggle}
                 onToggleAll={toggleAll}
                 onDownload={(d) => void handleDownloadOne(d)}
                 onPreview={(d) => setPreviewId(d.id)}
                 focusedId={previewId}
+                pagination={{
+                  page: safePage,
+                  totalPages,
+                  from: documents.length === 0 ? 0 : pageStart + 1,
+                  to: Math.min(pageStart + PAGE_SIZE, documents.length),
+                  total: documents.length,
+                  onPageChange: setPage,
+                }}
               />
             )}
           </div>
 
-          <div className="w-full lg:w-[60%]">
+          <div className="w-full lg:sticky lg:top-[75px] lg:h-full lg:w-[60%]">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
               showVersionHistory={isGovernance}

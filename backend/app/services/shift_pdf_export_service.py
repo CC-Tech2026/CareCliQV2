@@ -64,6 +64,18 @@ def _format_ts(value: str | None) -> str:
         return str(value)[:19]
 
 
+def _escape_pdf_text(value: Any) -> str:
+    """ReportLab's Paragraph interprets a small XML-like markup subset in its
+    text, so raw DB/free-text content containing &, <, or > (a task label,
+    a compliance explanation, a worker's shift note) must be escaped before
+    being wrapped in a Paragraph - otherwise it can silently drop content
+    (e.g. an unrecognized "<tag>" is stripped rather than shown) or render
+    wrong, with no error raised."""
+    from xml.sax.saxutils import escape
+
+    return escape(str(value if value is not None else ""))
+
+
 def _ack_statements_from_signature(sig: dict[str, Any] | None) -> list[tuple[str, bool]]:
     if not sig:
         return [(stmt, False) for stmt in ACK_STATEMENTS]
@@ -76,14 +88,21 @@ def _ack_statements_from_signature(sig: dict[str, Any] | None) -> list[tuple[str
 
 
 def _add_pdf_accessibility_markers(pdf_bytes: bytes) -> bytes:
-    """Mark PDF as tagged for assistive tech (/Marked, /Lang on catalog)."""
+    """Mark PDF as tagged for assistive tech (/MarkInfo on the catalog).
+
+    /Lang is NOT added here - SimpleDocTemplate(..., lang="en-AU") already
+    writes it into the same Catalog dictionary. Adding a second /Lang here
+    (as this used to) produces a Catalog with a duplicate key, which pypdf
+    (and presumably other strict readers) flags: "Multiple definitions in
+    dictionary ... for key /Lang" - confirmed by inspecting the raw bytes of
+    a document built with lang="en-AU"."""
     if b"/MarkInfo" in pdf_bytes:
         return pdf_bytes
     marker = b"/Type /Catalog"
     pos = pdf_bytes.find(marker)
     if pos < 0:
         return pdf_bytes
-    insertion = b" /Lang (en-AU) /MarkInfo << /Marked true >>"
+    insertion = b" /MarkInfo << /Marked true >>"
     return pdf_bytes[: pos + len(marker)] + insertion + pdf_bytes[pos + len(marker) :]
 
 
@@ -204,13 +223,16 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
         parent=body_style,
         fontName="Helvetica-Bold",
     )
+    meta_label_style = ParagraphStyle("MetaLabel", parent=styles["BodyText"], fontSize=10, leading=13, fontName="Helvetica-Bold")
+    meta_value_style = ParagraphStyle("MetaValue", parent=styles["BodyText"], fontSize=10, leading=13)
 
     story.append(Paragraph("Shift Summary", title_style))
     story.append(Spacer(1, 4 * mm))
 
+    score = detail.get("compliance_score")
     meta_rows = [
         ["Shift ID", str(detail.get("id") or "")[:8].upper() or "—"],
-        ["Date", str(detail.get("shift_date") or "")[:10]],
+        ["Date", str(detail.get("shift_date") or "")[:10] or "—"],
         [
             "Participant",
             f"{detail.get('participant_first_name') or 'Participant'} ({_participant_display_id(detail)})",
@@ -227,16 +249,26 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
         ["Duration", _format_duration(detail.get("duration_minutes"))],
         [
             "Compliance",
-            f"{detail.get('compliance_score')}% ({detail.get('compliance_band') or '—'})",
+            f"{score}% ({detail.get('compliance_band') or '—'})" if score is not None else "—",
         ],
     ]
-    meta_table = Table(meta_rows, colWidths=[35 * mm, 130 * mm])
+    # Meta values are wrapped in Paragraph (not passed as plain strings) so
+    # long content - a long worker name, a long participant name - word-wraps
+    # within the column instead of silently overflowing the fixed 35mm/130mm
+    # widths past the page edge.
+    meta_table = Table(
+        [
+            [Paragraph(_escape_pdf_text(k), meta_label_style), Paragraph(_escape_pdf_text(v), meta_value_style)]
+            for k, v in meta_rows
+        ],
+        colWidths=[35 * mm, 130 * mm],
+    )
     meta_table.setStyle(
         TableStyle(
             [
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
     )
@@ -245,7 +277,7 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
     explanation = detail.get("compliance_explanation") or ""
     if explanation:
         story.append(Spacer(1, 4 * mm))
-        story.append(Paragraph(explanation, body_style))
+        story.append(Paragraph(_escape_pdf_text(explanation), body_style))
 
     story.append(Paragraph("Tasks", heading_style))
     tasks = detail.get("tasks") or []
@@ -258,7 +290,7 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
             status = "Completed" if completed else "Incomplete"
             if task.get("marked_na"):
                 status = "N/A"
-            label = str(task.get("label") or "Task")
+            label = _escape_pdf_text(task.get("label") or "Task")
             prefix = "[Mandatory] " if mandatory else "[Optional] "
             style = mandatory_style if mandatory else body_style
             story.append(Paragraph(f"{prefix}{label}: {status}", style))
@@ -267,18 +299,15 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
     if evidence:
         story.append(Paragraph("Evidence (names only)", heading_style))
         for ev in evidence:
-            story.append(
-                Paragraph(
-                    f"• {ev.get('label') or 'Evidence'} ({ev.get('type') or 'file'})",
-                    body_style,
-                )
-            )
+            ev_label = _escape_pdf_text(ev.get("label") or "Evidence")
+            ev_type = _escape_pdf_text(ev.get("type") or "file")
+            story.append(Paragraph(f"• {ev_label} ({ev_type})", body_style))
 
     notes = (detail.get("notes") or "").strip()
     if notes:
         story.append(Paragraph("Notes", heading_style))
         for line in notes.splitlines() or [notes]:
-            story.append(Paragraph(line or " ", body_style))
+            story.append(Paragraph(_escape_pdf_text(line) or " ", body_style))
 
     story.append(Paragraph("Compliance confirmation", heading_style))
     sig = detail.get("shift_signature")
@@ -289,6 +318,10 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
     story.append(Paragraph("Worker signature", heading_style))
     if sig and signature_png:
         try:
+            # Not escaped here - SignatureBlockFlowable draws this directly
+            # via canvas.drawString, which takes raw text, not the XML-ish
+            # markup Paragraph parses, so escaped entities would show up
+            # literally (e.g. "&amp;" instead of "&") in the caption.
             signer = sig.get("signer_name") or "Worker"
             signed_at = str(sig.get("signed_at") or "")
             story.append(SignatureBlockFlowable(signature_png, signer, signed_at))
@@ -296,7 +329,7 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
             logger.debug("signature embed failed: %s", exc)
             story.append(Paragraph("No signature available", body_style))
     elif sig:
-        signer = sig.get("signer_name") or "Worker"
+        signer = _escape_pdf_text(sig.get("signer_name") or "Worker")
         signed_at = str(sig.get("signed_at") or "")[:19]
         story.append(Paragraph(f"Signed by {signer} on {signed_at}", body_style))
         story.append(Paragraph("Signature image unavailable", body_style))

@@ -1,4 +1,4 @@
-import { Camera, Mic, Paperclip, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, Mic, Paperclip, Pencil, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
@@ -55,10 +55,11 @@ function imageUrl(note: SessionNoteRecord) {
 type Props = {
   note: SessionNoteRecord;
   onDelete: () => void;
+  onEdit?: () => void;
   onViewImage?: (url: string, title: string) => void;
 };
 
-export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
+export function SessionNoteHistoryCard({ note, onDelete, onEdit, onViewImage }: Props) {
   const { translate, translateParams } = useAccessibility();
   const type = inferNoteType(note);
   const Icon = typeIcon(type);
@@ -120,15 +121,37 @@ export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
             )}
           </div>
         )}
+
+        {note.validation_result?.warning_message && (
+          <div className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2 py-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
+            <p className="text-amber-800 text-xs font-medium leading-snug">
+              {note.validation_result.warning_message}
+            </p>
+          </div>
+        )}
       </div>
-      <button
-        type="button"
-        className="shrink-0 self-start rounded p-1.5 text-red-600 transition hover:bg-red-50"
-        aria-label={translate("shift.session.noteDelete")}
-        onClick={onDelete}
-      >
-        <Trash2 size={15} />
-      </button>
+      <div className="flex shrink-0 items-start gap-1">
+        {onEdit && type === "text" && (
+          <button
+            type="button"
+            className="self-start rounded p-1.5 transition hover:bg-cc-bg"
+            style={{ color: MUTED }}
+            aria-label={translate("shift.session.noteEdit")}
+            onClick={onEdit}
+          >
+            <Pencil size={15} />
+          </button>
+        )}
+        <button
+          type="button"
+          className="shrink-0 self-start rounded p-1.5 text-red-600 transition hover:bg-red-50"
+          aria-label={translate("shift.session.noteDelete")}
+          onClick={onDelete}
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
     </li>
   );
 }

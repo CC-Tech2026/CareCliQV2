@@ -178,7 +178,14 @@ class LegalRecordNormalizationTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(session_service, "get_supabase_admin", return_value=supabase), patch(
             "backend.app.services.participant_service.get_participant_by_id",
             AsyncMock(return_value={"id": "p1", "organization_id": ORG_A}),
+        ), patch.object(
+            session_service, "_snapshot_note_version", AsyncMock(return_value=None)
         ):
+            # Note-version snapshotting is exercised separately in
+            # test_session_note_versions.py — mocked out here since this test
+            # is specifically about the optional-column insert retry, and the
+            # shared `sessions` mock has no spare side_effect entries for the
+            # extra session_note_versions calls that would otherwise trigger.
             data = session_service.SessionCreate(
                 participant_id="p1",
                 session_date=date.today(),

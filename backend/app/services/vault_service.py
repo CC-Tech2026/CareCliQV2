@@ -22,8 +22,10 @@ import io
 import json
 import logging
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -125,61 +127,94 @@ GOVERNANCE_MAX_BYTES = 20 * 1024 * 1024
 
 VALID_SHARE_METHODS = {"download_zip", "email_gmail", "email_outlook", "email_mailto"}
 
+# ── Tiny per-org TTL cache ────────────────────────────────────────────────────
+# list_folders()/list_vault_stats() call every category's loader back-to-back
+# to build the folder list and the home-page stats, and every loader
+# independently re-fetches the same org-wide patient/worker/org-name lookup
+# to attach a human-readable name to its rows. That's the same handful of
+# queries re-issued 15-20+ times over during a single Vault Home load. A short
+# TTL (not indefinite - a newly added patient/worker should show up quickly)
+# collapses all of those back down to one real query per org per window.
+_TTL_SECONDS = 30.0
+_ttl_cache: dict[str, tuple[float, Any]] = {}
+
+
+def _cached(key: str, compute: Callable[[], Any]) -> Any:
+    now = time.monotonic()
+    hit = _ttl_cache.get(key)
+    if hit and now - hit[0] < _TTL_SECONDS:
+        return hit[1]
+    value = compute()
+    _ttl_cache[key] = (now, value)
+    return value
+
 
 # ── Name-lookup helpers (batched per org, not per-row, to avoid N+1) ──────────
 
 def _patient_name_map(org_id: str) -> dict[str, str]:
-    try:
-        resp = (
-            get_supabase_admin().table("patients")
-            .select("id, full_name")
-            .eq("organization_id", org_id)
-            .execute()
-        )
-        return {row["id"]: row.get("full_name") or "Unknown participant" for row in (resp.data or [])}
-    except Exception:
-        return {}
+    def compute() -> dict[str, str]:
+        try:
+            resp = (
+                get_supabase_admin().table("patients")
+                .select("id, full_name")
+                .eq("organization_id", org_id)
+                .execute()
+            )
+            return {row["id"]: row.get("full_name") or "Unknown participant" for row in (resp.data or [])}
+        except Exception:
+            return {}
+
+    return _cached(f"patients:{org_id}", compute)
 
 
 def _user_name_map(org_id: str) -> dict[str, str]:
-    try:
-        resp = (
-            get_supabase_admin().table("users")
-            .select("id, full_name")
-            .eq("organization_id", org_id)
-            .execute()
-        )
-        return {row["id"]: row.get("full_name") or "Unknown worker" for row in (resp.data or [])}
-    except Exception:
-        return {}
+    def compute() -> dict[str, str]:
+        try:
+            resp = (
+                get_supabase_admin().table("users")
+                .select("id, full_name")
+                .eq("organization_id", org_id)
+                .execute()
+            )
+            return {row["id"]: row.get("full_name") or "Unknown worker" for row in (resp.data or [])}
+        except Exception:
+            return {}
+
+    return _cached(f"users:{org_id}", compute)
 
 
 def _applicant_name_map(org_id: str) -> dict[str, str]:
-    try:
-        resp = (
-            get_supabase_admin().table("applicants")
-            .select("id, full_name")
-            .eq("organization_id", org_id)
-            .execute()
-        )
-        return {row["id"]: row.get("full_name") or "Unknown applicant" for row in (resp.data or [])}
-    except Exception:
-        return {}
+    def compute() -> dict[str, str]:
+        try:
+            resp = (
+                get_supabase_admin().table("applicants")
+                .select("id, full_name")
+                .eq("organization_id", org_id)
+                .execute()
+            )
+            return {row["id"]: row.get("full_name") or "Unknown applicant" for row in (resp.data or [])}
+        except Exception:
+            return {}
+
+    return _cached(f"applicants:{org_id}", compute)
 
 
 def _org_name(org_id: str) -> str:
-    try:
-        resp = (
-            get_supabase_admin().table("organizations")
-            .select("organization_name")
-            .eq("organization_id", org_id)
-            .limit(1)
-            .execute()
-        )
-        row = (resp.data or [None])[0]
-        return (row or {}).get("organization_name") or "Organisation"
-    except Exception:
-        return "Organisation"
+    def compute() -> str:
+        try:
+            resp = (
+                get_supabase_admin().table("organizations")
+                .select("organization_name")
+                .eq("organization_id", org_id)
+                .limit(1)
+                .execute()
+            )
+            row = (resp.data or [None])[0]
+            return (row or {}).get("organization_name") or "Organisation"
+        except Exception:
+            return "Organisation"
+
+    return _cached(f"org_name:{org_id}", compute)
 
 
 def _download_stored_file(bucket_name: str, file_path: str) -> bytes:
@@ -192,6 +227,17 @@ def _download_stored_file(bucket_name: str, file_path: str) -> bytes:
 # ── Lightweight per-record PDF rendering for DB-row-only categories ───────────
 # Mirrors shift_pdf_export_service's reportlab pattern, without the
 # signature-block machinery that's specific to shift PDFs.
+
+def _escape_pdf_text(value: Any) -> str:
+    """ReportLab's Paragraph interprets a small XML-like markup subset in its
+    text, so raw DB/free-text content containing &, <, or > (a participant
+    name like "Smith & Sons", a note that happens to include a "<") must be
+    escaped before being wrapped in a Paragraph - otherwise it can render
+    wrong or raise a markup parse error."""
+    from xml.sax.saxutils import escape
+
+    return escape(str(value if value is not None else ""))
+
 
 def _filter_meta(meta_rows: list[tuple[str, str]], exclude: set[str] | None) -> list[tuple[str, str]]:
     if not exclude:
@@ -245,25 +291,37 @@ def _render_record_pdf(
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=15, spaceAfter=8, textColor=HexColor(accent))
     heading_style = ParagraphStyle("Section", parent=styles["Heading2"], fontSize=11, spaceBefore=8, spaceAfter=3)
     body_style = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14)
+    meta_label_style = ParagraphStyle("MetaLabel", parent=styles["BodyText"], fontSize=10, leading=13, fontName="Helvetica-Bold")
+    meta_value_style = ParagraphStyle("MetaValue", parent=styles["BodyText"], fontSize=10, leading=13)
 
-    story.extend([Paragraph(title, title_style), Spacer(1, 3 * mm)])
+    story.extend([Paragraph(_escape_pdf_text(title), title_style), Spacer(1, 3 * mm)])
     if meta_rows:
-        table = Table([[k, v] for k, v in meta_rows], colWidths=[40 * mm, 125 * mm])
+        # Meta values are wrapped in Paragraph (not passed as plain strings) so
+        # long content - a full worker name plus role, a long participant
+        # name - word-wraps within the column instead of silently overflowing
+        # the fixed 40mm/125mm widths past the page edge.
+        table = Table(
+            [
+                [Paragraph(_escape_pdf_text(k), meta_label_style), Paragraph(_escape_pdf_text(v), meta_value_style)]
+                for k, v in meta_rows
+            ],
+            colWidths=[40 * mm, 125 * mm],
+        )
         table.setStyle(
             TableStyle(
                 [
-                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, -1), 10),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ]
             )
         )
         story.append(table)
     for label, text_value in sections:
         story.append(Spacer(1, 3 * mm))
-        story.append(Paragraph(label, heading_style))
+        story.append(Paragraph(_escape_pdf_text(label), heading_style))
         for line in text_value.splitlines() or [text_value]:
-            story.append(Paragraph(line or " ", body_style))
+            story.append(Paragraph(_escape_pdf_text(line) or " ", body_style))
 
     doc.build(story)
     return buffer.getvalue()
@@ -373,7 +431,7 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
 
     meta = [
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
-        ("Date", session_dt[:10]),
+        ("Date", session_dt[:10] or "—"),
         ("Time", session_dt[11:16] if len(session_dt) >= 16 else "—"),
         ("Duration", f"{duration} minutes" if duration else "—"),
         ("Support worker", worker_display),
@@ -440,7 +498,7 @@ def _render_incident(org_id: str, document_id: str, exclude_fields: set[str] | N
     patients = _patient_name_map(org_id)
     meta = [
         ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
-        ("Date", str(row.get("incident_date") or "")[:10]),
+        ("Date", str(row.get("incident_date") or "")[:10] or "—"),
         ("Type", row.get("incident_type") or "—"),
         ("Severity", row.get("severity") or "—"),
         ("Status", row.get("status") or "—"),
@@ -502,8 +560,8 @@ def _render_ndis_plan(org_id: str, document_id: str, exclude_fields: set[str] | 
     meta = [
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
         ("Plan number", row.get("plan_number") or "—"),
-        ("Plan period", f"{row.get('plan_start')} to {row.get('plan_end')}"),
-        ("Total funding", f"${row.get('total_funding')}" if row.get("total_funding") is not None else "—"),
+        ("Plan period", f"{row.get('plan_start') or '—'} to {row.get('plan_end') or '—'}"),
+        ("Total funding", f"${row.get('total_funding'):,.2f}" if row.get("total_funding") is not None else "—"),
         ("Status", row.get("status") or "—"),
     ]
     pdf = _render_record_pdf(org_id, "NDIS Plan Summary", meta, exclude=exclude_fields)
@@ -609,7 +667,7 @@ def _render_medication_record(org_id: str, document_id: str, exclude_fields: set
     patients = _patient_name_map(org_id)
     meta = [
         ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
-        ("Administered", str(row.get("administered_time") or "")[:19]),
+        ("Administered", str(row.get("administered_time") or "")[:19] or "—"),
         ("Outcome", (row.get("outcome") or "—").replace("_", " ").title()),
         ("Dose given", row.get("dose_given") or "—"),
     ]
@@ -765,7 +823,7 @@ def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | No
         ("Invoice number", row.get("invoice_number") or "—"),
         ("Issued", str(row.get("issued_at") or row.get("created_at") or "")[:10]),
         ("Due date", str(row.get("due_date") or "")[:10] or "—"),
-        ("Total", f"${total / 100:.2f}" if total is not None else "—"),
+        ("Total", f"${total / 100:,.2f}" if total is not None else "—"),
         ("Status", (row.get("status") or "draft").replace("_", " ").title()),
     ]
     pdf = _render_record_pdf(org_id, "Invoice Summary", meta, exclude=exclude_fields)
@@ -920,7 +978,7 @@ def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: se
         ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
         ("Consent given by", row.get("consent_given_by") or "—"),
         ("Consent method", row.get("consent_method") or "—"),
-        ("Confirmed at", str(row.get("consent_confirmed_at") or "")[:19]),
+        ("Confirmed at", str(row.get("consent_confirmed_at") or "")[:19] or "—"),
     ]
     pdf = _render_record_pdf(org_id, "Plan Meeting Consent Record", meta, exclude=exclude_fields)
     return f"consent-{document_id[:8]}.pdf", pdf
@@ -1076,19 +1134,22 @@ def _custom_folder_id(category: str) -> str:
 
 
 def list_custom_folders(org_id: str) -> list[dict[str, Any]]:
-    try:
-        resp = (
-            get_supabase_admin()
-            .table("vault_custom_folders")
-            .select("id, label, description, folder_group, created_at")
-            .eq("organization_id", org_id)
-            .is_("deleted_at", "null")
-            .order("created_at")
-            .execute()
-        )
-        return resp.data or []
-    except Exception:
-        return []
+    def compute() -> list[dict[str, Any]]:
+        try:
+            resp = (
+                get_supabase_admin()
+                .table("vault_custom_folders")
+                .select("id, label, description, folder_group, created_at")
+                .eq("organization_id", org_id)
+                .is_("deleted_at", "null")
+                .order("created_at")
+                .execute()
+            )
+            return resp.data or []
+        except Exception:
+            return []
+
+    return _cached(f"custom_folders:{org_id}", compute)
 
 
 def create_custom_folder(
@@ -1316,6 +1377,36 @@ def _apply_filters(
     return sorted(out, key=lambda d: d["date"] or "", reverse=True)
 
 
+def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
+    """The raw, unfiltered per-category fetch — the part that's actually
+    worth caching, since it's identical for every request in the TTL window
+    regardless of a viewer's search/person/date filters. Every other query
+    on this data (list, count, search) starts from this same cached list."""
+    def compute() -> list[VaultDocument]:
+        if category.startswith(CUSTOM_FOLDER_PREFIX):
+            return _list_custom_folder_documents(org_id, _custom_folder_id(category))
+        if category not in CATEGORY_META:
+            raise HTTPException(status_code=404, detail="Unknown vault category.")
+        if category in GOVERNANCE_FOLDER_KEYS:
+            return _list_governance(org_id, category)
+        loader = _RECORD_LOADERS.get(category)
+        return loader(org_id) if loader else []
+
+    return _cached(f"docs:{org_id}:{category}", compute)
+
+
+def _load_all_category_docs(org_id: str) -> dict[str, list[VaultDocument]]:
+    """Every built-in + custom category's docs, fetched concurrently. Cheap
+    on a warm cache (each _load_category_docs call is then just a dict
+    lookup); on a cold cache this turns ~20 sequential network round-trips
+    into one round-trip's worth of wall-clock time."""
+    custom_folders = list_custom_folders(org_id)
+    keys = list(CATEGORY_META.keys()) + [_custom_folder_category(c["id"]) for c in custom_folders]
+    with ThreadPoolExecutor(max_workers=min(len(keys), 12) or 1) as pool:
+        results = pool.map(lambda k: _load_category_docs(org_id, k), keys)
+    return dict(zip(keys, results))
+
+
 def list_folder_documents(
     org_id: str,
     category: str,
@@ -1325,16 +1416,9 @@ def list_folder_documents(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[VaultDocument]:
-    if category.startswith(CUSTOM_FOLDER_PREFIX):
-        docs = _list_custom_folder_documents(org_id, _custom_folder_id(category))
-        return _apply_filters(docs, search=search, person=person, date_from=date_from, date_to=date_to)
-    if category not in CATEGORY_META:
+    if not category.startswith(CUSTOM_FOLDER_PREFIX) and category not in CATEGORY_META:
         raise HTTPException(status_code=404, detail="Unknown vault category.")
-    if category in GOVERNANCE_FOLDER_KEYS:
-        docs = _list_governance(org_id, category)
-    else:
-        loader = _RECORD_LOADERS.get(category)
-        docs = loader(org_id) if loader else []
+    docs = _load_category_docs(org_id, category)
     return _apply_filters(docs, search=search, person=person, date_from=date_from, date_to=date_to)
 
 
@@ -1363,36 +1447,53 @@ def render_document_file(
     return renderer(org_id, document_id, exclude_fields)
 
 
-def list_folders(org_id: str) -> list[dict[str, Any]]:
-    folders = []
-    for key, meta in CATEGORY_META.items():
-        docs = list_folder_documents(org_id, key)
-        flagged = sum(1 for d in docs if d["status"] in FLAGGED_STATUSES)
-        folders.append(
-            {
-                "category": key,
-                "label": meta["label"],
-                "group": meta["group"],
-                "count": len(docs),
-                "flagged_count": flagged,
-                "updated_at": docs[0]["date"] if docs else None,
-                "is_custom": False,
-            }
-        )
+def _folder_meta_from_docs(
+    category: str, label: str, group: str, is_custom: bool, docs: list[VaultDocument], fallback_updated_at: str | None = None
+) -> dict[str, Any]:
+    flagged = 0 if is_custom else sum(1 for d in docs if d["status"] in FLAGGED_STATUSES)
+    return {
+        "category": category,
+        "label": label,
+        "group": group,
+        "count": len(docs),
+        "flagged_count": flagged,
+        "updated_at": docs[0]["date"] if docs else fallback_updated_at,
+        "is_custom": is_custom,
+    }
 
-    for custom in list_custom_folders(org_id):
+
+def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
+    """A single folder's meta — used when a viewer opens one folder, so it
+    never needs to pay for computing all 17+ categories just to read one."""
+    if category.startswith(CUSTOM_FOLDER_PREFIX):
+        folder_id = _custom_folder_id(category)
+        custom = next((c for c in list_custom_folders(org_id) if c["id"] == folder_id), None)
+        if not custom:
+            return None
+        docs = _load_category_docs(org_id, category)
+        return _folder_meta_from_docs(category, custom["label"], custom.get("folder_group") or "record", True, docs, custom.get("created_at"))
+    meta = CATEGORY_META.get(category)
+    if not meta:
+        return None
+    docs = _load_category_docs(org_id, category)
+    return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+
+
+def list_folders(org_id: str) -> list[dict[str, Any]]:
+    custom_folders = list_custom_folders(org_id)
+    all_docs = _load_all_category_docs(org_id)
+
+    folders = [
+        _folder_meta_from_docs(key, meta["label"], meta["group"], False, all_docs.get(key, []))
+        for key, meta in CATEGORY_META.items()
+    ]
+    for custom in custom_folders:
         category = _custom_folder_category(custom["id"])
-        docs = list_folder_documents(org_id, category)
         folders.append(
-            {
-                "category": category,
-                "label": custom["label"],
-                "group": custom.get("folder_group") or "record",
-                "count": len(docs),
-                "flagged_count": 0,
-                "updated_at": docs[0]["date"] if docs else custom.get("created_at"),
-                "is_custom": True,
-            }
+            _folder_meta_from_docs(
+                category, custom["label"], custom.get("folder_group") or "record", True,
+                all_docs.get(category, []), custom.get("created_at"),
+            )
         )
 
     order = get_folder_order(org_id)
@@ -1402,14 +1503,15 @@ def list_folders(org_id: str) -> list[dict[str, Any]]:
 
 
 def list_vault_stats(org_id: str) -> dict[str, Any]:
-    total = 0
-    flagged = 0
-    for cat in CATEGORY_META:
-        docs = list_folder_documents(org_id, cat)
-        total += len(docs)
-        flagged += sum(1 for d in docs if d["status"] in FLAGGED_STATUSES)
-    for custom in list_custom_folders(org_id):
-        total += len(list_folder_documents(org_id, _custom_folder_category(custom["id"])))
+    all_docs = _load_all_category_docs(org_id)
+    total = sum(len(docs) for docs in all_docs.values())
+    flagged = sum(
+        1
+        for key, docs in all_docs.items()
+        if key in CATEGORY_META  # custom-folder docs have no meaningful "flagged" status
+        for d in docs
+        if d["status"] in FLAGGED_STATUSES
+    )
 
     since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     shared = 0

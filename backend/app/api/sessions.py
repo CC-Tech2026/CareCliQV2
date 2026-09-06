@@ -326,6 +326,18 @@ async def update_session(session_id: str, body: SessionUpdate, current_user: dic
     return updated
 
 
+@router.get("/{session_id}/note-versions")
+async def get_session_note_versions(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Full version history for a session's structured note fields (original
+    + every edit) — never overwritten, so this is the provable record of
+    what was written and when."""
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    org_id = get_user_organization_id(current_user)
+    return {"versions": session_service.list_session_note_versions(session_id, org_id)}
+
+
 @router.post("/{session_id}/save-with-ai")
 async def save_session_with_ai(
     session_id: str,

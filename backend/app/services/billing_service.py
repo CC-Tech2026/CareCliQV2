@@ -628,13 +628,14 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         except Exception:
             pass
 
-    # ── Plan dates from ndis_plans ─────────────────────────────────────────
+    # ── Plan dates + reference from ndis_plans ─────────────────────────────
     plan_start_date = ""
     plan_end_date = ""
+    plan_number = ""
     if invoice.get("participant_id"):
         try:
             r = supabase.table("ndis_plans").select(
-                "plan_start, plan_end"
+                "plan_start, plan_end, plan_number"
             ).eq("patient_id", invoice["participant_id"]).order(
                 "created_at", desc=True
             ).limit(1).execute()
@@ -643,6 +644,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
                 plan_start_date = _fmt_dmy(plan_row["plan_start"])
             if plan_row.get("plan_end"):
                 plan_end_date = _fmt_dmy(plan_row["plan_end"])
+            plan_number = plan_row.get("plan_number") or ""
         except Exception:
             pass
 
@@ -784,7 +786,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "status": invoice.get("status") or "draft",
         # Bill To
         "billed_to_name": billed_to_name,
-        "billed_to_address_line1": "",
+        "billed_to_address_line1": participant.get("address") or "",
         "billed_to_address_line2": "",
         "billed_to_email": billed_to_email,
         "billed_to_phone": billed_to_phone,
@@ -799,7 +801,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "plan_management_type": pmt_display,
         "plan_management_code": pmt_code,
         "support_category": support_category,
-        "service_agreement_ref": invoice.get("service_agreement_ref") or "",
+        "service_agreement_ref": plan_number,
         "claim_reference": invoice.get("claim_reference") or "",
         # Line items
         "line_items": template_items,

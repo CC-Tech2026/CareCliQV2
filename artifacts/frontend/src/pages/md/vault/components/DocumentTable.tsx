@@ -1,4 +1,5 @@
-import { Download, FileText } from "lucide-react";
+import { useMemo } from "react";
+import { ChevronLeft, ChevronRight, Download, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { VaultDocument } from "@/services/vaultService";
 
@@ -33,6 +34,93 @@ function formatDate(iso: string): string {
  * every column has to earn its width. Participant folds into the document
  * cell as a subtext line instead of its own column, and status sits next
  * to the download button rather than getting a full column of its own. */
+/** Optional paging footer — the caller owns the current page and the slice
+ * of `documents` it passes in, this just renders "Showing X-Y of Z" plus
+ * prev/next + numbered controls. Omitted entirely when there's only one page. */
+function DocumentTablePagination({
+  page,
+  totalPages,
+  from,
+  to,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  from: number;
+  to: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const pages = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 3) return [1, 2, 3, 4, totalPages];
+    if (page >= totalPages - 2) return [1, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, page - 1, page, page + 1, totalPages];
+  }, [page, totalPages]);
+
+  return (
+    <div
+      className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-3 py-2"
+      style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}
+    >
+      <p className="text-[11px] font-medium tabular-nums" style={{ color: "var(--cc-muted)" }}>
+        Showing {from}-{to} of {total}
+      </p>
+      <nav className="flex items-center gap-1" aria-label="Document pages">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border disabled:opacity-40"
+          style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)", background: "var(--cc-surface)" }}
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        {pages.map((p, idx) => {
+          const prev = pages[idx - 1];
+          const showEllipsis = prev != null && p - prev > 1;
+          const active = p === page;
+          return (
+            <span key={p} className="flex items-center gap-1">
+              {showEllipsis && (
+                <span className="px-0.5 text-[11px] font-bold" style={{ color: "var(--cc-muted)" }} aria-hidden>
+                  …
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onPageChange(p)}
+                className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-[11px] font-black tabular-nums"
+                style={{
+                  borderColor: active ? "var(--cc-plum)" : "var(--cc-border)",
+                  background: active ? "var(--cc-plum)" : "var(--cc-surface)",
+                  color: active ? "white" : "var(--cc-text)",
+                }}
+                aria-current={active ? "page" : undefined}
+                aria-label={`Page ${p}`}
+              >
+                {p}
+              </button>
+            </span>
+          );
+        })}
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border disabled:opacity-40"
+          style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)", background: "var(--cc-surface)" }}
+          aria-label="Next page"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </nav>
+    </div>
+  );
+}
+
 export function DocumentTable({
   documents,
   showCategoryColumn = false,
@@ -42,6 +130,7 @@ export function DocumentTable({
   onDownload,
   onPreview,
   focusedId,
+  pagination,
 }: {
   documents: VaultDocument[];
   showCategoryColumn?: boolean;
@@ -51,6 +140,9 @@ export function DocumentTable({
   onDownload: (doc: VaultDocument) => void;
   onPreview?: (doc: VaultDocument) => void;
   focusedId?: string | null;
+  /** Renders a paging footer when there's more than one page. `documents`
+   * should already be sliced to the current page by the caller. */
+  pagination?: { page: number; totalPages: number; from: number; to: number; total: number; onPageChange: (page: number) => void };
 }) {
   const allSelected = documents.length > 0 && documents.every((d) => selectedIds.has(d.id));
   const someSelected = documents.some((d) => selectedIds.has(d.id));
@@ -64,8 +156,8 @@ export function DocumentTable({
   }
 
   return (
-    <div className="rounded-2xl border" style={{ borderColor: "var(--cc-border)" }}>
-      <div className="flex items-center gap-2 border-b px-3 py-2" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
+    <div className="rounded-2xl border overflow-hidden lg:flex lg:h-full lg:flex-col" style={{ borderColor: "var(--cc-border)" }}>
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
         <Checkbox
           checked={allSelected ? true : someSelected ? "indeterminate" : false}
           onCheckedChange={onToggleAll}
@@ -74,7 +166,9 @@ export function DocumentTable({
           Document
         </span>
       </div>
-      <div className="divide-y" style={{ borderColor: "var(--cc-border)" }}>
+      {/* Only this row list scrolls on desktop — header and pagination
+       * footer stay put, so the preview beside it never needs page-scroll. */}
+      <div className="divide-y lg:min-h-0 lg:flex-1 lg:overflow-y-auto" style={{ borderColor: "var(--cc-border)" }}>
         {documents.map((doc) => {
           const tone = statusTone(doc.status);
           const isFocused = focusedId === doc.id;
@@ -128,6 +222,7 @@ export function DocumentTable({
           );
         })}
       </div>
+      {pagination && pagination.totalPages > 1 && <DocumentTablePagination {...pagination} />}
     </div>
   );
 }

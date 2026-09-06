@@ -40,6 +40,18 @@ async def get_vault_folders(current_user: dict = Depends(get_current_user)):
     return {"folders": vault_service.list_folders(org_id)}
 
 
+@router.get("/folders/{category}/meta")
+async def get_folder_meta(category: str, current_user: dict = Depends(get_current_user)):
+    """One folder's count/label/updated_at — for a viewer opening a single
+    folder, so it doesn't pay the cost of computing all 17+ categories
+    (list_folders) just to read the one it's actually looking at."""
+    org_id = _require_md(current_user)
+    meta = vault_service.get_folder_meta(org_id, category)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Unknown vault category.")
+    return meta
+
+
 @router.get("/customizable-fields")
 async def get_customizable_fields(current_user: dict = Depends(get_current_user)):
     _require_md(current_user)

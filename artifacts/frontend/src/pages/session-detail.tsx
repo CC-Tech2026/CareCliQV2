@@ -55,7 +55,7 @@ import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
   RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target,
-  Flag, FlagOff, ArrowLeft, User,
+  Flag, FlagOff, ArrowLeft, User, History,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -259,6 +259,17 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [isAISaving, setIsAISaving] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
+  const [noteHistoryOpen, setNoteHistoryOpen] = useState(false);
+  const [noteVersions, setNoteVersions] = useState<
+    Array<{
+      id: string;
+      is_current: boolean;
+      created_at: string;
+      created_during_shift?: boolean;
+      validation_result?: { warning_message: string | null } | null;
+    }> | null
+  >(null);
+  const [noteVersionsLoading, setNoteVersionsLoading] = useState(false);
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const qc = useQueryClient();
@@ -976,10 +987,64 @@ export default function SessionDetail({ id }: { id?: string }) {
             if (filledSections.length === 0) return null;
             return (
               <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "var(--cc-card-shadow)" }}>
-                <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "var(--cc-card-divider)" }}>
-                  <Shield className="h-4 w-4" style={{ color: "var(--cc-muted)" }} />
-                  <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>Structured Clinical Notes</p>
+                <div className="px-5 py-4 border-b flex items-center justify-between gap-2" style={{ borderColor: "var(--cc-card-divider)" }}>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" style={{ color: "var(--cc-muted)" }} />
+                    <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>Structured Clinical Notes</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !noteHistoryOpen;
+                      setNoteHistoryOpen(next);
+                      if (next && noteVersions === null && sessionId) {
+                        setNoteVersionsLoading(true);
+                        try {
+                          const res = await apiFetch(`/api/sessions/${sessionId}/note-versions`);
+                          const data = await res.json();
+                          setNoteVersions(Array.isArray(data?.versions) ? data.versions : []);
+                        } catch {
+                          setNoteVersions([]);
+                        } finally {
+                          setNoteVersionsLoading(false);
+                        }
+                      }
+                    }}
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                    style={{
+                      borderColor: noteHistoryOpen ? "var(--cc-plum)" : "var(--cc-border)",
+                      color: noteHistoryOpen ? "var(--cc-plum)" : "var(--cc-muted)",
+                    }}
+                  >
+                    <History className="h-3 w-3" />
+                    Version history
+                  </button>
                 </div>
+
+                {noteHistoryOpen && (
+                  <div className="border-b px-5 py-3" style={{ borderColor: "var(--cc-card-divider)" }}>
+                    {noteVersionsLoading ? (
+                      <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>Loading version history…</p>
+                    ) : !noteVersions || noteVersions.length <= 1 ? (
+                      <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>No prior versions — this is the original note.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {noteVersions.map((v) => (
+                          <div key={v.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: "var(--cc-soft)" }}>
+                            <p className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                              {v.is_current ? "Current version" : "Superseded"} · {format(parseISO(v.created_at), "d MMM yyyy, h:mm a")}
+                              {v.created_during_shift ? " · flagged live during shift" : ""}
+                            </p>
+                            {v.validation_result?.warning_message && (
+                              <span className="text-[10.5px] font-semibold text-amber-700 shrink-0">Flagged</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-5 space-y-5">
                   {filledSections.map(({ label, icon: Icon, value, color }) => (
                     <div key={label}>

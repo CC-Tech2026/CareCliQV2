@@ -3565,6 +3565,7 @@ export const en: Dict = {
   "shift.session.timeline": "Session Timeline ({count})",
   "shift.session.timelineEmpty": "Updates from your task threads will appear here.",
   "shift.session.noteDelete": "Delete note",
+  "shift.session.noteEdit": "Edit note",
   "shift.session.viewImage": "View image",
   "shift.session.image": "Image",
   "shift.session.attachedFile": "Attached file",

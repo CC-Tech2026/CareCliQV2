@@ -84,10 +84,12 @@ def test_build_shift_pdf_bytes():
                 {"label": "Meal prep", "completed": False, "mandatory": False},
             ],
             "worker_name": "Alex Worker",
-        }
+        },
+        "11111111-1111-1111-1111-111111111111",
     )
     assert pdf.startswith(b"%PDF")
     assert b"/MarkInfo" in pdf or b"/Marked" in pdf
+    assert pdf.count(b"/Lang (en-AU)") == 1
 
 
 def test_shift_summary_email_subject_format():

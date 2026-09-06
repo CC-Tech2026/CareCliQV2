@@ -3461,6 +3461,7 @@ export const zhHans: Dict = {
   "shift.session.listening": "正在听……",
   "shift.session.liveNote": "实时进度说明",
   "shift.session.noteDelete": "删除注释",
+  "shift.session.noteEdit": "编辑注释",
   "shift.session.notePlaceholder": "在上面的注释区域中语音或输入",
   "shift.session.notesEmpty": "您发送的注释将显示在此处，最新的在前。",
   "shift.session.offlineNotes": "离线——笔记保存在本地",

@@ -3461,6 +3461,7 @@ export const ar: Dict = {
   "shift.session.listening": "جاري الاستماع…",
   "shift.session.liveNote": "ملاحظة التقدم المباشر",
   "shift.session.noteDelete": "حذف الملاحظة",
+  "shift.session.noteEdit": "تعديل الملاحظة",
   "shift.session.notePlaceholder": "صوت أو اكتب في منطقة الملاحظة أعلاه",
   "shift.session.notesEmpty": "ستظهر هنا الملاحظات التي ترسلها، الأحدث أولاً.",
   "shift.session.offlineNotes": "غير متصل - يتم حفظ الملاحظات محليًا",

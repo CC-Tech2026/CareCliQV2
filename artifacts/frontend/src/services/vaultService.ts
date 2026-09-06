@@ -67,6 +67,14 @@ export async function fetchVaultFolders(): Promise<VaultFolder[]> {
   return data.folders;
 }
 
+/** One folder's meta only — for a folder page opening a single category, so
+ * it doesn't pay for recomputing every category (fetchVaultFolders) just to
+ * read the one it's actually showing. */
+export async function fetchFolderMeta(category: string): Promise<VaultFolder> {
+  const res = await apiFetch(`/api/md-vault/folders/${encodeURIComponent(category)}/meta`);
+  return parseJson<VaultFolder>(res);
+}
+
 /** Which field/section labels can be individually left out of a share, per
  * category — empty/absent for categories with no structured content to
  * customize (real uploaded files). */

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -894,9 +894,17 @@ def test_goal_id_for_shift_task_resolves_from_tasks_json():
     assert shift_service._goal_id_for_shift_task(shift, "missing") is None
 
 
+@pytest.mark.asyncio
+@patch("backend.app.services.shift_service._run_note_validation", new_callable=AsyncMock)
 @patch("backend.app.services.shift_service.get_shift_for_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_for_session):
+async def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_for_session, mock_validate):
+    mock_validate.return_value = {
+        "relevant_to_participant": True,
+        "fits_task_category": True,
+        "inappropriate_content": False,
+        "warning_message": None,
+    }
     session = {
         "id": "sess-1",
         "shift_id": "shift-1",
@@ -935,7 +943,7 @@ def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_for_sess
         ]
     )
 
-    result = shift_service.sync_session_notes(
+    result = await shift_service.sync_session_notes(
         "sess-1",
         "worker-1",
         "org-1",

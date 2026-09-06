@@ -16,6 +16,17 @@
     @page {
       size: A4;
       margin: 12mm 14mm 22mm 14mm;
+      /* WeasyPrint renders this via native CSS paged media; xhtml2pdf
+       * doesn't understand @page margin boxes and just ignores the block,
+       * which is fine — it gets its page number from <pdf:pagenumber/>
+       * below instead. Two different mechanisms because the two engines
+       * don't share one: WeasyPrint has no equivalent of <pdf:pagenumber/>,
+       * and xhtml2pdf has no support for CSS page counters. */
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 7pt;
+        color: #94a3b8;
+      }
     }
 
     /* ── Running page footer (xhtml2pdf: position:fixed; WeasyPrint: same) ── */
@@ -363,7 +374,7 @@
         <div class="item-name">{{ item.item_name }}</div>
         {% if item.item_description %}<div class="item-desc">{{ item.item_description }}</div>{% endif %}
       </td>
-      <td class="center">{{ item.shift_date or '&mdash;' }}</td>
+      <td class="center">{{ item.shift_date or '—' }}</td>
       <td class="center">{{ "%.1f"|format(item.hours|float) }}</td>
       <td class="right">${{ "%.2f"|format(item.unit_price|float) }}</td>
       <td class="center">{% if item.gst_applicable %}10%{% else %}N/A{% endif %}</td>
