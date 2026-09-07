@@ -77,13 +77,15 @@ export function DocumentPreviewPane({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-    } else {
-      void frameRef.current?.requestFullscreen();
-    }
+function toggleFullscreen() {
+  const el = frameRef.current;
+  if (!el) return;
+  if (document.fullscreenElement === el) {
+    void document.exitFullscreen();
+  } else {
+    void el.requestFullscreen();
   }
+}
 
   function toggleHistory() {
     if (!doc) return;
