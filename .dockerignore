@@ -17,3 +17,13 @@ out-tsc
 __pycache__
 **/__pycache__
 *.pyc
+
+# backend/Dockerfile only ever COPYs backend/, pyproject.toml, uv.lock,
+# pytest.ini, main.py, and builds its own .venv in-container via uv sync -
+# none of the below is ever read by the build, just uploaded to the builder
+# on every deploy.
+.venv
+artifacts
+attached_assets
+temp
+markdown
