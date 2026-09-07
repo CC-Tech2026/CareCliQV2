@@ -1902,6 +1902,8 @@ async def worker_edit_session_note(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    if str(note.get("session_id") or "") != str(session_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
     await audit_service.log_action(
         action_type="worker.session.note_edited",
         entity_type="session",
