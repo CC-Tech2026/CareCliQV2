@@ -141,12 +141,16 @@ def _log_evidence_access(
     error_message: Optional[str] = None,
     shift_id: Optional[str] = None,
     notes: Optional[str] = None,
-) -> None:
+) -> bool:
     """
     Log evidence access to immutable audit trail (evidence_access_audit_log).
-    
+
     Non-fatal: failures are logged but never raised (primary operation unaffected).
     This is a SYNCHRONOUS function — it logs to DB and returns, never blocking.
+
+    Returns True if the row was written, False if it wasn't, so a caller
+    that wants to know (see the upload call site) can mark the affected
+    evidence record rather than the failure staying invisible.
     """
     try:
         row: dict[str, Any] = {
@@ -178,11 +182,14 @@ def _log_evidence_access(
             row["notes"] = notes
         
         get_supabase_admin().table("evidence_access_audit_log").insert(row).execute()
+        return True
     except Exception as exc:
-        logger.warning(
-            "Failed to log evidence access (non-fatal): evidence_id=%s action=%s: %s",
-            evidence_id, action, exc
+        logger.error(
+            "Failed to log evidence access (non-fatal, primary operation was NOT blocked): "
+            "evidence_id=%s action=%s accessed_by=%s error=%s",
+            evidence_id, action, accessed_by, exc,
         )
+        return False
 
 
 
@@ -335,7 +342,7 @@ def upload_session_evidence_media(
                 raise
 
         # === CHAIN OF CUSTODY: LOG UPLOAD TO AUDIT TRAIL ===
-        _log_evidence_access(
+        access_logged = _log_evidence_access(
             evidence_id=eid,
             session_id=session_id,
             organization_id=org_id,
@@ -348,6 +355,21 @@ def upload_session_evidence_media(
             purpose="evidence_upload",
             shift_id=shift_id,
         )
+        if not access_logged:
+            # The file and its chain-of-custody metadata row are already
+            # saved above — that must not depend on this log write. Mark the
+            # evidence record itself so a piece of evidence that exists
+            # without a confirmed audit trail entry is findable, instead of
+            # looking identical to one that logged correctly.
+            try:
+                get_supabase_admin().table("task_evidence_metadata").update(
+                    {"audit_log_pending": True}
+                ).eq("evidence_id", eid).execute()
+            except Exception as exc:
+                logger.warning(
+                    "Could not set audit_log_pending on task_evidence_metadata for %s: %s",
+                    eid, exc,
+                )
 
         # Keep sessions.task_evidence JSONB in sync (backward compatibility)
         backward_compat_record: dict[str, Any] = {
