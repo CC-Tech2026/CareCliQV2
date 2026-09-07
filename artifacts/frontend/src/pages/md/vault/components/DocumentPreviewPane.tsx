@@ -110,8 +110,13 @@ export function DocumentPreviewPane({
   }, [doc?.category, doc?.id, excludedKey]);
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
-      <div className="flex min-h-[560px] flex-1 flex-col border-b" style={{ borderColor: "var(--cc-border)" }}>
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
+      {/* No min-height here on purpose — the pane now sits in a
+       * viewport-bounded sticky column (see VaultFolder.tsx), so a fixed
+       * floor from the pre-sticky layout could force this taller than the
+       * space actually available and overflow past the card's edges (the
+       * PDF iframe's own backdrop bleeding into whatever sits below it). */}
+      <div className="flex min-h-0 flex-1 flex-col border-b" style={{ borderColor: "var(--cc-border)" }}>
         {!doc ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
             <Eye size={22} style={{ color: "var(--cc-muted)" }} />
@@ -226,12 +231,12 @@ export function DocumentPreviewPane({
                   Loading preview…
                 </div>
               ) : previewKind === "pdf" && previewUrl ? (
-                <iframe title={doc.title} src={previewUrl} className="h-full min-h-[420px] w-full rounded-lg border-0" />
+                <iframe title={doc.title} src={previewUrl} className="h-full w-full rounded-lg border-0" />
               ) : previewKind === "image" && previewUrl ? (
                 <img src={previewUrl} alt={doc.title} className="mx-auto max-h-full max-w-full rounded-lg object-contain" />
               ) : (
                 <div
-                  className="flex h-full min-h-[380px] flex-col items-center justify-center gap-2 rounded-lg text-center"
+                  className="flex h-full flex-col items-center justify-center gap-2 rounded-lg text-center"
                   style={{ background: "var(--cc-soft)" }}
                 >
                   <FileText size={22} style={{ color: "var(--cc-muted)" }} />

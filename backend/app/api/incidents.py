@@ -338,7 +338,8 @@ async def update_incident(
         entity_id=incident_id,
         user_id=user.get("sub"),
         organization_id=user.get("organization_id"),
-        after_state={"id": incident_id, "status": updated.get("status")},
+        before_state={k: existing.get(k) for k in updates},
+        after_state={k: updated.get(k) for k in updates},
     )
     return updated
 

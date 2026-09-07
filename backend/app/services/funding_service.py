@@ -376,6 +376,7 @@ async def get_all_plans_for_participant(
 async def create_or_update_plan(
     participant_id: str,
     plan_data: Dict[str, Any],
+    current_user: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """Create or update participant plan."""
 
@@ -397,6 +398,19 @@ async def create_or_update_plan(
             .eq("id", existing["id"])
             .execute()
         )
+        if current_user:
+            from . import audit_service
+            from ..core.access import get_user_id, get_user_organization_id
+
+            await audit_service.log_action(
+                action_type="ndis_plan.updated",
+                entity_type="ndis_plan",
+                entity_id=str(existing["id"]),
+                user_id=get_user_id(current_user),
+                organization_id=get_user_organization_id(current_user) or existing.get("organization_id"),
+                before_state={k: existing.get(k) for k in payload},
+                after_state={k: payload.get(k) for k in payload},
+            )
     else:
         payload.setdefault("status", "active")
 

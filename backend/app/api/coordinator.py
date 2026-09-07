@@ -4803,9 +4803,22 @@ async def update_ndis_goal(
         "plan_id": body.plan_id,
         "updated_at": now,
     }
+    existing_resp = supabase.table("ndis_goals").select("*").eq("id", goal_id).eq("organization_id", org_id).limit(1).execute()
+    existing = (existing_resp.data or [None])[0]
     try:
         resp = supabase.table("ndis_goals").update(update).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [update])[0]
+        result = (resp.data or [update])[0]
+        if existing:
+            await audit_service.log_action(
+                action_type="ndis_goal.updated",
+                entity_type="ndis_goal",
+                entity_id=goal_id,
+                user_id=get_user_id(current_user),
+                organization_id=org_id,
+                before_state={k: existing.get(k) for k in update},
+                after_state={k: result.get(k) for k in update},
+            )
+        return result
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal update failed: {exc}")
 
@@ -4819,9 +4832,22 @@ async def archive_ndis_goal(
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
+    existing_resp = supabase.table("ndis_goals").select("status, archived_at").eq("id", goal_id).eq("organization_id", org_id).limit(1).execute()
+    existing = (existing_resp.data or [None])[0]
     try:
         resp = supabase.table("ndis_goals").update({"status": "archived", "archived_at": now, "updated_at": now}).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [{}])[0]
+        result = (resp.data or [{}])[0]
+        if existing:
+            await audit_service.log_action(
+                action_type="ndis_goal.archived",
+                entity_type="ndis_goal",
+                entity_id=goal_id,
+                user_id=get_user_id(current_user),
+                organization_id=org_id,
+                before_state={"status": existing.get("status"), "archived_at": existing.get("archived_at")},
+                after_state={"status": result.get("status"), "archived_at": result.get("archived_at")},
+            )
+        return result
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal archive failed: {exc}")
 
@@ -4835,9 +4861,22 @@ async def complete_ndis_goal(
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
+    existing_resp = supabase.table("ndis_goals").select("status, completed_at").eq("id", goal_id).eq("organization_id", org_id).limit(1).execute()
+    existing = (existing_resp.data or [None])[0]
     try:
         resp = supabase.table("ndis_goals").update({"status": "completed", "completed_at": now, "updated_at": now}).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [{}])[0]
+        result = (resp.data or [{}])[0]
+        if existing:
+            await audit_service.log_action(
+                action_type="ndis_goal.completed",
+                entity_type="ndis_goal",
+                entity_id=goal_id,
+                user_id=get_user_id(current_user),
+                organization_id=org_id,
+                before_state={"status": existing.get("status"), "completed_at": existing.get("completed_at")},
+                after_state={"status": result.get("status"), "completed_at": result.get("completed_at")},
+            )
+        return result
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal complete failed: {exc}")
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
+from ..services import audit_service
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
 
 CREDENTIAL_FILES_BUCKET = "credential-files"
@@ -148,6 +149,15 @@ async def update_my_credential(
         .execute()
     )
     updated = result.data[0] if result.data else _get_credential_for_user(credential_id, current_user)
+    await audit_service.log_action(
+        action_type="credential.updated",
+        entity_type="credential",
+        entity_id=credential_id,
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        before_state={k: existing.get(k) for k in payload},
+        after_state={k: updated.get(k) for k in payload},
+    )
     return _with_signed_file_url(updated)
 
 
@@ -234,4 +244,13 @@ async def review_credential(
         payload["last_checked_against_nwsd"] = body.last_checked_against_nwsd
     result = get_supabase_admin().table("credentials").update(payload).eq("id", credential_id).execute()
     updated = result.data[0] if result.data else {**existing, **payload}
+    await audit_service.log_action(
+        action_type="credential.reviewed",
+        entity_type="credential",
+        entity_id=credential_id,
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        before_state={k: existing.get(k) for k in payload},
+        after_state={k: updated.get(k) for k in payload},
+    )
     return _with_signed_file_url(updated)
