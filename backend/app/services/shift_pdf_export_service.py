@@ -476,6 +476,140 @@ def _existing_auto_export(shift_id: str) -> dict[str, Any] | None:
         raise
 
 
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_ts(*values: str | None) -> datetime | None:
+    parsed = [d for d in (_parse_ts(v) for v in values) if d is not None]
+    return max(parsed) if parsed else None
+
+
+def _shift_pdf_source_last_changed(shift_id: str, session_id: str | None) -> datetime | None:
+    """Latest timestamp across everything the auto-export PDF actually depends on: the
+    shift row (tasks JSONB, compliance validation), the session's notes field, the newest
+    per-task visit note (shift_visit_notes inserts a new row per edit rather than updating
+    in place — see 168_shift_visit_notes_versioning.sql — so its own created_at already
+    reflects the latest edit), and the shift signature. Reuses each table's existing
+    updated_at/created_at/signed_at rather than adding a new tracking column."""
+    supabase = get_supabase_admin()
+    candidates: list[str | None] = []
+
+    try:
+        resp = supabase.table("shifts").select("updated_at").eq("id", shift_id).limit(1).execute()
+        rows = resp.data or []
+        if rows:
+            candidates.append(rows[0].get("updated_at"))
+    except Exception as exc:
+        logger.debug("shift updated_at lookup failed for staleness check on %s: %s", shift_id, exc)
+
+    if session_id:
+        try:
+            resp = supabase.table("sessions").select("updated_at").eq("id", str(session_id)).limit(1).execute()
+            rows = resp.data or []
+            if rows:
+                candidates.append(rows[0].get("updated_at"))
+        except Exception as exc:
+            logger.debug("session updated_at lookup failed for staleness check on %s: %s", shift_id, exc)
+
+    try:
+        resp = (
+            supabase.table("shift_visit_notes")
+            .select("created_at")
+            .eq("shift_id", shift_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if rows:
+            candidates.append(rows[0].get("created_at"))
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.debug("shift_visit_notes lookup failed for staleness check on %s: %s", shift_id, exc)
+
+    try:
+        resp = (
+            supabase.table("shift_signatures")
+            .select("signed_at")
+            .eq("shift_id", shift_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if rows:
+            candidates.append(rows[0].get("signed_at"))
+    except Exception as exc:
+        if not _is_missing_schema(exc):
+            logger.debug("shift_signatures lookup failed for staleness check on %s: %s", shift_id, exc)
+
+    return _latest_ts(*candidates)
+
+
+def _cached_auto_export_is_stale(shift_id: str, session_id: str | None, existing: dict[str, Any]) -> bool:
+    last_changed = _shift_pdf_source_last_changed(shift_id, session_id)
+    if last_changed is None:
+        return False
+    generated_at = _latest_ts(existing.get("updated_at"), existing.get("created_at"))
+    if generated_at is None:
+        return True
+    return last_changed > generated_at
+
+
+def _regenerate_auto_export(
+    existing: dict[str, Any],
+    detail: dict[str, Any],
+    organization_id: str,
+) -> dict[str, Any]:
+    """Rebuild the PDF into the SAME shift_export_requests row — the partial unique index
+    (uq_shift_export_auto_per_shift) allows only one pending/ready auto-generated export per
+    shift, so a stale cached copy is refreshed in place rather than inserted as a new row."""
+    export_id = existing["id"]
+    shift_id = detail.get("id")
+    signature_png = _download_signature_png(detail.get("shift_signature"))
+    pdf_bytes = _build_shift_pdf(detail, organization_id, signature_png=signature_png)
+    path = existing.get("file_path") or f"{organization_id}/{shift_id}/{export_id}.pdf"
+
+    try:
+        supabase = get_supabase_admin()
+        supabase.storage.from_("shift-export-files").upload(
+            path,
+            pdf_bytes,
+            {"content-type": "application/pdf", "upsert": "true"},
+        )
+        bucket = supabase.storage.from_("shift-export-files")
+        file_url = _signed_export_url(bucket, path)
+    except Exception as exc:
+        get_supabase_admin().table("shift_export_requests").update({
+            "status": "failed",
+            "error_message": str(exc)[:500],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", export_id).execute()
+        raise HTTPException(status_code=502, detail="PDF storage failed.") from exc
+
+    get_supabase_admin().table("shift_export_requests").update({
+        "status": "ready",
+        "file_path": path,
+        "file_url": file_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", export_id).execute()
+
+    row = {
+        "id": export_id,
+        "status": "ready",
+        "file_url": file_url,
+        "expires_at": existing.get("expires_at"),
+        "auto_generated": True,
+    }
+    return _export_response(row, already_exists=False)
+
+
 def create_shift_export(
     shift_id: str,
     user_id: str,
@@ -496,7 +630,11 @@ def create_shift_export(
     if auto_generated:
         existing = _existing_auto_export(shift_id)
         if existing and existing.get("status") == "ready":
-            return _export_response(existing, already_exists=True)
+            if not _cached_auto_export_is_stale(shift_id, detail.get("session_id"), existing):
+                return _export_response(existing, already_exists=True)
+            # A shift note, signature, or compliance result changed since this PDF was
+            # generated — a repeated auto-export request must not hand back the stale copy.
+            return _regenerate_auto_export(existing, detail, organization_id)
 
     now = datetime.now(timezone.utc)
     expires = None if auto_generated else (now + timedelta(days=EXPORT_TTL_DAYS))
