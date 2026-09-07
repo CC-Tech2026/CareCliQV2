@@ -34,4 +34,10 @@ ALTER TABLE public.ai_summaries
     ADD CONSTRAINT ai_summaries_patient_id_fkey
     FOREIGN KEY (patient_id) REFERENCES public.patients(id);
 
+CREATE INDEX IF NOT EXISTS idx_plans_patient_id
+    ON public.plans(patient_id);
+
+CREATE INDEX IF NOT EXISTS idx_ai_summaries_patient_id
+    ON public.ai_summaries(patient_id);
+
 COMMIT;
