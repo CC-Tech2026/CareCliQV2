@@ -4676,7 +4676,7 @@ async def emergency_stop_shift(
                 "is_read": False,
                 "created_by": coordinator_id,
             }).execute()
-        except APIError as exc:
+        except Exception as exc:
             logger.error(
                 "Failed to create emergency-stop alert: shift_id=%s organization_id=%s error=%s",
                 shift_id, org_id, exc,
