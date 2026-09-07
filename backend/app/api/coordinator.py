@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
+from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,21 @@ router = APIRouter(prefix="/coordinator", tags=["coordinator"])
 # NOT NULL, so an unassigned shift gets this all-zeros UUID instead of a real
 # worker id (see create_unassigned_shift below for where it's set).
 UNASSIGNED_SHIFT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+
+
+async def _mark_audit_log_pending(table: str, row_id: str) -> None:
+    """audit_service.log_action() returned False - the primary action already
+    succeeded and must stay succeeded, but flag the record itself so a
+    coordinator/admin can find it later without already knowing to look."""
+    if not row_id:
+        return
+    try:
+        get_supabase_admin().table(table).update({"audit_log_pending": True}).eq("id", row_id).execute()
+    except Exception as exc:
+        logger.warning(
+            "Could not set audit_log_pending on %s/%s after a failed audit write: %s",
+            table, row_id, exc,
+        )
 
 
 def _require_coordinator(user: dict) -> str:
@@ -587,7 +603,8 @@ async def flag_session_for_review(
 
     try:
         existing = supabase.table("sessions").select(
-            "id, participant_id, patient_id, worker_id, support_worker_id, owner_user_id, organization_id"
+            "id, patient_id, worker_id, support_worker_id, owner_user_id, organization_id, "
+            "review_flag, review_note, review_requested_by, review_requested_at"
         ).eq("id", session_id).maybe_single().execute()
         session_row = existing.data if existing else None
     except Exception:
@@ -630,6 +647,25 @@ async def flag_session_for_review(
                 participant_id=participant_id,
             )
 
+    logged = await audit_service.log_action(
+        action_type="session.flagged_for_review" if body.flagged else "session.review_cleared",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=coordinator_id or None,
+        organization_id=org_id,
+        before_state={
+            "review_flag": (session_row or {}).get("review_flag"),
+            "review_note": (session_row or {}).get("review_note"),
+        },
+        after_state={
+            "review_flag": update_data.get("review_flag"),
+            "review_note": update_data.get("review_note"),
+            "review_requested_by": update_data.get("review_requested_by"),
+        },
+    )
+    if not logged:
+        await _mark_audit_log_pending("sessions", session_id)
+
     return {"session_id": session_id, "flagged": body.flagged}
 
 
@@ -648,7 +684,7 @@ async def approve_session(
     try:
         existing_resp = (
             supabase.table("sessions")
-            .select("id, participant_id, patient_id, session_date, session_type, status, "
+            .select("id, patient_id, session_date, session_type, status, "
                     "compliance_score, worker_id, support_worker_id, owner_user_id, organization_id, "
                     "review_flag, review_note, review_requested_by, review_requested_at")
             .eq("id", session_id)
@@ -666,52 +702,52 @@ async def approve_session(
     if session_org != org_id:
         raise HTTPException(status_code=403, detail="Session does not belong to your organisation.")
 
-    # ── 2. Build update payload; try with extended fields first ──────────────
-    base_update: dict[str, Any] = {
+    # ── 2. Write approval directly to the real columns ────────────────────────
+    # approved_by/approved_at are real NOT NULL-capable columns as of
+    # migration 171 — no more falling back to embedding identity/timestamp
+    # as text inside review_note.
+    update_payload: dict[str, Any] = {
         "review_flag": False,
         "review_requested_by": None,
         "review_requested_at": None,
-        "review_note": f"Approved by {coordinator_id} at {approved_at}",
-    }
-    extended_update: dict[str, Any] = {
-        **base_update,
+        "review_note": None,
         "approved_by": coordinator_id,
         "approved_at": approved_at,
     }
 
-    def _do_update(payload: dict[str, Any]) -> None:
-        supabase.table("sessions").update(payload).eq("id", session_id).execute()
-
-    # ── 3. Apply update — no delete/insert fallback to avoid FK cascade risk ─
     try:
-        _do_update(extended_update)
-        persisted = {**session_row, **extended_update}
+        supabase.table("sessions").update(update_payload).eq("id", session_id).execute()
+        persisted = {**session_row, **update_payload}
     except Exception as e:
         err = str(e)
-        # Column missing (approved_by / approved_at not yet in schema) — retry base only
-        if "42703" in err or "column" in err.lower():
-            try:
-                _do_update(base_update)
-                persisted = {**session_row, **base_update}
-            except Exception as e2:
-                err2 = str(e2)
-                if "42703" in err2 or "updated_at" in err2:
-                    # updated_at trigger bug: update is actually applied despite the error;
-                    # treat as success rather than corrupting data with delete+insert.
-                    persisted = {**session_row, **base_update}
-                else:
-                    raise HTTPException(status_code=500, detail=f"Approve failed: {e2}")
-        elif "42703" in err or "updated_at" in err:
-            # updated_at trigger bug on extended update — treat as success
-            persisted = {**session_row, **extended_update}
+        if "updated_at" in err:
+            # updated_at trigger bug: the update is actually applied despite
+            # the error; treat as success rather than corrupting data with a
+            # delete+insert workaround.
+            persisted = {**session_row, **update_payload}
         else:
             raise HTTPException(status_code=500, detail=f"Approve failed: {e}")
 
-    # ── 4. Return the updated session payload ────────────────────────────────
+    logged = await audit_service.log_action(
+        action_type="session.approved",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=coordinator_id or None,
+        organization_id=org_id,
+        before_state={
+            "review_flag": session_row.get("review_flag"),
+            "review_note": session_row.get("review_note"),
+        },
+        after_state={"approved_by": coordinator_id, "approved_at": approved_at},
+    )
+    if not logged:
+        await _mark_audit_log_pending("sessions", session_id)
+
+    # ── 3. Return the updated session payload ────────────────────────────────
     return {
         **_session_payload(persisted),
         "review_flag": False,
-        "review_note": persisted.get("review_note"),
+        "review_note": None,
         "approved_by": coordinator_id,
         "approved_at": approved_at,
     }
@@ -4327,12 +4363,19 @@ async def get_live_shifts(
                         "organization_id": org_id,
                         "shift_id": sid,
                         "alert_type": "no_session_started",
+                        "title": "No session started",
                         "message": f"Worker clocked in {elapsed:.0f} min ago but no session started",
                         "severity": "warning",
                         "is_read": False,
                     }).execute()
-                except Exception:
-                    pass
+                except APIError as exc:
+                    # The DB rejected this insert (bad/missing column, RLS,
+                    # etc) — non-fatal to the shift-list response, but
+                    # findable now instead of silently never happening.
+                    logger.error(
+                        "Failed to create no_session_started alert: shift_id=%s organization_id=%s error=%s",
+                        sid, org_id, exc,
+                    )
 
         elif elapsed > 45 and has_session and not has_notes:
             existing = [a for a in alerts_map.get(sid, []) if a.get("alert_type") == "no_notes_recorded"]
@@ -4342,12 +4385,16 @@ async def get_live_shifts(
                         "organization_id": org_id,
                         "shift_id": sid,
                         "alert_type": "no_notes_recorded",
+                        "title": "No notes recorded",
                         "message": f"Session active {elapsed:.0f} min but no notes recorded",
                         "severity": "warning",
                         "is_read": False,
                     }).execute()
-                except Exception:
-                    pass
+                except APIError as exc:
+                    logger.error(
+                        "Failed to create no_notes_recorded alert: shift_id=%s organization_id=%s error=%s",
+                        sid, org_id, exc,
+                    )
 
     # Build response
     session_map: dict[str, dict] = {}
@@ -4534,18 +4581,33 @@ async def flag_shift_alert(
     """Create an alert flag for a shift."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
+    coordinator_id = str(get_user_id(current_user) or "") or None
     try:
         resp = supabase.table("alerts").insert({
             "organization_id": org_id,
             "shift_id": shift_id,
             "alert_type": "coordinator_flag",
+            "title": "Coordinator flag",
             "message": body.message,
             "severity": body.severity,
             "is_read": False,
+            "created_by": coordinator_id,
         }).execute()
-        return (resp.data or [{}])[0]
+        result = (resp.data or [{}])[0]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Flag failed: {exc}")
+
+    logged = await audit_service.log_action(
+        action_type="shift.flagged",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=coordinator_id,
+        organization_id=org_id,
+        after_state={"message": body.message, "severity": body.severity},
+    )
+    if not logged and result.get("id"):
+        await _mark_audit_log_pending("alerts", result["id"])
+    return result
 
 
 # ── POST /shifts/{id}/emergency-stop ─────────────────────────────────────────
@@ -4564,6 +4626,7 @@ async def emergency_stop_shift(
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
+    coordinator_id = str(get_user_id(current_user) or "") or None
 
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id") or "") != org_id:
@@ -4573,12 +4636,25 @@ async def emergency_stop_shift(
         result = supabase.table("shifts").update({
             "emergency_flagged": True,
             "emergency_flagged_at": now,
+            "emergency_flagged_by": coordinator_id,
             "emergency_note": body.note,
             "updated_at": now,
         }).eq("id", shift_id).execute()
         updated = (result.data or [{}])[0]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Emergency stop failed: {exc}")
+
+    logged = await audit_service.log_action(
+        action_type="shift.emergency_stopped",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=coordinator_id,
+        organization_id=org_id,
+        before_state={"emergency_flagged": shift.get("emergency_flagged")},
+        after_state={"emergency_flagged": True, "emergency_flagged_at": now, "note": body.note},
+    )
+    if not logged:
+        await _mark_audit_log_pending("shifts", shift_id)
 
     worker_id = shift.get("worker_id")
     if worker_id:
@@ -4594,12 +4670,17 @@ async def emergency_stop_shift(
                 "organization_id": org_id,
                 "shift_id": shift_id,
                 "alert_type": "emergency",
+                "title": "Emergency stop",
                 "message": body.note,
                 "severity": "critical",
                 "is_read": False,
+                "created_by": coordinator_id,
             }).execute()
-        except Exception:
-            pass
+        except APIError as exc:
+            logger.error(
+                "Failed to create emergency-stop alert: shift_id=%s organization_id=%s error=%s",
+                shift_id, org_id, exc,
+            )
 
     return {"ok": True, "shift": updated}
 

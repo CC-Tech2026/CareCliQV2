@@ -27,7 +27,7 @@ async def log_action(
     after_state: Optional[dict] = None,
     details: Optional[dict] = None,
     ip_address: Optional[str] = None,
-) -> None:
+) -> bool:
     """Write a single immutable audit log row.
 
     Parameters
@@ -53,6 +53,15 @@ async def log_action(
         Any extra structured metadata that doesn't fit the above.
     ip_address:
         Optional — caller IP for security events (login, export, etc.).
+
+    Returns
+    -------
+    bool
+        True if the row was written, False if it wasn't. Never raises —
+        a failed audit write must never break the primary action it's
+        logging — but a caller that wants to know can check this. Callers
+        that don't check it (most of them, deliberately) are unaffected;
+        this stays purely additive.
     """
     try:
         supabase = get_supabase_admin()
@@ -78,8 +87,17 @@ async def log_action(
             row["ip_address"] = ip_address
 
         supabase.table("audit_logs").insert(row).execute()
+        return True
     except Exception as exc:
-        logger.warning("audit_service.log_action failed (non-fatal): %s", exc)
+        # error, not warning — a warning-level, contextless line is
+        # effectively invisible in monitoring. This still never raises: the
+        # primary action this was logging must not fail because of it.
+        logger.error(
+            "audit_service.log_action failed (non-fatal, primary action was "
+            "NOT blocked): action_type=%s entity_type=%s entity_id=%s user_id=%s error=%s",
+            action_type, entity_type, entity_id, user_id, exc,
+        )
+        return False
 
 
 async def get_entity_audit_trail(
