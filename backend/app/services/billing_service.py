@@ -315,6 +315,30 @@ async def _verify_invoice_scope(user: dict, data: dict) -> None:
             raise HTTPException(status_code=404, detail="Session not found.")
 
 
+def _single_matching_participant(org_id: str, recipient_name: str) -> dict[str, Any] | None:
+    """Exact, case-insensitive match against this org's participants — used only to catch a
+    manual invoice whose recipient_name is really one specific participant's name typed in
+    free text with no participant_id set, and refuse it. Never used to silently set
+    participant_id from a text match; that would just be a different flavour of the same
+    inference problem this exists to prevent."""
+    text = (recipient_name or "").strip()
+    if not text:
+        return None
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("patients")
+            .select("id, full_name")
+            .eq("organization_id", org_id)
+            .ilike("full_name", text)
+            .execute()
+        )
+    except Exception:
+        return None
+    rows = [r for r in (resp.data or []) if isinstance(r, dict) and r.get("id")]
+    return rows[0] if len(rows) == 1 else None
+
+
 async def create_invoice(user: dict, data: dict) -> dict:
     _require_billing_role(user)
     org_id = _require_org(user)
@@ -420,6 +444,23 @@ async def create_invoice(user: dict, data: dict) -> dict:
             data["recipient_name"] = name
             if not data.get("recipient_email") and email:
                 data["recipient_email"] = email
+
+    if not participant_id:
+        # A null participant_id is legitimate for a genuinely organisation-level invoice
+        # (e.g. billed straight to NDIA) — but if recipient_name was typed free text and
+        # happens to be exactly one participant's name on file, this is not that; it's a
+        # participant invoice that was never linked. Refuse rather than leave the gap for a
+        # participant-scoped query to silently miss later.
+        matched = _single_matching_participant(org_id, str(data.get("recipient_name") or ""))
+        if matched:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"'{matched.get('full_name')}' is a participant on file. Select them in the "
+                    "participant field instead of typing their name as the recipient, so this "
+                    "invoice is correctly linked to their record."
+                ),
+            )
 
     payload = {
         "organization_id": org_id,
