@@ -17,6 +17,7 @@ from ..schemas.incident import (
     IncidentCreate,
     IncidentUpdate,
     WorkerIncidentCreate,
+    CORRECTABLE_INCIDENT_FIELDS,
     NDIS_NOTIFICATION_HOURS,
     PRACTICE_STANDARD_MAP,
     WORKER_REPORT_TYPE_TO_INCIDENT,
@@ -753,26 +754,65 @@ async def add_incident_correction(
     *,
     worker_id: str,
     org_id: str,
-    note: str,
+    field_name: str,
+    new_value: str,
+    note: str | None = None,
 ) -> dict[str, Any]:
+    if field_name not in CORRECTABLE_INCIDENT_FIELDS:
+        raise ValueError(f"field_name must be one of: {', '.join(sorted(CORRECTABLE_INCIDENT_FIELDS))}")
+    new_value = (new_value or "").strip()
+    if not new_value:
+        raise ValueError("A new value is required.")
+
     supabase = get_supabase_admin()
     existing = await get_incident_by_id(incident_id)
     if not existing:
         raise ValueError("Incident not found")
     if str(existing.get("user_id") or "") != str(worker_id):
         raise ValueError("Only the reporting worker can add a correction note")
+
+    # The current *effective* value for this field: the incident row itself stays immutable
+    # (incident_corrections is the append-only history, per this table's own design), so
+    # "before" means the original value unless an earlier correction already changed this
+    # same field — in which case that correction's new_value is the real "before" now.
+    old_value = str(existing.get(field_name) or "").strip()
+    try:
+        prior_resp = (
+            supabase.table("incident_corrections")
+            .select("new_value")
+            .eq("incident_id", incident_id)
+            .eq("field_name", field_name)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        prior_rows = _safe_rows(prior_resp.data)
+        if prior_rows:
+            old_value = str(prior_rows[0].get("new_value") or "").strip()
+    except Exception as exc:
+        if not _is_missing_column_error(exc):
+            logger.warning(
+                "Prior correction lookup failed for incident %s field %s: %s", incident_id, field_name, exc,
+            )
+
+    if old_value == new_value:
+        raise ValueError("New value is the same as the current value.")
+
     row = {
         "incident_id": incident_id,
         "worker_id": worker_id,
         "organization_id": org_id,
-        "note": note.strip(),
+        "field_name": field_name,
+        "old_value": old_value or None,
+        "new_value": new_value,
+        "note": (note or "").strip() or None,
     }
     try:
         resp = supabase.table("incident_corrections").insert(row).execute()
         rows = _safe_rows(resp.data)
         return rows[0] if rows else row
     except Exception as exc:
-        if _is_missing_schema_error(exc):
+        if _is_missing_column_error(exc):
             raise ValueError("Correction notes are not available — run database migrations.") from exc
         raise
 
@@ -789,7 +829,7 @@ async def list_incident_corrections(incident_id: str) -> list[dict[str, Any]]:
         )
         return _safe_rows(resp.data)
     except Exception as exc:
-        if _is_missing_schema_error(exc):
+        if _is_missing_column_error(exc):
             return []
         raise
 

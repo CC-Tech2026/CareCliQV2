@@ -197,8 +197,34 @@ class WorkerIncidentCreate(BaseModel):
         return normalized
 
 
+# Worker-authored narrative fields a correction may target — deliberately excludes
+# system-generated fields (title) and coordinator-only investigation fields
+# (investigation_notes, corrective_actions), which a worker never wrote in the first place.
+CORRECTABLE_INCIDENT_FIELDS = {"description", "location", "worker_actions", "participant_impact"}
+
+
 class IncidentCorrectionCreate(BaseModel):
-    note: str = Field(min_length=1, max_length=2000)
+    field_name: str
+    new_value: str = Field(min_length=1, max_length=4000)
+    # Optional context alongside the structured field_name/old_value/new_value diff below,
+    # which is now the actual record of what changed — the note used to be the only record.
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+    @field_validator("field_name")
+    @classmethod
+    def validate_field_name(cls, value: str) -> str:
+        normalized = (value or "").strip()
+        if normalized not in CORRECTABLE_INCIDENT_FIELDS:
+            raise ValueError(f"field_name must be one of: {', '.join(sorted(CORRECTABLE_INCIDENT_FIELDS))}")
+        return normalized
+
+    @field_validator("note")
+    @classmethod
+    def validate_note(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class IncidentUpdate(BaseModel):

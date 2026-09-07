@@ -201,6 +201,8 @@ async def add_incident_correction(
             incident_id,
             worker_id=user.get("sub"),
             org_id=org_id,
+            field_name=body.field_name,
+            new_value=body.new_value,
             note=body.note,
         )
     except ValueError as e:

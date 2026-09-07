@@ -87,10 +87,15 @@ export function createWorkerIncident<T = unknown>(payload: WorkerIncidentPayload
   });
 }
 
-export function addIncidentCorrection<T = unknown>(incidentId: string, note: string) {
+export function addIncidentCorrection<T = unknown>(
+  incidentId: string,
+  fieldName: "description" | "location" | "worker_actions" | "participant_impact",
+  newValue: string,
+  note?: string,
+) {
   return jsonFetch<T>(`/api/incidents/${incidentId}/corrections`, {
     method: "POST",
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ field_name: fieldName, new_value: newValue, note: note || null }),
   });
 }
 
