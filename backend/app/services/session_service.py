@@ -1075,7 +1075,7 @@ async def _snapshot_note_version(
     new version. Never raises — a validation or versioning failure must not
     block the session save itself, which has already committed by the time
     this runs."""
-    if not any(field in payload for field in _NOTE_VERSION_FIELDS):
+    if not any(field in payload for field in (*_NOTE_VERSION_FIELDS, "support_category")):
         return None
 
     supabase = get_supabase_admin()
@@ -1085,7 +1085,9 @@ async def _snapshot_note_version(
 
         prior = (
             supabase.table("session_note_versions")
-            .select("id, notes, activities_performed, outcomes, participant_response, progress_toward_goals")
+            .select(
+                "id, notes, activities_performed, outcomes, participant_response, progress_toward_goals, support_category"
+            )
             .eq("session_id", session_id)
             .is_("superseded_at", "null")
             .order("created_at", desc=True)
@@ -1093,8 +1095,10 @@ async def _snapshot_note_version(
             .execute()
         )
         prior_rows = prior.data or []
-        if prior_rows and all(
-            (prior_rows[0].get(f) or None) == (merged.get(f) or None) for f in _NOTE_VERSION_FIELDS
+        if (
+            prior_rows
+            and all((prior_rows[0].get(f) or None) == (merged.get(f) or None) for f in _NOTE_VERSION_FIELDS)
+            and (prior_rows[0].get("support_category") or None) == (support_category or None)
         ):
             return None  # unchanged from the last version already on file
 

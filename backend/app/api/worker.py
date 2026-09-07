@@ -1743,6 +1743,21 @@ async def worker_end_shift(
             await _run_shift_documentation_compliance_check(shift, current_user, persist=True)
         except Exception as exc:
             logger.warning("Documentation compliance check failed for shift %s: %s", shift_id, exc)
+            # Same marker as save_session_with_ai's unexpected-failure case
+            # (backend/app/api/sessions.py) — without this, the linked
+            # session looks identical to "compliance check never run".
+            session_id = shift.get("session_id")
+            if session_id:
+                try:
+                    get_supabase_admin().table("sessions").update({
+                        "compliance_check_status": "failed",
+                        "compliance_check_error": str(exc)[:500],
+                    }).eq("id", str(session_id)).execute()
+                except Exception as marker_err:
+                    logger.warning(
+                        "Could not persist compliance_check_status=failed marker for session %s: %s",
+                        session_id, marker_err,
+                    )
 
     background_tasks.add_task(_auto_summary_and_notify)
     background_tasks.add_task(_documentation_check)
@@ -1887,6 +1902,8 @@ async def worker_edit_session_note(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    if str(note.get("session_id") or "") != str(session_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
     await audit_service.log_action(
         action_type="worker.session.note_edited",

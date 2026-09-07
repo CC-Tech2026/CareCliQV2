@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Download, Eye, FileText, History, Share2, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, Eye, FileText, History, Maximize2, Minimize2, Share2, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   fetchDocumentFile,
@@ -55,6 +55,8 @@ export function DocumentPreviewPane({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<GovernanceDocumentVersion[] | null>(null);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
 
   const excludedKey = Array.from(excludedFields).sort().join("|");
 
@@ -62,6 +64,28 @@ export function DocumentPreviewPane({
     setHistoryOpen(false);
     setVersions(null);
   }, [doc?.id]);
+
+  // Real browser fullscreen (not a CSS-only overlay) — the PDF/image gets
+  // the entire screen, exit via Esc (native) or the button below, which
+  // also handles the reverse: exiting fullscreen some other way (browser
+  // chrome, F11) keeps this state in sync so the icon never lies.
+  useEffect(() => {
+    function onChange() {
+      setIsFullscreen(document.fullscreenElement === frameRef.current);
+    }
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+function toggleFullscreen() {
+  const el = frameRef.current;
+  if (!el) return;
+  if (document.fullscreenElement === el) {
+    void document.exitFullscreen();
+  } else {
+    void el.requestFullscreen();
+  }
+}
 
   function toggleHistory() {
     if (!doc) return;
@@ -116,7 +140,11 @@ export function DocumentPreviewPane({
        * floor from the pre-sticky layout could force this taller than the
        * space actually available and overflow past the card's edges (the
        * PDF iframe's own backdrop bleeding into whatever sits below it). */}
-      <div className="flex min-h-0 flex-1 flex-col border-b" style={{ borderColor: "var(--cc-border)" }}>
+      <div
+        ref={frameRef}
+        className="flex min-h-0 flex-1 flex-col border-b"
+        style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}
+      >
         {!doc ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
             <Eye size={22} style={{ color: "var(--cc-muted)" }} />
@@ -135,20 +163,33 @@ export function DocumentPreviewPane({
                   {doc.person_name} · {formatDate(doc.date)}
                 </p>
               </div>
-              {showVersionHistory && (
-                <button
-                  type="button"
-                  onClick={toggleHistory}
-                  className="flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
-                  style={{
-                    borderColor: historyOpen ? "var(--cc-plum)" : "var(--cc-border)",
-                    color: historyOpen ? "var(--cc-plum)" : "var(--cc-muted)",
-                  }}
-                >
-                  <History size={12} />
-                  Version history
-                </button>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {(previewKind === "pdf" || previewKind === "image") && previewUrl && (
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                    style={{ borderColor: "var(--cc-border)", color: "var(--cc-muted)" }}
+                  >
+                    {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                    {isFullscreen ? "Exit full screen" : "Full screen"}
+                  </button>
+                )}
+                {showVersionHistory && (
+                  <button
+                    type="button"
+                    onClick={toggleHistory}
+                    className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                    style={{
+                      borderColor: historyOpen ? "var(--cc-plum)" : "var(--cc-border)",
+                      color: historyOpen ? "var(--cc-plum)" : "var(--cc-muted)",
+                    }}
+                  >
+                    <History size={12} />
+                    Version history
+                  </button>
+                )}
+              </div>
             </div>
 
             {historyOpen && (

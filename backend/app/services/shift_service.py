@@ -4130,9 +4130,13 @@ async def sync_session_notes(
                         # replay, not a real edit. Keep today's plain update,
                         # no new version, no re-validation.
                         get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
-                        payload["id"] = row_id
-                        payload["created_at"] = existing_row.get("created_at") or created_at
-                        confirmed.append(_note_payload_from_row({**payload, "id": row_id}))
+                        response_row = {
+                            **existing_row,
+                            **payload,
+                            "id": row_id,
+                            "created_at": existing_row.get("created_at") or created_at,
+                        }
+                        confirmed.append(_note_payload_from_row(response_row))
                         continue
 
                     # Content actually changed on a re-sent client_note_id —

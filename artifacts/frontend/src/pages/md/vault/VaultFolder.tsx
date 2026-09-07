@@ -299,8 +299,8 @@ export default function VaultFolderPage({ category }: { category: string }) {
           </div>
         </div>
 
-        <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:h-[calc(100vh-260px)] lg:min-h-[560px]">
-          <div className="min-w-0 lg:flex lg:h-full lg:w-[40%] lg:flex-col">
+        <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:h-[calc(100vh-220px)] lg:min-h-[640px]">
+          <div className="min-w-0 lg:flex lg:h-full lg:w-[33%] lg:flex-col">
             {loading ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -328,7 +328,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
           </div>
 
-          <div className="w-full lg:sticky lg:top-[75px] lg:h-full lg:w-[60%]">
+          <div className="w-full lg:sticky lg:top-[75px] lg:h-full lg:w-[67%]">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
               showVersionHistory={isGovernance}

@@ -808,6 +808,19 @@ async def save_session_with_ai(
         raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
+        # An unexpected failure here (as opposed to the expected block/warn
+        # tier failures above, which already persist their own snapshot)
+        # would otherwise leave this session looking identical to "compliance
+        # check never run" — a blank compliance_score either way. Mark it
+        # distinctly so a coordinator/auditor can tell the difference.
+        try:
+            from ..services.supabase_client import get_supabase_admin
+            get_supabase_admin().table("sessions").update({
+                "compliance_check_status": "failed",
+                "compliance_check_error": str(e)[:500],
+            }).eq("id", session_id).execute()
+        except Exception as marker_err:
+            logger.warning(f"Could not persist compliance_check_status=failed marker (non-critical): {marker_err}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
