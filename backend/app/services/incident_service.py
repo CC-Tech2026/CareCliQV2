@@ -73,6 +73,40 @@ def _insert_incident_payload(supabase: Any, payload: dict[str, Any]) -> Any:
         return supabase.table(TABLE).insert(fallback).execute()
 
 
+async def _log_incident_created(incident: dict[str, Any], *, org_id: Optional[str], user_id: Optional[str]) -> None:
+    """Shared by every incident-creation path (coordinator report, worker
+    report, and both medication-error/pattern-signal auto-creation paths,
+    which call create_incident() directly) - logging lives here, at the
+    point the row is actually written, rather than being something each
+    caller has to remember to do separately."""
+    from . import audit_service
+
+    logged = await audit_service.log_action(
+        action_type="incident.created",
+        entity_type="incident",
+        entity_id=str(incident.get("id") or ""),
+        user_id=user_id,
+        organization_id=org_id,
+        after_state={
+            "id": incident.get("id"),
+            "title": incident.get("title"),
+            "severity": incident.get("severity"),
+            "participant_id": incident.get("participant_id"),
+            "source_type": incident.get("source_type"),
+        },
+    )
+    if not logged and incident.get("id"):
+        try:
+            get_supabase_admin().table("incidents").update(
+                {"audit_log_pending": True}
+            ).eq("id", incident["id"]).execute()
+        except Exception as exc:
+            logger.warning(
+                "Could not set audit_log_pending on incident %s after a failed audit write: %s",
+                incident.get("id"), exc,
+            )
+
+
 def _is_missing_column_error(exc: Exception) -> bool:
     err = str(exc).lower()
     return (
@@ -618,7 +652,9 @@ async def create_incident(
             "Incident insert returned no rows"
         )
 
-    return _enrich(rows[0])
+    enriched = _enrich(rows[0])
+    await _log_incident_created(enriched, org_id=org_id, user_id=user_id)
+    return enriched
 
 
 def _generate_reference_number(supabase: Any) -> Optional[str]:
@@ -742,7 +778,9 @@ async def create_worker_incident(
     rows = _safe_rows(result.data)
     if not rows:
         raise ValueError("Incident insert returned no rows")
-    return _enrich(rows[0])
+    enriched = _enrich(rows[0])
+    await _log_incident_created(enriched, org_id=org_id, user_id=user_id)
+    return enriched
 
 
 async def add_incident_correction(

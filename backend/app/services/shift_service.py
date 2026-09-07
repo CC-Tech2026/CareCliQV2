@@ -3560,7 +3560,7 @@ def list_shift_visit_notes(
         raise
 
 
-def create_shift_visit_note(
+async def create_shift_visit_note(
     shift_id: str,
     worker_id: str,
     organization_id: str,
@@ -3576,6 +3576,12 @@ def create_shift_visit_note(
     if not text:
         raise ValueError("Note content is required.")
     now = _now_iso()
+    validation_result = await _run_note_validation(
+        content=text,
+        organization_id=organization_id,
+        participant_id=shift.get("participant_id"),
+        task_category=(category or "").strip() or None,
+    )
     payload = {
         "organization_id": organization_id,
         "shift_id": shift_id,
@@ -3586,6 +3592,9 @@ def create_shift_visit_note(
         "attachment_urls": attachment_urls or [],
         "created_at": now,
         "updated_at": now,
+        "is_original": True,
+        "created_during_shift": str(shift.get("status") or "") not in ("completed", "cancelled"),
+        "validation_result": validation_result,
     }
     try:
         result = get_supabase_admin().table("shift_visit_notes").insert(payload).execute()
@@ -3593,7 +3602,21 @@ def create_shift_visit_note(
         return rows[0] if rows else None
     except Exception as exc:
         if _is_missing_schema_error(exc):
-            return None
+            # Versioning columns (migration 168) not applied yet — degrade to
+            # a plain note insert rather than failing the whole save.
+            fallback_payload = {
+                k: v
+                for k, v in payload.items()
+                if k not in ("is_original", "created_during_shift", "validation_result")
+            }
+            try:
+                result = get_supabase_admin().table("shift_visit_notes").insert(fallback_payload).execute()
+                rows = result.data or []
+                return rows[0] if rows else None
+            except Exception as exc2:
+                if _is_missing_schema_error(exc2):
+                    return None
+                raise
         raise
 
 
@@ -3614,6 +3637,244 @@ def _goal_id_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Op
             goal = task.get("goal_id")
             return str(goal) if goal else None
     return None
+
+
+def _task_category_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Optional[str]:
+    """Free-text category/label for a task entry on the shift's JSONB
+    checklist — used as the "does this note fit the task" signal for
+    validate_note_content. Not the TaskCategory enum (task templates use
+    that), the actual per-shift task entries carry their own looser strings."""
+    if not task_id:
+        return None
+    tasks = shift.get("tasks") or []
+    if not isinstance(tasks, list):
+        return None
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        if str(task.get("task_id") or "") == str(task_id):
+            return str(task.get("category") or task.get("label") or "") or None
+    return None
+
+
+async def _run_note_validation(
+    *,
+    content: str,
+    organization_id: str,
+    participant_id: Optional[str],
+    task_category: Optional[str],
+) -> dict[str, Any]:
+    """Best-effort real-time relevance/appropriateness check for a
+    worker-written note. Always returns a usable result — never raises —
+    so a validation failure can never block a note save."""
+    from . import ai_service, participant_service
+
+    try:
+        participant_context: dict[str, Any] = {}
+        if participant_id:
+            participant_context = await participant_service.get_participant_validation_context(
+                participant_id, organization_id
+            )
+        return await ai_service.validate_note_content(content, participant_context, task_category)
+    except Exception:
+        logger.warning("Note validation failed; treating as no concerns", exc_info=True)
+        return {
+            "relevant_to_participant": True,
+            "fits_task_category": True,
+            "inappropriate_content": False,
+            "warning_message": None,
+        }
+
+
+async def _supersede_note_with_new_content(
+    *,
+    existing_row: dict[str, Any],
+    new_content: str,
+    organization_id: str,
+    worker_id: str,
+    edited_by: Optional[str],
+    session_status: Optional[str],
+    task_category: Optional[str],
+    participant_id: Optional[str],
+) -> Optional[dict[str, Any]]:
+    """Insert a new shift_visit_notes row carrying new_content, then mark
+    existing_row superseded by it — same insert-then-supersede ordering as
+    vault_service.upload_governance_document. Deliberately does not carry
+    client_note_id onto the new row: that id is the offline-retry match key
+    for the (superseded) old row, and duplicating it onto the new row would
+    make future retries of that id ambiguous between the two rows."""
+    now = _now_iso()
+    validation_result = await _run_note_validation(
+        content=new_content,
+        organization_id=organization_id,
+        participant_id=participant_id,
+        task_category=task_category,
+    )
+    new_payload = {
+        "organization_id": organization_id,
+        "shift_id": existing_row.get("shift_id"),
+        "worker_id": existing_row.get("worker_id") or worker_id,
+        "session_id": existing_row.get("session_id"),
+        "task_id": existing_row.get("task_id"),
+        "goal_id": existing_row.get("goal_id"),
+        "content": new_content,
+        "category": existing_row.get("category"),
+        "attachment_urls": existing_row.get("attachment_urls") or [],
+        "created_at": now,
+        "updated_at": now,
+        "auto_saved_at": now,
+        "is_original": False,
+        "created_during_shift": str(session_status or "") not in ("completed", "cancelled"),
+        "validation_result": validation_result,
+        "edited_by": edited_by,
+    }
+    admin = get_supabase_admin()
+    try:
+        insert_result = admin.table("shift_visit_notes").insert(new_payload).execute()
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    new_rows = insert_result.data or []
+    if not new_rows:
+        return None
+    new_row = new_rows[0]
+    try:
+        admin.table("shift_visit_notes").update(
+            {"superseded_by_note_id": new_row["id"], "superseded_at": now}
+        ).eq("id", existing_row["id"]).execute()
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            raise
+    return new_row
+
+
+async def edit_shift_visit_note(
+    note_id: str,
+    worker_id: str,
+    organization_id: str,
+    content: str,
+) -> Optional[dict[str, Any]]:
+    """Edit an existing per-task/shift quick note without overwriting it —
+    inserts a new version and marks the previous one superseded, so the
+    original and every edit stay on the record."""
+    new_content = (content or "").strip()
+    if not new_content:
+        raise ValueError("Note content is required.")
+
+    admin = get_supabase_admin()
+    try:
+        existing_result = (
+            admin.table("shift_visit_notes")
+            .select("*")
+            .eq("id", note_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    rows = existing_result.data or []
+    if not rows:
+        return None
+    existing = rows[0]
+
+    shift = get_shift_by_id(str(existing.get("shift_id") or ""))
+    if not shift or str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+    if existing.get("superseded_at"):
+        return None
+
+    if (existing.get("content") or "").strip() == new_content:
+        return existing
+
+    session_status = None
+    session_id = existing.get("session_id")
+    if session_id:
+        session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+        session_status = session.get("status") if session else None
+
+    task_category = existing.get("category")
+    if existing.get("task_id"):
+        resolved = _task_category_for_shift_task(shift, existing.get("task_id"))
+        if resolved:
+            task_category = resolved
+
+    return await _supersede_note_with_new_content(
+        existing_row=existing,
+        new_content=new_content,
+        organization_id=organization_id,
+        worker_id=worker_id,
+        edited_by=worker_id,
+        session_status=session_status,
+        task_category=task_category,
+        participant_id=shift.get("participant_id"),
+    )
+
+
+def list_shift_visit_note_versions(note_id: str, organization_id: str) -> Optional[list[dict[str, Any]]]:
+    """Full version chain for a shift_visit_notes row, newest first — mirrors
+    vault_service.list_governance_document_versions (walk forward to the
+    current row, then backward to collect every superseded ancestor)."""
+    admin = get_supabase_admin()
+    try:
+        result = (
+            admin.table("shift_visit_notes")
+            .select("*")
+            .eq("id", note_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    rows = result.data or []
+    if not rows:
+        return None
+
+    cursor = rows[0]
+    seen_ids = {cursor["id"]}
+    while cursor.get("superseded_by_note_id"):
+        next_id = cursor["superseded_by_note_id"]
+        if next_id in seen_ids:
+            break
+        next_result = (
+            admin.table("shift_visit_notes")
+            .select("*")
+            .eq("id", next_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        next_rows = next_result.data or []
+        if not next_rows:
+            break
+        cursor = next_rows[0]
+        seen_ids.add(cursor["id"])
+
+    chain = [cursor]
+    while True:
+        prev_result = (
+            admin.table("shift_visit_notes")
+            .select("*")
+            .eq("superseded_by_note_id", chain[-1]["id"])
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        prev_rows = prev_result.data or []
+        if not prev_rows:
+            break
+        chain.append(prev_rows[0])
+
+    return [
+        {**row, "is_current": not row.get("superseded_at")}
+        for row in chain
+    ]
 
 
 def _coerce_client_note_id(raw: str | None) -> str | None:
@@ -3662,6 +3923,7 @@ def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "note_type": note_type,
         "file_name": file_name,
         "attachment_urls": [u for u in attachments if isinstance(u, str) and not u.startswith("name:")],
+        "validation_result": row.get("validation_result"),
     }
 
 
@@ -3674,7 +3936,10 @@ def _get_worker_session_or_none(
         resp = (
             get_supabase_admin()
             .table("sessions")
-            .select("id, shift_id, worker_id, support_worker_id, owner_user_id, created_by, organization_id")
+            .select(
+                "id, shift_id, worker_id, support_worker_id, owner_user_id, created_by, "
+                "organization_id, status, patient_id"
+            )
             .eq("id", session_id)
             .limit(1)
             .execute()
@@ -3752,7 +4017,7 @@ def list_session_notes(
         raise
 
 
-def sync_session_notes(
+async def sync_session_notes(
     session_id: str,
     worker_id: str,
     organization_id: str,
@@ -3843,12 +4108,14 @@ def sync_session_notes(
         if client_note_id:
             payload["client_note_id"] = client_note_id
 
+        task_category = _task_category_for_shift_task(shift, task_id) if task_id else None
+
         try:
             if client_note_id:
                 existing = (
                     get_supabase_admin()
                     .table("shift_visit_notes")
-                    .select("id, created_at")
+                    .select("*")
                     .eq("session_id", session_id)
                     .eq("client_note_id", client_note_id)
                     .limit(1)
@@ -3856,21 +4123,65 @@ def sync_session_notes(
                 )
                 rows = existing.data or []
                 if rows:
-                    row_id = rows[0]["id"]
-                    get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
-                    payload["id"] = row_id
-                    # Preserve the note's true original created_at on re-sync — this is
-                    # an update, not a new note, so it must not be re-stamped with "now".
-                    payload["created_at"] = rows[0].get("created_at") or created_at
-                    confirmed.append(_note_payload_from_row({**payload, "id": row_id}))
+                    existing_row = rows[0]
+                    row_id = existing_row["id"]
+                    if (existing_row.get("content") or "").strip() == content:
+                        # Same content resent — an offline-retry idempotency
+                        # replay, not a real edit. Keep today's plain update,
+                        # no new version, no re-validation.
+                        get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
+                        response_row = {
+                            **existing_row,
+                            **payload,
+                            "id": row_id,
+                            "created_at": existing_row.get("created_at") or created_at,
+                        }
+                        confirmed.append(_note_payload_from_row(response_row))
+                        continue
+
+                    # Content actually changed on a re-sent client_note_id —
+                    # a real edit, not a retry. Version it instead of
+                    # overwriting, same as the dedicated edit endpoint.
+                    superseded = await _supersede_note_with_new_content(
+                        existing_row=existing_row,
+                        new_content=content,
+                        organization_id=organization_id,
+                        worker_id=worker_id,
+                        edited_by=worker_id,
+                        session_status=session.get("status"),
+                        task_category=task_category,
+                        participant_id=session.get("patient_id"),
+                    )
+                    if superseded:
+                        confirmed.append(_note_payload_from_row(superseded))
                     continue
 
+            validation_result = await _run_note_validation(
+                content=content,
+                organization_id=organization_id,
+                participant_id=session.get("patient_id"),
+                task_category=task_category,
+            )
             insert_payload = {
                 **payload,
                 "attachment_urls": attachment_urls,
                 "created_at": created_at,
+                "is_original": True,
+                "created_during_shift": str(session.get("status") or "") not in ("completed", "cancelled"),
+                "validation_result": validation_result,
             }
-            result = get_supabase_admin().table("shift_visit_notes").insert(insert_payload).execute()
+            try:
+                result = get_supabase_admin().table("shift_visit_notes").insert(insert_payload).execute()
+            except Exception as exc:
+                if _is_missing_schema_error(exc):
+                    fallback_payload = {
+                        k: v
+                        for k, v in insert_payload.items()
+                        if k not in ("is_original", "created_during_shift", "validation_result")
+                    }
+                    result = get_supabase_admin().table("shift_visit_notes").insert(fallback_payload).execute()
+                else:
+                    raise
             rows = result.data or []
             if rows:
                 confirmed.append(_note_payload_from_row(rows[0]))

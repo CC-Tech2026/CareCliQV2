@@ -137,6 +137,8 @@ async def create_worker_incident_report(
         participant = await participant_service.get_participant_by_id(body.participant_id, user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
+    else:
+        raise HTTPException(status_code=400, detail="A shift_id or participant_id is required to report an incident")
 
     if body.behaviour_subtype and body.worker_report_type != "participant_behaviour":
         raise HTTPException(status_code=422, detail="behaviour_subtype only applies to participant_behaviour")
@@ -234,14 +236,9 @@ async def create_incident(
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
         result = await incident_service.create_incident(body, org_id=org_id, user_id=user.get("sub"))
-        await audit_service.log_action(
-            action_type="incident.created",
-            entity_type="incident",
-            entity_id=result.get("id", ""),
-            user_id=user.get("sub"),
-            organization_id=org_id,
-            after_state={"id": result.get("id"), "title": result.get("title"), "severity": result.get("severity")},
-        )
+        # Audit logging for every incident-creation path now happens inside
+        # incident_service (create_incident/create_worker_incident), not here
+        # — see incident_service._log_incident_created.
 
         # Enqueue incident text embedding (CARECLIQV2-30).
         # Embed title + description + worker_actions so the incident is
@@ -338,7 +335,8 @@ async def update_incident(
         entity_id=incident_id,
         user_id=user.get("sub"),
         organization_id=user.get("organization_id"),
-        after_state={"id": incident_id, "status": updated.get("status")},
+        before_state={k: existing.get(k) for k in updates},
+        after_state={k: updated.get(k) for k in updates},
     )
     return updated
 

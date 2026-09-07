@@ -14,6 +14,7 @@ import {
   UserPlus,
   HeartHandshake,
   ShieldCheck,
+  FolderLock,
   AlertTriangle,
   Mail,
   DollarSign,
@@ -101,6 +102,7 @@ const MD_NAV_GROUPS = [
     label: "Oversight & Risk",
     items: [
       { href: "/md/compliance", label: "Audit & Compliance", icon: ShieldCheck },
+      { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
       { href: "/md/incidents", label: "Critical Incidents", icon: AlertTriangle },
       { href: "/onboard-participant/complaints", label: "Participant Complaints", icon: Mail },
       { href: "/feedback-reports", label: "Feedback & Reports", icon: MessageSquareWarning },
@@ -172,6 +174,22 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeGroupHover, setActiveGroupHover] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Remembers the last width the sidebar was dragged to, so collapsing (by
+  // click or by dragging past the snap threshold) and re-expanding restores
+  // it instead of always resetting to the default.
+  const [sidebarWidth, setSidebarWidth] = useState(288);
+  const [sidebarDragging, setSidebarDragging] = useState(false);
+  const sidebarDragStartX = useRef(0);
+  const sidebarDragStartWidth = useRef(288);
+  const SIDEBAR_MIN_WIDTH = 200;
+  const SIDEBAR_MAX_WIDTH = 420;
+  const SIDEBAR_COLLAPSE_THRESHOLD = 150;
+  // Topbar/bottombar "Command Deck" dock auto-hides on scroll-down and
+  // reappears on scroll-up, like a mobile browser's chrome — pointer events
+  // (not raw mouse/touch listeners) so wheel, trackpad, and touch scrolling
+  // all drive it the same way.
+  const [navAutoHidden, setNavAutoHidden] = useState(false);
+  const lastScrollY = useRef(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
   const [brandingLoaded, setBrandingLoaded] = useState(false);
@@ -192,6 +210,65 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const toggleGroup = (groupLabel: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [groupLabel]: !prev[groupLabel] }));
   };
+
+  // Auto-hide the floating Command Deck dock (topbar or bottombar mode) as
+  // the page scrolls down, bring it back the moment the user scrolls up —
+  // only relevant for those two layouts, since the sidebar is always visible.
+  useEffect(() => {
+    if (!isMD || sidebarMode) return;
+    lastScrollY.current = window.scrollY;
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const delta = y - lastScrollY.current;
+        if (y < 80) setNavAutoHidden(false);
+        else if (delta > 8) setNavAutoHidden(true);
+        else if (delta < -8) setNavAutoHidden(false);
+        lastScrollY.current = y;
+        ticking = false;
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isMD, sidebarMode]);
+
+  // Drag-to-resize the sidebar's right edge. Pointer events (rather than
+  // separate mouse/touch handlers) cover mouse, trackpad, and touch alike.
+  // Dragging past SIDEBAR_COLLAPSE_THRESHOLD snaps it fully closed; dragging
+  // a collapsed sidebar back out past that point re-expands it.
+  useEffect(() => {
+    if (!sidebarDragging) return;
+    function onMove(e: PointerEvent) {
+      const delta = e.clientX - sidebarDragStartX.current;
+      const next = sidebarDragStartWidth.current + delta;
+      if (next < SIDEBAR_COLLAPSE_THRESHOLD) {
+        setSidebarCollapsed(true);
+      } else {
+        setSidebarCollapsed(false);
+        setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, next)));
+      }
+    }
+    function onUp() {
+      setSidebarDragging(false);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarDragging]);
+
+  function startSidebarDrag(e: React.PointerEvent) {
+    e.preventDefault();
+    setSidebarDragging(true);
+    sidebarDragStartX.current = e.clientX;
+    sidebarDragStartWidth.current = sidebarCollapsed ? 72 : sidebarWidth;
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -422,7 +499,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
       {/* Command Deck Executive Navigation (Floating Dock) */}
       {isMD && !sidebarMode && !bottombarMode && (
-        <div className="sticky top-[75px] z-30 hidden lg:block py-3 px-6 pointer-events-none">
+        <div
+          className={`sticky top-[75px] z-30 hidden lg:block py-3 px-6 pointer-events-none transition-transform duration-300 ease-out ${
+            navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"
+          }`}
+        >
           <div
             ref={navRef}
             className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
@@ -546,7 +627,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
       {/* Bottom Bar Executive Navigation (Floating Dock — mirrors the top Command Deck) */}
       {isMD && bottombarMode && (
-        <div className="fixed inset-x-0 bottom-0 z-30 py-4 px-6 pointer-events-none">
+        <div
+          className={`fixed inset-x-0 bottom-0 z-30 py-4 px-6 pointer-events-none transition-transform duration-300 ease-out ${
+            navAutoHidden ? "translate-y-[calc(100%+2rem)]" : "translate-y-0"
+          }`}
+        >
           <div
             ref={navRef}
             className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
@@ -631,11 +716,32 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {isMD && sidebarMode ? (
         <div className="mx-auto flex max-w-[1600px] items-start gap-0 px-4 py-4 sm:px-6">
           <aside
-            className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border transition-all duration-200 lg:block ${
-              sidebarCollapsed ? "w-[72px]" : "w-72"
+            className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border lg:block ${
+              sidebarDragging ? "" : "transition-[width] duration-200"
             }`}
-            style={{ background: navBackground, borderColor: "rgba(124,58,237,0.15)", boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
+            style={{
+              width: sidebarCollapsed ? 72 : sidebarWidth,
+              background: navBackground,
+              borderColor: "rgba(124,58,237,0.15)",
+              boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+            }}
           >
+            {/* Drag handle — grab and pull to resize, or drag past the snap
+             * point to collapse/expand, in addition to the button below. */}
+            <div
+              onPointerDown={startSidebarDrag}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize sidebar"
+              className="group absolute inset-y-0 -right-2 z-10 hidden w-4 cursor-col-resize items-center justify-center lg:flex"
+              style={{ touchAction: "none" }}
+            >
+              <div
+                className="h-10 w-1 rounded-full transition-colors group-hover:opacity-100"
+                style={{ background: sidebarDragging ? "var(--cc-plum)" : "var(--cc-border)", opacity: sidebarDragging ? 1 : 0.6 }}
+              />
+            </div>
+
             <div className={sidebarCollapsed ? "flex flex-col items-center px-2 py-4" : "flex flex-col p-4"}>
               <button
                 type="button"

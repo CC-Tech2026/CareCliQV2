@@ -253,6 +253,10 @@ from .api import admin as admin_api
 app.include_router(admin_api.router, prefix="/api")
 from .api import platform_billing as platform_billing_api
 app.include_router(platform_billing_api.router, prefix="/api")
+from .api import launch_waitlist as launch_waitlist_api
+app.include_router(launch_waitlist_api.router, prefix="/api")
+from .api import md_vault as md_vault_api
+app.include_router(md_vault_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

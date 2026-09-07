@@ -1050,6 +1050,124 @@ async def get_session_by_id(
 # Create
 # ---------------------------------------------------------------------------
 
+_NOTE_VERSION_FIELDS = (
+    "notes",
+    "activities_performed",
+    "outcomes",
+    "participant_response",
+    "progress_toward_goals",
+)
+
+
+async def _snapshot_note_version(
+    session_id: str,
+    org_id: str,
+    existing: Dict[str, Any],
+    payload: Dict[str, Any],
+    current_user: Optional[dict],
+    is_original: bool,
+) -> Optional[dict]:
+    """Insert an immutable snapshot of the structured note fields whenever a
+    create/update touches them, and mark the prior current version
+    superseded — mirrors vault_service.upload_governance_document's
+    insert-then-supersede ordering for governance documents. Also runs the
+    real-time relevance/appropriateness check and stores the result on the
+    new version. Never raises — a validation or versioning failure must not
+    block the session save itself, which has already committed by the time
+    this runs."""
+    if not any(field in payload for field in (*_NOTE_VERSION_FIELDS, "support_category")):
+        return None
+
+    supabase = get_supabase_admin()
+    try:
+        merged = {field: payload.get(field, existing.get(field)) for field in _NOTE_VERSION_FIELDS}
+        support_category = payload.get("support_category", existing.get("support_category"))
+
+        prior = (
+            supabase.table("session_note_versions")
+            .select(
+                "id, notes, activities_performed, outcomes, participant_response, progress_toward_goals, support_category"
+            )
+            .eq("session_id", session_id)
+            .is_("superseded_at", "null")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        prior_rows = prior.data or []
+        if (
+            prior_rows
+            and all((prior_rows[0].get(f) or None) == (merged.get(f) or None) for f in _NOTE_VERSION_FIELDS)
+            and (prior_rows[0].get("support_category") or None) == (support_category or None)
+        ):
+            return None  # unchanged from the last version already on file
+
+        from . import ai_service, participant_service
+
+        combined_text = "\n".join(str(merged.get(f) or "") for f in _NOTE_VERSION_FIELDS if merged.get(f)).strip()
+        participant_id = existing.get("patient_id")
+        participant_context: Dict[str, Any] = {}
+        if participant_id:
+            participant_context = await participant_service.get_participant_validation_context(
+                str(participant_id), org_id
+            )
+        try:
+            validation_result = await ai_service.validate_note_content(
+                combined_text, participant_context, support_category
+            )
+        except Exception:
+            validation_result = None
+
+        new_payload = {
+            "organization_id": org_id,
+            "session_id": session_id,
+            **merged,
+            "support_category": support_category,
+            "validation_result": validation_result,
+            "is_original": is_original,
+            "created_during_shift": str(existing.get("status") or "") not in ("completed", "cancelled"),
+            "edited_by": get_user_id(current_user) if current_user else None,
+        }
+        insert_result = supabase.table("session_note_versions").insert(new_payload).execute()
+        new_rows = insert_result.data or []
+        if not new_rows:
+            return None
+
+        if prior_rows:
+            supabase.table("session_note_versions").update(
+                {
+                    "superseded_by_version_id": new_rows[0]["id"],
+                    "superseded_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", prior_rows[0]["id"]).execute()
+
+        return validation_result
+    except Exception:
+        logger.warning("Session note version snapshot failed for session %s", session_id, exc_info=True)
+        return None
+
+
+def list_session_note_versions(session_id: str, org_id: str) -> List[dict]:
+    """Full version history for a session's structured note fields, newest
+    first — every version returned carries the validation result recorded
+    at the time it was saved."""
+    supabase = get_supabase_admin()
+    try:
+        result = (
+            supabase.table("session_note_versions")
+            .select("*")
+            .eq("session_id", session_id)
+            .eq("organization_id", org_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("list_session_note_versions failed: %s", exc)
+        return []
+    rows = result.data or []
+    return [{**row, "is_current": not row.get("superseded_at")} for row in rows]
+
+
 async def create_session(
     data: SessionCreate,
     current_user: Optional[dict] = None,
@@ -1122,7 +1240,12 @@ async def create_session(
     if not rows:
         return {}
 
-    return _normalize(rows[0])
+    note_validation = await _snapshot_note_version(
+        str(rows[0]["id"]), org_id, rows[0], payload, current_user, True
+    )
+    normalized = _normalize(rows[0])
+    normalized["note_validation"] = note_validation
+    return normalized
 
 
 # ---------------------------------------------------------------------------
@@ -1186,7 +1309,12 @@ async def update_session(
     if not rows:
         return None
 
-    return _normalize(rows[0])
+    note_validation = await _snapshot_note_version(
+        session_id, org_id, existing, payload, current_user, False
+    )
+    normalized = _normalize(rows[0])
+    normalized["note_validation"] = note_validation
+    return normalized
 
 
 # ---------------------------------------------------------------------------

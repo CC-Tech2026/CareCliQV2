@@ -1309,6 +1309,95 @@ Respond with exactly:
 
 
 # ---------------------------------------------------------------------------
+# Real-time note relevance / category-fit / appropriateness check
+# (advisory only — never blocks save)
+# ---------------------------------------------------------------------------
+
+_NO_WARNING_RESULT: dict[str, Any] = {
+    "relevant_to_participant": True,
+    "fits_task_category": True,
+    "inappropriate_content": False,
+    "warning_message": None,
+}
+
+
+def _validation_result(**overrides: Any) -> dict:
+    from datetime import datetime, timezone
+
+    result = {**_NO_WARNING_RESULT, "checked_at": datetime.now(timezone.utc).isoformat(), "model": "gpt-4o-mini"}
+    result.update(overrides)
+    return result
+
+
+async def validate_note_content(
+    note_text: str,
+    participant_context: dict[str, Any],
+    task_category: str | None,
+) -> dict:
+    """Advisory check on a support-worker note: does it actually relate to
+    this participant, does it fit the task/category it's logged against, and
+    is it free of inappropriate content? This is a corrector, not a writing
+    assistant — it never rewrites or suggests phrasing, only flags a concern
+    with a short message. Never blocks a save: any failure (short/empty note,
+    API error, malformed response) returns the "nothing flagged" shape."""
+    text = (note_text or "").strip()
+    if len(text) < 15 or text.startswith("[Attachment"):
+        return _validation_result()
+
+    goal_titles = ", ".join(participant_context.get("goal_titles") or []) or "No goals on file."
+    participant_name = participant_context.get("full_name") or "the participant"
+    category_line = task_category or "General shift note (no specific task category)"
+
+    prompt = f"""You are reviewing a support worker's shift note for an NDIS participant. Check three things and return JSON only.
+
+PARTICIPANT: {participant_name}
+PARTICIPANT'S NDIS GOALS: {goal_titles}
+TASK / CATEGORY THIS NOTE IS LOGGED AGAINST: {category_line}
+
+NOTE TEXT:
+\"\"\"{text}\"\"\"
+
+CHECKS:
+1. "relevant_to_participant" (bool): Does this note plausibly describe something that happened during support of this specific participant — not random, generic, or clearly unrelated text?
+2. "fits_task_category" (bool): Is the note's content consistent with the stated task/category (or a reasonable general shift note if no specific category is given)?
+3. "inappropriate_content" (bool): Does the note contain unprofessional, offensive, or otherwise inappropriate language?
+
+Do NOT suggest a rewrite or better phrasing, only flag concerns. Do not use em dashes or en dashes in warning_message, use plain commas or periods instead.
+If all three checks pass (relevant=true, fits=true, inappropriate=false), set "warning_message" to null.
+Otherwise, set "warning_message" to ONE short, plain, non-alarming sentence explaining what to double-check (e.g. "This note doesn't appear to relate to {participant_name} or the logged task, please confirm this is correct.").
+
+Respond with exactly:
+{{
+  "relevant_to_participant": <bool>,
+  "fits_task_category": <bool>,
+  "inappropriate_content": <bool>,
+  "warning_message": <string or null>
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=250,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        r = json.loads(response.choices[0].message.content)
+        return _validation_result(
+            relevant_to_participant=bool(r.get("relevant_to_participant", True)),
+            fits_task_category=bool(r.get("fits_task_category", True)),
+            inappropriate_content=bool(r.get("inappropriate_content", False)),
+            warning_message=(r.get("warning_message") or None),
+        )
+    except Exception as exc:
+        logger.warning("validate_note_content AI call failed: %s", exc)
+        return _validation_result()
+
+
+# ---------------------------------------------------------------------------
 # Audio transcription — OpenAI Whisper, then Google Cloud Speech-to-Text
 # ---------------------------------------------------------------------------
 

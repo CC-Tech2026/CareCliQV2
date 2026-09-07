@@ -1,0 +1,12 @@
+{
+  "extends": ["development"],
+  "overrides": [
+    {
+      "files": ["backend/app/templates/**/*.html"],
+      "hints": {
+        "meta-viewport": "off",
+        "no-inline-styles": "off"
+      }
+    }
+  ]
+}

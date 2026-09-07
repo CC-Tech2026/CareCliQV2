@@ -13,9 +13,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   SessionNoteHistoryCard,
   isImageName,
@@ -31,6 +34,7 @@ import {
 import { SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
 import {
   deleteSessionNote,
+  editSessionNote,
   listSessionNotes,
   syncSessionNotes,
   type SessionNoteRecord,
@@ -150,6 +154,9 @@ export function LiveProgressNotePanel({
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [noteToDelete, setNoteToDelete] = useState<SessionNoteRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [noteToEdit, setNoteToEdit] = useState<SessionNoteRecord | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [offlineVoiceOpen, setOfflineVoiceOpen] = useState(false);
 
   const refreshNotes = useCallback(async () => {
@@ -401,6 +408,26 @@ export function LiveProgressNotePanel({
     }
   }
 
+  async function confirmEdit() {
+    if (!sessionId || !noteToEdit?.id) return;
+    const clean = editValue.trim().slice(0, SESSION_NOTE_MAX);
+    if (!clean) return;
+    setSavingEdit(true);
+    try {
+      const updated = await editSessionNote(sessionId, noteToEdit.id, clean);
+      setNotes((prev) =>
+        sortNotesLatestFirst(
+          prev.map((row) => (row.id === noteToEdit.id ? { ...updated, synced: true } : row)),
+        ),
+      );
+      setNoteToEdit(null);
+    } catch {
+      /* leave the note as-is; the dialog stays open so the worker can retry */
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   function handleEndSession() {
     stopDictation(true);
     if (inputValue.trim()) {
@@ -539,6 +566,14 @@ export function LiveProgressNotePanel({
                     key={note.note_id}
                     note={note}
                     onDelete={() => setNoteToDelete(note)}
+                    onEdit={
+                      note.id && note.synced
+                        ? () => {
+                            setNoteToEdit(note);
+                            setEditValue(note.content);
+                          }
+                        : undefined
+                    }
                     onViewImage={(url, title) => setPreviewImage({ url, title })}
                   />
                 ))}
@@ -659,6 +694,32 @@ export function LiveProgressNotePanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={Boolean(noteToEdit)}
+        onOpenChange={(open) => !open && !savingEdit && (setNoteToEdit(null), setEditValue(""))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{translate("shift.session.noteEdit")}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value.slice(0, SESSION_NOTE_MAX))}
+            rows={4}
+            maxLength={SESSION_NOTE_MAX}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" disabled={savingEdit} onClick={() => (setNoteToEdit(null), setEditValue(""))}>
+              {translate("common.cancel")}
+            </Button>
+            <Button disabled={savingEdit || !editValue.trim()} onClick={() => void confirmEdit()}>
+              {translate("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-3xl">

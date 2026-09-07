@@ -16,6 +16,17 @@
     @page {
       size: A4;
       margin: 12mm 14mm 22mm 14mm;
+      /* WeasyPrint renders this via native CSS paged media; xhtml2pdf
+       * doesn't understand @page margin boxes and just ignores the block,
+       * which is fine — it gets its page number from <pdf:pagenumber/>
+       * below instead. Two different mechanisms because the two engines
+       * don't share one: WeasyPrint has no equivalent of <pdf:pagenumber/>,
+       * and xhtml2pdf has no support for CSS page counters. */
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 7pt;
+        color: #94a3b8;
+      }
     }
 
     /* ── Running page footer (xhtml2pdf: position:fixed; WeasyPrint: same) ── */
@@ -34,7 +45,7 @@
     /* ── Header block ──────────────────────────────────────────────────────── */
     .header-wrap {
       background: #f8f9fa;
-      border-bottom: 3px solid #C27803;
+      border-bottom: 3px solid {{ brand_accent_color or '#C27803' }};
       padding: 12px 14px;
       margin-bottom: 14px;
       width: 100%;
@@ -49,13 +60,14 @@
       color: #1a1a1a;
       letter-spacing: -0.5px;
     }
-    .logo-dot { color: #C27803; }
+    .logo-dot { color: {{ brand_accent_color or '#C27803' }}; }
     .logo-tagline { font-size: 7.5pt; color: #64748b; margin-top: 2px; }
+    .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
 
     .provider-name {
       font-size: 10pt;
       font-weight: bold;
-      color: #C27803;
+      color: {{ brand_accent_color or '#C27803' }};
       margin-top: 7px;
       margin-bottom: 2px;
     }
@@ -63,7 +75,7 @@
     .provider-info .muted { font-size: 7.5pt; color: #64748b; }
 
     .doc-type { font-size: 18pt; font-weight: bold; color: #1a1a1a; letter-spacing: 1px; }
-    .inv-number { font-size: 11pt; font-weight: bold; color: #C27803; margin-top: 3px; }
+    .inv-number { font-size: 11pt; font-weight: bold; color: {{ brand_accent_color or '#C27803' }}; margin-top: 3px; }
     .inv-meta { font-size: 8.5pt; color: #475569; line-height: 1.75; margin-top: 5px; }
     .inv-meta b { color: #1a1a1a; }
 
@@ -102,7 +114,7 @@
     .party-label {
       font-size: 6.5pt;
       font-weight: bold;
-      color: #C27803;
+      color: {{ brand_accent_color or '#C27803' }};
       text-transform: uppercase;
       letter-spacing: 1px;
       margin-bottom: 5px;
@@ -136,7 +148,7 @@
 
     /* ── Line items table ──────────────────────────────────────────────────── */
     .line-items { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    .line-items thead tr { background: #C27803; }
+    .line-items thead tr { background: {{ brand_accent_color or '#C27803' }}; }
     .line-items thead th {
       padding: 7px 8px;
       font-size: 8pt;
@@ -167,7 +179,7 @@
     .totals-line td { padding: 5px 8px; font-size: 8.5pt; border-bottom: 1px solid #e2e8f0; }
     .totals-label { text-align: left; color: #64748b; }
     .totals-value { text-align: right; font-weight: 600; color: #1a1a1a; }
-    .totals-grand { background: #C27803; }
+    .totals-grand { background: {{ brand_accent_color or '#C27803' }}; }
     .totals-grand td {
       padding: 8px 10px;
       font-size: 10pt;
@@ -232,7 +244,7 @@
     .note-label {
       font-size: 7pt;
       font-weight: bold;
-      color: #C27803;
+      color: {{ brand_accent_color or '#C27803' }};
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 4px;
@@ -263,8 +275,12 @@
   <table class="header-table">
     <tr>
       <td class="hdr-left">
+        {% if logo_url %}
+        <img class="logo-img" src="{{ logo_url }}" alt="{{ provider_name }}" />
+        {% else %}
         <div class="logo-text">CareCliQ<span class="logo-dot">.</span></div>
         <div class="logo-tagline">NDIS Compliance &amp; Workforce Platform</div>
+        {% endif %}
         <div class="provider-name">{{ provider_name }}</div>
         <div class="provider-info">
           {% if provider_address %}{{ provider_address }}<br />{% endif %}
@@ -358,7 +374,7 @@
         <div class="item-name">{{ item.item_name }}</div>
         {% if item.item_description %}<div class="item-desc">{{ item.item_description }}</div>{% endif %}
       </td>
-      <td class="center">{{ item.shift_date or '&mdash;' }}</td>
+      <td class="center">{{ item.shift_date or '—' }}</td>
       <td class="center">{{ "%.1f"|format(item.hours|float) }}</td>
       <td class="right">${{ "%.2f"|format(item.unit_price|float) }}</td>
       <td class="center">{% if item.gst_applicable %}10%{% else %}N/A{% endif %}</td>

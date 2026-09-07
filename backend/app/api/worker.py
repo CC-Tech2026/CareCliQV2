@@ -149,6 +149,10 @@ class ShiftVisitNoteCreate(BaseModel):
     session_id: Optional[str] = None
 
 
+class SessionNoteEditBody(BaseModel):
+    content: str = Field(min_length=1)
+
+
 class SessionNoteItem(BaseModel):
     note_id: str = Field(min_length=1)
     session_id: Optional[str] = None
@@ -1738,6 +1742,21 @@ async def worker_end_shift(
             await _run_shift_documentation_compliance_check(shift, current_user, persist=True)
         except Exception as exc:
             logger.warning("Documentation compliance check failed for shift %s: %s", shift_id, exc)
+            # Same marker as save_session_with_ai's unexpected-failure case
+            # (backend/app/api/sessions.py) — without this, the linked
+            # session looks identical to "compliance check never run".
+            session_id = shift.get("session_id")
+            if session_id:
+                try:
+                    get_supabase_admin().table("sessions").update({
+                        "compliance_check_status": "failed",
+                        "compliance_check_error": str(exc)[:500],
+                    }).eq("id", str(session_id)).execute()
+                except Exception as marker_err:
+                    logger.warning(
+                        "Could not persist compliance_check_status=failed marker for session %s: %s",
+                        session_id, marker_err,
+                    )
 
     background_tasks.add_task(_auto_summary_and_notify)
     background_tasks.add_task(_documentation_check)
@@ -1827,7 +1846,7 @@ async def worker_sync_session_notes(
     for item in items:
         if item.get("session_id") and item["session_id"] != session_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id mismatch")
-    result = shift_service.sync_session_notes(session_id, worker_id, org_id, items)
+    result = await shift_service.sync_session_notes(session_id, worker_id, org_id, items)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     await audit_service.log_action(
@@ -1863,6 +1882,57 @@ async def worker_delete_session_note(
         after_state={"note_id": note_id},
     )
     return None
+
+
+@router.patch("/sessions/{session_id}/notes/{note_id}")
+async def worker_edit_session_note(
+    session_id: str,
+    note_id: str,
+    body: SessionNoteEditBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Edit a session note without overwriting it — the previous version is
+    kept and marked superseded, never deleted."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        note = await shift_service.edit_shift_visit_note(note_id, worker_id, org_id, body.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    if str(note.get("session_id") or "") != str(session_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    await audit_service.log_action(
+        action_type="worker.session.note_edited",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"note_id": note_id, "new_version_id": note.get("id")},
+    )
+    return shift_service._note_payload_from_row(note)
+
+
+@router.get("/sessions/{session_id}/notes/{note_id}/versions")
+async def worker_list_session_note_versions(
+    session_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full version history for one session note (original + every edit)."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    versions = shift_service.list_shift_visit_note_versions(note_id, org_id)
+    if versions is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    return {
+        "versions": [
+            {**shift_service._note_payload_from_row(v), "is_current": v.get("is_current", False)}
+            for v in versions
+        ]
+    }
 
 
 @router.post("/sessions/{session_id}/transcribe")
@@ -1964,7 +2034,7 @@ async def worker_create_shift_note(
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     try:
-        note = shift_service.create_shift_visit_note(
+        note = await shift_service.create_shift_visit_note(
             shift_id,
             worker_id,
             org_id,

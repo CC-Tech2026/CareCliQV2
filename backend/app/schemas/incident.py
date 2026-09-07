@@ -109,7 +109,7 @@ class WitnessItem(BaseModel):
 
 
 class IncidentCreate(BaseModel):
-    participant_id: Optional[str] = None
+    participant_id: str
     session_id: Optional[str] = None
     shift_id: Optional[str] = None
     title: str

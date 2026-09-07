@@ -45,6 +45,7 @@ _PLAN_FIELD_MAP = {
 async def _sync_plan_fields_from_payload(
     participant_id: str,
     payload: dict,
+    current_user: Optional[dict] = None,
 ) -> dict:
     """Route plan mirror edits to ndis_plans instead of patients."""
     plan_payload: dict = {}
@@ -57,7 +58,7 @@ async def _sync_plan_fields_from_payload(
 
     from . import funding_service
 
-    await funding_service.create_or_update_plan(participant_id, plan_payload)
+    await funding_service.create_or_update_plan(participant_id, plan_payload, current_user)
     return payload
 
 
@@ -225,6 +226,54 @@ async def get_participants_list_light(
 ) -> List[dict]:
     """Participant list without goals/plan enrichment — for dashboards and my-clients."""
     return await _list_accessible_participants(current_user)
+
+
+async def get_participant_validation_context(
+    participant_id: str,
+    organization_id_: str,
+) -> dict:
+    """Minimal participant context for the real-time note-validation check
+    (ai_service.validate_note_content) — deliberately not get_participant_by_id,
+    which does full plan/goal enrichment and writes a "Participant Record
+    Access" audit row on every call. This is called on every note save, so it
+    stays to a direct, unlogged, minimal select instead."""
+    if not participant_id or not organization_id_:
+        return {}
+
+    supabase = get_supabase_admin()
+    try:
+        participant_result = (
+            supabase.table(TABLE)
+            .select("id, full_name, primary_disability")
+            .eq("id", participant_id)
+            .eq("organization_id", organization_id_)
+            .limit(1)
+            .execute()
+        )
+        rows = participant_result.data or []
+        if not rows:
+            return {}
+        participant = rows[0]
+
+        goals_result = (
+            supabase.table("ndis_goals")
+            .select("name")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id_)
+            .eq("status", "active")
+            .limit(5)
+            .execute()
+        )
+        goal_titles = [g["name"] for g in (goals_result.data or []) if g.get("name")]
+
+        return {
+            "full_name": participant.get("full_name"),
+            "primary_disability": participant.get("primary_disability"),
+            "goal_titles": goal_titles,
+        }
+    except Exception:
+        logger.warning("get_participant_validation_context failed for %s", participant_id, exc_info=True)
+        return {}
 
 
 async def get_participant_by_id(
@@ -396,7 +445,7 @@ async def create_participant(
     if plan_payload and participant_id:
         from . import funding_service
 
-        await funding_service.create_or_update_plan(participant_id, plan_payload)
+        await funding_service.create_or_update_plan(participant_id, plan_payload, current_user)
 
     from . import goals_service, funding_service
 
@@ -426,7 +475,7 @@ async def update_participant(
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
     payload.pop("goals", None)
-    payload = await _sync_plan_fields_from_payload(participant_id, payload)
+    payload = await _sync_plan_fields_from_payload(participant_id, payload, current_user)
 
     if not payload:
         return await get_participant_by_id(
@@ -461,6 +510,21 @@ async def update_participant(
         return None
 
     updated = _normalize(rows[0])
+
+    if existing_before and current_user:
+        from . import audit_service
+        from ..core.access import get_user_id, get_user_organization_id
+
+        await audit_service.log_action(
+            action_type="participant.updated",
+            entity_type="participant",
+            entity_id=participant_id,
+            user_id=get_user_id(current_user),
+            organization_id=get_user_organization_id(current_user)
+            or str(existing_before.get("organization_id") or ""),
+            before_state={k: existing_before.get(k) for k in payload},
+            after_state={k: updated.get(k) for k in payload},
+        )
 
     if (
         existing_before

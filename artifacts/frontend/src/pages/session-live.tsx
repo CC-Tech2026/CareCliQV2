@@ -541,6 +541,7 @@ export default function SessionLive() {
     rules?: Array<{ label: string; pass: boolean; note?: string }>;
     rpFlags?: RPFlag[];
     deltaSummaries?: string[];
+    noteWarning?: string | null;
   }
   const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
   const [previewDeltaSummaries, setPreviewDeltaSummaries] = useState<string[]>([]);
@@ -1343,6 +1344,11 @@ export default function SessionLive() {
         body: JSON.stringify(patchBody),
       });
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
+      const patchData = await patchRes.json().catch(() => ({}));
+      const noteWarning: string | null =
+        typeof patchData?.note_validation?.warning_message === "string"
+          ? patchData.note_validation.warning_message
+          : null;
 
       const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
       // TODO: Implement structured compliance checking
@@ -1358,6 +1364,7 @@ export default function SessionLive() {
               : "Non-Compliant",
         rules: liveComplianceLocal.checks.map((c) => ({ label: c.label, pass: c.pass, note: c.note })),
         rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
+        noteWarning,
       };
 
       const aiRes = await apiFetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" });
@@ -1985,6 +1992,14 @@ export default function SessionLive() {
                       {line}
                     </p>
                   ))}
+                </div>
+              )}
+              {postSaveResult.noteWarning && (
+                <div className="flex items-start gap-2 rounded-xl p-3 border bg-amber-50 border-amber-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[12.5px] text-amber-800 font-medium leading-snug">
+                    {postSaveResult.noteWarning}
+                  </p>
                 </div>
               )}
               <Button

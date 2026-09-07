@@ -3461,6 +3461,7 @@ export const vi: Dict = {
   "shift.session.listening": "Đang nghe…",
   "shift.session.liveNote": "Ghi chú tiến độ trực tiếp",
   "shift.session.noteDelete": "Xóa ghi chú",
+  "shift.session.noteEdit": "Chỉnh sửa ghi chú",
   "shift.session.notePlaceholder": "Giọng nói hoặc gõ vào khu vực ghi chú ở trên",
   "shift.session.notesEmpty": "Ghi chú bạn gửi sẽ xuất hiện ở đây, mới nhất sẽ xuất hiện trước.",
   "shift.session.offlineNotes": "Ngoại tuyến — ghi chú được lưu cục bộ",

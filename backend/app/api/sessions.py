@@ -326,6 +326,18 @@ async def update_session(session_id: str, body: SessionUpdate, current_user: dic
     return updated
 
 
+@router.get("/{session_id}/note-versions")
+async def get_session_note_versions(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Full version history for a session's structured note fields (original
+    + every edit) — never overwritten, so this is the provable record of
+    what was written and when."""
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    org_id = get_user_organization_id(current_user)
+    return {"versions": session_service.list_session_note_versions(session_id, org_id)}
+
+
 @router.post("/{session_id}/save-with-ai")
 async def save_session_with_ai(
     session_id: str,
@@ -796,6 +808,19 @@ async def save_session_with_ai(
         raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
+        # An unexpected failure here (as opposed to the expected block/warn
+        # tier failures above, which already persist their own snapshot)
+        # would otherwise leave this session looking identical to "compliance
+        # check never run" — a blank compliance_score either way. Mark it
+        # distinctly so a coordinator/auditor can tell the difference.
+        try:
+            from ..services.supabase_client import get_supabase_admin
+            get_supabase_admin().table("sessions").update({
+                "compliance_check_status": "failed",
+                "compliance_check_error": str(e)[:500],
+            }).eq("id", session_id).execute()
+        except Exception as marker_err:
+            logger.warning(f"Could not persist compliance_check_status=failed marker (non-critical): {marker_err}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
