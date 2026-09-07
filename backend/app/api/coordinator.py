@@ -4368,7 +4368,7 @@ async def get_live_shifts(
                         "severity": "warning",
                         "is_read": False,
                     }).execute()
-                except Exception as exc:
+                except APIError as exc:
                     # The DB rejected this insert (bad/missing column, RLS,
                     # etc) — non-fatal to the shift-list response, but
                     # findable now instead of silently never happening.
