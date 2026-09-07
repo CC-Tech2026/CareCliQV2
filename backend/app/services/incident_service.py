@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from .compliance_evidence_service import record_file_evidence_metadata
 from .object_storage import upload_evidence_bytes
 from .supabase_client import get_supabase_admin
 from .documentation_normalization_service import normalize_documentation_for_legal_record
@@ -588,6 +589,7 @@ async def create_incident(
     if photo_data and org_id:
         uploaded = _upload_incident_photos(
             photo_data, str(org_id), incident_id, photo_items=photo_items, max_photos=6,
+            uploaded_by=user_id, session_id=payload.get("session_id"), shift_id=payload.get("shift_id"),
         )
         if uploaded:
             payload["photo_urls"] = uploaded
@@ -718,6 +720,7 @@ async def create_worker_incident(
     if photo_data and org_id:
         uploaded = _upload_incident_photos(
             photo_data, org_id, incident_id, photo_items=photo_items, max_photos=3,
+            uploaded_by=user_id, session_id=body.session_id, shift_id=body.shift_id,
         )
         if uploaded:
             payload["photo_urls"] = uploaded
@@ -798,6 +801,9 @@ def _upload_incident_photos(
     *,
     photo_items: Optional[list[Any]] = None,
     max_photos: int = 6,
+    uploaded_by: Optional[str] = None,
+    session_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
 ) -> list[str]:
     urls: list[str] = []
     for index, raw in enumerate(photo_data[:max_photos]):
@@ -816,11 +822,30 @@ def _upload_incident_photos(
         if not binary:
             continue
         ext = "jpg" if "jpeg" in mime or "jpg" in mime else "png"
-        path = f"incidents/{org_id}/{incident_id}/{uuid.uuid4().hex}_{index}.{ext}"
+        evidence_id = uuid.uuid4().hex
+        path = f"incidents/{org_id}/{incident_id}/{evidence_id}_{index}.{ext}"
         try:
             stored = upload_evidence_bytes(path, binary, mime)
             if stored.file_url:
                 urls.append(stored.file_url)
+                # Chain-of-custody (CARECLIQV2-271 coverage extended to incident photos):
+                # same SHA-256 hash + retention_until as task evidence. uploaded_by may be
+                # absent on legacy call paths — the hash/retention record still needs a real
+                # actor, so skip rather than attribute it to no one.
+                if uploaded_by:
+                    record_file_evidence_metadata(
+                        evidence_id=f"incident-{incident_id}-{evidence_id}",
+                        organization_id=org_id,
+                        uploaded_by=uploaded_by,
+                        raw_bytes=binary,
+                        mime_type=mime,
+                        storage_path=stored.storage_path,
+                        storage_provider=stored.provider,
+                        evidence_type="photo",
+                        file_url=stored.file_url,
+                        session_id=session_id,
+                        shift_id=shift_id,
+                    )
         except Exception as exc:
             logger.warning("Incident photo upload failed: %s", exc)
     return urls

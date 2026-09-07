@@ -1075,6 +1075,7 @@ async def worker_upload_medication_verification_photo(
         document_type="verification_photo",
         medication_id=medication_id,
         skip_extraction=True,
+        shift_id=shift_id,
     )
     return {"url": result["document"]["file_url"]}
 

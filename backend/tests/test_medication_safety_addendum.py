@@ -39,10 +39,17 @@ def _shift() -> dict:
     return {"id": SHIFT_ID, "organization_id": ORG_ID, "participant_id": PARTICIPANT_ID}
 
 
-def _mock_supabase_insert(mock_admin: MagicMock, returned_row: dict | None = None) -> MagicMock:
+def _mock_supabase_insert(
+    mock_admin: MagicMock,
+    returned_row: dict | None = None,
+    select_data_by_table: dict[str, list[dict]] | None = None,
+) -> MagicMock:
     """Wires get_supabase_admin() so any .table(...).insert(payload).execute() call returns
     a single row echoing the inserted payload (or an override), and any .select(...) chain
-    used for incidental lookups (e.g. PRN max checks) returns an empty result."""
+    used for incidental lookups (e.g. PRN max checks, or the verification-photo resolve
+    lookup against medication_documents) returns an empty result unless select_data_by_table
+    supplies rows for that table name."""
+    select_data_by_table = select_data_by_table or {}
     mock_supabase = MagicMock()
     mock_admin.return_value = mock_supabase
 
@@ -63,7 +70,8 @@ def _mock_supabase_insert(mock_admin: MagicMock, returned_row: dict | None = Non
         select_chain.not_.is_.return_value = select_chain
         select_chain.gte.return_value = select_chain
         select_chain.lt.return_value = select_chain
-        select_chain.execute.return_value = MagicMock(data=[], count=0)
+        select_chain.limit.return_value = select_chain
+        select_chain.execute.return_value = MagicMock(data=select_data_by_table.get(name, []), count=0)
         table_mock.select.return_value = select_chain
 
         return table_mock
@@ -206,7 +214,11 @@ class HighRiskPhotoGateTests(unittest.TestCase):
 
     @patch("backend.app.services.medication_service.get_supabase_admin")
     def test_given_outcome_with_photo_allowed(self, mock_admin):
-        _mock_supabase_insert(mock_admin)
+        # The gate must resolve verification_photo_url to a real medication_documents row for
+        # this medication before accepting it — mock that lookup as a hit.
+        _mock_supabase_insert(mock_admin, select_data_by_table={
+            "medication_documents": [{"id": "doc-1"}],
+        })
         record = medication_service.create_administration(
             medication=_medication(is_high_risk=True),
             shift=_shift(),
@@ -220,6 +232,27 @@ class HighRiskPhotoGateTests(unittest.TestCase):
         )
         self.assertEqual(record["verification_photo_url"], "https://storage.example/photo.jpg")
         self.assertIsNotNone(record["verification_photo_taken_at"])
+        self.assertEqual(record["verification_document_id"], "doc-1")
+
+    @patch("backend.app.services.medication_service.get_supabase_admin")
+    def test_given_outcome_with_unlinked_photo_url_rejected(self, mock_admin):
+        # A client-supplied string that doesn't resolve to any medication_documents row for
+        # this medication must not clear the gate — only a non-empty check passing is not
+        # enough (CARECLIQV2 evidence-integrity audit item 3).
+        _mock_supabase_insert(mock_admin)  # no medication_documents rows configured
+        with self.assertRaises(HTTPException) as ctx:
+            medication_service.create_administration(
+                medication=_medication(is_high_risk=True),
+                shift=_shift(),
+                organization_id=ORG_ID,
+                administered_by=WORKER_ID,
+                action="given",
+                scheduled_time=None,
+                dose_given="10mg",
+                notes=None,
+                verification_photo_url="https://storage.example/not-a-real-upload.jpg",
+            )
+        self.assertEqual(ctx.exception.status_code, 422)
 
     @patch("backend.app.services.medication_service.get_supabase_admin")
     def test_refused_outcome_does_not_require_photo(self, mock_admin):

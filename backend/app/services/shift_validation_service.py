@@ -5,20 +5,22 @@ from __future__ import annotations
 from typing import Any
 
 
+def _has_photo_evidence(task: dict[str, Any]) -> bool:
+    # has_photo is what the mobile client actually sends (see ShiftTask in
+    # artifacts/mobile/lib/worker-api.ts) - photo_evidence/photo_thumbnails are a richer
+    # legacy shape this function used to check exclusively, which meant every task
+    # documented via the mobile per-task composer looked like it had zero evidence here
+    # even when _mandatory_task_satisfied() (the gate for marking a task complete, in
+    # shift_service.py) already recognized has_photo as valid. Keep both shapes.
+    return bool(task.get("photo_evidence") or (task.get("photo_thumbnails") or []) or task.get("has_photo"))
+
+
+def _has_voice_evidence(task: dict[str, Any]) -> bool:
+    return bool(task.get("voice_evidence") or task.get("voice_duration_seconds") or task.get("has_voice"))
+
+
 def _has_strong_evidence(task: dict[str, Any]) -> bool:
-    # has_photo/has_voice are what the mobile client actually sends (see
-    # ShiftTask in artifacts/mobile/lib/worker-api.ts) - photo_evidence/
-    # voice_evidence/etc are a richer legacy shape this function used to
-    # check exclusively, which meant every task documented via the mobile
-    # per-task composer looked like it had zero evidence here even when
-    # _mandatory_task_satisfied() (the gate for marking a task complete,
-    # just below in shift_service.py) already recognized has_photo/has_voice
-    # as valid. Keep both shapes so older/richer evidence payloads still work.
-    if task.get("photo_evidence") or (task.get("photo_thumbnails") or []) or task.get("has_photo"):
-        return True
-    if task.get("voice_evidence") or task.get("voice_duration_seconds") or task.get("has_voice"):
-        return True
-    return False
+    return _has_photo_evidence(task) or _has_voice_evidence(task)
 
 
 def _has_qualifying_note(task: dict[str, Any]) -> bool:
@@ -26,6 +28,19 @@ def _has_qualifying_note(task: dict[str, Any]) -> bool:
 
 
 def _has_task_evidence(task: dict[str, Any]) -> bool:
+    # A coordinator can configure a task's evidence_required as photo/notes/photo_and_notes
+    # (task_models.EvidenceRequired) - honour that specific type instead of treating photo,
+    # voice and a qualifying note as interchangeable. A task requiring a photo is not
+    # satisfied by a text note, and vice versa. Tasks with no declared requirement ("none",
+    # or missing on an older task shape) keep the original permissive behaviour: any of
+    # photo, voice, or a qualifying note counts.
+    required = str(task.get("evidence_required") or "none").strip().lower()
+    if required == "photo":
+        return _has_photo_evidence(task)
+    if required == "notes":
+        return _has_qualifying_note(task)
+    if required == "photo_and_notes":
+        return _has_photo_evidence(task) and _has_qualifying_note(task)
     return _has_strong_evidence(task) or _has_qualifying_note(task)
 
 

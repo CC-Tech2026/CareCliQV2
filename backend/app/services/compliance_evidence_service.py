@@ -292,6 +292,96 @@ def record_text_evidence_metadata(
     return True
 
 
+def record_file_evidence_metadata(
+    *,
+    evidence_id: str,
+    organization_id: str,
+    uploaded_by: str,
+    raw_bytes: bytes,
+    mime_type: str,
+    storage_path: str,
+    storage_provider: str,
+    evidence_type: str,
+    file_url: Optional[str] = None,
+    session_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    goal_id: Any = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Chain-of-custody metadata (SHA-256 hash + retention_until) for an uploaded file,
+    shared by every evidence source — task evidence, medication photos/documents, incident
+    photos. Same task_evidence_metadata mechanism as CARECLIQV2-271, just not gated on a
+    session_id existing: medication documents and standalone incident reports don't always
+    have one, so session_id is optional here (shift_id, also optional, is used for retention
+    lookups when there is no session)."""
+    if not evidence_id or not raw_bytes:
+        return None
+
+    resolved_shift_id = shift_id or (resolve_shift_id_for_session(session_id) if session_id else None)
+    shift_date = resolve_shift_date(resolved_shift_id)
+    retention_until = compute_retention_until(shift_date, organization_id)
+    device_type = parse_device_type(user_agent)
+    file_hash = hashlib.sha256(raw_bytes).hexdigest()
+    server_timestamp = datetime.now(timezone.utc)
+
+    metadata_record: dict[str, Any] = {
+        "evidence_id": evidence_id,
+        "session_id": session_id,
+        "organization_id": organization_id,
+        "uploaded_by": uploaded_by,
+        "uploaded_at": server_timestamp.isoformat(),
+        "file_hash": file_hash,
+        "file_hash_algorithm": "sha256",
+        "file_size_bytes": len(raw_bytes),
+        "mime_type": mime_type,
+        "storage_path": storage_path,
+        "storage_provider": storage_provider,
+        "file_url": file_url,
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+        "evidence_type": evidence_type,
+        "task_id": task_id,
+        "goal_id": _coerce_uuid(goal_id),
+        "is_finalized": True,
+        "device_type": device_type,
+        "retention_until": retention_until.isoformat(),
+        "shift_id": resolved_shift_id,
+    }
+
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("task_evidence_metadata").insert(metadata_record).execute()
+    except Exception as exc:
+        if _is_missing_table(exc):
+            logger.warning("task_evidence_metadata unavailable for %s evidence %s: %s", evidence_type, evidence_id, exc)
+            return None
+        msg = str(exc).lower()
+        if "duplicate" in msg or "unique" in msg:
+            return None
+        raise
+
+    try:
+        supabase.table("evidence_access_audit_log").insert({
+            "evidence_id": evidence_id,
+            "session_id": session_id,
+            "organization_id": organization_id,
+            "accessed_by": uploaded_by,
+            "action": "upload",
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "file_hash_match": True,
+            "file_hash_stored": file_hash,
+            "purpose": f"{evidence_type}_evidence_upload",
+            "shift_id": resolved_shift_id,
+        }).execute()
+    except Exception as exc:
+        logger.debug("evidence_access_audit_log insert skipped for %s: %s", evidence_id, exc)
+
+    return metadata_record
+
+
 def coordinator_delete_evidence(
     evidence_id: str,
     coordinator_id: str,

@@ -17,6 +17,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from . import medication_extraction_service
+from .compliance_evidence_service import record_file_evidence_metadata
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ async def upload_document(
     document_type: str = "other",
     medication_id: str | None = None,
     skip_extraction: bool = False,
+    shift_id: str | None = None,
 ) -> dict[str, Any]:
     """Store the file first, insert the row, then run extraction. Extraction failure is
     logged and reflected in extraction_status — it never undoes the storage/insert above.
@@ -94,6 +96,23 @@ async def upload_document(
             raise HTTPException(status_code=503, detail="Medication document service unavailable.") from exc
         raise
     document = result.data[0] if result.data else record
+
+    # Chain-of-custody (CARECLIQV2-271 coverage extended to medication documents): every
+    # original file stored above — prescriptions/plans/letters as well as high-risk
+    # administration verification photos — gets the same SHA-256 hash + retention_until
+    # as task evidence, keyed by the document's own id so it survives extraction failing.
+    record_file_evidence_metadata(
+        evidence_id=document_id,
+        organization_id=organization_id,
+        uploaded_by=uploaded_by,
+        raw_bytes=file_bytes,
+        mime_type=resolved_type,
+        storage_path=path,
+        storage_provider="supabase",
+        evidence_type="photo" if document_type == "verification_photo" else "document",
+        file_url=url,
+        shift_id=shift_id,
+    )
 
     if skip_extraction:
         return {"document": document, "extracted_fields": None}

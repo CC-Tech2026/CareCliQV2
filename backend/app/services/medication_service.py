@@ -104,6 +104,32 @@ def get_medication(medication_id: str, organization_id: str) -> dict[str, Any]:
     return rows[0]
 
 
+def _resolve_verification_document(photo_url: str, medication_id: str, organization_id: str) -> dict[str, Any] | None:
+    """The photo-verification gate must confirm verification_photo_url actually corresponds to
+    a real uploaded file for THIS medication, not just be a non-empty string — the two rows
+    (medication_administrations, medication_documents) have never had a foreign key between
+    them, only matching URL values. This is the resolve step; create_administration rejects the
+    administration if it returns None."""
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("medication_documents")
+            .select("id")
+            .eq("medication_id", medication_id)
+            .eq("organization_id", organization_id)
+            .eq("document_type", "verification_photo")
+            .eq("file_url", photo_url)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            return None
+        raise
+    rows = resp.data or []
+    return rows[0] if rows else None
+
+
 def get_administration(administration_id: str, organization_id: str) -> dict[str, Any]:
     resp = (
         get_supabase_admin()
@@ -644,11 +670,23 @@ def create_administration(
             raise HTTPException(status_code=422, detail=f"error_subtype is required and must be one of: {', '.join(sorted(ERROR_SUBTYPES))}.")
         if error_subtype == "other" and not (notes or "").strip():
             raise HTTPException(status_code=422, detail="A note is required when error_subtype is 'other'.")
-    if medication.get("is_high_risk") and outcome in GIVEN_OUTCOMES and not (verification_photo_url or "").strip():
-        raise HTTPException(
-            status_code=422,
-            detail="A verification photo is required to log a dose for a high-risk medication.",
-        )
+    verification_document: dict[str, Any] | None = None
+    if medication.get("is_high_risk") and outcome in GIVEN_OUTCOMES:
+        photo_url = (verification_photo_url or "").strip()
+        if not photo_url:
+            raise HTTPException(
+                status_code=422,
+                detail="A verification photo is required to log a dose for a high-risk medication.",
+            )
+        verification_document = _resolve_verification_document(photo_url, medication["id"], organization_id)
+        if not verification_document:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "The verification photo could not be matched to an uploaded file for this "
+                    "medication. Upload the photo again and use the returned URL."
+                ),
+            )
     if reason_code:
         allowed_codes = REASON_CODES.get(outcome, set())
         if reason_code not in allowed_codes:
@@ -680,6 +718,7 @@ def create_administration(
         "error_discovered_by": error_discovered_by if corrects_administration_id else None,
         "verification_photo_url": verification_photo_url,
         "verification_photo_taken_at": datetime.now(timezone.utc).isoformat() if verification_photo_url else None,
+        "verification_document_id": verification_document["id"] if verification_document else None,
     }
     try:
         result = get_supabase_admin().table("medication_administrations").insert(payload).execute()
