@@ -2244,6 +2244,8 @@ export const en: Dict = {
   "settings.privacy.subtitle": "What CareCliQ holds about you, and your rights to export or delete it.",
   "settings.nav.notifications": "Notifications",
   "settings.nav.team": "Team",
+  "settings.nav.bugReport": "Report a Bug",
+  "settings.nav.improvementFeedback": "Improvements & Feedback",
   "settings.nav.billing": "Billing",
   "settings.nav.branding": "Branding",
   "settings.branding.title": "Organisation branding",

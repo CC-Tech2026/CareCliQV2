@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -45,6 +46,10 @@ import {
   CreditCard,
   Sparkles,
   Receipt,
+  Bug,
+  Lightbulb,
+  Paperclip,
+  Video,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -53,6 +58,8 @@ import { formatDistanceToNow } from "date-fns";
 import QRCode from "react-qr-code";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
+import { submitBugReport } from "@/services/bugReportService";
+import { submitImprovementFeedback } from "@/services/improvementFeedbackService";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -99,7 +106,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
@@ -110,6 +117,8 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "privacy",       labelKey: "settings.nav.privacy",           icon: Shield      },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
+  { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
+  { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
 ];
@@ -890,6 +899,292 @@ function SecuritySection() {
         )}
       </PanelCard>
     </Section>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Bug reporting: any role reaches this (Account is every role's default
+// landing tab). Submits to /api/bug-reports, scoped to the reporter's own
+// org — visible only in the Master System (Super Admin) portal, never to
+// this provider's own coordinators/MD. See backend/app/api/bug_reports.py.
+// -----------------------------------------------------------------------------
+const BUG_ATTACHMENT_MAX_COUNT = 3;
+const BUG_ATTACHMENT_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const BUG_ATTACHMENT_MAX_VIDEO_BYTES = 20 * 1024 * 1024;
+const BUG_ATTACHMENT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const BUG_ATTACHMENT_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const BUG_ATTACHMENT_ACCEPT = [...BUG_ATTACHMENT_IMAGE_TYPES, ...BUG_ATTACHMENT_VIDEO_TYPES].join(",");
+
+type PickedAttachment = { file: File; previewUrl: string | null };
+
+type BugSeverity = "low" | "medium" | "urgent";
+
+// Colors distinguish severity the same way the rest of the admin surfaces
+// already use amber for "needs attention" and coral for "urgent/destructive"
+// (see AdminShell/admin dashboard) — not new colors invented for this card.
+const SEVERITY_OPTIONS: { value: BugSeverity; label: string; hint: string; color: string; soft: string }[] = [
+  { value: "low", label: "Low", hint: "Something's a little off.", color: "var(--cc-plum)", soft: "var(--cc-plum-soft)" },
+  { value: "medium", label: "Medium", hint: "Annoying, but I can work around it.", color: "#9A5B0A", soft: "#FBF2E6" },
+  { value: "urgent", label: "Urgent", hint: "I can't use CareCliQ.", color: "var(--cc-coral)", soft: "var(--cc-coral-soft)" },
+];
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// The "Report a Bug" tab is open to every role, but the photo/video
+// attachment picker is MD and coordinators only — workers keep the plain
+// text-only report.
+function BugReportCard() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const canAttach = user?.role === "managing_director" || user?.role === "support_coordinator";
+  const [description, setDescription] = useState("");
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
+  const [severity, setSeverity] = useState<BugSeverity>("low");
+  const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function addFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    const incoming = Array.from(fileList);
+    const room = BUG_ATTACHMENT_MAX_COUNT - attachments.length;
+    if (room <= 0) {
+      toast({ title: `You can attach up to ${BUG_ATTACHMENT_MAX_COUNT} files`, variant: "destructive" });
+      return;
+    }
+    const accepted: PickedAttachment[] = [];
+    for (const file of incoming.slice(0, room)) {
+      const isImage = BUG_ATTACHMENT_IMAGE_TYPES.includes(file.type);
+      const isVideo = BUG_ATTACHMENT_VIDEO_TYPES.includes(file.type);
+      if (!isImage && !isVideo) {
+        toast({ title: `${file.name}: unsupported file type`, variant: "destructive" });
+        continue;
+      }
+      const maxBytes = isImage ? BUG_ATTACHMENT_MAX_IMAGE_BYTES : BUG_ATTACHMENT_MAX_VIDEO_BYTES;
+      if (file.size > maxBytes) {
+        toast({ title: `${file.name}: exceeds ${Math.round(maxBytes / (1024 * 1024))} MB limit`, variant: "destructive" });
+        continue;
+      }
+      accepted.push({ file, previewUrl: isImage ? URL.createObjectURL(file) : null });
+    }
+    if (accepted.length) setAttachments((prev) => [...prev, ...accepted]);
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(index, 1);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  }
+
+  async function handleSubmit() {
+    if (!description.trim()) return;
+    setSubmitting(true);
+    try {
+      const uploaded = await Promise.all(
+        attachments.map(async ({ file }) => ({ mime_type: file.type, data: await readFileAsBase64(file) })),
+      );
+      await submitBugReport(description.trim(), window.location.pathname, uploaded, severity);
+      setDescription("");
+      attachments.forEach((a) => a.previewUrl && URL.revokeObjectURL(a.previewUrl));
+      setAttachments([]);
+      setSeverity("low");
+      toast({ title: "Bug report sent", description: "Thanks — the CareCliQ team can now see this." });
+    } catch (e) {
+      toast({
+        title: "Couldn't send that",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <PanelCard label="Report a bug">
+      <p className="mb-3 text-[12px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>
+        Something not working right? Describe it below — the page you're on is attached automatically. This goes
+        straight to CareCliQ, not to anyone at your own organisation. Please don't include a participant's name or
+        other personal details — describe the issue without them.
+      </p>
+
+      {canAttach && (
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          {SEVERITY_OPTIONS.map((opt) => {
+            const selected = severity === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setSeverity(opt.value)}
+                className="flex flex-col items-start gap-1 rounded-xl border-2 p-2.5 text-left transition-colors"
+                style={{
+                  borderColor: selected ? opt.color : "var(--cc-border)",
+                  background: selected ? opt.soft : "transparent",
+                }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full border-2"
+                    style={{
+                      borderColor: selected ? opt.color : "var(--cc-border)",
+                      background: selected ? opt.color : "transparent",
+                    }}
+                  />
+                  <span className="text-[12.5px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {opt.label}
+                  </span>
+                </span>
+                <span className="text-[11px] leading-snug" style={{ color: "var(--cc-muted)" }}>
+                  {opt.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <Textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="What happened, and what did you expect instead?"
+        rows={4}
+        className="resize-none text-[13px]"
+        maxLength={5000}
+      />
+
+      {canAttach && attachments.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {attachments.map((a, i) => (
+            <div
+              key={i}
+              className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border"
+              style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}
+            >
+              {a.previewUrl ? (
+                <img src={a.previewUrl} alt={a.file.name} className="h-full w-full object-cover" />
+              ) : (
+                <Video className="h-5 w-5" style={{ color: "var(--cc-muted)" }} />
+              )}
+              <button
+                onClick={() => removeAttachment(i)}
+                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={`mt-3 flex items-center ${canAttach ? "justify-between" : "justify-end"}`}>
+        {canAttach && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={BUG_ATTACHMENT_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={attachments.length >= BUG_ATTACHMENT_MAX_COUNT}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              Add photo/video
+            </Button>
+          </>
+        )}
+        <Button
+          size="sm"
+          className="gap-1.5 border-0"
+          style={canAttach ? { background: SEVERITY_OPTIONS.find((o) => o.value === severity)?.color } : undefined}
+          onClick={handleSubmit}
+          disabled={!description.trim() || submitting}
+        >
+          {submitting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Bug className="h-3.5 w-3.5" />
+          )}
+          {canAttach
+            ? `Report ${SEVERITY_OPTIONS.find((o) => o.value === severity)?.label} Priority Bug`
+            : "Send report"}
+        </Button>
+      </div>
+    </PanelCard>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Improvements & Feedback: managing director only (see settings.nav.improvementFeedback's
+// mdOnly flag) — feature requests, improvement ideas, general product
+// feedback about CareCliQ itself. Submits to /api/improvement-feedback,
+// visible only in the Master System (Super Admin) portal. See
+// backend/app/api/improvement_feedback.py.
+// -----------------------------------------------------------------------------
+function ImprovementFeedbackCard() {
+  const { toast } = useToast();
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (!description.trim()) return;
+    setSubmitting(true);
+    try {
+      await submitImprovementFeedback(description.trim());
+      setDescription("");
+      toast({ title: "Feedback sent", description: "Thanks — the CareCliQ team can now see this." });
+    } catch (e) {
+      toast({
+        title: "Couldn't send that",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <PanelCard label="Send feedback">
+      <p className="mb-3 text-[12px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>
+        A feature you wish existed, an improvement idea, or anything that would make CareCliQ work better for your
+        business — this goes straight to CareCliQ. Please don't include a participant's name or other personal
+        details.
+      </p>
+      <Textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="What would make CareCliQ better for your team?"
+        rows={4}
+        className="resize-none text-[13px]"
+        maxLength={5000}
+      />
+      <div className="mt-3 flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={handleSubmit} disabled={!description.trim() || submitting}>
+          {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
+          Send feedback
+        </Button>
+      </div>
+    </PanelCard>
   );
 }
 
@@ -1954,6 +2249,24 @@ export default function Settings() {
                 </div>
               )}
             </PanelCard>
+          </Section>
+        )}
+
+        {/* -- Report a bug section --------------------------------------------- */}
+        {activeSection === "bugReport" && (
+          <Section title={translate("settings.nav.bugReport")} description="Something not working right? Tell CareCliQ directly." icon={Bug}>
+            <BugReportCard />
+          </Section>
+        )}
+
+        {/* -- Improvements & Feedback section (MD only) ------------------------ */}
+        {activeSection === "improvementFeedback" && (
+          <Section
+            title={translate("settings.nav.improvementFeedback")}
+            description="Feature requests, improvement ideas, and general feedback about CareCliQ."
+            icon={Lightbulb}
+          >
+            <ImprovementFeedbackCard />
           </Section>
         )}
 

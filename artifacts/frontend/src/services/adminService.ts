@@ -51,3 +51,75 @@ export function activateAdminOrganization(organizationId: string) {
     { method: "POST" },
   );
 }
+
+export type BugReportStatus = "open" | "in_progress" | "resolved";
+export type BugReportSeverity = "low" | "medium" | "urgent";
+
+export type AdminBugReportAttachment = {
+  storage_path: string;
+  mime_type: string;
+  file_size_bytes: number;
+  url: string | null; // signed, generated fresh on each list call — never store/cache
+};
+
+export type AdminBugReport = {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  reporter_id: string;
+  reporter_name: string;
+  page_url: string | null;
+  description: string;
+  status: BugReportStatus;
+  severity: BugReportSeverity;
+  jira_issue_key: string | null;
+  jira_url: string | null;
+  attachments: AdminBugReportAttachment[];
+  created_at: string;
+  updated_at: string;
+};
+
+export function listAdminBugReports() {
+  return jsonFetch<AdminBugReport[]>("/api/admin/bug-reports");
+}
+
+export function updateAdminBugReportStatus(reportId: string, status: BugReportStatus) {
+  return jsonFetch<{ ok: boolean; status: BugReportStatus }>(
+    `/api/admin/bug-reports/${reportId}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
+// Same status lifecycle as bug reports (open/in_progress/resolved).
+export type AdminImprovementFeedback = {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  submitted_by: string;
+  reporter_name: string;
+  description: string;
+  status: BugReportStatus;
+  jira_issue_key: string | null;
+  jira_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function listAdminImprovementFeedback() {
+  return jsonFetch<AdminImprovementFeedback[]>("/api/admin/improvement-feedback");
+}
+
+export function updateAdminImprovementFeedbackStatus(feedbackId: string, status: BugReportStatus) {
+  return jsonFetch<{ ok: boolean; status: BugReportStatus }>(
+    `/api/admin/improvement-feedback/${feedbackId}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+  );
+}

@@ -208,6 +208,54 @@ class TestOrgContextMiddleware:
         resp = client.post("/api/auth/login", json={"email": "x@x.com", "password": "pw"})
         assert resp.status_code == 200
 
+    def test_admin_path_exempt_for_org_less_super_admin(self):
+        """super_admin is deliberately org-less (see AuthContext.tsx and
+        admin.py's own file header) — /api/admin/* must not be rejected by
+        this middleware just because the token has no organization_id.
+        Each admin endpoint enforces its own is_super_admin() check
+        independently, so this exemption doesn't touch tenant isolation
+        for any provider-facing route. Regression guard for the bug where
+        every /api/admin/* call was 403ing before its handler ever ran."""
+        from starlette.testclient import TestClient
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        from starlette.responses import PlainTextResponse
+        from backend.app.middleware.org_context import OrgContextMiddleware
+
+        async def admin_route(request):
+            return PlainTextResponse("ok")
+
+        app = Starlette(routes=[Route("/api/admin/bug-reports", admin_route, methods=["GET"])])
+        app.add_middleware(
+            OrgContextMiddleware,
+            _decode_fn=lambda token: {"sub": "super-admin-1", "role": "super_admin"},  # no organization_id
+        )
+        client = TestClient(app)
+
+        resp = client.get("/api/admin/bug-reports", headers={"Authorization": "Bearer fake-token"})
+        assert resp.status_code == 200
+
+    def test_jira_webhook_path_exempt_with_no_token_at_all(self):
+        """Jira Automation calls this endpoint with no Authorization header
+        at all — it authenticates with its own shared-secret header instead
+        (see jira_webhook.py). The middleware must let the request through
+        to the handler rather than 403ing it for missing org context."""
+        from starlette.testclient import TestClient
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        from starlette.responses import PlainTextResponse
+        from backend.app.middleware.org_context import OrgContextMiddleware
+
+        async def webhook_route(request):
+            return PlainTextResponse("ok")
+
+        app = Starlette(routes=[Route("/api/webhooks/jira", webhook_route, methods=["POST"])])
+        app.add_middleware(OrgContextMiddleware)
+        client = TestClient(app)
+
+        resp = client.post("/api/webhooks/jira", json={"issue_key": "BRS-1", "status": "Done"})
+        assert resp.status_code == 200
+
 
 # ── Service-layer org-filter unit tests ──────────────────────────────────────
 
