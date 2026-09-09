@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -286,6 +288,34 @@ def get_org_travel_settings(organization_id: str) -> dict[str, Any]:
         "rate_display": f"Current rate: ${rate_cents / 100:.2f}/km",
         "currency": "AUD",
     }
+
+
+def set_org_mileage_rate_cents(organization_id: str, rate_cents: int, updated_by: str) -> dict[str, Any]:
+    """Update the org's per-km mileage reimbursement rate (coordinator-only).
+
+    Logs every change to organization_mileage_rate_history so past
+    submissions' rate_cents_snapshot can always be explained.
+    """
+    if rate_cents <= 0:
+        raise HTTPException(status_code=422, detail="mileage_rate_cents must be positive.")
+    now = _now_iso()
+    get_supabase_admin().table("organization_travel_settings").upsert(
+        {
+            "organization_id": organization_id,
+            "mileage_rate_cents": rate_cents,
+            "updated_by": updated_by,
+            "updated_at": now,
+        },
+        on_conflict="organization_id",
+    ).execute()
+    get_supabase_admin().table("organization_mileage_rate_history").insert(
+        {
+            "organization_id": organization_id,
+            "rate_cents": rate_cents,
+            "created_by": updated_by,
+        }
+    ).execute()
+    return get_org_travel_settings(organization_id)
 
 
 async def auto_save_mileage_on_clock_in(
@@ -600,15 +630,21 @@ def monthly_summary(worker_id: str, organization_id: str, months: int = 12) -> l
 
 def export_tax_csv(worker_id: str, organization_id: str) -> str:
     summary = monthly_summary(worker_id, organization_id, months=12)
-    lines = ["date,type,amount_aud,status,shift_id"]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["date", "type", "amount_aud", "status", "shift_id"])
     for month in summary:
         for item in month.get("items") or []:
             submitted = str(item.get("submitted_at") or item.get("created_at") or "")[:10]
             amount = int(item.get("amount_cents") or 0) / 100
-            lines.append(
-                f"{submitted},{item.get('expense_type')},{amount:.2f},{item.get('status')},{item.get('shift_id')}"
-            )
-    return "\n".join(lines) + "\n"
+            writer.writerow([
+                submitted,
+                item.get("expense_type"),
+                f"{amount:.2f}",
+                item.get("status"),
+                item.get("shift_id"),
+            ])
+    return buffer.getvalue()
 
 
 def list_pending_for_coordinator(organization_id: str) -> list[dict[str, Any]]:

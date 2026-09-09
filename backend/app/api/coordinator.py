@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal
 
 import json
 import logging
@@ -6,13 +7,14 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
+from ..core.config import settings
 from ..core.security import get_current_user
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
@@ -41,6 +43,13 @@ from ..services.notification_service import (
 )
 from ..services import audit_service, conversation_service, shift_offer_service, worker_matching_service
 from ..services import worker_buddy_service
+from ..services import (
+    compliance_evidence_service,
+    schedule_request_service,
+    shift_feedback_service,
+    shift_signature_service,
+    travel_expense_service,
+)
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
 from ..services.supabase_client import get_supabase_admin
 
@@ -767,7 +776,7 @@ async def flagged_sessions(current_user: dict = Depends(get_current_user)):
 
     try:
         result = supabase.table("sessions").select(
-            "id, participant_id, patient_id, session_date, session_type, status, "
+            "id, patient_id, session_date, session_type, status, "
             "compliance_score, review_flag, review_note, review_requested_by, "
             "review_requested_at, worker_id, support_worker_id, owner_user_id, organization_id"
         ).eq("review_flag", "true").execute()
@@ -4989,7 +4998,7 @@ async def get_goal_progress(
         sessions_resp = (
             supabase.table("sessions")
             .select("id, session_date, status, compliance_score, notes")
-            .eq("participant_id", participant_id)
+            .eq("patient_id", participant_id)
             .gte("session_date", cutoff[:10])
             .order("session_date", desc=True)
             .limit(10)
@@ -5580,6 +5589,10 @@ async def upload_training_cover(file: UploadFile = File(...), current_user: dict
 
 
 class TrainingModuleBody(BaseModel):
+    material_layout: Literal["list", "cards"] = "list"
+    learning_steps: list[str] = Field(default_factory=list, max_length=30)
+    estimated_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+
     cover_color: Optional[str] = None
     cover_path: Optional[str] = None
     title: str
@@ -5590,6 +5603,10 @@ class TrainingModuleBody(BaseModel):
 
 
 class TrainingModuleUpdateBody(BaseModel):
+    material_layout: Literal["list", "cards"] = "list"
+    learning_steps: list[str] = Field(default_factory=list, max_length=30)
+    estimated_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+
     cover_color: Optional[str] = None
     cover_path: Optional[str] = None
     title: Optional[str] = None
@@ -5703,6 +5720,9 @@ async def coordinator_create_training_module(
         auto_assign_on_hire=body.auto_assign_on_hire,
         cover_color=body.cover_color,
         cover_path=body.cover_path,
+        material_layout=body.material_layout,
+        learning_steps=body.learning_steps,
+        estimated_minutes=body.estimated_minutes,
     )
 
 
@@ -5919,3 +5939,266 @@ async def coordinator_delete_worker_onboarding_document(
 
     onboarding_docs.delete_document(document_id, org_id)
     return None
+
+
+# ── Coordinator travel management ─────────────────────────────────────────────
+# Reviews/approves what workers submit via worker_travel.py; the per-org
+# mileage rate here is what get_org_mileage_rate_cents() (worker.py's
+# mileage-estimate flow) reads back.
+
+class TravelSettingsUpdateBody(BaseModel):
+    mileage_rate_cents: int
+
+
+class TravelSubmissionActionBody(BaseModel):
+    approve: bool
+    rejection_reason: Optional[str] = None
+    mark_paid: bool = False
+
+
+@router.get("/travel/settings")
+async def get_coordinator_travel_settings(current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    return travel_expense_service.get_org_travel_settings(org_id)
+
+
+@router.put("/travel/settings")
+async def update_coordinator_travel_settings(
+    body: TravelSettingsUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return travel_expense_service.set_org_mileage_rate_cents(
+        org_id, body.mileage_rate_cents, get_user_id(current_user)
+    )
+
+
+@router.get("/travel/submissions")
+async def list_coordinator_travel_submissions(current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    return {"submissions": travel_expense_service.list_pending_for_coordinator(org_id)}
+
+
+@router.post("/travel/submissions/{submission_id}/action")
+async def action_coordinator_travel_submission(
+    submission_id: str,
+    body: TravelSubmissionActionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return travel_expense_service.action_submission(
+        submission_id,
+        get_user_id(current_user),
+        org_id,
+        approve=body.approve,
+        rejection_reason=body.rejection_reason,
+        mark_paid=body.mark_paid,
+    )
+
+
+# ── Coordinator evidence / signature review ───────────────────────────────────
+# Org-wide mirrors of the worker-side evidence-metadata and shift-sign
+# endpoints in worker.py — a coordinator reviews every worker's records in
+# their org, not just their own.
+
+class EvidenceDeleteBody(BaseModel):
+    reason: str
+
+
+def _session_org_or_404(session_id: str, org_id: str) -> None:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, organization_id")
+            .eq("id", session_id)
+            .maybe_single()
+            .execute()
+        )
+        session = resp.data if resp else None
+    except Exception:
+        session = None
+    if not session or str(session.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+
+def _shift_org_or_404(shift_id: str, org_id: str) -> None:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shifts")
+            .select("id, organization_id")
+            .eq("id", shift_id)
+            .maybe_single()
+            .execute()
+        )
+        shift = resp.data if resp else None
+    except Exception:
+        shift = None
+    if not shift or str(shift.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+
+
+@router.get("/sessions/{session_id}/evidence-metadata")
+async def coordinator_list_evidence_metadata(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    _session_org_or_404(session_id, org_id)
+    items = compliance_evidence_service.list_session_evidence_metadata(session_id, org_id)
+    return {"evidence": items}
+
+
+@router.get("/shifts/{shift_id}/signature")
+async def coordinator_get_shift_signature(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    _shift_org_or_404(shift_id, org_id)
+    signature = shift_signature_service.get_shift_signature(shift_id)
+    if not signature:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signature not found")
+    return signature
+
+
+@router.delete("/evidence/{evidence_id}")
+async def coordinator_delete_evidence_route(
+    evidence_id: str,
+    body: EvidenceDeleteBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    try:
+        return compliance_evidence_service.coordinator_delete_evidence(
+            evidence_id, get_user_id(current_user), org_id, body.reason
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/shifts/{shift_id}/audit-log")
+async def coordinator_get_shift_audit_log(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return {"entries": compliance_evidence_service.list_shift_audit_log(shift_id, org_id)}
+
+
+@router.get("/shifts/{shift_id}/audit-log/export")
+async def coordinator_export_shift_audit_log_csv(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    filename, csv_content = compliance_evidence_service.export_shift_evidence_audit_csv(shift_id, org_id)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Coordinator schedule-request review ───────────────────────────────────────
+
+class ScheduleRequestResolveBody(BaseModel):
+    status: str
+    coordinator_notes: Optional[str] = None
+
+
+@router.get("/schedule-requests")
+async def list_coordinator_schedule_requests(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    request_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    requests = schedule_request_service.list_requests(
+        organization_id=org_id,
+        request_type=request_type,
+        status=status_filter,
+        coordinator=True,
+    )
+    return {"requests": requests}
+
+
+@router.patch("/schedule-requests/{request_id}")
+async def resolve_coordinator_schedule_request(
+    request_id: str,
+    body: ScheduleRequestResolveBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return schedule_request_service.resolve_request(
+        request_id,
+        org_id,
+        get_user_id(current_user),
+        status=body.status,
+        coordinator_notes=body.coordinator_notes,
+    )
+
+
+@router.post("/workers/{worker_id}/availability/request-update")
+async def request_worker_availability_update(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    now = datetime.now(timezone.utc).isoformat()
+    await notify_worker(
+        user_id=worker_id,
+        org_id=org_id,
+        event="availability_update_requested",
+        title="Please update your availability",
+        message="Your coordinator has asked you to review and update your availability settings.",
+        reference_key=f"availability_update_requested:{worker_id}:{now}",
+        severity="medium",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/worker/availability",
+    )
+    return {"ok": True}
+
+
+# ── Coordinator shift feedback ────────────────────────────────────────────────
+
+class ShiftFeedbackBody(BaseModel):
+    strengths: str
+    areas_to_improve: str
+    action_items: str
+    tag_ids: Optional[list[str]] = None
+
+
+@router.post("/shifts/{shift_id}/feedback")
+async def submit_coordinator_shift_feedback(
+    shift_id: str,
+    body: ShiftFeedbackBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return await shift_feedback_service.submit_shift_feedback(
+        coordinator_id=get_user_id(current_user),
+        organization_id=org_id,
+        shift_id=shift_id,
+        strengths=body.strengths,
+        areas_to_improve=body.areas_to_improve,
+        action_items=body.action_items,
+        tag_ids=body.tag_ids,
+    )
+
+
+@router.get("/feedback/tags")
+async def get_coordinator_feedback_tags(
+    category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return {"tags": shift_feedback_service.list_feedback_tags(org_id, category)}
+
+
+@router.get("/feedback/acknowledgement-rate")
+async def get_coordinator_feedback_acknowledgement_rate(
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_org_read(current_user)
+    return shift_feedback_service.coordinator_acknowledgement_rate(org_id)

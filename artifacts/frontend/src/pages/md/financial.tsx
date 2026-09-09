@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
+  Loader2,
   PieChart,
   TrendingUp,
   Wallet,
@@ -21,6 +22,8 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionInfo } from "@/components/ui/section-info";
+import { useReAuth } from "@/hooks/useReAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -170,6 +173,9 @@ function InvoiceLedger() {
   const [statusFilter, setStatusFilter] = useState<LedgerStatusFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const { requireReAuth, modal: reauthModal } = useReAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     apiFetch("/api/billing/invoices")
@@ -177,6 +183,36 @@ function InvoiceLedger() {
       .then((data) => setInvoices(Array.isArray(data) ? data : []))
       .catch(() => setInvoices([]));
   }, []);
+
+  // pdf_url is only ever set by generating the PDF (see billing_service.py's
+  // generate_invoice_pdf) — a coordinator can trigger it from billing.tsx,
+  // but an MD reviewing the ledger here had no way to self-serve one before
+  // that happened. This lets them generate it directly instead of asking a
+  // coordinator to do it first.
+  async function generatePdf(invoice: Invoice) {
+    setGeneratingId(invoice.id);
+    try {
+      const res = await requireReAuth(() =>
+        apiFetch(`/api/billing/invoices/${invoice.id}/pdf`, { method: "POST" })
+      );
+      if (!res) return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || "Could not generate PDF.");
+      }
+      const updated = await res.json();
+      setInvoices((prev) => (prev ? prev.map((i) => (i.id === updated.id ? updated : i)) : prev));
+      if (updated.pdf_url) window.open(updated.pdf_url, "_blank", "noopener");
+    } catch (err) {
+      toast({
+        title: "PDF generation failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingId(null);
+    }
+  }
 
   const q = search.trim().toLowerCase();
   const filtered = (invoices ?? []).filter((inv) => {
@@ -280,33 +316,50 @@ function InvoiceLedger() {
                     </td>
                     <td className="px-6 py-3.5">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => inv.pdf_url && window.open(inv.pdf_url, "_blank", "noopener")}
-                          disabled={!inv.pdf_url}
-                          title="View"
-                          aria-label={`View invoice ${inv.invoice_number}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
-                        >
-                          <Eye size={13} style={{ color: MUTED }} />
-                        </button>
-                        <button
-                          onClick={() => inv.pdf_url && window.open(inv.pdf_url, "_blank", "noopener")}
-                          disabled={!inv.pdf_url}
-                          title="Print"
-                          aria-label={`Print invoice ${inv.invoice_number}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
-                        >
-                          <Printer size={13} style={{ color: MUTED }} />
-                        </button>
-                        <button
-                          onClick={() => inv.pdf_url && downloadInvoicePdf(inv.pdf_url, `${inv.invoice_number}.pdf`)}
-                          disabled={!inv.pdf_url}
-                          title="Download"
-                          aria-label={`Download invoice ${inv.invoice_number}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-30"
-                        >
-                          <Download size={13} style={{ color: MUTED }} />
-                        </button>
+                        {inv.pdf_url ? (
+                          <>
+                            <button
+                              onClick={() => window.open(inv.pdf_url!, "_blank", "noopener")}
+                              title="View"
+                              aria-label={`View invoice ${inv.invoice_number}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5"
+                            >
+                              <Eye size={13} style={{ color: MUTED }} />
+                            </button>
+                            <button
+                              onClick={() => window.open(inv.pdf_url!, "_blank", "noopener")}
+                              title="Print"
+                              aria-label={`Print invoice ${inv.invoice_number}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5"
+                            >
+                              <Printer size={13} style={{ color: MUTED }} />
+                            </button>
+                            <button
+                              onClick={() => downloadInvoicePdf(inv.pdf_url!, `${inv.invoice_number}.pdf`)}
+                              title="Download"
+                              aria-label={`Download invoice ${inv.invoice_number}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5"
+                            >
+                              <Download size={13} style={{ color: MUTED }} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => generatePdf(inv)}
+                            disabled={generatingId === inv.id}
+                            title="Generate PDF"
+                            aria-label={`Generate PDF for invoice ${inv.invoice_number}`}
+                            className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{ borderColor: BORDER, color: PLUM }}
+                          >
+                            {generatingId === inv.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <FileText size={12} />
+                            )}
+                            Generate
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -316,6 +369,7 @@ function InvoiceLedger() {
           </table>
         </div>
       )}
+      {reauthModal}
     </section>
   );
 }

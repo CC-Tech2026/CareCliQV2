@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getStoredSignature } from "@/lib/signature-store";
 import { apiFetch } from "@/lib/api-fetch";
+import { getOrganizationBranding } from "@/services/organizationBrandingService";
 
 export interface AuditPayload {
   audit_version: string;
@@ -78,19 +79,61 @@ async function fetchProviderSettings(): Promise<ProviderInfo> {
   }
 }
 
-async function fetchLogoDataUrl(): Promise<string | null> {
+export interface OrgBrandingForPdf {
+  displayName: string | null;
+  logoDataUrl: string | null;
+  logoFormat: "PNG" | "JPEG" | "WEBP" | null;
+  accentColor: string | null;
+}
+
+function mimeToJsPdfFormat(mime: string): "PNG" | "JPEG" | "WEBP" | null {
+  if (mime.includes("png")) return "PNG";
+  if (mime.includes("webp")) return "WEBP";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "JPEG";
+  return null; // e.g. SVG — jsPDF's addImage can't rasterize it, fall back to placeholder
+}
+
+// The org's own logo/name/accent colour (organization_branding_service — the
+// same source every server-generated PDF in the app uses), not a hardcoded
+// product logo. A public bucket URL, so a plain fetch (no auth header) is
+// correct here — see lib/api-fetch.ts for why /api/... calls need apiFetch
+// instead.
+async function fetchOrgBrandingForPdf(): Promise<OrgBrandingForPdf> {
   try {
-    const res = await fetch("/opengraph.jpg");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    const branding = await getOrganizationBranding();
+    let logoDataUrl: string | null = null;
+    let logoFormat: "PNG" | "JPEG" | "WEBP" | null = null;
+    if (branding.logo_url) {
+      try {
+        const res = await fetch(branding.logo_url);
+        if (res.ok) {
+          const blob = await res.blob();
+          const format = mimeToJsPdfFormat(blob.type || "");
+          if (format) {
+            const dataUrl = await new Promise<string | null>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => resolve(null);
+              reader.readAsDataURL(blob);
+            });
+            if (dataUrl) {
+              logoDataUrl = dataUrl;
+              logoFormat = format;
+            }
+          }
+        }
+      } catch {
+        // logo fetch failed — fall through with no logo, placeholder still shows org name
+      }
+    }
+    return {
+      displayName: branding.display_name?.trim() || null,
+      logoDataUrl,
+      logoFormat,
+      accentColor: branding.brand_accent_color?.trim() || null,
+    };
   } catch {
-    return null;
+    return { displayName: null, logoDataUrl: null, logoFormat: null, accentColor: null };
   }
 }
 
@@ -124,9 +167,18 @@ export function appendSessionToPDF(
   pdf: jsPDF,
   data: AuditPayload,
   isFirstSession = true,
-  logoDataUrl: string | null = null,
+  orgBranding: OrgBrandingForPdf = { displayName: null, logoDataUrl: null, logoFormat: null, accentColor: null },
   providerInfo: ProviderInfo = {}
 ) {
+  const { logoDataUrl, logoFormat } = orgBranding;
+  const brandLabel = (orgBranding.displayName || "NDIS SESSION AUDIT").toUpperCase();
+  const brandInitials = (orgBranding.displayName || "NDIS")
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 3)
+    .join("")
+    .toUpperCase();
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 18;
@@ -145,9 +197,9 @@ export function appendSessionToPDF(
     pdf.setFillColor(HEADER_ACCENT);
     pdf.rect(0, stripH - 2, pageW, 2, "F");
 
-    if (logoDataUrl) {
+    if (logoDataUrl && logoFormat) {
       try {
-        pdf.addImage(logoDataUrl, "JPEG", pageW - margin - 8, 1, 8, 8);
+        pdf.addImage(logoDataUrl, logoFormat, pageW - margin - 8, 1, 8, 8);
       } catch {
         // skip on failure
       }
@@ -156,7 +208,7 @@ export function appendSessionToPDF(
     pdf.setFontSize(7);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor("#93c5fd");
-    pdf.text("AI CLINICAL COMPANION", margin, 4.5);
+    pdf.text(brandLabel, margin, 4.5);
 
     pdf.setFont("helvetica", "normal");
     pdf.setTextColor("#94a3b8");
@@ -253,9 +305,9 @@ export function appendSessionToPDF(
   const logoX = pageW - margin - logoSize;
   const logoY = (headerH - logoSize) / 2;
 
-  if (logoDataUrl) {
+  if (logoDataUrl && logoFormat) {
     try {
-      pdf.addImage(logoDataUrl, "JPEG", logoX, logoY, logoSize, logoSize);
+      pdf.addImage(logoDataUrl, logoFormat, logoX, logoY, logoSize, logoSize);
     } catch {
       // fallback: draw branded placeholder square
       pdf.setFillColor(HEADER_ACCENT);
@@ -263,7 +315,7 @@ export function appendSessionToPDF(
       pdf.setFontSize(7);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor("#ffffff");
-      pdf.text("ACC", logoX + logoSize / 2, logoY + logoSize / 2 + 2.5, { align: "center" });
+      pdf.text(brandInitials, logoX + logoSize / 2, logoY + logoSize / 2 + 2.5, { align: "center" });
     }
   } else {
     // No image available — draw branded rounded square as placeholder
@@ -272,13 +324,13 @@ export function appendSessionToPDF(
     pdf.setFontSize(7);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor("#ffffff");
-    pdf.text("ACC", logoX + logoSize / 2, logoY + logoSize / 2 + 2.5, { align: "center" });
+    pdf.text(brandInitials, logoX + logoSize / 2, logoY + logoSize / 2 + 2.5, { align: "center" });
   }
 
   pdf.setFontSize(8);
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor("#93c5fd");
-  pdf.text("AI CLINICAL COMPANION", margin, 9);
+  pdf.text(brandLabel, margin, 9);
 
   pdf.setFontSize(15);
   pdf.setFont("helvetica", "bold");
@@ -883,7 +935,8 @@ export function appendSessionToPDF(
   return pdf;
 }
 
-export function addPDFFooters(pdf: jsPDF, ndisFooterPrinciple: string) {
+export function addPDFFooters(pdf: jsPDF, ndisFooterPrinciple: string, orgDisplayName: string | null = null) {
+  const footerBrand = orgDisplayName ? `${orgDisplayName} — ` : "";
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 18;
@@ -915,7 +968,7 @@ export function addPDFFooters(pdf: jsPDF, ndisFooterPrinciple: string) {
     pdf.setFont("helvetica", "normal");
     pdf.setTextColor("#94a3b8");
     pdf.text(
-      "AI Clinical Companion — Confidential. For NDIS audit and compliance use only.",
+      `${footerBrand}Confidential. For NDIS audit and compliance use only.`,
       margin,
       footerY + 6
     );
@@ -926,16 +979,16 @@ export function addPDFFooters(pdf: jsPDF, ndisFooterPrinciple: string) {
 }
 
 export async function exportSingleSessionPDF(sessionId: string): Promise<void> {
-  const [data, logoDataUrl, providerInfo] = await Promise.all([
+  const [data, orgBranding, providerInfo] = await Promise.all([
     fetchAuditData(sessionId),
-    fetchLogoDataUrl(),
+    fetchOrgBrandingForPdf(),
     fetchProviderSettings(),
   ]);
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  appendSessionToPDF(pdf, data, true, logoDataUrl, providerInfo);
-  addPDFFooters(pdf, data.ndis_principle ?? "If it cannot be evidenced, it cannot be claimed.");
+  appendSessionToPDF(pdf, data, true, orgBranding, providerInfo);
+  addPDFFooters(pdf, data.ndis_principle ?? "If it cannot be evidenced, it cannot be claimed.", orgBranding.displayName);
 
   const p = data.participant ?? {};
   const s = data.session ?? {};
@@ -953,8 +1006,8 @@ export async function exportBulkSessionsPDF(
 ): Promise<void> {
   if (sessionIds.length === 0) return;
 
-  const [logoDataUrl, providerInfo] = await Promise.all([
-    fetchLogoDataUrl(),
+  const [orgBranding, providerInfo] = await Promise.all([
+    fetchOrgBrandingForPdf(),
     fetchProviderSettings(),
   ]);
 
@@ -965,7 +1018,7 @@ export async function exportBulkSessionsPDF(
 
   for (let i = 0; i < sessionIds.length; i++) {
     const data = await fetchAuditData(sessionIds[i]);
-    appendSessionToPDF(pdf, data, i === 0, logoDataUrl, providerInfo);
+    appendSessionToPDF(pdf, data, i === 0, orgBranding, providerInfo);
     if (data.ndis_principle) ndisFooterPrinciple = data.ndis_principle;
     const sessionDate = data.session?.date ?? "";
     if (sessionDate) {
@@ -975,7 +1028,7 @@ export async function exportBulkSessionsPDF(
     onProgress?.(i + 1, sessionIds.length);
   }
 
-  addPDFFooters(pdf, ndisFooterPrinciple);
+  addPDFFooters(pdf, ndisFooterPrinciple, orgBranding.displayName);
 
   const startStr = dateRangeStart.replace(/-/g, "_");
   const endStr = dateRangeEnd.replace(/-/g, "_");

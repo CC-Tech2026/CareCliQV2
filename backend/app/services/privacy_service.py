@@ -184,7 +184,7 @@ def _build_export_payload(user_id: str, organization_id: Optional[str]) -> dict[
     devices: list[dict] = []
     sessions: list[dict] = []
     try:
-        d_resp = supabase.table("trusted_devices").select("*").eq("user_id", user_id).execute()
+        d_resp = supabase.table("user_trusted_devices").select("*").eq("user_id", user_id).execute()
         devices = d_resp.data or []
     except Exception:
         pass

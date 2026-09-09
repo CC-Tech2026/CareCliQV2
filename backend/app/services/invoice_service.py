@@ -488,24 +488,8 @@ def render_invoice_pdf(invoice_data: Dict[str, Any]) -> bytes:
     template = env.get_template("invoice.html")
     html_str = template.render(**invoice_data)
 
-    # Try WeasyPrint (Linux / production with GTK/Pango available)
+    from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
     try:
-        from weasyprint import HTML
-        return HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
-    except Exception:
-        pass
-
-    # Fall back to xhtml2pdf (pure-Python, works on Windows without GTK)
-    try:
-        import io
-        from xhtml2pdf import pisa
-        buf = io.BytesIO()
-        result = pisa.CreatePDF(html_str, dest=buf)
-        if not result.err:
-            return buf.getvalue()
-    except ImportError:
-        pass
-
-    raise InvoiceGenerationError(
-        "PDF rendering failed: install weasyprint (Linux) or xhtml2pdf (Windows)."
-    )
+        return render_html_to_pdf(html_str, base_url=str(_TEMPLATES_DIR))
+    except HtmlPdfRenderError as exc:
+        raise InvoiceGenerationError(str(exc)) from exc

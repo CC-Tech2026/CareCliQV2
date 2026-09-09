@@ -8,7 +8,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..core.access import get_user_id
+from ..core.access import get_user_id, get_user_organization_id
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
 
@@ -78,6 +78,31 @@ def _row_to_response(user_id: str, row: dict) -> dict:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/organisation")
+async def get_organisation_settings(
+    current_user: dict = Depends(get_current_user),
+):
+    """Minimal org profile for onboarding/greeting surfaces (name, abn, plan_tier)."""
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("organizations")
+        .select("organization_name, display_name, abn, plan_tier")
+        .eq("organization_id", org_id)
+        .maybe_single()
+        .execute()
+    )
+    row = result.data if result and result.data else {}
+    return {
+        "name": row.get("display_name") or row.get("organization_name"),
+        "abn": row.get("abn"),
+        "plan_tier": row.get("plan_tier"),
+    }
 
 
 @router.get("/practitioner", response_model=PractitionerSettings)

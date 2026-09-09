@@ -1,11 +1,14 @@
 """
-NDIS Invoicing and Task Management API Endpoints
+NDIS Task Management API Endpoints
 
 Provides endpoints for:
-- Generating invoices from completed/verified tasks
 - Managing task completion with evidence verification
 - Scheduling recurring tasks with shift-based automation
 - Resolving pricing for tasks based on shift type and date
+
+Invoicing lives in billing.py/billing_service.py (the pipeline billing.tsx
+and financial.tsx actually use) — this file previously duplicated a second,
+unreachable invoice generation/PDF pipeline that has been removed.
 """
 
 from __future__ import annotations
@@ -14,19 +17,9 @@ from datetime import date, datetime, timezone
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
 
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
-from ..services.invoice_service import (
-    create_invoice,
-    get_invoice_summary,
-    finalize_invoice,
-    mark_invoice_sent,
-    assemble_invoice_data,
-    render_invoice_pdf,
-    InvoiceGenerationError,
-)
 from ..services.recurring_task_scheduler import (
     schedule_recurring_tasks_for_period,
     list_task_instances_for_date,
@@ -256,178 +249,6 @@ async def list_task_completions(
         return resp.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {e}")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Invoice Generation
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-class InvoiceGeneratePayload(BaseModel):
-    """Parameters for invoice generation."""
-    participant_id: str
-    plan_id: Optional[str] = None
-    period_start: str  # YYYY-MM-DD
-    period_end: str  # YYYY-MM-DD
-
-
-@router.post("/invoices/preview")
-async def preview_invoice(
-    body: InvoiceGeneratePayload,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Preview invoice before generation (coordinator function).
-    
-    Shows what will be billed without creating the invoice yet.
-    Useful for review and approval workflow.
-    """
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-    
-    try:
-        period_start = date.fromisoformat(body.period_start)
-        period_end = date.fromisoformat(body.period_end)
-        
-        summary = await get_invoice_summary(
-            supabase,
-            org_id,
-            body.participant_id,
-            period_start,
-            period_end,
-        )
-        return summary
-    
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/invoices/generate", status_code=201)
-async def generate_invoice(
-    body: InvoiceGeneratePayload,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Generate NDIS invoice from verified task completions.
-    
-    Creates invoice header and line items grouped by support category.
-    Invoice starts in "draft" status for review/approval before sending.
-    """
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-    
-    try:
-        period_start = date.fromisoformat(body.period_start)
-        period_end = date.fromisoformat(body.period_end)
-        
-        result = await create_invoice(
-            supabase,
-            org_id,
-            body.participant_id,
-            body.plan_id,
-            period_start,
-            period_end,
-            _get_user_id(current_user),
-            status="draft"  # Start as draft for review
-        )
-        
-        return result
-    
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
-    except InvoiceGenerationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Invoice generation failed: {e}")
-
-
-@router.post("/invoices/{invoice_id}/finalize")
-async def finalize_invoice_endpoint(
-    invoice_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Finalize invoice (move from draft to finalized status)."""
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-    
-    try:
-        result = finalize_invoice(supabase, invoice_id, org_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/invoices/{invoice_id}/mark-sent")
-async def mark_sent_endpoint(
-    invoice_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Mark invoice as sent to participant/scheme."""
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-    
-    try:
-        result = mark_invoice_sent(supabase, invoice_id, org_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/invoices/{invoice_id}")
-async def get_invoice(
-    invoice_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Get invoice details with line items."""
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-
-    try:
-        resp = (
-            supabase.table("invoices")
-            .select("*, invoice_line_items(*)")
-            .eq("id", invoice_id)
-            .eq("organization_id", org_id)
-            .single()
-            .execute()
-        )
-        return resp.data
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-
-
-@router.get("/invoices/{invoice_id}/pdf")
-async def get_invoice_pdf(
-    invoice_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Generate and return a professional NDIS invoice PDF.
-
-    Fetches invoice + line items + provider + participant + plan data,
-    renders the Jinja2 template via WeasyPrint, and streams the PDF.
-    """
-    org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
-
-    try:
-        invoice_data = assemble_invoice_data(supabase, invoice_id, org_id)
-        pdf_bytes = render_invoice_pdf(invoice_data)
-        invoice_number = invoice_data.get("invoice_number", invoice_id)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{invoice_number}.pdf"',
-                "Content-Length": str(len(pdf_bytes)),
-            },
-        )
-    except InvoiceGenerationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

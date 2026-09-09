@@ -1621,7 +1621,7 @@ def get_audit_engagement_pack(
             get_supabase_admin()
             .table("sessions")
             .select(
-                "id, session_date, participant_id, worker_id, shift_id, "
+                "id, session_date, patient_id, worker_id, shift_id, "
                 "duration_minutes, checkin_count, max_gap_secs, break_duration_secs, "
                 "billable_duration_secs, engagement_score, engagement_check16, compliance_flags, "
                 "is_long_shift"
@@ -1693,7 +1693,7 @@ def get_audit_engagement_pack(
 
         participant = None
         worker = None
-        pid = sess.get("participant_id")
+        pid = sess.get("patient_id")
         wid = sess.get("worker_id")
         if pid:
             try:

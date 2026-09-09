@@ -781,7 +781,7 @@ async def transcribe_and_resolve_names(
                 name = speaker.get("resolved_name", "")
                 try:
                     p_resp = (
-                        supabase.table("participants")
+                        supabase.table("patients")
                         .select("id")
                         .ilike("full_name", f"%{name}%")
                         .eq("organization_id", organization_id)

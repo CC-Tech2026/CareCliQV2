@@ -219,7 +219,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     try:
         sessions_resp = (
             supabase.table("sessions")
-            .select("id, session_date, compliance_score, worker_id, support_worker_id, owner_user_id, participant_id")
+            .select("id, session_date, compliance_score, worker_id, support_worker_id, owner_user_id, patient_id")
             .eq("organization_id", org_id)
             .gte("session_date", since)
             .not_.is_("compliance_score", "null")
@@ -409,7 +409,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     flagged_ids = {str(r.get("participant_id")) for r in crit_rows if r.get("participant_id")}
     participant_scores: dict[str, list[float]] = {}
     for s in sessions:
-        pid = str(s.get("participant_id") or "")
+        pid = str(s.get("patient_id") or "")
         if pid and s.get("compliance_score") is not None:
             participant_scores.setdefault(pid, []).append(float(s["compliance_score"]))
 
@@ -624,15 +624,15 @@ async def compliance_centre_participants(
         try:
             sess_resp = (
                 supabase.table("sessions")
-                .select("participant_id, compliance_score, session_date")
+                .select("patient_id, compliance_score, session_date")
                 .eq("organization_id", org_id)
                 .gte("session_date", since)
                 .lte("session_date", until)
-                .in_("participant_id", patient_ids)
+                .in_("patient_id", patient_ids)
                 .execute()
             )
             for s in (sess_resp.data or []):
-                pid = str(s.get("participant_id") or "")
+                pid = str(s.get("patient_id") or "")
                 if not pid:
                     continue
                 session_count_by_patient[pid] = session_count_by_patient.get(pid, 0) + 1

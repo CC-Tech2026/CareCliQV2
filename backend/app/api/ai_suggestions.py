@@ -69,7 +69,7 @@ class ParticipantContextResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
 
-@router.post("/suggestions", response_model=SuggestionResponse)
+@router.get("/suggestions", response_model=SuggestionResponse)
 async def get_field_suggestions(
     participant_id: str = Query(..., description="Participant UUID"),
     field_type: str = Query(..., description="task_completion_notes | goal_description | task_name | shift_notes | evidence_notes"),
@@ -252,11 +252,12 @@ async def get_participant_context(
         "created_at", desc=True
     ).limit(5).execute()
     
-    # Get average compliance score from sessions
+    # Get average compliance score from sessions (sessions uses patient_id,
+    # unlike ndis_goals/task_completions/incidents which use participant_id)
     sessions = await supabase_client.table("sessions").select(
         "compliance_score"
     ).eq(
-        "participant_id", participant_id
+        "patient_id", participant_id
     ).order(
         "session_date", desc=True
     ).limit(20).execute()
