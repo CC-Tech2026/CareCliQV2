@@ -63,6 +63,7 @@ import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDVaultHomePage from "@/pages/md/vault/VaultHome";
 import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
+import MDPolicyEditorPage from "@/pages/md/policy-editor";
 import MDFinancialPage from "@/pages/md/financial";
 import MDCalendarPage from "@/pages/md/md-calendar";
 import AdminDashboardPage from "@/pages/admin/dashboard";
@@ -97,6 +98,7 @@ import WorkerShiftHistory from "@/pages/worker-shift-history";
 import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
 import WorkerTraining from "@/pages/worker-training";
 import WorkerInduction from "@/pages/worker-induction";
+import WorkerPolicies from "@/pages/worker-policies";
 import WorkerFeedback from "@/pages/worker-feedback";
 import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
 import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
@@ -281,6 +283,12 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/md/policy-editor">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDPolicyEditorPage />
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/md/financial">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDFinancialPage />
@@ -414,6 +422,12 @@ function Router() {
       <Route path="/worker-induction">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerInduction /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker-policies">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPolicies /></AppLayout>
         </ProtectedRoute>
       </Route>
 

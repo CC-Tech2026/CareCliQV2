@@ -208,6 +208,7 @@ async def post_governance_document(
     file: UploadFile = File(...),
     supersedes_document_id: str | None = Form(None),
     version_label: str | None = Form(None),
+    visible_to_workers: bool = Form(False),
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
@@ -216,11 +217,14 @@ async def post_governance_document(
         raise HTTPException(status_code=422, detail="A file is required.")
     content_type = file.content_type or ""
     raw = await file.read()
-    return await vault_service.upload_governance_document(
+    doc = await vault_service.upload_governance_document(
         org_id, folder_key, title, description, user_id, raw, content_type,
         supersedes_document_id=supersedes_document_id or None,
         version_label=version_label or None,
     )
+    if visible_to_workers:
+        doc = vault_service.set_governance_document_worker_visibility(org_id, doc["id"], True)
+    return doc
 
 
 @router.get("/governance-documents/{document_id}/versions")
@@ -234,6 +238,99 @@ async def delete_governance_document(document_id: str, current_user: dict = Depe
     org_id = _require_md(current_user)
     vault_service.delete_governance_document(org_id, document_id)
     return None
+
+
+class VisibilityRequest(BaseModel):
+    visible_to_workers: bool
+
+
+@router.put("/governance-documents/{document_id}/worker-visibility")
+async def put_governance_document_worker_visibility(
+    document_id: str,
+    body: VisibilityRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    return vault_service.set_governance_document_worker_visibility(org_id, document_id, body.visible_to_workers)
+
+
+@router.get("/policies/acknowledgement-status")
+async def get_policy_acknowledgement_status(current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"policies": vault_service.coordinator_policy_acknowledgement_status(org_id)}
+
+
+# ── Branded templates + in-app policy document editing ──────────────────────
+
+class DocumentTemplateCreate(BaseModel):
+    name: str
+    description: str | None = None
+    html_content: str
+
+
+@router.post("/templates", status_code=201)
+async def post_document_template(body: DocumentTemplateCreate, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    user_id = get_user_id(current_user)
+    return vault_service.create_document_template(org_id, body.name, body.description, body.html_content, user_id)
+
+
+@router.get("/templates")
+async def get_document_templates(current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"templates": vault_service.list_document_templates(org_id)}
+
+
+class PolicyDocumentCreate(BaseModel):
+    folder_key: str
+    title: str
+    template_id: str | None = None
+
+
+class PolicyDocumentUpdate(BaseModel):
+    title: str | None = None
+    folder_key: str | None = None
+    template_id: str | None = None
+    content_html: str | None = None
+    visible_to_workers: bool | None = None
+
+
+@router.post("/policy-documents", status_code=201)
+async def post_policy_document(body: PolicyDocumentCreate, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    user_id = get_user_id(current_user)
+    return vault_service.create_policy_document(org_id, body.folder_key, body.title, body.template_id, user_id)
+
+
+@router.get("/policy-documents")
+async def get_policy_documents(current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"documents": vault_service.list_policy_documents(org_id)}
+
+
+@router.get("/policy-documents/{policy_document_id}")
+async def get_policy_document(policy_document_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return vault_service.get_policy_document(org_id, policy_document_id)
+
+
+@router.patch("/policy-documents/{policy_document_id}")
+async def patch_policy_document(
+    policy_document_id: str,
+    body: PolicyDocumentUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    return vault_service.update_policy_document(
+        org_id, policy_document_id, **body.model_dump(exclude_unset=True)
+    )
+
+
+@router.post("/policy-documents/{policy_document_id}/publish")
+async def publish_policy_document(policy_document_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    user_id = get_user_id(current_user)
+    return await vault_service.publish_policy_document(org_id, policy_document_id, user_id)
 
 
 class AuditPackGenerateRequest(BaseModel):

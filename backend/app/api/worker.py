@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
@@ -31,6 +32,7 @@ from ..services import (
 )
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
+from ..services.object_storage import upload_evidence_bytes
 from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
@@ -60,6 +62,13 @@ class WorkerSessionCreate(BaseModel):
     goal_progress_notes: list[GoalProgressNote] = Field(default_factory=list)
     # SCRUM-227: participant choice & control narrative
     participant_choice_control: Optional[str] = None
+
+
+class WorkerNoteCreate(BaseModel):
+    notes: str
+    session_date: date = Field(default_factory=date.today)
+    session_type: str = "note"
+    duration_minutes: int = Field(default=0, ge=0)
 
 
 class ShiftTaskItem(BaseModel):
@@ -826,6 +835,42 @@ async def create_my_client_session(
     return _session_payload(session)
 
 
+@router.post("/my-clients/{participant_id}/notes", status_code=status.HTTP_201_CREATED)
+async def create_my_client_note(
+    participant_id: str,
+    body: WorkerNoteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """A standalone note about a client outside of a timed session — same
+    underlying sessions record as create_my_client_session, distinguished
+    by session_type='note' and zero duration, so it still surfaces through
+    the participant's session/compliance history."""
+    await _assigned_participant(participant_id, current_user)
+    _require_worker_active(current_user)
+    _require_worker_ready_for_sessions(current_user)
+    payload = SessionCreate(
+        participant_id=participant_id,
+        session_date=body.session_date,
+        duration_minutes=body.duration_minutes,
+        session_type=body.session_type,
+        notes=body.notes,
+        status="draft",
+    )
+    try:
+        session = await session_service.create_session(payload, current_user)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    await audit_service.log_action(
+        action_type="worker.note.created",
+        entity_type="session",
+        entity_id=session.get("id", ""),
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        after_state={"participant_id": participant_id, "session_type": body.session_type},
+    )
+    return _session_payload(session)
+
+
 @router.get("/shifts")
 async def worker_shifts(
     filter: str = Query(default="today", alias="filter"),
@@ -1519,6 +1564,58 @@ async def worker_acknowledge_safety_protocol(
     return result
 
 
+from ..services import vault_service
+
+
+@router.get("/policies")
+async def worker_list_policies(current_user: dict = Depends(get_current_user)):
+    """Current org policy documents this worker has been given access to
+    read (visible_to_workers), with this worker's own acknowledgement
+    status attached to each."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    return {"policies": vault_service.list_worker_visible_policies(str(org_id or ""), str(worker_id or ""))}
+
+
+@router.get("/policies/{document_id}/file")
+async def worker_get_policy_file(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Stream the actual policy document bytes so a worker can read it
+    before acknowledging."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    filename, data = vault_service.render_worker_policy_file(str(org_id or ""), document_id)
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.post("/policies/{document_id}/acknowledge")
+async def worker_acknowledge_policy(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log that this worker has read a policy document."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = vault_service.acknowledge_policy(document_id, str(worker_id or ""), str(org_id or ""))
+    await audit_service.log_action(
+        action_type="worker.policy.acknowledged",
+        entity_type="governance_document",
+        entity_id=document_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return result
+
+
 @router.post("/shifts/{shift_id}/start-session")
 async def worker_start_session(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Start an active session from a clocked-in shift (CARECLIQV2-116 comment 10051)."""
@@ -1762,6 +1859,28 @@ async def worker_end_shift(
     background_tasks.add_task(_auto_summary_and_notify)
     background_tasks.add_task(_documentation_check)
     return shift
+
+
+@router.post("/upload")
+async def generic_upload(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Generic file upload not tied to a specific session/shift (e.g. a
+    task-completion photo). For anything session- or shift-scoped, prefer
+    the dedicated upload-evidence/upload-photo endpoints instead — this one
+    carries no compliance chain-of-custody metadata."""
+    _require_worker(current_user)
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large (max 15MB).")
+    storage_path = f"uploads/{get_user_id(current_user)}/{uuid4()}-{file.filename or 'file'}"
+    try:
+        result = upload_evidence_bytes(storage_path, data, file.content_type or "application/octet-stream")
+    except Exception as exc:
+        logger.exception("generic upload failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc) or "Upload failed") from exc
+    return {"url": result.file_url}
 
 
 @router.post("/sessions/{session_id}/upload-evidence")

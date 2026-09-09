@@ -30,7 +30,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .organization_branding_service import build_pdf_letterhead
+from .organization_branding_service import build_pdf_letterhead, get_letterhead
 from .supabase_client import get_supabase_admin, signed_storage_url
 
 logger = logging.getLogger(__name__)
@@ -1739,6 +1739,454 @@ def delete_governance_document(org_id: str, document_id: str) -> None:
     supabase.table("governance_documents").update(
         {"deleted_at": datetime.now(timezone.utc).isoformat()}
     ).eq("id", document_id).execute()
+
+
+def set_governance_document_worker_visibility(org_id: str, document_id: str, visible: bool) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    existing = (
+        supabase.table("governance_documents")
+        .select("id")
+        .eq("id", document_id)
+        .eq("organization_id", org_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Governance document not found.")
+    result = (
+        supabase.table("governance_documents")
+        .update({"visible_to_workers": visible})
+        .eq("id", document_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {"id": document_id, "visible_to_workers": visible}
+
+
+# ── Worker-facing policy visibility + acknowledgement ───────────────────────
+# governance_documents (above) is the single source of truth for what a
+# worker can see — visible_to_workers is opt-in per document (some governance
+# categories, e.g. human_resource_management, may hold internal-only files),
+# never automatic for all 9 categories.
+
+def list_worker_visible_policies(org_id: str, worker_id: str) -> list[dict[str, Any]]:
+    """Current, non-superseded, non-deleted governance documents this org has
+    marked visible_to_workers, each annotated with this worker's own
+    acknowledgement status."""
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("governance_documents")
+            .select("id, folder_key, title, description, version_label, created_at")
+            .eq("organization_id", org_id)
+            .eq("visible_to_workers", True)
+            .is_("deleted_at", "null")
+            .is_("superseded_at", "null")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        docs = resp.data or []
+    except Exception:
+        return []
+
+    if not docs:
+        return []
+
+    doc_ids = [d["id"] for d in docs]
+    ack_map: dict[str, str] = {}
+    try:
+        ack_resp = (
+            supabase.table("policy_acknowledgements")
+            .select("document_id, acknowledged_at")
+            .eq("worker_id", worker_id)
+            .in_("document_id", doc_ids)
+            .execute()
+        )
+        for row in ack_resp.data or []:
+            ack_map[row["document_id"]] = row["acknowledged_at"]
+    except Exception:
+        pass
+
+    return [
+        {
+            **doc,
+            "folder_label": CATEGORY_META.get(doc["folder_key"], {}).get("label", doc["folder_key"]),
+            "acknowledged": doc["id"] in ack_map,
+            "acknowledged_at": ack_map.get(doc["id"]),
+        }
+        for doc in docs
+    ]
+
+
+def acknowledge_policy(document_id: str, worker_id: str, organization_id: str) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    doc_resp = (
+        supabase.table("governance_documents")
+        .select("id, organization_id, visible_to_workers, deleted_at, superseded_at")
+        .eq("id", document_id)
+        .limit(1)
+        .execute()
+    )
+    doc = (doc_resp.data or [None])[0]
+    if not doc or str(doc.get("organization_id")) != str(organization_id):
+        raise HTTPException(status_code=404, detail="Policy document not found.")
+    if doc.get("deleted_at") or doc.get("superseded_at"):
+        raise HTTPException(
+            status_code=409,
+            detail="This policy has since been updated. Please review the latest version.",
+        )
+    if not doc.get("visible_to_workers"):
+        raise HTTPException(status_code=403, detail="Not authorized.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    row = {
+        "worker_id": worker_id,
+        "document_id": document_id,
+        "organization_id": organization_id,
+        "acknowledged_at": now,
+    }
+    supabase.table("policy_acknowledgements").upsert(
+        row, on_conflict="worker_id,document_id"
+    ).execute()
+    return {"document_id": document_id, "acknowledged_at": now}
+
+
+def render_worker_policy_file(org_id: str, document_id: str) -> tuple[str, bytes]:
+    """The actual file bytes for a worker-visible policy — same
+    org/current/not-deleted/visible_to_workers checks as acknowledge_policy,
+    then delegates to the same file renderer the MD vault view uses."""
+    supabase = get_supabase_admin()
+    doc_resp = (
+        supabase.table("governance_documents")
+        .select("id, organization_id, folder_key, visible_to_workers, deleted_at, superseded_at")
+        .eq("id", document_id)
+        .limit(1)
+        .execute()
+    )
+    doc = (doc_resp.data or [None])[0]
+    if (
+        not doc
+        or str(doc.get("organization_id")) != str(org_id)
+        or doc.get("deleted_at")
+        or doc.get("superseded_at")
+        or not doc.get("visible_to_workers")
+    ):
+        raise HTTPException(status_code=404, detail="Policy document not found.")
+    return _render_governance_file(org_id, doc["folder_key"], document_id)
+
+
+def coordinator_policy_acknowledgement_status(org_id: str) -> list[dict[str, Any]]:
+    """Per current worker-visible policy: how many active support workers
+    have acknowledged it. Mirrors shift_feedback_service's
+    coordinator_acknowledgement_rate {total, acknowledged, rate_percent}
+    shape, one row per policy instead of a single aggregate."""
+    supabase = get_supabase_admin()
+    try:
+        docs_resp = (
+            supabase.table("governance_documents")
+            .select("id, title, folder_key, created_at")
+            .eq("organization_id", org_id)
+            .eq("visible_to_workers", True)
+            .is_("deleted_at", "null")
+            .is_("superseded_at", "null")
+            .execute()
+        )
+        docs = docs_resp.data or []
+    except Exception:
+        return []
+    if not docs:
+        return []
+
+    try:
+        workers_resp = (
+            supabase.table("users")
+            .select("id", count="exact")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .eq("is_active", True)
+            .execute()
+        )
+        total_workers = workers_resp.count or 0
+    except Exception:
+        total_workers = 0
+
+    doc_ids = [d["id"] for d in docs]
+    ack_counts: dict[str, int] = {}
+    try:
+        ack_resp = (
+            supabase.table("policy_acknowledgements")
+            .select("document_id")
+            .in_("document_id", doc_ids)
+            .execute()
+        )
+        for row in ack_resp.data or []:
+            did = row["document_id"]
+            ack_counts[did] = ack_counts.get(did, 0) + 1
+    except Exception:
+        pass
+
+    return [
+        {
+            "document_id": d["id"],
+            "title": d["title"],
+            "folder_key": d["folder_key"],
+            "folder_label": CATEGORY_META.get(d["folder_key"], {}).get("label", d["folder_key"]),
+            "total": total_workers,
+            "acknowledged": ack_counts.get(d["id"], 0),
+            "rate_percent": round((ack_counts.get(d["id"], 0) / total_workers) * 100, 1) if total_workers else None,
+        }
+        for d in docs
+    ]
+
+
+# ── Branded template upload + in-app document editing ───────────────────────
+# An org can author a policy document in-app (Tiptap rich-text body) instead
+# of only ever uploading a finished file. "Publish" renders the body through
+# either the org's own uploaded HTML/Jinja2 template or a built-in default
+# letterhead template, via the same Jinja2 + WeasyPrint engine already used
+# for invoices (html_pdf_render.py), then files the result into
+# governance_documents through the existing upload/supersede path above —
+# policy_documents is purely the editable authoring wrapper, it never
+# duplicates governance_documents' own versioning.
+
+POLICY_TEMPLATE_MAX_HTML_CHARS = 200_000  # ~200KB of template/content source
+
+_DEFAULT_POLICY_TEMPLATE_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 22mm 18mm; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 11pt; }
+  .letterhead { border-bottom: 3px solid {{ org_accent_color }}; padding-bottom: 10px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; }
+  .letterhead img { max-height: 48px; }
+  .org-name { font-size: 14pt; font-weight: bold; color: #1e293b; }
+  .doc-title { font-size: 18pt; font-weight: bold; margin: 10px 0 4px; }
+  .meta { font-size: 9pt; color: #64748b; margin-bottom: 20px; }
+  .content { line-height: 1.5; }
+  .content h1, .content h2, .content h3 { color: #1e293b; }
+  .content table { border-collapse: collapse; width: 100%; }
+  .content table td, .content table th { border: 1px solid #cbd5e1; padding: 6px 8px; }
+  .footer { position: fixed; bottom: -12mm; left: 0; right: 0; font-size: 8pt; color: #94a3b8; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    {% if org_logo_url %}<img src="{{ org_logo_url }}" alt="{{ org_name }}">{% else %}<div class="org-name">{{ org_name }}</div>{% endif %}
+    <div class="meta">{{ org_abn and "ABN: " ~ org_abn or "" }}</div>
+  </div>
+  <div class="doc-title">{{ title }}</div>
+  <div class="meta">{{ org_name }} &middot; Generated {{ generated_at }}</div>
+  <div class="content">{{ content | safe }}</div>
+  <div class="footer">{{ org_name }} &mdash; Confidential</div>
+</body>
+</html>"""
+
+
+def _resolve_policy_template_html(org_id: str, template_id: str | None) -> str:
+    if not template_id:
+        return _DEFAULT_POLICY_TEMPLATE_HTML
+    supabase = get_supabase_admin()
+    resp = (
+        supabase.table("organization_document_templates")
+        .select("html_content")
+        .eq("id", template_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    row = (resp.data or [None])[0]
+    return row["html_content"] if row and row.get("html_content") else _DEFAULT_POLICY_TEMPLATE_HTML
+
+
+def create_document_template(
+    org_id: str, name: str, description: str | None, html_content: str, created_by: str
+) -> dict[str, Any]:
+    if not name.strip():
+        raise HTTPException(status_code=422, detail="Template name is required.")
+    if not html_content.strip():
+        raise HTTPException(status_code=422, detail="Template content is required.")
+    if len(html_content) > POLICY_TEMPLATE_MAX_HTML_CHARS:
+        raise HTTPException(status_code=413, detail="Template is too large.")
+    supabase = get_supabase_admin()
+    payload = {
+        "organization_id": org_id,
+        "name": name.strip(),
+        "description": (description or "").strip() or None,
+        "html_content": html_content,
+        "created_by": created_by,
+    }
+    result = supabase.table("organization_document_templates").insert(payload).execute()
+    return result.data[0] if result.data else payload
+
+
+def list_document_templates(org_id: str) -> list[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("organization_document_templates")
+            .select("id, name, description, is_default, created_at, updated_at")
+            .eq("organization_id", org_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception:
+        return []
+
+
+def create_policy_document(
+    org_id: str, folder_key: str, title: str, template_id: str | None, created_by: str
+) -> dict[str, Any]:
+    if folder_key not in GOVERNANCE_FOLDER_KEYS:
+        raise HTTPException(status_code=422, detail="Invalid governance folder.")
+    if not title.strip():
+        raise HTTPException(status_code=422, detail="Document title is required.")
+    supabase = get_supabase_admin()
+    payload = {
+        "organization_id": org_id,
+        "folder_key": folder_key,
+        "title": title.strip(),
+        "template_id": template_id,
+        "content_html": "",
+        "visible_to_workers": False,
+    }
+    if created_by:
+        payload["created_by"] = created_by
+    result = supabase.table("policy_documents").insert(payload).execute()
+    return result.data[0] if result.data else payload
+
+
+def list_policy_documents(org_id: str) -> list[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    try:
+        resp = (
+            supabase.table("policy_documents")
+            .select("*")
+            .eq("organization_id", org_id)
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception:
+        return []
+
+
+def get_policy_document(org_id: str, policy_document_id: str) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    resp = (
+        supabase.table("policy_documents")
+        .select("*")
+        .eq("id", policy_document_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    row = (resp.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail="Policy document not found.")
+    return row
+
+
+def update_policy_document(org_id: str, policy_document_id: str, **fields: Any) -> dict[str, Any]:
+    """Draft edits — title/folder_key/template_id/content_html/visible_to_workers.
+    Never touches current_governance_document_id (only publish_policy_document does)."""
+    existing = get_policy_document(org_id, policy_document_id)
+    updates: dict[str, Any] = {}
+    if "title" in fields and fields["title"] is not None:
+        title = str(fields["title"]).strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Document title is required.")
+        updates["title"] = title
+    if "folder_key" in fields and fields["folder_key"] is not None:
+        if fields["folder_key"] not in GOVERNANCE_FOLDER_KEYS:
+            raise HTTPException(status_code=422, detail="Invalid governance folder.")
+        updates["folder_key"] = fields["folder_key"]
+    if "template_id" in fields:
+        updates["template_id"] = fields["template_id"]
+    if "content_html" in fields and fields["content_html"] is not None:
+        if len(fields["content_html"]) > POLICY_TEMPLATE_MAX_HTML_CHARS:
+            raise HTTPException(status_code=413, detail="Document content is too large.")
+        updates["content_html"] = fields["content_html"]
+    if "visible_to_workers" in fields and fields["visible_to_workers"] is not None:
+        updates["visible_to_workers"] = bool(fields["visible_to_workers"])
+    if not updates:
+        return existing
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("policy_documents")
+        .update(updates)
+        .eq("id", policy_document_id)
+        .eq("organization_id", org_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {**existing, **updates}
+
+
+async def publish_policy_document(org_id: str, policy_document_id: str, published_by: str) -> dict[str, Any]:
+    """Render this policy_documents row's content through its template (or
+    the built-in default) and file the result into governance_documents,
+    superseding whatever this draft last published — the existing
+    upload_governance_document()/supersede chain does the actual versioning,
+    this just drives it from in-app-authored content instead of an upload."""
+    from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
+
+    doc = get_policy_document(org_id, policy_document_id)
+    if not (doc.get("content_html") or "").strip():
+        raise HTTPException(status_code=422, detail="Document has no content to publish.")
+
+    template_html = _resolve_policy_template_html(org_id, doc.get("template_id"))
+    letterhead = get_letterhead(org_id)
+
+    try:
+        from jinja2 import Environment, select_autoescape
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"PDF rendering requires jinja2: {exc}")
+
+    env = Environment(autoescape=select_autoescape(["html"]))
+    try:
+        template = env.from_string(template_html)
+        html_str = template.render(
+            content=doc["content_html"],
+            title=doc["title"],
+            org_name=letterhead["provider_name"] or "Organisation",
+            org_logo_url=letterhead["logo_url"],
+            org_accent_color=letterhead["brand_accent_color"],
+            org_abn=letterhead.get("abn"),
+            org_address=letterhead.get("address"),
+            generated_at=datetime.now(timezone.utc).strftime("%d %b %Y"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Template rendering failed: {exc}")
+
+    try:
+        pdf_bytes = render_html_to_pdf(html_str)
+    except HtmlPdfRenderError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    new_doc = await upload_governance_document(
+        org_id,
+        doc["folder_key"],
+        doc["title"],
+        None,
+        published_by,
+        pdf_bytes,
+        "application/pdf",
+        supersedes_document_id=doc.get("current_governance_document_id"),
+    )
+
+    if doc.get("visible_to_workers"):
+        set_governance_document_worker_visibility(org_id, new_doc["id"], True)
+
+    supabase = get_supabase_admin()
+    supabase.table("policy_documents").update(
+        {
+            "current_governance_document_id": new_doc["id"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ).eq("id", policy_document_id).execute()
+
+    return {**doc, "current_governance_document_id": new_doc["id"], "published_document": new_doc}
 
 
 # ── Audit pack generation ───────────────────────────────────────────────────

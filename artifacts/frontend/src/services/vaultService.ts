@@ -177,6 +177,7 @@ export async function uploadGovernanceDocument(params: {
   file: File;
   supersedesDocumentId?: string;
   versionLabel?: string;
+  visibleToWorkers?: boolean;
 }): Promise<VaultDocument> {
   const form = new FormData();
   form.set("folder_key", params.folderKey);
@@ -184,9 +185,35 @@ export async function uploadGovernanceDocument(params: {
   if (params.description) form.set("description", params.description);
   if (params.supersedesDocumentId) form.set("supersedes_document_id", params.supersedesDocumentId);
   if (params.versionLabel) form.set("version_label", params.versionLabel);
+  if (params.visibleToWorkers) form.set("visible_to_workers", "true");
   form.set("file", params.file);
   const res = await apiFetch("/api/md-vault/governance-documents", { method: "POST", body: form });
   return parseJson(res);
+}
+
+export async function setGovernanceDocumentWorkerVisibility(id: string, visible: boolean): Promise<VaultDocument> {
+  const res = await apiFetch(`/api/md-vault/governance-documents/${encodeURIComponent(id)}/worker-visibility`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visible_to_workers: visible }),
+  });
+  return parseJson(res);
+}
+
+export interface PolicyAcknowledgementStatus {
+  document_id: string;
+  title: string;
+  folder_key: string;
+  folder_label: string;
+  total: number;
+  acknowledged: number;
+  rate_percent: number | null;
+}
+
+export async function fetchPolicyAcknowledgementStatus(): Promise<PolicyAcknowledgementStatus[]> {
+  const res = await apiFetch("/api/md-vault/policies/acknowledgement-status");
+  const data = await parseJson<{ policies: PolicyAcknowledgementStatus[] }>(res);
+  return data.policies;
 }
 
 export interface GovernanceDocumentVersion {
@@ -276,4 +303,102 @@ export async function deleteCustomFolderDocument(folderId: string, documentId: s
   if (!res.ok && res.status !== 204) {
     throw new Error("Could not delete this document.");
   }
+}
+
+// ── Branded templates + in-app policy document editing ──────────────────────
+
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchDocumentTemplates(): Promise<DocumentTemplate[]> {
+  const res = await apiFetch("/api/md-vault/templates");
+  const data = await parseJson<{ templates: DocumentTemplate[] }>(res);
+  return data.templates;
+}
+
+export async function createDocumentTemplate(params: {
+  name: string;
+  description?: string;
+  htmlContent: string;
+}): Promise<DocumentTemplate> {
+  const res = await apiFetch("/api/md-vault/templates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: params.name, description: params.description, html_content: params.htmlContent }),
+  });
+  return parseJson(res);
+}
+
+export interface PolicyDocument {
+  id: string;
+  organization_id: string;
+  folder_key: string;
+  title: string;
+  template_id: string | null;
+  content_html: string;
+  visible_to_workers: boolean;
+  current_governance_document_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchPolicyDocuments(): Promise<PolicyDocument[]> {
+  const res = await apiFetch("/api/md-vault/policy-documents");
+  const data = await parseJson<{ documents: PolicyDocument[] }>(res);
+  return data.documents;
+}
+
+export async function fetchPolicyDocument(id: string): Promise<PolicyDocument> {
+  const res = await apiFetch(`/api/md-vault/policy-documents/${encodeURIComponent(id)}`);
+  return parseJson(res);
+}
+
+export async function createPolicyDocument(params: {
+  folderKey: string;
+  title: string;
+  templateId?: string | null;
+}): Promise<PolicyDocument> {
+  const res = await apiFetch("/api/md-vault/policy-documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder_key: params.folderKey, title: params.title, template_id: params.templateId ?? null }),
+  });
+  return parseJson(res);
+}
+
+export async function updatePolicyDocument(
+  id: string,
+  updates: Partial<{
+    title: string;
+    folderKey: string;
+    templateId: string | null;
+    contentHtml: string;
+    visibleToWorkers: boolean;
+  }>,
+): Promise<PolicyDocument> {
+  const body: Record<string, unknown> = {};
+  if (updates.title !== undefined) body.title = updates.title;
+  if (updates.folderKey !== undefined) body.folder_key = updates.folderKey;
+  if (updates.templateId !== undefined) body.template_id = updates.templateId;
+  if (updates.contentHtml !== undefined) body.content_html = updates.contentHtml;
+  if (updates.visibleToWorkers !== undefined) body.visible_to_workers = updates.visibleToWorkers;
+  const res = await apiFetch(`/api/md-vault/policy-documents/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return parseJson(res);
+}
+
+export async function publishPolicyDocument(id: string): Promise<PolicyDocument & { published_document: VaultDocument }> {
+  const res = await apiFetch(`/api/md-vault/policy-documents/${encodeURIComponent(id)}/publish`, {
+    method: "POST",
+  });
+  return parseJson(res);
 }

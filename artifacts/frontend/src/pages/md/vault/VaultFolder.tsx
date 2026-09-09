@@ -359,8 +359,9 @@ export default function VaultFolderPage({ category }: { category: string }) {
           onOpenChange={setUploadOpen}
           folderLabel={label}
           withDescription={isGovernance}
+          withWorkerVisibility={isGovernance}
           existingDocuments={isGovernance ? documents.map((d) => ({ id: d.id, title: d.title })) : undefined}
-          onUpload={({ title, description, file, supersedesDocumentId, versionLabel }) =>
+          onUpload={({ title, description, file, supersedesDocumentId, versionLabel, visibleToWorkers }) =>
             isCustom && customFolderId
               ? uploadCustomFolderDocument({ folderId: customFolderId, title, file })
               : uploadGovernanceDocument({
@@ -370,6 +371,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
                   file,
                   supersedesDocumentId,
                   versionLabel,
+                  visibleToWorkers,
                 })
           }
           onUploaded={() => {

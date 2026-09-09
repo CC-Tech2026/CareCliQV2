@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 export interface ExistingFolderDocument {
@@ -23,6 +24,7 @@ export function FolderUploadDialog({
   onOpenChange,
   folderLabel,
   withDescription = true,
+  withWorkerVisibility = false,
   existingDocuments,
   onUpload,
   onUploaded,
@@ -31,6 +33,10 @@ export function FolderUploadDialog({
   onOpenChange: (open: boolean) => void;
   folderLabel: string;
   withDescription?: boolean;
+  /** Only governance/policy folders offer this — a custom folder's files
+   * aren't governance_documents rows, so there's nothing for a worker to
+   * read/acknowledge. */
+  withWorkerVisibility?: boolean;
   /** When provided (non-empty), the dialog offers "replace an existing
    * policy" — picking one clones its title/description into the form as a
    * starting point and, on submit, marks that document superseded by this
@@ -43,6 +49,7 @@ export function FolderUploadDialog({
     file: File;
     supersedesDocumentId?: string;
     versionLabel?: string;
+    visibleToWorkers?: boolean;
   }) => Promise<unknown>;
   onUploaded: () => void;
 }) {
@@ -53,6 +60,7 @@ export function FolderUploadDialog({
   const [description, setDescription] = useState("");
   const [versionLabel, setVersionLabel] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [visibleToWorkers, setVisibleToWorkers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const canReplace = (existingDocuments?.length ?? 0) > 0;
@@ -74,6 +82,7 @@ export function FolderUploadDialog({
     setDescription("");
     setVersionLabel("");
     setFile(null);
+    setVisibleToWorkers(false);
   }
 
   async function handleSubmit() {
@@ -93,6 +102,7 @@ export function FolderUploadDialog({
         file,
         supersedesDocumentId: mode === "replace" ? replaceId : undefined,
         versionLabel: versionLabel.trim() || undefined,
+        visibleToWorkers: withWorkerVisibility ? visibleToWorkers : undefined,
       });
       toast({ title: mode === "replace" ? "New version uploaded" : "Document uploaded" });
       reset();
@@ -195,6 +205,20 @@ export function FolderUploadDialog({
               value={versionLabel}
               onChange={(e) => setVersionLabel(e.target.value)}
             />
+          )}
+          {withWorkerVisibility && (
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-3" style={{ borderColor: "var(--cc-border)" }}>
+              <Checkbox checked={visibleToWorkers} onCheckedChange={(v) => setVisibleToWorkers(v === true)} className="mt-0.5" />
+              <span>
+                <span className="block text-[12.5px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                  Visible to workers
+                </span>
+                <span className="block text-[11px]" style={{ color: "var(--cc-muted)" }}>
+                  Staff will be able to read this policy and acknowledge it. Off by default — turn on only for
+                  documents every worker should read.
+                </span>
+              </span>
+            </label>
           )}
           <label
             className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed py-6 text-[12.5px] font-semibold"

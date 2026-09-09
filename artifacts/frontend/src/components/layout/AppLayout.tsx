@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning,
+  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -95,6 +95,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/my-compliance",   label: "My Compliance", icon: ShieldCheck   },
         { href: "/worker/training", label: "Training",      icon: GraduationCap },
+        { href: "/worker-policies", label: "Policies",      icon: FileText      },
         { href: "/incidents",       label: "Incidents",     icon: AlertTriangle },
         { href: "/worker-onboarding", label: "My Credentials", icon: BadgeCheck },
         { href: "/toolkit",         label: "Toolkit",       icon: Wrench        },
@@ -202,6 +203,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "My Availability",     description: "Set working hours & blackout dates",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
   { label: "My Compliance",       description: "Your training & credential status",       href: "/my-compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["support_worker"] },
   { label: "Training",            description: "Assigned training modules & certifications", href: "/worker/training",              icon: GraduationCap,   group: "pages",    roles: ["support_worker"] },
+  { label: "Policies",            description: "Organisation policies to read & acknowledge", href: "/worker-policies",              icon: FileText,        group: "pages",    roles: ["support_worker"] },
   { label: "My Credentials",      description: "Manage certifications & licences",        href: "/worker-onboarding",               icon: BadgeCheck,      group: "pages",    roles: ["support_worker"] },
   { label: "Incidents",           description: "Incident reports & history",              href: "/incidents",                       icon: AlertTriangle,   group: "pages",    roles: ["support_coordinator", "support_worker"] },
   { label: "Feedback & Reports",  description: "Operational issues, complaints & feedback", href: "/feedback-reports",              icon: MessageSquareWarning, group: "pages", roles: ["support_coordinator", "support_worker"] },
