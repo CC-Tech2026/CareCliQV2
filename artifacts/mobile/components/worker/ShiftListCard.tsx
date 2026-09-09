@@ -1,6 +1,6 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -17,11 +17,7 @@ import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip
 import { useT } from "@/context/PreferencesContext";
 import { showAlert } from "@/lib/alert";
 import { useColors } from "@/hooks/useColors";
-import {
-  clockInShift,
-  startShiftSession,
-  type WorkerShift,
-} from "@/lib/worker-api";
+import { startShiftSession, type WorkerShift } from "@/lib/worker-api";
 import {
   avatarShouldPulse,
   emergencyContactDisplay,
@@ -42,7 +38,12 @@ type Props = {
   siblingShifts?: WorkerShift[];
 };
 
-export function ShiftListCard({ shift, showActions = false, onRefresh, siblingShifts = [] }: Props) {
+export function ShiftListCard({
+  shift,
+  showActions = false,
+  onRefresh,
+  siblingShifts = [],
+}: Props) {
   const colors = useColors();
   const router = useRouter();
   const t = useT();
@@ -53,11 +54,11 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
   const showDetails = showActions && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
-  const inProgressShift = findInProgressShift(siblingShifts.length ? siblingShifts : [shift]);
+  const inProgressShift = findInProgressShift(
+    siblingShifts.length ? siblingShifts : [shift],
+  );
 
-  const avatarColor = isCancelled
-    ? colors.destructive
-    : colors.soft;
+  const avatarColor = isCancelled ? colors.destructive : colors.soft;
   const avatarTextColor = isCancelled ? "#FFFFFF" : colors.primary;
 
   const mapsUrl = shift.participant_address
@@ -72,17 +73,21 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
     null;
   const healthAlerts = shift.health_alerts ?? [];
   const medicalFallback =
-    shift.health_flags?.trim() ||
-    shift.allergies?.trim() ||
-    null;
+    shift.health_flags?.trim() || shift.allergies?.trim() || null;
   const hasMedicalInfo = healthAlerts.length > 0 || Boolean(medicalFallback);
-  const emergencyContact = emergencyContactDisplay(shift.profile?.emergency_contact);
+  const emergencyContact = emergencyContactDisplay(
+    shift.profile?.emergency_contact,
+  );
   const caseManager = shift.profile?.case_manager;
-  const coordinatorLine = [caseManager?.phone, caseManager?.email].filter(Boolean).join(" · ");
+  const coordinatorLine = [caseManager?.phone, caseManager?.email]
+    .filter(Boolean)
+    .join(" · ");
   const officePhone = shift.office_contact_number?.trim() || null;
 
   const showBlockedAlert = () => {
-    showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+    showBlockedByInProgressAlert(t, inProgressShift, (id) =>
+      router.push(`/shift/${id}` as never),
+    );
   };
 
   const navigateToShift = () => {
@@ -97,21 +102,6 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
     await startShiftSession(shift.id);
     onRefresh?.();
     navigateToShift();
-  };
-
-  const captureGps = async (): Promise<{ lat: number; lng: number; accuracy?: number } | null> => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return null;
-    try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      return {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        accuracy: pos.coords.accuracy ?? undefined,
-      };
-    } catch {
-      return null;
-    }
   };
 
   const handleClockIn = async () => {
@@ -143,41 +133,8 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
       return;
     }
 
-    setStarting(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-      const location = await captureGps();
-      if (!location) {
-        showAlert(t("shifts.listCard.geoDenied"), t("shifts.listCard.geoFailed"));
-        return;
-      }
-
-      await clockInShift(shift.id, {
-        method: "gps",
-        location,
-        client_timestamp: new Date().toISOString(),
-      });
-      await runStartSession();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (message.toLowerCase().includes("acknowledge the participant safety card")) {
-        // This card has no room for the full safety-card read/acknowledge flow -
-        // send the worker into the shift detail screen, which now handles it.
-        showAlert(
-          "Safety card required",
-          "Read and acknowledge the participant's safety card before clocking in. Opening shift details.",
-          [{ text: "OK", onPress: () => router.push(`/shift/${shift.id}` as never) }],
-        );
-      } else {
-        showAlert(
-          t("shifts.listCard.clockInFailed"),
-          message || t("shifts.listCard.tryAgain"),
-        );
-      }
-    } finally {
-      setStarting(false);
-    }
+    // Review participant information and use the shared GPS/QR chooser.
+    navigateToShift();
   };
 
   const actionLabel = starting
@@ -186,7 +143,7 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
       ? t("shifts.listCard.resumeSession")
       : shift.visual_state === "clocked_in"
         ? t("shifts.listCard.startSession")
-        : t("shifts.listCard.clockIn");
+        : "Review & clock in";
 
   return (
     <View
@@ -202,8 +159,22 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
     >
       <Pressable onPress={navigateToShift}>
         <View style={styles.row}>
-          <View style={[styles.avatar, { backgroundColor: avatarColor }, pulse && styles.avatarPulse]}>
-            <Text style={[styles.avatarText, { color: avatarTextColor, fontFamily: "Inter_600SemiBold" }]}>
+          <View
+            style={[
+              styles.avatar,
+              { backgroundColor: avatarColor },
+              pulse && styles.avatarPulse,
+            ]}
+          >
+            <Text
+              style={[
+                styles.avatarText,
+                {
+                  color: avatarTextColor,
+                  fontFamily: FontFamily.interSemiBold,
+                },
+              ]}
+            >
               {shiftInitials(shift.participant_name)}
             </Text>
           </View>
@@ -213,17 +184,31 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
               <Text
                 style={[
                   styles.name,
-                  { color: colors.foreground, fontFamily: "Inter_700Bold" },
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interBold,
+                  },
                   isCancelled && styles.strikethrough,
                 ]}
-                numberOfLines={1}
               >
                 {shift.participant_name ?? t("shifts.listCard.participant")}
               </Text>
-              {!isCancelled && <ShiftStatusBadge visualState={isCompleted ? "completed" : shift.visual_state} />}
+              {!isCancelled && (
+                <ShiftStatusBadge
+                  visualState={isCompleted ? "completed" : shift.visual_state}
+                />
+              )}
             </View>
 
-            <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text
+              style={[
+                styles.time,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interMedium,
+                },
+              ]}
+            >
               {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
             </Text>
 
@@ -231,115 +216,207 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
               <Feather
                 name="map-pin"
                 size={12}
-                color={shift.participant_address ? colors.primary : colors.mutedForeground}
+                color={
+                  shift.participant_address
+                    ? colors.primary
+                    : colors.mutedForeground
+                }
                 style={styles.addressIcon}
               />
               <Text
                 style={[
                   styles.address,
-                  { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                  },
                   !shift.participant_address && styles.italic,
                 ]}
                 numberOfLines={2}
               >
-                {shift.participant_address?.trim() || t("shifts.listCard.noAddress")}
+                {shift.participant_address?.trim() ||
+                  t("shifts.listCard.noAddress")}
               </Text>
             </View>
           </View>
         </View>
       </Pressable>
 
-        {showDetails && goals.length > 0 && (
-          <View style={styles.goalRow}>
-            {goals.map((goal, i) => (
-              <View key={i} style={[styles.goalChip, { backgroundColor: colors.activeBg }]}>
-                <Feather name="star" size={10} color="#F59E0B" />
-                <Text
-                  style={[styles.goalText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}
-                  numberOfLines={1}
-                >
-                  {formatActiveGoalLabel(goal)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {showDetails && emergencyContact && (
-          <View style={[styles.detailCard, { backgroundColor: colors.soft, borderColor: colors.border }]}>
-            <View style={styles.detailTop}>
-              <View style={styles.detailTextCol}>
-                <Text style={[styles.detailEyebrow, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  {t("shifts.listCard.nextOfKin").toUpperCase()}
-                </Text>
-                {emergencyContact.name ? (
-                  <Text style={[styles.detailTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                    {emergencyContact.name}
-                  </Text>
-                ) : null}
-                <Text style={[styles.detailSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {emergencyContact.detail || emergencyContact.text}
-                </Text>
-              </View>
-              {emergencyContact.phone ? (
-                <Pressable
-                  onPress={() => Linking.openURL(`tel:${emergencyContact.phone!.replace(/\s/g, "")}`)}
-                  style={[styles.detailCallBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                >
-                  <Feather name="phone" size={12} color={colors.primary} />
-                  <Text style={[styles.detailCallText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                    {t("shifts.listCard.call")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        )}
-
-        {showDetails && (caseManager?.name || notesText) && (
-          <View style={[styles.detailCard, { backgroundColor: colors.soft, borderColor: colors.border }]}>
-            <View style={styles.detailTop}>
-              <View style={styles.detailInline}>
-                <Feather name="clipboard" size={14} color={colors.primary} />
-                <Text
-                  style={[styles.detailTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
-                  numberOfLines={1}
-                >
-                  {caseManager?.name || t("shifts.listCard.messageCoordinator")}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => router.push(`/shift/${shift.id}/message-office` as never)}
-                style={styles.detailInlineBtn}
+      {showDetails && goals.length > 0 && (
+        <View style={styles.goalRow}>
+          {goals.map((goal, i) => (
+            <View
+              key={i}
+              style={[styles.goalChip, { backgroundColor: colors.activeBg }]}
+            >
+              <Feather name="star" size={10} color="#F59E0B" />
+              <Text
+                style={[
+                  styles.goalText,
+                  {
+                    color: colors.primary,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+                numberOfLines={1}
               >
-                <Feather name="mail" size={12} color={colors.accent} />
-                <Text style={[styles.detailCallText, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
-                  {t("shifts.listCard.message")}
+                {formatActiveGoalLabel(goal)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {showDetails && emergencyContact && (
+        <View
+          style={[
+            styles.detailCard,
+            { backgroundColor: colors.soft, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.detailTop}>
+            <View style={styles.detailTextCol}>
+              <Text
+                style={[
+                  styles.detailEyebrow,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interBold,
+                  },
+                ]}
+              >
+                {t("shifts.listCard.nextOfKin").toUpperCase()}
+              </Text>
+              {emergencyContact.name ? (
+                <Text
+                  style={[
+                    styles.detailTitle,
+                    {
+                      color: colors.foreground,
+                      fontFamily: FontFamily.interBold,
+                    },
+                  ]}
+                >
+                  {emergencyContact.name}
+                </Text>
+              ) : null}
+              <Text
+                style={[
+                  styles.detailSub,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                  },
+                ]}
+              >
+                {emergencyContact.detail || emergencyContact.text}
+              </Text>
+            </View>
+            {emergencyContact.phone ? (
+              <Pressable
+                onPress={() =>
+                  Linking.openURL(
+                    `tel:${emergencyContact.phone!.replace(/\s/g, "")}`,
+                  )
+                }
+                style={[
+                  styles.detailCallBtn,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+              >
+                <Feather name="phone" size={12} color={colors.primary} />
+                <Text
+                  style={[
+                    styles.detailCallText,
+                    { color: colors.primary, fontFamily: FontFamily.interBold },
+                  ]}
+                >
+                  {t("shifts.listCard.call")}
                 </Text>
               </Pressable>
-            </View>
-            {notesText ? (
-              <Text style={[styles.notesText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                {notesText}
-              </Text>
-            ) : null}
-            {coordinatorLine || officePhone ? (
-              <Text style={[styles.detailSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {coordinatorLine || officePhone}
-              </Text>
             ) : null}
           </View>
-        )}
+        </View>
+      )}
 
-        {showDetails && hasMedicalInfo && (
-          <WorkerMobileRiskStrip
-            alerts={healthAlerts}
-            fallbackSummary={medicalFallback}
-            alwaysExpandable
-            embedded
-            headerTitle={t("shifts.listCard.medicalAlert")}
-          />
-        )}
+      {showDetails && (caseManager?.name || notesText) && (
+        <View
+          style={[
+            styles.detailCard,
+            { backgroundColor: colors.soft, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.detailTop}>
+            <View style={styles.detailInline}>
+              <Feather name="clipboard" size={14} color={colors.primary} />
+              <Text
+                style={[
+                  styles.detailTitle,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interBold,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {caseManager?.name || t("shifts.listCard.messageCoordinator")}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                router.push(`/shift/${shift.id}/message-office` as never)
+              }
+              style={styles.detailInlineBtn}
+            >
+              <Feather name="mail" size={12} color={colors.accent} />
+              <Text
+                style={[
+                  styles.detailCallText,
+                  { color: colors.accent, fontFamily: FontFamily.interBold },
+                ]}
+              >
+                {t("shifts.listCard.message")}
+              </Text>
+            </Pressable>
+          </View>
+          {notesText ? (
+            <Text
+              style={[
+                styles.notesText,
+                {
+                  color: colors.foreground,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            >
+              {notesText}
+            </Text>
+          ) : null}
+          {coordinatorLine || officePhone ? (
+            <Text
+              style={[
+                styles.detailSub,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            >
+              {coordinatorLine || officePhone}
+            </Text>
+          ) : null}
+        </View>
+      )}
+
+      {showDetails && hasMedicalInfo && (
+        <WorkerMobileRiskStrip
+          alerts={healthAlerts}
+          fallbackSummary={medicalFallback}
+          alwaysExpandable
+          embedded
+          headerTitle={t("shifts.listCard.medicalAlert")}
+        />
+      )}
 
       {showActions && !isCancelled && !isCompleted && (
         <View style={styles.actions}>
@@ -349,12 +426,23 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
                 void Linking.openURL(mapsUrl);
                 return;
               }
-              showAlert(t("shifts.listCard.directions"), t("shifts.listCard.noLocationStored"));
+              showAlert(
+                t("shifts.listCard.directions"),
+                t("shifts.listCard.noLocationStored"),
+              );
             }}
-            style={[styles.secondaryBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+            style={[
+              styles.secondaryBtn,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
           >
             <Feather name="navigation" size={14} color={colors.foreground} />
-            <Text style={[styles.secondaryBtnText, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text
+              style={[
+                styles.secondaryBtnText,
+                { color: colors.foreground, fontFamily: FontFamily.interBold },
+              ]}
+            >
               {t("shifts.listCard.directions")}
             </Text>
           </Pressable>
@@ -365,9 +453,15 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
                 void Linking.openURL(`tel:${phone.replace(/\s/g, "")}`);
                 return;
               }
-              showAlert(t("shifts.listCard.call"), t("shifts.listCard.noPhoneStored"));
+              showAlert(
+                t("shifts.listCard.call"),
+                t("shifts.listCard.noPhoneStored"),
+              );
             }}
-            style={[styles.iconBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+            style={[
+              styles.iconBtn,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
           >
             <Feather name="phone" size={14} color={colors.foreground} />
           </Pressable>
@@ -380,7 +474,14 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
             {starting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>{actionLabel}</Text>
+              <Text
+                style={[
+                  styles.primaryBtnText,
+                  { fontFamily: FontFamily.interBold },
+                ]}
+              >
+                {actionLabel}
+              </Text>
             )}
           </Pressable>
         </View>
@@ -391,7 +492,12 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
           onPress={() => navigateToShift()}
           style={[styles.completeBtn, { backgroundColor: colors.accent }]}
         >
-          <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
+          <Text
+            style={[
+              styles.primaryBtnText,
+              { fontFamily: FontFamily.interBold },
+            ]}
+          >
             {t("shifts.listCard.completeNotes")}
           </Text>
         </Pressable>
@@ -402,9 +508,9 @@ export function ShiftListCard({ shift, showActions = false, onRefresh, siblingSh
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 22,
     borderWidth: 1,
-    padding: 12,
+    padding: 16,
     gap: 12,
   },
   row: {
@@ -430,12 +536,13 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
   },
   name: {
-    fontSize: 13,
+    fontSize: 16,
     flex: 1,
   },
   strikethrough: {
@@ -446,7 +553,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   time: {
-    fontSize: 11,
+    fontSize: 14,
   },
   addressRow: {
     flexDirection: "row",

@@ -1,7 +1,14 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import * as Location from "expo-location";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +35,11 @@ import { WorkerMobileSignatureScreen } from "@/components/worker/WorkerMobileSig
 import { WorkerMobileTopbar } from "@/components/worker/WorkerMobileTopbar";
 import { DuringShiftActionsSidebar } from "@/components/worker/DuringShiftActionsSidebar";
 import { useOffline } from "@/context/OfflineContext";
-import { useToast } from "@/context/ToastContext";
+import {
+  WorkerActionSheet,
+  type WorkerActionFeedback,
+} from "@/components/worker/WorkerActionSheet";
+import { PreShiftParticipantCard } from "@/components/worker/PreShiftParticipantCard";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
@@ -102,7 +113,49 @@ type Props = {
   breakStatus?: ActiveBreakStatus;
 };
 
-export function WorkerMobileShiftView({
+type ClockInDialog =
+  | WorkerActionFeedback
+  | {
+      kind: "choose";
+      onChooseGps: () => void;
+      onQrScanned: (token: string) => void;
+    }
+  | {
+      kind: "safety";
+      props: React.ComponentProps<typeof WorkerMobileSafetyCardSheet>;
+    };
+
+export function WorkerMobileShiftView(props: Props) {
+  const [dialog, setDialog] = useState<ClockInDialog | null>(null);
+  const closeDialog = () => {
+    if (dialog?.kind !== "loading") setDialog(null);
+  };
+  return (
+    <View style={{ flex: 1 }}>
+      <WorkerMobileShiftContent {...props} onDialog={setDialog} />
+      <Modal
+        visible={dialog !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeDialog}
+      >
+        {dialog?.kind === "choose" ? (
+          <WorkerMobileClockInSheet
+            onClose={closeDialog}
+            onChooseGps={dialog.onChooseGps}
+            onQrScanned={dialog.onQrScanned}
+          />
+        ) : dialog?.kind === "safety" ? (
+          <WorkerMobileSafetyCardSheet {...dialog.props} />
+        ) : dialog ? (
+          <WorkerActionSheet feedback={dialog} onClose={closeDialog} />
+        ) : null}
+      </Modal>
+    </View>
+  );
+}
+
+function WorkerMobileShiftContent({
   shift,
   sessionNotes,
   onRefresh,
@@ -113,10 +166,15 @@ export function WorkerMobileShiftView({
   onCheckin,
   checkinStatus,
   breakStatus,
-}: Props) {
+  onDialog,
+}: Props & { onDialog: (dialog: ClockInDialog | null) => void }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { showToast } = useToast();
+  const clockInPending = useRef(false);
+  const clockInActions = useRef<{
+    gps: () => Promise<void>;
+    qr: (token: string) => Promise<void>;
+  } | null>(null);
   const { isOnline, queueWorkerUpdate, flushNow } = useOffline();
   const [phase, setPhase] = useState<WorkerMobilePhase>(() => {
     if (shift.visual_state === "completed") return "completed";
@@ -127,9 +185,17 @@ export function WorkerMobileShiftView({
   const [busy, setBusy] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(0);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
-  const [validation, setValidation] = useState<{ title: string; message: string } | null>(null);
-  const [incidentDraft, setIncidentDraft] = useState<{ noteId?: string; content?: string } | null>(null);
-  const [filedNoteIds, setFiledNoteIds] = useState<Set<string>>(() => new Set());
+  const [validation, setValidation] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+  const [incidentDraft, setIncidentDraft] = useState<{
+    noteId?: string;
+    content?: string;
+  } | null>(null);
+  const [filedNoteIds, setFiledNoteIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!validation) return;
@@ -152,10 +218,18 @@ export function WorkerMobileShiftView({
 
   useEffect(() => {
     if (shift.visual_state === "completed") {
-      setPhase((current) => (current === "submitted" ? "submitted" : "completed"));
-    } else if (shift.visual_state === "clocked_in" || shift.visual_state === "session_active") {
       setPhase((current) =>
-        current === "review" || current === "compliance" || current === "signature" || current === "submitted"
+        current === "submitted" ? "submitted" : "completed",
+      );
+    } else if (
+      shift.visual_state === "clocked_in" ||
+      shift.visual_state === "session_active"
+    ) {
+      setPhase((current) =>
+        current === "review" ||
+        current === "compliance" ||
+        current === "signature" ||
+        current === "submitted"
           ? current
           : "session",
       );
@@ -173,20 +247,16 @@ export function WorkerMobileShiftView({
     return shift.duration_minutes ?? 0;
   }, [shift.scheduled_start, shift.scheduled_end, shift.duration_minutes]);
 
-  const notifyCheckinScheduleIfLongShift = useCallback(() => {
-    if (plannedShiftMins < 240) return;
-    showAlert(
-      "System check-ins active",
-      "This shift includes periodic system check-ins to confirm you're available. You'll get a notification when one's due — please respond within 5 minutes. If you're not able to, it's logged and you'll be asked to explain it before you submit the shift.",
-    );
-  }, [plannedShiftMins]);
-
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const participantName = shift.participant_name ?? "Participant";
   const participantFirstName = participantName.split(" ")[0];
   const sessionId = shift.session_id ?? null;
   const visualState = shift.visual_state;
-  const anchor = timerAnchorIso(visualState, shift.session_started_at, shift.clocked_in_at);
+  const anchor = timerAnchorIso(
+    visualState,
+    shift.session_started_at,
+    shift.clocked_in_at,
+  );
   void nowTick;
   const elapsed = useMemo(() => {
     const now = Date.now();
@@ -194,7 +264,9 @@ export function WorkerMobileShiftView({
     if (live !== "00:00:00") return live;
 
     if (shift.clocked_in_at) {
-      const endMs = shift.clocked_out_at ? parseIsoMs(shift.clocked_out_at) ?? now : now;
+      const endMs = shift.clocked_out_at
+        ? (parseIsoMs(shift.clocked_out_at) ?? now)
+        : now;
       const fromClockIn = formatElapsedTimer(shift.clocked_in_at, endMs);
       if (fromClockIn !== "00:00:00") return fromClockIn;
     }
@@ -222,14 +294,22 @@ export function WorkerMobileShiftView({
         incidentReportFiledNoteIds: filedNoteIds,
         includeSubmitWarnings: phase === "review",
       }),
-    [complianceNotes, activeTasks, participantFirstName, shift.clocked_out_at, filedNoteIds, phase],
+    [
+      complianceNotes,
+      activeTasks,
+      participantFirstName,
+      shift.clocked_out_at,
+      filedNoteIds,
+      phase,
+    ],
   );
 
   useEffect(() => {
     if (sessionId) setFiledNoteIds(loadFiledNoteIds(sessionId));
   }, [sessionId, localNotes]);
 
-  const [documentationCompliance, setDocumentationCompliance] = useState<DocumentationComplianceCheck | null>(null);
+  const [documentationCompliance, setDocumentationCompliance] =
+    useState<DocumentationComplianceCheck | null>(null);
   // Real backend 12-rule check, debounced after note activity settles rather
   // than run on every keystroke - it's a genuine compliance_engine call
   // (word count, language, goal references, RP/incident handling, etc), not
@@ -272,9 +352,12 @@ export function WorkerMobileShiftView({
     };
   }, [phase, shift.id, sessionId]);
 
-  const openIncidentReport = useCallback((noteId?: string, content?: string) => {
-    setIncidentDraft({ noteId, content });
-  }, []);
+  const openIncidentReport = useCallback(
+    (noteId?: string, content?: string) => {
+      setIncidentDraft({ noteId, content });
+    },
+    [],
+  );
 
   const handleIncidentFiled = useCallback(
     (noteId?: string) => {
@@ -296,74 +379,144 @@ export function WorkerMobileShiftView({
     [sessionId, compliance.noteFlags],
   );
 
-  const [clockInSheetOpen, setClockInSheetOpen] = useState(false);
-  const [safetyCardOpen, setSafetyCardOpen] = useState(false);
-
-  const submitClockIn = useCallback(
-    async (method: "gps" | "qr", location: { lat: number; lng: number; accuracy?: number } | null, qrToken?: string) => {
-      setBusy("clock-in");
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      try {
-        const clientTimestamp = new Date().toISOString();
-
-        if (!isOnline) {
-          await queueWorkerUpdate({
-            type: "clock_in",
-            id: `clock_in-${shift.id}`,
-            shiftId: shift.id,
-            method,
-            location,
-            qrToken,
-            clientTimestamp,
-            startSession: true,
-            timestamp: Date.now(),
-          });
+  const openClockInDialog = () =>
+    onDialog({
+      kind: "choose",
+      onChooseGps: () => void clockInActions.current?.gps(),
+      onQrScanned: (token) => void clockInActions.current?.qr(token),
+    });
+  const openSafetyCard = () => {
+    if (!shift.participant_id) {
+      onDialog({
+        kind: "error",
+        title: "Participant information missing",
+        message: "Refresh the shift to load its participant information.",
+        actionLabel: "Refresh shift",
+        onAction: () => {
+          onDialog(null);
           onRefresh();
-          setPhase("session");
-          showAlert(
-            "Clocked in offline",
-            "Your clock-in is saved and will sync automatically when you're back online. You can keep working.",
-          );
-          notifyCheckinScheduleIfLongShift();
-          return;
-        }
-
-        await clockInShift(shift.id, {
+        },
+      });
+      return;
+    }
+    onDialog({
+      kind: "safety",
+      props: {
+        participantId: shift.participant_id,
+        participantName: shift.participant_name,
+        shiftId: shift.id,
+        mandatory: true,
+        onClose: () => onDialog(null),
+        onAcknowledged: openClockInDialog,
+      },
+    });
+  };
+  const completeClockIn = (offline: boolean) => {
+    onRefresh();
+    setPhase("session");
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onDialog({
+      kind: offline ? "offline" : "success",
+      title: offline ? "Saved on this device" : "You're clocked in",
+      message:
+        (offline
+          ? "Your clock-in is saved locally and will sync when you're back online. You can continue your shift."
+          : "Your shift with " +
+            participantName +
+            " is ready. You can now record support and complete your tasks.") +
+        (plannedShiftMins >= 240
+          ? "\n\nThis shift includes periodic check-ins. Respond within 5 minutes. Missed check-ins are logged and need an explanation before you submit your shift."
+          : ""),
+    });
+  };
+  const submitClockIn = async (
+    method: "gps" | "qr",
+    location: { lat: number; lng: number; accuracy?: number } | null,
+    qrToken?: string,
+  ) => {
+    setBusy("clock-in");
+    onDialog({
+      kind: "loading",
+      title: "Starting your shift",
+      message: "We're saving your clock-in. This may take a moment.",
+    });
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    let clockInRecorded = false;
+    try {
+      const clientTimestamp = new Date().toISOString();
+      if (!isOnline) {
+        await queueWorkerUpdate({
+          type: "clock_in",
+          id: "clock_in-" + shift.id,
+          shiftId: shift.id,
           method,
           location,
-          qr_token: qrToken,
-          client_timestamp: clientTimestamp,
+          qrToken,
+          clientTimestamp,
+          startSession: true,
+          timestamp: Date.now(),
         });
-        await startShiftSession(shift.id);
-        onRefresh();
-        setPhase("session");
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(`Clocked in for ${participantName}`, "success");
-        notifyCheckinScheduleIfLongShift();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "";
-        if (message.toLowerCase().includes("acknowledge the participant safety card")) {
-          // Backend still blocked us - shift.requires_safety_ack was stale
-          // (e.g. content changed since the shift list was last fetched).
-          // Show the safety card instead of a dead-end error.
-          setSafetyCardOpen(true);
-        } else {
-          Alert.alert("Clock-in failed", message || "Please try again.");
-        }
-      } finally {
-        setBusy(null);
+        completeClockIn(true);
+        return;
       }
-    },
-    [shift.id, onRefresh, isOnline, queueWorkerUpdate, notifyCheckinScheduleIfLongShift],
-  );
-
-  const handleGpsClockIn = useCallback(async () => {
-    setClockInSheetOpen(false);
+      await clockInShift(shift.id, {
+        method,
+        location,
+        qr_token: qrToken,
+        client_timestamp: clientTimestamp,
+      });
+      clockInRecorded = true;
+      await startShiftSession(shift.id);
+      completeClockIn(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Please try again.";
+      if (
+        message
+          .toLowerCase()
+          .includes("acknowledge the participant safety card")
+      )
+        openSafetyCard();
+      else if (clockInRecorded)
+        onDialog({
+          kind: "error",
+          title: "Clock-in saved",
+          message:
+            "Your clock-in was saved, but we couldn't open the session. Refresh the shift to continue.",
+          actionLabel: "Refresh shift",
+          onAction: () => {
+            onDialog(null);
+            onRefresh();
+          },
+        });
+      else
+        onDialog({
+          kind: "error",
+          title: "We couldn't clock you in",
+          message,
+          actionLabel: "Try again",
+          onAction: openClockInDialog,
+        });
+    } finally {
+      clockInPending.current = false;
+      setBusy(null);
+    }
+  };
+  const handleGpsClockIn = async () => {
+    if (clockInPending.current) return;
+    clockInPending.current = true;
+    setBusy("clock-in");
+    onDialog({
+      kind: "loading",
+      title: "Checking your location",
+      message: "Allow location access so we can verify your arrival.",
+    });
     let location: { lat: number; lng: number; accuracy?: number } | null = null;
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
         location = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -371,26 +524,21 @@ export function WorkerMobileShiftView({
         };
       }
     } catch {
-      /* GPS unavailable (e.g. airplane mode) — clock in without location */
+      /* The server validates the existing location fallback. */
     }
     await submitClockIn("gps", location);
-  }, [submitClockIn]);
-
-  const handleQrClockIn = useCallback(
-    async (token: string) => {
-      setClockInSheetOpen(false);
-      await submitClockIn("qr", null, token);
-    },
-    [submitClockIn],
-  );
-
-  const handleClockIn = useCallback(() => {
-    if (shift.requires_safety_ack) {
-      setSafetyCardOpen(true);
-      return;
-    }
-    setClockInSheetOpen(true);
-  }, [shift.requires_safety_ack]);
+  };
+  const handleQrClockIn = async (token: string) => {
+    if (clockInPending.current) return;
+    clockInPending.current = true;
+    await submitClockIn("qr", null, token);
+  };
+  clockInActions.current = { gps: handleGpsClockIn, qr: handleQrClockIn };
+  const handleClockIn = () => {
+    if (clockInPending.current) return;
+    if (shift.requires_safety_ack) openSafetyCard();
+    else openClockInDialog();
+  };
 
   const handleAttemptEnd = useCallback(() => {
     if (busy) return;
@@ -398,7 +546,8 @@ export function WorkerMobileShiftView({
     if (hasIncompleteMandatoryTasks(active)) {
       setValidation({
         title: "Mandatory Tasks Incomplete",
-        message: "Review task completion and evidence before ending your shift.",
+        message:
+          "Review task completion and evidence before ending your shift.",
       });
       return;
     }
@@ -417,7 +566,9 @@ export function WorkerMobileShiftView({
   const handleSaveNote = async (noteId: string, content: string) => {
     if (!sessionId) return;
     const updated = localNotes.map((n) =>
-      n.note_id === noteId ? { ...n, content, auto_saved_at: new Date().toISOString() } : n,
+      n.note_id === noteId
+        ? { ...n, content, auto_saved_at: new Date().toISOString() }
+        : n,
     );
     setLocalNotes(updated);
     const edited = updated.find((n) => n.note_id === noteId);
@@ -425,7 +576,13 @@ export function WorkerMobileShiftView({
       await syncSessionNotes(sessionId, updated);
     } catch {
       if (edited) {
-        await queueWorkerUpdate({ type: "sync_notes", id: noteId, sessionId, notes: [edited], timestamp: Date.now() });
+        await queueWorkerUpdate({
+          type: "sync_notes",
+          id: noteId,
+          sessionId,
+          notes: [edited],
+          timestamp: Date.now(),
+        });
       }
     }
     refreshNotes();
@@ -441,12 +598,17 @@ export function WorkerMobileShiftView({
 
     const taskId = note.task_id;
     if (taskId) {
-      const remainingForTask = updated.filter((n) => n.task_id === taskId && n.content?.trim());
+      const remainingForTask = updated.filter(
+        (n) => n.task_id === taskId && n.content?.trim(),
+      );
       const combined = remainingForTask.map((n) => n.content.trim()).join("\n");
       const stillDocumented =
         combined.length >= MIN_EVIDENCE_NOTE_CHARS ||
         remainingForTask.some(
-          (n) => n.note_type === "photo" || n.note_type === "file" || n.note_type === "voice",
+          (n) =>
+            n.note_type === "photo" ||
+            n.note_type === "file" ||
+            n.note_type === "voice",
         );
 
       if (!stillDocumented) {
@@ -459,7 +621,10 @@ export function WorkerMobileShiftView({
             has_photo: remainingForTask.some((n) => n.note_type === "photo"),
             has_voice: remainingForTask.some((n) => n.note_type === "voice"),
             has_text_notes: remainingForTask.some(
-              (n) => n.note_type === "text" || n.note_type === "file" || !n.note_type,
+              (n) =>
+                n.note_type === "text" ||
+                n.note_type === "file" ||
+                !n.note_type,
             ),
           };
         });
@@ -467,7 +632,13 @@ export function WorkerMobileShiftView({
         try {
           await updateShiftTasks(shift.id, nextTasks);
         } catch {
-          await queueWorkerUpdate({ type: "update_tasks", id: `${shift.id}-${Date.now()}`, shiftId: shift.id, tasks: nextTasks, timestamp: Date.now() });
+          await queueWorkerUpdate({
+            type: "update_tasks",
+            id: `${shift.id}-${Date.now()}`,
+            shiftId: shift.id,
+            tasks: nextTasks,
+            timestamp: Date.now(),
+          });
         }
       }
     }
@@ -475,7 +646,13 @@ export function WorkerMobileShiftView({
     try {
       await deleteSessionNote(sessionId, noteId);
     } catch {
-      await queueWorkerUpdate({ type: "delete_note", id: `del-${noteId}`, sessionId, noteId, timestamp: Date.now() });
+      await queueWorkerUpdate({
+        type: "delete_note",
+        id: `del-${noteId}`,
+        sessionId,
+        noteId,
+        timestamp: Date.now(),
+      });
     }
     refreshNotes();
   };
@@ -496,7 +673,13 @@ export function WorkerMobileShiftView({
     try {
       await syncSessionNotes(sessionId, updated);
     } catch {
-      await queueWorkerUpdate({ type: "sync_notes", id: note.note_id, sessionId, notes: [note], timestamp: Date.now() });
+      await queueWorkerUpdate({
+        type: "sync_notes",
+        id: note.note_id,
+        sessionId,
+        notes: [note],
+        timestamp: Date.now(),
+      });
     }
     refreshNotes();
   };
@@ -506,14 +689,23 @@ export function WorkerMobileShiftView({
   };
 
   const handleContinueFromCompliance = () => {
-    const redFlags = compliance.rules?.filter((rule) => rule.status === "fail") ?? [];
+    const redFlags =
+      compliance.rules?.filter((rule) => rule.status === "fail") ?? [];
     if (redFlags.length > 0) {
       showAlert(
         "Unresolved compliance flags",
         "You can still submit, but your coordinator will be notified. Submit anyway?",
         [
-          { text: "Revise notes", style: "cancel", onPress: () => setPhase("review") },
-          { text: "Continue", style: "destructive", onPress: () => setPhase("signature") },
+          {
+            text: "Revise notes",
+            style: "cancel",
+            onPress: () => setPhase("review"),
+          },
+          {
+            text: "Continue",
+            style: "destructive",
+            onPress: () => setPhase("signature"),
+          },
         ],
       );
       return;
@@ -558,7 +750,10 @@ export function WorkerMobileShiftView({
             "Your signature and shift completion are saved and will submit automatically once you're back online.",
           );
         } else {
-          Alert.alert("Not saved yet", "Couldn't save your sign-off. Please try again before leaving this screen.");
+          Alert.alert(
+            "Not saved yet",
+            "Couldn't save your sign-off. Please try again before leaving this screen.",
+          );
         }
         return;
       }
@@ -606,7 +801,10 @@ export function WorkerMobileShiftView({
           "Couldn't reach the server just now - your sign-off will submit automatically once you're back online.",
         );
       } else {
-        Alert.alert("End shift failed", err instanceof Error ? err.message : "Please try again.");
+        Alert.alert(
+          "End shift failed",
+          err instanceof Error ? err.message : "Please try again.",
+        );
       }
     } finally {
       setBusy(null);
@@ -638,7 +836,9 @@ export function WorkerMobileShiftView({
         tasksCompleted={summaryTasksDone}
         tasksTotal={summaryTasks.length}
         score={compliance.score}
-        submittedAt={formatSubmittedAt(submittedAt ?? shift.clocked_out_at ?? null)}
+        submittedAt={formatSubmittedAt(
+          submittedAt ?? shift.clocked_out_at ?? null,
+        )}
         onDone={onBack ?? onShiftComplete}
       />
     );
@@ -670,7 +870,9 @@ export function WorkerMobileShiftView({
 
   if (phase === "review") {
     return (
-      <View style={[styles.sessionWrap, { backgroundColor: colors.background }]}>
+      <View
+        style={[styles.sessionWrap, { backgroundColor: colors.background }]}
+      >
         <WorkerMobileTopbar
           participantName={participantName}
           visualState="session_active"
@@ -685,10 +887,17 @@ export function WorkerMobileShiftView({
           notes={localNotes}
           compliance={compliance}
           busy={Boolean(busy)}
-          missedCheckins={(checkinStatus ?? shift.checkin_status)?.missed_checkins_needing_reason}
+          missedCheckins={
+            (checkinStatus ?? shift.checkin_status)
+              ?.missed_checkins_needing_reason
+          }
           onSubmitMissedCheckinReason={async (scheduledCheckinId, reason) => {
             if (!sessionId) return;
-            await submitMissedCheckinReason(sessionId, scheduledCheckinId, reason);
+            await submitMissedCheckinReason(
+              sessionId,
+              scheduledCheckinId,
+              reason,
+            );
           }}
           onSaveNote={handleSaveNote}
           onRemoveNote={handleRemoveNote}
@@ -726,9 +935,15 @@ export function WorkerMobileShiftView({
     );
   }
 
-  if (phase === "session" || visualState === "session_active" || visualState === "clocked_in") {
+  if (
+    phase === "session" ||
+    visualState === "session_active" ||
+    visualState === "clocked_in"
+  ) {
     return (
-      <View style={[styles.sessionWrap, { backgroundColor: colors.background }]}>
+      <View
+        style={[styles.sessionWrap, { backgroundColor: colors.background }]}
+      >
         <WorkerMobileTopbar
           participantName={participantName}
           visualState={visualState}
@@ -744,8 +959,22 @@ export function WorkerMobileShiftView({
         {validation && (
           <View style={styles.validationBanner}>
             <View style={styles.validationText}>
-              <Text style={[styles.validationTitle, { fontFamily: "Inter_700Bold" }]}>{validation.title}</Text>
-              <Text style={[styles.validationMessage, { fontFamily: "Inter_500Medium" }]}>{validation.message}</Text>
+              <Text
+                style={[
+                  styles.validationTitle,
+                  { fontFamily: FontFamily.interBold },
+                ]}
+              >
+                {validation.title}
+              </Text>
+              <Text
+                style={[
+                  styles.validationMessage,
+                  { fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {validation.message}
+              </Text>
             </View>
             <Pressable onPress={() => setValidation(null)} hitSlop={8}>
               <Feather name="x" size={18} color="#FFFFFF" />
@@ -812,78 +1041,90 @@ export function WorkerMobileShiftView({
       />
       <ScrollView
         style={styles.scheduled}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 12 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + 32,
+          paddingTop: 12,
+          width: "100%",
+          maxWidth: 800,
+          alignSelf: "center",
+        }}
       >
-      <View style={[styles.scheduledCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.scheduledName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          {participantName}
-        </Text>
-        <Text style={[styles.scheduledTime, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          {shift.scheduled_start
-            ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)
-            : "Time TBC"}
-        </Text>
-
-        {shift.participant_address && (
-          <Pressable
-            onPress={() => {
-              const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address!)}`;
-              Linking.openURL(url);
-            }}
-            style={styles.mapLink}
-          >
-            <Feather name="map-pin" size={14} color={colors.primary} />
-            <Text style={[styles.address, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {shift.participant_address}
-            </Text>
-          </Pressable>
-        )}
-
-        <Pressable
-          onPress={handleClockIn}
-          disabled={Boolean(busy)}
-          style={[styles.clockInBtn, { backgroundColor: colors.primary }]}
+        <View
+          style={[
+            styles.scheduledCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
         >
-          {busy === "clock-in" ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={[styles.clockInText, { fontFamily: "Inter_700Bold" }]}>Clock In</Text>
+          <Text
+            style={[
+              styles.scheduledName,
+              { color: colors.foreground, fontFamily: FontFamily.interBold },
+            ]}
+          >
+            {participantName}
+          </Text>
+          <Text
+            style={[
+              styles.scheduledTime,
+              {
+                color: colors.mutedForeground,
+                fontFamily: FontFamily.interMedium,
+              },
+            ]}
+          >
+            {shift.scheduled_start
+              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)
+              : "Time TBC"}
+          </Text>
+
+          {shift.participant_address && (
+            <Pressable
+              onPress={() => {
+                const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address!)}`;
+                Linking.openURL(url);
+              }}
+              style={styles.mapLink}
+            >
+              <Feather name="map-pin" size={14} color={colors.primary} />
+              <Text
+                style={[
+                  styles.address,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                  },
+                ]}
+              >
+                {shift.participant_address}
+              </Text>
+            </Pressable>
           )}
-        </Pressable>
-      </View>
-      </ScrollView>
-      <Modal
-        visible={clockInSheetOpen}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setClockInSheetOpen(false)}
-      >
-        <WorkerMobileClockInSheet
-          onClose={() => setClockInSheetOpen(false)}
-          onChooseGps={() => void handleGpsClockIn()}
-          onQrScanned={(token) => void handleQrClockIn(token)}
-        />
-      </Modal>
-      <Modal
-        visible={safetyCardOpen}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setSafetyCardOpen(false)}
-      >
-        {shift.participant_id && (
-          <WorkerMobileSafetyCardSheet
-            participantId={shift.participant_id}
-            participantName={shift.participant_name}
+
+          <PreShiftParticipantCard
             shiftId={shift.id}
-            mandatory
-            onClose={() => setSafetyCardOpen(false)}
-            onAcknowledged={() => {
-              setSafetyCardOpen(false);
-              setClockInSheetOpen(true);
-            }}
+            participantId={shift.participant_id}
           />
-        )}
-      </Modal>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleClockIn}
+            disabled={Boolean(busy)}
+            style={[styles.clockInBtn, { backgroundColor: colors.primary }]}
+          >
+            {busy === "clock-in" ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text
+                style={[
+                  styles.clockInText,
+                  { fontFamily: FontFamily.interBold },
+                ]}
+              >
+                Clock In
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -911,7 +1152,12 @@ const styles = StyleSheet.create({
   },
   validationText: { flex: 1, gap: 4 },
   validationTitle: { color: "#FFFFFF", fontSize: 15 },
-  validationMessage: { color: "#FFFFFF", fontSize: 13, lineHeight: 18, opacity: 0.95 },
+  validationMessage: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.95,
+  },
   scheduled: { flex: 1, paddingHorizontal: 16 },
   scheduledCard: {
     borderRadius: 16,
@@ -924,8 +1170,9 @@ const styles = StyleSheet.create({
   mapLink: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   address: { fontSize: 13, flex: 1 },
   clockInBtn: {
-    height: 52,
-    borderRadius: 14,
+    minHeight: 52,
+    padding: 14,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,

@@ -1,7 +1,8 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,10 +17,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
-import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { WeekCalendar, localDayKey } from "@/components/worker/WeekCalendar";
 import { useOffline } from "@/context/OfflineContext";
 import { useT } from "@/context/PreferencesContext";
-import { useWorkerShiftsInfinite } from "@/hooks/worker/useWorkerShifts";
+import { useWorkerShifts } from "@/hooks/worker/useWorkerShifts";
 import { useColors } from "@/hooks/useColors";
 import {
   cacheWorkerShifts,
@@ -28,27 +29,34 @@ import {
 import type { WorkerShift } from "@/lib/worker-api";
 import {
   getPrimaryTodayShiftId,
-  isShiftCompletedForList,
   sortTodayShiftsForList,
 } from "@/lib/shift-utils";
-
-type ShiftSeg = "today" | "upcoming" | "past";
-
-function isTodayShift(shift: WorkerShift): boolean {
-  const ref = shift.scheduled_start ?? shift.clocked_out_at ?? shift.clocked_in_at;
-  if (!ref) return false;
-  const d = new Date(ref);
-  return d.toDateString() === new Date().toDateString();
-}
 
 function ShiftSkeleton() {
   const colors = useColors();
   return (
-    <View style={[styles.skeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.skeletonAvatar, { backgroundColor: colors.muted }]} />
+    <View
+      style={[
+        styles.skeleton,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <View
+        style={[styles.skeletonAvatar, { backgroundColor: colors.muted }]}
+      />
       <View style={styles.skeletonLines}>
-        <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "70%" }]} />
-        <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "50%" }]} />
+        <View
+          style={[
+            styles.skeletonLine,
+            { backgroundColor: colors.muted, width: "70%" },
+          ]}
+        />
+        <View
+          style={[
+            styles.skeletonLine,
+            { backgroundColor: colors.muted, width: "50%" },
+          ]}
+        />
       </View>
     </View>
   );
@@ -56,106 +64,54 @@ function ShiftSkeleton() {
 
 export default function MyShiftsScreen() {
   const colors = useColors();
-  const isDark = colors.scheme === "dark";
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
   const t = useT();
   const { isOnline } = useOffline();
   const [cachedShifts, setCachedShifts] = useState<WorkerShift[] | null>(null);
-  const [segment, setSegment] = useState<ShiftSeg>("today");
-  const loadingMoreRef = useRef(false);
-
-  const todayQuery = useWorkerShiftsInfinite("today");
-  const upcomingQuery = useWorkerShiftsInfinite("upcoming");
-  const pastQuery = useWorkerShiftsInfinite("past");
-
-  const activeQuery =
-    segment === "today" ? todayQuery : segment === "upcoming" ? upcomingQuery : pastQuery;
-
-  const todayShifts = useMemo(
-    () => todayQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
-    [todayQuery.data?.pages],
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const selectedKey = localDayKey(selectedDate);
+  const todayKey = localDayKey(new Date());
+  const segment =
+    selectedKey === todayKey
+      ? "today"
+      : selectedKey < todayKey
+        ? "past"
+        : "upcoming";
+  const activeQuery = useWorkerShifts("all");
+  // Complete schedule: filtering a page would falsely show empty future dates.
+  const allShifts = useMemo(
+    () => activeQuery.data?.shifts ?? (!isOnline ? (cachedShifts ?? []) : []),
+    [activeQuery.data, isOnline, cachedShifts],
   );
-  const upcomingShifts = useMemo(
-    () => upcomingQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
-    [upcomingQuery.data?.pages],
-  );
-  const pastShifts = useMemo(
-    () => pastQuery.data?.pages.flatMap((page) => page.shifts) ?? [],
-    [pastQuery.data?.pages],
-  );
-
-  const onlineShifts = useMemo(() => {
-    if (segment === "today") {
-      if (!todayQuery.data?.pages) return undefined;
-      // Completed/documented shifts belong in Past only.
-      return todayShifts.filter((s) => !isShiftCompletedForList(s));
-    }
-    if (segment === "upcoming") {
-      if (!upcomingQuery.data?.pages) return undefined;
-      return upcomingShifts;
-    }
-    if (!pastQuery.data?.pages) return undefined;
-    const completedToday = todayShifts.filter((s) => isTodayShift(s) && isShiftCompletedForList(s));
-    const byId = new Map<string, WorkerShift>();
-    for (const s of [...completedToday, ...pastShifts]) byId.set(s.id, s);
-    return Array.from(byId.values()).sort((a, b) => {
-      const aRef = a.scheduled_start ?? a.clocked_out_at ?? a.clocked_in_at ?? "";
-      const bRef = b.scheduled_start ?? b.clocked_out_at ?? b.clocked_in_at ?? "";
-      return bRef.localeCompare(aRef);
-    });
-  }, [
-    segment,
-    todayQuery.data?.pages,
-    upcomingQuery.data?.pages,
-    pastQuery.data?.pages,
-    todayShifts,
-    upcomingShifts,
-    pastShifts,
-  ]);
-
   useEffect(() => {
-    if (segment === "today" && onlineShifts && onlineShifts.length > 0) {
-      cacheWorkerShifts(onlineShifts);
-    } else if (segment === "today" && !isOnline) {
-      getCachedWorkerShifts<WorkerShift>().then((cached) => {
-        if (cached) setCachedShifts(cached);
-      });
-    }
-  }, [onlineShifts, isOnline, segment]);
-
-  const activeShifts =
-    segment === "today"
-      ? onlineShifts ?? (isOnline ? undefined : cachedShifts ?? undefined)
-      : onlineShifts;
-
-  const { sortedShifts, primaryShiftId } = useMemo(() => {
-    const list = activeShifts ?? [];
-    if (segment !== "today") {
-      return { sortedShifts: list, primaryShiftId: null as string | null };
-    }
-    return {
-      sortedShifts: sortTodayShiftsForList(list),
-      primaryShiftId: getPrimaryTodayShiftId(list),
-    };
-  }, [activeShifts, segment]);
+    if (isOnline && activeQuery.data)
+      void cacheWorkerShifts(activeQuery.data.shifts);
+    else if (!isOnline)
+      void getCachedWorkerShifts<WorkerShift>().then((cached) =>
+        setCachedShifts(cached ?? []),
+      );
+  }, [isOnline, activeQuery.data]);
+  const dayKeyForShift = (shift: WorkerShift) => {
+    const value =
+      shift.scheduled_start ?? shift.clocked_in_at ?? shift.clocked_out_at;
+    return value ? localDayKey(new Date(value)) : null;
+  };
+  const counts: Record<string, number> = {};
+  for (const shift of allShifts) {
+    const key = dayKeyForShift(shift);
+    if (key) counts[key] = (counts[key] ?? 0) + 1;
+  }
+  const sortedShifts = sortTodayShiftsForList(
+    allShifts.filter((shift) => dayKeyForShift(shift) === selectedKey),
+  );
+  const primaryShiftId =
+    segment === "today" ? getPrimaryTodayShiftId(sortedShifts) : null;
 
   const handleRefresh = useCallback(() => {
-    void todayQuery.refetch();
-    void upcomingQuery.refetch();
-    void pastQuery.refetch();
     void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
-  }, [todayQuery, upcomingQuery, pastQuery, queryClient]);
-
-  const handleLoadMore = useCallback(() => {
-    if (loadingMoreRef.current) return;
-    if (!activeQuery.hasNextPage || activeQuery.isFetchingNextPage) return;
-    loadingMoreRef.current = true;
-    void activeQuery.fetchNextPage().finally(() => {
-      loadingMoreRef.current = false;
-    });
-  }, [activeQuery]);
+  }, [queryClient]);
 
   const listHeader = (
     <View style={styles.listHeader}>
@@ -164,54 +120,64 @@ export default function MyShiftsScreen() {
         style={[styles.availBanner, { backgroundColor: colors.soft }]}
       >
         <Feather name="calendar" size={17} color={colors.primary} />
-        <Text style={[styles.availBannerText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+        <Text
+          style={[
+            styles.availBannerText,
+            { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+          ]}
+        >
           {t("shifts.setAvailability")}
         </Text>
         <Feather name="chevron-right" size={15} color={colors.primary} />
       </Pressable>
 
-      <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
-        {(
-          [
-            ["today", t("shifts.filter.today")],
-            ["upcoming", t("shifts.filter.upcoming")],
-            ["past", t("shifts.filter.past")],
-          ] as const
-        ).map(([key, label]) => {
-          const active = segment === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setSegment(key)}
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: active ? colors.primary : colors.soft },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  {
-                    color: active ? colors.primaryForeground : colors.mutedForeground,
-                    fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
-                  },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
+      <WeekCalendar
+        selected={selectedDate}
+        onSelect={setSelectedDate}
+        counts={counts}
+      />
+      <Text
+        accessibilityRole="header"
+        style={{
+          color: colors.foreground,
+          fontFamily: FontFamily.interBold,
+          fontSize: 17,
+          marginTop: 8,
+        }}
+      >
+        {selectedKey === todayKey
+          ? "Today"
+          : selectedDate.toLocaleDateString("en-AU", { weekday: "long" })}
+        {" - "}
+        {selectedDate.toLocaleDateString("en-AU", {
+          day: "numeric",
+          month: "short",
         })}
-      </View>
+      </Text>
+      <Text
+        style={{
+          color: colors.mutedForeground,
+          fontFamily: FontFamily.interRegular,
+          fontSize: 13,
+        }}
+      >
+        {sortedShifts.length} shift{sortedShifts.length === 1 ? "" : "s"}
+        {!isOnline ? " saved on this device" : " on this day"}
+      </Text>
     </View>
   );
 
   const listFooter = (
     <View style={styles.footer}>
-      {activeQuery.isFetchingNextPage ? (
-        <ActivityIndicator color={colors.primary} style={styles.footerSpinner} />
-      ) : null}
-      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+      <Text
+        style={[
+          styles.hint,
+          {
+            color: colors.mutedForeground,
+            fontFamily: FontFamily.interRegular,
+          },
+        ]}
+      >
         {t("shifts.tapHint")}
       </Text>
     </View>
@@ -228,26 +194,47 @@ export default function MyShiftsScreen() {
           <ShiftSkeleton />
           <ShiftSkeleton />
         </View>
-      ) : activeQuery.error ? (
-        <View style={styles.empty}>
-          <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+      ) : activeQuery.error && isOnline ? (
+        <View style={styles.loading}>
+          {listHeader}
+          <Text
+            style={[
+              styles.errorText,
+              {
+                color: colors.destructive,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
             {(activeQuery.error as Error).message}
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleRefresh}
+            style={{
+              minHeight: 48,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: colors.primary }}>Try again</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
           data={sortedShifts}
           keyExtractor={(item) => item.id}
           style={{ backgroundColor: colors.background }}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: insets.bottom + 100 },
+          ]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={listHeader}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.4}
           refreshControl={
             isOnline ? (
               <RefreshControl
-                refreshing={activeQuery.isRefetching && !activeQuery.isFetchingNextPage}
+                refreshing={activeQuery.isRefetching}
                 onRefresh={handleRefresh}
                 tintColor={colors.primary}
               />
@@ -256,21 +243,47 @@ export default function MyShiftsScreen() {
           renderItem={({ item }) => (
             <ShiftListCard
               shift={item}
-              siblingShifts={sortedShifts}
+              siblingShifts={allShifts}
               showActions={segment === "today" && item.id === primaryShiftId}
               onRefresh={handleRefresh}
             />
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-                <Feather name="calendar" size={28} color={colors.mutedForeground} />
+              <View
+                style={[styles.emptyIcon, { backgroundColor: colors.muted }]}
+              >
+                <Feather
+                  name="calendar"
+                  size={28}
+                  color={colors.mutedForeground}
+                />
               </View>
-              <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                {t("shifts.emptyTitle")}
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+              >
+                {isOnline
+                  ? "No shifts on this day"
+                  : "No saved shifts for this day"}
               </Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {t("shifts.emptySub")}
+              <Text
+                style={[
+                  styles.emptySub,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                  },
+                ]}
+              >
+                {isOnline
+                  ? "Choose another date to see your shifts."
+                  : "Connect to refresh your schedule."}
               </Text>
             </View>
           }
@@ -283,7 +296,13 @@ export default function MyShiftsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loading: { padding: 16, gap: 12 },
+  loading: {
+    padding: 16,
+    gap: 12,
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+  },
   listHeader: { gap: 12 },
   availBanner: {
     borderRadius: 12,
@@ -294,19 +313,6 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   availBannerText: { flex: 1, fontSize: 12.5 },
-  segmentTrack: {
-    flexDirection: "row",
-    gap: 3,
-  },
-  segmentBtn: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  segmentText: { fontSize: 12 },
   skeleton: {
     flexDirection: "row",
     gap: 12,
@@ -317,8 +323,19 @@ const styles = StyleSheet.create({
   skeletonAvatar: { width: 48, height: 48, borderRadius: 24 },
   skeletonLines: { flex: 1, gap: 8, paddingTop: 4 },
   skeletonLine: { height: 12, borderRadius: 6 },
-  list: { padding: 16, gap: 8 },
-  empty: { alignItems: "center", paddingTop: 48, gap: 12, paddingHorizontal: 40 },
+  list: {
+    padding: 16,
+    gap: 12,
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+  },
+  empty: {
+    alignItems: "center",
+    paddingTop: 48,
+    gap: 12,
+    paddingHorizontal: 40,
+  },
   emptyIcon: {
     width: 64,
     height: 64,

@@ -5,7 +5,10 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { WorkerBottomNav, workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
+import {
+  WorkerBottomNav,
+  workerBottomNavHeight,
+} from "@/components/worker/WorkerBottomNav";
 import { useColors } from "@/hooks/useColors";
 import { goBackOrHome } from "@/lib/go-back";
 
@@ -16,7 +19,12 @@ type Props = {
   children: React.ReactNode;
 };
 
-export function ClientScreenShell({ title, subtitle, backHref, children }: Props) {
+export function ClientScreenShell({
+  title,
+  subtitle,
+  backHref,
+  children,
+}: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -43,19 +51,33 @@ export function ClientScreenShell({ title, subtitle, backHref, children }: Props
           },
         ]}
       >
-        <Pressable onPress={handleBack} style={[styles.backBtn, { borderColor: colors.border }]}>
+        <Pressable
+          onPress={handleBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={[styles.backBtn, { borderColor: colors.border }]}
+        >
           <Feather name="arrow-left" size={18} color={colors.foreground} />
         </Pressable>
         <View style={styles.headerText}>
           <Text
-            style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
+            style={[
+              styles.headerTitle,
+              { color: colors.foreground, fontFamily: "Inter_700Bold" },
+            ]}
             numberOfLines={1}
           >
             {title}
           </Text>
           {subtitle ? (
             <Text
-              style={[styles.headerSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+              style={[
+                styles.headerSubtitle,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
               numberOfLines={1}
             >
               {subtitle}
@@ -83,8 +105,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",

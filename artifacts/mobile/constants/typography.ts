@@ -1,24 +1,38 @@
+import { Platform } from "react-native";
+
 /**
  * CareCliQ type scale — Mobile UI/UX Redesign §3.3
  * Families are variable fonts; only load the weights listed here.
  */
 
+const platformFont = (name: string): string =>
+  Platform.OS === "web"
+    ? `${name}, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+    : name;
+
 export const FontFamily = {
-  display: "BricolageGrotesque_700Bold",
-  h1: "BricolageGrotesque_700Bold",
-  h2: "BricolageGrotesque_600SemiBold",
-  body: "Inter_400Regular",
-  bodyStrong: "Inter_600SemiBold",
-  caption: "Inter_400Regular",
-  label: "Inter_500Medium",
+  display: platformFont("BricolageGrotesque_700Bold"),
+  h1: platformFont("BricolageGrotesque_700Bold"),
+  h2: platformFont("BricolageGrotesque_600SemiBold"),
+  body: platformFont("Inter_400Regular"),
+  bodyStrong: platformFont("Inter_600SemiBold"),
+  caption: platformFont("Inter_400Regular"),
+  label: platformFont("Inter_500Medium"),
   /** Common Inter weights still used across the app */
-  interRegular: "Inter_400Regular",
-  interMedium: "Inter_500Medium",
-  interSemiBold: "Inter_600SemiBold",
-  interBold: "Inter_700Bold",
+  interRegular: platformFont("Inter_400Regular"),
+  interMedium: platformFont("Inter_500Medium"),
+  interSemiBold: platformFont("Inter_600SemiBold"),
+  interBold: platformFont("Inter_700Bold"),
 } as const;
 
-export type TypeToken = "display" | "h1" | "h2" | "body" | "bodyStrong" | "caption" | "label";
+export type TypeToken =
+  | "display"
+  | "h1"
+  | "h2"
+  | "body"
+  | "bodyStrong"
+  | "caption"
+  | "label";
 
 export type TypeStyle = {
   fontFamily: string;
