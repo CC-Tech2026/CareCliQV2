@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from ..core.access import is_coordinator_role
+from ..core.access import has_org_wide_access
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
 from ..schemas.participant import (
@@ -96,7 +96,7 @@ async def create_participant(
     Create participant within current user's organization.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can create participants",
@@ -171,7 +171,7 @@ async def replace_participant(
     Full replacement update.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can update participant records",
@@ -207,7 +207,7 @@ async def update_participant(
     Partial update.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can update participant records",
@@ -248,7 +248,7 @@ async def delete_participant(
     Usually support coordinator only.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can delete participants",
@@ -338,7 +338,7 @@ async def create_participant_plan(
     Create or update participant NDIS plan.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can create or update NDIS plans",
@@ -442,7 +442,7 @@ async def upsert_plan_budget_category(
     participant's NDIS plan. Part of the "Set Up NDIS Plan" flow.
     """
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can edit plan budgets",
@@ -494,7 +494,7 @@ async def delete_plan_budget_category(
 ):
     """Remove a funded category from the participant's NDIS plan."""
 
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can edit plan budgets",
@@ -696,7 +696,7 @@ async def get_restricted_clinical(
     current_user: dict = Depends(get_current_user),
 ):
     """Full medical history + restricted behavioural notes — Support Coordinator only."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     participant = await _require_participant_access(participant_id, current_user)
     return {
@@ -721,7 +721,7 @@ async def update_restricted_clinical(
     current_user: dict = Depends(get_current_user),
 ):
     """Update restricted clinical fields — Support Coordinator only."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..services.supabase_client import get_supabase_admin
@@ -778,7 +778,7 @@ async def get_shift_context(
     current_user: dict = Depends(get_current_user),
 ):
     """Coordinator view of participant shift-context fields."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
@@ -818,7 +818,7 @@ async def update_shift_context(
     current_user: dict = Depends(get_current_user),
 ):
     """Update participant shift-context fields — coordinator only."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
@@ -935,7 +935,7 @@ async def get_safety_protocol(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
@@ -950,7 +950,7 @@ async def update_safety_protocol(
     body: SafetyProtocolUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
@@ -979,7 +979,7 @@ async def list_check_in_codes(
     current_user: dict = Depends(get_current_user),
 ):
     """List active QR check-in codes for a participant (CARECLIQV2-200)."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
@@ -996,7 +996,7 @@ async def create_check_in_code(
     current_user: dict = Depends(get_current_user),
 ):
     """Generate a QR check-in code for a participant location (CARECLIQV2-200)."""
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_id, get_user_organization_id

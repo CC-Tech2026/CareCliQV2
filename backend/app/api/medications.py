@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role, is_support_worker
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_support_worker
 from ..core.security import get_current_user
 from ..services import medication_document_service, medication_pattern_service, medication_service
 
@@ -21,7 +21,7 @@ router = APIRouter(tags=["medications"])
 
 
 def _require_coordinator(current_user: dict) -> str:
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:

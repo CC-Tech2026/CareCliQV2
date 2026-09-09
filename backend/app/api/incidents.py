@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from typing import Optional
-from ..core.access import is_coordinator_role, is_support_worker
+from ..core.access import has_org_wide_access, is_support_worker
 from ..core.security import get_current_user
 from .security import require_recent_reauth
 from ..core.config import settings
@@ -303,7 +303,7 @@ async def update_incident(
     existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
     if not existing:
         raise HTTPException(status_code=404, detail="Incident not found")
-    if not is_coordinator_role(user) and existing.get("user_id") != user.get("sub"):
+    if not has_org_wide_access(user) and existing.get("user_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Access denied")
     if is_support_worker(user):
         raise HTTPException(
@@ -351,7 +351,7 @@ async def override_incident_reportable(
 ):
     """Coordinator correction to the auto-classified reportability. One-time only — the
     reason is retained permanently on the record per NDIS Commission record-keeping guidance."""
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
     if not existing:
@@ -381,7 +381,7 @@ async def add_subject_of_allegation(
 ):
     """Kept in a separate table from any personnel-file view, per the Commission's explicit
     separation requirement — coordinator/managing-director only."""
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
     if not existing:
@@ -409,7 +409,7 @@ async def get_subject_of_allegation(
     incident_id: str,
     user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     org_id = user.get("organization_id")
     if not org_id:
@@ -425,7 +425,7 @@ async def assign_incident_investigator(
 ):
     """Assigns an investigator, refusing the assignment when the candidate has a
     conflict of interest (reporter, record creator, or a subject of allegation)."""
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     org_id = user.get("organization_id")
     if not org_id:
@@ -456,7 +456,7 @@ async def add_incident_interview(
     body: InterviewCreate,
     user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     existing = await incident_service.get_incident_by_id(incident_id, current_user=user)
     if not existing:
@@ -484,7 +484,7 @@ async def get_incident_interviews(
     incident_id: str,
     user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     org_id = user.get("organization_id")
     if not org_id:

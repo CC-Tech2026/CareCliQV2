@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
 from ..services import audit_service
@@ -87,7 +87,7 @@ def _query_own(user: dict):
 
 def _get_credential_for_user(credential_id: str, user: dict) -> dict:
     query = get_supabase_admin().table("credentials").select("*").eq("id", credential_id)
-    if not is_coordinator_role(user):
+    if not has_org_wide_access(user):
         query = query.eq("user_id", get_user_id(user))
     else:
         query = query.eq("organization_id", get_user_organization_id(user))
@@ -135,7 +135,7 @@ async def update_my_credential(
     current_user: dict = Depends(get_current_user),
 ):
     existing = _get_credential_for_user(credential_id, current_user)
-    if existing.get("verified_at") and not is_coordinator_role(current_user):
+    if existing.get("verified_at") and not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Reviewed credentials cannot be edited by workers.")
     _check_screening_number(body)
     payload = body.model_dump(exclude_unset=True)
@@ -224,7 +224,7 @@ async def review_credential(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(status_code=403, detail="Only support coordinators can review credentials.")
     require_recent_reauth(request, current_user)
     if body.status not in {"valid", "rejected", "pending_review"}:

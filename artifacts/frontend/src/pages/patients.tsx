@@ -979,7 +979,7 @@ type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance
 function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void }) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
 
   const participantQuery = useOrgQuery(["participant", id], {
     queryFn: () => jsonFetch<ParticipantRecord>(`/api/participants/${id}`),

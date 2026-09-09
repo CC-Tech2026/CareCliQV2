@@ -232,12 +232,12 @@ function WorkerIncidentsList() {
 
 export default function Incidents() {
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  const canManageIncidents = user?.role === "support_coordinator" || user?.role === "managing_director";
   // New incident reports (worker mobile app, offline queue included) now
   // land here the moment they reach the database, not just on next page load.
   useIncidentsRealtime(true);
 
-  if (isCoordinator) {
+  if (canManageIncidents) {
     return <IncidentRegisterPanel />;
   }
 

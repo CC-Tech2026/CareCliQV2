@@ -271,7 +271,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   >(null);
   const [noteVersionsLoading, setNoteVersionsLoading] = useState(false);
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
   const qc = useQueryClient();
   const flagMutation = useMutation({
     mutationFn: ({ flag, note }: { flag: boolean; note?: string }) =>

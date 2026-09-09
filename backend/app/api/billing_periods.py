@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..core.access import get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..schemas.billing_period import BillingPeriodCurrentOut, BillingPeriodListOut, BillingPeriodOut
 from ..services import billing_period_service, participant_service
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/participants", tags=["billing-periods"])
 
 
 async def _require_coordinator_participant(participant_id: str, current_user: dict) -> dict:
-    if not is_coordinator_role(current_user):
+    if not has_org_wide_access(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can view billing period history.",
