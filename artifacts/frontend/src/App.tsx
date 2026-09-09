@@ -74,7 +74,7 @@ import AdminBugReportsPage from "@/pages/admin/bug-reports";
 import AdminLayoutSettingsPage from "@/pages/admin/settings-layout";
 import AdminAccessibilitySettingsPage from "@/pages/admin/settings-accessibility";
 import MDOnboardingPage from "@/pages/md/onboarding";
-import MDOnboardingTrainingPage from "@/pages/md/onboarding-training";
+import MDOnboardingTrainingPage, { MDOnboardingSetupPage } from "@/pages/md/onboarding-training";
 import TagManagementPage from "@/pages/md/tag-management";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
@@ -296,6 +296,12 @@ function Router() {
       <Route path="/md/onboarding">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDOnboardingPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/onboarding/setup">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDOnboardingSetupPage />
         </ProtectedRoute>
       </Route>
 
@@ -563,17 +569,17 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Create/Edit: coordinator only — workers cannot add or edit participants */}
+      {/* Create/Edit: coordinator + MD — workers cannot add or edit participants */}
       <Route path="/participants/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><ParticipantNew /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><ParticipantNew /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/participants/:id/edit">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-            <AppLayout><ParticipantEdit id={params.id} /></AppLayout>
+          <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+            <RoleAwareShell><ParticipantEdit id={params.id} /></RoleAwareShell>
           </ProtectedRoute>
         )}
       </Route>
@@ -672,7 +678,7 @@ function Router() {
 
       <Route path="/platform-billing">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
-          <AppLayout><PlatformBilling /></AppLayout>
+          <PlatformBilling />
         </ProtectedRoute>
       </Route>
 

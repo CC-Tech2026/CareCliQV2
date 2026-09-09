@@ -1506,7 +1506,7 @@ export function MDHubView() {
             bySex={data.participants_by_sex}
             byPlanStatus={data.participants_by_plan_status}
             capacity={{ used: data.active_participants, total: data.active_staff * CASELOAD_PER_WORKER }}
-            onNavigate={() => navigate("/participants")}
+            onNavigate={() => navigate("/patients")}
           />
         </div>
         <GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
@@ -1540,7 +1540,7 @@ export function MDHubView() {
             label="Support visits"
             value={formatNumber(data.sessions_this_week)}
             detail="This week"
-            onClick={() => navigate("/schedule")}
+            onClick={() => navigate("/md/schedule")}
             breakdown={[
               { label: "Compliant", value: data.team_compliance_breakdown.compliant, color: GREEN },
               { label: "At risk", value: data.team_compliance_breakdown.at_risk, color: AMBER },

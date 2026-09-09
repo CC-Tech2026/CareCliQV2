@@ -19,8 +19,14 @@ const AREAS = [
   {
     href: "/md/onboarding/training",
     icon: GraduationCap,
-    title: "Training Programs",
-    description: "Build onboarding training programs, manage resources, and approve stage completions.",
+    title: "Training & resources",
+    description: "Create training modules, share guidelines and review worker completions.",
+  },
+  {
+    href: "/md/onboarding/setup",
+    icon: GraduationCap,
+    title: "Onboarding setup",
+    description: "Configure programmes, induction checklists and stage approvals for new starters.",
   },
 ] as const;
 

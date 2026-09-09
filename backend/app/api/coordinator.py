@@ -77,10 +77,12 @@ def _require_coordinator(user: dict) -> str:
     return org_id
 
 
-# Same org_id-or-403 shape as _require_coordinator, but for read-only worker-detail
-# endpoints the managing director should also see (staff profile tabs) - mutations
-# on these same resources stay _require_coordinator-only, matching the read/write
-# split already established for /workers/pipeline and account-management actions.
+# Same org_id-or-403 shape as _require_coordinator, but for the resources the
+# managing director should also read AND act on: worker-profile tabs (staff
+# detail, availability, skills, training assignment/review, onboarding
+# documents) and NDIS goals/tasks. Rostering, shift assignment, pay/SCHADS,
+# messaging, and account-management actions stay _require_coordinator-only —
+# those remain Coordinator's own operational domain, not MD oversight.
 def _require_org_read(user: dict) -> str:
     if not has_org_wide_access(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
@@ -587,7 +589,11 @@ async def flag_session_for_review(
     current_user: dict = Depends(get_current_user),
 ):
     """Flag (or unflag) a session for worker correction."""
-    org_id = _require_coordinator(current_user)
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     supabase = get_supabase_admin()
     coordinator_id = str(get_user_id(current_user) or "")
 
@@ -3735,7 +3741,7 @@ async def update_worker_availability(
     current_user: dict = Depends(get_current_user),
 ):
     """Upsert availability settings for a worker."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         now = datetime.now(timezone.utc).isoformat()
@@ -3804,7 +3810,7 @@ async def add_worker_skill(
     current_user: dict = Depends(get_current_user),
 ):
     """Add or update a certified skill for a worker."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         payload: dict[str, Any] = {
@@ -3834,7 +3840,7 @@ async def remove_worker_skill(
     current_user: dict = Depends(get_current_user),
 ):
     """Remove a skill from a worker."""
-    _require_coordinator(current_user)
+    _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("worker_skills").delete().eq("user_id", worker_id).eq("skill", skill).execute()
@@ -4802,7 +4808,7 @@ async def list_coordinator_goals(
     current_user: dict = Depends(get_current_user),
 ):
     """List NDIS goals for the coordinator's organization."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         q = supabase.table("ndis_goals").select("*").eq("organization_id", org_id).order("created_at", desc=True)
@@ -4822,7 +4828,7 @@ async def create_ndis_goal(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new NDIS goal for a participant."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     support_category = normalize_goal_support_category(body.support_category)
     if not support_category:
@@ -4863,7 +4869,7 @@ async def update_ndis_goal(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an existing NDIS goal."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     support_category = normalize_goal_support_category(body.support_category)
     if not support_category:
@@ -4910,7 +4916,7 @@ async def archive_ndis_goal(
     current_user: dict = Depends(get_current_user),
 ):
     """Archive an NDIS goal."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     existing_resp = supabase.table("ndis_goals").select("status, archived_at").eq("id", goal_id).eq("organization_id", org_id).limit(1).execute()
@@ -4939,7 +4945,7 @@ async def complete_ndis_goal(
     current_user: dict = Depends(get_current_user),
 ):
     """Mark an NDIS goal as completed."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     existing_resp = supabase.table("ndis_goals").select("status, completed_at").eq("id", goal_id).eq("organization_id", org_id).limit(1).execute()
@@ -4968,7 +4974,7 @@ async def get_goal_progress(
     current_user: dict = Depends(get_current_user),
 ):
     """Get progress metrics for a specific goal (linked sessions + evidence)."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         goal_resp = supabase.table("ndis_goals").select("*").eq("id", goal_id).eq("organization_id", org_id).single().execute()
@@ -5032,7 +5038,7 @@ async def list_task_templates(
     current_user: dict = Depends(get_current_user),
 ):
     """List task templates for a participant: org-level system defaults + participant-specific."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         # System defaults seeded by migration 088 (is_custom=FALSE, participant_id IS NULL)
@@ -5073,7 +5079,7 @@ async def create_task_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a custom task template for a participant."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -5118,7 +5124,7 @@ async def update_task_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Update a custom task template."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     update = {
@@ -5156,7 +5162,7 @@ async def delete_task_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Soft-delete a task template (mark inactive)."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         # status is canonical (list_task_templates filters on it); is_active is synced
@@ -5248,7 +5254,7 @@ async def list_participant_tasks(
     current_user: dict = Depends(get_current_user),
 ):
     """List tasks for a participant, optionally filtered by status or goal."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         q = (
@@ -5296,7 +5302,7 @@ async def create_participant_task(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new task instance for a participant under a goal."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     await _ensure_participant_active_plan(participant_id)
     now = datetime.now(timezone.utc).isoformat()
@@ -5383,7 +5389,7 @@ async def update_participant_task(
     current_user: dict = Depends(get_current_user),
 ):
     """Update a participant task."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
     
@@ -5461,7 +5467,7 @@ async def delete_participant_task(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete a participant task."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     
     try:
@@ -5565,7 +5571,17 @@ async def get_audit_engagement_pack(
 
 # ── Training & Induction (CARECLIQV2-289 coordinator surface) ─────────────────
 
+@router.post("/training-module-covers")
+async def upload_training_cover(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.training_cover_service import upload_cover, MAX_COVER_BYTES
+    content = await file.read(MAX_COVER_BYTES + 1)
+    return upload_cover(org_id, content, file.content_type or "")
+
+
 class TrainingModuleBody(BaseModel):
+    cover_color: Optional[str] = None
+    cover_path: Optional[str] = None
     title: str
     description: Optional[str] = None
     linked_credential_type: Optional[str] = None
@@ -5574,12 +5590,80 @@ class TrainingModuleBody(BaseModel):
 
 
 class TrainingModuleUpdateBody(BaseModel):
+    cover_color: Optional[str] = None
+    cover_path: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     linked_credential_type: Optional[str] = None
     requires_certification: Optional[bool] = None
     auto_assign_on_hire: Optional[bool] = None
     is_active: Optional[bool] = None
+
+
+class TrainingModuleLockBody(BaseModel):
+    is_locked: bool
+    lock_reason: Optional[str] = None
+
+
+@router.patch("/training-modules/{module_id}/lock")
+async def set_training_module_lock(module_id: str, body: TrainingModuleLockBody,
+                                   current_user: dict = Depends(get_current_user)):
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=403, detail="Managing Director access required.")
+    org_id = _require_org_read(current_user)
+    from ..services.worker_training_service import update_training_module
+    reason = (body.lock_reason or "").strip()[:500] if body.is_locked else None
+    return update_training_module(org_id, module_id, {"is_locked": body.is_locked, "lock_reason": reason})
+
+
+class TrainingResourceBody(BaseModel):
+    title: str
+    resource_type: str
+    external_url: Optional[str] = None
+    storage_path: Optional[str] = None
+    sort_order: int = 0
+
+
+@router.post("/training-modules/{module_id}/resources/upload")
+async def upload_training_material(module_id: str, file: UploadFile = File(...),
+                                   title: str = Form(...), sort_order: int = Form(0),
+                                   resource_id: Optional[str] = Form(None),
+                                   current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.training_material_service import upload_material, MAX_MATERIAL_BYTES
+    content = await file.read(MAX_MATERIAL_BYTES + 1)
+    return upload_material(org_id, module_id, title, content, file.content_type or "", sort_order, resource_id)
+
+
+@router.get("/training-modules/{module_id}/resources/{resource_id}/access")
+async def coordinator_material_access(module_id: str, resource_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.training_material_service import material_access_url
+    return material_access_url(org_id, module_id, resource_id)
+
+
+@router.post("/training-modules/{module_id}/resources")
+async def create_training_resource(module_id: str, body: TrainingResourceBody,
+                                   current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.worker_training_service import manage_training_resource
+    return manage_training_resource(org_id, module_id, body.model_dump())
+
+
+@router.patch("/training-modules/{module_id}/resources/{resource_id}")
+async def update_training_resource(module_id: str, resource_id: str, body: TrainingResourceBody,
+                                   current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.worker_training_service import manage_training_resource
+    return manage_training_resource(org_id, module_id, body.model_dump(), resource_id)
+
+
+@router.delete("/training-modules/{module_id}/resources/{resource_id}")
+async def delete_training_resource(module_id: str, resource_id: str,
+                                   current_user: dict = Depends(get_current_user)):
+    org_id = _require_org_read(current_user)
+    from ..services.worker_training_service import manage_training_resource
+    return manage_training_resource(org_id, module_id, None, resource_id)
 
 
 class TrainingAssignBody(BaseModel):
@@ -5595,7 +5679,7 @@ class TrainingReviewBody(BaseModel):
 
 @router.get("/training-modules")
 async def coordinator_list_training_modules(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.list_training_modules(org_id)
@@ -5606,7 +5690,7 @@ async def coordinator_create_training_module(
     body: TrainingModuleBody,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.create_training_module(
@@ -5617,6 +5701,8 @@ async def coordinator_create_training_module(
         linked_credential_type=body.linked_credential_type,
         requires_certification=body.requires_certification,
         auto_assign_on_hire=body.auto_assign_on_hire,
+        cover_color=body.cover_color,
+        cover_path=body.cover_path,
     )
 
 
@@ -5626,7 +5712,7 @@ async def coordinator_update_training_module(
     body: TrainingModuleUpdateBody,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.update_training_module(
@@ -5727,7 +5813,7 @@ async def coordinator_review_training_completion(
     body: TrainingReviewBody,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return await training.review_training_completion(
@@ -5758,7 +5844,7 @@ async def coordinator_assign_training(
     body: TrainingAssignBody,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     return training.recommend_training_module(
@@ -5776,7 +5862,7 @@ async def coordinator_dismiss_training_assignment(
     recommendation_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_training_service as training
 
     training.dismiss_training_recommendation(recommendation_id, org_id)
@@ -5805,7 +5891,7 @@ async def coordinator_upload_worker_onboarding_document(
     file: UploadFile | None = File(None),
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_onboarding_documents_service as onboarding_docs
 
     record = onboarding_docs.create_document_record(
@@ -5828,7 +5914,7 @@ async def coordinator_delete_worker_onboarding_document(
     document_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     from ..services import worker_onboarding_documents_service as onboarding_docs
 
     onboarding_docs.delete_document(document_id, org_id)

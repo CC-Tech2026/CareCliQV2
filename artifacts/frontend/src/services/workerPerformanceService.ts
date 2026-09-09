@@ -108,6 +108,11 @@ export type WorkerCertification = {
 };
 
 export type TrainingModule = {
+  cover_color?: string | null;
+  cover_path?: string | null;
+  cover_url?: string | null;
+  is_locked?: boolean;
+  lock_reason?: string | null;
   id: string;
   title: string;
   description?: string | null;
@@ -117,7 +122,8 @@ export type TrainingModule = {
     id: string;
     resource_type: "video" | "pdf" | "external_link";
     title: string;
-    storage_path?: string | null;
+    access_url?: string | null;
+  storage_path?: string | null;
     external_url?: string | null;
   }>;
 };
@@ -222,6 +228,19 @@ export function getWorkerCertifications() {
 
 export function getTrainingModules() {
   return jsonFetch<{ modules: TrainingModule[] }>("/api/worker/training/modules");
+}
+
+export type SharedTrainingResource = {
+  id: string; name: string; category?: string | null;
+  resource_type: string; file_size_bytes?: number | null;
+};
+
+export function getSharedTrainingResources() {
+  return jsonFetch<{ resources: SharedTrainingResource[] }>("/api/worker/training/resources");
+}
+
+export function getSharedTrainingResourceUrl(id: string) {
+  return jsonFetch<{ url: string }>(`/api/worker/training/resources/${encodeURIComponent(id)}/access`);
 }
 
 export function markTrainingComplete(payload: {

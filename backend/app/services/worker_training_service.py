@@ -6,13 +6,109 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import uuid4
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 
 from .notification_service import _notify_office_staff, notify_worker
 from .supabase_client import get_supabase_admin
+from .training_cover_service import validate_cover, with_cover_url
+from .training_material_service import validate_material_path, with_material_url
 
 logger = logging.getLogger(__name__)
+
+
+def require_available_module(organization_id: str, module_id: str) -> dict[str, Any]:
+    result = (get_supabase_admin().table("training_modules").select("*")
+              .eq("id", module_id).eq("organization_id", organization_id)
+              .eq("is_active", True).maybe_single().execute())
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Training module not found.")
+    if result.data.get("is_locked"):
+        raise HTTPException(status_code=423, detail="This module is being updated. Please try again when it is unlocked.")
+    return result.data
+
+
+def locked_module_ids(organization_id: str) -> set[str]:
+    try:
+        rows = (get_supabase_admin().table("training_modules").select("id")
+                .eq("organization_id", organization_id).eq("is_locked", True).execute())
+    except Exception as exc:
+        # Older databases have no maintenance state until migration 182 runs.
+        if _is_missing_schema(exc):
+            return set()
+        raise
+    return {str(row["id"]) for row in (rows.data or [])}
+
+
+def list_shared_resources(organization_id: str) -> list[dict[str, Any]]:
+    if not organization_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    result = (get_supabase_admin().table("onboarding_stage_resources")
+              .select("id, name, category, resource_type, file_size_bytes")
+              .eq("org_id", organization_id).order("name").execute())
+    return result.data or []
+
+
+def shared_resource_url(organization_id: str, resource_id: str) -> dict[str, str]:
+    if not organization_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+    db = get_supabase_admin()
+    result = (db.table("onboarding_stage_resources").select("file_key")
+              .eq("org_id", organization_id).eq("id", resource_id).maybe_single().execute())
+    if not result.data or not result.data.get("file_key"):
+        raise HTTPException(status_code=404, detail="Resource file not found.")
+    signed = db.storage.from_("onboarding-resources").create_signed_url(result.data["file_key"], 300)
+    url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url")
+    if not url:
+        raise HTTPException(status_code=502, detail="Could not open this resource. Please try again.")
+    return {"url": url}
+
+
+def manage_training_resource(
+    organization_id: str, module_id: str, payload: dict[str, Any] | None,
+    resource_id: str | None = None,
+) -> dict[str, Any]:
+    """Manage materials only after verifying ownership of the parent module."""
+    db = get_supabase_admin()
+    module = (db.table("training_modules").select("id")
+              .eq("organization_id", organization_id).eq("id", module_id)
+              .maybe_single().execute())
+    if not module.data:
+        raise HTTPException(status_code=404, detail="Training module not found.")
+    if payload is None:
+        result = (db.table("training_resources").delete()
+                  .eq("module_id", module_id).eq("id", resource_id).execute())
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Material not found.")
+        return {"ok": True}
+    title = str(payload.get("title") or "").strip()
+    url = str(payload.get("external_url") or "").strip()
+    try:
+        parsed = urlsplit(url)
+        valid_url = parsed.scheme in ("http", "https") and bool(parsed.hostname)
+    except ValueError:
+        valid_url = False
+    storage_path = payload.get("storage_path") or None
+    if storage_path:
+        validate_material_path(organization_id, module_id, storage_path, payload.get("resource_type"))
+    if not title or (not valid_url and not storage_path):
+        raise HTTPException(status_code=422, detail="A title and valid HTTP(S) material URL are required.")
+    if payload.get("resource_type") not in ("video", "pdf", "external_link"):
+        raise HTTPException(status_code=422, detail="Unsupported material type.")
+    if payload.get("sort_order", 0) < 0:
+        raise HTTPException(status_code=422, detail="Material position cannot be negative.")
+    record = {"title": title, "external_url": None if storage_path else url, "storage_path": storage_path,
+              "resource_type": payload["resource_type"], "sort_order": payload.get("sort_order", 0)}
+    if resource_id:
+        result = (db.table("training_resources").update(record)
+                  .eq("module_id", module_id).eq("id", resource_id).execute())
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Material not found.")
+        return with_material_url(result.data[0])
+    record.update({"id": str(uuid4()), "module_id": module_id})
+    db.table("training_resources").insert(record).execute()
+    return with_material_url(record)
 
 EXPIRING_DAYS = 60
 
@@ -91,9 +187,10 @@ def list_training_modules(organization_id: str) -> list[dict[str, Any]]:
         )
         by_module: dict[str, list] = {}
         for res in res_resp.data or []:
-            by_module.setdefault(str(res["module_id"]), []).append(res)
+            by_module.setdefault(str(res["module_id"]), []).append(with_material_url(res))
         for mod in modules:
             mod["resources"] = by_module.get(str(mod["id"]), [])
+            with_cover_url(mod)
         return modules
     except Exception as exc:
         if _is_missing_schema(exc):
@@ -114,6 +211,9 @@ def mark_training_complete(
             status_code=422,
             detail="You must tick the acknowledgment box confirming you completed this training before submitting.",
         )
+    module = require_available_module(organization_id, module_id)
+    if module.get("requires_certification"):
+        raise HTTPException(status_code=422, detail="Upload certification evidence for this module instead.")
     now = datetime.now(timezone.utc).isoformat()
     record = {
         "id": str(uuid4()),
@@ -132,6 +232,8 @@ def mark_training_complete(
             on_conflict="worker_id,module_id",
         ).execute()
     except Exception as exc:
+        if "under maintenance" in str(exc).lower():
+            raise HTTPException(status_code=423, detail="This module is being updated. Please try again when it is unlocked.") from exc
         if _is_missing_schema(exc):
             raise HTTPException(status_code=503, detail="Training service unavailable.") from exc
         raise
@@ -223,6 +325,7 @@ def list_training_history(worker_id: str) -> list[dict[str, Any]]:
             .select("*, training_modules(title)")
             .eq("worker_id", worker_id)
             .order("completed_at", desc=True)
+            .order("created_at", desc=True)
             .execute()
         )
         return resp.data or []
@@ -289,6 +392,8 @@ def create_training_module(
     linked_credential_type: str | None = None,
     requires_certification: bool = False,
     auto_assign_on_hire: bool = False,
+    cover_color: str | None = None,
+    cover_path: str | None = None,
 ) -> dict[str, Any]:
     if not title.strip():
         raise HTTPException(status_code=422, detail="Title is required.")
@@ -303,6 +408,8 @@ def create_training_module(
         "created_by": created_by,
         "is_active": True,
     }
+    validate_cover(organization_id, {"cover_color": cover_color, "cover_path": cover_path})
+    record.update({"cover_color": cover_color, "cover_path": cover_path})
     try:
         get_supabase_admin().table("training_modules").insert(record).execute()
     except Exception as exc:
@@ -310,7 +417,7 @@ def create_training_module(
             raise HTTPException(status_code=503, detail="Training service unavailable.") from exc
         raise
     record["resources"] = []
-    return record
+    return with_cover_url(record)
 
 
 def update_training_module(
@@ -318,6 +425,7 @@ def update_training_module(
     module_id: str,
     updates: dict[str, Any],
 ) -> dict[str, Any]:
+    validate_cover(organization_id, updates)
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update.")
     if "title" in updates:
@@ -343,7 +451,7 @@ def update_training_module(
         .eq("organization_id", organization_id)
         .execute()
     )
-    return (resp.data or [{}])[0]
+    return with_cover_url((resp.data or [{}])[0])
 
 
 def assign_mandatory_modules_on_hire(
@@ -453,6 +561,7 @@ def dismiss_training_recommendation(recommendation_id: str, organization_id: str
 def start_training_module(worker_id: str, organization_id: str, training_module_id: str) -> dict[str, Any]:
     """Log that a worker opened an assigned training module. Idempotent — only
     the first open is recorded, so the timestamp reflects genuine start time."""
+    require_available_module(organization_id, training_module_id)
     now = datetime.now(timezone.utc).isoformat()
     try:
         resp = (
@@ -524,7 +633,7 @@ def _overdue_module_ids(worker_id: str, organization_id: str) -> set[str]:
             done_ids = set()
         else:
             raise
-    return overdue_ids - done_ids
+    return overdue_ids - done_ids - locked_module_ids(organization_id)
 
 
 def is_training_overdue(worker_id: str, organization_id: str) -> bool:
@@ -572,8 +681,11 @@ def team_training_overdue_map(organization_id: str) -> dict[str, bool]:
         else:
             raise
 
+    locked_ids = locked_module_ids(organization_id)
     overdue: dict[str, bool] = {}
     for r in rows:
+        if str(r.get("training_module_id")) in locked_ids:
+            continue
         pair = (r["worker_id"], r.get("training_module_id"))
         if pair not in done_pairs:
             overdue[str(r["worker_id"])] = True

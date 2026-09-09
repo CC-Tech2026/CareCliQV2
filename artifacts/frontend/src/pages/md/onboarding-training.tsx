@@ -5,6 +5,10 @@ import {
   ThumbsUp, Send, Plus, Grip, Pencil, Trash2, Upload, FileText,
   FileVideo, Link2, X, Loader2, ClipboardCheck,
 } from "lucide-react";
+import { TrainingReviews } from "@/components/training/TrainingReviews";
+import { TrainingModuleEditor } from "@/components/training/TrainingModuleEditor";
+import { SharedResourceAccess } from "@/components/training/WorkerResourceLibrary";
+import { CourseCover } from "@/components/training/CourseCover";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -12,7 +16,6 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import {
   getTrainingModules,
-  createTrainingModule,
   updateTrainingModule,
   type TrainingModule as CoordinatorTrainingModule,
 } from "@/services/coordinatorService";
@@ -49,7 +52,6 @@ const CORAL  = "var(--cc-coral)";
 const GREEN  = "#0F7B57";
 const AMBER  = "#9A5B0A";
 
-type Tab = "overview" | "builder" | "modules" | "induction" | "resources" | "approvals";
 
 interface KpiData {
   new_starters: number;
@@ -832,7 +834,7 @@ function ResourcesTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Training Resources</h2>
+        <div><h2 className="text-[14px] font-black" style={{ color: TEXT }}>Shared resource library</h2><p className="mt-1 text-xs" style={{ color: MUTED }}>Guidelines, policies and documents uploaded here are available to all support workers in your organisation.</p></div>
         <button
           onClick={() => setShowUpload(true)}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-black text-white"
@@ -965,15 +967,7 @@ function ResourcesTab() {
                       Uploaded {new Date(r.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
                   )}
-                  <a
-                    href={`/api/md/onboarding/resources/${r.id}/download`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
-                    style={{ color: PLUM }}
-                  >
-                    View <Link2 size={10} />
-                  </a>
+                  <div className="mt-3"><SharedResourceAccess id={r.id} name={r.name} accessUrl={`/api/md/onboarding/resources/${encodeURIComponent(r.id)}/download?redirect=false`} /></div>
                 </div>
               </div>
             </div>
@@ -1174,154 +1168,14 @@ const CREDENTIAL_TYPE_OPTIONS = [
   { value: "qualification", label: "Qualification" },
 ];
 
-function ModuleFormSheet({
-  onClose,
-  onSaved,
-}: {
-  onClose: () => void;
-  onSaved: (module: CoordinatorTrainingModule) => void;
-}) {
-  const { toast } = useToast();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [linkedCredentialType, setLinkedCredentialType] = useState("");
-  const [requiresCertification, setRequiresCertification] = useState(false);
-  const [autoAssignOnHire, setAutoAssignOnHire] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    if (!title.trim()) return;
-    setSaving(true);
-    try {
-      const created = await createTrainingModule({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        linked_credential_type: linkedCredentialType || undefined,
-        requires_certification: requiresCertification,
-        auto_assign_on_hire: autoAssignOnHire,
-      });
-      toast({ title: "Training module created" });
-      onSaved(created);
-    } catch {
-      toast({ title: "Failed to create module", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col" style={{ borderLeft: `1px solid ${BORDER}` }}>
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
-          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>New Training Module</h3>
-          <button onClick={onClose} aria-label="Close panel" className="rounded-lg p-1 hover:bg-gray-100">
-            <X size={16} style={{ color: MUTED }} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 p-5">
-          <div>
-            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
-              Title
-            </label>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. NDIS Worker Orientation"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
-              style={{ borderColor: BORDER }}
-              placeholder="What does this module cover?"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
-              Linked Credential Type
-            </label>
-            <select
-              value={linkedCredentialType}
-              onChange={(e) => setLinkedCredentialType(e.target.value)}
-              aria-label="Linked credential type"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
-            >
-              {CREDENTIAL_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
-              Optional — completing this module can satisfy a matching credential requirement.
-            </p>
-          </div>
-
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={requiresCertification}
-              onChange={(e) => setRequiresCertification(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
-            />
-            <span className="text-[13px] font-medium" style={{ color: TEXT }}>
-              Requires certification
-              <span className="mt-0.5 block text-[11px] font-normal" style={{ color: MUTED }}>
-                Worker must upload proof of completion, not just tick it off.
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoAssignOnHire}
-              onChange={(e) => setAutoAssignOnHire(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
-            />
-            <span className="text-[13px] font-medium" style={{ color: TEXT }}>
-              Auto-assign to every new hire
-              <span className="mt-0.5 block text-[11px] font-normal" style={{ color: MUTED }}>
-                Assigned automatically the moment a worker accepts their invite. Rostering is blocked until it's complete.
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: BORDER }}>
-          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-[13px] font-bold" style={{ borderColor: BORDER, color: MUTED }}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !title.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: "var(--cc-cta)" }}
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-            Create Module
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModulesTab() {
+function ModulesTab({ onEditingChange }: { onEditingChange: (editing: boolean) => void }) {
   const { toast } = useToast();
   const [modules, setModules] = useState<CoordinatorTrainingModule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingModule, setEditingModule] = useState<CoordinatorTrainingModule | undefined>();
+  const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -1334,6 +1188,7 @@ function ModulesTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { onEditingChange(showForm); }, [showForm, onEditingChange]);
 
   async function toggleFlag(module: CoordinatorTrainingModule, key: "auto_assign_on_hire" | "requires_certification") {
     setUpdatingId(module.id);
@@ -1347,23 +1202,42 @@ function ModulesTab() {
     }
   }
 
+  if (showForm) return (
+        <TrainingModuleEditor
+          key={editingModule?.id ?? "new"}
+          module={editingModule}
+          credentials={CREDENTIAL_TYPE_OPTIONS}
+          onChanged={(updated) => {
+            setModules((prev) => prev.map((m) => m.id === updated.id ? { ...m, ...updated } : m));
+            setEditingModule(updated);
+          }}
+          onClose={() => setShowForm(false)}
+          onSaved={(created) => {
+            setModules((prev) => editingModule ? prev.map((m) => m.id === created.id ? { ...m, ...created } : m) : [created, ...prev]);
+            if (editingModule) { setShowForm(false); } else { setEditingModule(created); }
+          }}
+        />
+  );
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Training Modules</h2>
           <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>
-            Modules marked "auto-assign" go to every new hire automatically and block rostering until complete.
+            Create courses, curate learning materials and set requirements for new hires.
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditingModule(undefined); setShowForm(true); }}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-black text-white shrink-0"
           style={{ background: "var(--cc-cta)" }}
         >
           <Plus size={12} strokeWidth={2.5} /> New Module
         </button>
       </div>
+
+      <label className="block"><span className="sr-only">Search training modules</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search training modules" className="w-full rounded-xl border bg-card px-4 py-3 text-sm sm:max-w-sm" /></label>
 
       {loading ? (
         <div className="space-y-2">
@@ -1373,7 +1247,7 @@ function ModulesTab() {
         <div className="rounded-xl border p-10 text-center" style={{ borderColor: BORDER }}>
           <AlertTriangle size={32} className="mx-auto mb-3" style={{ color: CORAL }} />
           <p className="font-black" style={{ color: TEXT }}>Could not load training modules</p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Reload the page to try again.</p>
+          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}><button onClick={load} className="underline">Try again</button></p>
         </div>
       ) : modules.length === 0 ? (
         <div className="rounded-xl border p-10 text-center" style={{ borderColor: BORDER }}>
@@ -1382,14 +1256,16 @@ function ModulesTab() {
           <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Create one and mark it auto-assign to make it mandatory for new hires.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {modules.map((m) => (
-            <div key={m.id} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-black" style={{ color: TEXT }}>{m.title}</p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {modules.filter((m) => (m.title + " " + (m.description ?? "")).toLowerCase().includes(search.toLowerCase())).map((m) => (
+            <div key={m.id} className="flex h-full flex-col rounded-2xl border bg-card p-3 shadow-sm" style={{ borderColor: BORDER }}>
+              <CourseCover title={m.title} count={m.resources?.length} color={m.cover_color} imageUrl={m.cover_url} />
+              <div className="flex flex-1 flex-col gap-4 p-2 pt-4">
+                <div className="min-w-0 flex-1">
+                  <p className="min-h-10 text-sm font-bold leading-5" style={{ color: TEXT }}>{m.title}</p>
+                  <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${m.is_locked ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-700"}`}>{m.is_locked ? "Under maintenance" : "Available to workers"}</span>
                   {m.description && (
-                    <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>{m.description}</p>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5" style={{ color: MUTED }}>{m.description}</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {m.linked_credential_type && (
@@ -1405,35 +1281,20 @@ function ModulesTab() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => toggleFlag(m, "auto_assign_on_hire")}
-                  disabled={updatingId === m.id}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition disabled:opacity-50"
-                  style={{
-                    background: m.auto_assign_on_hire ? "var(--cc-plum-soft)" : SOFT,
-                    color: m.auto_assign_on_hire ? PLUM : MUTED,
-                    border: `1px solid ${m.auto_assign_on_hire ? PLUM : BORDER}`,
-                  }}
-                  title="Toggle auto-assign on hire"
-                >
-                  {updatingId === m.id ? <Loader2 size={11} className="animate-spin" /> : null}
-                  {m.auto_assign_on_hire ? "Auto-assigned to new hires" : "Not auto-assigned"}
-                </button>
+                <div className="mt-auto grid gap-2 border-t pt-4">
+                  <button onClick={() => { setEditingModule(m); setShowForm(true); }} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-xs font-bold text-primary-foreground"><Pencil size={14} /> Manage module</button>
+                  <button onClick={() => toggleFlag(m, "auto_assign_on_hire")} disabled={updatingId !== null} aria-pressed={m.auto_assign_on_hire} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50" style={{ borderColor: BORDER, color: MUTED }}>{updatingId === m.id && <Loader2 size={13} className="animate-spin" />}{m.auto_assign_on_hire ? "New-hire assignment: On" : "New-hire assignment: Off"}</button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {showForm && (
-        <ModuleFormSheet
-          onClose={() => setShowForm(false)}
-          onSaved={(created) => {
-            setModules((prev) => [created, ...prev]);
-            setShowForm(false);
-          }}
-        />
-      )}
+      {!loading && !error && modules.length > 0 && !modules.some((m) => (m.title + " " + (m.description ?? "")).toLowerCase().includes(search.toLowerCase())) && <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No modules match your search.</p>}
+
+
+
     </div>
   );
 }
@@ -1683,24 +1544,23 @@ function InductionItemsTab() {
   );
 }
 
-const TAB_KEYS: { id: Tab; labelKey: string }[] = [
-  { id: "overview", labelKey: "md.onboarding.tab.overview" },
-  { id: "builder", labelKey: "md.onboarding.tab.builder" },
-  { id: "modules", labelKey: "md.onboarding.tab.modules" },
-  { id: "induction", labelKey: "md.onboarding.tab.induction" },
-  { id: "resources", labelKey: "md.onboarding.tab.resources" },
-  { id: "approvals", labelKey: "md.onboarding.tab.approvals" },
-];
+const TAB_KEYS = [
+  { id: "modules", label: "Training modules" },
+  { id: "resources", label: "Resource library" },
+  { id: "reviews", label: "Completion reviews" },
+] as const;
 
 export default function MDOnboardingTrainingPage() {
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [editing, setEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"modules" | "resources" | "reviews">("modules");
 
   return (
     <HubLayout>
       <div className="space-y-6 pb-10">
-        <div className="flex items-center gap-4">
+        {!editing && <>
+        <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={() => navigate("/md/onboarding")}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
@@ -1710,7 +1570,7 @@ export default function MDOnboardingTrainingPage() {
           </button>
           <div>
             <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
-              {translate("md.onboarding.title")}
+              Training & resources
               <SectionInfo text={translate("md.onboarding.subtitle")} />
             </h1>
           </div>
@@ -1719,30 +1579,33 @@ export default function MDOnboardingTrainingPage() {
           </div>
         </div>
 
-        <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
+        <div className="flex gap-1 overflow-x-auto rounded-xl p-1" style={{ background: SOFT }}>
           {TAB_KEYS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="flex-1 rounded-lg py-2 text-[12px] font-black transition"
+              className="min-w-max flex-1 rounded-lg px-3 py-2 text-[12px] font-black transition"
               style={{
                 background: activeTab === tab.id ? "var(--cc-bg)" : "transparent",
                 color: activeTab === tab.id ? PLUM : MUTED,
                 boxShadow: activeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}
             >
-              {translate(tab.labelKey)}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {activeTab === "overview"  && <OverviewTab />}
-        {activeTab === "builder"   && <BuilderTab />}
-        {activeTab === "modules"   && <ModulesTab />}
-        {activeTab === "induction" && <InductionItemsTab />}
+        </>}
+        {activeTab === "modules"   && <ModulesTab onEditingChange={setEditing} />}
         {activeTab === "resources" && <ResourcesTab />}
-        {activeTab === "approvals" && <ApprovalsTab />}
+        {activeTab === "reviews" && <TrainingReviews />}
       </div>
     </HubLayout>
   );
+}
+
+export function MDOnboardingSetupPage() {
+  const [, navigate] = useLocation();
+  return <HubLayout><div className="space-y-5 pb-10"><button onClick={() => navigate("/md/onboarding")} className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold"><ArrowLeft size={15} />Back to onboarding</button><div><h1 className="text-2xl font-bold">Onboarding setup</h1><p className="mt-2 text-sm text-muted-foreground">Manage new-starter programmes, induction and stage approvals.</p></div>{[{ title: "Onboarding overview", content: <OverviewTab /> }, { title: "Programme builder", content: <BuilderTab /> }, { title: "Induction checklist", content: <InductionItemsTab /> }, { title: "Stage completion approvals", content: <ApprovalsTab /> }].map(({ title, content }) => <details key={title} className="rounded-2xl border bg-card p-5"><summary className="cursor-pointer text-sm font-bold">{title}</summary><div className="mt-5">{content}</div></details>)}</div></HubLayout>;
 }

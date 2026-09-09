@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Loader2, ExternalLink } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
+import { HubLayout } from "@/components/layout/HubLayout";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -111,9 +112,11 @@ export default function PlatformBilling() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="animate-spin" style={{ color: PLUM }} size={28} />
-      </div>
+      <HubLayout>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="animate-spin" style={{ color: PLUM }} size={28} />
+        </div>
+      </HubLayout>
     );
   }
 
@@ -121,6 +124,7 @@ export default function PlatformBilling() {
   const hasSubscription = Boolean(status?.stripe_customer_id);
 
   return (
+    <HubLayout>
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
       <div>
         <h1 className="text-2xl font-black" style={{ color: TEXT }}>Subscription &amp; billing</h1>
@@ -214,5 +218,6 @@ export default function PlatformBilling() {
         </div>
       </div>
     </div>
+    </HubLayout>
   );
 }

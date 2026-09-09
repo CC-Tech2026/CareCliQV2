@@ -373,7 +373,7 @@ async def upload_resource(
 
 
 @router.get("/resources/{resource_id}/download")
-async def download_resource(resource_id: str, current_user: dict = Depends(get_current_user)):
+async def download_resource(resource_id: str, redirect: bool = True, current_user: dict = Depends(get_current_user)):
     """Return a short-lived signed URL for the private onboarding-resources bucket."""
     _require_md(current_user)
     org_id = _require_org(current_user)
@@ -401,6 +401,8 @@ async def download_resource(resource_id: str, current_user: dict = Depends(get_c
         raise HTTPException(status_code=502, detail=f"Could not generate signed URL: {e}")
     if not signed_url:
         raise HTTPException(status_code=502, detail="Signed URL generation returned empty result")
+    if not redirect:
+        return {"url": signed_url}
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=signed_url, status_code=302)
 

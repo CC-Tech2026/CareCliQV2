@@ -2133,13 +2133,20 @@ export function getComplianceCentreIncidents() {
 
 export type TrainingResource = {
   id: string;
+  sort_order?: number;
   resource_type: "video" | "pdf" | "external_link";
   title: string;
+  access_url?: string | null;
   storage_path?: string | null;
   external_url?: string | null;
 };
 
 export type TrainingModule = {
+  cover_color?: string | null;
+  cover_path?: string | null;
+  cover_url?: string | null;
+  is_locked?: boolean;
+  lock_reason?: string | null;
   id: string;
   organization_id: string;
   title: string;
@@ -2181,7 +2188,27 @@ export function getTrainingModules() {
   return jsonFetch<TrainingModule[]>("/api/coordinator/training-modules");
 }
 
+export function setTrainingModuleLock(moduleId: string, isLocked: boolean, reason?: string) {
+  return jsonFetch<TrainingModule>(`/api/coordinator/training-modules/${encodeURIComponent(moduleId)}/lock`, {
+    method: "PATCH", body: JSON.stringify({ is_locked: isLocked, lock_reason: reason }),
+  });
+}
+
+export function saveTrainingResource(moduleId: string, payload: Omit<TrainingResource, "id" | "access_url">, resourceId?: string) {
+  return jsonFetch<TrainingResource>(`/api/coordinator/training-modules/${encodeURIComponent(moduleId)}/resources${resourceId ? `/${encodeURIComponent(resourceId)}` : ""}`, {
+    method: resourceId ? "PATCH" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTrainingResource(moduleId: string, resourceId: string) {
+  return jsonFetch<{ ok: boolean }>(`/api/coordinator/training-modules/${encodeURIComponent(moduleId)}/resources/${encodeURIComponent(resourceId)}`, { method: "DELETE" });
+}
+
 export function createTrainingModule(payload: {
+  cover_color?: string | null;
+  cover_path?: string | null;
   title: string;
   description?: string;
   linked_credential_type?: string;
@@ -2198,6 +2225,8 @@ export function createTrainingModule(payload: {
 export function updateTrainingModule(
   moduleId: string,
   payload: Partial<{
+    cover_color: string | null;
+    cover_path: string | null;
     title: string;
     description: string | null;
     linked_credential_type: string | null;
@@ -2295,4 +2324,14 @@ export function deleteWorkerOnboardingDocument(documentId: string) {
   return jsonFetch(`/api/coordinator/onboarding-documents/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
   });
+}
+
+export function uploadTrainingCover(file: File) {
+  const body = new FormData(); body.append("file", file);
+  return jsonFetch<{ cover_path: string }>("/api/coordinator/training-module-covers", { method: "POST", body });
+}
+
+export function uploadTrainingMaterial(moduleId: string, file: File, title: string, sortOrder: number, resourceId?: string) {
+  const body = new FormData(); body.append("file", file); body.append("title", title); body.append("sort_order", String(sortOrder)); if (resourceId) body.append("resource_id", resourceId);
+  return jsonFetch<TrainingResource>(`/api/coordinator/training-modules/${encodeURIComponent(moduleId)}/resources/upload`, { method: "POST", body });
 }

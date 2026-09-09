@@ -189,7 +189,22 @@ async def worker_certifications(current_user: dict = Depends(get_current_user)):
 async def worker_training_modules(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
     modules = worker_training_service.list_training_modules(get_user_organization_id(current_user))
+    for module in modules:
+        if module.get("is_locked"):
+            module["resources"] = []
     return {"modules": modules}
+
+
+@router.get("/training/resources")
+async def worker_shared_resources(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    return {"resources": worker_training_service.list_shared_resources(get_user_organization_id(current_user))}
+
+
+@router.get("/training/resources/{resource_id}/access")
+async def worker_shared_resource_access(resource_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    return worker_training_service.shared_resource_url(get_user_organization_id(current_user), resource_id)
 
 
 class MarkCompleteBody(BaseModel):
@@ -197,6 +212,15 @@ class MarkCompleteBody(BaseModel):
     completed_at: date
     note: Optional[str] = None
     acknowledged: bool = False
+
+
+@router.get("/training/modules/{module_id}/resources/{resource_id}/access")
+async def worker_material_access(module_id: str, resource_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_training_service.require_available_module(org_id, module_id)
+    from ..services.training_material_service import material_access_url
+    return material_access_url(org_id, module_id, resource_id)
 
 
 @router.post("/training/complete", status_code=201)
