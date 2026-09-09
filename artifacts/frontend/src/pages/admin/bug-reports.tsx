@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import { Bug, Building2, ExternalLink, Video } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bug, Building2, ExternalLink, Search, Video, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   listAdminBugReports,
@@ -9,11 +11,18 @@ import {
   type BugReportSeverity,
   type BugReportStatus,
 } from "@/services/adminService";
+import {
+  DEFAULT_BUG_REPORT_FILTERS,
+  filterBugReports,
+  hasActiveBugReportFilters,
+  type BugReportFilters,
+} from "@/lib/bug-report-filters";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SURFACE = "var(--cc-surface)";
+const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
@@ -61,6 +70,7 @@ export default function AdminBugReportsPage() {
   const [reports, setReports] = useState<AdminBugReport[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<BugReportFilters>(DEFAULT_BUG_REPORT_FILTERS);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,6 +104,25 @@ export default function AdminBugReportsPage() {
 
   const openCount = reports?.filter((r) => r.status === "open").length ?? 0;
   const inProgressCount = reports?.filter((r) => r.status === "in_progress").length ?? 0;
+
+  // Distinct orgs among the loaded reports, alphabetised — there's no
+  // separate "all orgs" endpoint call here, so the org filter's options
+  // are only ever the orgs that actually have a report, same as how the
+  // rest of this page derives everything from the one list call.
+  const orgOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const r of reports ?? []) byId.set(r.organization_id, r.organization_name);
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [reports]);
+
+  const visibleReports = useMemo(
+    () => (reports ? filterBugReports(reports, filters) : null),
+    [reports, filters],
+  );
+  const filtersActive = hasActiveBugReportFilters(filters);
+  function clearFilters() {
+    setFilters(DEFAULT_BUG_REPORT_FILTERS);
+  }
 
   return (
     <AdminShell>
@@ -142,8 +171,91 @@ export default function AdminBugReportsPage() {
               </div>
             )}
 
+            <div className="flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER, background: SURFACE }}>
+              <div className="relative min-w-0 flex-1">
+                <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+                <Input
+                  value={filters.search}
+                  onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                  placeholder="Search description, organisation, or reporter"
+                  className="h-11 rounded-xl border-0 pl-11 text-[13px] shadow-none focus-visible:ring-1"
+                  style={{ background: SOFT }}
+                />
+                {filters.search && (
+                  <button
+                    onClick={() => setFilters((f) => ({ ...f, search: "" }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"
+                  >
+                    <X size={14} style={{ color: MUTED }} />
+                  </button>
+                )}
+              </div>
+
+              <Select
+                value={filters.status}
+                onValueChange={(v) => setFilters((f) => ({ ...f, status: v as BugReportFilters["status"] }))}
+              >
+                <SelectTrigger className="h-11 w-full rounded-xl border-0 text-[12px] shadow-none sm:w-[150px]" style={{ background: SOFT }}>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Status</SelectItem>
+                  {(Object.keys(STATUS_STYLE) as BugReportStatus[]).map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_STYLE[s].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.severity}
+                onValueChange={(v) => setFilters((f) => ({ ...f, severity: v as BugReportFilters["severity"] }))}
+              >
+                <SelectTrigger className="h-11 w-full rounded-xl border-0 text-[12px] shadow-none sm:w-[150px]" style={{ background: SOFT }}>
+                  <SelectValue placeholder="Severity Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Severity Level</SelectItem>
+                  {(Object.keys(SEVERITY_STYLE) as BugReportSeverity[]).map((s) => (
+                    <SelectItem key={s} value={s}>{SEVERITY_STYLE[s].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {orgOptions.length > 1 && (
+                <Select
+                  value={filters.organizationId}
+                  onValueChange={(v) => setFilters((f) => ({ ...f, organizationId: v }))}
+                >
+                  <SelectTrigger className="h-11 w-full rounded-xl border-0 text-[12px] shadow-none sm:w-[190px]" style={{ background: SOFT }}>
+                    <SelectValue placeholder="All organisations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All organisations</SelectItem>
+                    {orgOptions.map(([id, name]) => (
+                      <SelectItem key={id} value={id}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filtersActive && (
+                <button
+                  onClick={clearFilters}
+                  className="flex h-11 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5"
+                  style={{ color: MUTED }}
+                >
+                  <X size={13} /> Clear
+                </button>
+              )}
+            </div>
+
+            {visibleReports && visibleReports.length === 0 ? (
+              <div className="rounded-2xl border p-10 text-center" style={{ borderColor: BORDER, background: SURFACE }}>
+                <p className="text-[13px] font-black" style={{ color: TEXT }}>No bug reports match these filters.</p>
+              </div>
+            ) : (
             <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-              {reports.map((report, i) => {
+              {(visibleReports ?? []).map((report, i) => {
                 const st = STATUS_STYLE[report.status];
                 const sev = SEVERITY_STYLE[report.severity];
                 const next = NEXT_STATUS[report.status];
@@ -232,6 +344,7 @@ export default function AdminBugReportsPage() {
                 );
               })}
             </div>
+            )}
           </>
         )}
       </div>
