@@ -1126,7 +1126,7 @@ VALUES (
     ARRAY['application/pdf','video/mp4','video/quicktime','video/webm',
           'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain','image/png','image/jpeg']
+          'text/plain','image/png','image/jpeg','image/webp']
 )
 ON CONFLICT (id) DO NOTHING;
 

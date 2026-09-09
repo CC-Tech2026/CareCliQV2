@@ -394,6 +394,9 @@ def create_training_module(
     auto_assign_on_hire: bool = False,
     cover_color: str | None = None,
     cover_path: str | None = None,
+    material_layout: str = "list",
+    learning_steps: list[str] | None = None,
+    estimated_minutes: int | None = None,
 ) -> dict[str, Any]:
     if not title.strip():
         raise HTTPException(status_code=422, detail="Title is required.")
@@ -409,7 +412,7 @@ def create_training_module(
         "is_active": True,
     }
     validate_cover(organization_id, {"cover_color": cover_color, "cover_path": cover_path})
-    record.update({"cover_color": cover_color, "cover_path": cover_path})
+    record.update({"cover_color": cover_color, "cover_path": cover_path, "material_layout": material_layout, "learning_steps": learning_steps or [], "estimated_minutes": estimated_minutes})
     try:
         get_supabase_admin().table("training_modules").insert(record).execute()
     except Exception as exc:
