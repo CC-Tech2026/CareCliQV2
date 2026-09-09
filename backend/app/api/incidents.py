@@ -9,7 +9,7 @@ from ..schemas.incident import (
     ReportableOverrideBody, SubjectOfAllegationCreate, AssignInvestigatorBody,
     InterviewCreate, worker_status_label,
 )
-from ..services import audit_service, incident_service, participant_service, session_service, shift_service
+from ..services import audit_service, embedding_pipeline, incident_service, participant_service, session_service, shift_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
 from ..services.incident_pattern_service import get_incident_pattern_analysis
 from ..services.notification_service import notify_incident_reported, notify_incident_status_changed
@@ -257,14 +257,15 @@ async def create_incident(
             )
         ).strip()
         if incident_id and incident_text:
-            background_tasks.add_task(
-                run_incident_embedding_pipeline,
-                incident_id=incident_id,
-                session_id=str(body.session_id) if body.session_id else None,
-                organization_id=org_id,
-                text=incident_text,
-                participant_id=str(body.participant_id) if body.participant_id else None,
-                worker_id=user.get("sub"),
+            embedding_pipeline.schedule(
+                run_incident_embedding_pipeline(
+                    incident_id=incident_id,
+                    session_id=str(body.session_id) if body.session_id else None,
+                    organization_id=org_id,
+                    text=incident_text,
+                    participant_id=str(body.participant_id) if body.participant_id else None,
+                    worker_id=user.get("sub"),
+                )
             )
 
         severity = str(result.get("severity") or body.severity or "medium")
@@ -321,6 +322,36 @@ async def update_incident(
         raise HTTPException(status_code=400, detail=str(e))
     if not updated:
         raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Re-embed on edit (Track B): title/description/worker_actions feed the
+    # searchable text (see create_incident above) — an edit to any of them
+    # must regenerate the embedding so semantic search never serves stale
+    # content. Not gated on incident status/compliance for the same reason
+    # session-note generation isn't (see save_session_with_ai).
+    if {"title", "description", "worker_actions"} & set(updates.keys()):
+        incident_text = " ".join(
+            filter(
+                None,
+                [
+                    updated.get("title", ""),
+                    updated.get("description", ""),
+                    updated.get("worker_actions", ""),
+                ],
+            )
+        ).strip()
+        org_id = user.get("organization_id") or updated.get("organization_id")
+        if incident_text and org_id:
+            embedding_pipeline.schedule(
+                run_incident_embedding_pipeline(
+                    incident_id=incident_id,
+                    session_id=str(updated.get("session_id")) if updated.get("session_id") else None,
+                    organization_id=org_id,
+                    text=incident_text,
+                    participant_id=str(updated.get("participant_id")) if updated.get("participant_id") else None,
+                    worker_id=existing.get("user_id"),
+                )
+            )
+
     if updates.get("status") and existing.get("status") != updated.get("status"):
         reporter_id = existing.get("user_id")
         if reporter_id:

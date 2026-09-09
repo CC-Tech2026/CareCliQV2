@@ -105,12 +105,16 @@ async def get_field_suggestions(
             participant_id, current_user.organization_id, supabase_client
         )
         
-        # Retrieve relevant history using RAG
+        # Retrieve relevant history using RAG — scoped to this participant
+        # only. Access to participant_id was already verified above, but
+        # without this filter the retrieval itself was organisation-wide,
+        # so the LLM prompt could be seeded with another participant's notes.
         rag_query = build_rag_query(field_type, current_value)
         retrieved_context = await retrieve_similar(
             query=rag_query,
             organisation_id=current_user.organization_id,
-            k=5
+            k=5,
+            participant_ids=[participant_id],
         )
         
         # Build prompt for AI

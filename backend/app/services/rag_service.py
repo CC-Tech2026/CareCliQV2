@@ -62,6 +62,7 @@ def _row_to_retrieval_result(row: dict[str, Any]) -> RetrievalResult:
         participant_id=str(participant) if participant else None,
         session_date=_parse_session_date(row.get("session_date")),
         compliance_score=_parse_compliance_score(row.get("compliance_score")),
+        compliance_status=row.get("compliance_status"),
         similarity_score=round(float(row.get("similarity_score", row.get("similarity", 0))), 4),
     )
 
@@ -69,13 +70,13 @@ def _row_to_retrieval_result(row: dict[str, Any]) -> RetrievalResult:
 def _fetch_session_metadata(
     supabase, session_ids: list[str]
 ) -> dict[str, dict[str, Any]]:
-    """Batch-fetch session_date, compliance_score, patient_id for enrichment."""
+    """Batch-fetch session_date, compliance_score/status, patient_id for enrichment."""
     if not session_ids:
         return {}
     try:
         result = (
             supabase.table("sessions")
-            .select("id, session_date, compliance_score, patient_id")
+            .select("id, session_date, compliance_score, compliance_status, patient_id")
             .in_("id", session_ids)
             .execute()
         )
@@ -109,6 +110,7 @@ def _enrich_chunk_rows(
                 compliance_score=_parse_compliance_score(
                     chunk.get("compliance_score") or meta.get("compliance_score")
                 ),
+                compliance_status=chunk.get("compliance_status") or meta.get("compliance_status"),
                 similarity_score=round(float(chunk.get("similarity", 0)), 4),
             )
         )
@@ -119,6 +121,7 @@ def _python_similarity_search(
     rows: list[dict],
     query_vector: list[float],
     limit: int,
+    min_similarity: float = 0.0,
 ) -> list[dict[str, Any]]:
     """Client-side cosine search used when the RPC is unavailable."""
     scored: list[tuple[float, dict]] = []
@@ -131,6 +134,8 @@ def _python_similarity_search(
             if len(candidate) != _EMBEDDING_DIM:
                 continue
             sim = _cosine_similarity(query_vector, candidate)
+            if sim < min_similarity:
+                continue
             scored.append(
                 (
                     sim,
@@ -155,17 +160,26 @@ def _rpc_similarity_search(
     query_vector: list[float],
     organisation_id: str,
     top_k: int,
+    worker_ids: list[str] | None = None,
+    participant_ids: list[str] | None = None,
 ) -> list[RetrievalResult] | None:
-    """Call match_session_embeddings RPC.  Returns None on failure."""
+    """Call match_session_embeddings RPC.  Returns None on failure.
+
+    worker_ids/participant_ids are the caller's effective visibility scope
+    (per core/access.py) and are applied inside the RPC's WHERE clause —
+    not as a filter on the rows this function returns.
+    """
     try:
-        result = supabase.rpc(
-            "match_session_embeddings",
-            {
-                "query_embedding": query_vector,
-                "organisation_id": organisation_id,
-                "top_k": top_k,
-            },
-        ).execute()
+        params: dict[str, Any] = {
+            "query_embedding": query_vector,
+            "organisation_id": organisation_id,
+            "top_k": top_k,
+        }
+        if worker_ids is not None:
+            params["p_worker_ids"] = worker_ids
+        if participant_ids is not None:
+            params["p_participant_ids"] = participant_ids
+        result = supabase.rpc("match_session_embeddings", params).execute()
         rows = result.data or []
         return [_row_to_retrieval_result(r) for r in rows]
     except Exception as exc:
@@ -179,10 +193,18 @@ async def retrieve_similar(
     query: str,
     organisation_id: str,
     k: int = 5,
+    worker_ids: list[str] | None = None,
+    participant_ids: list[str] | None = None,
 ) -> list[RetrievalResult]:
     """Return up to *k* session chunks semantically similar to *query*.
 
     Results are strictly scoped to *organisation_id* — no cross-org leakage.
+    *worker_ids*/*participant_ids*, when given, are the caller's effective
+    visibility scope (per core/access.py — e.g. a support worker's own id, or
+    a coordinator's team) and are applied as part of the query itself (RPC
+    WHERE clause / fallback .in_() filter), never as a post-fetch filter on
+    already-returned rows. Leave both None for org-wide access (coordinator/
+    managing_director tiers).
 
     Primary path: pgvector HNSW via match_session_embeddings RPC (org filter
     applied before ranking).  Fallback: client-side cosine on org-scoped rows.
@@ -200,17 +222,24 @@ async def retrieve_similar(
 
     supabase = get_supabase_admin()
 
-    rpc_result = _rpc_similarity_search(supabase, query_vector, organisation_id, k)
+    rpc_result = _rpc_similarity_search(
+        supabase, query_vector, organisation_id, k,
+        worker_ids=worker_ids, participant_ids=participant_ids,
+    )
     if rpc_result is not None:
         return rpc_result
 
     try:
-        result = (
+        query_builder = (
             supabase.table("session_embeddings")
             .select("session_id, content, embedding, participant_id")
             .eq("organization_id", organisation_id)
-            .execute()
         )
+        if worker_ids is not None:
+            query_builder = query_builder.in_("worker_id", worker_ids)
+        if participant_ids is not None:
+            query_builder = query_builder.in_("participant_id", participant_ids)
+        result = query_builder.execute()
         rows = result.data or []
     except Exception as exc:
         logger.warning("RAG fallback DB query failed: %s", exc)
@@ -225,9 +254,16 @@ async def retrieve_similar_sessions(
     org_id: str,
     limit: int = 5,
     min_similarity: float = 0.70,
+    worker_ids: list[str] | None = None,
+    participant_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Backward-compatible wrapper returning dicts (filters by min_similarity)."""
-    results = await retrieve_similar(query_text, org_id, k=limit)
+    """Backward-compatible wrapper returning dicts (filters by min_similarity).
+
+    See retrieve_similar() for worker_ids/participant_ids scoping semantics.
+    """
+    results = await retrieve_similar(
+        query_text, org_id, k=limit, worker_ids=worker_ids, participant_ids=participant_ids
+    )
     filtered = [r for r in results if r.similarity_score >= min_similarity]
     return [
         {
@@ -237,6 +273,7 @@ async def retrieve_similar_sessions(
             "participant_id": r.participant_id,
             "session_date": r.session_date.isoformat() if r.session_date else None,
             "compliance_score": r.compliance_score,
+            "compliance_status": r.compliance_status,
             "metadata": {},
         }
         for r in filtered
@@ -260,8 +297,14 @@ def _incident_rpc_similarity_search(
     limit: int,
     min_similarity: float,
     exclude_incident_id: str | None = None,
+    worker_ids: list[str] | None = None,
+    participant_ids: list[str] | None = None,
 ) -> list[dict[str, Any]] | None:
-    """Call match_incident_embeddings RPC. Returns None on failure."""
+    """Call match_incident_embeddings RPC. Returns None on failure.
+
+    worker_ids/participant_ids are applied inside the RPC's WHERE clause —
+    see retrieve_similar()'s docstring for the scoping contract.
+    """
     try:
         params: dict[str, Any] = {
             "query_embedding": query_vector,
@@ -271,6 +314,10 @@ def _incident_rpc_similarity_search(
         }
         if exclude_incident_id:
             params["p_exclude_incident_id"] = exclude_incident_id
+        if worker_ids is not None:
+            params["p_worker_ids"] = worker_ids
+        if participant_ids is not None:
+            params["p_participant_ids"] = participant_ids
         result = supabase.rpc("match_incident_embeddings", params).execute()
         rows = result.data or []
         return [
@@ -347,10 +394,14 @@ async def retrieve_similar_incidents(
     exclude_incident_id: str | None = None,
     limit: int = 5,
     min_similarity: float = 0.65,
+    worker_ids: list[str] | None = None,
+    participant_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return up to *limit* past incident chunks similar to *query_text*.
 
-    Results are strictly scoped to *org_id* and filtered to incident embeddings only.
+    Results are strictly scoped to *org_id* and filtered to incident embeddings
+    only. worker_ids/participant_ids scoping follows the same query-level
+    contract as retrieve_similar() — see its docstring.
     """
     if not query_text or not query_text.strip():
         return []
@@ -371,18 +422,24 @@ async def retrieve_similar_incidents(
         fetch_limit,
         min_similarity,
         exclude_incident_id=exclude_incident_id,
+        worker_ids=worker_ids,
+        participant_ids=participant_ids,
     )
     if rpc_result is not None:
         return _dedupe_incident_matches(rpc_result, limit)
 
     try:
-        result = (
+        query_builder = (
             supabase.table("session_embeddings")
-            .select("session_id, incident_id, chunk_index, content, embedding, metadata, participant_id")
+            .select("session_id, incident_id, chunk_index, content, embedding, metadata, participant_id, worker_id")
             .eq("organization_id", org_id)
             .eq("metadata->>source", "incident")
-            .execute()
         )
+        if worker_ids is not None:
+            query_builder = query_builder.in_("worker_id", worker_ids)
+        if participant_ids is not None:
+            query_builder = query_builder.in_("participant_id", participant_ids)
+        result = query_builder.execute()
         rows = result.data or []
     except Exception as exc:
         logger.warning("Incident RAG fallback DB query failed: %s", exc)

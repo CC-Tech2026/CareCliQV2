@@ -17,4 +17,5 @@ class RetrievalResult(BaseModel):
     participant_id: Optional[str] = None
     session_date: Optional[datetime] = None
     compliance_score: Optional[float] = None
+    compliance_status: Optional[str] = None
     similarity_score: float = Field(ge=0.0, le=1.0)

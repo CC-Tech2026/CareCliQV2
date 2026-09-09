@@ -26,6 +26,7 @@ from ...core.access import (
     get_coordinator_team_ids,
     get_user_id,
     get_user_organization_id,
+    has_org_wide_access,
     is_coordinator_role,
     is_managing_director,
 )
@@ -709,26 +710,50 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
 
     @tool
     async def search_session_notes(query: str) -> dict:
-        """Semantic search over past session notes for this organisation.
-        Use this when asked to find, recall, or summarise past sessions or
-        notes about a topic (not for current numeric stats — use the other
-        tools for those)."""
+        """Semantic search over past session notes. Organisation-wide for a
+        coordinator or managing director; a support worker only searches
+        their own authored notes. Use this when asked to find, recall, or
+        summarise past sessions or notes about a topic (not for current
+        numeric stats — use the other tools for those)."""
         org_id = get_user_organization_id(current_user)
         if not org_id:
             return {"error": "No organization membership found for this user."}
-        results = await rag_service.retrieve_similar_sessions(query_text=query, org_id=org_id, limit=5)
-        return {"scope": "organisation-wide", "matches": results}
+        # Session notes are worker-owned (core/access.py: a support worker
+        # sees their assigned participant's profile but not other workers'
+        # session notes for that participant) — org-wide only for the
+        # coordinator/managing_director tier, exactly like every direct
+        # session-record access check elsewhere in the app.
+        if has_org_wide_access(current_user):
+            worker_ids, scope = None, "organisation-wide"
+        else:
+            worker_ids, scope = [get_user_id(current_user)], "your own notes"
+        results = await rag_service.retrieve_similar_sessions(
+            query_text=query, org_id=org_id, limit=5, worker_ids=worker_ids,
+        )
+        return {"scope": scope, "matches": results}
 
     @tool
     async def search_incident_history(query: str) -> dict:
-        """Semantic search over past incident reports for this organisation.
-        Use this to find similar past incidents by description, not for
-        current incident counts/stats — use get_incident_summary for those."""
+        """Semantic search over past incident reports. Organisation-wide for
+        a coordinator or managing director; a support worker only searches
+        incidents they personally reported. Use this to find similar past
+        incidents by description, not for current incident counts/stats —
+        use get_incident_summary for those."""
         org_id = get_user_organization_id(current_user)
         if not org_id:
             return {"error": "No organization membership found for this user."}
-        results = await rag_service.retrieve_similar_incidents(query_text=query, org_id=org_id, limit=5)
-        return {"scope": "organisation-wide", "matches": results}
+        # Matches list_incidents()'s existing rule (incidents.py): org-wide
+        # for coordinator/managing_director, reporter-only for a support
+        # worker — see this module's docstring on why incidents are
+        # org-wide rather than team-scoped for coordinators.
+        if has_org_wide_access(current_user):
+            worker_ids, scope = None, "organisation-wide"
+        else:
+            worker_ids, scope = [get_user_id(current_user)], "your own reports"
+        results = await rag_service.retrieve_similar_incidents(
+            query_text=query, org_id=org_id, limit=5, worker_ids=worker_ids,
+        )
+        return {"scope": scope, "matches": results}
 
     all_tools = [
         get_compliance_snapshot,

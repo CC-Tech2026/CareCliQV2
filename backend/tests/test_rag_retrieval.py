@@ -253,6 +253,159 @@ async def test_retrieve_similar_respects_k_parameter():
     assert len(results) == 2
 
 
+# ── Track B: compliance_status + worker/participant query-level scoping ──────
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_returns_compliance_status():
+    rpc_rows = [
+        {
+            "content": "chunk",
+            "session_id": SESSION_A,
+            "participant_id": PARTICIPANT_A,
+            "session_date": "2026-06-01T10:00:00+00:00",
+            "compliance_score": 40.0,
+            "compliance_status": "non_compliant",
+            "similarity_score": 0.8,
+        }
+    ]
+    mock_supabase = _mock_supabase_for_rpc(rpc_rows)
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        results = await rag_service.retrieve_similar("query", ORG_A, k=1)
+
+    assert results[0].compliance_status == "non_compliant"
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_not_gated_on_compliance_status():
+    """A flagged/failed note's chunk must still come back from retrieval —
+    generation not being gated on compliance status only matters if
+    retrieval also never filters it back out."""
+    rpc_rows = [
+        {
+            "content": "blocked note chunk",
+            "session_id": SESSION_A,
+            "participant_id": PARTICIPANT_A,
+            "session_date": "2026-06-01T10:00:00+00:00",
+            "compliance_score": 12.0,
+            "compliance_status": "non_compliant",
+            "similarity_score": 0.99,
+        }
+    ]
+    mock_supabase = _mock_supabase_for_rpc(rpc_rows)
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        results = await rag_service.retrieve_similar("query", ORG_A, k=1)
+
+    assert len(results) == 1
+    assert results[0].compliance_status == "non_compliant"
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_passes_worker_and_participant_scope_to_rpc():
+    """worker_ids/participant_ids must land inside the RPC call params — the
+    query-level gate, not a filter applied after rows come back."""
+    mock_supabase = _mock_supabase_for_rpc([])
+    worker_ids = [str(uuid.uuid4())]
+    participant_ids = [PARTICIPANT_A]
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        await rag_service.retrieve_similar(
+            "query", ORG_A, k=5, worker_ids=worker_ids, participant_ids=participant_ids
+        )
+
+    call_params = mock_supabase.rpc.call_args[0][1]
+    assert call_params["p_worker_ids"] == worker_ids
+    assert call_params["p_participant_ids"] == participant_ids
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_omits_scope_params_when_org_wide():
+    """A coordinator/managing_director caller passes no worker_ids/
+    participant_ids — the RPC call must not gain the keys at all (None means
+    "no restriction", matching the RPC's own DEFAULT NULL params), so this
+    stays behaviourally identical to the pre-Track-B call shape."""
+    mock_supabase = _mock_supabase_for_rpc([])
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        await rag_service.retrieve_similar("query", ORG_A, k=5)
+
+    call_params = mock_supabase.rpc.call_args[0][1]
+    assert "p_worker_ids" not in call_params
+    assert "p_participant_ids" not in call_params
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_fallback_applies_worker_scope_in_query():
+    """When the RPC is unavailable, the Python fallback must still apply
+    worker_ids as part of the DB query itself (.in_()), not as a filter on
+    already-fetched rows."""
+    mock_supabase = MagicMock()
+    mock_supabase.rpc.return_value.execute.side_effect = RuntimeError("rpc down")
+    query_chain = mock_supabase.table.return_value.select.return_value.eq.return_value
+    query_chain.in_.return_value = query_chain
+    query_chain.execute.return_value = MagicMock(data=[])
+
+    worker_ids = [str(uuid.uuid4())]
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        await rag_service.retrieve_similar("query", ORG_A, k=5, worker_ids=worker_ids)
+
+    query_chain.in_.assert_any_call("worker_id", worker_ids)
+
+
+@pytest.mark.asyncio
+async def test_retrieve_similar_incidents_passes_worker_scope_to_rpc():
+    mock_supabase = MagicMock()
+    mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=[])
+    worker_ids = [str(uuid.uuid4())]
+
+    with patch(
+        "backend.app.services.rag_service.generate_query_embedding",
+        return_value=[0.1] * rag_service._EMBEDDING_DIM,
+    ), patch(
+        "backend.app.services.rag_service.get_supabase_admin",
+        return_value=mock_supabase,
+    ):
+        await rag_service.retrieve_similar_incidents(
+            query_text="query", org_id=ORG_A, worker_ids=worker_ids,
+        )
+
+    call_params = mock_supabase.rpc.call_args[0][1]
+    assert call_params["p_worker_ids"] == worker_ids
+
+
 # ── Performance (optional, real DB) ───────────────────────────────────────────
 
 

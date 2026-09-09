@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from ..services.compliance_engine import run_compliance_check
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
+from ..services import embedding_pipeline
 from ..services.embedding_pipeline import run_session_embedding_pipeline
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
@@ -341,7 +342,6 @@ async def get_session_note_versions(session_id: str, current_user: dict = Depend
 @router.post("/{session_id}/save-with-ai")
 async def save_session_with_ai(
     session_id: str,
-    background_tasks: BackgroundTasks,
     body: Optional[SaveWithAIBody] = None,
     current_user: dict = Depends(get_current_user),
 ):
@@ -565,6 +565,28 @@ async def save_session_with_ai(
 
         updated = await session_service.update_session(session_id, updates, current_user)
 
+        # Enqueue embedding generation (CARECLIQV2-30 / Track B) immediately —
+        # before the block/warn compliance gates below can raise. Generation
+        # is never gated on compliance outcome: a flagged or failed note must
+        # remain searchable, and the compliance outcome travels alongside the
+        # embedding rather than deciding whether embedding happens. This must
+        # use embedding_pipeline.schedule() (asyncio.create_task), not
+        # background_tasks.add_task() — FastAPI only attaches queued
+        # BackgroundTasks to the response on the non-exception path, so a
+        # task added here would be silently dropped once a block/warn failure
+        # raises HTTPException further down.
+        if compliance_input_text:
+            _org_id = session.get("organization_id") or get_user_organization_id(current_user)
+            embedding_pipeline.schedule(
+                run_session_embedding_pipeline(
+                    session_id=session_id,
+                    organization_id=_org_id,
+                    text=compliance_input_text,
+                    participant_id=participant_id,
+                    worker_id=session.get("worker_id"),
+                )
+            )
+
         # 2c. Persist RP flags + per-rule results (non-critical)
         try:
             from ..services.supabase_client import get_supabase_admin
@@ -667,20 +689,6 @@ async def save_session_with_ai(
             await funding_service.create_compliance_audit_log(session_id, rules_result)
         except Exception as side_e:
             logger.warning(f"Audit log failed (non-critical): {side_e}")
-
-        # Stage 7: Enqueue embedding pipeline as background task (CARECLIQV2-30).
-        # Only embed when the session reaches "completed" status so partial/blocked
-        # notes never pollute the vector store.
-        if updates.get("status") == "completed" and compliance_input_text:
-            _org_id = session.get("organization_id") or get_user_organization_id(current_user)
-            background_tasks.add_task(
-                run_session_embedding_pipeline,
-                session_id=session_id,
-                organization_id=_org_id,
-                text=compliance_input_text,
-                participant_id=participant_id,
-                worker_id=session.get("worker_id"),
-            )
 
         # 4. Budget deduction is intentionally disabled here. This used to
         # deduct plan_budgets.used_amount immediately on session save, with
