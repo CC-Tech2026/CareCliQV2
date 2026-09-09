@@ -77,7 +77,7 @@ export default function MyShifts() {
     try {
       const result = await syncAllQueuedShiftActions();
       if (result.synced > 0) {
-        void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
+        void queryClient.invalidateQueries({ queryKey: [user?.organizationId, "worker", "shifts"] });
       }
     } finally {
       setSyncing(false);

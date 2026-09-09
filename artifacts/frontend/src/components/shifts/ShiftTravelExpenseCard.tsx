@@ -11,6 +11,7 @@ import {
   type MileageEstimate,
 } from "@/services/travelExpenseService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 
 const REASON_KEYS: Record<string, string> = {
@@ -44,6 +45,8 @@ export function ShiftTravelExpenseCard({
   mileageDraftRef,
 }: Props) {
   const { translate, translateParams } = useAccessibility();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const queryClient = useQueryClient();
   const [claimedKm, setClaimedKm] = useState("");
   const [isOverridden, setIsOverridden] = useState(false);
@@ -108,12 +111,12 @@ export function ShiftTravelExpenseCard({
     void saveMileageExpense(shiftId, estimate.distance_km, estimate.distance_km)
       .then(() => {
         queryClient.invalidateQueries({ queryKey: ["worker", "mileage-estimate", shiftId] });
-        queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
+        queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-drafts"] });
       })
       .catch(() => {
         autoSavedRef.current = false;
       });
-  }, [isClockedIn, isOverridden, savedDraft, estimate?.available, estimate?.distance_km, shiftId, queryClient]);
+  }, [isClockedIn, isOverridden, savedDraft, estimate?.available, estimate?.distance_km, shiftId, queryClient, orgId]);
 
   useEffect(() => {
     if (!isClockedIn || !isOverridden) return;
@@ -129,7 +132,7 @@ export function ShiftTravelExpenseCard({
       )
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ["worker", "mileage-estimate", shiftId] });
-          queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
+          queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-drafts"] });
         })
         .catch(() => undefined);
     }, 600);
@@ -137,7 +140,7 @@ export function ShiftTravelExpenseCard({
     return () => {
       if (postClockInSaveRef.current) clearTimeout(postClockInSaveRef.current);
     };
-  }, [claimedKm, isClockedIn, isOverridden, calculatedKm, shiftId, queryClient]);
+  }, [claimedKm, isClockedIn, isOverridden, calculatedKm, shiftId, queryClient, orgId]);
 
   const handleKmChange = (value: string) => {
     userEditedRef.current = true;

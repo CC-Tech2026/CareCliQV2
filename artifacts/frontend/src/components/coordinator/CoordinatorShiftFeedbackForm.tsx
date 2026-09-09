@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   getCoordinatorFeedbackTags,
   submitCoordinatorShiftFeedback,
@@ -23,6 +24,8 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
   const { toast } = useToast();
   const { translate } = useAccessibility();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const [strengths, setStrengths] = useState("");
   const [improvements, setImprovements] = useState("");
   const [actions, setActions] = useState("");
@@ -46,7 +49,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
         title: translate("coordinator.feedback.sent"),
         description: translate("coordinator.feedback.workerNotified"),
       });
-      void queryClient.invalidateQueries({ queryKey: ["coordinator"] });
+      void queryClient.invalidateQueries({ queryKey: [orgId, "coordinator"] });
       onSuccess?.();
     },
     onError: (e: Error) =>

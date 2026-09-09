@@ -17,6 +17,7 @@ import {
 } from "@/lib/offline-sync-registry";
 import { purgeTutorialOfflineArtifacts } from "@/lib/tutorial-offline";
 import type { SyncItemResult } from "@/lib/sync-pending-shift-actions";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type SyncVisualState = "offline" | "syncing" | "synced";
 
@@ -37,6 +38,8 @@ const OfflineSyncContext = createContext<OfflineSyncContextValue | null>(null);
 
 export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -61,7 +64,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       const result = await syncAllPendingItems();
       setLastResults(result.results);
       if (result.synced > 0) {
-        void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
+        void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shifts"] });
       }
       return result;
     } finally {

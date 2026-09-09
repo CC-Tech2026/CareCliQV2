@@ -43,14 +43,11 @@ export function TaskCompletionModal({ isOpen, onClose, instanceId, onSuccess }: 
         const formData = new FormData();
         formData.append("file", photoFile);
         try {
-          const uploadResponse = await fetch("/api/upload", {
+          const uploadedData = await jsonFetch<{ url: string }>("/api/upload", {
             method: "POST",
             body: formData,
           });
-          if (uploadResponse.ok) {
-            const uploadedData = await uploadResponse.json();
-            photoUrl = uploadedData.url;
-          }
+          photoUrl = uploadedData.url;
         } catch (error) {
           console.error("Photo upload failed:", error);
           toast({

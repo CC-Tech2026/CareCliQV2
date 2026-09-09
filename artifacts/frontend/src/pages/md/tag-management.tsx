@@ -5,6 +5,7 @@ import { Plus, Tag as TagIcon, X } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { SectionInfo } from "@/components/ui/section-info";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,9 +36,14 @@ const CTA = "var(--cc-cta)";
 function CategoryCard({ category }: { category: TagCategory }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const [newTagLabel, setNewTagLabel] = useState("");
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["coordinator-tags"] });
+  // Must include orgId — useOrgQuery prefixes every key with it, and
+  // invalidateQueries only partial-matches on the raw key array (not the
+  // hashed cache key), so an un-prefixed key here silently invalidates nothing.
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [orgId, "coordinator-tags"] });
 
   const addTagMutation = useMutation({
     mutationFn: (label: string) => createTag(category.id, label),
@@ -145,6 +151,8 @@ function CategoryCard({ category }: { category: TagCategory }) {
 export default function TagManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const { data, isLoading, error } = useOrgQuery(["coordinator-tags"], { queryFn: getTagCatalog });
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryRole, setNewCategoryRole] = useState<TagMatchingRole>(null);
@@ -154,7 +162,7 @@ export default function TagManagementPage() {
     onSuccess: () => {
       setNewCategoryName("");
       setNewCategoryRole(null);
-      queryClient.invalidateQueries({ queryKey: ["coordinator-tags"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "coordinator-tags"] });
     },
     onError: (err) => toast({ title: "Could not add category", description: (err as Error).message, variant: "destructive" }),
   });

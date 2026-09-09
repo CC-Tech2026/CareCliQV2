@@ -284,7 +284,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
 
   const runStartSession = async () => {
     const updated = await startShiftSession(shift.id);
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
+    void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shifts"] });
     void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shift", shift.id] });
     toast({
       title: translate("toast.sessionStarted"),

@@ -452,7 +452,7 @@ export default function CoordinatorRosteringPage() {
             size="sm"
             className="rounded-xl gap-1.5 h-9"
             style={{ borderColor: BORDER }}
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["live-shifts", liveOrgId] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: [liveOrgId, "live-shifts", liveOrgId] })}
           >
             <RefreshCw size={13} /> Refresh
           </Button>

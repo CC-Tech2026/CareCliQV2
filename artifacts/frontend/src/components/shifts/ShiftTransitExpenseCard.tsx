@@ -11,6 +11,7 @@ import {
   saveTransitExpense,
 } from "@/services/travelExpenseService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const RECEIPT_THRESHOLD_AUD = 10;
 
@@ -30,6 +31,8 @@ type Props = {
 export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [amountAud, setAmountAud] = useState("");
@@ -73,7 +76,9 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
       setReceipt(null);
       if (fileRef.current) fileRef.current.value = "";
       queryClient.invalidateQueries({ queryKey: ["worker", "transit-draft", shiftId] });
-      queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
+      // worker-travel-expenses.tsx reads this list via useOrgQuery, so its actual
+      // cache key is [orgId, "worker", "travel-drafts"] - needs the prefix here too.
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-drafts"] });
     },
     onError: (e: Error) =>
       toast({ title: translate("shift.transit.toastFailed"), description: e.message, variant: "destructive" }),

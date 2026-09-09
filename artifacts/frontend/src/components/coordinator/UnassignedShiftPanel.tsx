@@ -125,6 +125,7 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
     mutationFn: ({ workerId, candidateQueue }: { workerId: string; candidateQueue: string[] }) =>
       sendShiftOffer(shift!.id, { workerId, candidateQueue }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
       toast({ title: translate("coordinator.shiftAssign.offerSent"), description: translate("coordinator.shiftAssign.offerSentDesc") });
       onOpenChange(false);
     },

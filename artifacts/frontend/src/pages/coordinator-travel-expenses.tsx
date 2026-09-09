@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   actionTravelSubmission,
   getCoordinatorTravelSettings,
@@ -38,6 +39,8 @@ function formatDate(iso?: string | null) {
 export default function CoordinatorTravelExpenses() {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const [rateDraft, setRateDraft] = useState("");
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export default function CoordinatorTravelExpenses() {
     },
     onSuccess: (res) => {
       toast({ title: translate("coordinator.travel.toast.rateUpdated"), description: res.rate_display });
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "travel-settings"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "travel-settings"] });
     },
     onError: (e: Error) =>
       toast({ title: translate("coordinator.travel.toast.updateFailed"), description: e.message, variant: "destructive" }),

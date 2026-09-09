@@ -6,6 +6,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getWorkerShifts, type WorkerShift } from "@/services/shiftService";
 import {
   createPreferredShiftRequest,
@@ -182,6 +183,8 @@ function SubmitButton({
 export default function WorkerScheduleRequests() {
   const { translate } = useAccessibility();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("time_off");
   const [filterType, setFilterType] = useState<string>("all");
@@ -214,7 +217,7 @@ export default function WorkerScheduleRequests() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [shiftsData]);
 
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["worker", "schedule-requests"] });
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "schedule-requests"] });
 
   const timeOffMut = useMutation({
     mutationFn: () => createTimeOffRequest(timeOff),

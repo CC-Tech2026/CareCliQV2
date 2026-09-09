@@ -3,6 +3,7 @@ import { MessageSquare } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { acknowledgeFeedback, getFeedbackDetail } from "@/services/workerPerformanceService";
@@ -13,6 +14,8 @@ export default function WorkerFeedbackPage() {
   const [, params] = useRoute("/worker/feedback/:id");
   const feedbackId = params?.id ?? "";
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useOrgQuery(
@@ -27,8 +30,10 @@ export default function WorkerFeedbackPage() {
         title: translate("feedback.gotItToast"),
         description: translate("feedback.gotItToastDesc"),
       });
-      void queryClient.invalidateQueries({ queryKey: ["worker", "feedback"] });
-      void queryClient.invalidateQueries({ queryKey: ["worker", "shift-history"] });
+      // Both are useOrgQuery-backed, so their actual cache keys start with
+      // orgId - invalidation needs that prefix too or it silently no-ops.
+      void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "feedback"] });
+      void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shift-history"] });
     },
     onError: (e: Error) =>
       toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),

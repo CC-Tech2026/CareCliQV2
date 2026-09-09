@@ -398,7 +398,10 @@ export default function IncidentDetail({ id }: { id: string }) {
   const createModuleMutation = useMutation({
     mutationFn: () =>
       createTrainingModule({ title: trainingNewTitle.trim(), description: trainingNewDescription.trim() || undefined }),
-    onSuccess: (mod: TrainingModule) => assignTrainingMutation.mutate({ moduleId: mod.id, title: mod.title }),
+    onSuccess: (mod: TrainingModule) => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "training-modules"] });
+      assignTrainingMutation.mutate({ moduleId: mod.id, title: mod.title });
+    },
     onError: () => toast({ title: translate("incidents.detail.trainingAssignFailed"), variant: "destructive" }),
   });
 

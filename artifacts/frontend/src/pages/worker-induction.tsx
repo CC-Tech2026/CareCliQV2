@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, Circle, ClipboardList, Link2, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -11,6 +12,8 @@ import { completeMyInductionItem, getMyInduction, type InductionItem } from "@/s
 export default function WorkerInductionPage() {
   const { translate } = useAccessibility();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
@@ -27,7 +30,7 @@ export default function WorkerInductionPage() {
     onSuccess: () => {
       toast({ title: "Induction item completed" });
       setOpenItemId(null);
-      void queryClient.invalidateQueries({ queryKey: ["worker", "induction"] });
+      void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "induction"] });
       void queryClient.invalidateQueries({ queryKey: ["worker", "onboarding"] });
     },
     onError: (e: Error) => toast({ title: "Failed to complete item", description: e.message, variant: "destructive" }),

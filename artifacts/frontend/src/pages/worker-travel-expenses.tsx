@@ -29,6 +29,7 @@ import {
 } from "@/services/travelExpenseService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 function formatAud(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -186,6 +187,8 @@ function CorrectionCard({ item, onDone }: { item: TravelExpense; onDone: () => v
 export default function WorkerTravelExpenses() {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
@@ -219,8 +222,8 @@ export default function WorkerTravelExpenses() {
           total: formatAud(res.total_amount_cents),
         }),
       });
-      queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
-      queryClient.invalidateQueries({ queryKey: ["worker", "travel-summary"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-drafts"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-summary"] });
       setConfirmOpen(false);
     },
     onError: (e: Error) =>
@@ -228,7 +231,7 @@ export default function WorkerTravelExpenses() {
   });
 
   const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
+    queryClient.invalidateQueries({ queryKey: [orgId, "worker", "travel-drafts"] });
     void refetchRejected();
   };
 

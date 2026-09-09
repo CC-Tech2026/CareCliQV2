@@ -44,6 +44,8 @@ function formatDate(iso: string) {
 
 function NewReportSheet({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
   const [category, setCategory] = useState<FeedbackCategory>("other");
   const [title, setTitle] = useState("");
@@ -52,7 +54,7 @@ function NewReportSheet({ onClose }: { onClose: () => void }) {
   const submitMut = useMutation({
     mutationFn: () => createOperationalFeedback({ category, title: title.trim(), description: description.trim() }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["operational-feedback"] });
+      qc.invalidateQueries({ queryKey: [orgId, "operational-feedback"] });
       toast({ title: "Report submitted" });
       onClose();
     },
@@ -113,6 +115,7 @@ function NewReportSheet({ onClose }: { onClose: () => void }) {
 
 export default function FeedbackReports() {
   const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const { toast } = useToast();
   const qc = useQueryClient();
   const canResolve = user?.role === "support_coordinator" || user?.role === "managing_director";
@@ -134,7 +137,7 @@ export default function FeedbackReports() {
     mutationFn: (vars: { id: string; status: FeedbackStatus; notes?: string }) =>
       updateOperationalFeedbackStatus(vars.id, vars.status, vars.notes),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["operational-feedback"] });
+      qc.invalidateQueries({ queryKey: [orgId, "operational-feedback"] });
       toast({ title: "Report updated", description: `Marked as ${STATUS_META[vars.status].label.toLowerCase()}.` });
       setRespondingId(null);
       setDraftNotes("");

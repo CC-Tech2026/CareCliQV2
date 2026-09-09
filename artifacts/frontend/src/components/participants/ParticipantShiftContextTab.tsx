@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Users, X as XIcon } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
@@ -52,6 +53,8 @@ export function ParticipantShiftContextTab({ participantId }: ParticipantShiftCo
 function ParticipantTagsSection({ participantId }: { participantId: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const tagsKey = ["participant-tags", participantId];
   const catalogKey = ["coordinator-tags"];
 
@@ -67,7 +70,9 @@ function ParticipantTagsSection({ participantId }: { participantId: string }) {
     );
   })();
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: tagsKey });
+  // useOrgQuery scopes tagsKey's actual cache entry under [orgId, ...tagsKey],
+  // so invalidation has to include orgId too or it silently matches nothing.
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [orgId, ...tagsKey] });
 
   const addMutation = useMutation({
     mutationFn: (tagId: string) => addParticipantTag(participantId, tagId),

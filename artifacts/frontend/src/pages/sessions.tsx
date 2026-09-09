@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { exportBulkSessionsPDF } from "@/lib/pdf-export";
-import { useGetSessions, useGetParticipants } from "@workspace/api-client-react";
+import { useGetSessions, useGetParticipants, getGetSessionsQueryKey } from "@workspace/api-client-react";
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
 // -- Design tokens � aligned with Dashboard -------------------------------------
@@ -329,7 +329,7 @@ export default function Sessions() {
       setLoading(true);
       try {
         await flagSessionForReview(sessionId, !flagged, !flagged ? "Flagged from sessions list" : undefined);
-        _qc.invalidateQueries({ queryKey: ["getSessions"] });
+        _qc.invalidateQueries({ queryKey: getGetSessionsQueryKey({ limit: 200 }) });
         _toast({ title: flagged ? translate("sessions.toast.flagRemoved") : translate("sessions.toast.flagged") });
       } catch {
         _toast({ title: translate("sessions.toast.flagFailed"), variant: "destructive" });

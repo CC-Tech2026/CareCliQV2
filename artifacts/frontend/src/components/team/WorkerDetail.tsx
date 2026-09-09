@@ -1306,7 +1306,10 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
     );
   })();
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: tagsKey });
+  // useOrgQuery scopes tagsKey's actual cache entry under [orgId, ...tagsKey], so a bare-key
+  // invalidate wouldn't match it - use the predicate pattern already established elsewhere in
+  // this file (DocumentsTab, TrainingTab) instead of threading orgId through here too.
+  const invalidate = () => queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-tags") });
 
   const addMutation = useMutation({
     mutationFn: (tagId: string) => addWorkerTag(workerId, tagId),
@@ -1769,6 +1772,7 @@ function TrainingTab({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
+  const [revisionFeedback, setRevisionFeedback] = useState<Record<string,string>>({});
 
   const assignmentsQuery = useOrgQuery(["worker-training-assignments", worker.id], {
     queryFn: () => getWorkerTrainingAssignments(worker.id),
@@ -1777,16 +1781,18 @@ function TrainingTab({
   const dismissMut = useMutation({
     mutationFn: (id: string) => dismissTrainingAssignment(id),
     onSuccess: () => { qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-training-assignments") }); toast({ title: "Assignment removed" }); },
+    onError: (error: Error) => toast({ title: "Could not remove assignment", description: error.message, variant: "destructive" }),
   });
 
   const reviewMut = useMutation({
-    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => reviewTrainingCompletion(id, approved),
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => reviewTrainingCompletion(id, approved, approved ? undefined : revisionFeedback[id]?.trim()),
     onSuccess: () => { qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-training-assignments") }); toast({ title: "Training completion reviewed" }); },
+    onError: (error: Error) => toast({ title: "Could not review completion", description: error.message, variant: "destructive" }),
   });
 
   const recommendations = assignmentsQuery.data?.recommendations ?? [];
   const history = assignmentsQuery.data?.history ?? [];
-  const completedModuleIds = new Set(history.map((h) => h.module_id));
+  const completedModuleIds = new Set(history.filter(h => h.status === "confirmed" || h.status === "awaiting_confirmation").map((h) => h.module_id));
 
   // Overdue first, then soonest-due, then no-due-date last — a coordinator scanning this tab
   // should see what's overdue immediately, not have to search for it among upcoming modules.
@@ -1803,30 +1809,9 @@ function TrainingTab({
     });
   const overdueCount = inProgress.filter((r) => r.overdue).length;
 
-  const totalModuleIds = new Set([...recommendations.map((r) => r.training_module_id), ...history.map((h) => h.module_id)]);
-  const total = totalModuleIds.size;
-  const completeCount = new Set(history.filter((h) => h.status === "confirmed").map((h) => h.module_id)).size;
-
-  // Same carry-over pattern as Credentials — but only overrides the generic "N complete" text
-  // with a training-specific reason if training is genuinely what's overdue here; otherwise
-  // this tab still names its own overdue count rather than showing an unrelated blocker.
-  const stripLevel: ReadinessLevel = overdueCount > 0 ? "danger" : (topReason?.level ?? "good");
-  const stripReason = overdueCount > 0
-    ? `${overdueCount} module${overdueCount !== 1 ? "s" : ""} overdue`
-    : (topReason?.label ?? "All assigned training complete");
-  const stripBg = stripLevel === "good" ? "var(--cc-status-success-bg)" : stripLevel === "warning" ? "var(--cc-status-warning-bg)" : "var(--cc-status-danger-bg)";
-  const stripColor = stripLevel === "good" ? "var(--cc-status-success)" : stripLevel === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
-        <div>
-          <p className="text-lg font-black">{completeCount} / {total} complete</p>
-          <p className="text-xs font-bold mt-0.5">{stripReason}</p>
-        </div>
-        {stripLevel === "good" ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
-      </div>
-
+      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && overdueCount > 0 && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Some assigned training is overdue. Review the deadlines below.</p>}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <GraduationCap size={16} style={{ color: PLUM }} />
@@ -1839,7 +1824,8 @@ function TrainingTab({
 
       {assignmentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
 
-      {!assignmentsQuery.isLoading && recommendations.length === 0 && history.length === 0 && (
+      {assignmentsQuery.isError && <p role="alert" className="text-sm">Unable to load training. <button onClick={() => void assignmentsQuery.refetch()} className="underline">Try again</button></p>}
+      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && recommendations.length === 0 && history.length === 0 && (
         <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
           <GraduationCap size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.training.empty")}</p>
@@ -1849,7 +1835,7 @@ function TrainingTab({
       {inProgress.length > 0 && (
         <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
           {inProgress.map((rec) => (
-            <div key={rec.id} className="flex items-center gap-3 px-5 py-4">
+            <div key={rec.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <IconBadge
                 icon={GraduationCap}
                 color={rec.overdue ? "var(--cc-status-danger)" : "var(--cc-status-info)"}
@@ -1862,7 +1848,7 @@ function TrainingTab({
                   {rec.due_at ? ` · Due ${safeFormat(rec.due_at)}` : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="text-[11px] font-bold px-2.5 py-1 rounded-full"
                   style={{
@@ -1873,6 +1859,7 @@ function TrainingTab({
                   {rec.overdue ? "Overdue" : translate("team.training.inProgress")}
                 </span>
                 <button
+                  disabled={dismissMut.isPending}
                   onClick={() => dismissMut.mutate(rec.id)}
                   className="rounded-lg p-1.5 hover:bg-black/5"
                   title={translate("team.training.remove")}
@@ -1893,20 +1880,21 @@ function TrainingTab({
             {history.map((h) => {
               const style = completionStatusStyle(h.status);
               return (
-                <div key={h.id} className="flex items-center gap-3 px-5 py-4">
+                <div key={h.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <IconBadge icon={GraduationCap} color={style.color} bg={style.bg} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold" style={{ color: TEXT }}>{h.training_modules?.title ?? translate("team.training.module")}</p>
                     <p className="text-xs mt-0.5" style={{ color: MUTED }}>{translate("team.training.completedOn")} {safeFormat(h.completed_at)}</p>
                     {h.note && <p className="text-xs mt-0.5 italic" style={{ color: MUTED }}>"{h.note}"</p>}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     {h.status === "awaiting_confirmation" ? (
                       <>
-                        <Button size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-200 hover:bg-green-50" onClick={() => reviewMut.mutate({ id: h.id, approved: true })}>
+                        <input aria-label={`Revision feedback for ${h.training_modules?.title ?? "training"}`} placeholder="Feedback for revision" value={revisionFeedback[h.id] ?? ""} onChange={e => setRevisionFeedback(prev => ({ ...prev, [h.id]: e.target.value }))} className="h-9 min-w-0 rounded-lg border bg-background px-3 text-xs" />
+                        <Button disabled={reviewMut.isPending} size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-200 hover:bg-green-50" onClick={() => reviewMut.mutate({ id: h.id, approved: true })}>
                           <Check size={12} /> {translate("team.training.approve")}
                         </Button>
-                        <Button size="sm" variant="outline" className="text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => reviewMut.mutate({ id: h.id, approved: false })}>
+                        <Button disabled={reviewMut.isPending || !revisionFeedback[h.id]?.trim()} size="sm" variant="outline" className="text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => reviewMut.mutate({ id: h.id, approved: false })}>
                           <XIcon size={12} /> {translate("team.training.reject")}
                         </Button>
                       </>
@@ -2242,8 +2230,10 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
   const [callOutEnd, setCallOutEnd] = useState("");
   const [callOutNote, setCallOutNote] = useState("");
 
+  // useOrgQuery scopes this under [orgId, "shift-pay-preview", shift.id], so a bare-key
+  // invalidate wouldn't match it - predicate pattern instead, as used elsewhere in this file.
   const invalidatePay = () => {
-    qc.invalidateQueries({ queryKey: ["shift-pay-preview", shift.id] });
+    qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("shift-pay-preview") });
   };
 
   const sleepoverMut = useMutation({
@@ -2569,7 +2559,9 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
     mutationFn: () => postShiftMatchFeedback(shiftId, { outcome_rating: rating, would_repeat: wouldRepeat, participant_response: note || null }),
     onSuccess: () => {
       toast({ title: "Saved" });
-      queryClient.invalidateQueries({ queryKey: feedbackKey });
+      // useOrgQuery scopes feedbackKey's actual cache entry under [orgId, ...feedbackKey],
+      // so a bare-key invalidate wouldn't match it - predicate instead, as used elsewhere in this file.
+      queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("shift-match-feedback") });
     },
     onError: (err) => toast({ title: "Could not save", description: (err as Error).message, variant: "destructive" }),
   });
@@ -2763,7 +2755,7 @@ function AssignTrainingDialog({
     queryFn: getTrainingModules,
     enabled: open,
   });
-  const modules = modulesQuery.data ?? [];
+  const modules = (modulesQuery.data ?? []).filter(m => !m.is_locked);
 
   const createModuleMut = useMutation({
     mutationFn: () => createTrainingModule({ title: newTitle.trim(), description: newDescription.trim() || undefined }),

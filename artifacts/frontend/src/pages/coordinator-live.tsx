@@ -149,7 +149,7 @@ function MessageModal({
       sendShiftMessage(shift.id, shift.worker_id ?? "", text.trim(), type),
     onSuccess: () => {
       setText("");
-      qc.invalidateQueries({ queryKey: ["shift-messages", shift.id, orgId] });
+      qc.invalidateQueries({ queryKey: [orgId, "shift-messages", shift.id, orgId] });
     },
     onError: () => toast({ variant: "destructive", title: translate("coordinator.live.messageFailed") }),
   });
@@ -686,6 +686,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [severity, setSeverity] = useState<"warning" | "critical">("warning");
 
@@ -693,6 +694,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
     mutationFn: () => flagShift(shift!.id, note.trim(), severity),
     onSuccess: () => {
       toast({ title: translate("coordinator.live.toast.flagCreated") });
+      qc.invalidateQueries({ queryKey: [orgId, "live-shifts", orgId] });
       onClose();
       setNote("");
     },
@@ -759,7 +761,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
     mutationFn: () => emergencyStopShift(shift!.id, note),
     onSuccess: () => {
       toast({ title: translate("coordinator.live.toast.emergencyIssued") });
-      qc.invalidateQueries({ queryKey: ["live-shifts", orgId] });
+      qc.invalidateQueries({ queryKey: [orgId, "live-shifts", orgId] });
       onClose();
     },
     onError: () => toast({ variant: "destructive", title: translate("coordinator.live.toast.emergencyFailed") }),

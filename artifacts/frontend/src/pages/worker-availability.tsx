@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { SectionInfo } from "@/components/ui/section-info";
 import {
@@ -57,6 +58,8 @@ const STATUS_STYLES: Record<SlotStatus, { className: string; key: string }> = {
 export default function WorkerAvailabilityPage() {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const { data, isLoading } = useOrgQuery(["worker", "availability"], {
     queryFn: getWorkerAvailability,
@@ -74,7 +77,9 @@ export default function WorkerAvailabilityPage() {
     setBlackouts(data.blackout_dates);
   }, [data]);
 
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["worker", "availability"] });
+  // useOrgQuery scopes this under [orgId, "worker", "availability"], so
+  // invalidation needs the orgId prefix too or it silently matches nothing.
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "availability"] });
 
   const slotsMut = useMutation({
     mutationFn: () => updateAvailabilitySlots(slots),

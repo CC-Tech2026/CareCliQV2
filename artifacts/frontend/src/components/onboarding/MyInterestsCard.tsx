@@ -5,6 +5,7 @@ import { Eye, EyeOff, Heart, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   getWorkerTagCatalog,
   getMyTags,
@@ -19,7 +20,9 @@ const BORDER = "var(--cc-border)";
 
 export function MyInterestsCard() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const orgId = user?.organizationId ?? "__no_org__";
   const catalogKey = ["worker-tag-catalog"];
   const myTagsKey = ["worker-my-tags"];
 
@@ -35,7 +38,9 @@ export function MyInterestsCard() {
     );
   }, [catalog, myTags]);
 
-  const invalidateMine = () => queryClient.invalidateQueries({ queryKey: myTagsKey });
+  // useOrgQuery scopes myTagsKey's actual cache entry under [orgId, ...myTagsKey],
+  // so invalidation has to include orgId too or it silently matches nothing.
+  const invalidateMine = () => queryClient.invalidateQueries({ queryKey: [orgId, ...myTagsKey] });
 
   const addMutation = useMutation({
     mutationFn: ({ tagId, visible }: { tagId: string; visible: boolean }) => addMyTag(tagId, undefined, visible),
