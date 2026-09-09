@@ -6,11 +6,17 @@
 
 import type { AdminBugReport, BugReportSeverity, BugReportStatus } from "@/services/adminService";
 
+// Sentinel for the org filter/picker — an Internal report has
+// organization_id: null, which can't be a real <Select> option value (the
+// underlying Radix Select treats "" as "no value"), so this stands in for
+// "no organisation" wherever a report needs to be filtered/grouped by org.
+export const INTERNAL_ORG_FILTER_VALUE = "__internal__";
+
 export type BugReportFilters = {
   search: string;
   status: "all" | BugReportStatus;
   severity: "all" | BugReportSeverity;
-  organizationId: "all" | string;
+  organizationId: "all" | typeof INTERNAL_ORG_FILTER_VALUE | string;
 };
 
 export const DEFAULT_BUG_REPORT_FILTERS: BugReportFilters = {
@@ -29,19 +35,23 @@ export function hasActiveBugReportFilters(filters: BugReportFilters): boolean {
   );
 }
 
-// Search matches description, organisation, and reporter — the three
-// pieces of text visible on each row (see bug-reports.tsx) — so a search
-// box behaves the way a user reading the list would expect it to.
+// Search matches description and organisation only — not the reporter's
+// name, which the admin portal deliberately never displays or searches by
+// (it's the individual staff member's private info, not the org's — see
+// bug-reports.tsx's card footer, which shows the org, not the reporter).
 export function matchesBugReportFilters(report: AdminBugReport, filters: BugReportFilters): boolean {
   const query = filters.search.trim().toLowerCase();
   const matchesSearch =
     !query ||
     report.description.toLowerCase().includes(query) ||
-    report.organization_name.toLowerCase().includes(query) ||
-    report.reporter_name.toLowerCase().includes(query);
+    report.organization_name.toLowerCase().includes(query);
   const matchesStatus = filters.status === "all" || report.status === filters.status;
   const matchesSeverity = filters.severity === "all" || report.severity === filters.severity;
-  const matchesOrg = filters.organizationId === "all" || report.organization_id === filters.organizationId;
+  const matchesOrg =
+    filters.organizationId === "all" ||
+    (filters.organizationId === INTERNAL_ORG_FILTER_VALUE
+      ? report.organization_id === null
+      : report.organization_id === filters.organizationId);
   return matchesSearch && matchesStatus && matchesSeverity && matchesOrg;
 }
 

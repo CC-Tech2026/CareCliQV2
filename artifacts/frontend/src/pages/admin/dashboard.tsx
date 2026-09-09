@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, Users, ShieldAlert, ArrowRight, Clock } from "lucide-react";
+import { AlertTriangle, Building2, Users, ShieldAlert, ArrowRight, Clock } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { listAdminOrganizations, type AdminOrgSummary } from "@/services/adminService";
@@ -13,13 +13,6 @@ const PLUM = "var(--cc-plum)";
 const GREEN = "#0F7B57";
 const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
-
-const DUMMY_ORGS: AdminOrgSummary[] = [
-  { organization_id: "dummy-1", display_name: "Sunshine Disability Services", provider_type: "Disability", status: "active", plan_tier: "growth", team_size: "11-25", participant_volume: "26-50", created_at: "2026-06-02T00:00:00Z", user_count: 13 },
-  { organization_id: "dummy-2", display_name: "Harbourview Aged Care", provider_type: "Aged Care", status: "active", plan_tier: "starter", team_size: "1-10", participant_volume: "1-25", created_at: "2026-07-14T00:00:00Z", user_count: 6 },
-  { organization_id: "dummy-3", display_name: "Northside Community Support", provider_type: "Disability", status: "suspended", plan_tier: "starter", team_size: "1-10", participant_volume: "1-25", created_at: "2026-05-20T00:00:00Z", user_count: 4 },
-  { organization_id: "dummy-4", display_name: "Coastal Care Collective", provider_type: "Disability", status: "active", plan_tier: "enterprise", team_size: "50+", participant_volume: "100+", created_at: "2026-03-11T00:00:00Z", user_count: 42 },
-];
 
 function StatTile({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
@@ -41,13 +34,21 @@ export default function AdminDashboardPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const firstName = (user?.full_name || "Admin").trim().split(/\s+/)[0];
 
+  // No dummy-data fallback — a real fetch failure needs to read as a real
+  // failure, not silently show fabricated providers that could be
+  // mistaken for actual customers.
   useEffect(() => {
     let cancelled = false;
     listAdminOrganizations()
-      .then((data) => { if (!cancelled) setOrgs(data.length > 0 ? data : DUMMY_ORGS); })
-      .catch(() => { if (!cancelled) setOrgs(DUMMY_ORGS); });
+      .then((data) => { if (!cancelled) setOrgs(data); })
+      .catch((e) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : "Could not load providers.");
+        setOrgs([]);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -68,6 +69,13 @@ export default function AdminDashboardPage() {
           <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>Hello, {firstName}! 👋</h1>
           <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Overview across every provider on CareCliQ.</p>
         </div>
+
+        {loadError && (
+          <div className="flex items-center gap-2 rounded-2xl border p-4" style={{ borderColor: AMBER, background: AMBER_SOFT }}>
+            <AlertTriangle size={15} style={{ color: AMBER }} className="shrink-0" />
+            <p className="text-[12px] font-bold" style={{ color: AMBER }}>Couldn't load providers: {loadError}</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Total providers" value={orgs === null ? "—" : totalProviders} />
@@ -128,7 +136,7 @@ export default function AdminDashboardPage() {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{o.display_name}</p>
-                      <p className="text-[10px]" style={{ color: MUTED }}>{o.provider_type || "Provider"} · {o.plan_tier || "starter"}</p>
+                      <p className="text-[10px]" style={{ color: MUTED }}>{o.provider_type || "Provider"} · {o.plan_tier || "Trial"}</p>
                     </div>
                   </div>
                   <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold" style={{ color: MUTED }}>

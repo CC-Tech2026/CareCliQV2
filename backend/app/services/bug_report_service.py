@@ -60,7 +60,7 @@ def _decode_base64_payload(raw: str) -> bytes:
 
 
 def _process_attachments(
-    organization_id: str, report_id: str, attachments: list[dict[str, Any]]
+    organization_id: str | None, report_id: str, attachments: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """Validates and uploads each attachment, returning the metadata to
     store on the bug_reports row. Raises ValueError on anything invalid —
@@ -85,7 +85,7 @@ def _process_attachments(
             raise ValueError(f"File exceeds {max_bytes // (1024 * 1024)} MB limit.")
 
         ext = _EXT_BY_MIME.get(mime_type, "bin")
-        storage_path = f"{organization_id}/bug-reports/{report_id}/{i}-{uuid.uuid4().hex[:8]}.{ext}"
+        storage_path = f"{organization_id or 'internal'}/bug-reports/{report_id}/{i}-{uuid.uuid4().hex[:8]}.{ext}"
         stored_object = upload_evidence_bytes(storage_path, raw_bytes, mime_type)
         stored.append(
             {
@@ -97,10 +97,16 @@ def _process_attachments(
     return stored
 
 
-def _organization_display_name(organization_id: str) -> str:
+def _organization_display_name(organization_id: str | None) -> str:
     """Jira's Reporter field only accepts a real Jira user account — it
     can't hold an org name as text, so instead the org goes at the front
-    of the ticket title/description (see create_bug_report below)."""
+    of the ticket title/description (see create_bug_report below).
+
+    None means a Super Admin filed this as "Internal" — not on behalf of
+    any provider (see 190_bug_reports_nullable_org.sql) — so there's no
+    org row to look up at all."""
+    if organization_id is None:
+        return "Internal — Master Portal"
     try:
         result = (
             get_supabase_admin()
@@ -118,7 +124,7 @@ def _organization_display_name(organization_id: str) -> str:
 
 
 async def create_bug_report(
-    organization_id: str,
+    organization_id: str | None,
     reporter_id: str,
     description: str,
     page_url: str | None,

@@ -67,7 +67,7 @@ async def test_list_bug_reports_requires_super_admin():
 
 
 @pytest.mark.asyncio
-async def test_list_bug_reports_attaches_org_and_reporter_names():
+async def test_list_bug_reports_attaches_org_name():
     supabase = MagicMock()
 
     def _table(name: str):
@@ -78,7 +78,6 @@ async def test_list_bug_reports_attaches_org_and_reporter_names():
                     {
                         "id": "r-1",
                         "organization_id": "org-1",
-                        "reporter_id": "u-1",
                         "page_url": "/settings",
                         "description": "Button does nothing",
                         "status": "open",
@@ -91,10 +90,6 @@ async def test_list_bug_reports_attaches_org_and_reporter_names():
             table.select.return_value.in_.return_value.execute.return_value = MagicMock(
                 data=[{"organization_id": "org-1", "organization_name": "Sunshine Disability Services", "name": None}]
             )
-        elif name == "users":
-            table.select.return_value.in_.return_value.execute.return_value = MagicMock(
-                data=[{"id": "u-1", "full_name": "Jamie Support", "email": "jamie@example.com"}]
-            )
         else:
             raise AssertionError(f"Unexpected table requested: {name}")
         return table
@@ -106,7 +101,44 @@ async def test_list_bug_reports_attaches_org_and_reporter_names():
 
     assert len(result) == 1
     assert result[0]["organization_name"] == "Sunshine Disability Services"
-    assert result[0]["reporter_name"] == "Jamie Support"
+
+
+@pytest.mark.asyncio
+async def test_list_bug_reports_never_exposes_reporter_identity():
+    """CARECLIQV2-352 — a bug report is identified by which org hit it,
+    never which staff member did. The response must carry no reporter
+    field, and the users table must never even be queried for it — a
+    _table side_effect raising on "users" proves that."""
+    supabase = MagicMock()
+
+    def _table(name: str):
+        table = MagicMock()
+        if name == "bug_reports":
+            table.select.return_value.order.return_value.execute.return_value = MagicMock(
+                data=[
+                    {
+                        "id": "r-1",
+                        "organization_id": "org-1",
+                        "description": "Button does nothing",
+                        "status": "open",
+                        "created_at": "2026-09-01T00:00:00Z",
+                        "updated_at": "2026-09-01T00:00:00Z",
+                    }
+                ]
+            )
+        elif name == "organizations":
+            table.select.return_value.in_.return_value.execute.return_value = MagicMock(data=[])
+        else:
+            raise AssertionError(f"Unexpected table requested: {name}")
+        return table
+
+    supabase.table.side_effect = _table
+
+    with patch("backend.app.api.admin.get_supabase_admin", return_value=supabase):
+        result = await admin.list_bug_reports(current_user={"id": "admin-1", "role": "super_admin"})
+
+    assert "reporter_name" not in result[0]
+    assert "reporter_id" not in result[0]
 
 
 @pytest.mark.asyncio

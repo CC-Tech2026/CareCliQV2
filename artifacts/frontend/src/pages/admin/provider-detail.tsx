@@ -1,16 +1,28 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   getAdminOrganization,
   suspendAdminOrganization,
   activateAdminOrganization,
+  updateAdminOrganizationType,
   type AdminOrgDetail,
   type OrgStatus,
+  type OrgType,
 } from "@/services/adminService";
+
+// Same labels as the Providers list filter (providers.tsx) — kept in sync
+// by hand since there's no shared constants file for admin pages yet.
+const ORG_TYPE_LABEL: Record<OrgType, string> = {
+  aged_care: "Aged Care",
+  disability: "Disability",
+  aged_care_disability: "Aged Care & Disability",
+};
+const ORG_TYPE_OPTIONS: OrgType[] = ["aged_care", "disability", "aged_care_disability"];
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -29,54 +41,23 @@ const STATUS_STYLE: Record<OrgStatus, { label: string; color: string; bg: string
   offboarded: { label: "Offboarded", color: SLATE, bg: SLATE_SOFT },
 };
 
-// UI-only placeholder, keyed to match providers.tsx's DUMMY_ORGS ids — see
-// the note there. Swap back to relying purely on the real API once the
-// backend migrations (151/152) are run.
-const DUMMY_DETAIL: Record<string, AdminOrgDetail> = {
-  "dummy-1": {
-    organization_id: "dummy-1", display_name: "Sunshine Disability Services", provider_type: "Disability",
-    status: "active", plan_tier: "growth", team_size: "11-25", participant_volume: "26-50", user_count: 13,
-    users: [
-      { id: "u1", full_name: "Alex Director", email: "alex@sunshinedisability.com.au", role: "managing_director", is_active: true },
-      { id: "u2", full_name: "Priya Coordinator", email: "priya@sunshinedisability.com.au", role: "support_coordinator", is_active: true },
-      { id: "u3", full_name: "Jordan Worker", email: "jordan@sunshinedisability.com.au", role: "support_worker", is_active: true },
-    ],
-  },
-  "dummy-2": {
-    organization_id: "dummy-2", display_name: "Harbourview Aged Care", provider_type: "Aged Care",
-    status: "active", plan_tier: "starter", team_size: "1-10", participant_volume: "1-25", user_count: 6,
-    users: [
-      { id: "u4", full_name: "Sam Director", email: "sam@harbourview.com.au", role: "managing_director", is_active: true },
-    ],
-  },
-  "dummy-3": {
-    organization_id: "dummy-3", display_name: "Northside Community Support", provider_type: "Disability",
-    status: "suspended", plan_tier: "starter", team_size: "1-10", participant_volume: "1-25", user_count: 4,
-    users: [
-      { id: "u5", full_name: "Casey Director", email: "casey@northsidecs.com.au", role: "managing_director", is_active: true },
-    ],
-  },
-  "dummy-4": {
-    organization_id: "dummy-4", display_name: "Coastal Care Collective", provider_type: "Disability",
-    status: "active", plan_tier: "enterprise", team_size: "50+", participant_volume: "100+", user_count: 42,
-    users: [
-      { id: "u6", full_name: "Morgan Director", email: "morgan@coastalcare.com.au", role: "managing_director", is_active: true },
-      { id: "u7", full_name: "Riley Coordinator", email: "riley@coastalcare.com.au", role: "support_coordinator", is_active: true },
-    ],
-  },
-};
-
 export default function AdminProviderDetailPage() {
   const { organizationId } = useParams<{ organizationId: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [org, setOrg] = useState<AdminOrgDetail | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [savingOrgType, setSavingOrgType] = useState(false);
 
+  // No dummy-data fallback — a real fetch failure (or a genuinely
+  // not-found org) needs to read as that, not silently show a fabricated
+  // provider that could be mistaken for a real customer.
   function load() {
+    setLoadError(null);
     getAdminOrganization(organizationId)
       .then(setOrg)
-      .catch(() => setOrg(DUMMY_DETAIL[organizationId] ?? null));
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Could not load this provider."));
   }
 
   useEffect(() => { load(); }, [organizationId]);
@@ -107,6 +88,20 @@ export default function AdminProviderDetailPage() {
     }
   }
 
+  async function handleOrgTypeChange(orgType: OrgType) {
+    setSavingOrgType(true);
+    // Optimistic — the picker feels instant; rolled back below on failure.
+    setOrg((prev) => (prev ? { ...prev, org_type: orgType } : prev));
+    try {
+      await updateAdminOrganizationType(organizationId, orgType);
+    } catch (err) {
+      toast({ title: "Couldn't update org type", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+      load();
+    } finally {
+      setSavingOrgType(false);
+    }
+  }
+
   return (
     <AdminShell>
       <div className="space-y-5">
@@ -114,9 +109,19 @@ export default function AdminProviderDetailPage() {
           <ArrowLeft size={14} /> All providers
         </button>
 
-        {org === null && (
+        {org === null && loadError && (
           <div className="rounded-2xl border p-10 text-center" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[13px] font-black" style={{ color: TEXT }}>Unknown provider.</p>
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: AMBER_SOFT }}>
+              <AlertTriangle size={20} style={{ color: AMBER }} />
+            </span>
+            <p className="mt-3 text-[13px] font-black" style={{ color: TEXT }}>Couldn't load this provider</p>
+            <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium" style={{ color: MUTED }}>{loadError}</p>
+          </div>
+        )}
+
+        {org === null && !loadError && (
+          <div className="space-y-2">
+            {[0, 1].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} />)}
           </div>
         )}
 
@@ -131,8 +136,25 @@ export default function AdminProviderDetailPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>
-                  {org.provider_type || "Provider"} · {org.plan_tier || "starter"} plan · {org.team_size || "—"} team size · {org.participant_volume || "—"} participants
+                  {org.provider_type || "Provider"} · {org.plan_tier ? `${org.plan_tier} plan` : "Trial"} · {org.team_size || "—"} team size · {org.participant_volume || "—"} participants
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Org Type</span>
+                  <Select
+                    value={org.org_type ?? undefined}
+                    onValueChange={(v) => handleOrgTypeChange(v as OrgType)}
+                    disabled={savingOrgType}
+                  >
+                    <SelectTrigger className="h-8 w-[190px] rounded-lg border text-[12px] shadow-none" style={{ borderColor: BORDER }}>
+                      <SelectValue placeholder="Not set" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ORG_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{ORG_TYPE_LABEL[opt]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {org.status === "active" ? (

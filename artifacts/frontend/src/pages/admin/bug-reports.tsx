@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bug, Building2, ExternalLink, Search, Video, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bug, Download, ExternalLink, Plus, RotateCcw, Search, Video, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ReportBugPanel } from "@/components/admin/ReportBugPanel";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -15,8 +17,11 @@ import {
   DEFAULT_BUG_REPORT_FILTERS,
   filterBugReports,
   hasActiveBugReportFilters,
+  INTERNAL_ORG_FILTER_VALUE,
   type BugReportFilters,
 } from "@/lib/bug-report-filters";
+import { buildBugReportsCsv } from "@/lib/bug-report-csv";
+import { downloadBlob } from "@/lib/download-file";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -46,23 +51,30 @@ const SEVERITY_STYLE: Record<BugReportSeverity, { label: string; color: string; 
 };
 
 // The order a report normally moves through — used for the "advance to
-// next phase" button. There's no going backwards from this button (an
-// admin can still reopen by other means later if that's ever needed).
+// next phase" button. Going backwards from Resolved is handled separately
+// by the dedicated Reopen action below, not by this forward-only map.
 const NEXT_STATUS: Record<BugReportStatus, BugReportStatus | null> = {
   open: "in_progress",
   in_progress: "resolved",
   resolved: null,
 };
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function formatCreatedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts[0][0] + (parts[parts.length - 1][0] ?? "")).toUpperCase();
+}
+
+// Not a real ticket-numbering system — just the first 6 hex characters of
+// the row's UUID, purely so a report is easy to point at/scan in the list
+// (mirrors the "BUG-1234"-style badge on other bug trackers, without
+// pretending we have a sequential id we don't).
+function shortDisplayId(id: string): string {
+  return `BR-${id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
 
 export default function AdminBugReportsPage() {
@@ -71,6 +83,16 @@ export default function AdminBugReportsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<BugReportFilters>(DEFAULT_BUG_REPORT_FILTERS);
+  const [reportPanelOpen, setReportPanelOpen] = useState(false);
+
+  const refetch = useCallback(() => {
+    return listAdminBugReports()
+      .then((data) => setReports(data))
+      .catch((e) => {
+        setLoadError(e instanceof Error ? e.message : "Could not load bug reports.");
+        setReports((prev) => prev ?? []);
+      });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,13 +106,11 @@ export default function AdminBugReportsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  async function advance(report: AdminBugReport) {
-    const next = NEXT_STATUS[report.status];
-    if (!next) return;
+  async function changeStatus(report: AdminBugReport, targetStatus: BugReportStatus) {
     setUpdatingId(report.id);
     try {
-      await updateAdminBugReportStatus(report.id, next);
-      setReports((prev) => prev?.map((r) => (r.id === report.id ? { ...r, status: next } : r)) ?? prev);
+      await updateAdminBugReportStatus(report.id, targetStatus);
+      setReports((prev) => prev?.map((r) => (r.id === report.id ? { ...r, status: targetStatus } : r)) ?? prev);
     } catch (e) {
       toast({
         title: "Couldn't update status",
@@ -104,14 +124,17 @@ export default function AdminBugReportsPage() {
 
   const openCount = reports?.filter((r) => r.status === "open").length ?? 0;
   const inProgressCount = reports?.filter((r) => r.status === "in_progress").length ?? 0;
+  const resolvedCount = reports?.filter((r) => r.status === "resolved").length ?? 0;
 
   // Distinct orgs among the loaded reports, alphabetised — there's no
   // separate "all orgs" endpoint call here, so the org filter's options
   // are only ever the orgs that actually have a report, same as how the
-  // rest of this page derives everything from the one list call.
+  // rest of this page derives everything from the one list call. An
+  // Internal report (organization_id: null) gets the sentinel value so
+  // it's still filterable/groupable like a real org.
   const orgOptions = useMemo(() => {
     const byId = new Map<string, string>();
-    for (const r of reports ?? []) byId.set(r.organization_id, r.organization_name);
+    for (const r of reports ?? []) byId.set(r.organization_id ?? INTERNAL_ORG_FILTER_VALUE, r.organization_name);
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [reports]);
 
@@ -124,15 +147,26 @@ export default function AdminBugReportsPage() {
     setFilters(DEFAULT_BUG_REPORT_FILTERS);
   }
 
+  // Exports whatever's currently visible (i.e. respects the active
+  // filters) — an admin who's just filtered down to "Urgent" reports
+  // almost certainly wants a CSV of those, not the full unfiltered list.
+  function exportCsv() {
+    if (!visibleReports || visibleReports.length === 0) return;
+    const csv = buildBugReportsCsv(visibleReports);
+    downloadBlob(new Blob([csv], { type: "text/csv" }), `carecliq-bug-reports-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
   return (
     <AdminShell>
       <div className="space-y-5">
-        <div>
-          <h1 className="text-xl font-black" style={{ color: TEXT }}>Bug Reports</h1>
-          <p className="text-[12px] font-medium" style={{ color: MUTED }}>
-            Errors and issues, scoped to which provider hit them — never the participant data involved.
-          </p>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-3xl font-black" style={{ color: TEXT }}>Bug Management</h1>
+          <Button className="gap-1.5" onClick={() => setReportPanelOpen(true)}>
+            <Plus size={15} /> Report Bug
+          </Button>
         </div>
+
+        <ReportBugPanel open={reportPanelOpen} onOpenChange={setReportPanelOpen} onSubmitted={refetch} />
 
         {reports === null ? (
           <div className="space-y-2">
@@ -158,8 +192,8 @@ export default function AdminBugReportsPage() {
           </div>
         ) : (
           <>
-            {(openCount > 0 || inProgressCount > 0) && (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {(openCount > 0 || inProgressCount > 0 || resolvedCount > 0) && (
+              <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, background: SURFACE }}>
                   <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Open</p>
                   <p className="mt-1 text-xl font-black" style={{ color: openCount > 0 ? AMBER : TEXT }}>{openCount}</p>
@@ -167,6 +201,10 @@ export default function AdminBugReportsPage() {
                 <div className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, background: SURFACE }}>
                   <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>In progress</p>
                   <p className="mt-1 text-xl font-black" style={{ color: PLUM }}>{inProgressCount}</p>
+                </div>
+                <div className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, background: SURFACE }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Resolved</p>
+                  <p className="mt-1 text-xl font-black" style={{ color: GREEN }}>{resolvedCount}</p>
                 </div>
               </div>
             )}
@@ -177,7 +215,7 @@ export default function AdminBugReportsPage() {
                 <Input
                   value={filters.search}
                   onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-                  placeholder="Search description, organisation, or reporter"
+                  placeholder="Search description or organisation"
                   className="h-11 rounded-xl border-0 pl-11 text-[13px] shadow-none focus-visible:ring-1"
                   style={{ background: SOFT }}
                 />
@@ -247,6 +285,16 @@ export default function AdminBugReportsPage() {
                   <X size={13} /> Clear
                 </button>
               )}
+
+              <button
+                onClick={exportCsv}
+                disabled={!visibleReports || visibleReports.length === 0}
+                title="Export the reports below as CSV"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-40"
+                style={{ background: SOFT, color: MUTED }}
+              >
+                <Download size={16} />
+              </button>
             </div>
 
             {visibleReports && visibleReports.length === 0 ? (
@@ -254,89 +302,116 @@ export default function AdminBugReportsPage() {
                 <p className="text-[13px] font-black" style={{ color: TEXT }}>No bug reports match these filters.</p>
               </div>
             ) : (
-            <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-              {(visibleReports ?? []).map((report, i) => {
+            <div className="space-y-3">
+              {(visibleReports ?? []).map((report) => {
                 const st = STATUS_STYLE[report.status];
                 const sev = SEVERITY_STYLE[report.severity];
                 const next = NEXT_STATUS[report.status];
                 return (
                   <div
                     key={report.id}
-                    className="flex items-start justify-between gap-4 px-5 py-4"
-                    style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : undefined }}
+                    className="rounded-2xl border p-4"
+                    style={{ borderColor: BORDER, background: SURFACE }}
                   >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
-                        <Building2 size={13} style={{ color: PLUM }} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {report.jira_url ? (
+                        <a
+                          href={report.jira_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold hover:underline"
+                          style={{ borderColor: PLUM, color: PLUM }}
+                        >
+                          {report.jira_issue_key} <ExternalLink size={10} />
+                        </a>
+                      ) : (
+                        <span
+                          className="rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold"
+                          style={{ borderColor: BORDER, color: MUTED }}
+                        >
+                          {shortDisplayId(report.id)}
+                        </span>
+                      )}
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                        style={{ background: sev.bg, color: sev.color }}
+                      >
+                        {sev.label}
                       </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[13px] font-bold" style={{ color: TEXT }}>{report.organization_name}</p>
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
-                            style={{ background: sev.bg, color: sev.color }}
-                          >
-                            {sev.label}
-                          </span>
-                        </div>
-                        <p className="text-[11px] font-medium" style={{ color: MUTED }}>
-                          {report.reporter_name} · {timeAgo(report.created_at)}
-                          {report.page_url && <> · {report.page_url}</>}
-                        </p>
-                        <p className="mt-1.5 max-w-2xl text-[12px] leading-relaxed" style={{ color: TEXT }}>{report.description}</p>
-                        {report.attachments.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {report.attachments.map((a, ai) =>
-                              a.mime_type.startsWith("image/") ? (
-                                <a key={ai} href={a.url ?? undefined} target="_blank" rel="noopener noreferrer">
-                                  <img
-                                    src={a.url ?? undefined}
-                                    alt="Attachment"
-                                    className="h-14 w-14 rounded-lg border object-cover"
-                                    style={{ borderColor: BORDER }}
-                                  />
-                                </a>
-                              ) : (
-                                <a
-                                  key={ai}
-                                  href={a.url ?? undefined}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-lg border text-[9px] font-bold"
-                                  style={{ borderColor: BORDER, color: MUTED }}
-                                >
-                                  <Video size={16} />
-                                  Video
-                                </a>
-                              ),
-                            )}
-                          </div>
-                        )}
-                        {report.jira_url && (
-                          <a
-                            href={report.jira_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold hover:underline"
-                            style={{ color: PLUM }}
-                          >
-                            {report.jira_issue_key} <ExternalLink size={11} />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <span className="rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: st.bg, color: st.color }}>
+                      <span className="rounded-full px-2.5 py-0.5 text-[10px] font-black" style={{ background: st.bg, color: st.color }}>
                         {st.label}
                       </span>
+                    </div>
+
+                    <p className="mt-2.5 text-[14px] font-bold leading-snug" style={{ color: TEXT }}>{report.description}</p>
+
+                    {report.page_url && (
+                      <p className="mt-0.5 text-[11px] font-medium" style={{ color: MUTED }}>{report.page_url}</p>
+                    )}
+
+                    {report.attachments.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        {report.attachments.map((a, ai) =>
+                          a.mime_type.startsWith("image/") ? (
+                            <a key={ai} href={a.url ?? undefined} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={a.url ?? undefined}
+                                alt="Attachment"
+                                className="h-14 w-14 rounded-lg border object-cover"
+                                style={{ borderColor: BORDER }}
+                              />
+                            </a>
+                          ) : (
+                            <a
+                              key={ai}
+                              href={a.url ?? undefined}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-lg border text-[9px] font-bold"
+                              style={{ borderColor: BORDER, color: MUTED }}
+                            >
+                              <Video size={16} />
+                              Video
+                            </a>
+                          ),
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3" style={{ borderColor: BORDER }}>
+                      <div className="flex items-center gap-3 text-[11px] font-medium" style={{ color: MUTED }}>
+                        {/* Org identifies the report, never the individual staff
+                            member who filed it — see the "which provider hit
+                            it" framing in the page subtitle above. */}
+                        <span className="flex items-center gap-1.5">
+                          <span
+                            className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-black"
+                            style={{ background: "var(--cc-plum-soft)", color: PLUM }}
+                          >
+                            {initials(report.organization_name)}
+                          </span>
+                          {report.organization_name}
+                        </span>
+                        <span>Created {formatCreatedDate(report.created_at)}</span>
+                      </div>
                       {next && (
                         <button
-                          onClick={() => advance(report)}
+                          onClick={() => changeStatus(report, next)}
                           disabled={updatingId === report.id}
                           className="text-[11px] font-bold hover:underline disabled:opacity-50"
                           style={{ color: MUTED }}
                         >
                           Mark {STATUS_STYLE[next].label.toLowerCase()} →
+                        </button>
+                      )}
+                      {report.status === "resolved" && (
+                        <button
+                          onClick={() => changeStatus(report, "open")}
+                          disabled={updatingId === report.id}
+                          className="flex items-center gap-1 text-[11px] font-bold hover:underline disabled:opacity-50"
+                          style={{ color: AMBER }}
+                        >
+                          <RotateCcw size={11} /> Reopen
                         </button>
                       )}
                     </div>

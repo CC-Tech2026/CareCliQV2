@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Lightbulb, Building2, ExternalLink } from "lucide-react";
+import { Lightbulb, Building2 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -148,17 +148,6 @@ export default function AdminFeedbackPage() {
                           {item.reporter_name} · {timeAgo(item.created_at)}
                         </p>
                         <p className="mt-1.5 max-w-2xl text-[12px] leading-relaxed" style={{ color: TEXT }}>{item.description}</p>
-                        {item.jira_url && (
-                          <a
-                            href={item.jira_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold hover:underline"
-                            style={{ color: PLUM }}
-                          >
-                            {item.jira_issue_key} <ExternalLink size={11} />
-                          </a>
-                        )}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">

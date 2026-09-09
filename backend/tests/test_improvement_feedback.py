@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.app.api import admin, improvement_feedback
+from backend.app.services import improvement_feedback_service
 
 
 @pytest.mark.asyncio
@@ -45,6 +46,25 @@ async def test_submit_creates_with_org_and_submitter_from_session():
         )
     create.assert_called_once_with("org-1", "u-1", "A better rostering view")
     assert result == {"id": "f-1", "status": "open"}
+
+
+@pytest.mark.asyncio
+async def test_create_improvement_feedback_never_calls_jira():
+    """CARECLIQV2-350 — feedback is a plain internal list, unlike bug
+    reports: submitting it must never create/touch a Jira issue."""
+    supabase = MagicMock()
+    supabase.table.return_value.insert.return_value.execute.return_value = MagicMock(
+        data=[{"id": "f-1", "status": "open"}]
+    )
+
+    with patch(
+        "backend.app.services.improvement_feedback_service.get_supabase_admin", return_value=supabase
+    ), patch("backend.app.services.jira_service.create_issue") as create_issue:
+        row = await improvement_feedback_service.create_improvement_feedback("org-1", "u-1", "A better rostering view")
+
+    create_issue.assert_not_called()
+    assert row == {"id": "f-1", "status": "open"}
+    assert "jira_issue_key" not in row
 
 
 @pytest.mark.asyncio
@@ -94,6 +114,8 @@ async def test_list_improvement_feedback_attaches_org_and_submitter_names():
     assert len(result) == 1
     assert result[0]["organization_name"] == "Sunshine Disability Services"
     assert result[0]["reporter_name"] == "Jamie MD"
+    # CARECLIQV2-350 — feedback has no Jira integration, so it never gets a link.
+    assert result[0]["jira_url"] is None
 
 
 @pytest.mark.asyncio
@@ -120,3 +142,26 @@ async def test_update_improvement_feedback_status_404_when_not_found():
                 current_user={"id": "admin-1", "role": "super_admin"},
             )
     assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_improvement_feedback_status_never_syncs_jira():
+    """CARECLIQV2-350 — even a legacy row that still carries a
+    jira_issue_key (from before this integration was removed) must not
+    trigger a Jira transition on status change."""
+    supabase = MagicMock()
+    supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"id": "f-1", "jira_issue_key": "BRS-12"}]
+    )
+
+    with patch("backend.app.api.admin.get_supabase_admin", return_value=supabase), patch(
+        "backend.app.api.admin.jira_service.transition_issue"
+    ) as transition_issue:
+        result = await admin.update_improvement_feedback_status(
+            feedback_id="f-1",
+            body=admin.ImprovementFeedbackStatusUpdate(status="in_progress"),
+            current_user={"id": "admin-1", "role": "super_admin"},
+        )
+
+    transition_issue.assert_not_called()
+    assert result == {"ok": True, "status": "in_progress"}

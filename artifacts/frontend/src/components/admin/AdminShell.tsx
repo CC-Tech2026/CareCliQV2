@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  ShieldCheck,
   LayoutDashboard,
   Building2,
   UserPlus,
@@ -18,14 +17,22 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SURFACE = "var(--cc-surface)";
-const SOFT = "var(--cc-soft)";
-const BG = "var(--cc-bg)";
 const PLUM = "var(--cc-plum)";
+
+// Sidebar only — the reference had a dark nav rail against a light content
+// area, and --cc-sidebar-bg was already sitting in index.css unused,
+// added specifically for this ("Deep dark navy — matches reference
+// image"). The main content card stays CareCliQ's normal light surface —
+// this isn't a full dark-theme switch, just the nav rail.
+const SIDEBAR_BG = "var(--cc-sidebar-bg)";
+const SIDEBAR_TEXT = "#F5F5F7";
+const SIDEBAR_MUTED = "rgba(245, 245, 247, 0.55)";
+const SIDEBAR_BORDER = "rgba(245, 245, 247, 0.1)";
+const SIDEBAR_AVATAR_BG = "rgba(245, 245, 247, 0.12)";
 
 // One entry per real page — add to this list (not ad hoc links) as the
 // portal grows. `label: null` renders ungrouped, flush with the top —
@@ -123,30 +130,31 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: BG }}>
+    // The sidebar is not a card — it has no border/rounding/shadow of its
+    // own, it's the same flat layer as the page background (both this
+    // exact color), so it reads as one continuous shape. Only the white
+    // content card is a distinct, elevated card floating on top of that
+    // shape — see its own margin/rounding/shadow below.
+    <div className="flex min-h-screen" style={{ background: SIDEBAR_BG }}>
       <aside
-        className={`flex ${iconOnly ? "w-16" : "w-60"} shrink-0 flex-col border-r transition-[width]`}
-        style={{ borderColor: BORDER, background: SURFACE }}
+        className={`flex ${iconOnly ? "w-16" : "w-60"} shrink-0 flex-col transition-[width]`}
       >
-        <div className={`flex items-center border-b py-4 ${iconOnly ? "flex-col gap-2 px-2" : "gap-2 px-5"}`} style={{ borderColor: BORDER }}>
+        <div className={`flex items-center border-b py-4 ${iconOnly ? "flex-col gap-2 px-2" : "gap-2 px-5"}`} style={{ borderColor: SIDEBAR_BORDER }}>
           <Link
             href="/admin/dashboard"
-            className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg transition-colors hover:bg-cc-soft ${iconOnly ? "flex-none justify-center px-1 py-1" : ""}`}
+            className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg transition-colors hover:bg-white/10 ${iconOnly ? "flex-none px-1 py-1" : ""}`}
           >
-            <ShieldCheck size={20} style={{ color: PLUM }} className="shrink-0" />
-            {!iconOnly && (
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-black leading-tight" style={{ color: TEXT }}>CareCliQ Admin</p>
-                <p className="truncate text-[10px] font-semibold" style={{ color: MUTED }}>Master system</p>
-              </div>
-            )}
+            {/* Sized down when collapsed — the icon-only rail is only 64px
+                wide (w-16 minus its own padding), so the same size used
+                expanded would overflow it. */}
+            <CareCliQLogo size={iconOnly ? 36 : 64} className="shrink-0" />
           </Link>
           <button
             onClick={toggleCollapsed}
-            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-cc-soft"
+            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-white/10"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {iconOnly ? <PanelLeftOpen size={16} style={{ color: MUTED }} /> : <PanelLeftClose size={16} style={{ color: MUTED }} />}
+            {iconOnly ? <PanelLeftOpen size={16} style={{ color: SIDEBAR_MUTED }} /> : <PanelLeftClose size={16} style={{ color: SIDEBAR_MUTED }} />}
           </button>
         </div>
 
@@ -159,16 +167,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <div className="space-y-0.5">
               <button
                 onClick={closeAccountPanel}
-                className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase transition-colors hover:bg-cc-soft"
-                style={{ color: MUTED, letterSpacing: "0.16em" }}
+                className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase transition-colors hover:bg-white/10"
+                style={{ color: SIDEBAR_MUTED, letterSpacing: "0.16em" }}
               >
                 <ArrowLeft size={13} /> Account
               </button>
 
               <button
                 onClick={() => setSettingsOpen((v) => !v)}
-                className="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-cc-soft"
-                style={{ color: MUTED }}
+                className="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-white/10"
+                style={{ color: SIDEBAR_MUTED }}
               >
                 <span className="flex items-center gap-2.5">
                   <Settings size={16} /> Settings
@@ -176,7 +184,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 {showSettingsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
               {showSettingsExpanded && (
-                <div className="ml-3 space-y-0.5 border-l-2 pl-3" style={{ borderColor: BORDER }}>
+                <div className="ml-3 space-y-0.5 border-l-2 pl-3" style={{ borderColor: SIDEBAR_BORDER }}>
                   {SETTINGS_ITEMS.map((item) => {
                     const Icon = item.icon;
                     const active = location.startsWith(item.href);
@@ -185,7 +193,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                         key={item.href}
                         href={item.href}
                         className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors"
-                        style={{ background: active ? "var(--cc-plum-soft)" : "transparent", color: active ? PLUM : MUTED }}
+                        style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
                       >
                         <Icon size={16} /> {item.label}
                       </Link>
@@ -196,8 +204,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
               <button
                 onClick={logout}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-cc-soft"
-                style={{ color: MUTED }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-white/10"
+                style={{ color: SIDEBAR_MUTED }}
               >
                 <LogOut size={16} /> Log out
               </button>
@@ -213,7 +221,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     title={item.label}
                     className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors"
-                    style={{ background: active ? "var(--cc-plum-soft)" : "transparent", color: active ? PLUM : MUTED }}
+                    style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
                   >
                     <Icon size={18} />
                   </Link>
@@ -224,7 +232,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             NAV_GROUPS.map((group) => (
               <div key={group.label ?? "top"}>
                 {group.label && (
-                  <p className="mb-2 px-3 text-[10px] font-black uppercase" style={{ color: MUTED, letterSpacing: "0.16em" }}>
+                  <p className="mb-2 px-3 text-[10px] font-black uppercase" style={{ color: SIDEBAR_MUTED, letterSpacing: "0.16em" }}>
                     {group.label}
                   </p>
                 )}
@@ -232,7 +240,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     read as "belonging to" their header, not as more top-level
                     items — the header alone (small caps, same-ish size as
                     before) wasn't enough of a visual break on its own. */}
-                <div className={group.label ? "ml-3 space-y-0.5 border-l-2 pl-3" : "space-y-0.5"} style={group.label ? { borderColor: BORDER } : undefined}>
+                <div className={group.label ? "ml-3 space-y-0.5 border-l-2 pl-3" : "space-y-0.5"} style={group.label ? { borderColor: SIDEBAR_BORDER } : undefined}>
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const active = location.startsWith(item.href);
@@ -241,7 +249,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                         key={item.href}
                         href={item.href}
                         className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors"
-                        style={{ background: active ? "var(--cc-plum-soft)" : "transparent", color: active ? PLUM : MUTED }}
+                        style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
                       >
                         <Icon size={16} /> {item.label}
                       </Link>
@@ -253,33 +261,41 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
-        <div className="border-t p-3" style={{ borderColor: BORDER }}>
+        <div className="border-t p-3" style={{ borderColor: SIDEBAR_BORDER }}>
           <button
             onClick={() => (showAccountPanel ? closeAccountPanel() : setAccountOpen(true))}
             title={iconOnly ? (user?.full_name || "Admin") : undefined}
-            className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-left transition-colors hover:bg-cc-soft ${iconOnly ? "justify-center px-0" : "px-2"}`}
+            className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-left transition-colors hover:bg-white/10 ${iconOnly ? "justify-center px-0" : "px-2"}`}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black" style={{ background: SOFT, color: TEXT }}>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black" style={{ background: SIDEBAR_AVATAR_BG, color: SIDEBAR_TEXT }}>
               {getInitials(user?.full_name || user?.email || "A")}
             </span>
             {!iconOnly && (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{user?.full_name || "Admin"}</p>
-                  <p className="truncate text-[10px]" style={{ color: MUTED }}>{user?.email}</p>
+                  <p className="truncate text-[12px] font-bold" style={{ color: SIDEBAR_TEXT }}>{user?.full_name || "Admin"}</p>
+                  <p className="truncate text-[10px]" style={{ color: SIDEBAR_MUTED }}>{user?.email}</p>
                 </div>
-                {showAccountPanel ? <ChevronUp size={14} style={{ color: MUTED }} /> : <ChevronDown size={14} style={{ color: MUTED }} />}
+                {showAccountPanel ? <ChevronUp size={14} style={{ color: SIDEBAR_MUTED }} /> : <ChevronDown size={14} style={{ color: SIDEBAR_MUTED }} />}
               </>
             )}
           </button>
         </div>
       </aside>
 
-      {/* No max-width cap — this was leaving most of the screen empty on
-          anything wider than a laptop, centered inside a fixed max-w-5xl
-          column. The sidebar already bounds one edge; let content use the
-          rest. */}
-      <main className="flex-1 px-8 py-8">{children}</main>
+      {/* The one floating card — margin on every side (including the
+          left, for a visible gap off the flat sidebar/background layer)
+          plus its own rounding/border/shadow, so it reads as elevated
+          above that layer rather than sharing a frame with it. No
+          max-width cap — that was leaving most of the screen empty on
+          anything wider than a laptop; the sidebar already bounds one
+          edge, let content use the rest. */}
+      <main
+        className="m-4 flex-1 rounded-3xl border px-8 py-8 shadow-sm"
+        style={{ borderColor: BORDER, background: SURFACE }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

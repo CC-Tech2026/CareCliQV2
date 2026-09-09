@@ -91,6 +91,7 @@ interface FormData {
 
   sp_organisation_name: string;
   sp_provider_type: string;
+  sp_org_type: string;
   sp_registration_status: string;
   sp_team_size: string;
   sp_participant_volume: string;
@@ -107,6 +108,7 @@ const EMPTY: FormData = {
 
   sp_organisation_name: "",
   sp_provider_type: "",
+  sp_org_type: "",
   sp_registration_status: "",
   sp_team_size: "",
   sp_participant_volume: "",
@@ -418,6 +420,7 @@ export default function Signup() {
     return (
       form.sp_organisation_name.trim() !== "" &&
       form.sp_provider_type.trim() !== "" &&
+      form.sp_org_type.trim() !== "" &&
       form.sp_registration_status.trim() !== "" &&
       form.sp_team_size.trim() !== "" &&
       form.sp_participant_volume.trim() !== "" &&
@@ -1613,6 +1616,7 @@ function buildPayload(form: FormData) {
     account_type: accountType,
     organization_name: form.sp_organisation_name,
     provider_type: form.sp_provider_type || undefined,
+    org_type: form.sp_org_type || undefined,
     registration_status: form.sp_registration_status || undefined,
     team_size: form.sp_team_size || undefined,
     participant_volume: form.sp_participant_volume || undefined,
@@ -1621,6 +1625,7 @@ function buildPayload(form: FormData) {
     org_address: form.sp_address || undefined,
     onboarding_data: {
       provider_type: form.sp_provider_type,
+      org_type: form.sp_org_type,
       registration_status: form.sp_registration_status,
       team_size: form.sp_team_size,
       participant_volume: form.sp_participant_volume,
@@ -1681,6 +1686,24 @@ function SmallProviderFields({
             { value: "unregistered", label: t("auth.signup.providerType.unregistered") },
             { value: "plan_management", label: t("auth.signup.providerType.planManagement") },
             { value: "support_coord", label: t("auth.signup.providerType.supportCoord") },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Label>{t("auth.signup.field.orgType")}</Label>
+
+        <StyledSelect
+          name="sp_org_type"
+          value={form.sp_org_type}
+          onChange={(v) => updateField("sp_org_type", v)}
+          placeholder={t("auth.signup.placeholder.selectType")}
+          disabled={disabled}
+          required
+          options={[
+            { value: "aged_care", label: t("auth.signup.orgType.agedCare") },
+            { value: "disability", label: t("auth.signup.orgType.disability") },
+            { value: "aged_care_disability", label: t("auth.signup.orgType.agedCareDisability") },
           ]}
         />
       </div>

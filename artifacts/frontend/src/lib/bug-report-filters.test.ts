@@ -4,6 +4,7 @@ import {
   DEFAULT_BUG_REPORT_FILTERS,
   filterBugReports,
   hasActiveBugReportFilters,
+  INTERNAL_ORG_FILTER_VALUE,
   matchesBugReportFilters,
 } from "@/lib/bug-report-filters";
 
@@ -12,8 +13,6 @@ function makeReport(overrides: Partial<AdminBugReport> = {}): AdminBugReport {
     id: "r1",
     organization_id: "org-1",
     organization_name: "Sunshine Disability Services",
-    reporter_id: "u1",
-    reporter_name: "Jamie Lee",
     page_url: "/shifts/123",
     description: "Task checklist wouldn't save",
     status: "open",
@@ -34,11 +33,10 @@ describe("CARECLIQV2-349 bug report filters", () => {
     expect(hasActiveBugReportFilters(DEFAULT_BUG_REPORT_FILTERS)).toBe(false);
   });
 
-  it("search matches description, organisation, or reporter name, case-insensitively", () => {
+  it("search matches description or organisation, case-insensitively", () => {
     const report = makeReport();
     const filters = { ...DEFAULT_BUG_REPORT_FILTERS, search: "sunshine" };
     expect(matchesBugReportFilters(report, filters)).toBe(true);
-    expect(matchesBugReportFilters(report, { ...filters, search: "JAMIE" })).toBe(true);
     expect(matchesBugReportFilters(report, { ...filters, search: "checklist" })).toBe(true);
     expect(matchesBugReportFilters(report, { ...filters, search: "nope" })).toBe(false);
   });
@@ -59,6 +57,20 @@ describe("CARECLIQV2-349 bug report filters", () => {
     const report = makeReport({ organization_id: "org-2" });
     expect(matchesBugReportFilters(report, { ...DEFAULT_BUG_REPORT_FILTERS, organizationId: "org-2" })).toBe(true);
     expect(matchesBugReportFilters(report, { ...DEFAULT_BUG_REPORT_FILTERS, organizationId: "org-1" })).toBe(false);
+  });
+
+  it("filters Internal reports (organization_id: null) via the sentinel value", () => {
+    const internalReport = makeReport({ organization_id: null, organization_name: "Internal — Master Portal" });
+    const orgReport = makeReport({ organization_id: "org-1" });
+    expect(
+      matchesBugReportFilters(internalReport, { ...DEFAULT_BUG_REPORT_FILTERS, organizationId: INTERNAL_ORG_FILTER_VALUE }),
+    ).toBe(true);
+    expect(
+      matchesBugReportFilters(orgReport, { ...DEFAULT_BUG_REPORT_FILTERS, organizationId: INTERNAL_ORG_FILTER_VALUE }),
+    ).toBe(false);
+    expect(
+      matchesBugReportFilters(internalReport, { ...DEFAULT_BUG_REPORT_FILTERS, organizationId: "org-1" }),
+    ).toBe(false);
   });
 
   it("requires every active filter to match at once", () => {

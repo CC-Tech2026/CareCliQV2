@@ -59,6 +59,7 @@ import QRCode from "react-qr-code";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { submitBugReport } from "@/services/bugReportService";
+import { readFileAsBase64 } from "@/lib/read-file-as-base64";
 import { submitImprovementFeedback } from "@/services/improvementFeedbackService";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -927,15 +928,6 @@ const SEVERITY_OPTIONS: { value: BugSeverity; label: string; hint: string; color
   { value: "medium", label: "Medium", hint: "Annoying, but I can work around it.", color: "#9A5B0A", soft: "#FBF2E6" },
   { value: "urgent", label: "Urgent", hint: "I can't use CareCliQ.", color: "var(--cc-coral)", soft: "var(--cc-coral-soft)" },
 ];
-
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
-    reader.readAsDataURL(file);
-  });
-}
 
 // The "Report a Bug" tab is open to every role, but the photo/video
 // attachment picker is MD and coordinators only — workers keep the plain

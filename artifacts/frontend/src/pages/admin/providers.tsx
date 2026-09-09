@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, CreditCard, HeartHandshake, Search, User, X } from "lucide-react";
+import { Activity, AlertTriangle, Building2, CreditCard, HeartHandshake, Search, User, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { listAdminOrganizations, type AdminOrgSummary } from "@/services/adminService";
+import { listAdminOrganizations, type AdminOrgSummary, type OrgType } from "@/services/adminService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -26,21 +26,9 @@ const TRIAL = "var(--cc-coral)";
 const AVATAR_TINTS = ["var(--cc-plum-soft)", "var(--cc-coral-soft)"];
 const AVATAR_STACK_MAX = 3;
 
-// UI-only placeholder — the real API needs migrations 151/152 run before it
-// works. Lets the portal be iterated on without the backend. Swap back to
-// relying purely on listAdminOrganizations() once that's wired up.
-// Harbourview deliberately has no plan_tier — the one dummy row that
-// exercises the "On Trial" status below.
-const DUMMY_ORGS: AdminOrgSummary[] = [
-  { organization_id: "dummy-1", display_name: "Sunshine Disability Services", provider_type: "Disability", status: "active", plan_tier: "growth", team_size: "11-25", participant_volume: "26-50", created_at: "2026-06-02T00:00:00Z", user_count: 13 },
-  { organization_id: "dummy-2", display_name: "Harbourview Aged Care", provider_type: "Aged Care", status: "active", plan_tier: null, team_size: "1-10", participant_volume: "1-25", created_at: "2026-07-14T00:00:00Z", user_count: 6 },
-  { organization_id: "dummy-3", display_name: "Northside Community Support", provider_type: "Disability", status: "suspended", plan_tier: "starter", team_size: "1-10", participant_volume: "1-25", created_at: "2026-05-20T00:00:00Z", user_count: 4 },
-  { organization_id: "dummy-4", display_name: "Coastal Care Collective", provider_type: "Aged Care & Disability", status: "active", plan_tier: "enterprise", team_size: "50+", participant_volume: "100+", created_at: "2026-03-11T00:00:00Z", user_count: 42 },
-];
-
 // "Trial" isn't a real status field yet — derived from plan_tier being
 // unset, per the product call (2026-09-02): a provider with no plan tier
-// is still on trial; picking a tier (even "starter") makes them Active.
+// is still on trial; picking a tier (even "micro") makes them Active.
 // Suspended/offboarded still win over that since access being cut off
 // matters more than billing state. Split into a key (for filtering) and a
 // style lookup (for display) so the row badge and the Status filter can't
@@ -61,10 +49,14 @@ const PROVIDER_STATUS_STYLE: Record<ProviderStatusKey, { label: string; color: s
   offboarded: { label: "Offboarded", color: SLATE },
 };
 
+// Matches stripe_service.PLAN_TIERS / platform-billing.tsx — migration
+// 159_platform_subscription.sql renamed the old starter/growth/enterprise
+// tiers to these; this filter had drifted and never actually matched a
+// real organisation's plan_tier value.
 const PLAN_FILTER_OPTIONS = [
-  { value: "starter", label: "Starter" },
-  { value: "growth", label: "Growth" },
-  { value: "enterprise", label: "Enterprise" },
+  { value: "micro", label: "Micro" },
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
 ];
 
 // Only the three statuses asked for are selectable filters — "offboarded"
@@ -76,7 +68,12 @@ const STATUS_FILTER_OPTIONS: { value: ProviderStatusKey; label: string }[] = [
   { value: "suspended", label: "Suspended" },
 ];
 
-const SERVICE_FILTER_OPTIONS = ["Aged Care", "Disability", "Aged Care & Disability"];
+const ORG_TYPE_LABEL: Record<OrgType, string> = {
+  aged_care: "Aged Care",
+  disability: "Disability",
+  aged_care_disability: "Aged Care & Disability",
+};
+const ORG_TYPE_FILTER_OPTIONS: OrgType[] = ["aged_care", "disability", "aged_care_disability"];
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -91,16 +88,24 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 export default function AdminProvidersPage() {
   const [, navigate] = useLocation();
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState<"all" | string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | ProviderStatusKey>("all");
-  const [serviceFilter, setServiceFilter] = useState<"all" | string>("all");
+  const [orgTypeFilter, setOrgTypeFilter] = useState<"all" | OrgType>("all");
 
+  // No dummy-data fallback — a real fetch failure needs to read as a real
+  // failure (see loadError below), not silently show fabricated providers
+  // that could be mistaken for actual customers.
   useEffect(() => {
     let cancelled = false;
     listAdminOrganizations()
-      .then((data) => { if (!cancelled) setOrgs(data.length > 0 ? data : DUMMY_ORGS); })
-      .catch(() => { if (!cancelled) setOrgs(DUMMY_ORGS); });
+      .then((data) => { if (!cancelled) setOrgs(data); })
+      .catch((e) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : "Could not load providers.");
+        setOrgs([]);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -109,29 +114,33 @@ export default function AdminProvidersPage() {
 
   const q = search.trim().toLowerCase();
   const visibleOrgs = orgs?.filter((o) => {
-    const matchesSearch = !q || o.display_name.toLowerCase().includes(q) || (o.provider_type || "").toLowerCase().includes(q);
+    const matchesSearch =
+      !q ||
+      o.display_name.toLowerCase().includes(q) ||
+      (o.provider_type || "").toLowerCase().includes(q) ||
+      o.organization_id.toLowerCase().includes(q);
     const matchesPlan = planFilter === "all" || o.plan_tier === planFilter;
     const matchesStatus = statusFilter === "all" || getProviderStatusKey(o) === statusFilter;
-    const matchesService = serviceFilter === "all" || o.provider_type === serviceFilter;
-    return matchesSearch && matchesPlan && matchesStatus && matchesService;
+    const matchesOrgType = orgTypeFilter === "all" || o.org_type === orgTypeFilter;
+    return matchesSearch && matchesPlan && matchesStatus && matchesOrgType;
   }) ?? null;
 
-  const hasActiveFilters = Boolean(search) || planFilter !== "all" || statusFilter !== "all" || serviceFilter !== "all";
+  const hasActiveFilters = Boolean(search) || planFilter !== "all" || statusFilter !== "all" || orgTypeFilter !== "all";
   function clearFilters() {
     setSearch("");
     setPlanFilter("all");
     setStatusFilter("all");
-    setServiceFilter("all");
+    setOrgTypeFilter("all");
   }
 
-  const ROW_GRID = "grid-cols-[2fr_1fr_1fr_140px]";
+
+  const ROW_GRID = "grid-cols-[1.1fr_1.6fr_0.9fr_1.1fr_1fr_110px]";
 
   return (
     <AdminShell>
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-black" style={{ color: TEXT }}>Providers</h1>
-          <p className="text-[12px] font-medium" style={{ color: MUTED }}>Every organisation using CareCliQ, across all providers.</p>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -146,7 +155,7 @@ export default function AdminProvidersPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search for a provider"
+              placeholder="Search by name or Org ID"
               className="h-11 rounded-xl border-0 pl-11 text-[13px] shadow-none focus-visible:ring-1"
               style={{ background: SOFT }}
             />
@@ -173,25 +182,25 @@ export default function AdminProvidersPage() {
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | ProviderStatusKey)}>
             <SelectTrigger className="h-11 w-full rounded-xl border-0 text-[12px] shadow-none sm:w-[160px]" style={{ background: SOFT }}>
               <Activity size={14} className="mr-1.5" style={{ color: MUTED }} />
-              <SelectValue placeholder="All statuses" />
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="all">Status</SelectItem>
               {STATUS_FILTER_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select value={serviceFilter} onValueChange={setServiceFilter}>
+          <Select value={orgTypeFilter} onValueChange={(v) => setOrgTypeFilter(v as "all" | OrgType)}>
             <SelectTrigger className="h-11 w-full rounded-xl border-0 text-[12px] shadow-none sm:w-[190px]" style={{ background: SOFT }}>
               <HeartHandshake size={14} className="mr-1.5" style={{ color: MUTED }} />
-              <SelectValue placeholder="All services" />
+              <SelectValue placeholder="Org Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All services</SelectItem>
-              {SERVICE_FILTER_OPTIONS.map((opt) => (
-                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              <SelectItem value="all">Org Type</SelectItem>
+              {ORG_TYPE_FILTER_OPTIONS.map((opt) => (
+                <SelectItem key={opt} value={opt}>{ORG_TYPE_LABEL[opt]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -207,51 +216,82 @@ export default function AdminProvidersPage() {
           )}
         </div>
 
-        {orgs === null ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} />)}
+        {/* The header row is always visible, even while loading or on
+            error — a Super Admin should still recognise this as the
+            Providers directory rather than stare at a bare error card
+            that could belong to any page. Only the body below it (rows,
+            skeleton, error, empty state) varies. */}
+        <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+          <div className={`grid ${ROW_GRID} gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-wide`} style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
+            <span>Org ID</span>
+            <span>Company</span>
+            <span>Status</span>
+            <span>Org Type</span>
+            <span>Subscription Type</span>
+            <span className="text-right">Users</span>
           </div>
-        ) : orgs.length === 0 ? (
-          <div className="rounded-2xl border p-10 text-center" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[13px] font-black" style={{ color: TEXT }}>No providers yet.</p>
-          </div>
-        ) : visibleOrgs && visibleOrgs.length === 0 ? (
-          <div className="rounded-2xl border p-10 text-center" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[13px] font-black" style={{ color: TEXT }}>No providers match these filters.</p>
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-            <div className={`grid ${ROW_GRID} gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-wide`} style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
-              <span>Company</span>
-              <span>Status</span>
-              <span>About</span>
-              <span className="text-right">Users</span>
+
+          {orgs === null ? (
+            <div className="space-y-2 p-5">
+              {[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-lg" style={{ background: SOFT }} />)}
             </div>
-            {(visibleOrgs ?? []).map((org, i) => {
+          ) : loadError ? (
+            <div className="p-10 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "#FBF2E6" }}>
+                <AlertTriangle size={20} style={{ color: AMBER }} />
+              </span>
+              <p className="mt-3 text-[13px] font-black" style={{ color: TEXT }}>Couldn't load providers</p>
+              <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium" style={{ color: MUTED }}>{loadError}</p>
+            </div>
+          ) : orgs.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-[13px] font-black" style={{ color: TEXT }}>No providers yet.</p>
+            </div>
+          ) : visibleOrgs && visibleOrgs.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-[13px] font-black" style={{ color: TEXT }}>No providers match these filters.</p>
+            </div>
+          ) : (
+            (visibleOrgs ?? []).map((org, i) => {
               const st = PROVIDER_STATUS_STYLE[getProviderStatusKey(org)];
               return (
-                <button
+                <div
                   key={org.organization_id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => navigate(`/admin/organizations/${org.organization_id}`)}
-                  className={`grid w-full ${ROW_GRID} items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-cc-soft`}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    navigate(`/admin/organizations/${org.organization_id}`);
+                  }}
+                  className={`grid w-full cursor-pointer ${ROW_GRID} items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-cc-soft`}
                   style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : undefined }}
                 >
+                  <span className="truncate font-mono text-[11px]" style={{ color: MUTED }}>{org.organization_id}</span>
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
                       <Building2 size={15} style={{ color: PLUM }} />
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{org.display_name}</p>
-                      {org.plan_tier && (
-                        <p className="truncate text-[11px] font-medium capitalize" style={{ color: MUTED }}>{org.plan_tier} plan</p>
-                      )}
-                    </div>
+                    <p className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{org.display_name}</p>
                   </div>
                   <span className="flex items-center gap-1.5 text-[12px] font-bold" style={{ color: st.color }}>
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: st.color }} />
                     {st.label}
                   </span>
-                  <span className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{org.provider_type || "—"}</span>
+                  {org.org_type ? (
+                    <span
+                      className="w-fit truncate rounded-full px-2.5 py-1 text-[11px] font-bold"
+                      style={{ background: "var(--cc-plum-soft)", color: PLUM }}
+                    >
+                      {ORG_TYPE_LABEL[org.org_type]}
+                    </span>
+                  ) : (
+                    <span className="text-[12px] font-medium" style={{ color: MUTED }}>—</span>
+                  )}
+                  <span className="truncate text-[12px] font-semibold capitalize" style={{ color: TEXT }}>
+                    {org.plan_tier ? `${org.plan_tier} plan` : "Trial"}
+                  </span>
                   <span className="ml-auto flex shrink-0 items-center">
                     <span className="flex -space-x-2">
                       {Array.from({ length: Math.min(org.user_count, AVATAR_STACK_MAX) }).map((_, avatarIdx) => (
@@ -271,11 +311,11 @@ export default function AdminProvidersPage() {
                       {org.user_count}
                     </span>
                   </span>
-                </button>
+                </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
     </AdminShell>
   );

@@ -302,6 +302,7 @@ class OnboardingCompleteRequest(BaseModel):
     onboarding_data: dict = {}
     organization_name: Optional[str] = None
     provider_type: Optional[str] = None
+    org_type: Optional[str] = None
     registration_status: Optional[str] = None
     team_size: Optional[str] = None
     participant_volume: Optional[str] = None
@@ -998,6 +999,7 @@ async def complete_onboarding(
                 "owner_user_id": user_id,
                 "organization_name": body.organization_name,
                 "provider_type": body.provider_type,
+                "org_type": body.org_type,
                 "registration_status": body.registration_status,
                 "team_size": body.team_size,
                 "participant_volume": body.participant_volume,
@@ -1020,6 +1022,7 @@ async def complete_onboarding(
                 **(body.onboarding_data or {}),
                 "organization_name": body.organization_name,
                 "provider_type": body.provider_type,
+                "org_type": body.org_type,
                 "registration_status": body.registration_status,
                 "team_size": body.team_size,
                 "participant_volume": body.participant_volume,

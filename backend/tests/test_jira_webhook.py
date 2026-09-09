@@ -88,17 +88,16 @@ def test_apply_jira_status_change_updates_bug_report():
     assert updated is True
 
 
-def test_apply_jira_status_change_falls_back_to_improvement_feedback():
+def test_apply_jira_status_change_never_touches_improvement_feedback():
+    """CARECLIQV2-350 — feedback has no Jira integration, so a webhook call
+    must only ever query bug_reports, even when the issue key is unknown."""
     supabase = MagicMock()
 
     def _table(name: str):
-        table = MagicMock()
-        if name == "bug_reports":
-            table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
-        elif name == "improvement_feedback":
-            table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{"id": "f-1"}])
-        else:
+        if name != "bug_reports":
             raise AssertionError(f"Unexpected table requested: {name}")
+        table = MagicMock()
+        table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         return table
 
     supabase.table.side_effect = _table
@@ -106,7 +105,7 @@ def test_apply_jira_status_change_falls_back_to_improvement_feedback():
     with patch("backend.app.services.jira_webhook_service.get_supabase_admin", return_value=supabase):
         updated = jira_webhook_service.apply_jira_status_change("BRS-2", "In Progress")
 
-    assert updated is True
+    assert updated is False
 
 
 def test_apply_jira_status_change_false_when_issue_key_unknown():
