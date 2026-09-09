@@ -25,6 +25,16 @@ logger = logging.getLogger(__name__)
 
 # Paths that do NOT require an org context.
 # Prefix-matched: any path starting with one of these strings is exempt.
+#
+# "/api/admin" is here for a different reason than the rest — it's not
+# public, it's CareCliQ's own vendor-side Super Admin surface (see
+# backend/app/api/admin.py), used only by the super_admin role, which is
+# deliberately not scoped to any organization at all. Every endpoint under
+# that prefix enforces its own is_super_admin() check independently (see
+# admin.py's _require_super_admin), so exempting it here doesn't weaken
+# tenant isolation for any provider-facing route — it just lets a
+# legitimately org-less role reach the one surface built for it, instead
+# of being rejected before its own auth check ever runs.
 _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/auth/login",
     "/api/auth/register",
@@ -40,6 +50,11 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/invitations/organizations",
     "/api/invitations/accept/",
     "/api/health",
+    "/api/admin",
+    # Jira calls this one directly (Automation "Send web request"), with no
+    # JWT at all — it authenticates with its own shared-secret header
+    # instead (see jira_webhook.py), checked independently of org context.
+    "/api/webhooks/jira",
     "/docs",
     "/openapi.json",
     "/redoc",

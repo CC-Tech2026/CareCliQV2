@@ -249,8 +249,14 @@ from .api import organization_branding as organization_branding_api
 app.include_router(organization_branding_api.router, prefix="/api")
 from .api import operational_feedback as operational_feedback_api
 app.include_router(operational_feedback_api.router, prefix="/api")
+from .api import bug_reports as bug_reports_api
+app.include_router(bug_reports_api.router, prefix="/api")
+from .api import improvement_feedback as improvement_feedback_api
+app.include_router(improvement_feedback_api.router, prefix="/api")
 from .api import admin as admin_api
 app.include_router(admin_api.router, prefix="/api")
+from .api import jira_webhook as jira_webhook_api
+app.include_router(jira_webhook_api.router, prefix="/api")
 from .api import platform_billing as platform_billing_api
 app.include_router(platform_billing_api.router, prefix="/api")
 from .api import launch_waitlist as launch_waitlist_api

@@ -111,6 +111,19 @@ class Settings(BaseSettings):
     # NDIS participant funding in billing.py, which doesn't touch Stripe at all.
     stripe_secret_key: str = os.environ.get("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    # Jira auto-ticketing for bug reports / improvement feedback (see
+    # backend/app/services/jira_service.py). Optional — everything using
+    # this degrades to "no Jira link" rather than failing when unset.
+    jira_site_url: str = os.environ.get("JIRA_SITE_URL", "")
+    jira_email: str = os.environ.get("JIRA_EMAIL", "")
+    jira_api_token: str = os.environ.get("JIRA_API_TOKEN", "")
+    jira_project_key: str = os.environ.get("JIRA_PROJECT_KEY", "")
+    jira_issue_type: str = os.environ.get("JIRA_ISSUE_TYPE", "Bug")
+    # Shared secret the inbound Jira webhook (backend/app/api/jira_webhook.py)
+    # requires on every request, since Jira Automation can't send a bearer
+    # JWT — set as a custom header on the Jira Automation "Send web request"
+    # action. Empty means the webhook rejects everything, not that it's open.
+    jira_webhook_secret: str = os.environ.get("JIRA_WEBHOOK_SECRET", "")
     notification_scheduler_enabled: bool = os.environ.get("NOTIFICATION_SCHEDULER_ENABLED", "true").lower() == "true"
     notification_scheduler_interval_minutes: int = int(
         os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15
