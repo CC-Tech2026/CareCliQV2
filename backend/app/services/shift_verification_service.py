@@ -268,10 +268,23 @@ def compute_verification_checks(
     }
 
     force_ended = bool(end_validation.get("force_ended"))
+    auto_ended = bool(end_validation.get("auto_ended"))
+    end_reason = end_validation.get("end_reason")
     force_ended_check = {
         "force_ended": force_ended,
+        "auto_ended": auto_ended,
+        "end_reason": end_reason,
         "flagged": force_ended,
-        "reason": "Shift was force-ended with incomplete mandatory tasks." if force_ended else None,
+        "reason": (
+            end_reason
+            or (
+                "Shift was automatically ended by the system — the worker did not end it."
+                if auto_ended
+                else "Shift was force-ended with incomplete mandatory tasks."
+                if force_ended
+                else None
+            )
+        ),
     }
 
     hours_check = _hours_sanity_check(shift)

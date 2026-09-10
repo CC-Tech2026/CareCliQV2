@@ -25,6 +25,7 @@ from .shift_offer_service import run_shift_offer_pass
 from .supabase_client import get_supabase_admin
 from .task_reminder_service import run_task_reminder_pass
 from .unassigned_shift_expiry_service import run_unassigned_shift_expiry_pass
+from .overdue_documentation_escalation_service import run_overdue_documentation_escalation_pass
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ _scheduler_task: Optional[asyncio.Task] = None
 _long_shift_task: Optional[asyncio.Task] = None
 _random_checkin_task: Optional[asyncio.Task] = None
 _stripe_reconciliation_task: Optional[asyncio.Task] = None
+_overdue_shift_autoend_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -167,6 +169,7 @@ async def run_notification_pass() -> dict[str, int]:
         screening_recheck_count, onboarding_escalation_stats,
         offer_letter_stats, applicant_stage_reminder_count,
         shift_offer_stats, unassigned_shift_expiry_count,
+        overdue_documentation_count,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -184,6 +187,7 @@ async def run_notification_pass() -> dict[str, int]:
         run_applicant_stage_reminder_pass(),
         run_shift_offer_pass(),
         run_unassigned_shift_expiry_pass(),
+        run_overdue_documentation_escalation_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -206,6 +210,7 @@ async def run_notification_pass() -> dict[str, int]:
         "shift_offers_advanced": shift_offer_stats["advanced"],
         "shift_offers_exhausted": shift_offer_stats["exhausted"],
         "unassigned_shift_expirations": unassigned_shift_expiry_count,
+        "overdue_documentation_escalations": overdue_documentation_count,
     }
 
 
@@ -229,6 +234,7 @@ async def _scheduler_loop() -> None:
 
 def start_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
+    global _overdue_shift_autoend_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -237,6 +243,7 @@ def start_notification_scheduler() -> None:
     _long_shift_task = asyncio.create_task(_long_shift_monitor_loop())
     _random_checkin_task = asyncio.create_task(_random_checkin_loop())
     _stripe_reconciliation_task = asyncio.create_task(_stripe_reconciliation_loop())
+    _overdue_shift_autoend_task = asyncio.create_task(_overdue_shift_autoend_loop())
 
 
 async def _random_checkin_loop() -> None:
@@ -269,6 +276,22 @@ async def _long_shift_monitor_loop() -> None:
         await asyncio.sleep(300)
 
 
+async def _overdue_shift_autoend_loop() -> None:
+    """Dedicated 5-minute pass so the 30-minute grace period is enforced
+    reasonably promptly, independent of the general notification interval."""
+    from .overdue_shift_autoend_service import run_overdue_shift_autoend_pass
+
+    logger.info("Overdue shift auto-end loop started (every 5 min)")
+    while True:
+        try:
+            count = await run_overdue_shift_autoend_pass()
+            if count:
+                logger.info("Overdue shift auto-end: %s shift(s) ended", count)
+        except Exception as exc:
+            logger.warning("Overdue shift auto-end loop failed: %s", exc)
+        await asyncio.sleep(300)
+
+
 async def _stripe_reconciliation_loop() -> None:
     """Hourly pass checking for signup Checkout sessions that completed
     payment with no matching organization - a missed/failed webhook
@@ -295,7 +318,11 @@ async def _stripe_reconciliation_loop() -> None:
 
 async def stop_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
-    for task in (_scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task):
+    global _overdue_shift_autoend_task
+    for task in (
+        _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task,
+        _overdue_shift_autoend_task,
+    ):
         if not task:
             continue
         task.cancel()
@@ -307,3 +334,4 @@ async def stop_notification_scheduler() -> None:
     _long_shift_task = None
     _random_checkin_task = None
     _stripe_reconciliation_task = None
+    _overdue_shift_autoend_task = None

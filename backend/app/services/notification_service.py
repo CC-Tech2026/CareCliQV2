@@ -42,6 +42,8 @@ NOTIFICATION_EVENTS = (
     "shift_offer",
     "shift_offer_exhausted",
     "shift_auto_cancelled_unassigned",
+    "shift_auto_ended_overdue",
+    "shift_documentation_overdue",
     "account_deactivated",
     "account_reactivated",
 )
@@ -66,6 +68,8 @@ EVENT_ALERT_TYPES = {
     "shift_offer": "shift_offer",
     "shift_offer_exhausted": "shift_offer_exhausted",
     "shift_auto_cancelled_unassigned": "shift_auto_cancelled_unassigned",
+    "shift_auto_ended_overdue": "shift_auto_ended_overdue",
+    "shift_documentation_overdue": "shift_documentation_overdue",
     "account_deactivated": "account_deactivated",
     "account_reactivated": "account_reactivated",
 }

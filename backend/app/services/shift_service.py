@@ -997,6 +997,8 @@ def _shift_card_payload(
         "clock_in_location": shift.get("clock_in_location"),
         "clock_in_verified": bool(shift.get("clock_in_verified")),
         "office_contact_number": org_contact or _org_contact_number(str(shift.get("organization_id") or "")),
+        "documentation_pending": bool(shift.get("documentation_pending")),
+        "documentation_due_at": shift.get("documentation_due_at"),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
     return payload
@@ -2588,16 +2590,26 @@ def update_shift_tasks(
     now = _now_iso()
     # CARECLIQV2-330: dual-write progress to normalized shift_tasks.
     _sync_shift_tasks_progress(shift_id, organization_id, tasks)
+    update_payload: dict[str, Any] = {"tasks": tasks, "updated_at": now}
+    # A shift ended early with incomplete docs (documentation_pending, set by
+    # end_shift's force path) stays flagged until the worker actually comes
+    # back and finishes the mandatory tasks - this is that close-out, checked
+    # on every task save so it clears the moment they're done, not just when
+    # they happen to re-open the shift.
+    if shift.get("documentation_pending") and _mandatory_tasks_complete(tasks):
+        update_payload["documentation_pending"] = False
+        update_payload["documentation_due_at"] = None
+        update_payload["documentation_escalated_at"] = None
     try:
         resp = (
             get_supabase_admin()
             .table("shifts")
-            .update({"tasks": tasks, "updated_at": now})
+            .update(update_payload)
             .eq("id", shift_id)
             .execute()
         )
         rows = resp.data or []
-        updated = rows[0] if rows else {**shift, "tasks": tasks}
+        updated = rows[0] if rows else {**shift, **update_payload}
     except Exception as exc:
         if _is_missing_schema_error(exc):
             logger.debug("shifts table unavailable: %s", exc)
@@ -3128,8 +3140,18 @@ def end_shift(
     worker_id: str,
     organization_id: str,
     force: bool = False,
+    reason: str | None = None,
+    system_initiated: bool = False,
 ) -> Optional[dict[str, Any]]:
-    """Complete shift and linked session (CARECLIQV2-156)."""
+    """Complete shift and linked session (CARECLIQV2-156).
+
+    system_initiated is for the overdue-shift auto-end backstop
+    (overdue_shift_autoend_service) - nobody's present to sign or complete
+    tasks, so it implies force and skips the signature requirement. A
+    worker-initiated force-end (force=True, system_initiated=False) still
+    requires a signature; reason is the worker's own explanation, captured
+    alongside the acknowledgement that mandatory tasks were incomplete.
+    """
     shift = get_shift_by_id(shift_id)
     if not shift:
         return None
@@ -3142,14 +3164,21 @@ def end_shift(
     if not shift.get("clocked_in_at"):
         raise ValueError("Clock in before ending the shift.")
 
-    from .shift_signature_service import require_signature_for_shift
+    force = force or system_initiated
 
-    require_signature_for_shift(shift_id)
+    if not system_initiated:
+        from .shift_signature_service import require_signature_for_shift
+
+        require_signature_for_shift(shift_id)
 
     tasks = shift.get("tasks") or []
     validation = compute_shift_validation(tasks)
     if force:
         validation["force_ended"] = True
+    if system_initiated:
+        validation["auto_ended"] = True
+    if reason:
+        validation["end_reason"] = reason
 
     if tasks and not _mandatory_tasks_complete(tasks) and not force:
         raise ValueError("Complete all mandatory tasks before ending the shift.")
@@ -3286,11 +3315,25 @@ def end_shift(
                     if not _is_missing_schema_error(inner_exc):
                         raise
 
-    update_payload = {
+    update_payload: dict[str, Any] = {
         "status": "completed",
         "clocked_out_at": now,
         "updated_at": now,
     }
+    # Ended with incomplete mandatory tasks (worker override or system
+    # auto-end) - the shift is closed, but the documentation isn't. Give the
+    # worker 24h from when they actually clocked in to come back and finish
+    # it (via update_shift_tasks, which clears this once tasks are complete)
+    # before overdue_documentation_escalation_service flags it.
+    incomplete_docs = bool(tasks) and not _mandatory_tasks_complete(tasks) and force
+    if incomplete_docs:
+        clocked_in_at = shift.get("clocked_in_at")
+        try:
+            clock_in_dt = datetime.fromisoformat(str(clocked_in_at).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            clock_in_dt = datetime.now(timezone.utc)
+        update_payload["documentation_pending"] = True
+        update_payload["documentation_due_at"] = (clock_in_dt + timedelta(hours=24)).isoformat()
     try:
         resp = (
             get_supabase_admin()
@@ -3302,9 +3345,33 @@ def end_shift(
         rows = resp.data or []
         updated = rows[0] if rows else {**shift, **update_payload}
     except Exception as exc:
-        if _is_missing_schema_error(exc):
+        if _is_missing_schema_error(exc) and incomplete_docs:
+            # documentation_pending/documentation_due_at columns not migrated
+            # yet on this environment - fall back to closing the shift without
+            # the deadline tracking rather than blocking the worker entirely.
+            base_payload = {
+                "status": "completed",
+                "clocked_out_at": now,
+                "updated_at": now,
+            }
+            try:
+                resp = (
+                    get_supabase_admin()
+                    .table("shifts")
+                    .update(base_payload)
+                    .eq("id", shift_id)
+                    .execute()
+                )
+                rows = resp.data or []
+                updated = rows[0] if rows else {**shift, **base_payload}
+            except Exception as inner_exc:
+                if _is_missing_schema_error(inner_exc):
+                    return None
+                raise
+        elif _is_missing_schema_error(exc):
             return None
-        raise
+        else:
+            raise
 
     try:
         from . import schads_engine

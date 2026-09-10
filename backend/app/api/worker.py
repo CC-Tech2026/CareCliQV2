@@ -111,6 +111,7 @@ class CustomTaskCreate(BaseModel):
 
 class EndShiftBody(BaseModel):
     force: bool = False
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class ShiftSignatureBody(BaseModel):
@@ -1804,8 +1805,16 @@ async def worker_end_shift(
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
+    reason = (body.reason or "").strip() or None
+    if body.force and not reason:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A reason is required to end this shift with incomplete tasks.",
+        )
     try:
-        shift = shift_service.end_shift(shift_id, worker_id, org_id, force=body.force)
+        shift = shift_service.end_shift(
+            shift_id, worker_id, org_id, force=body.force, reason=reason,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if not shift:
@@ -1816,7 +1825,11 @@ async def worker_end_shift(
         entity_id=shift_id,
         user_id=worker_id,
         organization_id=org_id,
-        after_state={"session_id": shift.get("session_id")},
+        after_state={
+            "session_id": shift.get("session_id"),
+            "force": body.force,
+            "reason": reason,
+        },
     )
 
     async def _auto_summary_and_notify() -> None:

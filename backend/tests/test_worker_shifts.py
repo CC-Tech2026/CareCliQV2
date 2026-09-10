@@ -502,6 +502,178 @@ def test_end_shift_completes_shift(mock_get, mock_admin, mock_session, _mock_sig
     assert result["completion_summary"]["mandatory_completed"] == 5
 
 
+@patch("backend.app.services.shift_signature_service.require_signature_for_shift")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_end_shift_force_with_incomplete_tasks_records_reason(mock_get, mock_admin, mock_signature):
+    """Worker override: incomplete mandatory tasks allowed through with force=True,
+    but only when a reason is given (enforced at the API layer) - the service records
+    it as force_ended + end_reason for the coordinator's shift-verification queue."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        tasks=tasks,
+    )
+    mock_get.return_value = shift
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**shift, "status": "completed"}]
+    )
+
+    result = shift_service.end_shift(
+        "shift-1", "worker-1", "org-1", force=True, reason="Participant became unwell, left early.",
+    )
+    assert result is not None
+    validation = result["completion_summary"]["validation"]
+    assert validation["force_ended"] is True
+    assert validation.get("auto_ended") is not True
+    assert validation["end_reason"] == "Participant became unwell, left early."
+    mock_signature.assert_called_once()  # worker-initiated still requires a signature
+
+
+@patch("backend.app.services.shift_signature_service.require_signature_for_shift")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_end_shift_system_initiated_skips_signature_and_marks_auto_ended(mock_get, mock_admin, mock_signature):
+    """The overdue-shift auto-end backstop: nobody is present to complete tasks or
+    sign, so system_initiated bypasses the signature requirement entirely and the
+    validation blob is distinctly marked auto_ended (never confused with a worker's
+    own force-ended shift)."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        tasks=tasks,
+    )
+    mock_get.return_value = shift
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**shift, "status": "completed"}]
+    )
+
+    result = shift_service.end_shift(
+        "shift-1", "worker-1", "org-1",
+        reason="Automatically ended — worker did not end the shift.",
+        system_initiated=True,
+    )
+    assert result is not None
+    validation = result["completion_summary"]["validation"]
+    assert validation["force_ended"] is True
+    assert validation["auto_ended"] is True
+    mock_signature.assert_not_called()
+
+
+@patch("backend.app.services.shift_signature_service.require_signature_for_shift")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_end_shift_incomplete_tasks_sets_24h_documentation_deadline(mock_get, mock_admin, _mock_signature):
+    """Ending with incomplete mandatory tasks starts a 24h documentation
+    deadline from clock-in (not from now/scheduled_end) - the worker still
+    owes the documentation, they just get a window to come back and finish it."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    clocked_in_at = datetime(2026, 1, 1, 9, 0, 0, tzinfo=timezone.utc)
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=clocked_in_at.isoformat(),
+        tasks=tasks,
+    )
+    mock_get.return_value = shift
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    captured_payload = {}
+
+    def _capture_update(payload):
+        captured_payload.update(payload)
+        return table
+
+    table.update.side_effect = _capture_update
+    table.eq.return_value.execute.return_value = MagicMock(data=[{**shift, **captured_payload}])
+
+    result = shift_service.end_shift("shift-1", "worker-1", "org-1", force=True, reason="Ran out of time.")
+    assert result is not None
+    assert captured_payload["documentation_pending"] is True
+    due_at = datetime.fromisoformat(captured_payload["documentation_due_at"])
+    assert due_at == clocked_in_at + timedelta(hours=24)
+
+
+@patch("backend.app.services.shift_signature_service.require_signature_for_shift")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_end_shift_complete_tasks_does_not_set_documentation_deadline(mock_get, mock_admin, _mock_signature):
+    """force=True with tasks that are actually complete (e.g. a worker signs
+    off with everything done) must not start a bogus documentation deadline."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    for task in tasks:
+        if task.get("mandatory") or int(task.get("order") or 0) <= 4:
+            task["completed"] = True
+            task["note"] = "Completed with sufficient written evidence."
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        tasks=tasks,
+    )
+    mock_get.return_value = shift
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    captured_payload = {}
+
+    def _capture_update(payload):
+        captured_payload.update(payload)
+        return table
+
+    table.update.side_effect = _capture_update
+    table.eq.return_value.execute.return_value = MagicMock(data=[{**shift, **captured_payload}])
+
+    result = shift_service.end_shift("shift-1", "worker-1", "org-1", force=True)
+    assert result is not None
+    assert "documentation_pending" not in captured_payload
+
+
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_update_shift_tasks_clears_documentation_pending_once_complete(mock_get):
+    """The 24h-deadline flag clears itself the moment the worker finishes the
+    mandatory tasks - they shouldn't have to find some separate 'mark done' action."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    for task in tasks:
+        if task.get("mandatory") or int(task.get("order") or 0) <= 4:
+            task["completed"] = True
+            task["note"] = "Completed with sufficient written evidence."
+    shift = _sample_shift(
+        status="completed",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        documentation_pending=True,
+        documentation_due_at=(datetime.now(timezone.utc) + timedelta(hours=20)).isoformat(),
+    )
+    mock_get.return_value = shift
+
+    with patch("backend.app.services.shift_service._sync_shift_tasks_progress"), \
+         patch("backend.app.services.shift_service.get_supabase_admin") as mock_admin:
+        table = MagicMock()
+        mock_admin.return_value.table.return_value = table
+        captured_payload = {}
+
+        def _capture_update(payload):
+            captured_payload.update(payload)
+            return table
+
+        table.update.side_effect = _capture_update
+        table.eq.return_value.execute.return_value = MagicMock(data=[{**shift, "tasks": tasks, **captured_payload}])
+
+        result = shift_service.update_shift_tasks("shift-1", "worker-1", "org-1", tasks)
+
+    assert result is not None
+    assert captured_payload["documentation_pending"] is False
+    assert captured_payload["documentation_due_at"] is None
+    assert captured_payload["documentation_escalated_at"] is None
+
+
 def test_build_support_instructions_uses_stored_json():
     shift = _sample_shift(
         support_instructions=[
