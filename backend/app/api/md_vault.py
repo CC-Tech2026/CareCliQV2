@@ -281,6 +281,16 @@ async def get_document_templates(current_user: dict = Depends(get_current_user))
     return {"templates": vault_service.list_document_templates(org_id)}
 
 
+class TemplatePreviewRequest(BaseModel):
+    html_content: str
+
+
+@router.post("/templates/preview")
+async def post_template_preview(body: TemplatePreviewRequest, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"html": vault_service.preview_template_html(org_id, body.html_content)}
+
+
 class PolicyDocumentCreate(BaseModel):
     folder_key: str
     title: str
@@ -331,6 +341,21 @@ async def publish_policy_document(policy_document_id: str, current_user: dict = 
     org_id = _require_md(current_user)
     user_id = get_user_id(current_user)
     return await vault_service.publish_policy_document(org_id, policy_document_id, user_id)
+
+
+class PolicyDocumentPreviewRequest(BaseModel):
+    template_id: str | None = None
+    title: str
+    content_html: str
+
+
+@router.post("/policy-documents/preview")
+async def post_policy_document_preview(
+    body: PolicyDocumentPreviewRequest, current_user: dict = Depends(get_current_user)
+):
+    org_id = _require_md(current_user)
+    html = vault_service.preview_policy_document_html(org_id, body.template_id, body.title, body.content_html)
+    return {"html": html}
 
 
 class AuditPackGenerateRequest(BaseModel):

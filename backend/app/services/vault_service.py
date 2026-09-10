@@ -2123,6 +2123,58 @@ def update_policy_document(org_id: str, policy_document_id: str, **fields: Any) 
     return result.data[0] if result.data else {**existing, **updates}
 
 
+def _render_policy_html(org_id: str, template_html: str, title: str, content_html: str) -> str:
+    """Merge policy content into a branded template via the same Jinja2
+    engine publish/preview both use. Returns raw HTML — callers decide
+    whether that's for a live preview or as input to render_html_to_pdf."""
+    letterhead = get_letterhead(org_id)
+    try:
+        from jinja2 import Environment, select_autoescape
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"PDF rendering requires jinja2: {exc}")
+
+    env = Environment(autoescape=select_autoescape(["html"]))
+    try:
+        template = env.from_string(template_html)
+        return template.render(
+            content=content_html,
+            title=title,
+            org_name=letterhead["provider_name"] or "Organisation",
+            org_logo_url=letterhead["logo_url"],
+            org_accent_color=letterhead["brand_accent_color"],
+            org_abn=letterhead.get("abn"),
+            org_address=letterhead.get("address"),
+            generated_at=datetime.now(timezone.utc).strftime("%d %b %Y"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Template rendering failed: {exc}")
+
+
+_PREVIEW_SAMPLE_CONTENT_HTML = (
+    "<h2>Sample section heading</h2>"
+    "<p>This is placeholder body text showing how a paragraph will look against this template's"
+    " typography and spacing.</p>"
+    "<ul><li>First point</li><li>Second point</li></ul>"
+)
+
+
+def preview_policy_document_html(
+    org_id: str, template_id: str | None, title: str, content_html: str
+) -> str:
+    """Live preview for the policy editor: render unsaved title/content/template
+    choices through the branded template without publishing anything."""
+    template_html = _resolve_policy_template_html(org_id, template_id)
+    return _render_policy_html(org_id, template_html, title or "Untitled policy", content_html or "<p></p>")
+
+
+def preview_template_html(org_id: str, html_content: str) -> str:
+    """Preview a template's own letterhead design with placeholder content,
+    before it's saved as an organization_document_templates row."""
+    if not html_content.strip():
+        raise HTTPException(status_code=422, detail="Template content is required.")
+    return _render_policy_html(org_id, html_content, "Sample Policy Title", _PREVIEW_SAMPLE_CONTENT_HTML)
+
+
 async def publish_policy_document(org_id: str, policy_document_id: str, published_by: str) -> dict[str, Any]:
     """Render this policy_documents row's content through its template (or
     the built-in default) and file the result into governance_documents,
@@ -2136,28 +2188,7 @@ async def publish_policy_document(org_id: str, policy_document_id: str, publishe
         raise HTTPException(status_code=422, detail="Document has no content to publish.")
 
     template_html = _resolve_policy_template_html(org_id, doc.get("template_id"))
-    letterhead = get_letterhead(org_id)
-
-    try:
-        from jinja2 import Environment, select_autoescape
-    except ImportError as exc:
-        raise HTTPException(status_code=500, detail=f"PDF rendering requires jinja2: {exc}")
-
-    env = Environment(autoescape=select_autoescape(["html"]))
-    try:
-        template = env.from_string(template_html)
-        html_str = template.render(
-            content=doc["content_html"],
-            title=doc["title"],
-            org_name=letterhead["provider_name"] or "Organisation",
-            org_logo_url=letterhead["logo_url"],
-            org_accent_color=letterhead["brand_accent_color"],
-            org_abn=letterhead.get("abn"),
-            org_address=letterhead.get("address"),
-            generated_at=datetime.now(timezone.utc).strftime("%d %b %Y"),
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Template rendering failed: {exc}")
+    html_str = _render_policy_html(org_id, template_html, doc["title"], doc["content_html"])
 
     try:
         pdf_bytes = render_html_to_pdf(html_str)

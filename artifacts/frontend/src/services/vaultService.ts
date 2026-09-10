@@ -335,6 +335,16 @@ export async function createDocumentTemplate(params: {
   return parseJson(res);
 }
 
+export async function previewTemplateHtml(htmlContent: string): Promise<string> {
+  const res = await apiFetch("/api/md-vault/templates/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html_content: htmlContent }),
+  });
+  const data = await parseJson<{ html: string }>(res);
+  return data.html;
+}
+
 export interface PolicyDocument {
   id: string;
   organization_id: string;
@@ -401,4 +411,18 @@ export async function publishPolicyDocument(id: string): Promise<PolicyDocument 
     method: "POST",
   });
   return parseJson(res);
+}
+
+export async function previewPolicyDocument(params: {
+  templateId: string | null;
+  title: string;
+  contentHtml: string;
+}): Promise<string> {
+  const res = await apiFetch("/api/md-vault/policy-documents/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template_id: params.templateId, title: params.title, content_html: params.contentHtml }),
+  });
+  const data = await parseJson<{ html: string }>(res);
+  return data.html;
 }

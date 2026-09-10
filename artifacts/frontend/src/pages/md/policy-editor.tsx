@@ -16,6 +16,8 @@ import {
   fetchPolicyDocument,
   fetchPolicyDocuments,
   fetchVaultFolders,
+  previewPolicyDocument,
+  previewTemplateHtml,
   publishPolicyDocument,
   updatePolicyDocument,
   type DocumentTemplate,
@@ -23,6 +25,29 @@ import {
   type PolicyDocument,
   type VaultFolder,
 } from "@/services/vaultService";
+
+/** Renders arbitrary template/policy HTML with no script execution, no
+ * same-origin access, and no navigation — templates are user-authored. */
+function PreviewFrame({ html, className }: { html: string; className?: string }) {
+  return (
+    <iframe
+      title="Preview"
+      srcDoc={html}
+      sandbox=""
+      className={className}
+      style={{ width: "100%", border: "none", background: "white" }}
+    />
+  );
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 export default function PolicyEditorPage() {
   const { toast } = useToast();
@@ -241,10 +266,14 @@ function PolicyDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showTemplateUpload, setShowTemplateUpload] = useState(false);
+  const [contentHtml, setContentHtml] = useState(doc.content_html || "<p></p>");
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const editor = useEditor({
     extensions: [StarterKit],
     content: doc.content_html || "<p></p>",
+    onUpdate: ({ editor }) => setContentHtml(editor.getHTML()),
   });
 
   useEffect(() => {
@@ -255,6 +284,26 @@ function PolicyDocumentEditor({
     () => folders.find((f) => f.category === doc.folder_key)?.label ?? doc.folder_key,
     [folders, doc.folder_key],
   );
+
+  const debouncedTitle = useDebouncedValue(title, 500);
+  const debouncedContentHtml = useDebouncedValue(contentHtml, 500);
+
+  useEffect(() => {
+    let cancelled = false;
+    previewPolicyDocument({ templateId, title: debouncedTitle, contentHtml: debouncedContentHtml })
+      .then((html) => {
+        if (!cancelled) {
+          setPreviewHtml(html);
+          setPreviewError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setPreviewError((err as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId, debouncedTitle, debouncedContentHtml]);
 
   async function handleSaveDraft() {
     if (!editor) return;
@@ -301,7 +350,7 @@ function PolicyDocumentEditor({
         <X size={14} /> Back to policy documents
       </button>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_280px]">
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} className="text-lg font-black" />
           <p className="text-xs font-medium" style={{ color: "var(--cc-muted)" }}>{folderLabel}</p>
@@ -315,6 +364,19 @@ function PolicyDocumentEditor({
               <ToolbarButton active={editor?.isActive("orderedList")} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>1. List</ToolbarButton>
             </div>
             <EditorContent editor={editor} className="prose prose-sm max-w-none p-4 min-h-[360px] focus:outline-none" />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>Preview</p>
+          <div className="overflow-hidden rounded-2xl border bg-card" style={{ borderColor: "var(--cc-border)" }}>
+            {previewError ? (
+              <p className="p-4 text-xs font-medium" style={{ color: "var(--cc-destructive, #b91c1c)" }}>{previewError}</p>
+            ) : previewHtml ? (
+              <PreviewFrame html={previewHtml} className="h-[420px]" />
+            ) : (
+              <p className="p-4 text-xs font-medium" style={{ color: "var(--cc-muted)" }}>Loading preview…</p>
+            )}
           </div>
         </div>
 
@@ -398,6 +460,31 @@ function TemplateUploadInline({
   const [name, setName] = useState("");
   const [html, setHtml] = useState("");
   const [saving, setSaving] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const debouncedHtml = useDebouncedValue(html, 500);
+
+  useEffect(() => {
+    if (!debouncedHtml.trim()) {
+      setPreviewHtml(null);
+      setPreviewError(null);
+      return;
+    }
+    let cancelled = false;
+    previewTemplateHtml(debouncedHtml)
+      .then((rendered) => {
+        if (!cancelled) {
+          setPreviewHtml(rendered);
+          setPreviewError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setPreviewError((err as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedHtml]);
 
   async function handleSave() {
     if (!name.trim() || !html.trim()) {
@@ -427,6 +514,13 @@ function TemplateUploadInline({
         className="w-full rounded-lg border p-2 font-mono text-[11px]"
         style={{ borderColor: "var(--cc-border)" }}
       />
+      {previewError ? (
+        <p className="text-[11px] font-medium" style={{ color: "var(--cc-destructive, #b91c1c)" }}>{previewError}</p>
+      ) : previewHtml ? (
+        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--cc-border)" }}>
+          <PreviewFrame html={previewHtml} className="h-[260px]" />
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <Button size="sm" className="flex-1 text-xs" disabled={saving} onClick={() => void handleSave()}>
           {saving && <Loader2 size={12} className="mr-1 animate-spin" />}
