@@ -56,22 +56,42 @@ function QuickAccessTile({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
         elevatedCardShadow(colors.scheme === "dark"),
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          opacity: pressed ? 0.85 : 1,
+        },
       ]}
     >
       <View style={[styles.tileIcon, { backgroundColor: colors.soft }]}>
         <Feather name={tile.icon} size={20} color={tile.accent} />
       </View>
-      <Text style={[styles.tileLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
+      <Text
+        style={[
+          styles.tileLabel,
+          { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+        ]}
+      >
         {tile.label}
       </Text>
       {tile.badge ? (
-        <View style={[styles.tileBadge, { backgroundColor: colors.statusProgressBg }]}>
-          <Text style={[styles.tileBadgeText, { color: colors.warning, fontFamily: "Inter_700Bold" }]}>
+        <View
+          style={[
+            styles.tileBadge,
+            { backgroundColor: colors.statusProgressBg },
+          ]}
+        >
+          <Text
+            style={[
+              styles.tileBadgeText,
+              { color: colors.warning, fontFamily: FontFamily.interBold },
+            ]}
+          >
             {tile.badge}
           </Text>
         </View>
@@ -96,7 +116,9 @@ function HomeShiftCard({
 
   const openShift = () => {
     if (isBlockedByInProgressShift(shift, inProgressShift)) {
-      showBlockedByInProgressAlert(t, inProgressShift, (id) => router.push(`/shift/${id}` as never));
+      showBlockedByInProgressAlert(t, inProgressShift, (id) =>
+        router.push(`/shift/${id}` as never),
+      );
       return;
     }
     router.push(`/shift/${shift.id}` as never);
@@ -104,23 +126,48 @@ function HomeShiftCard({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={openShift}
-      style={[styles.shiftCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[
+        styles.shiftCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
     >
       <View style={[styles.shiftAvatar, { backgroundColor: colors.soft }]}>
-        <Text style={[styles.shiftAvatarText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+        <Text
+          style={[
+            styles.shiftAvatarText,
+            { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+          ]}
+        >
           {shiftInitials(shift.participant_name)}
         </Text>
       </View>
       <View style={styles.shiftBody}>
-        <Text style={[styles.shiftName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.shiftName,
+            { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+          ]}
+        >
           {shift.participant_name}
         </Text>
-        <Text style={[styles.shiftMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.shiftMeta,
+            {
+              color: colors.mutedForeground,
+              fontFamily: FontFamily.interRegular,
+            },
+          ]}
+        >
           {meta || "—"}
         </Text>
+        <View style={{ alignSelf: "flex-start", marginTop: 6 }}>
+          <ShiftStatusBadge visualState={visualState} />
+        </View>
       </View>
-      <ShiftStatusBadge visualState={visualState} />
+      <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
     </Pressable>
   );
 }
@@ -140,7 +187,8 @@ export default function HomeScreen() {
     enabled: isAuthenticated,
   });
   const expiringCount = useMemo(
-    () => (credentials ?? []).filter((item) => item.status === "expiring").length,
+    () =>
+      (credentials ?? []).filter((item) => item.status === "expiring").length,
     [credentials],
   );
 
@@ -161,29 +209,29 @@ export default function HomeScreen() {
 
   const shifts = landing.data?.today_shifts ?? [];
   const total = landing.data?.stats.shifts_today ?? shifts.length;
-  const done = landing.data?.stats.completed_today ?? shifts.filter((s) => s.visual_state === "completed").length;
-  const dateLabel = landing.data?.greeting_context.date_label || formatHomeDateLabel();
-
-  const progressSlots = useMemo(() => {
-    const count = Math.max(total, 1);
-    return Array.from({ length: count }, (_, i) => i < done);
-  }, [total, done]);
-
-  const continueShiftId = useMemo(() => {
-    const active = findInProgressShift(shifts);
-    return active?.id ?? shifts.find((s) => s.visual_state === "scheduled")?.id ?? shifts[0]?.id ?? null;
-  }, [shifts]);
+  const done =
+    landing.data?.stats.completed_today ??
+    shifts.filter((s) => s.visual_state === "completed").length;
+  const dateLabel =
+    landing.data?.greeting_context.date_label || formatHomeDateLabel();
 
   const inProgressShift = useMemo(() => findInProgressShift(shifts), [shifts]);
+  const featuredShift =
+    inProgressShift ??
+    shifts.find((shift) => shift.visual_state === "scheduled") ??
+    null;
+  const progress = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
 
   const handleRefresh = () => {
     void landing.refetch();
-    void queryClient.invalidateQueries({ queryKey: ["dashboard", "worker-landing"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["dashboard", "worker-landing"],
+    });
   };
 
   const openContinue = () => {
-    if (continueShiftId) {
-      router.push(`/shift/${continueShiftId}` as never);
+    if (featuredShift) {
+      router.push(`/shift/${featuredShift.id}` as never);
       return;
     }
     router.push("/(tabs)/shifts" as never);
@@ -217,7 +265,10 @@ export default function HomeScreen() {
       label: t("nav.credentials"),
       accent: colors.warning,
       href: "/credentials",
-      badge: expiringCount > 0 ? t("settings.credentialsExpiring", { count: expiringCount }) : undefined,
+      badge:
+        expiringCount > 0
+          ? t("settings.credentialsExpiring", { count: expiringCount })
+          : undefined,
     },
   ];
 
@@ -232,7 +283,10 @@ export default function HomeScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + 120 },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -242,44 +296,201 @@ export default function HomeScreen() {
             />
           }
         >
-          <Text style={[styles.greeting, { color: colors.foreground, fontFamily: FontFamily.h1 }]}>
+          <Text
+            style={[
+              styles.greeting,
+              { color: colors.foreground, fontFamily: FontFamily.h1 },
+            ]}
+          >
             {t("dashboard.greetingWithName", { greeting, name: displayName })}
           </Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.mutedForeground,
+                fontFamily: FontFamily.interRegular,
+              },
+            ]}
+          >
             {t("dashboard.shiftsTodayMeta", { date: dateLabel, count: total })}
           </Text>
 
-          <View style={[styles.hero, { backgroundColor: colors.heroCard }]}>
-            <Text style={[styles.heroLabel, { color: colors.heroMuted, fontFamily: "Inter_400Regular" }]}>
-              {t("dashboard.todaysDocumentation")}
-            </Text>
-            <Text style={[styles.heroStat, { color: "#FFFFFF", fontFamily: "Inter_700Bold" }]}>
-              {t("dashboard.documentedOf", { done, total: Math.max(total, done) })}
-            </Text>
-            <View style={styles.progressRow}>
-              {progressSlots.map((filled, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.progressSeg,
-                    { backgroundColor: filled ? colors.success : colors.progressTrack },
-                  ]}
-                />
-              ))}
-            </View>
-            <Pressable
-              onPress={openContinue}
-              style={[styles.continueBtn, { backgroundColor: colors.pink }]}
-              accessibilityRole="button"
+          {landing.isError ? (
+            <View
+              style={[
+                styles.notice,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              <Feather name="play" size={14} color="#FFFFFF" />
-              <Text style={[styles.continueText, { fontFamily: "Inter_600SemiBold" }]}>
-                {t("dashboard.continueSession")}
+              <Text style={[styles.bodyText, { color: colors.foreground }]}>
+                {t("dashboard.homeLoadError")}
               </Text>
-            </Pressable>
-          </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleRefresh}
+                style={styles.retryButton}
+              >
+                <Text style={[styles.bodyText, { color: colors.primary }]}>
+                  {t("common.retry")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {landing.data ? (
+            <View style={[styles.hero, { backgroundColor: colors.heroCard }]}>
+              <View style={styles.heroTop}>
+                <View style={styles.heroIcon}>
+                  <Feather
+                    name={inProgressShift ? "activity" : "calendar"}
+                    size={22}
+                    color="#FFFFFF"
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.heroLabel,
+                    {
+                      color: colors.heroMuted,
+                      fontFamily: FontFamily.interSemiBold,
+                    },
+                  ]}
+                >
+                  {t(
+                    inProgressShift
+                      ? "dashboard.homeActiveShift"
+                      : featuredShift
+                        ? "dashboard.homeNextShift"
+                        : "dashboard.todaysShifts",
+                  )}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.heroStat,
+                  { color: "#FFFFFF", fontFamily: FontFamily.h1 },
+                ]}
+              >
+                {featuredShift?.participant_name ??
+                  t("dashboard.homeDayComplete")}
+              </Text>
+              <Text style={[styles.heroDetail, { color: colors.heroMuted }]}>
+                {featuredShift
+                  ? [
+                      featuredShift.time_label,
+                      shortLocationLabel(featuredShift.participant_address),
+                    ]
+                      .filter(Boolean)
+                      .join(" / ")
+                  : t("dashboard.homeViewSchedule")}
+              </Text>
+              <Pressable
+                onPress={openContinue}
+                style={[
+                  styles.continueBtn,
+                  { backgroundColor: colors.primary },
+                ]}
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.continueText,
+                    {
+                      color: colors.primaryForeground,
+                      fontFamily: FontFamily.interSemiBold,
+                    },
+                  ]}
+                >
+                  {t(
+                    inProgressShift
+                      ? "dashboard.continueSession"
+                      : featuredShift
+                        ? "dashboard.homeReviewShift"
+                        : "dashboard.homeViewSchedule",
+                  )}
+                </Text>
+                <Feather
+                  name="arrow-right"
+                  size={20}
+                  color={colors.primaryForeground}
+                />
+              </Pressable>
+              {total > 0 ? (
+                <View style={styles.progressSummary}>
+                  <Text style={[styles.heroLabel, { color: colors.heroMuted }]}>
+                    {t("dashboard.homeCompleted", { done, total })}
+                  </Text>
+                  <View
+                    accessibilityRole="progressbar"
+                    accessibilityLabel={t("dashboard.todaysShifts")}
+                    accessibilityValue={{
+                      min: 0,
+                      max: total,
+                      now: Math.min(done, total),
+                    }}
+                    style={[
+                      styles.progressTrack,
+                      { backgroundColor: colors.progressTrack },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: (progress * 100 + "%") as `${number}%`,
+                          backgroundColor: colors.success,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
-          <Text style={[styles.sectionTitle, styles.quickAccessTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: colors.foreground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {t("dashboard.todaysShifts")}
+          </Text>
+
+          {!landing.data ? null : shifts.length === 0 ? (
+            <Text
+              style={[
+                styles.empty,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interMedium,
+                },
+              ]}
+            >
+              {t("dashboard.noShiftsToday")}
+            </Text>
+          ) : (
+            shifts.map((shift) => (
+              <HomeShiftCard
+                key={shift.id}
+                shift={shift}
+                inProgressShift={inProgressShift}
+              />
+            ))
+          )}
+          <Text
+            style={[
+              styles.sectionTitle,
+              styles.quickAccessTitle,
+              {
+                color: colors.foreground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
             {t("dashboard.quickAccess")}
           </Text>
           <View style={styles.quickGrid}>
@@ -292,20 +503,6 @@ export default function HomeScreen() {
               />
             ))}
           </View>
-
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            {t("dashboard.todaysShifts")}
-          </Text>
-
-          {shifts.length === 0 ? (
-            <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              {t("dashboard.noShiftsToday")}
-            </Text>
-          ) : (
-            shifts.map((shift) => (
-              <HomeShiftCard key={shift.id} shift={shift} inProgressShift={inProgressShift} />
-            ))
-          )}
         </ScrollView>
       )}
     </View>
@@ -315,21 +512,57 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
-  greeting: { fontSize: 21, marginTop: 0, marginBottom: 2 },
-  subtitle: { fontSize: 12, marginBottom: 12 },
-  hero: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+  scroll: {
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
-  heroLabel: { fontSize: 12, marginBottom: 4 },
-  heroStat: { fontSize: 19, marginBottom: 10 },
-  progressRow: { flexDirection: "row", gap: 5 },
-  progressSeg: { flex: 1, height: 5, borderRadius: 99 },
-  continueBtn: {
-    marginTop: 12,
+  greeting: { fontSize: 28, lineHeight: 35, marginBottom: 8 },
+  subtitle: { fontSize: 14, lineHeight: 21, marginBottom: 24 },
+  hero: {
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 28,
+  },
+  heroLabel: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: FontFamily.interMedium,
+  },
+  heroStat: { fontSize: 26, lineHeight: 33, marginBottom: 8 },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 20,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroDetail: { fontSize: 15, lineHeight: 23, fontFamily: FontFamily.body },
+  progressSummary: { marginTop: 22, gap: 10 },
+  progressTrack: { height: 6, borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: 6, borderRadius: 3 },
+  notice: { padding: 16, borderWidth: 1, borderRadius: 20, marginBottom: 20 },
+  bodyText: { fontSize: 15, lineHeight: 22, fontFamily: FontFamily.body },
+  retryButton: {
+    minHeight: 44,
+    justifyContent: "center",
     alignSelf: "flex-start",
+    paddingHorizontal: 12,
+  },
+  continueBtn: {
+    marginTop: 20,
+    minHeight: 56,
+    justifyContent: "space-between",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -337,8 +570,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 999,
   },
-  continueText: { color: "#FFFFFF", fontSize: 12 },
-  quickAccessTitle: { marginTop: 4 },
+  continueText: { flexShrink: 1, fontSize: 16, lineHeight: 22 },
+  quickAccessTitle: { marginTop: 24 },
   quickGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -346,7 +579,8 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   tile: {
-    flexBasis: "47%",
+    flexBasis: "45%",
+    minWidth: 120,
     flexGrow: 1,
     borderWidth: 1,
     borderRadius: 18,
@@ -360,7 +594,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tileLabel: { fontSize: 13, lineHeight: 17 },
+  tileLabel: { fontSize: 15, lineHeight: 22 },
   tileBadge: {
     alignSelf: "flex-start",
     borderRadius: 999,
@@ -368,12 +602,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginTop: -2,
   },
-  tileBadgeText: { fontSize: 10 },
-  sectionTitle: { fontSize: 15, marginBottom: 8 },
+  tileBadgeText: { fontSize: 12, lineHeight: 18 },
+  sectionTitle: { fontSize: 20, lineHeight: 26, marginBottom: 14 },
   shiftCard: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 22,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -386,9 +620,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  shiftAvatarText: { fontSize: 12 },
-  shiftBody: { flex: 1, gap: 2 },
-  shiftName: { fontSize: 13 },
-  shiftMeta: { fontSize: 11 },
-  empty: { fontSize: 13, paddingVertical: 12 },
+  shiftAvatarText: { fontSize: 14 },
+  shiftBody: { flex: 1, minWidth: 0, gap: 5 },
+  shiftName: { fontSize: 16, lineHeight: 23 },
+  shiftMeta: { fontSize: 13, lineHeight: 20 },
+  empty: { fontSize: 15, lineHeight: 23, paddingVertical: 20 },
 });

@@ -11,9 +11,9 @@ const platformFont = (name: string): string =>
     : name;
 
 export const FontFamily = {
-  display: platformFont("BricolageGrotesque_700Bold"),
-  h1: platformFont("BricolageGrotesque_700Bold"),
-  h2: platformFont("BricolageGrotesque_600SemiBold"),
+  display: platformFont("Inter_700Bold"),
+  h1: platformFont("Inter_700Bold"),
+  h2: platformFont("Inter_600SemiBold"),
   body: platformFont("Inter_400Regular"),
   bodyStrong: platformFont("Inter_600SemiBold"),
   caption: platformFont("Inter_400Regular"),

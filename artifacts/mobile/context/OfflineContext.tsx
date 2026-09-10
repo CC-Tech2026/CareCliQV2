@@ -174,7 +174,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
             await enqueueWorkerUpdate({ ...item, signatureSubmitted: true });
           }
           try {
-            await endShift(item.shiftId);
+            await endShift(item.shiftId, { force: item.force, reason: item.reason });
           } catch (endError) {
             const msg = endError instanceof Error ? endError.message : "";
             if (!/already completed/i.test(msg)) throw endError;

@@ -3,6 +3,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { APP_TIMEZONE } from "@/lib/shift-utils";
 
 type Props = {
   clockedInAt: string | null;
@@ -12,7 +13,7 @@ type Props = {
 export function ClockedInBanner({ clockedInAt }: Props) {
   const colors = useColors();
   const timeLabel = clockedInAt
-    ? new Date(clockedInAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+    ? new Date(clockedInAt).toLocaleTimeString("en-AU", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" })
     : null;
 
   return (

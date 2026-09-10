@@ -174,26 +174,11 @@ export default function ClientDetailHubScreen() {
                 </Pressable>
               ) : nextShifts.length ? (
                 nextShifts.map((shift) => (
-                  <View key={shift.id} style={{ gap: 8 }}>
-                    <Text
-                      style={{
-                        color: colors.mutedForeground,
-                        fontFamily: FontFamily.interSemiBold,
-                        fontSize: 13,
-                      }}
-                    >
-                      {shift.scheduled_start
-                        ? new Date(shift.scheduled_start).toLocaleDateString(
-                            "en-AU",
-                            { weekday: "long", day: "numeric", month: "short" },
-                          )
-                        : "Time to be confirmed"}
-                    </Text>
-                    <ShiftListCard
-                      shift={shift}
-                      siblingShifts={schedule.data?.shifts}
-                    />
-                  </View>
+                  <ShiftListCard
+                    key={shift.id}
+                    shift={shift}
+                    siblingShifts={schedule.data?.shifts}
+                  />
                 ))
               ) : (
                 <Text style={{ color: colors.mutedForeground }}>

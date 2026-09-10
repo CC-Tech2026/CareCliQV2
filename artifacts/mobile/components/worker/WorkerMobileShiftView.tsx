@@ -40,6 +40,7 @@ import {
   type WorkerActionFeedback,
 } from "@/components/worker/WorkerActionSheet";
 import { PreShiftParticipantCard } from "@/components/worker/PreShiftParticipantCard";
+import { IncompleteDocsEndShiftModal } from "@/components/worker/IncompleteDocsEndShiftModal";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
@@ -62,10 +63,12 @@ import {
   type WorkerShift,
 } from "@/lib/worker-api";
 import {
+  APP_TIMEZONE,
   formatElapsedTimer,
   formatMobileShiftDuration,
   formatShiftTimeRange,
   hasIncompleteMandatoryTasks,
+  incompleteMandatoryTasks,
   MIN_EVIDENCE_NOTE_CHARS,
   newClientNoteId,
   parseIsoMs,
@@ -93,11 +96,11 @@ function formatSubmittedAt(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "just now";
   const time = d
-    .toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+    .toLocaleTimeString("en-AU", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" })
     .toLowerCase();
   return d.toDateString() === new Date().toDateString()
     ? `${time} today`
-    : d.toLocaleDateString("en-AU");
+    : d.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE });
 }
 
 type Props = {
@@ -196,6 +199,15 @@ function WorkerMobileShiftContent({
   const [filedNoteIds, setFiledNoteIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [showIncompleteEndModal, setShowIncompleteEndModal] = useState(false);
+  // Set only when the worker chose to end with incomplete mandatory tasks and
+  // acknowledged the risk - threads through to endShift as force+reason.
+  const [forceEndReason, setForceEndReason] = useState<string | null>(null);
+  // True while the worker has come back to a documentation_pending shift to
+  // finish it - keeps phase in "session" (reusing its task checklist) even
+  // though shift.visual_state is "completed", which would otherwise pin phase
+  // back to the read-only success screen on every render (see effect below).
+  const [resumingDocs, setResumingDocs] = useState(false);
 
   useEffect(() => {
     if (!validation) return;
@@ -217,6 +229,7 @@ function WorkerMobileShiftContent({
   }, []);
 
   useEffect(() => {
+    if (resumingDocs) return;
     if (shift.visual_state === "completed") {
       setPhase((current) =>
         current === "submitted" ? "submitted" : "completed",
@@ -234,7 +247,7 @@ function WorkerMobileShiftContent({
           : "session",
       );
     }
-  }, [shift.visual_state]);
+  }, [shift.visual_state, resumingDocs]);
 
   const plannedShiftMins = useMemo(() => {
     if (shift.scheduled_start && shift.scheduled_end) {
@@ -248,6 +261,22 @@ function WorkerMobileShiftContent({
   }, [shift.scheduled_start, shift.scheduled_end, shift.duration_minutes]);
 
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
+
+  useEffect(() => {
+    if (!resumingDocs) return;
+    if (hasIncompleteMandatoryTasks(activeTasks)) return;
+    // update_shift_tasks already cleared documentation_pending server-side
+    // the moment the last mandatory task saved - this just closes the loop
+    // in the UI instead of leaving the worker sitting in the task checklist.
+    setResumingDocs(false);
+    setPhase("completed");
+    onRefresh();
+    showAlert(
+      "Documentation complete",
+      "Thanks for finishing this up - the shift is no longer flagged as pending.",
+    );
+  }, [resumingDocs, activeTasks, onRefresh]);
+
   const participantName = shift.participant_name ?? "Participant";
   const participantFirstName = participantName.split(" ")[0];
   const sessionId = shift.session_id ?? null;
@@ -544,16 +573,20 @@ function WorkerMobileShiftContent({
     if (busy) return;
     const active = resolveActiveShiftTasks(shift.tasks, tasks);
     if (hasIncompleteMandatoryTasks(active)) {
-      setValidation({
-        title: "Mandatory Tasks Incomplete",
-        message:
-          "Review task completion and evidence before ending your shift.",
-      });
+      setShowIncompleteEndModal(true);
       return;
     }
+    setForceEndReason(null);
     setValidation(null);
     setPhase("review");
   }, [busy, shift.tasks, tasks]);
+
+  const handleConfirmIncompleteEnd = useCallback((reason: string) => {
+    setForceEndReason(reason);
+    setShowIncompleteEndModal(false);
+    setValidation(null);
+    setPhase("review");
+  }, []);
 
   const refreshNotes = onNotesRefresh ?? onRefresh;
 
@@ -729,11 +762,13 @@ function WorkerMobileShiftContent({
         id: `end_shift-${shift.id}`,
         shiftId: shift.id,
         signature,
+        force: forceEndReason != null,
+        reason: forceEndReason ?? undefined,
         timestamp: Date.now(),
       });
       return queued;
     },
-    [shift.id, queueWorkerUpdate],
+    [shift.id, queueWorkerUpdate, forceEndReason],
   );
 
   const handleSigned = async (signature: ShiftSignaturePayload) => {
@@ -771,7 +806,9 @@ function WorkerMobileShiftContent({
       const remaining = await flushNow();
 
       try {
-        await endShift(shift.id);
+        await endShift(shift.id, forceEndReason != null
+          ? { force: true, reason: forceEndReason }
+          : undefined);
       } catch (endErr) {
         const message = endErr instanceof Error ? endErr.message : "";
         if (!/already completed/i.test(message)) throw endErr;
@@ -829,6 +866,94 @@ function WorkerMobileShiftContent({
   }
 
   if (phase === "completed") {
+    if (shift.documentation_pending) {
+      const dueMs = parseIsoMs(shift.documentation_due_at);
+      const overdue = dueMs != null && dueMs < Date.now();
+      const dueLabel = dueMs
+        ? new Date(dueMs).toLocaleString("en-AU", {
+            timeZone: APP_TIMEZONE,
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : null;
+      return (
+        <View
+          style={[
+            styles.docsPendingWrap,
+            { backgroundColor: colors.background },
+          ]}
+        >
+          <View
+            style={[
+              styles.docsPendingCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Feather
+              name="alert-triangle"
+              size={28}
+              color={overdue ? colors.destructive : colors.warning}
+            />
+            <Text
+              style={[
+                styles.docsPendingTitle,
+                { color: colors.foreground, fontFamily: FontFamily.interBold },
+              ]}
+            >
+              {overdue ? "Documentation overdue" : "Documentation still needed"}
+            </Text>
+            <Text
+              style={[
+                styles.docsPendingBody,
+                { color: colors.mutedForeground, fontFamily: FontFamily.interRegular },
+              ]}
+            >
+              This shift for {participantName} ended with incomplete task
+              documentation.
+              {dueLabel
+                ? overdue
+                  ? ` It was due ${dueLabel}.`
+                  : ` It's due by ${dueLabel}.`
+                : ""}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setResumingDocs(true);
+                setPhase("session");
+              }}
+              style={[styles.docsPendingBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text
+                style={[
+                  styles.docsPendingBtnText,
+                  { color: colors.primaryForeground, fontFamily: FontFamily.interBold },
+                ]}
+              >
+                Finish documentation
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onBack ?? onShiftComplete}
+              style={styles.docsPendingDismiss}
+            >
+              <Text
+                style={[
+                  styles.docsPendingDismissText,
+                  { color: colors.mutedForeground, fontFamily: FontFamily.interSemiBold },
+                ]}
+              >
+                Not now
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
     return (
       <WorkerMobileSubmitSuccess
         participantName={participantName}
@@ -952,7 +1077,14 @@ function WorkerMobileShiftContent({
           showEnd={visualState === "session_active"}
           onEnd={handleAttemptEnd}
           endBusy={busy === "end"}
-          onBack={onBack}
+          onBack={
+            resumingDocs
+              ? () => {
+                  setResumingDocs(false);
+                  setPhase("completed");
+                }
+              : onBack
+          }
           canCheckin={canCheckin}
           onCheckin={onCheckin}
         />
@@ -1002,6 +1134,14 @@ function WorkerMobileShiftContent({
           breakStatus={breakStatus ?? shift.break_status}
           onCheckin={onCheckin}
         />
+        <IncompleteDocsEndShiftModal
+          visible={showIncompleteEndModal}
+          incompleteTaskLabels={incompleteMandatoryTasks(
+            resolveActiveShiftTasks(shift.tasks, tasks),
+          ).map((task) => task.label)}
+          onCancel={() => setShowIncompleteEndModal(false)}
+          onConfirm={handleConfirmIncompleteEnd}
+        />
         <Modal
           visible={incidentDraft !== null}
           animationType="slide"
@@ -1042,7 +1182,7 @@ function WorkerMobileShiftContent({
       <ScrollView
         style={styles.scheduled}
         contentContainerStyle={{
-          paddingBottom: insets.bottom + 32,
+          paddingBottom: 20,
           paddingTop: 12,
           width: "100%",
           maxWidth: 800,
@@ -1079,6 +1219,7 @@ function WorkerMobileShiftContent({
 
           {shift.participant_address && (
             <Pressable
+              accessibilityRole="link"
               onPress={() => {
                 const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address!)}`;
                 Linking.openURL(url);
@@ -1099,11 +1240,23 @@ function WorkerMobileShiftContent({
               </Text>
             </Pressable>
           )}
-
-          <PreShiftParticipantCard
-            shiftId={shift.id}
-            participantId={shift.participant_id}
-          />
+        </View>
+        <PreShiftParticipantCard
+          shiftId={shift.id}
+          participantId={shift.participant_id}
+        />
+      </ScrollView>
+      <View
+        style={[
+          styles.clockFooter,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
+        <View style={styles.footerContent}>
           <Pressable
             accessibilityRole="button"
             onPress={handleClockIn}
@@ -1116,7 +1269,10 @@ function WorkerMobileShiftContent({
               <Text
                 style={[
                   styles.clockInText,
-                  { fontFamily: FontFamily.interBold },
+                  {
+                    fontFamily: FontFamily.interBold,
+                    color: colors.primaryForeground,
+                  },
                 ]}
               >
                 Clock In
@@ -1124,13 +1280,41 @@ function WorkerMobileShiftContent({
             )}
           </Pressable>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   sessionWrap: { flex: 1 },
+  docsPendingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  docsPendingCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 24,
+    gap: 12,
+    alignItems: "center",
+  },
+  docsPendingTitle: { fontSize: 19, textAlign: "center" },
+  docsPendingBody: { fontSize: 14, lineHeight: 20, textAlign: "center" },
+  docsPendingBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  docsPendingBtnText: { fontSize: 15 },
+  docsPendingDismiss: { paddingVertical: 10 },
+  docsPendingDismissText: { fontSize: 13 },
   validationBanner: {
     position: "absolute",
     top: 8,
@@ -1158,17 +1342,25 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     opacity: 0.95,
   },
-  scheduled: { flex: 1, paddingHorizontal: 16 },
+  clockFooter: { borderTopWidth: 1, paddingHorizontal: 12, paddingTop: 10 },
+  footerContent: { width: "100%", maxWidth: 800, alignSelf: "center" },
+  scheduled: { flex: 1, paddingHorizontal: 12 },
   scheduledCard: {
     borderRadius: 16,
     borderWidth: 1,
-    padding: 20,
+    padding: 16,
     gap: 12,
   },
-  scheduledName: { fontSize: 22 },
-  scheduledTime: { fontSize: 15 },
-  mapLink: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  address: { fontSize: 13, flex: 1 },
+  scheduledName: { fontSize: 22, lineHeight: 29 },
+  scheduledTime: { fontSize: 15, lineHeight: 22 },
+  mapLink: {
+    minHeight: 44,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  address: { fontSize: 14, lineHeight: 21, flex: 1 },
   clockInBtn: {
     minHeight: 52,
     padding: 14,

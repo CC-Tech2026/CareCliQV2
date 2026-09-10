@@ -1,192 +1,228 @@
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-
+import {
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FontFamily } from "@/constants/typography";
+import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
-
-const DEFAULT_OFFICE_PHONE = "1300 000 000";
 
 type Props = {
   shiftId: string;
   officePhone?: string | null;
   onReportIncident?: () => void;
 };
-
-type ActionItem = {
-  id: string;
-  label: string;
-  icon: React.ComponentProps<typeof Feather>["name"];
-  accent: string;
-  onPress: () => void;
-};
-
-export function DuringShiftActionsSidebar({ shiftId, officePhone, onReportIncident }: Props) {
+export function DuringShiftActionsSidebar({
+  shiftId,
+  officePhone,
+  onReportIncident,
+}: Props) {
   const colors = useColors();
   const router = useRouter();
-  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { reduceMotion } = usePreferences();
   const [expanded, setExpanded] = useState(false);
-  const phone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
-
-  // Percentage-based top positioning looks right on a phone but drifts into
-  // a large empty gap on a tall tablet screen — cap how far down it can go
-  // in absolute pixels rather than scaling forever with viewport height.
-  const tabTop = Math.min(windowHeight * 0.42, 380);
-  const panelTop = Math.min(windowHeight * 0.28, 260);
-
-  const actions: ActionItem[] = [
+  const phone = officePhone?.replace(/[^+\d]/g, "");
+  const actions: {
+    label: string;
+    icon: React.ComponentProps<typeof Feather>["name"];
+    run: () => void;
+  }[] = [
     {
-      id: "message",
       label: "Message office",
       icon: "message-square",
-      accent: colors.primary,
-      onPress: () => router.push(`/shift/${shiftId}/message-office` as never),
+      run: () => router.push(`/shift/${shiftId}/message-office` as never),
     },
-    {
-      id: "call",
-      label: "Call office",
-      icon: "phone-call",
-      accent: "#16A34A",
-      onPress: () => void Linking.openURL(`tel:${phone}`),
-    },
+    ...(phone
+      ? [
+          {
+            label: "Call office",
+            icon: "phone" as const,
+            run: () => {
+              void Linking.openURL(`tel:${phone}`);
+            },
+          },
+        ]
+      : []),
     ...(onReportIncident
       ? [
           {
-            id: "incident",
             label: "Report incident",
             icon: "alert-triangle" as const,
-            accent: colors.destructive,
-            onPress: onReportIncident,
+            run: onReportIncident,
           },
         ]
       : []),
   ];
-
-  if (!expanded) {
-    return (
-      <Pressable
-        onPress={() => setExpanded(true)}
-        style={[styles.tab, { top: tabTop, backgroundColor: colors.primary, borderColor: colors.primary }]}
-      >
-        <Feather name="chevron-left" size={16} color="#FFFFFF" />
-      </Pressable>
-    );
-  }
-
-  const overlayColor = colors.scheme === "dark" ? "rgba(31,41,55,0.55)" : "rgba(255,255,255,0.55)";
-
   return (
-    <BlurView
-      intensity={28}
-      tint={colors.scheme === "dark" ? "dark" : "light"}
-      style={[styles.panel, { top: panelTop, borderColor: colors.border }]}
-    >
-      <View style={[styles.panelOverlay, { backgroundColor: overlayColor }]}>
-      <Text style={[styles.header, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-        QUICK ACTIONS
-      </Text>
-      {actions.map((item) => (
+    <>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 10),
+          },
+        ]}
+      >
         <Pressable
-          key={item.id}
-          onPress={() => {
-            item.onPress();
-            setExpanded(false);
-          }}
-          style={styles.row}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          onPress={() => setExpanded(true)}
+          style={[styles.trigger, { backgroundColor: colors.soft }]}
         >
-          <Text style={[styles.rowLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
-            {item.label}
+          <Feather name="grid" size={18} color={colors.primary} />
+          <Text style={[styles.label, { color: colors.primary }]}>
+            Shift actions
           </Text>
-          <View style={[styles.rowIcon, { backgroundColor: item.accent }]}>
-            <Feather name={item.icon} size={15} color="#FFFFFF" />
-          </View>
+          <Feather name="chevron-up" size={18} color={colors.primary} />
         </Pressable>
-      ))}
-      <Pressable onPress={() => setExpanded(false)} style={[styles.closeRow, { borderTopColor: colors.border }]}>
-        <Feather name="chevron-right" size={12} color={colors.mutedForeground} />
-        <Text style={[styles.closeText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-          Close quick actions
-        </Text>
-      </Pressable>
       </View>
-    </BlurView>
+      <Modal
+        visible={expanded}
+        transparent
+        animationType={reduceMotion ? "none" : "slide"}
+        onRequestClose={() => setExpanded(false)}
+      >
+        <View style={styles.backdrop}>
+          <Pressable
+            accessible={false}
+            style={StyleSheet.absoluteFill}
+            onPress={() => setExpanded(false)}
+          />
+          <View
+            accessibilityViewIsModal
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.card,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.header}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.title, { color: colors.foreground }]}
+              >
+                Shift actions
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close shift actions"
+                onPress={() => setExpanded(false)}
+                style={styles.close}
+              >
+                <Feather name="x" size={22} color={colors.foreground} />
+              </Pressable>
+            </View>
+            <ScrollView
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+            >
+              {actions.map((action) => (
+                <Pressable
+                  key={action.label}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setExpanded(false);
+                    action.run();
+                  }}
+                  style={[styles.action, { backgroundColor: colors.soft }]}
+                >
+                  <Feather
+                    name={action.icon}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={[styles.label, { color: colors.foreground }]}>
+                    {action.label}
+                  </Text>
+                  <Feather
+                    name="chevron-right"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              ))}
+              {!phone ? (
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  No office phone recorded. Use Message office to contact your
+                  team.
+                </Text>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
-
 const styles = StyleSheet.create({
-  tab: {
-    position: "absolute",
-    right: 0,
-    zIndex: 15,
-    width: 22,
-    height: 48,
-    borderTopLeftRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderWidth: 1,
-    borderRightWidth: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: -2, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  panel: {
-    position: "absolute",
-    right: 0,
-    zIndex: 30,
-    width: 200,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-    borderWidth: 1,
-    borderRightWidth: 0,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: -2, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  panelOverlay: {
-    paddingBottom: 4,
-  },
-  header: {
-    fontSize: 9,
-    letterSpacing: 1,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  row: {
+  footer: { padding: 10, borderTopWidth: 1 },
+  trigger: {
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
     flexDirection: "row",
-    alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    alignItems: "center",
+    padding: 14,
+    minHeight: 48,
+    borderRadius: 16,
   },
-  rowLabel: {
+  label: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 15,
+    lineHeight: 22,
     flex: 1,
-    fontSize: 13,
   },
-  rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+  backdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  sheet: {
+    width: "100%",
+    maxWidth: 600,
+    alignSelf: "center",
+    maxHeight: "85%",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+  },
+  header: { flexDirection: "row", alignItems: "center", padding: 16, gap: 10 },
+  title: {
+    fontFamily: FontFamily.interBold,
+    fontSize: 20,
+    lineHeight: 27,
+    flex: 1,
+  },
+  close: {
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  closeRow: {
+  action: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 4,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+    minHeight: 56,
+    padding: 16,
+    borderRadius: 16,
   },
-  closeText: {
-    fontSize: 11,
+  hint: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 20,
+    paddingVertical: 12,
   },
 });

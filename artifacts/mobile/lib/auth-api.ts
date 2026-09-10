@@ -98,13 +98,16 @@ export async function completeMfaLogin(
   };
 }
 
-export async function fetchCurrentUser(): Promise<AuthUser | null> {
-  try {
-    const data = await workerFetch<{ user: Record<string, unknown> }>("/api/auth/me");
-    return mapUser(data.user);
-  } catch {
-    return null;
-  }
+/**
+ * Throws WorkerApiError on failure instead of swallowing it - the caller
+ * (AuthProvider's bootstrap) needs the status code to tell a genuine 401/403
+ * (this token really is invalid, clear the session) apart from a transient
+ * network/server failure (keep the cached session; a stale-but-valid token
+ * must survive a backend hiccup, not force a re-login).
+ */
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const data = await workerFetch<{ user: Record<string, unknown> }>("/api/auth/me");
+  return mapUser(data.user);
 }
 
 export async function logoutApi(): Promise<void> {

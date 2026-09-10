@@ -19,6 +19,7 @@ import { showAlert } from "@/lib/alert";
 import { useColors } from "@/hooks/useColors";
 import { startShiftSession, type WorkerShift } from "@/lib/worker-api";
 import {
+  APP_TIMEZONE,
   avatarShouldPulse,
   emergencyContactDisplay,
   findInProgressShift,
@@ -26,6 +27,7 @@ import {
   formatShiftTimeRange,
   isBlockedByInProgressShift,
   isShiftCompletedForList,
+  parseIsoMs,
   shiftInitials,
 } from "@/lib/shift-utils";
 import { showBlockedByInProgressAlert } from "@/lib/shift-block-alert";
@@ -51,8 +53,14 @@ export function ShiftListCard({
 
   const isCancelled = shift.status === "cancelled";
   const isCompleted = isShiftCompletedForList(shift);
+  const docsDueMs = parseIsoMs(shift.documentation_due_at);
+  const docsOverdue = docsDueMs != null && docsDueMs < Date.now();
   const pulse = !isCompleted && avatarShouldPulse(shift.visual_state);
   const showDetails = showActions && !isCompleted;
+  const [preparationOpen, setPreparationOpen] = useState(false);
+  const [preparationTab, setPreparationTab] = useState<"focus" | "contacts">(
+    "focus",
+  );
   const isSessionLive = shift.visual_state === "session_active";
   const inProgressShift = findInProgressShift(
     siblingShifts.length ? siblingShifts : [shift],
@@ -79,9 +87,9 @@ export function ShiftListCard({
     shift.profile?.emergency_contact,
   );
   const caseManager = shift.profile?.case_manager;
-  const coordinatorLine = [caseManager?.phone, caseManager?.email]
-    .filter(Boolean)
-    .join(" · ");
+  const hasCaseManagerInfo = Boolean(
+    caseManager?.name?.trim() || caseManager?.phone || caseManager?.email,
+  );
   const officePhone = shift.office_contact_number?.trim() || null;
 
   const showBlockedAlert = () => {
@@ -143,7 +151,7 @@ export function ShiftListCard({
       ? t("shifts.listCard.resumeSession")
       : shift.visual_state === "clocked_in"
         ? t("shifts.listCard.startSession")
-        : "Review & clock in";
+        : t("shifts.listCard.reviewClockIn");
 
   return (
     <View
@@ -157,7 +165,64 @@ export function ShiftListCard({
       ]}
       testID={`shift-card-${shift.id}`}
     >
-      <Pressable onPress={navigateToShift}>
+      <View style={[styles.scheduleBand, { borderBottomColor: colors.border }]}>
+        <View style={styles.timeRow}>
+          <Feather name="clock" size={16} color={colors.primary} />
+          <Text
+            style={[
+              styles.time,
+              {
+                color: colors.foreground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+          </Text>
+        </View>
+        {isCancelled ? (
+          <Text
+            style={{
+              color: colors.destructive,
+              fontFamily: FontFamily.interSemiBold,
+            }}
+          >
+            {t("shifts.listCard.cancelled")}
+          </Text>
+        ) : (
+          <ShiftStatusBadge
+            visualState={isCompleted ? "completed" : shift.visual_state}
+          />
+        )}
+      </View>
+      {shift.documentation_pending && (
+        <View
+          style={[
+            styles.docsPendingBanner,
+            {
+              backgroundColor: docsOverdue ? colors.dangerBg : colors.statusProgressBg,
+            },
+          ]}
+        >
+          <Feather
+            name="alert-triangle"
+            size={13}
+            color={docsOverdue ? colors.destructive : colors.warning}
+          />
+          <Text
+            style={[
+              styles.docsPendingText,
+              {
+                color: docsOverdue ? colors.destructive : colors.warning,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {docsOverdue ? "Documentation overdue" : "Documentation needed"}
+          </Text>
+        </View>
+      )}
+      <Pressable accessibilityRole="button" onPress={navigateToShift}>
         <View style={styles.row}>
           <View
             style={[
@@ -193,24 +258,7 @@ export function ShiftListCard({
               >
                 {shift.participant_name ?? t("shifts.listCard.participant")}
               </Text>
-              {!isCancelled && (
-                <ShiftStatusBadge
-                  visualState={isCompleted ? "completed" : shift.visual_state}
-                />
-              )}
             </View>
-
-            <Text
-              style={[
-                styles.time,
-                {
-                  color: colors.mutedForeground,
-                  fontFamily: FontFamily.interMedium,
-                },
-              ]}
-            >
-              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
-            </Text>
 
             <View style={styles.addressRow}>
               <Feather
@@ -242,172 +290,6 @@ export function ShiftListCard({
         </View>
       </Pressable>
 
-      {showDetails && goals.length > 0 && (
-        <View style={styles.goalRow}>
-          {goals.map((goal, i) => (
-            <View
-              key={i}
-              style={[styles.goalChip, { backgroundColor: colors.activeBg }]}
-            >
-              <Feather name="star" size={10} color="#F59E0B" />
-              <Text
-                style={[
-                  styles.goalText,
-                  {
-                    color: colors.primary,
-                    fontFamily: FontFamily.interSemiBold,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {formatActiveGoalLabel(goal)}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {showDetails && emergencyContact && (
-        <View
-          style={[
-            styles.detailCard,
-            { backgroundColor: colors.soft, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.detailTop}>
-            <View style={styles.detailTextCol}>
-              <Text
-                style={[
-                  styles.detailEyebrow,
-                  {
-                    color: colors.mutedForeground,
-                    fontFamily: FontFamily.interBold,
-                  },
-                ]}
-              >
-                {t("shifts.listCard.nextOfKin").toUpperCase()}
-              </Text>
-              {emergencyContact.name ? (
-                <Text
-                  style={[
-                    styles.detailTitle,
-                    {
-                      color: colors.foreground,
-                      fontFamily: FontFamily.interBold,
-                    },
-                  ]}
-                >
-                  {emergencyContact.name}
-                </Text>
-              ) : null}
-              <Text
-                style={[
-                  styles.detailSub,
-                  {
-                    color: colors.mutedForeground,
-                    fontFamily: FontFamily.interRegular,
-                  },
-                ]}
-              >
-                {emergencyContact.detail || emergencyContact.text}
-              </Text>
-            </View>
-            {emergencyContact.phone ? (
-              <Pressable
-                onPress={() =>
-                  Linking.openURL(
-                    `tel:${emergencyContact.phone!.replace(/\s/g, "")}`,
-                  )
-                }
-                style={[
-                  styles.detailCallBtn,
-                  { borderColor: colors.border, backgroundColor: colors.card },
-                ]}
-              >
-                <Feather name="phone" size={12} color={colors.primary} />
-                <Text
-                  style={[
-                    styles.detailCallText,
-                    { color: colors.primary, fontFamily: FontFamily.interBold },
-                  ]}
-                >
-                  {t("shifts.listCard.call")}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      )}
-
-      {showDetails && (caseManager?.name || notesText) && (
-        <View
-          style={[
-            styles.detailCard,
-            { backgroundColor: colors.soft, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.detailTop}>
-            <View style={styles.detailInline}>
-              <Feather name="clipboard" size={14} color={colors.primary} />
-              <Text
-                style={[
-                  styles.detailTitle,
-                  {
-                    color: colors.foreground,
-                    fontFamily: FontFamily.interBold,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {caseManager?.name || t("shifts.listCard.messageCoordinator")}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() =>
-                router.push(`/shift/${shift.id}/message-office` as never)
-              }
-              style={styles.detailInlineBtn}
-            >
-              <Feather name="mail" size={12} color={colors.accent} />
-              <Text
-                style={[
-                  styles.detailCallText,
-                  { color: colors.accent, fontFamily: FontFamily.interBold },
-                ]}
-              >
-                {t("shifts.listCard.message")}
-              </Text>
-            </Pressable>
-          </View>
-          {notesText ? (
-            <Text
-              style={[
-                styles.notesText,
-                {
-                  color: colors.foreground,
-                  fontFamily: FontFamily.interRegular,
-                },
-              ]}
-            >
-              {notesText}
-            </Text>
-          ) : null}
-          {coordinatorLine || officePhone ? (
-            <Text
-              style={[
-                styles.detailSub,
-                {
-                  color: colors.mutedForeground,
-                  fontFamily: FontFamily.interRegular,
-                },
-              ]}
-            >
-              {coordinatorLine || officePhone}
-            </Text>
-          ) : null}
-        </View>
-      )}
-
       {showDetails && hasMedicalInfo && (
         <WorkerMobileRiskStrip
           alerts={healthAlerts}
@@ -420,64 +302,82 @@ export function ShiftListCard({
 
       {showActions && !isCancelled && !isCompleted && (
         <View style={styles.actions}>
-          <Pressable
-            onPress={() => {
-              if (mapsUrl) {
-                void Linking.openURL(mapsUrl);
-                return;
-              }
-              showAlert(
-                t("shifts.listCard.directions"),
-                t("shifts.listCard.noLocationStored"),
-              );
-            }}
-            style={[
-              styles.secondaryBtn,
-              { borderColor: colors.border, backgroundColor: colors.card },
-            ]}
-          >
-            <Feather name="navigation" size={14} color={colors.foreground} />
-            <Text
+          {mapsUrl ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (mapsUrl) {
+                  void Linking.openURL(mapsUrl);
+                  return;
+                }
+                showAlert(
+                  t("shifts.listCard.directions"),
+                  t("shifts.listCard.noLocationStored"),
+                );
+              }}
               style={[
-                styles.secondaryBtnText,
-                { color: colors.foreground, fontFamily: FontFamily.interBold },
+                styles.secondaryBtn,
+                { borderColor: colors.border, backgroundColor: colors.card },
               ]}
             >
-              {t("shifts.listCard.directions")}
-            </Text>
-          </Pressable>
+              <Feather name="navigation" size={14} color={colors.foreground} />
+              <Text
+                style={[
+                  styles.secondaryBtnText,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interBold,
+                  },
+                ]}
+              >
+                {t("shifts.listCard.directions")}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {phone ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (phone) {
+                  void Linking.openURL(`tel:${phone.replace(/\s/g, "")}`);
+                  return;
+                }
+                showAlert(
+                  t("shifts.listCard.call"),
+                  t("shifts.listCard.noPhoneStored"),
+                );
+              }}
+              style={[
+                styles.iconBtn,
+                { borderColor: colors.border, backgroundColor: colors.card },
+              ]}
+              accessibilityLabel={t("shifts.listCard.call")}
+            >
+              <Feather name="phone" size={14} color={colors.foreground} />
+            </Pressable>
+          ) : null}
 
           <Pressable
-            onPress={() => {
-              if (phone) {
-                void Linking.openURL(`tel:${phone.replace(/\s/g, "")}`);
-                return;
-              }
-              showAlert(
-                t("shifts.listCard.call"),
-                t("shifts.listCard.noPhoneStored"),
-              );
-            }}
-            style={[
-              styles.iconBtn,
-              { borderColor: colors.border, backgroundColor: colors.card },
-            ]}
-          >
-            <Feather name="phone" size={14} color={colors.foreground} />
-          </Pressable>
-
-          <Pressable
+            accessibilityRole="button"
             onPress={() => void handleClockIn()}
             disabled={starting}
-            style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
+            accessibilityState={{ disabled: starting, busy: starting }}
+            style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
           >
             {starting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator
+                color={colors.primaryForeground}
+                size="small"
+              />
             ) : (
               <Text
                 style={[
                   styles.primaryBtnText,
-                  { fontFamily: FontFamily.interBold },
+                  {
+                    fontFamily: FontFamily.interBold,
+                    color: colors.primaryForeground,
+                  },
                 ]}
               >
                 {actionLabel}
@@ -487,15 +387,291 @@ export function ShiftListCard({
         </View>
       )}
 
+      {showDetails &&
+      (goals.length > 0 ||
+        emergencyContact ||
+        hasCaseManagerInfo ||
+        officePhone ||
+        notesText) ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: preparationOpen }}
+          onPress={() => setPreparationOpen((open) => !open)}
+          style={[styles.preparationToggle, { borderColor: colors.border }]}
+        >
+          <Feather name="file-text" size={18} color={colors.primary} />
+          <Text
+            style={{
+              flex: 1,
+              color: colors.primary,
+              fontFamily: FontFamily.interSemiBold,
+              fontSize: 14,
+            }}
+          >
+            {t("shifts.listCard.preparation")}
+          </Text>
+          <Feather
+            name={preparationOpen ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={colors.primary}
+          />
+        </Pressable>
+      ) : null}
+      {showDetails && preparationOpen ? (
+        <View style={[styles.preparationBody, { borderColor: colors.border }]}>
+          <View style={[styles.prepTabs, { backgroundColor: colors.soft }]}>
+            {(["focus", "contacts"] as const).map((tab) => (
+              <Pressable
+                key={tab}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: preparationTab === tab }}
+                onPress={() => setPreparationTab(tab)}
+                style={[
+                  styles.prepTab,
+                  preparationTab === tab && { backgroundColor: colors.card },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionText,
+                    {
+                      color:
+                        preparationTab === tab
+                          ? colors.primary
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  {t(
+                    tab === "focus"
+                      ? "shifts.listCard.shiftFocus"
+                      : "shifts.listCard.contacts",
+                  )}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {preparationTab === "focus" && !goals.length && !notesText ? (
+            <Text style={[styles.prepText, { color: colors.mutedForeground }]}>
+              {t("shifts.listCard.noPreparationNotes")}
+            </Text>
+          ) : null}
+          {preparationTab === "contacts" &&
+          !emergencyContact &&
+          !hasCaseManagerInfo &&
+          !officePhone ? (
+            <Text style={[styles.prepText, { color: colors.mutedForeground }]}>
+              {t("shifts.listCard.noContacts")}
+            </Text>
+          ) : null}
+          {preparationTab === "focus" && goals.length > 0 ? (
+            <View style={styles.prepSection}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+              >
+                {t("shifts.listCard.shiftFocus")}
+              </Text>
+              {goals.map((goal, index) => (
+                <View key={index} style={styles.focusRow}>
+                  <Feather
+                    name="check-circle"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.prepText,
+                      { color: colors.foreground, flex: 1 },
+                    ]}
+                  >
+                    {formatActiveGoalLabel(goal)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {preparationTab === "focus" && notesText ? (
+            <View style={styles.prepSection}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+              >
+                {t("shifts.listCard.shiftInstructions")}
+              </Text>
+              <Text style={[styles.prepText, { color: colors.foreground }]}>
+                {notesText}
+              </Text>
+            </View>
+          ) : null}
+          {preparationTab === "contacts" && emergencyContact ? (
+            <View style={styles.prepSection}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+              >
+                {t("shifts.listCard.nextOfKin")}
+              </Text>
+              <Text style={[styles.contactName, { color: colors.foreground }]}>
+                {emergencyContact.name || emergencyContact.text}
+              </Text>
+              {emergencyContact.detail ? (
+                <Text
+                  style={[styles.prepText, { color: colors.mutedForeground }]}
+                >
+                  {emergencyContact.detail}
+                </Text>
+              ) : null}
+              {emergencyContact.phone ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    t("shifts.listCard.call") +
+                    " " +
+                    (emergencyContact.name || emergencyContact.phone)
+                  }
+                  onPress={() =>
+                    void Linking.openURL(
+                      `tel:${emergencyContact.phone!.replace(/\s/g, "")}`,
+                    )
+                  }
+                  style={[styles.contactAction, { borderColor: colors.border }]}
+                >
+                  <Feather name="phone" size={16} color={colors.primary} />
+                  <Text style={[styles.actionText, { color: colors.primary }]}>
+                    {t("shifts.listCard.call")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {preparationTab === "contacts" &&
+          (hasCaseManagerInfo || officePhone) ? (
+            <View style={styles.prepSection}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+              >
+                {hasCaseManagerInfo
+                  ? t("shifts.listCard.caseManager")
+                  : t("shifts.listCard.noCaseManager")}
+              </Text>
+              {caseManager?.name ? (
+                <Text
+                  style={[styles.contactName, { color: colors.foreground }]}
+                >
+                  {caseManager.name}
+                </Text>
+              ) : null}
+              {[caseManager?.phone, caseManager?.email]
+                .filter(Boolean)
+                .map((value, index) => (
+                  <Text
+                    key={index}
+                    style={[styles.prepText, { color: colors.mutedForeground }]}
+                  >
+                    {value}
+                  </Text>
+                ))}
+              <View style={styles.contactActions}>
+                {caseManager?.phone ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      void Linking.openURL(
+                        `tel:${caseManager.phone!.replace(/[^+\d]/g, "")}`,
+                      )
+                    }
+                    style={[
+                      styles.contactAction,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.actionText, { color: colors.primary }]}
+                    >
+                      {t("shifts.listCard.callCaseManager")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {caseManager?.email ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      void Linking.openURL(
+                        `mailto:${caseManager.email!.trim()}`,
+                      )
+                    }
+                    style={[
+                      styles.contactAction,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.actionText, { color: colors.primary }]}
+                    >
+                      {t("shifts.listCard.emailCaseManager")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.sectionLabel,
+                  { color: colors.mutedForeground, marginTop: 12 },
+                ]}
+              >
+                {t("shifts.listCard.officeTeam")}
+              </Text>
+              {officePhone ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    void Linking.openURL(
+                      `tel:${officePhone.replace(/[^+\d]/g, "")}`,
+                    )
+                  }
+                  style={[styles.contactAction, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.actionText, { color: colors.primary }]}>
+                    {t("shifts.listCard.callOffice")} / {officePhone}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push(`/shift/${shift.id}/message-office` as never)
+                }
+                style={[styles.contactAction, { borderColor: colors.border }]}
+              >
+                <Feather
+                  name="message-circle"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={[styles.actionText, { color: colors.primary }]}>
+                  {t("shifts.listCard.messageOffice")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {isCompleted && (
         <Pressable
+          accessibilityRole="button"
           onPress={() => navigateToShift()}
-          style={[styles.completeBtn, { backgroundColor: colors.accent }]}
+          style={[styles.completeBtn, { backgroundColor: colors.primary }]}
         >
           <Text
             style={[
               styles.primaryBtnText,
-              { fontFamily: FontFamily.interBold },
+              {
+                fontFamily: FontFamily.interBold,
+                color: colors.primaryForeground,
+              },
             ]}
           >
             {t("shifts.listCard.completeNotes")}
@@ -508,19 +684,93 @@ export function ShiftListCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 16,
+    padding: 12,
     gap: 12,
+  },
+  scheduleBand: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
+  },
+  docsPendingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  docsPendingText: { fontSize: 12 },
+  preparationToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 48,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  prepTabs: { flexDirection: "row", gap: 4, padding: 4, borderRadius: 14 },
+  prepTab: {
+    flex: 1,
+    minHeight: 44,
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+  },
+  preparationBody: { borderTopWidth: 1, paddingTop: 10, gap: 12 },
+  prepSection: { gap: 6 },
+  sectionLabel: {
+    fontFamily: FontFamily.interMedium,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  prepText: { fontFamily: FontFamily.body, fontSize: 14, lineHeight: 22 },
+  contactName: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 16,
+    lineHeight: 23,
+  },
+  focusRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  contactActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  contactAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionText: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 14,
+    lineHeight: 20,
+    flexShrink: 1,
   },
   row: {
     flexDirection: "row",
     gap: 10,
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 48,
+    height: 48,
+    alignSelf: "flex-start",
+    flexShrink: 0,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -542,7 +792,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   name: {
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 25,
     flex: 1,
   },
   strikethrough: {
@@ -553,7 +804,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   time: {
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
+    flexShrink: 1,
   },
   addressRow: {
     flexDirection: "row",
@@ -563,65 +816,21 @@ const styles = StyleSheet.create({
   },
   addressIcon: { marginTop: 2 },
   address: {
-    fontSize: 12,
+    fontSize: 14,
+    lineHeight: 21,
     flex: 1,
   },
   italic: { fontStyle: "italic" },
-  goalRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-  },
-  goalChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    maxWidth: "100%",
-  },
-  goalText: { fontSize: 11 },
-  detailCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
-    marginTop: 10,
-  },
-  detailTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  detailTextCol: { flex: 1, gap: 2 },
-  detailInline: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
-  detailInlineBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-  detailEyebrow: { fontSize: 9, letterSpacing: 0.8 },
-  detailTitle: { fontSize: 13, flexShrink: 1 },
-  detailSub: { fontSize: 12, lineHeight: 16 },
-  detailCallBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  detailCallText: { fontSize: 11 },
-  notesText: { fontSize: 12, lineHeight: 18 },
   actions: {
+    flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   secondaryBtn: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
@@ -634,7 +843,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   iconBtn: {
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     width: 48,
     borderRadius: 12,
     borderWidth: 1,
@@ -642,18 +852,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryBtn: {
-    flex: 1.35,
-    height: 48,
+    width: "100%",
+    paddingHorizontal: 16,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   primaryBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
   },
   completeBtn: {
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",

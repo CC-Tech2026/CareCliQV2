@@ -112,39 +112,45 @@ export function PreShiftParticipantCard({
               >
                 Emergency contacts
               </Text>
-              {data.emergency_contacts.map((contact, index) => (
-                <Pressable
-                  key={index}
-                  accessibilityRole="link"
-                  accessibilityLabel={`Call ${contact.name}, ${contact.phone}`}
-                  onPress={() =>
-                    void Linking.openURL(
-                      `tel:${contact.phone.replace(/[^+\d]/g, "")}`,
-                    )
-                  }
-                  style={[styles.contact, { backgroundColor: colors.soft }]}
-                >
-                  <Feather name="phone" size={18} color={colors.primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        Typography.bodyStrong,
-                        { color: colors.foreground },
-                      ]}
-                    >
-                      {contact.name}
-                    </Text>
-                    <Text
-                      style={[
-                        Typography.caption,
-                        { color: colors.mutedForeground },
-                      ]}
-                    >
-                      {contact.role} · {contact.phone}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
+              <View style={styles.contactsGrid}>
+                {data.emergency_contacts.map((contact, index) => (
+                  <Pressable
+                    key={index}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Call ${contact.name}, ${contact.phone}`}
+                    onPress={() =>
+                      void Linking.openURL(
+                        `tel:${contact.phone.replace(/[^+\d]/g, "")}`,
+                      )
+                    }
+                    style={[
+                      styles.contact,
+                      styles.contactGridItem,
+                      { backgroundColor: colors.soft },
+                    ]}
+                  >
+                    <Feather name="phone" size={18} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          Typography.bodyStrong,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {contact.name}
+                      </Text>
+                      <Text
+                        style={[
+                          Typography.caption,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {contact.role} · {contact.phone}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
         </>
@@ -169,22 +175,24 @@ export function PreShiftParticipantCard({
 }
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 20,
+    padding: 14,
     gap: 18,
     marginTop: 16,
   },
   heading: { flexDirection: "row", alignItems: "center", gap: 10 },
   section: { gap: 8 },
-  alert: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 10 },
+  alert: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
   contact: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 14,
+    gap: 8,
+    padding: 10,
     borderRadius: 16,
     minHeight: 48,
   },
+  contactsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  contactGridItem: { flexGrow: 1, flexBasis: "45%", minWidth: 150 },
   link: { minHeight: 48, justifyContent: "center" },
 });

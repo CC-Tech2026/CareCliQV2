@@ -80,6 +80,9 @@ export type WorkerOfflineQueueItem =
       /** Set once the signature itself has synced on a prior attempt, so a
        * retry doesn't resubmit it - mirrors clock_in's clockedIn flag. */
       signatureSubmitted?: boolean;
+      /** Worker ended with incomplete mandatory tasks and acknowledged the risk. */
+      force?: boolean;
+      reason?: string;
       timestamp: number;
     };
 

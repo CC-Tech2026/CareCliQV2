@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -64,7 +65,10 @@ function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]): boolean {
   return notes.some((n) => n.task_id === task.task_id && n.content?.trim());
 }
 
-function sessionNoteTextsForTask(sessionNotes: SessionNoteRecord[], taskId: string): string[] {
+function sessionNoteTextsForTask(
+  sessionNotes: SessionNoteRecord[],
+  taskId: string,
+): string[] {
   return sessionNotes
     .filter((n) => n.task_id === taskId && n.content?.trim())
     .map((n) => n.content!.trim());
@@ -82,12 +86,17 @@ function sessionNoteTextsForTask(sessionNotes: SessionNoteRecord[], taskId: stri
  * identity) when nothing actually changed, so callers can cheaply detect
  * "does this need to sync."
  */
-function attachSessionNotesToTask(task: ShiftTask, sessionNotes: SessionNoteRecord[]): ShiftTask {
+function attachSessionNotesToTask(
+  task: ShiftTask,
+  sessionNotes: SessionNoteRecord[],
+): ShiftTask {
   const forTask = sessionNotes.filter((n) => n.task_id === task.task_id);
   if (!forTask.length) return task;
 
-  const hasPhoto = task.has_photo || forTask.some((n) => n.note_type === "photo");
-  const hasVoice = task.has_voice || forTask.some((n) => n.note_type === "voice");
+  const hasPhoto =
+    task.has_photo || forTask.some((n) => n.note_type === "photo");
+  const hasVoice =
+    task.has_voice || forTask.some((n) => n.note_type === "voice");
 
   let note = task.note;
   let hasTextNotes = task.has_text_notes;
@@ -99,13 +108,27 @@ function attachSessionNotesToTask(task: ShiftTask, sessionNotes: SessionNoteReco
     }
   }
 
-  if (note === task.note && hasTextNotes === task.has_text_notes && hasPhoto === task.has_photo && hasVoice === task.has_voice) {
+  if (
+    note === task.note &&
+    hasTextNotes === task.has_text_notes &&
+    hasPhoto === task.has_photo &&
+    hasVoice === task.has_voice
+  ) {
     return task;
   }
-  return { ...task, note, has_text_notes: hasTextNotes, has_photo: hasPhoto, has_voice: hasVoice };
+  return {
+    ...task,
+    note,
+    has_text_notes: hasTextNotes,
+    has_photo: hasPhoto,
+    has_voice: hasVoice,
+  };
 }
 
-function taskHasMobileDocumentation(task: ShiftTask, sessionNotes: SessionNoteRecord[]): boolean {
+function taskHasMobileDocumentation(
+  task: ShiftTask,
+  sessionNotes: SessionNoteRecord[],
+): boolean {
   if (hasStrongTaskEvidence(task)) return true;
   const combined = [
     ...sessionNoteTextsForTask(sessionNotes, task.task_id),
@@ -153,13 +176,18 @@ export function WorkerMobileSessionScreen({
     setLocalSessionNotes(sessionNotes);
   }, [sessionNotes]);
 
-  const activeTasks = useMemo(() => localTasks.filter((t) => !t.marked_na), [localTasks]);
+  const activeTasks = useMemo(
+    () => localTasks.filter((t) => !t.marked_na),
+    [localTasks],
+  );
   const mandatoryTasks = useMemo(
     () => activeTasks.filter((t) => isMandatoryTask(t)),
     [activeTasks],
   );
   const doneMandatory = mandatoryTasks.filter((t) => t.completed).length;
-  const startedMandatory = mandatoryTasks.filter((t) => taskStarted(t, localSessionNotes)).length;
+  const startedMandatory = mandatoryTasks.filter((t) =>
+    taskStarted(t, localSessionNotes),
+  ).length;
   const progressLabel =
     mandatoryTasks.length > 0
       ? doneMandatory > 0
@@ -190,7 +218,10 @@ export function WorkerMobileSessionScreen({
         }
         await updateShiftTasks(shiftId, next);
       } catch (err) {
-        Alert.alert("Save failed", err instanceof Error ? err.message : "Please try again.");
+        Alert.alert(
+          "Save failed",
+          err instanceof Error ? err.message : "Please try again.",
+        );
       } finally {
         setBusy(false);
       }
@@ -220,7 +251,9 @@ export function WorkerMobileSessionScreen({
     const next = localTasks.map((t) => {
       if (t.task_id !== taskId) return t;
       const willComplete = !t.completed;
-      const withEvidence = willComplete ? attachSessionNotesToTask(t, localSessionNotes) : t;
+      const withEvidence = willComplete
+        ? attachSessionNotesToTask(t, localSessionNotes)
+        : t;
       return {
         ...withEvidence,
         completed: willComplete,
@@ -232,7 +265,10 @@ export function WorkerMobileSessionScreen({
   };
 
   const handleNoteSaved = async (note: SessionNoteRecord) => {
-    const mergedNotes = [...localSessionNotes.filter((n) => n.note_id !== note.note_id), note];
+    const mergedNotes = [
+      ...localSessionNotes.filter((n) => n.note_id !== note.note_id),
+      note,
+    ];
     setLocalSessionNotes(mergedNotes);
 
     const taskId = note.task_id;
@@ -241,7 +277,9 @@ export function WorkerMobileSessionScreen({
       if (task) {
         const withEvidence = attachSessionNotesToTask(task, mergedNotes);
         const evidenceChanged = withEvidence !== task;
-        const shouldAutoComplete = !task.completed && taskHasMobileDocumentation(withEvidence, mergedNotes);
+        const shouldAutoComplete =
+          !task.completed &&
+          taskHasMobileDocumentation(withEvidence, mergedNotes);
         // Sync on every note, not just the one that happens to cross the
         // auto-complete threshold - a task already marked complete, or a
         // second/third note on the same task, previously never made it back
@@ -286,7 +324,10 @@ export function WorkerMobileSessionScreen({
         bottomOffset={24}
       >
         <WorkerMobileRiskStrip alerts={healthAlerts} />
-        <ClockedInBanner clockedInAt={clockedInAt} participantName={participantName} />
+        <ClockedInBanner
+          clockedInAt={clockedInAt}
+          participantName={participantName}
+        />
 
         <LongShiftEngagementPanel
           shiftId={shiftId}
@@ -301,12 +342,35 @@ export function WorkerMobileSessionScreen({
           disabled={disabled || busy}
         />
 
-        <View style={[styles.taskCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <View style={[styles.taskHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.taskHeaderTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <View
+          style={[
+            styles.taskCard,
+            { borderColor: colors.border, backgroundColor: colors.card },
+          ]}
+        >
+          <View
+            style={[styles.taskHeader, { borderBottomColor: colors.border }]}
+          >
+            <Text
+              style={[
+                styles.taskHeaderTitle,
+                {
+                  color: colors.foreground,
+                  fontFamily: FontFamily.interSemiBold,
+                },
+              ]}
+            >
               Tasks
             </Text>
-            <Text style={[styles.taskHeaderCount, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text
+              style={[
+                styles.taskHeaderCount,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interMedium,
+                },
+              ]}
+            >
               {progressLabel}
             </Text>
           </View>
@@ -316,7 +380,8 @@ export function WorkerMobileSessionScreen({
             onSelectTask={setActiveTaskId}
             onToggleTask={toggleTask}
             taskCanComplete={(t) =>
-              !isMandatoryTask(t) || taskHasMobileDocumentation(t, localSessionNotes)
+              !isMandatoryTask(t) ||
+              taskHasMobileDocumentation(t, localSessionNotes)
             }
             disabled={disabled || busy}
             shiftId={shiftId}
@@ -334,15 +399,40 @@ export function WorkerMobileSessionScreen({
             This is a safety net only — shown when the shift's task list has no
             medication-category task, so scheduled/PRN doses are never unreachable. */}
         {!localTasks.some((t) => t.category === "medication") && (
-          <View style={[styles.taskCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-            <View style={[styles.medicationsTitleRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[
+              styles.taskCard,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+          >
+            <View
+              style={[
+                styles.medicationsTitleRow,
+                { borderBottomColor: colors.border },
+              ]}
+            >
               <Feather name="clipboard" size={14} color={colors.foreground} />
-              <Text style={[styles.medicationsTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text
+                style={[
+                  styles.medicationsTitle,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+              >
                 Medications
               </Text>
             </View>
-            <WorkerMobileMedicationChecklist shiftId={shiftId} disabled={disabled || busy} />
-            <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled || busy} />
+            <WorkerMobileMedicationChecklist
+              shiftId={shiftId}
+              disabled={disabled || busy}
+            />
+            <WorkerMobilePrnMedications
+              shiftId={shiftId}
+              sessionId={sessionId}
+              disabled={disabled || busy}
+            />
           </View>
         )}
 
@@ -364,18 +454,30 @@ export function WorkerMobileSessionScreen({
             anywhere now that there's no single flat notes list. */}
         {untaskedNotes.length > 0 && (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            <Text
+              style={[
+                styles.sectionLabel,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interSemiBold,
+                },
+              ]}
+            >
               CHECK-INS
             </Text>
             {untaskedNotes.map((note) => {
-              const flag = compliance.noteFlags.find((f) => f.noteId === note.note_id);
+              const flag = compliance.noteFlags.find(
+                (f) => f.noteId === note.note_id,
+              );
               return (
                 <WorkerMobileNoteBubble
                   key={note.note_id}
                   note={note}
                   participantName={participantName}
                   flag={flag}
-                  onIncidentReport={flag?.severity === "fail" ? onOpenIncidentReport : undefined}
+                  onIncidentReport={
+                    flag?.severity === "fail" ? onOpenIncidentReport : undefined
+                  }
                 />
               );
             })}
@@ -394,8 +496,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
     paddingBottom: 16,
-    gap: 8,
+    gap: 12,
   },
   sectionLabel: {
     fontSize: 11,
@@ -406,7 +511,7 @@ const styles = StyleSheet.create({
   taskCard: {
     marginHorizontal: 14,
     marginTop: 12,
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
   },
@@ -422,6 +527,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   taskHeader: {
+    flexWrap: "wrap",
+    gap: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -430,10 +537,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   taskHeaderTitle: {
-    fontSize: 14,
+    fontSize: 18,
   },
   taskHeaderCount: {
-    fontSize: 12,
+    fontSize: 14,
   },
   scoreWrap: {
     marginTop: 12,

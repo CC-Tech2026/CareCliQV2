@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useT } from "@/context/PreferencesContext";
+import { FontFamily } from "@/constants/typography";
 import { useColors } from "@/hooks/useColors";
 import type { TranslationKey } from "@/lib/i18n/translations";
 
@@ -38,11 +39,24 @@ export type WorkerMobileTabBarProps = {
 
 export const WORKER_TABS: TabConfig[] = [
   { id: "index", labelKey: "nav.home", icon: "home", href: "/(tabs)" },
-  { id: "shifts", labelKey: "nav.shifts", icon: "calendar", href: "/(tabs)/shifts" },
-  { id: "compliance", labelKey: "nav.compliance", icon: "shield", href: "/(tabs)/compliance" },
+  {
+    id: "shifts",
+    labelKey: "nav.shifts",
+    icon: "calendar",
+    href: "/(tabs)/shifts",
+  },
+  {
+    id: "compliance",
+    labelKey: "nav.compliance",
+    icon: "shield",
+    href: "/(tabs)/compliance",
+  },
 ];
 
-export function workerBottomNavHeight(insetsBottom: number, isWeb: boolean): number {
+export function workerBottomNavHeight(
+  insetsBottom: number,
+  isWeb: boolean,
+): number {
   return (isWeb ? 96 : 72 + insetsBottom) + 20;
 }
 
@@ -67,37 +81,45 @@ export function WorkerBottomNavBar({ activeTab, onTabPress }: BarProps) {
         },
       ]}
     >
-      {WORKER_TABS.map((tab) => {
-        const active = activeTab === tab.id;
-        const label = t(tab.labelKey);
-        return (
-          <Pressable
-            key={tab.id}
-            accessibilityRole="button"
-            accessibilityState={active ? { selected: true } : {}}
-            accessibilityLabel={label}
-            onPress={() => onTabPress(tab.href)}
-            style={styles.tab}
-          >
-            <Feather
-              name={tab.icon}
-              size={22}
-              color={active ? colors.primary : colors.mutedForeground}
-            />
-            <Text
+      <View accessibilityRole="tablist" style={styles.rail}>
+        {WORKER_TABS.map((tab) => {
+          const active = activeTab === tab.id;
+          const label = t(tab.labelKey);
+          return (
+            <Pressable
+              key={tab.id}
+              accessibilityRole="tab"
+              accessibilityState={active ? { selected: true } : {}}
+              aria-selected={active}
+              accessibilityLabel={label}
+              onPress={() => onTabPress(tab.href)}
               style={[
-                styles.label,
-                {
-                  color: active ? colors.primary : colors.mutedForeground,
-                  fontFamily: "Inter_500Medium",
-                },
+                styles.tab,
+                { backgroundColor: active ? colors.soft : "transparent" },
               ]}
             >
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
+              <Feather
+                name={tab.icon}
+                size={22}
+                color={active ? colors.primary : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: active ? colors.primary : colors.mutedForeground,
+                    fontFamily: active
+                      ? FontFamily.interSemiBold
+                      : FontFamily.interMedium,
+                  },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -112,10 +134,15 @@ export function WorkerBottomNav() {
   );
 }
 
-export function WorkerMobileTabBar({ state, navigation }: WorkerMobileTabBarProps) {
+export function WorkerMobileTabBar({
+  state,
+  navigation,
+}: WorkerMobileTabBarProps) {
   const routeName = state.routes[state.index]?.name ?? "index";
   const activeTab = (
-    routeName === "index" || routeName === "shifts" || routeName === "compliance"
+    routeName === "index" ||
+    routeName === "shifts" ||
+    routeName === "compliance"
       ? routeName
       : null
   ) as WorkerTabId | null;
@@ -143,18 +170,31 @@ export function WorkerMobileTabBar({ state, navigation }: WorkerMobileTabBarProp
 
 const styles = StyleSheet.create({
   bar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 6,
-    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+  },
+  rail: {
+    flexDirection: "row",
+    gap: 6,
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
   },
   tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
-    minHeight: 52,
+    gap: 4,
+    minHeight: 56,
+    padding: 8,
+    borderRadius: 18,
   },
-  label: { fontSize: 10, lineHeight: 12 },
+  label: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: "center",
+    width: "100%",
+    flexShrink: 1,
+  },
 });

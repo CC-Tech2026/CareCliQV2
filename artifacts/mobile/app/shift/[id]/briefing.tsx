@@ -20,12 +20,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useShiftBriefing } from "@/hooks/worker/useShiftBriefing";
 import { useColors } from "@/hooks/useColors";
+import { APP_TIMEZONE } from "@/lib/shift-utils";
 import { completeShiftBriefing } from "@/lib/worker-api";
 
 function formatNoteDate(value?: string | null): string {
   if (!value) return "";
   try {
     return new Date(value).toLocaleDateString("en-AU", {
+      timeZone: APP_TIMEZONE,
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -368,32 +370,40 @@ export default function ShiftBriefingScreen() {
                 Emergency Contacts
               </Text>
             </View>
-            {briefing.emergency_contacts.map((contact, i) => (
-              <View key={`${contact.name}-${i}`} style={styles.contactRow}>
-                <Text
+            <View style={styles.contactsGrid}>
+              {briefing.emergency_contacts.map((contact, i) => (
+                <View
+                  key={`${contact.name}-${i}`}
                   style={[
-                    styles.contactName,
-                    {
-                      color: colors.foreground,
-                      fontFamily: FontFamily.interSemiBold,
-                    },
+                    styles.contactCard,
+                    { backgroundColor: colors.background, borderColor: colors.border },
                   ]}
                 >
-                  {contact.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.contactRole,
-                    {
-                      color: colors.mutedForeground,
-                      fontFamily: FontFamily.interRegular,
-                    },
-                  ]}
-                >
-                  {contact.role} · {contact.phone}
-                </Text>
-              </View>
-            ))}
+                  <Text
+                    style={[
+                      styles.contactName,
+                      {
+                        color: colors.foreground,
+                        fontFamily: FontFamily.interSemiBold,
+                      },
+                    ]}
+                  >
+                    {contact.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.contactRole,
+                      {
+                        color: colors.mutedForeground,
+                        fontFamily: FontFamily.interRegular,
+                      },
+                    ]}
+                  >
+                    {contact.role} · {contact.phone}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
@@ -519,7 +529,16 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12 },
   badge: { fontSize: 11 },
   alertItem: { fontSize: 14, lineHeight: 20 },
-  contactRow: { gap: 2 },
+  contactsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  contactCard: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minWidth: 150,
+    gap: 2,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+  },
   contactName: { fontSize: 14 },
   contactRole: { fontSize: 12 },
   footer: {

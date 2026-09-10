@@ -1,5 +1,7 @@
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceScoreRing";
 import { useT } from "@/context/PreferencesContext";
@@ -21,11 +23,17 @@ type Props = {
 export function ComplianceSessionHistoryItem({ session }: Props) {
   const colors = useColors();
   const t = useT();
+  const router = useRouter();
   const hasScore = session.compliance_score != null && Number.isFinite(Number(session.compliance_score));
   const score = hasScore ? Math.round(Number(session.compliance_score)) : 0;
 
   return (
-    <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${sessionTitle(session, t)}, ${safeClientDate(session.session_date)}`}
+      onPress={() => router.push(`/session/${session.id}`)}
+      style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}
+    >
       <ComplianceScoreRing score={score} size={48} empty={!hasScore} />
       <View style={styles.body}>
         <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
@@ -35,7 +43,8 @@ export function ComplianceSessionHistoryItem({ session }: Props) {
           {safeClientDate(session.session_date)}
         </Text>
       </View>
-    </View>
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+    </Pressable>
   );
 }
 

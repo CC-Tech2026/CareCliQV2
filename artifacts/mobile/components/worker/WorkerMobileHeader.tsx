@@ -3,13 +3,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WorkerProfileDropdown } from "@/components/worker/WorkerProfileDropdown";
@@ -30,7 +24,12 @@ type Props = {
   minimal?: boolean;
 };
 
-export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) {
+export function WorkerMobileHeader({
+  title,
+  showBack,
+  onBack,
+  minimal,
+}: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -51,7 +50,7 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style={colors.scheme === "dark" ? "dark" : "light"} />
       <View
         style={[
           styles.header,
@@ -63,14 +62,23 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
       >
         {showBack ? (
           <Pressable
+            accessibilityRole="button"
             onPress={() => (onBack ? onBack() : goBackOrHome(router))}
-            style={[styles.sideBtn, { backgroundColor: "rgba(255,255,255,0.16)" }]}
+            style={[
+              styles.sideBtn,
+              { backgroundColor: "rgba(255,255,255,0.16)" },
+            ]}
             accessibilityLabel="Go back"
           >
-            <Feather name="arrow-left" size={19} color="#FFFFFF" />
+            <Feather
+              name="arrow-left"
+              size={19}
+              color={colors.primaryForeground}
+            />
           </Pressable>
         ) : (
           <Pressable
+            accessibilityRole="button"
             onPress={() => {
               if (minimal) return;
               router.push("/(tabs)/settings" as never);
@@ -79,11 +87,28 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
             style={styles.avatarWrap}
             accessibilityLabel="Open profile"
           >
-            <View style={[styles.avatar, { backgroundColor: colors.card, borderColor: "rgba(255,255,255,0.55)" }]}>
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: "rgba(255,255,255,0.55)",
+                },
+              ]}
+            >
               {photoUrl ? (
-                <Image source={{ uri: photoUrl }} style={styles.avatarImage} contentFit="cover" />
+                <Image
+                  source={{ uri: photoUrl }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                />
               ) : (
-                <Text style={[styles.avatarText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                <Text
+                  style={[
+                    styles.avatarText,
+                    { color: colors.primary, fontFamily: "Inter_700Bold" },
+                  ]}
+                >
                   {initials}
                 </Text>
               )}
@@ -102,31 +127,48 @@ export function WorkerMobileHeader({ title, showBack, onBack, minimal }: Props) 
         {minimal ? null : (
           <>
             <Text
-              style={[styles.title, { color: "#FFFFFF", fontFamily: FontFamily.h2 }]}
+              style={[
+                styles.title,
+                { color: colors.primaryForeground, fontFamily: FontFamily.h2 },
+              ]}
               numberOfLines={1}
             >
               {title}
             </Text>
 
             <Pressable
+              accessibilityRole="button"
               onPress={() => router.push("/worker/notifications" as never)}
-              style={[styles.sideBtn, { backgroundColor: "rgba(255,255,255,0.16)" }]}
+              style={[
+                styles.sideBtn,
+                { backgroundColor: "rgba(255,255,255,0.16)" },
+              ]}
               accessibilityLabel={
                 notificationCount > 0
                   ? `${notificationCount} unread notifications`
                   : "Notifications"
               }
             >
-              <Feather name="bell" size={19} color="#FFFFFF" />
+              <Feather name="bell" size={19} color={colors.primaryForeground} />
               {notificationCount > 0 ? (
-                <View style={[styles.bellDot, { backgroundColor: colors.pink, borderColor: headerBg }]} />
+                <View
+                  style={[
+                    styles.bellDot,
+                    { backgroundColor: colors.pink, borderColor: headerBg },
+                  ]}
+                />
               ) : null}
             </Pressable>
           </>
         )}
       </View>
 
-      {!minimal ? <WorkerProfileDropdown visible={menuOpen} onClose={() => setMenuOpen(false)} /> : null}
+      {!minimal ? (
+        <WorkerProfileDropdown
+          visible={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        />
+      ) : null}
     </>
   );
 }
@@ -148,15 +190,17 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   sideBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarWrap: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     position: "relative",
   },
   avatar: {

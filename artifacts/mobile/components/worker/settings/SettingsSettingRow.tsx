@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/typography";
 import React from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";
 
@@ -26,16 +27,37 @@ export function SettingsSettingRow({
     <View
       style={[
         styles.row,
-        showDivider && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+        showDivider && {
+          borderBottomColor: colors.border,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+        },
       ]}
     >
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{title}</Text>
-        <Text style={[styles.description, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.description,
+            {
+              color: colors.mutedForeground,
+              fontFamily: FontFamily.interRegular,
+            },
+          ]}
+        >
           {description}
         </Text>
       </View>
       <Switch
+        accessibilityLabel={title}
+        accessibilityHint={description}
+        style={{ minHeight: 44 }}
         value={checked}
         onValueChange={onCheckedChange}
         disabled={disabled}

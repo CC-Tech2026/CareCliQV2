@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/typography";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -22,7 +23,12 @@ export function ShiftStatusBadge({ visualState }: Props) {
 
   return (
     <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-      <Text style={[styles.label, { color: tone.color, fontFamily: "Inter_600SemiBold" }]}>
+      <Text
+        style={[
+          styles.label,
+          { color: tone.color, fontFamily: FontFamily.interSemiBold },
+        ]}
+      >
         {label}
       </Text>
     </View>
@@ -36,6 +42,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   label: {
-    fontSize: 10,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

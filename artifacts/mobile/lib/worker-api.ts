@@ -92,6 +92,11 @@ export type WorkerShift = {
   session_status?: string | null;
   session_started_at?: string | null;
   office_contact_number?: string | null;
+  /** Set when the shift was ended (worker override or system auto-end) with
+   * incomplete mandatory tasks - documentation_due_at is 24h from clock-in to
+   * finish them; clears itself once update_shift_tasks sees them complete. */
+  documentation_pending?: boolean;
+  documentation_due_at?: string | null;
   briefing_complete?: boolean;
   requires_briefing?: boolean;
   special_instructions?: string | null;
@@ -399,10 +404,10 @@ export function startShiftSession(id: string) {
   });
 }
 
-export function endShift(id: string, options?: { force?: boolean }) {
+export function endShift(id: string, options?: { force?: boolean; reason?: string }) {
   return workerFetch<WorkerShift>(`/api/worker/shifts/${id}/end-shift`, {
     method: "POST",
-    body: JSON.stringify({ force: options?.force ?? false }),
+    body: JSON.stringify({ force: options?.force ?? false, reason: options?.reason ?? null }),
   });
 }
 

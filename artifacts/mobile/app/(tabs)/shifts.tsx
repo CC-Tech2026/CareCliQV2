@@ -5,6 +5,8 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  ScrollView,
+  Platform,
   FlatList,
   Pressable,
   RefreshControl,
@@ -14,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
@@ -28,6 +31,7 @@ import {
 } from "@/hooks/useOfflineCache";
 import type { WorkerShift } from "@/lib/worker-api";
 import {
+  APP_TIMEZONE,
   getPrimaryTodayShiftId,
   sortTodayShiftsForList,
 } from "@/lib/shift-utils";
@@ -116,6 +120,7 @@ export default function MyShiftsScreen() {
   const listHeader = (
     <View style={styles.listHeader}>
       <Pressable
+        accessibilityRole="button"
         onPress={() => router.push("/worker/availability" as never)}
         style={[styles.availBanner, { backgroundColor: colors.soft }]}
       >
@@ -141,15 +146,20 @@ export default function MyShiftsScreen() {
         style={{
           color: colors.foreground,
           fontFamily: FontFamily.interBold,
-          fontSize: 17,
+          fontSize: 21,
+          lineHeight: 28,
           marginTop: 8,
         }}
       >
         {selectedKey === todayKey
           ? "Today"
-          : selectedDate.toLocaleDateString("en-AU", { weekday: "long" })}
+          : selectedDate.toLocaleDateString("en-AU", {
+              timeZone: APP_TIMEZONE,
+              weekday: "long",
+            })}
         {" - "}
         {selectedDate.toLocaleDateString("en-AU", {
+          timeZone: APP_TIMEZONE,
           day: "numeric",
           month: "short",
         })}
@@ -189,13 +199,33 @@ export default function MyShiftsScreen() {
       <WorkerMobileHeader title={t("nav.shifts")} />
 
       {activeQuery.isLoading && !cachedShifts ? (
-        <View style={styles.loading}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.loading,
+            {
+              paddingBottom: workerBottomNavHeight(
+                insets.bottom,
+                Platform.OS === "web",
+              ),
+            },
+          ]}
+        >
           {listHeader}
           <ShiftSkeleton />
           <ShiftSkeleton />
-        </View>
+        </ScrollView>
       ) : activeQuery.error && isOnline ? (
-        <View style={styles.loading}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.loading,
+            {
+              paddingBottom: workerBottomNavHeight(
+                insets.bottom,
+                Platform.OS === "web",
+              ),
+            },
+          ]}
+        >
           {listHeader}
           <Text
             style={[
@@ -219,7 +249,7 @@ export default function MyShiftsScreen() {
           >
             <Text style={{ color: colors.primary }}>Try again</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={sortedShifts}
@@ -227,7 +257,12 @@ export default function MyShiftsScreen() {
           style={{ backgroundColor: colors.background }}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: insets.bottom + 100 },
+            {
+              paddingBottom: workerBottomNavHeight(
+                insets.bottom,
+                Platform.OS === "web",
+              ),
+            },
           ]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={listHeader}
@@ -297,13 +332,13 @@ export default function MyShiftsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: {
-    padding: 16,
+    padding: 12,
     gap: 12,
     width: "100%",
     maxWidth: 800,
     alignSelf: "center",
   },
-  listHeader: { gap: 12 },
+  listHeader: { gap: 8 },
   availBanner: {
     borderRadius: 12,
     paddingVertical: 11,
@@ -312,7 +347,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
   },
-  availBannerText: { flex: 1, fontSize: 12.5 },
+  availBannerText: { flex: 1, fontSize: 14, lineHeight: 21 },
   skeleton: {
     flexDirection: "row",
     gap: 12,

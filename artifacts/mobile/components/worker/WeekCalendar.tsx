@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { FontFamily } from "@/constants/typography";
+import { APP_TIMEZONE } from "@/lib/shift-utils";
 
 export function localDayKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -47,42 +48,48 @@ export function WeekCalendar({
           style={[styles.month, { color: colors.foreground }]}
         >
           {selected.toLocaleDateString("en-AU", {
+            timeZone: APP_TIMEZONE,
             month: "long",
             year: "numeric",
           })}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go to today"
-          onPress={() => onSelect(new Date())}
-          style={styles.control}
-        >
-          <Text
-            style={{ color: colors.primary, fontFamily: FontFamily.bodyStrong }}
-          >
-            Today
-          </Text>
-        </Pressable>
-        {([-7, 7] as const).map((amount) => (
+        <View style={styles.controls}>
           <Pressable
-            key={amount}
             accessibilityRole="button"
-            accessibilityLabel={amount < 0 ? "Previous week" : "Next week"}
-            onPress={() => onSelect(moveDay(selected, amount))}
+            accessibilityLabel="Go to today"
+            onPress={() => onSelect(new Date())}
             style={styles.control}
           >
-            <Feather
-              name={amount < 0 ? "chevron-left" : "chevron-right"}
-              size={20}
-              color={colors.foreground}
-            />
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: FontFamily.bodyStrong,
+              }}
+            >
+              Today
+            </Text>
           </Pressable>
-        ))}
+          {([-7, 7] as const).map((amount) => (
+            <Pressable
+              key={amount}
+              accessibilityRole="button"
+              accessibilityLabel={amount < 0 ? "Previous week" : "Next week"}
+              onPress={() => onSelect(moveDay(selected, amount))}
+              style={styles.control}
+            >
+              <Feather
+                name={amount < 0 ? "chevron-left" : "chevron-right"}
+                size={20}
+                color={colors.foreground}
+              />
+            </Pressable>
+          ))}
+        </View>
       </View>
       <ScrollView
         ref={scroll}
         horizontal
-        showsHorizontalScrollIndicator={false}
+        showsHorizontalScrollIndicator
         contentContainerStyle={styles.week}
       >
         {Array.from({ length: 7 }, (_, index) => {
@@ -98,7 +105,7 @@ export function WeekCalendar({
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               aria-pressed={active}
-              accessibilityLabel={`${date.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}${key === today ? ", today" : ""}${counts[key] ? `, ${counts[key]} shift${counts[key] === 1 ? "" : "s"}` : ""}`}
+              accessibilityLabel={`${date.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE, weekday: "long", day: "numeric", month: "long" })}${key === today ? ", today" : ""}${counts[key] ? `, ${counts[key]} shift${counts[key] === 1 ? "" : "s"}` : ""}`}
               onLayout={(event) => {
                 positions.current[key] = event.nativeEvent.layout.x;
                 if (active)
@@ -117,7 +124,7 @@ export function WeekCalendar({
               ]}
             >
               <Text style={[styles.weekday, { color: foreground }]}>
-                {date.toLocaleDateString("en-AU", { weekday: "short" })}
+                {date.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE, weekday: "short" })}
               </Text>
               <Text style={[styles.date, { color: foreground }]}>
                 {date.getDate()}
@@ -136,14 +143,21 @@ export function WeekCalendar({
   );
 }
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 24, padding: 12, gap: 12 },
+  card: { borderWidth: 1, borderRadius: 20, padding: 10, gap: 6 },
   header: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: 2,
   },
-  month: { flexGrow: 1, fontSize: 16, fontFamily: FontFamily.interBold },
+  controls: { flexDirection: "row", alignItems: "center", marginStart: "auto" },
+  month: {
+    flexGrow: 1,
+    flexShrink: 1,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: FontFamily.interBold,
+  },
   control: {
     minWidth: 44,
     minHeight: 44,
@@ -155,14 +169,14 @@ const styles = StyleSheet.create({
   day: {
     flex: 1,
     minWidth: 44,
-    minHeight: 84,
+    minHeight: 68,
     paddingHorizontal: 4,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingVertical: 6,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
   },
   weekday: { fontFamily: FontFamily.label, fontSize: 12 },
   date: { fontFamily: FontFamily.interBold, fontSize: 20 },

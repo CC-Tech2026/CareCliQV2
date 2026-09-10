@@ -22,7 +22,7 @@ import {
   readMobileAuthToken,
   readStoredUserJson,
 } from "@/lib/session";
-import { setWorkerUnauthorizedHandler } from "@/lib/worker-fetch";
+import { setWorkerUnauthorizedHandler, WorkerApiError } from "@/lib/worker-fetch";
 import { clearQueue, clearWorkerQueue } from "@/hooks/useOfflineCache";
 
 type AuthContextValue = {
@@ -74,7 +74,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const fresh = await fetchCurrentUser();
+      let fresh: AuthUser | null = null;
+      let authRejected = false;
+      try {
+        fresh = await fetchCurrentUser();
+      } catch (err) {
+        // A genuine 401/403 means the server actually rejected this token -
+        // clear the session below. Anything else (network failure, timeout,
+        // a 5xx from a backend that's mid-restart) is not the token's fault;
+        // keep the cached session and let the app carry on with it rather
+        // than bouncing an otherwise-valid session back to login.
+        authRejected = err instanceof WorkerApiError && (err.status === 401 || err.status === 403);
+      }
       if (!cancelled) {
         if (fresh) {
           const merged: AuthUser = {
@@ -84,10 +95,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
           setUser(merged);
           await persistMobileAuthSession(token, JSON.stringify(merged));
-        } else {
+        } else if (authRejected) {
           await clearMobileAuthSession();
           setUser(null);
         }
+        // else: transient failure with no fresh data - `cached` (if any) is
+        // already set as the user above; leave the session as-is.
         setIsLoading(false);
       }
     }

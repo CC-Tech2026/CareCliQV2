@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IncidentsPanel } from "@/components/worker/incidents/IncidentsPanel";
@@ -159,6 +159,7 @@ export default function ComplianceTabScreen() {
   const isDark = colors.scheme === "dark";
   const insets = useSafeAreaInsets();
   const t = useT();
+  const router = useRouter();
   const loadingMoreRef = useRef(false);
   const params = useLocalSearchParams<{ segment?: string }>();
   const [segment, setSegment] = useState<Segment>(
@@ -224,7 +225,12 @@ export default function ComplianceTabScreen() {
 
   const listHeader = (
     <View style={styles.headerContent}>
-      <View style={[styles.latestCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!latest?.id}
+        onPress={() => latest?.id && router.push(`/session/${latest.id}`)}
+        style={[styles.latestCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      >
         <ComplianceScoreRing score={latestScore} size={52} />
         <View style={styles.latestCopy}>
           <Text style={[styles.latestLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -239,7 +245,10 @@ export default function ComplianceTabScreen() {
             {statusLabel(latestStatus, t)}
           </Text>
         </View>
-      </View>
+        {latest?.id ? (
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        ) : null}
+      </Pressable>
 
       <View style={styles.statsGrid}>
         <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

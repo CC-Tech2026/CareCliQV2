@@ -3,7 +3,10 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { WorkerBottomNav, workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
+import {
+  WorkerBottomNav,
+  workerBottomNavHeight,
+} from "@/components/worker/WorkerBottomNav";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { useColors } from "@/hooks/useColors";
 
@@ -30,7 +33,9 @@ export function SettingsSubScreen({
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <WorkerMobileHeader title={title} showBack={showBack} />
-      <View style={[styles.body, { paddingBottom: bottomInset }]}>{children}</View>
+      <View style={[styles.body, { paddingBottom: bottomInset }]}>
+        {children}
+      </View>
       {showBottomNav ? (
         <View style={styles.bottomNav}>
           <WorkerBottomNav />
@@ -42,7 +47,13 @@ export function SettingsSubScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  body: { flex: 1, paddingTop: 16 },
+  body: {
+    flex: 1,
+    paddingTop: 16,
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+  },
   bottomNav: {
     position: "absolute",
     left: 0,

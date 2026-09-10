@@ -15,7 +15,7 @@
     },
 
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "care.cliq2026",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
