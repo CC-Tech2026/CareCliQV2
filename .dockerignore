@@ -20,10 +20,19 @@ __pycache__
 
 # backend/Dockerfile only ever COPYs backend/, pyproject.toml, uv.lock,
 # pytest.ini, main.py, and builds its own .venv in-container via uv sync -
-# none of the below is ever read by the build, just uploaded to the builder
-# on every deploy.
+# none of the below is ever read by that build, just uploaded to the builder
+# on every deploy. NOTE: artifacts/ must stay OUT of this list - unlike
+# backend/Dockerfile, artifacts/frontend/Dockerfile's build stage does
+# `COPY . .` and needs the whole pnpm workspace (root package.json,
+# pnpm-workspace.yaml, artifacts/frontend itself, and the lib/* packages it
+# depends on) plus explicitly COPYs artifacts/frontend/nginx.conf in its
+# final stage - excluding artifacts/ breaks that build entirely.
 .venv
-artifacts
 attached_assets
 temp
 markdown
+
+# Replit-platform deployment metadata - irrelevant to any Docker build here,
+# and on Windows this project's OneDrive-synced checkout has repeatedly hit
+# transient file-transfer errors on these specific files during `docker build`.
+**/.replit-artifact
