@@ -32,6 +32,7 @@ const en = {
   "dashboard.homeActiveShift": "In progress",
   "dashboard.homeNextShift": "Up next today",
   "dashboard.homeDayComplete": "No more shifts to start today",
+  "dashboard.homeDayCompleteDetail": "Nice work — check your schedule for what's next.",
   "dashboard.homeReviewShift": "Review & prepare",
   "dashboard.homeViewSchedule": "View your schedule",
   "dashboard.homeCompleted": "{done} of {total} shifts completed",

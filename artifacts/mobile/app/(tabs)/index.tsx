@@ -382,7 +382,7 @@ export default function HomeScreen() {
                     ]
                       .filter(Boolean)
                       .join(" / ")
-                  : t("dashboard.homeViewSchedule")}
+                  : t("dashboard.homeDayCompleteDetail")}
               </Text>
               <Pressable
                 onPress={openContinue}
