@@ -258,23 +258,10 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
         </View>
       ) : null}
 
-      <View style={styles.filters}>
-        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t("incidents.searchPlaceholder")}
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-          />
-        </View>
-        <View style={styles.filterRow}>
-          <FilterChip label={severityLabel} active={filterSeverity !== "all"} onPress={() => setFilterModal("severity")} />
-          <FilterChip label={statusLabel} active={filterStatus !== "all"} onPress={() => setFilterModal("status")} />
-        </View>
-      </View>
-
+      {/* Needs your attention sits above search/filters on purpose — it's
+       * what a worker opening this tab actually needs to see first, not a
+       * browsing tool they'd only reach for once they already know what
+       * they're looking for. */}
       {attentionIncidents.length > 0 ? (
         <View style={styles.attentionSection}>
           <View style={styles.listHeader}>
@@ -303,6 +290,23 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
           </View>
         </View>
       ) : null}
+
+      <View style={styles.filters}>
+        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t("incidents.searchPlaceholder")}
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+          />
+        </View>
+        <View style={styles.filterRow}>
+          <FilterChip label={severityLabel} active={filterSeverity !== "all"} onPress={() => setFilterModal("severity")} />
+          <FilterChip label={statusLabel} active={filterStatus !== "all"} onPress={() => setFilterModal("status")} />
+        </View>
+      </View>
 
       {otherIncidents.length > 0 || attentionIncidents.length === 0 ? (
         <View style={styles.listHeader}>
