@@ -16,6 +16,7 @@ import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { needsCredentialUpdate } from "@/lib/credential-utils";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
 
 function statusMeta(
@@ -149,7 +150,12 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
       ) : (
         <View style={styles.list}>
           {data.map((credential) => (
-            <CredentialCard key={credential.id} credential={credential} isDark={isDark} />
+            <CredentialCard
+              key={credential.id}
+              credential={credential}
+              isDark={isDark}
+              onUpdate={() => router.push(`/worker/credentials/${credential.id}/update` as never)}
+            />
           ))}
         </View>
       )}
@@ -173,15 +179,24 @@ function SummaryPill({
   );
 }
 
-function CredentialCard({ credential, isDark }: { credential: Credential; isDark: boolean }) {
+function CredentialCard({
+  credential,
+  isDark,
+  onUpdate,
+}: {
+  credential: Credential;
+  isDark: boolean;
+  onUpdate: () => void;
+}) {
   const colors = useColors();
   const t = useT();
   const meta = statusMeta(credential.status, colors);
   const [expanded, setExpanded] = useState(false);
+  const updatable = needsCredentialUpdate(credential.status);
 
   return (
     <Pressable
-      onPress={() => setExpanded((value) => !value)}
+      onPress={() => (updatable ? onUpdate() : setExpanded((value) => !value))}
       style={[
         styles.credentialCard,
         elevatedCardShadow(isDark),
@@ -212,14 +227,23 @@ function CredentialCard({ credential, isDark }: { credential: Credential; isDark
           <Text style={[styles.dateText, { color: meta.color, fontFamily: "Inter_600SemiBold" }]}>
             {formatCredentialDate(credential, t)}
           </Text>
-          <Feather
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={colors.mutedForeground}
-          />
+          {updatable ? (
+            <View style={styles.updatePrompt}>
+              <Text style={[styles.updatePromptText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                {t("profile.credentials.tapToUpdate")}
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.primary} />
+            </View>
+          ) : (
+            <Feather
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={colors.mutedForeground}
+            />
+          )}
         </View>
 
-        {expanded ? (
+        {expanded && !updatable ? (
           <View style={[styles.expandedBlock, { borderTopColor: colors.border }]}>
             {credential.credential_number ? (
               <Text style={[styles.expandedLine, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -279,6 +303,8 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11 },
   credentialBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dateText: { fontSize: 12 },
+  updatePrompt: { flexDirection: "row", alignItems: "center", gap: 2 },
+  updatePromptText: { fontSize: 12 },
   expandedBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 10,

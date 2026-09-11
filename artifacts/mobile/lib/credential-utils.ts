@@ -29,3 +29,10 @@ const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
 export function credentialTypeLabel(type: string): string {
   return CREDENTIAL_TYPE_LABELS[type] ?? type;
 }
+
+/** A credential in one of these states already exists on file — renewing it
+ * means updating that same row (and, if needed, replacing its document),
+ * not creating a second record for the same requirement. */
+export function needsCredentialUpdate(status: string): boolean {
+  return status === "expiring" || status === "expired" || status === "rejected";
+}

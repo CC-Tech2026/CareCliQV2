@@ -153,6 +153,17 @@ export function createCredential(payload: CredentialPayload) {
   });
 }
 
+/** Renews an existing credential row in place (title/number/issuer/dates) —
+ * the row keeps its id, so re-attaching a document via uploadCredentialFile
+ * afterwards updates the same record instead of creating a second one for
+ * the same requirement. */
+export function updateCredential(credentialId: string, payload: Partial<CredentialPayload>) {
+  return workerFetch<Credential>(`/api/credentials/me/${credentialId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function uploadCredentialFile(
   credentialId: string,
   file: { uri: string; name: string; type: string },

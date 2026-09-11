@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -24,23 +26,48 @@ import {
   credentialTypeLabel,
   type CredentialTypeOption,
 } from "@/lib/credential-utils";
-import { createCredential } from "@/lib/resource-api";
+import { createCredential, updateCredential, uploadCredentialFile, type Credential } from "@/lib/resource-api";
 
-export function AddCredentialPanel() {
+type PickedFile = { uri: string; name: string; type: string };
+
+/** One form for both adding a brand-new credential and renewing an existing
+ * one — passing `credential` switches it into update mode: the type is
+ * fixed (it's the same requirement, not a new one), fields are prefilled,
+ * and saving patches that same row (plus re-uploading a document onto it)
+ * instead of inserting a second record for the same requirement. */
+export function CredentialFormPanel({ credential }: { credential?: Credential }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const t = useT();
   const router = useRouter();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const isUpdate = Boolean(credential);
 
-  const [credentialType, setCredentialType] = useState<CredentialTypeOption>(CREDENTIAL_TYPE_OPTIONS[0]);
-  const [title, setTitle] = useState("");
-  const [credentialNumber, setCredentialNumber] = useState("");
-  const [issuer, setIssuer] = useState("");
-  const [issueDate, setIssueDate] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
+  const [credentialType, setCredentialType] = useState<CredentialTypeOption>(
+    (credential?.credential_type as CredentialTypeOption) ?? CREDENTIAL_TYPE_OPTIONS[0],
+  );
+  const [title, setTitle] = useState(credential?.title ?? "");
+  const [credentialNumber, setCredentialNumber] = useState(credential?.credential_number ?? "");
+  const [issuer, setIssuer] = useState(credential?.issuer ?? "");
+  const [issueDate, setIssueDate] = useState(credential?.issue_date ?? "");
+  const [expiryDate, setExpiryDate] = useState(credential?.expiry_date ?? "");
   const [typeOpen, setTypeOpen] = useState(false);
+  const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
+
+  async function handlePickFile() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/*"],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setPickedFile({
+      uri: asset.uri,
+      name: asset.name || "credential-document",
+      type: asset.mimeType || "application/octet-stream",
+    });
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -49,22 +76,31 @@ export function AddCredentialPanel() {
         throw new Error(t("credentials.titleRequired"));
       }
 
-      return createCredential({
+      const payload = {
         credential_type: credentialType,
         title: trimmedTitle,
         credential_number: credentialNumber.trim() || null,
         issuer: issuer.trim() || null,
         issue_date: issueDate.trim() || null,
         expiry_date: expiryDate.trim() || null,
-      });
+      };
+
+      const saved = credential
+        ? await updateCredential(credential.id, payload)
+        : await createCredential(payload);
+
+      if (pickedFile) {
+        return uploadCredentialFile(saved.id, pickedFile);
+      }
+      return saved;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["credentials", "me"] });
-      showToast(t("credentials.saved"), "success");
+      showToast(isUpdate ? t("credentials.updated") : t("credentials.saved"), "success");
       router.back();
     },
     onError: (error: Error) => {
-      showToast(error.message || t("credentials.saveFailed"), "error");
+      showToast(error.message || (isUpdate ? t("credentials.updateFailed") : t("credentials.saveFailed")), "error");
     },
   });
 
@@ -79,7 +115,7 @@ export function AddCredentialPanel() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {t("credentials.addDescription")}
+          {isUpdate ? t("credentials.updateDescription") : t("credentials.addDescription")}
         </Text>
 
         <SettingsPanelCard>
@@ -88,15 +124,23 @@ export function AddCredentialPanel() {
               <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                 {t("credentials.type")}
               </Text>
-              <Pressable
-                onPress={() => setTypeOpen(true)}
-                style={[styles.select, { borderColor: colors.border, backgroundColor: colors.background }]}
-              >
-                <Text style={[styles.selectText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                  {credentialTypeLabel(credentialType)}
-                </Text>
-                <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-              </Pressable>
+              {isUpdate ? (
+                <View style={[styles.select, styles.selectDisabled, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Text style={[styles.selectText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {credentialTypeLabel(credentialType)}
+                  </Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => setTypeOpen(true)}
+                  style={[styles.select, { borderColor: colors.border, backgroundColor: colors.background }]}
+                >
+                  <Text style={[styles.selectText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                    {credentialTypeLabel(credentialType)}
+                  </Text>
+                  <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              )}
             </View>
 
             <View style={styles.field}>
@@ -166,8 +210,38 @@ export function AddCredentialPanel() {
               />
             </View>
 
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                {t("credentials.document")}
+              </Text>
+              {credential?.file_url && !pickedFile ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(credential.file_url as string)}
+                  style={[styles.fileRow, { borderColor: colors.border, backgroundColor: colors.background }]}
+                >
+                  <Feather name="file-text" size={16} color={colors.primary} />
+                  <Text style={[styles.fileRowText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+                    {t("credentials.viewCurrentDocument")}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => void handlePickFile()}
+                style={[styles.filePicker, { borderColor: colors.border, backgroundColor: colors.background }]}
+              >
+                <Feather name="upload" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.filePickerText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
+                  {pickedFile
+                    ? pickedFile.name
+                    : credential?.file_url
+                      ? t("credentials.replaceDocument")
+                      : t("credentials.uploadFile")}
+                </Text>
+              </Pressable>
+            </View>
+
             <SettingsSaveButton
-              label={t("credentials.save")}
+              label={isUpdate ? t("credentials.update") : t("credentials.save")}
               saving={saveMutation.isPending}
               onPress={() => saveMutation.mutate()}
             />
@@ -240,7 +314,29 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
+  selectDisabled: { opacity: 0.7 },
   selectText: { flex: 1, fontSize: 14 },
+  fileRow: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  fileRowText: { flex: 1, fontSize: 13 },
+  filePicker: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filePickerText: { flex: 1, fontSize: 13 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",

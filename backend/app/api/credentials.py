@@ -135,11 +135,18 @@ async def update_my_credential(
     current_user: dict = Depends(get_current_user),
 ):
     existing = _get_credential_for_user(credential_id, current_user)
-    if existing.get("verified_at") and not has_org_wide_access(current_user):
-        raise HTTPException(status_code=403, detail="Reviewed credentials cannot be edited by workers.")
     _check_screening_number(body)
     payload = body.model_dump(exclude_unset=True)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if existing.get("verified_at") and not has_org_wide_access(current_user):
+        # A worker renewing a previously-verified credential (e.g. a new expiry
+        # date after it lapsed) is submitting new, unreviewed claims about it —
+        # not editing the old verified ones. Rather than blocking the edit
+        # outright, drop it back to pending_review so a coordinator checks the
+        # new details, the same trust level a first-time submission gets.
+        payload["status"] = "pending_review"
+        payload["verified_at"] = None
+        payload["verified_by"] = None
     result = (
         get_supabase_admin()
         .table("credentials")
@@ -176,7 +183,7 @@ async def upload_my_credential_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    _get_credential_for_user(credential_id, current_user)
+    existing = _get_credential_for_user(credential_id, current_user)
     content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or ""
     if content_type not in ALLOWED_FILE_TYPES:
         raise HTTPException(status_code=422, detail="Credential file must be PDF or image.")
@@ -190,13 +197,21 @@ async def upload_my_credential_file(
         supabase.storage.from_(CREDENTIAL_FILES_BUCKET).upload(path, raw, {"content-type": content_type, "upsert": "true"})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Credential storage is not configured: {exc}")
+    update_payload = {"file_path": path, "file_url": None, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if existing.get("verified_at") and not has_org_wide_access(current_user):
+        # A new document on a previously-verified credential hasn't itself been
+        # reviewed yet — without this it would keep showing as verified/valid
+        # off the strength of a file a coordinator never actually looked at.
+        update_payload["status"] = "pending_review"
+        update_payload["verified_at"] = None
+        update_payload["verified_by"] = None
     result = (
         supabase.table("credentials")
         # file_url is intentionally not stored — credential-files is a private bucket,
         # so the URL must be a freshly-signed one generated at read time (see
         # _with_signed_file_url), never a persisted link that can outlive its signature
         # or predate the bucket being locked down.
-        .update({"file_path": path, "file_url": None, "updated_at": datetime.now(timezone.utc).isoformat()})
+        .update(update_payload)
         .eq("id", credential_id)
         .eq("user_id", get_user_id(current_user))
         .execute()
