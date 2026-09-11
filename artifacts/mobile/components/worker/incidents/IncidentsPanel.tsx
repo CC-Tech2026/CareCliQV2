@@ -281,8 +281,12 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
             <Text style={[styles.listTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               {t("incidents.needsAttention")}
             </Text>
-            <View style={[styles.countPill, { backgroundColor: colors.dangerBg }]}>
-              <Text style={[styles.countPillText, { color: colors.dangerText, fontFamily: "Inter_700Bold" }]}>
+            {/* Amber, not danger-red: this bucket mixes "just under
+             * investigation" with genuinely urgent (overdue/NDIS) reasons —
+             * red is reserved for the specific badges on each card below,
+             * so the section-level count doesn't overstate every item in it. */}
+            <View style={[styles.countPill, { backgroundColor: colors.statusProgressBg }]}>
+              <Text style={[styles.countPillText, { color: colors.warning, fontFamily: "Inter_700Bold" }]}>
                 {attentionIncidents.length}
               </Text>
             </View>
