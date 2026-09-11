@@ -1,30 +1,45 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { FileText, Loader2, Plus, Send, Save, Users, X } from "lucide-react";
-import { HubLayout } from "@/components/layout/HubLayout";
+import { ChevronDown, Loader2, Plus, Save, Send } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   createDocumentTemplate,
   createPolicyDocument,
   fetchDocumentTemplates,
-  fetchPolicyAcknowledgementStatus,
   fetchPolicyDocument,
-  fetchPolicyDocuments,
-  fetchVaultFolders,
   previewPolicyDocument,
   previewTemplateHtml,
   publishPolicyDocument,
   updatePolicyDocument,
   type DocumentTemplate,
-  type PolicyAcknowledgementStatus,
   type PolicyDocument,
-  type VaultFolder,
 } from "@/services/vaultService";
+
+/** Org-level merge fields a template author can insert into the body text
+ * itself (e.g. "Issued by {{ org.provider_name }}"), not just the outer
+ * letterhead — mirrors merge_fields.py's "org" source. participant/worker
+ * fields aren't offered here yet since nothing generates against them. */
+const ORG_MERGE_FIELDS: { key: string; label: string }[] = [
+  { key: "provider_name", label: "Organisation name" },
+  { key: "logo_url", label: "Logo URL" },
+  { key: "abn", label: "ABN" },
+  { key: "address", label: "Address" },
+  { key: "phone", label: "Phone" },
+  { key: "email", label: "Email" },
+  { key: "ndis_provider_number", label: "NDIS provider number" },
+];
 
 /** Renders arbitrary template/policy HTML with no script execution, no
  * same-origin access, and no navigation — templates are user-authored. */
@@ -49,46 +64,54 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-export default function PolicyEditorPage() {
+/** Full-height side panel version of the policy-document editor, opened
+ * from a governance vault folder — the folder is already known, so unlike
+ * the old standalone page there's no folder picker, just a title prompt
+ * before the first save. */
+export function PolicyDocumentEditorSheet({
+  open,
+  onOpenChange,
+  folderKey,
+  folderLabel,
+  documentId,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  folderKey: string;
+  folderLabel: string;
+  /** null = creating a brand-new draft in this folder. */
+  documentId: string | null;
+  onSaved: (doc: PolicyDocument) => void;
+}) {
   const { toast } = useToast();
-  const [documents, setDocuments] = useState<PolicyDocument[]>([]);
-  const [folders, setFolders] = useState<VaultFolder[]>([]);
-  const [status, setStatus] = useState<PolicyAcknowledgementStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [doc, setDoc] = useState<PolicyDocument | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
 
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const [docs, govFolders, ackStatus] = await Promise.all([
-        fetchPolicyDocuments(),
-        fetchVaultFolders(),
-        fetchPolicyAcknowledgementStatus().catch(() => []),
-      ]);
-      setDocuments(docs);
-      setFolders(govFolders.filter((f) => f.group === "governance"));
-      setStatus(ackStatus);
-    } catch (err) {
-      toast({ title: "Could not load policy documents", description: (err as Error).message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    void loadAll();
+    if (!open) return;
+    if (documentId) {
+      setLoading(true);
+      fetchPolicyDocument(documentId)
+        .then(setDoc)
+        .catch((err) => toast({ title: "Could not load this document", description: (err as Error).message, variant: "destructive" }))
+        .finally(() => setLoading(false));
+    } else {
+      setDoc(null);
+      setNewTitle("");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [open, documentId]);
 
-  const openDoc = documents.find((d) => d.id === openId) ?? null;
-
-  async function handleCreate(folderKey: string, title: string) {
+  async function handleCreate() {
+    if (!newTitle.trim()) return;
     setCreating(true);
     try {
-      const doc = await createPolicyDocument({ folderKey, title });
-      setDocuments((prev) => [doc, ...prev]);
-      setOpenId(doc.id);
+      const created = await createPolicyDocument({ folderKey, title: newTitle.trim() });
+      setDoc(created);
+      onSaved(created);
     } catch (err) {
       toast({ title: "Could not create document", description: (err as Error).message, variant: "destructive" });
     } finally {
@@ -97,165 +120,50 @@ export default function PolicyEditorPage() {
   }
 
   return (
-    <HubLayout>
-      <div className="space-y-5 p-6">
-        <header className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-plum)" }}>
-              Documents & Audit Vault
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
-              Policy editor
-            </h1>
-            <p className="mt-1 text-sm font-medium" style={{ color: "var(--cc-muted)" }}>
-              Write policy documents in-app using your own branded template, then publish them into the vault —
-              workers you mark "visible" can read and acknowledge the published version.
-            </p>
-          </div>
-        </header>
-
-        {openDoc ? (
-          <PolicyDocumentEditor
-            document={openDoc}
-            folders={folders}
-            onBack={() => setOpenId(null)}
-            onSaved={(updated) => {
-              setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-            }}
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-3">
-              <NewDocumentCard folders={folders} onCreate={handleCreate} creating={creating} />
-              {loading ? (
-                <p className="py-8 text-center text-sm font-medium" style={{ color: "var(--cc-muted)" }}>Loading…</p>
-              ) : documents.length === 0 ? (
-                <div className="rounded-2xl border bg-card p-8 text-center" style={{ borderColor: "var(--cc-border)" }}>
-                  <FileText size={26} className="mx-auto mb-2" style={{ color: "var(--cc-muted)" }} />
-                  <p className="text-sm font-medium" style={{ color: "var(--cc-muted)" }}>No policy documents yet.</p>
-                </div>
-              ) : (
-                <div className="rounded-2xl border divide-y bg-card" style={{ borderColor: "var(--cc-border)" }}>
-                  {documents.map((doc) => (
-                    <button
-                      key={doc.id}
-                      type="button"
-                      onClick={() => setOpenId(doc.id)}
-                      className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-cc-bg"
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-soft)" }}>
-                        <FileText size={15} style={{ color: "var(--cc-plum)" }} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold truncate" style={{ color: "var(--cc-text)" }}>{doc.title}</p>
-                        <p className="text-xs mt-0.5 truncate" style={{ color: "var(--cc-muted)" }}>
-                          {folders.find((f) => f.category === doc.folder_key)?.label ?? doc.folder_key}
-                          {doc.current_governance_document_id ? " · Published" : " · Draft, not yet published"}
-                          {doc.visible_to_workers ? " · Visible to workers" : ""}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-5xl">
+        <SheetHeader>
+          <SheetTitle>{doc ? doc.title : `New policy — ${folderLabel}`}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-5">
+          {loading ? (
+            <p className="py-10 text-center text-sm font-medium" style={{ color: "var(--cc-muted)" }}>Loading…</p>
+          ) : !doc ? (
             <div className="space-y-3">
-              <h2 className="text-xs font-black uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>
-                Worker acknowledgement
-              </h2>
-              {status.length === 0 ? (
-                <p className="text-sm font-medium" style={{ color: "var(--cc-muted)" }}>
-                  No policies are currently visible to workers.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {status.map((s) => (
-                    <div key={s.document_id} className="rounded-xl border bg-card p-3" style={{ borderColor: "var(--cc-border)" }}>
-                      <p className="text-xs font-bold truncate" style={{ color: "var(--cc-text)" }}>{s.title}</p>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <Users size={12} style={{ color: "var(--cc-muted)" }} />
-                        <p className="text-[11px] font-medium" style={{ color: "var(--cc-muted)" }}>
-                          {s.acknowledged} / {s.total} acknowledged
-                          {s.rate_percent != null ? ` (${s.rate_percent}%)` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <Input
+                placeholder="Document title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                autoFocus
+              />
+              <Button className="w-full gap-2" disabled={!newTitle.trim() || creating} onClick={() => void handleCreate()}>
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Start writing
+              </Button>
             </div>
-          </div>
-        )}
-      </div>
-    </HubLayout>
+          ) : (
+            <PolicyDocumentEditorBody
+              document={doc}
+              folderLabel={folderLabel}
+              onSaved={(updated) => {
+                setDoc(updated);
+                onSaved(updated);
+              }}
+            />
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
-function NewDocumentCard({
-  folders,
-  onCreate,
-  creating,
-}: {
-  folders: VaultFolder[];
-  onCreate: (folderKey: string, title: string) => void;
-  creating: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [folderKey, setFolderKey] = useState("");
-  const [title, setTitle] = useState("");
-
-  if (!open) {
-    return (
-      <Button
-        variant="outline"
-        className="w-full justify-center gap-2 rounded-2xl border-dashed py-6"
-        onClick={() => setOpen(true)}
-      >
-        <Plus size={16} /> New policy document
-      </Button>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border bg-card p-4 space-y-2.5" style={{ borderColor: "var(--cc-border)" }}>
-      <Input placeholder="Document title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Select value={folderKey} onValueChange={setFolderKey}>
-        <SelectTrigger>
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          {folders.map((f) => (
-            <SelectItem key={f.category} value={f.category}>{f.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div className="flex gap-2">
-        <Button
-          className="flex-1"
-          disabled={!title.trim() || !folderKey || creating}
-          onClick={() => onCreate(folderKey, title.trim())}
-        >
-          {creating && <Loader2 size={14} className="mr-1.5 animate-spin" />}
-          Create
-        </Button>
-        <Button variant="ghost" onClick={() => { setOpen(false); setTitle(""); setFolderKey(""); }}>
-          Cancel
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PolicyDocumentEditor({
+function PolicyDocumentEditorBody({
   document: doc,
-  folders,
-  onBack,
+  folderLabel,
   onSaved,
 }: {
   document: PolicyDocument;
-  folders: VaultFolder[];
-  onBack: () => void;
+  folderLabel: string;
   onSaved: (updated: PolicyDocument) => void;
 }) {
   const { toast } = useToast();
@@ -280,11 +188,6 @@ function PolicyDocumentEditor({
     fetchDocumentTemplates().then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
-  const folderLabel = useMemo(
-    () => folders.find((f) => f.category === doc.folder_key)?.label ?? doc.folder_key,
-    [folders, doc.folder_key],
-  );
-
   const debouncedTitle = useDebouncedValue(title, 500);
   const debouncedContentHtml = useDebouncedValue(contentHtml, 500);
 
@@ -304,6 +207,10 @@ function PolicyDocumentEditor({
       cancelled = true;
     };
   }, [templateId, debouncedTitle, debouncedContentHtml]);
+
+  function insertField(key: string) {
+    editor?.chain().focus().insertContent(`{{ org.${key} }}`).run();
+  }
 
   async function handleSaveDraft() {
     if (!editor) return;
@@ -346,22 +253,36 @@ function PolicyDocumentEditor({
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-black" style={{ color: "var(--cc-plum)" }}>
-        <X size={14} /> Back to policy documents
-      </button>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_280px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_260px]">
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} className="text-lg font-black" />
           <p className="text-xs font-medium" style={{ color: "var(--cc-muted)" }}>{folderLabel}</p>
 
           <div className="rounded-2xl border bg-card" style={{ borderColor: "var(--cc-border)" }}>
-            <div className="border-b px-4 py-2 flex flex-wrap gap-1" style={{ borderColor: "var(--cc-border)" }}>
+            <div className="flex flex-wrap items-center gap-1 border-b px-4 py-2" style={{ borderColor: "var(--cc-border)" }}>
               <ToolbarButton active={editor?.isActive("bold")} onClick={() => editor?.chain().focus().toggleBold().run()}>B</ToolbarButton>
               <ToolbarButton active={editor?.isActive("italic")} onClick={() => editor?.chain().focus().toggleItalic().run()}>I</ToolbarButton>
               <ToolbarButton active={editor?.isActive("heading", { level: 2 })} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H2</ToolbarButton>
               <ToolbarButton active={editor?.isActive("bulletList")} onClick={() => editor?.chain().focus().toggleBulletList().run()}>List</ToolbarButton>
               <ToolbarButton active={editor?.isActive("orderedList")} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>1. List</ToolbarButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold"
+                    style={{ color: "var(--cc-muted)" }}
+                  >
+                    Insert field <ChevronDown size={12} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {ORG_MERGE_FIELDS.map((f) => (
+                    <DropdownMenuItem key={f.key} onClick={() => insertField(f.key)}>
+                      {f.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <EditorContent editor={editor} className="prose prose-sm max-w-none p-4 min-h-[360px] focus:outline-none" />
           </div>

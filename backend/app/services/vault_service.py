@@ -25,7 +25,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, NotRequired, TypedDict
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -48,6 +48,10 @@ class VaultDocument(TypedDict):
     source_table: str
     source_id: str
     has_stored_file: bool
+    # Set only for governance rows that were published from an in-app policy
+    # draft (as opposed to a raw file upload) — lets the vault UI offer
+    # "Edit" (reopen the authoring sheet) instead of only "Upload new version".
+    policy_document_id: NotRequired[str | None]
 
 
 GOVERNANCE_FOLDER_KEYS = (
@@ -1055,6 +1059,8 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     except Exception:
         return []
     org_name = _org_name(org_id)
+    doc_ids = [row["id"] for row in (resp.data or [])]
+    policy_doc_by_governance_id = _policy_document_id_by_governance_id(org_id, doc_ids)
     return [
         VaultDocument(
             id=row["id"],
@@ -1068,9 +1074,34 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
             source_table="governance_documents",
             source_id=row["id"],
             has_stored_file=True,
+            policy_document_id=policy_doc_by_governance_id.get(row["id"]),
         )
         for row in (resp.data or [])
     ]
+
+
+def _policy_document_id_by_governance_id(org_id: str, governance_document_ids: list[str]) -> dict[str, str]:
+    """Reverse lookup: which policy_documents row (if any) currently
+    publishes each of these governance_documents rows. A doc not in the
+    returned map was uploaded as a raw file, not authored in-app."""
+    if not governance_document_ids:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("policy_documents")
+            .select("id, current_governance_document_id")
+            .eq("organization_id", org_id)
+            .in_("current_governance_document_id", governance_document_ids)
+            .execute()
+        )
+    except Exception:
+        return {}
+    return {
+        row["current_governance_document_id"]: row["id"]
+        for row in (resp.data or [])
+        if row.get("current_governance_document_id")
+    }
 
 
 def _render_governance_file(org_id: str, category: str, document_id: str) -> tuple[str, bytes]:
@@ -2024,7 +2055,7 @@ def list_document_templates(org_id: str) -> list[dict[str, Any]]:
     try:
         resp = (
             supabase.table("organization_document_templates")
-            .select("id, name, description, is_default, created_at, updated_at")
+            .select("id, name, description, is_default, merge_scope, created_at, updated_at")
             .eq("organization_id", org_id)
             .order("created_at", desc=True)
             .execute()
@@ -2126,8 +2157,34 @@ def update_policy_document(org_id: str, policy_document_id: str, **fields: Any) 
 def _render_policy_html(org_id: str, template_html: str, title: str, content_html: str) -> str:
     """Merge policy content into a branded template via the same Jinja2
     engine publish/preview both use. Returns raw HTML — callers decide
-    whether that's for a live preview or as input to render_html_to_pdf."""
+    whether that's for a live preview or as input to render_html_to_pdf.
+
+    Two-stage render: content_html (the Tiptap body) is itself run through
+    Jinja2 first, before being embedded into the outer letterhead template.
+    Without this, a merge placeholder typed *inside* the body — e.g. "Issued
+    by {{ org.provider_name }}" — would render as literal text instead of
+    resolving, since it would otherwise only ever reach the outer template as
+    an opaque pre-rendered string. Policy documents never pass a
+    participant_id/worker_id, so merge_context's 'participant'/'plan'/'worker'
+    are always None here — a stray reference to one of those renders as
+    empty (Jinja's default Undefined-on-None-attribute behaviour), never an
+    error, so this is a no-op for every template that doesn't use them.
+
+    Built inline from the `letterhead` this function already fetches, rather
+    than calling merge_fields.resolve_merge_context() — that would re-fetch
+    the same org row through a second, separately-mocked code path for no
+    benefit, since 'participant'/'plan'/'worker' are unreachable here anyway
+    (nothing in this pass generates a policy document for a specific
+    participant/worker). resolve_merge_context is for a future record-bound
+    generation flow, not this one."""
     letterhead = get_letterhead(org_id)
+    merge_context: dict[str, Any] = {
+        "org": letterhead,
+        "participant": None,
+        "plan": None,
+        "worker": None,
+        "generated": {"generated_at": datetime.now(timezone.utc).strftime("%d %b %Y")},
+    }
     try:
         from jinja2 import Environment, select_autoescape
     except ImportError as exc:
@@ -2135,16 +2192,21 @@ def _render_policy_html(org_id: str, template_html: str, title: str, content_htm
 
     env = Environment(autoescape=select_autoescape(["html"]))
     try:
+        inner_html = env.from_string(content_html).render(**merge_context) if content_html else content_html
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Content rendering failed: {exc}")
+    try:
         template = env.from_string(template_html)
         return template.render(
-            content=content_html,
+            content=inner_html,
             title=title,
             org_name=letterhead["provider_name"] or "Organisation",
             org_logo_url=letterhead["logo_url"],
             org_accent_color=letterhead["brand_accent_color"],
             org_abn=letterhead.get("abn"),
             org_address=letterhead.get("address"),
-            generated_at=datetime.now(timezone.utc).strftime("%d %b %Y"),
+            generated_at=merge_context["generated"]["generated_at"],
+            **merge_context,
         )
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Template rendering failed: {exc}")

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { VaultDocument } from "@/services/vaultService";
 
@@ -129,6 +129,7 @@ export function DocumentTable({
   onToggleAll,
   onDownload,
   onPreview,
+  onEdit,
   focusedId,
   pagination,
 }: {
@@ -139,6 +140,9 @@ export function DocumentTable({
   onToggleAll: () => void;
   onDownload: (doc: VaultDocument) => void;
   onPreview?: (doc: VaultDocument) => void;
+  /** Only offered for rows with a policy_document_id — reopens the in-app
+   * authoring sheet instead of the raw "upload a new version" flow. */
+  onEdit?: (doc: VaultDocument) => void;
   focusedId?: string | null;
   /** Renders a paging footer when there's more than one page. `documents`
    * should already be sliced to the current page by the caller. */
@@ -206,6 +210,20 @@ export function DocumentTable({
                   </span>
                 </div>
               </div>
+              {onEdit && doc.policy_document_id && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(doc);
+                  }}
+                  className="shrink-0 rounded-md p-1.5"
+                  style={{ color: "var(--cc-muted)" }}
+                  aria-label={`Edit ${doc.title}`}
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => {

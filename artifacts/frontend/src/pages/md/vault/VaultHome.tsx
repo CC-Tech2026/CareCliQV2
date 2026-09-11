@@ -46,7 +46,14 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { StatCardGroup, StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { fetchVaultStats, fetchVaultFolders, setFolderOrder, type VaultStats, type VaultFolder } from "@/services/vaultService";
+import {
+  fetchVaultStats,
+  fetchVaultFolders,
+  fetchPolicyAcknowledgementStatus,
+  setFolderOrder,
+  type VaultStats,
+  type VaultFolder,
+} from "@/services/vaultService";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { CreateFolderDialog } from "./components/CreateFolderDialog";
 
@@ -254,6 +261,7 @@ function FolderGroup({
   onDragEnd,
   navigate,
   trailing,
+  headerExtra,
 }: {
   title: string;
   subtitle: string;
@@ -262,16 +270,22 @@ function FolderGroup({
   onDragEnd: (event: DragEndEvent) => void;
   navigate: (path: string) => void;
   trailing?: ReactNode;
+  headerExtra?: ReactNode;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   return (
     <div>
-      <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
-        {title}
-      </h2>
-      <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-        {subtitle}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
+            {title}
+          </h2>
+          <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+            {subtitle}
+          </p>
+        </div>
+        {headerExtra}
+      </div>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext
           items={folders.map((f) => f.category)}
@@ -308,9 +322,19 @@ export default function VaultHome() {
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [createFolderGroup, setCreateFolderGroup] = useState<"record" | "governance">("record");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
+  const [ackSummary, setAckSummary] = useState<{ acknowledged: number; total: number } | null>(null);
 
   useEffect(() => {
     void refresh();
+    fetchPolicyAcknowledgementStatus()
+      .then((rows) =>
+        setAckSummary(
+          rows.length === 0
+            ? null
+            : rows.reduce((acc, r) => ({ acknowledged: acc.acknowledged + r.acknowledged, total: acc.total + r.total }), { acknowledged: 0, total: 0 })
+        )
+      )
+      .catch(() => setAckSummary(null));
   }, []);
 
   function changeViewMode(mode: ViewMode) {
@@ -442,6 +466,17 @@ export default function VaultHome() {
           mode={viewMode}
           onDragEnd={handleGovernanceDragEnd}
           navigate={navigate}
+          headerExtra={
+            ackSummary && (
+              <div
+                className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+              >
+                <Users size={13} style={{ color: "var(--cc-muted)" }} />
+                {ackSummary.acknowledged}/{ackSummary.total} policy acknowledgements
+              </div>
+            )
+          }
           trailing={
             <NewFolderControl
               mode={viewMode}

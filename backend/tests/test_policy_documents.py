@@ -176,6 +176,49 @@ async def test_publish_policy_document_supersedes_previous_and_propagates_visibi
 
 
 @pytest.mark.asyncio
+async def test_publish_policy_document_resolves_org_merge_field_inside_body():
+    """A merge placeholder typed *inside* the Tiptap body (not just the
+    outer letterhead template) must resolve — this is the two-stage render:
+    content_html is itself passed through Jinja2 before being embedded into
+    the outer template, so {{ org.provider_name }} written in the body
+    isn't left as literal text in the published PDF's source HTML."""
+    org_id, published_by, policy_doc_id = (str(uuid.uuid4()) for _ in range(3))
+    policy_doc = {
+        "id": policy_doc_id,
+        "organization_id": org_id,
+        "folder_key": "governance_operational",
+        "title": "Code of Conduct",
+        "template_id": None,
+        "content_html": "<p>Issued by {{ org.provider_name }}.</p>",
+        "visible_to_workers": False,
+        "current_governance_document_id": None,
+    }
+
+    captured_html: dict[str, bytes] = {}
+
+    def _capture_pdf(html_str: str) -> bytes:
+        captured_html["html"] = html_str.encode()
+        return b"%PDF-fake"
+
+    with patch.object(vault_service, "get_policy_document", return_value=policy_doc), \
+         patch.object(vault_service, "get_letterhead", return_value={
+             "provider_name": "Acme Care Co", "logo_url": None, "brand_accent_color": "#000000",
+             "abn": None, "address": None,
+         }), \
+         patch("backend.app.services.html_pdf_render.render_html_to_pdf", side_effect=_capture_pdf), \
+         patch.object(vault_service, "upload_governance_document") as mock_upload, \
+         patch.object(vault_service, "get_supabase_admin") as mock_admin:
+
+        mock_upload.return_value = {"id": str(uuid.uuid4()), "title": "Code of Conduct"}
+        mock_admin.return_value = MagicMock()
+
+        await vault_service.publish_policy_document(org_id, policy_doc_id, published_by)
+
+    assert b"Issued by Acme Care Co." in captured_html["html"]
+    assert b"{{ org.provider_name }}" not in captured_html["html"]
+
+
+@pytest.mark.asyncio
 async def test_publish_policy_document_rejects_empty_content():
     org_id, published_by, policy_doc_id = (str(uuid.uuid4()) for _ in range(3))
     policy_doc = {
@@ -187,6 +230,45 @@ async def test_publish_policy_document_rejects_empty_content():
         with pytest.raises(HTTPException) as exc:
             await vault_service.publish_policy_document(org_id, policy_doc_id, published_by)
     assert exc.value.status_code == 422
+
+
+# ── governance folder listing: policy_document_id reverse lookup ─────────
+
+
+def test_list_governance_attaches_policy_document_id_for_in_app_authored_docs():
+    """A folder row published from an in-app draft must carry
+    policy_document_id (so the vault UI can offer 'Edit'); a raw file
+    upload with no matching policy_documents row must not."""
+    org_id = str(uuid.uuid4())
+    authored_gov_id, uploaded_gov_id = str(uuid.uuid4()), str(uuid.uuid4())
+    policy_doc_id = str(uuid.uuid4())
+
+    gov_rows = [
+        {"id": authored_gov_id, "title": "Code of Conduct", "created_at": "2026-01-01T00:00:00Z"},
+        {"id": uploaded_gov_id, "title": "Raw Upload", "created_at": "2026-01-01T00:00:00Z"},
+    ]
+    policy_rows = [{"id": policy_doc_id, "current_governance_document_id": authored_gov_id}]
+
+    mock_supabase = MagicMock()
+
+    def table_side_effect(name):
+        m = MagicMock()
+        if name == "governance_documents":
+            m.select.return_value.eq.return_value.eq.return_value.is_.return_value.is_.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=gov_rows)
+        elif name == "policy_documents":
+            m.select.return_value.eq.return_value.in_.return_value.execute.return_value = MagicMock(data=policy_rows)
+        elif name == "organizations":
+            m.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[{"organization_name": "Acme"}])
+        return m
+
+    mock_supabase.table.side_effect = table_side_effect
+
+    with patch.object(vault_service, "get_supabase_admin", return_value=mock_supabase):
+        docs = vault_service._list_governance(org_id, "governance_operational")
+
+    by_id = {d["id"]: d for d in docs}
+    assert by_id[authored_gov_id]["policy_document_id"] == policy_doc_id
+    assert by_id[uploaded_gov_id]["policy_document_id"] is None
 
 
 # ── render_worker_policy_file: visibility enforced at the query level ─────

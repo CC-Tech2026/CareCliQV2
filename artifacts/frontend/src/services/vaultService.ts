@@ -12,6 +12,10 @@ export interface VaultDocument {
   source_table: string;
   source_id: string;
   has_stored_file: boolean;
+  /** Set only when this governance row was published from an in-app policy
+   * draft — lets the UI offer "Edit" (reopen the authoring sheet) instead
+   * of only "Upload new version". Absent for raw file uploads. */
+  policy_document_id?: string | null;
 }
 
 export interface VaultFolder {

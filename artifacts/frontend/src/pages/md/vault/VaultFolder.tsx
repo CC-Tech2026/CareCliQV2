@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Search, Upload, ChevronRight } from "lucide-react";
+import { FileEdit, Search, Upload, ChevronRight, Users } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,16 +11,21 @@ import {
   fetchDocumentFile,
   fetchFolderMeta,
   fetchCustomizableFields,
+  fetchPolicyDocuments,
+  fetchPolicyAcknowledgementStatus,
   uploadGovernanceDocument,
   uploadCustomFolderDocument,
   type VaultDocument,
   type VaultFolder as VaultFolderMeta,
+  type PolicyDocument,
+  type PolicyAcknowledgementStatus,
 } from "@/services/vaultService";
 import { triggerBlobDownload } from "@/lib/vaultZip";
 import { DocumentTable } from "./components/DocumentTable";
 import { DocumentPreviewPane } from "./components/DocumentPreviewPane";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { FolderUploadDialog } from "./components/FolderUploadDialog";
+import { PolicyDocumentEditorSheet } from "./components/PolicyDocumentEditorSheet";
 
 const CUSTOM_FOLDER_PREFIX = "custom:";
 const PAGE_SIZE = 20;
@@ -73,6 +78,10 @@ export default function VaultFolderPage({ category }: { category: string }) {
   const [customizableFields, setCustomizableFields] = useState<Record<string, string[]>>({});
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [policyDocuments, setPolicyDocuments] = useState<PolicyDocument[]>([]);
+  const [ackStatus, setAckStatus] = useState<PolicyAcknowledgementStatus[]>([]);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDocumentId, setEditorDocumentId] = useState<string | null>(null);
 
   const isGovernance = GOVERNANCE_FOLDER_KEYS.has(category);
   const isCustom = category.startsWith(CUSTOM_FOLDER_PREFIX);
@@ -85,6 +94,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
     setPage(1);
     void loadMeta();
     void loadDocuments();
+    if (isGovernance) void loadPolicyExtras();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category]);
 
@@ -105,6 +115,19 @@ export default function VaultFolderPage({ category }: { category: string }) {
       setMeta(await fetchFolderMeta(category));
     } catch {
       // non-fatal — the page still works without the header count/label refreshing
+    }
+  }
+
+  async function loadPolicyExtras() {
+    try {
+      const [docs, status] = await Promise.all([
+        fetchPolicyDocuments(),
+        fetchPolicyAcknowledgementStatus().catch(() => []),
+      ]);
+      setPolicyDocuments(docs);
+      setAckStatus(status);
+    } catch {
+      // non-fatal — drafts strip / acknowledgement summary just stay empty
     }
   }
 
@@ -131,6 +154,34 @@ export default function VaultFolderPage({ category }: { category: string }) {
     const names = new Set(documents.map((d) => d.person_name).filter(Boolean));
     return Array.from(names).sort();
   }, [documents]);
+
+  // Drafts never appear in `documents` — publishing is what creates their
+  // governance_documents row, so an unpublished draft is otherwise invisible
+  // in this folder.
+  const folderDrafts = useMemo(
+    () => policyDocuments.filter((d) => d.folder_key === category && !d.current_governance_document_id),
+    [policyDocuments, category]
+  );
+  const folderAckStatus = useMemo(
+    () => ackStatus.filter((s) => s.folder_key === category),
+    [ackStatus, category]
+  );
+
+  function openNewPolicyEditor() {
+    setEditorDocumentId(null);
+    setEditorOpen(true);
+  }
+
+  function openPolicyEditor(documentId: string) {
+    setEditorDocumentId(documentId);
+    setEditorOpen(true);
+  }
+
+  function handlePolicyEditorSaved() {
+    void loadDocuments();
+    void loadMeta();
+    void loadPolicyExtras();
+  }
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -232,13 +283,71 @@ export default function VaultFolderPage({ category }: { category: string }) {
               {documents.length} document{documents.length === 1 ? "" : "s"}
             </p>
           </div>
-          {canUpload && (
-            <Button className="gap-2 shrink-0" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-plum)", color: "white" }}>
-              <Upload size={15} />
-              Upload document
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {isGovernance && (
+              <Button variant="outline" className="gap-2" onClick={openNewPolicyEditor}>
+                <FileEdit size={15} />
+                Write in-app
+              </Button>
+            )}
+            {canUpload && (
+              <Button className="gap-2" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-plum)", color: "white" }}>
+                <Upload size={15} />
+                Upload document
+              </Button>
+            )}
+          </div>
         </div>
+
+        {isGovernance && (folderDrafts.length > 0 || folderAckStatus.length > 0) && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {folderDrafts.length > 0 && (
+              <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
+                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>
+                  Drafts, not yet published
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {folderDrafts.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => openPolicyEditor(d.id)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-[var(--cc-active-bg)]"
+                    >
+                      <span className="truncate text-[12.5px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                        {d.title}
+                      </span>
+                      <span className="shrink-0 text-[11px] font-bold" style={{ color: "var(--cc-plum)" }}>
+                        Continue editing
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {folderAckStatus.length > 0 && (
+              <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
+                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>
+                  Worker acknowledgement
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {folderAckStatus.map((s) => (
+                    <div key={s.document_id} className="flex items-center justify-between gap-2 px-2.5 py-1">
+                      <span className="truncate text-[12.5px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                        {s.title}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: "var(--cc-muted)" }}>
+                        <Users size={11} />
+                        {s.acknowledged}/{s.total}
+                        {s.rate_percent != null ? ` (${s.rate_percent}%)` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -315,6 +424,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
                 onToggleAll={toggleAll}
                 onDownload={(d) => void handleDownloadOne(d)}
                 onPreview={(d) => setPreviewId(d.id)}
+                onEdit={isGovernance ? (d) => d.policy_document_id && openPolicyEditor(d.policy_document_id) : undefined}
                 focusedId={previewId}
                 pagination={{
                   page: safePage,
@@ -378,6 +488,17 @@ export default function VaultFolderPage({ category }: { category: string }) {
             void loadDocuments();
             void loadMeta();
           }}
+        />
+      )}
+
+      {isGovernance && (
+        <PolicyDocumentEditorSheet
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          folderKey={category}
+          folderLabel={label}
+          documentId={editorDocumentId}
+          onSaved={handlePolicyEditorSaved}
         />
       )}
     </HubLayout>
