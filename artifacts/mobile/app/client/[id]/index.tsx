@@ -17,9 +17,12 @@ import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { ClientNavRow } from "@/components/worker/client/ClientNavRow";
 import { ClientProfileHeader } from "@/components/worker/client/ClientProfileHeader";
 import { ClientScreenShell } from "@/components/worker/client/ClientScreenShell";
+import { ClientSessionList } from "@/components/worker/client/ClientSessionList";
 import { activeGoals } from "@/lib/client-utils";
 import { useWorkerClientDetail } from "@/hooks/worker/useWorkerClientDetail";
 import { useColors } from "@/hooks/useColors";
+
+const RECENT_NOTES_LIMIT = 3;
 
 export default function ClientDetailHubScreen() {
   const colors = useColors();
@@ -76,6 +79,13 @@ export default function ClientDetailHubScreen() {
       (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? ""),
     )
     .slice(0, 2);
+  const recentNotes = [...data.notes]
+    .sort((a, b) => {
+      const aDate = a.session_date ? new Date(a.session_date).getTime() : 0;
+      const bDate = b.session_date ? new Date(b.session_date).getTime() : 0;
+      return bDate - aDate;
+    })
+    .slice(0, RECENT_NOTES_LIMIT);
 
   return (
     <ClientScreenShell title={client.full_name} subtitle="Participant profile">
@@ -149,6 +159,47 @@ export default function ClientDetailHubScreen() {
               </Text>
             </View>
             <ClientOverviewContent client={client} />
+            {recentNotes.length > 0 && (
+              <View style={{ gap: 10 }}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text
+                    accessibilityRole="header"
+                    style={{
+                      color: colors.foreground,
+                      fontFamily: FontFamily.interBold,
+                      fontSize: 18,
+                    }}
+                  >
+                    Recent session notes
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push(`/client/${id}/shift-notes` as never)}
+                  >
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontFamily: FontFamily.interSemiBold,
+                        fontSize: 13,
+                      }}
+                    >
+                      View all
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text
+                  style={{
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                    fontSize: 13,
+                    lineHeight: 19,
+                    marginTop: -4,
+                  }}
+                >
+                  What happened last time, so you know what to follow up on.
+                </Text>
+                <ClientSessionList rows={recentNotes} />
+              </View>
+            )}
             <View style={{ gap: 14 }}>
               <Text
                 accessibilityRole="header"
@@ -287,6 +338,12 @@ export default function ClientDetailHubScreen() {
 }
 
 const styles = StyleSheet.create({
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   center: {
     flex: 1,
     alignItems: "center",
