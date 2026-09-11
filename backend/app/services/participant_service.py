@@ -319,16 +319,27 @@ async def get_participant_by_id(
 
         if not can_access_participant(participant, current_user):
 
-            await log_security_event(
-                event_type="unauthorized_access",
-                description="Unauthorized participant record access",
-                accessor_id=user_id(current_user),
-                participant_id=participant_id,
-                organization_id=organization_id(current_user),
-                severity="high",
-            )
+            if is_support_worker(current_user) and await _worker_has_shift_for_participant(
+                participant_id,
+                current_user,
+            ):
+                # Rostered via a shift but assigned_worker_id/practitioner_allocations
+                # haven't been synced for this participant yet — shift_service treats
+                # shift ownership as proof of access for sessions, so the profile the
+                # worker needs to prepare for that shift must be visible too.
+                pass
+            else:
 
-            return None
+                await log_security_event(
+                    event_type="unauthorized_access",
+                    description="Unauthorized participant record access",
+                    accessor_id=user_id(current_user),
+                    participant_id=participant_id,
+                    organization_id=organization_id(current_user),
+                    severity="high",
+                )
+
+                return None
 
         await log_participant_read(
             participant_id,
@@ -729,6 +740,24 @@ async def get_dashboard_stats(
             if p.get("plan_status") == "active"
         ),
     }
+
+
+async def _worker_has_shift_for_participant(
+    participant_id: str,
+    current_user: Optional[dict],
+) -> bool:
+    """Fallback access check: a shift roster is itself proof a support worker
+    may view this participant, even before assigned_worker_id/practitioner_allocations
+    catch up. Mirrors the fallback shift_service.start_shift_session already
+    relies on for session creation."""
+    from . import shift_service
+
+    uid = user_id(current_user)
+    org_id = organization_id(current_user)
+    if not uid or not org_id:
+        return False
+
+    return shift_service.worker_has_shift_for_participant(participant_id, uid, org_id)
 
 
 async def _get_assignment_ids(current_user: Optional[dict]) -> tuple[set[str], set[str]]:

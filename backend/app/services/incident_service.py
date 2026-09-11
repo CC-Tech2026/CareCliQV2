@@ -406,7 +406,12 @@ async def get_all_incidents(
 
     enriched_rows: List[dict[str, Any]] = []
     visible_participant_ids: set[str] = set()
-    if current_user:
+    # Support workers are already scoped to their own reports by the SQL user_id
+    # filter above — re-checking participant visibility here would incorrectly
+    # hide a worker's own incident (e.g. one with no participant_id, or filed for
+    # a participant no longer on their permanent roster) that get_incident_stats
+    # still counts, since that function skips this same pass for reporter_id.
+    if current_user and not reporter_id:
         try:
             from . import participant_service
             visible_participants = await participant_service.get_all_participants(current_user)
@@ -419,7 +424,7 @@ async def get_all_incidents(
             visible_participant_ids = set()
 
     for row in rows:
-        if current_user and not is_coordinator_role(current_user):
+        if current_user and not is_coordinator_role(current_user) and not reporter_id:
             participant_id = row.get("participant_id")
             if not participant_id or str(participant_id) not in visible_participant_ids:
                 continue
