@@ -29,72 +29,20 @@ import {
   severityMeta,
   statusMeta,
 } from "@/lib/incident-utils";
-import { getIncidentStats, listIncidents, type IncidentSummary } from "@/lib/resource-api";
+import { listIncidents, type IncidentSummary } from "@/lib/resource-api";
 
 const INCIDENTS_PAGE_SIZE = 10;
 
 type FilterModal = "severity" | "status" | null;
 
-function CompactStatTile({
-  label,
-  value,
-  valueColor,
-  icon,
-  isDark,
-}: {
-  label: string;
-  value: number;
-  valueColor: string;
-  icon: keyof typeof Feather.glyphMap;
-  isDark: boolean;
-}) {
-  const colors = useColors();
-
-  return (
-    <View
-      style={[
-        styles.statTile,
-        elevatedCardShadow(isDark),
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <View style={[styles.statTileIcon, { backgroundColor: colors.soft }]}>
-        <Feather name={icon} size={14} color={colors.primary} />
-      </View>
-      <Text style={[styles.statTileValue, { color: valueColor, fontFamily: "Inter_700Bold" }]}>{value}</Text>
-      <Text style={[styles.statTileLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function StatsGrid({
-  stats,
-  isDark,
-}: {
-  stats: { total: number; open: number; overdue: number; critical: number };
-  isDark: boolean;
-}) {
-  const colors = useColors();
-  const t = useT();
-
-  const tiles = [
-    { label: t("incidents.total"), value: stats.total, valueColor: colors.primary, icon: "clipboard" as const },
-    { label: t("incidents.open"), value: stats.open, valueColor: "#D97706", icon: "activity" as const },
-    { label: t("incidents.overdue"), value: stats.overdue, valueColor: "#EA580C", icon: "clock" as const },
-    { label: t("incidents.critical"), value: stats.critical, valueColor: "#DC2626", icon: "alert-circle" as const },
-  ];
-
-  return (
-    <View style={styles.statsGrid}>
-      {tiles.map((tile) => (
-        <View key={tile.label} style={styles.statTileWrap}>
-          <CompactStatTile {...tile} isDark={isDark} />
-        </View>
-      ))}
-    </View>
-  );
+/** An incident "needs attention" when something's actively moving on it —
+ * under investigation (a coordinator may come back with questions), overdue
+ * for NDIS notification, or flagged as NDIS-reportable and not yet lodged.
+ * Every one of these is already surfaced honestly via the existing status/
+ * overdue/NDIS badges on the card itself — this just decides which
+ * incidents get pulled to the top instead of sitting in the plain list. */
+function needsAttention(incident: IncidentSummary): boolean {
+  return incident.status === "under_investigation" || Boolean(incident.overdue) || Boolean(incident.ndis_pending);
 }
 
 function FilterChip({
@@ -235,12 +183,6 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
     enabled: isAuthenticated,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["incident-stats"],
-    queryFn: getIncidentStats,
-    enabled: isAuthenticated,
-  });
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return incidents.filter((incident) => {
@@ -259,33 +201,42 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
     });
   }, [incidents, filterSeverity, filterStatus, search, t]);
 
+  // Pulled out of the plain list rather than duplicated into it, so there's
+  // one obvious place to look for "is anything moving on my reports right
+  // now" instead of scanning report-style totals.
+  const attentionIncidents = useMemo(() => filtered.filter(needsAttention), [filtered]);
+  const otherIncidents = useMemo(() => filtered.filter((i) => !needsAttention(i)), [filtered]);
+  const ndisPendingCount = useMemo(() => incidents.filter((i) => i.ndis_pending).length, [incidents]);
+
   useEffect(() => {
     setVisibleCount(INCIDENTS_PAGE_SIZE);
-  }, [filtered]);
+  }, [otherIncidents]);
 
   const visibleIncidents = useMemo(
-    () => filtered.slice(0, visibleCount),
-    [filtered, visibleCount],
+    () => otherIncidents.slice(0, visibleCount),
+    [otherIncidents, visibleCount],
   );
-  const hasMore = visibleCount < filtered.length;
+  const hasMore = visibleCount < otherIncidents.length;
 
   const handleLoadMore = useCallback(() => {
     if (!hasMore || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
-    setVisibleCount((count) => Math.min(count + INCIDENTS_PAGE_SIZE, filtered.length));
+    setVisibleCount((count) => Math.min(count + INCIDENTS_PAGE_SIZE, otherIncidents.length));
     requestAnimationFrame(() => {
       loadingMoreRef.current = false;
     });
-  }, [filtered.length, hasMore]);
+  }, [otherIncidents.length, hasMore]);
 
   const severityLabel =
     filterSeverity === "all" ? t("incidents.allSeverity") : t(incidentSeverityLabelKey(filterSeverity));
   const statusLabel =
     filterStatus === "all" ? t("incidents.allStatus") : t(incidentStatusLabelKey(filterStatus));
 
-  const listTitle =
-    filterSeverity !== "all" || filterStatus !== "all" || search.trim()
-      ? t("incidents.filteredResults")
+  const isFiltering = filterSeverity !== "all" || filterStatus !== "all" || Boolean(search.trim());
+  const otherListTitle = isFiltering
+    ? t("incidents.filteredResults")
+    : attentionIncidents.length > 0
+      ? t("incidents.otherIncidents")
       : t("incidents.allIncidents");
 
   const renderHeader = () => (
@@ -298,21 +249,11 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
         <Text style={[styles.logBtnText, { fontFamily: "Inter_700Bold" }]}>{t("incidents.log")}</Text>
       </Pressable>
 
-      <StatsGrid
-        isDark={isDark}
-        stats={{
-          total: stats?.total ?? 0,
-          open: stats?.open ?? 0,
-          overdue: stats?.overdue ?? 0,
-          critical: stats?.critical ?? 0,
-        }}
-      />
-
-      {(stats?.ndis_pending ?? 0) > 0 ? (
+      {ndisPendingCount > 0 ? (
         <View style={[styles.ndisBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
           <Feather name="alert-triangle" size={15} color={colors.dangerIcon} />
           <Text style={[styles.ndisBannerText, { color: colors.dangerText, fontFamily: "Inter_500Medium" }]}>
-            {t("incidents.ndisBanner", { count: stats?.ndis_pending ?? 0 })}
+            {t("incidents.ndisBanner", { count: ndisPendingCount })}
           </Text>
         </View>
       ) : null}
@@ -334,17 +275,44 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
         </View>
       </View>
 
-      <View style={styles.listHeader}>
-        <Text style={[styles.listTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{listTitle}</Text>
-        {filtered.length > 0 ? (
-          <View style={[styles.countPill, { backgroundColor: colors.soft }]}>
-            <Text style={[styles.countPillText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-              {filtered.length}{" "}
-              {filtered.length === 1 ? t("incidents.record") : t("incidents.records")}
+      {attentionIncidents.length > 0 ? (
+        <View style={styles.attentionSection}>
+          <View style={styles.listHeader}>
+            <Text style={[styles.listTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              {t("incidents.needsAttention")}
             </Text>
+            <View style={[styles.countPill, { backgroundColor: colors.dangerBg }]}>
+              <Text style={[styles.countPillText, { color: colors.dangerText, fontFamily: "Inter_700Bold" }]}>
+                {attentionIncidents.length}
+              </Text>
+            </View>
           </View>
-        ) : null}
-      </View>
+          <View style={styles.attentionList}>
+            {attentionIncidents.map((incident) => (
+              <IncidentCard
+                key={incident.id}
+                incident={incident}
+                isDark={isDark}
+                onPress={() => router.push(`/incidents/${incident.id}` as never)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {otherIncidents.length > 0 || attentionIncidents.length === 0 ? (
+        <View style={styles.listHeader}>
+          <Text style={[styles.listTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{otherListTitle}</Text>
+          {otherIncidents.length > 0 ? (
+            <View style={[styles.countPill, { backgroundColor: colors.soft }]}>
+              <Text style={[styles.countPillText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                {otherIncidents.length}{" "}
+                {otherIncidents.length === 1 ? t("incidents.record") : t("incidents.records")}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -386,22 +354,28 @@ export function IncidentsPanel({ contentBottomPad }: Props = {}) {
           )
         }
         ListEmptyComponent={
-          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {t("incidents.noIncidentsFound")}
-            </Text>
-            {incidents.length === 0 ? (
-              <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {t("incidents.noIncidentsYet")}{" "}
-                <Text
-                  onPress={() => router.push("/incidents/new" as never)}
-                  style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}
-                >
-                  {t("incidents.logFirst")}
-                </Text>
+          // Everything that matched is already shown in the "Needs your
+          // attention" block above the list itself — an empty-state card
+          // here would sit directly under a non-empty section and read as
+          // a contradiction, so it's only shown when nothing matched at all.
+          attentionIncidents.length > 0 ? null : (
+            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {t("incidents.noIncidentsFound")}
               </Text>
-            ) : null}
-          </View>
+              {incidents.length === 0 ? (
+                <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {t("incidents.noIncidentsYet")}{" "}
+                  <Text
+                    onPress={() => router.push("/incidents/new" as never)}
+                    style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}
+                  >
+                    {t("incidents.logFirst")}
+                  </Text>
+                </Text>
+              ) : null}
+            </View>
+          )
         }
         renderItem={({ item }) => (
           <IncidentCard
@@ -519,34 +493,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   logBtnText: { color: "#FFFFFF", fontSize: 14 },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  statTileWrap: {
-    width: "48%",
-    flexGrow: 1,
-    minWidth: "47%",
-  },
-  statTile: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 4,
-    minHeight: 88,
-  },
-  statTileIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "flex-start",
-  },
-  statTileValue: { fontSize: 24, lineHeight: 28 },
-  statTileLabel: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", lineHeight: 13 },
+  attentionSection: { gap: 10 },
+  attentionList: { gap: 10 },
   ndisBanner: {
     flexDirection: "row",
     alignItems: "flex-start",

@@ -40,6 +40,63 @@ type Props = {
   siblingShifts?: WorkerShift[];
 };
 
+type ContactAction = {
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  onPress: () => void;
+};
+function ShiftContactRow({
+  title,
+  name,
+  details,
+  actions,
+}: {
+  title: string;
+  name?: string | null;
+  details: (string | null | undefined)[];
+  actions: ContactAction[];
+}) {
+  const colors = useColors();
+  return (
+    <View style={[styles.contactRow, { borderColor: colors.border }]}>
+      <View style={styles.contactCopy}>
+        <Text
+          accessibilityRole="header"
+          style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+        >
+          {title}
+        </Text>
+        {name ? (
+          <Text style={[styles.contactName, { color: colors.foreground }]}>
+            {name}
+          </Text>
+        ) : null}
+        {details.filter(Boolean).map((detail, index) => (
+          <Text
+            key={index}
+            style={[styles.prepText, { color: colors.mutedForeground }]}
+          >
+            {detail}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.contactTools}>
+        {actions.map((action) => (
+          <Pressable
+            key={action.label}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            onPress={action.onPress}
+            style={[styles.contactIconButton, { backgroundColor: colors.soft }]}
+          >
+            <Feather name={action.icon} size={19} color={colors.primary} />
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function ShiftListCard({
   shift,
   showActions = false,
@@ -200,7 +257,9 @@ export function ShiftListCard({
           style={[
             styles.docsPendingBanner,
             {
-              backgroundColor: docsOverdue ? colors.dangerBg : colors.statusProgressBg,
+              backgroundColor: docsOverdue
+                ? colors.dangerBg
+                : colors.statusProgressBg,
             },
           ]}
         >
@@ -504,156 +563,93 @@ export function ShiftListCard({
               </Text>
             </View>
           ) : null}
-          {preparationTab === "contacts" && emergencyContact ? (
-            <View style={styles.prepSection}>
-              <Text
-                accessibilityRole="header"
-                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-              >
-                {t("shifts.listCard.nextOfKin")}
-              </Text>
-              <Text style={[styles.contactName, { color: colors.foreground }]}>
-                {emergencyContact.name || emergencyContact.text}
-              </Text>
-              {emergencyContact.detail ? (
-                <Text
-                  style={[styles.prepText, { color: colors.mutedForeground }]}
-                >
-                  {emergencyContact.detail}
-                </Text>
-              ) : null}
-              {emergencyContact.phone ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    t("shifts.listCard.call") +
-                    " " +
-                    (emergencyContact.name || emergencyContact.phone)
+          {preparationTab === "contacts" ? (
+            <View style={styles.contactList}>
+              {emergencyContact ? (
+                <ShiftContactRow
+                  title={t("shifts.listCard.nextOfKin")}
+                  name={emergencyContact.name || emergencyContact.text}
+                  details={[emergencyContact.detail]}
+                  actions={
+                    emergencyContact.phone
+                      ? [
+                          {
+                            label:
+                              t("shifts.listCard.call") +
+                              " " +
+                              (emergencyContact.name || emergencyContact.phone),
+                            icon: "phone",
+                            onPress: () => {
+                              void Linking.openURL(
+                                `tel:${emergencyContact.phone!.replace(/[^+\d]/g, "")}`,
+                              );
+                            },
+                          },
+                        ]
+                      : []
                   }
-                  onPress={() =>
-                    void Linking.openURL(
-                      `tel:${emergencyContact.phone!.replace(/\s/g, "")}`,
-                    )
-                  }
-                  style={[styles.contactAction, { borderColor: colors.border }]}
-                >
-                  <Feather name="phone" size={16} color={colors.primary} />
-                  <Text style={[styles.actionText, { color: colors.primary }]}>
-                    {t("shifts.listCard.call")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-          {preparationTab === "contacts" &&
-          (hasCaseManagerInfo || officePhone) ? (
-            <View style={styles.prepSection}>
-              <Text
-                accessibilityRole="header"
-                style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-              >
-                {hasCaseManagerInfo
-                  ? t("shifts.listCard.caseManager")
-                  : t("shifts.listCard.noCaseManager")}
-              </Text>
-              {caseManager?.name ? (
-                <Text
-                  style={[styles.contactName, { color: colors.foreground }]}
-                >
-                  {caseManager.name}
-                </Text>
-              ) : null}
-              {[caseManager?.phone, caseManager?.email]
-                .filter(Boolean)
-                .map((value, index) => (
-                  <Text
-                    key={index}
-                    style={[styles.prepText, { color: colors.mutedForeground }]}
-                  >
-                    {value}
-                  </Text>
-                ))}
-              <View style={styles.contactActions}>
-                {caseManager?.phone ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() =>
-                      void Linking.openURL(
-                        `tel:${caseManager.phone!.replace(/[^+\d]/g, "")}`,
-                      )
-                    }
-                    style={[
-                      styles.contactAction,
-                      { borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.actionText, { color: colors.primary }]}
-                    >
-                      {t("shifts.listCard.callCaseManager")}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {caseManager?.email ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() =>
-                      void Linking.openURL(
-                        `mailto:${caseManager.email!.trim()}`,
-                      )
-                    }
-                    style={[
-                      styles.contactAction,
-                      { borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.actionText, { color: colors.primary }]}
-                    >
-                      {t("shifts.listCard.emailCaseManager")}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              <Text
-                style={[
-                  styles.sectionLabel,
-                  { color: colors.mutedForeground, marginTop: 12 },
-                ]}
-              >
-                {t("shifts.listCard.officeTeam")}
-              </Text>
-              {officePhone ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() =>
-                    void Linking.openURL(
-                      `tel:${officePhone.replace(/[^+\d]/g, "")}`,
-                    )
-                  }
-                  style={[styles.contactAction, { borderColor: colors.border }]}
-                >
-                  <Text style={[styles.actionText, { color: colors.primary }]}>
-                    {t("shifts.listCard.callOffice")} / {officePhone}
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  router.push(`/shift/${shift.id}/message-office` as never)
-                }
-                style={[styles.contactAction, { borderColor: colors.border }]}
-              >
-                <Feather
-                  name="message-circle"
-                  size={16}
-                  color={colors.primary}
                 />
-                <Text style={[styles.actionText, { color: colors.primary }]}>
-                  {t("shifts.listCard.messageOffice")}
-                </Text>
-              </Pressable>
+              ) : null}
+              {hasCaseManagerInfo ? (
+                <ShiftContactRow
+                  title={t("shifts.listCard.caseManager")}
+                  name={caseManager?.name}
+                  details={[caseManager?.phone, caseManager?.email]}
+                  actions={[
+                    ...(caseManager?.phone
+                      ? [
+                          {
+                            label: t("shifts.listCard.callCaseManager"),
+                            icon: "phone" as const,
+                            onPress: () => {
+                              void Linking.openURL(
+                                `tel:${caseManager.phone!.replace(/[^+\d]/g, "")}`,
+                              );
+                            },
+                          },
+                        ]
+                      : []),
+                    ...(caseManager?.email
+                      ? [
+                          {
+                            label: t("shifts.listCard.emailCaseManager"),
+                            icon: "mail" as const,
+                            onPress: () => {
+                              void Linking.openURL(
+                                `mailto:${caseManager.email!.trim()}`,
+                              );
+                            },
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              ) : null}
+              <ShiftContactRow
+                title={t("shifts.listCard.officeTeam")}
+                details={[officePhone]}
+                actions={[
+                  ...(officePhone
+                    ? [
+                        {
+                          label: t("shifts.listCard.callOffice"),
+                          icon: "phone" as const,
+                          onPress: () => {
+                            void Linking.openURL(
+                              `tel:${officePhone.replace(/[^+\d]/g, "")}`,
+                            );
+                          },
+                        },
+                      ]
+                    : []),
+                  {
+                    label: t("shifts.listCard.messageOffice"),
+                    icon: "message-circle",
+                    onPress: () =>
+                      router.push(`/shift/${shift.id}/message-office` as never),
+                  },
+                ]}
+              />
             </View>
           ) : null}
         </View>
@@ -743,17 +739,29 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   focusRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  contactActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  contactAction: {
-    alignSelf: "flex-start",
+  contactList: { gap: 0 },
+  contactRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: 8,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  contactCopy: {
+    flexBasis: 140,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  contactTools: { flexDirection: "row", gap: 6, marginStart: "auto" },
+  contactIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionText: {
     fontFamily: FontFamily.interSemiBold,

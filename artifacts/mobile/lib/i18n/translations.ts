@@ -79,6 +79,8 @@ const en = {
   "incidents.allSeverity": "All severity",
   "incidents.allStatus": "All status",
   "incidents.allIncidents": "All Incidents",
+  "incidents.needsAttention": "Needs your attention",
+  "incidents.otherIncidents": "Other incidents",
   "incidents.filteredResults": "Filtered results",
   "incidents.record": "record",
   "incidents.records": "records",
