@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsPanelCard } from "@/components/worker/settings/settings-ui";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
+import { TabScrollFade } from "@/components/worker/settings/TabScrollFade";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import {
@@ -24,6 +25,7 @@ import {
   useSetAnalyticsOptOut,
 } from "@/hooks/worker/useWorkerPrivacy";
 import { useColors } from "@/hooks/useColors";
+import { useTabScrollFade } from "@/hooks/worker/useTabScrollFade";
 
 const DELETE_CONFIRMATION = "DELETE MY ACCOUNT";
 
@@ -35,6 +37,7 @@ export default function WorkerPrivacyScreen() {
   const t = useT();
   const { showToast } = useToast();
   const [tab, setTab] = useState<PrivacyTab>("policy");
+  const fade = useTabScrollFade();
 
   const { data: overview, isLoading, isError } = usePrivacyOverview();
   const { data: versionsData } = usePrivacyPolicyVersions();
@@ -126,7 +129,15 @@ export default function WorkerPrivacyScreen() {
   return (
     <SettingsSubScreen title={t("nav.privacy")}>
       <View style={styles.tabBarWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+          onLayout={fade.onLayout}
+          onContentSizeChange={fade.onContentSizeChange}
+          onScroll={fade.onScroll}
+          scrollEventThrottle={fade.scrollEventThrottle}
+        >
           {tabs.map((item) => {
             const active = tab === item.id;
             return (
@@ -150,6 +161,7 @@ export default function WorkerPrivacyScreen() {
             );
           })}
         </ScrollView>
+        <TabScrollFade visible={fade.showFade} background={colors.background} />
       </View>
 
       <View style={[styles.panel, { backgroundColor: colors.card }]}>
@@ -359,7 +371,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   loadingText: { fontSize: 14 },
-  tabBarWrap: { paddingHorizontal: 16 },
+  tabBarWrap: { paddingHorizontal: 16, position: "relative" },
   tabBar: { flexDirection: "row", gap: 3 },
   folderTab: {
     borderTopLeftRadius: 14,

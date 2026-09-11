@@ -15,10 +15,12 @@ import {
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { SecurityMfaPanel } from "@/components/worker/security/SecurityMfaPanel";
 import { SettingsSubScreen } from "@/components/worker/settings/SettingsSubScreen";
+import { TabScrollFade } from "@/components/worker/settings/TabScrollFade";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import { useTabScrollFade } from "@/hooks/worker/useTabScrollFade";
 import {
   disableBiometricUnlock,
   enableBiometricUnlock,
@@ -390,6 +392,7 @@ export default function WorkerSecurityScreen() {
   const t = useT();
   const colors = useColors();
   const [tab, setTab] = useState<SecurityTab>("password");
+  const fade = useTabScrollFade();
 
   const tabs = useMemo(
     () =>
@@ -404,7 +407,15 @@ export default function WorkerSecurityScreen() {
   return (
     <SettingsSubScreen title={t("nav.security")} showBack>
       <View style={styles.tabBarWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+          onLayout={fade.onLayout}
+          onContentSizeChange={fade.onContentSizeChange}
+          onScroll={fade.onScroll}
+          scrollEventThrottle={fade.scrollEventThrottle}
+        >
           {tabs.map((item) => {
             const active = tab === item.id;
             return (
@@ -428,6 +439,7 @@ export default function WorkerSecurityScreen() {
             );
           })}
         </ScrollView>
+        <TabScrollFade visible={fade.showFade} background={colors.background} />
       </View>
 
       <View style={[styles.panel, { backgroundColor: colors.card }]}>
@@ -444,7 +456,7 @@ export default function WorkerSecurityScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabBarWrap: { paddingHorizontal: 16 },
+  tabBarWrap: { paddingHorizontal: 16, position: "relative" },
   tabBar: { flexDirection: "row", gap: 3 },
   folderTab: {
     borderTopLeftRadius: 14,
