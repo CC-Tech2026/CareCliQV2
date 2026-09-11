@@ -409,11 +409,11 @@ export function ShiftListCard({
               }}
               style={[
                 styles.iconBtn,
-                { borderColor: colors.border, backgroundColor: colors.card },
+                { borderColor: colors.success, backgroundColor: colors.statusDocumentedBg },
               ]}
               accessibilityLabel={t("shifts.listCard.call")}
             >
-              <Feather name="phone" size={14} color={colors.foreground} />
+              <Feather name="phone" size={14} color={colors.success} />
             </Pressable>
           ) : null}
 

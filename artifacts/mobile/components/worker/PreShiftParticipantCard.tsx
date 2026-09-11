@@ -129,7 +129,7 @@ export function PreShiftParticipantCard({
                       { backgroundColor: colors.soft },
                     ]}
                   >
-                    <Feather name="phone" size={18} color={colors.primary} />
+                    <Feather name="phone" size={18} color={colors.success} />
                     <View style={{ flex: 1 }}>
                       <Text
                         style={[

@@ -311,10 +311,10 @@ export default function WorkerHelpScreen() {
                   {supportPhone ? (
                     <Pressable
                       onPress={() => void Linking.openURL(`tel:${supportPhone.replace(/\s/g, "")}`)}
-                      style={[styles.contactBtn, { borderColor: colors.border }]}
+                      style={[styles.contactBtn, { backgroundColor: colors.success, borderColor: colors.success }]}
                     >
-                      <Feather name="phone" size={16} color={colors.primary} />
-                      <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                      <Feather name="phone" size={16} color="#FFFFFF" />
+                      <Text style={{ color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 14 }}>
                         {t("help.chat.callNow", { phone: supportPhone })}
                       </Text>
                     </Pressable>

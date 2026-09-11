@@ -141,7 +141,7 @@ export function DuringShiftActionsSidebar({
                   <Feather
                     name={action.icon}
                     size={20}
-                    color={colors.primary}
+                    color={action.icon === "phone" ? colors.success : colors.primary}
                   />
                   <Text style={[styles.label, { color: colors.foreground }]}>
                     {action.label}

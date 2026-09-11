@@ -297,10 +297,10 @@ export function WorkerMobileSafetyCardSheet({
                     </View>
                     <Pressable
                       onPress={() => void Linking.openURL(`tel:${contact.phone.replace(/\s/g, "")}`)}
-                      style={[styles.callBtn, { borderColor: colors.border }]}
+                      style={[styles.callBtn, { backgroundColor: colors.success, borderColor: colors.success }]}
                     >
-                      <Feather name="phone" size={13} color={colors.composerPink} />
-                      <Text style={[styles.callBtnText, { color: colors.composerPink, fontFamily: "Inter_600SemiBold" }]}>
+                      <Feather name="phone" size={13} color="#FFFFFF" />
+                      <Text style={[styles.callBtnText, { color: "#FFFFFF", fontFamily: "Inter_600SemiBold" }]}>
                         Call
                       </Text>
                     </Pressable>
