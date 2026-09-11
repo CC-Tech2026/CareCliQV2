@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftStatusBadge } from "@/components/worker/ShiftStatusBadge";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
-import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
@@ -60,42 +59,34 @@ function QuickAccessTile({
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
-        elevatedCardShadow(colors.scheme === "dark"),
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.85 : 1,
-        },
+        { backgroundColor: `${tile.accent}16`, opacity: pressed ? 0.7 : 1 },
       ]}
     >
-      <View style={[styles.tileIcon, { backgroundColor: colors.soft }]}>
-        <Feather name={tile.icon} size={20} color={tile.accent} />
+      <View style={[styles.tileIcon, { backgroundColor: tile.accent }]}>
+        <Feather name={tile.icon} size={18} color="#FFFFFF" />
       </View>
-      <Text
-        style={[
-          styles.tileLabel,
-          { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
-        ]}
-      >
-        {tile.label}
-      </Text>
-      {tile.badge ? (
-        <View
+      <View style={styles.tileCopy}>
+        <Text
+          numberOfLines={1}
           style={[
-            styles.tileBadge,
-            { backgroundColor: colors.statusProgressBg },
+            styles.tileLabel,
+            { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
           ]}
         >
+          {tile.label}
+        </Text>
+        {tile.badge ? (
           <Text
+            numberOfLines={1}
             style={[
               styles.tileBadgeText,
-              { color: colors.warning, fontFamily: FontFamily.interBold },
+              { color: tile.accent, fontFamily: FontFamily.interBold },
             ]}
           >
             {tile.badge}
           </Text>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -220,6 +211,12 @@ export default function HomeScreen() {
     inProgressShift ??
     shifts.find((shift) => shift.visual_state === "scheduled") ??
     null;
+  // The hero card above already shows the featured shift's full detail —
+  // repeating it again in this list right below is pure duplication when
+  // it's the only shift today, and just noise when there are others.
+  const remainingShifts = featuredShift
+    ? shifts.filter((shift) => shift.id !== featuredShift.id)
+    : shifts;
   const progress = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
 
   const handleRefresh = () => {
@@ -448,38 +445,41 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.foreground,
-                fontFamily: FontFamily.interSemiBold,
-              },
-            ]}
-          >
-            {t("dashboard.todaysShifts")}
-          </Text>
-
-          {!landing.data ? null : shifts.length === 0 ? (
-            <Text
-              style={[
-                styles.empty,
-                {
-                  color: colors.mutedForeground,
-                  fontFamily: FontFamily.interMedium,
-                },
-              ]}
-            >
-              {t("dashboard.noShiftsToday")}
-            </Text>
-          ) : (
-            shifts.map((shift) => (
-              <HomeShiftCard
-                key={shift.id}
-                shift={shift}
-                inProgressShift={inProgressShift}
-              />
-            ))
+          {!landing.data || (shifts.length > 0 && remainingShifts.length === 0) ? null : (
+            <>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+              >
+                {t("dashboard.todaysShifts")}
+              </Text>
+              {shifts.length === 0 ? (
+                <Text
+                  style={[
+                    styles.empty,
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: FontFamily.interMedium,
+                    },
+                  ]}
+                >
+                  {t("dashboard.noShiftsToday")}
+                </Text>
+              ) : (
+                remainingShifts.map((shift) => (
+                  <HomeShiftCard
+                    key={shift.id}
+                    shift={shift}
+                    inProgressShift={inProgressShift}
+                  />
+                ))
+              )}
+            </>
           )}
           <Text
             style={[
@@ -579,30 +579,26 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   tile: {
-    flexBasis: "45%",
-    minWidth: 120,
+    flexBasis: "47%",
     flexGrow: 1,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
   },
   tileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  tileLabel: { fontSize: 15, lineHeight: 22 },
-  tileBadge: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginTop: -2,
-  },
-  tileBadgeText: { fontSize: 12, lineHeight: 18 },
+  tileCopy: { flex: 1, minWidth: 0, gap: 1 },
+  tileLabel: { fontSize: 13, lineHeight: 18 },
+  tileBadgeText: { fontSize: 11, lineHeight: 15 },
   sectionTitle: { fontSize: 20, lineHeight: 26, marginBottom: 14 },
   shiftCard: {
     borderWidth: 1,
