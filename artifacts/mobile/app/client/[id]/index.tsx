@@ -17,7 +17,7 @@ import { ShiftListCard } from "@/components/worker/ShiftListCard";
 import { ClientNavRow } from "@/components/worker/client/ClientNavRow";
 import { ClientProfileHeader } from "@/components/worker/client/ClientProfileHeader";
 import { ClientScreenShell } from "@/components/worker/client/ClientScreenShell";
-import { ClientSessionList } from "@/components/worker/client/ClientSessionList";
+import { RecentNotesPreview } from "@/components/worker/client/RecentNotesPreview";
 import { activeGoals } from "@/lib/client-utils";
 import { useWorkerClientDetail } from "@/hooks/worker/useWorkerClientDetail";
 import { useColors } from "@/hooks/useColors";
@@ -195,9 +195,9 @@ export default function ClientDetailHubScreen() {
                     marginTop: -4,
                   }}
                 >
-                  What happened last time, so you know what to follow up on.
+                  What happened last time, so you know what to follow up on. Tap a note to read it.
                 </Text>
-                <ClientSessionList rows={recentNotes} />
+                <RecentNotesPreview rows={recentNotes} />
               </View>
             )}
             <View style={{ gap: 14 }}>
