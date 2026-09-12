@@ -2335,3 +2335,21 @@ export function uploadTrainingMaterial(moduleId: string, file: File, title: stri
   const body = new FormData(); body.append("file", file); body.append("title", title); body.append("sort_order", String(sortOrder)); if (resourceId) body.append("resource_id", resourceId);
   return jsonFetch<TrainingResource>(`/api/coordinator/training-modules/${encodeURIComponent(moduleId)}/resources/upload`, { method: "POST", body });
 }
+
+/** Fetches the branded participant-profile PDF's bytes + the filename the
+ * server assigned it (via Content-Disposition) — same shape as
+ * vaultService.fetchDocumentFile, for a caller to hand to triggerBlobDownload. */
+export async function exportParticipantProfile(
+  participantId: string
+): Promise<{ filename: string; blob: Blob }> {
+  const res = await apiFetch(`/api/participants/${encodeURIComponent(participantId)}/export`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(typeof body.detail === "string" ? body.detail : "Could not export this profile.");
+  }
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] || `participant-profile-${participantId}.pdf`;
+  const blob = await res.blob();
+  return { filename, blob };
+}

@@ -34,6 +34,12 @@ def render_html_to_pdf(html_str: str, base_url: str | None = None) -> bytes:
             return buf.getvalue()
     except ImportError:
         pass
+    except Exception:
+        # xhtml2pdf's own CSS parser can raise on constructs it doesn't
+        # support (e.g. a TypeError on @page { @bottom-right {...} }) rather
+        # than failing gracefully — fall through to the shared error below
+        # instead of letting that escape as an unhandled 500.
+        pass
 
     raise HtmlPdfRenderError(
         "PDF rendering failed: install weasyprint (Linux) or xhtml2pdf (Windows)."

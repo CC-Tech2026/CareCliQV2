@@ -736,6 +736,37 @@ async def update_restricted_clinical(
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
 
 
+@router.get("/{participant_id}/export")
+async def export_participant_profile(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Coordinator/MD export of a participant's full profile as a branded PDF."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+
+    from fastapi.responses import Response
+
+    from ..core.access import get_user_organization_id
+    from ..services.participant_profile_export_service import (
+        ParticipantProfileExportError,
+        render_participant_profile_pdf,
+    )
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    try:
+        filename, pdf_bytes = await render_participant_profile_pdf(org_id, participant_id)
+    except ParticipantProfileExportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── Shift context (Coordinator authoring — CARECLIQV2-295) ─────────────────────
 
 class AllergyItem(BaseModel):

@@ -5,10 +5,11 @@ import {
   getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
   getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
   getParticipantBillingPeriods, getParticipantCurrentBillingPeriod, planManagementTypeLabel,
-  getTaskTemplates,
+  getTaskTemplates, exportParticipantProfile,
   type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
   type BillingPeriod, type TaskTemplate as DbTaskTemplate, type TaskTemplatesResponse,
 } from "@/services/coordinatorService";
+import { triggerBlobDownload } from "@/lib/vaultZip";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -57,6 +58,7 @@ import {
   Sun,
   Moon,
   Clock,
+  FileDown,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -1165,6 +1167,23 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
     }
   }, [restrictedQuery.data]);
   const { toast: toastFn } = useToast();
+  const [isExportingProfile, setIsExportingProfile] = useState(false);
+  const handleExportProfile = async () => {
+    setIsExportingProfile(true);
+    try {
+      const { filename, blob } = await exportParticipantProfile(id);
+      triggerBlobDownload(blob, filename);
+      toastFn({ title: "Profile exported", description: "The participant profile PDF has downloaded." });
+    } catch (err) {
+      toastFn({
+        title: "Couldn't export profile",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingProfile(false);
+    }
+  };
   const saveRestricted = useMutation({
     mutationFn: async () => {
       const res = await apiFetch(`/api/participants/${id}/restricted-clinical`, {
@@ -1409,6 +1428,18 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 {fullScreen ? "Exit full screen" : "Full screen"}
               </button>
             )}
+            {isCoordinator && (
+              <button
+                type="button"
+                onClick={handleExportProfile}
+                disabled={isExportingProfile}
+                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+              >
+                {isExportingProfile ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+                {isExportingProfile ? "Exporting…" : "Export profile"}
+              </button>
+            )}
             <EditParticipantPanel
               participant={participant}
               hasPlan={hasPlan}
@@ -1462,6 +1493,18 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
 
             {/* Action buttons — mobile: below stat cards */}
             <div className="flex sm:hidden flex-wrap items-center gap-2 mb-3">
+              {isCoordinator && (
+                <button
+                  type="button"
+                  onClick={handleExportProfile}
+                  disabled={isExportingProfile}
+                  className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
+                  style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+                >
+                  {isExportingProfile ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+                  {isExportingProfile ? "Exporting…" : "Export profile"}
+                </button>
+              )}
               <EditParticipantPanel
                 participant={participant}
                 hasPlan={hasPlan}

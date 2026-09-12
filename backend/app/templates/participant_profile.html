@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Participant Profile — {{ participant.full_name or "Participant" }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      color: #1a1a1a;
+      background: #fff;
+    }
+
+    @page {
+      size: A4;
+      margin: 12mm 14mm 22mm 14mm;
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 7pt;
+        color: #94a3b8;
+      }
+    }
+
+    #page-footer {
+      position: fixed;
+      bottom: -16mm;
+      left: 0;
+      right: 0;
+      font-size: 7pt;
+      color: #94a3b8;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 4px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header-wrap {
+      background: #f8f9fa;
+      border-bottom: 3px solid {{ org.brand_accent_color or '#4B3F91' }};
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      width: 100%;
+    }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .hdr-left { vertical-align: top; width: 55%; padding-right: 14px; }
+    .hdr-right { vertical-align: top; text-align: right; }
+    .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
+    .provider-name { font-size: 12pt; font-weight: bold; color: {{ org.brand_accent_color or '#4B3F91' }}; margin-bottom: 2px; }
+    .provider-info { font-size: 8pt; color: #334155; line-height: 1.65; }
+    .provider-info .muted { font-size: 7.5pt; color: #64748b; }
+    .doc-type { font-size: 16pt; font-weight: bold; color: #1a1a1a; letter-spacing: 1px; }
+    .doc-meta { font-size: 8.5pt; color: #475569; line-height: 1.75; margin-top: 5px; }
+    .doc-meta b { color: #1a1a1a; }
+
+    /* ── Participant strip ─────────────────────────────────────────────── */
+    .participant-strip {
+      border: 1px solid #e2e8f0;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .participant-name { font-size: 14pt; font-weight: bold; color: #1a1a1a; margin-bottom: 4px; }
+    .participant-detail { font-size: 8.5pt; color: #334155; line-height: 1.75; }
+
+    /* ── Sections ───────────────────────────────────────────────────────── */
+    .section { margin-bottom: 14px; }
+    .section-title {
+      font-size: 8pt;
+      font-weight: bold;
+      color: #fff;
+      background: {{ org.brand_accent_color or '#4B3F91' }};
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 5px 10px;
+      margin-bottom: 6px;
+    }
+    .kv-table { width: 100%; border-collapse: collapse; }
+    .kv-table td { padding: 4px 10px; font-size: 8.5pt; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+    .kv-label { color: #64748b; width: 32%; }
+    .kv-value { color: #1a1a1a; font-weight: 600; }
+
+    .list-row { border: 1px solid #e2e8f0; padding: 8px 10px; margin-bottom: 6px; }
+    .list-row-title { font-size: 9pt; font-weight: bold; color: #1a1a1a; margin-bottom: 2px; }
+    .list-row-meta { font-size: 7.5pt; color: #64748b; margin-bottom: 3px; }
+    .list-row-body { font-size: 8.5pt; color: #334155; line-height: 1.6; }
+    .empty-note { font-size: 8pt; color: #94a3b8; font-style: italic; }
+
+    .allergy-row { border-left: 3px solid #DC2626; background: #FEF2F2; padding: 6px 10px; margin-bottom: 6px; }
+    .allergy-name { font-size: 8.5pt; font-weight: bold; color: #991B1B; }
+    .allergy-detail { font-size: 8pt; color: #7F1D1D; margin-top: 2px; }
+
+    /* ── Footer ─────────────────────────────────────────────────────────── */
+    .doc-footer { border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 16px; width: 100%; }
+    .doc-footer table { width: 100%; border-collapse: collapse; }
+    .footer-left { vertical-align: top; }
+    .footer-right { vertical-align: top; text-align: right; }
+    .footer-org { font-size: 8pt; color: #334155; font-weight: 600; }
+    .footer-legal { font-size: 6.5pt; color: #94a3b8; margin-top: 3px; }
+    .footer-gen { font-size: 7.5pt; color: #475569; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div id="page-footer">
+  {{ org.provider_name }}{% if org.abn %} | ABN: {{ org.abn }}{% endif %} | Confidential | Page <pdf:pagenumber />
+</div>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+<div class="header-wrap">
+  <table class="header-table">
+    <tr>
+      <td class="hdr-left">
+        {% if org.logo_url %}
+        <img class="logo-img" src="{{ org.logo_url }}" alt="{{ org.provider_name }}" />
+        {% endif %}
+        <div class="provider-name">{{ org.provider_name or "Organisation" }}</div>
+        <div class="provider-info">
+          {% if org.address %}{{ org.address }}<br />{% endif %}
+          {% if org.email %}{{ org.email }}{% if org.phone %} | {{ org.phone }}{% endif %}<br />{% endif %}
+          {% if org.abn %}<span class="muted">ABN: {{ org.abn }}</span><br />{% endif %}
+          {% if org.ndis_provider_number %}<span class="muted">NDIS Registration: {{ org.ndis_provider_number }}</span>{% endif %}
+        </div>
+      </td>
+      <td class="hdr-right">
+        <div class="doc-type">PARTICIPANT PROFILE</div>
+        <div class="doc-meta">Generated: <b>{{ generated.generated_at }}</b></div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- ── PARTICIPANT STRIP ───────────────────────────────────────────────── -->
+<div class="participant-strip">
+  <div class="participant-name">{{ participant.full_name or "—" }}{% if participant.preferred_name %} ({{ participant.preferred_name }}){% endif %}</div>
+  <div class="participant-detail">
+    {% if participant.ndis_number %}NDIS Number: {{ participant.ndis_number }} &nbsp;&middot;&nbsp; {% endif %}
+    {% if participant.date_of_birth %}Date of birth: {{ participant.date_of_birth }}{% endif %}
+    <br />
+    {% if participant.phone %}{{ participant.phone }}{% endif %}{% if participant.phone and participant.email %} &nbsp;&middot;&nbsp; {% endif %}{% if participant.email %}{{ participant.email }}{% endif %}
+    {% if participant.address %}<br />{{ participant.address }}{% endif %}
+  </div>
+</div>
+
+<!-- ── NDIS PLAN ──────────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">NDIS Plan</div>
+  {% if plan %}
+  <table class="kv-table">
+    <tr><td class="kv-label">Plan number</td><td class="kv-value">{{ plan.plan_number or "—" }}</td></tr>
+    <tr><td class="kv-label">Plan period</td><td class="kv-value">{{ plan.plan_start or "—" }} to {{ plan.plan_end or "—" }}</td></tr>
+    <tr><td class="kv-label">Total funding</td><td class="kv-value">{% if plan.total_funding %}${{ "%.2f"|format(plan.total_funding|float) }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="kv-label">Status</td><td class="kv-value">{{ plan.status or "—" }}</td></tr>
+    <tr><td class="kv-label">Plan management</td><td class="kv-value">{{ plan.plan_management_type or "—" }}</td></tr>
+  </table>
+  {% else %}
+  <div class="empty-note">No NDIS plan on file.</div>
+  {% endif %}
+</div>
+
+<!-- ── SUPPORT NEEDS ──────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">Support Needs</div>
+  <table class="kv-table">
+    <tr><td class="kv-label">Primary disability</td><td class="kv-value">{{ participant.primary_disability or "—" }}</td></tr>
+    <tr><td class="kv-label">Communication guidance</td><td class="kv-value">{{ participant.communication_guidance or "—" }}</td></tr>
+    <tr><td class="kv-label">Sensory preferences</td><td class="kv-value">{{ participant.sensory_preferences or "—" }}</td></tr>
+    <tr><td class="kv-label">Cultural preferences</td><td class="kv-value">{{ participant.cultural_preferences or "—" }}</td></tr>
+    <tr><td class="kv-label">Likes / dislikes</td><td class="kv-value">{{ participant.likes_dislikes or "—" }}</td></tr>
+    <tr><td class="kv-label">Preferred activities</td><td class="kv-value">{{ participant.preferred_activities or "—" }}</td></tr>
+    <tr><td class="kv-label">Behavioural notes</td><td class="kv-value">{{ participant.behavioural_notes or "—" }}</td></tr>
+    <tr><td class="kv-label">Current conditions</td><td class="kv-value">{{ participant.current_conditions or "—" }}</td></tr>
+  </table>
+</div>
+
+<!-- ── ALLERGIES ──────────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">Allergies</div>
+  {% if allergies %}
+  {% for a in allergies %}
+  <div class="allergy-row">
+    <div class="allergy-name">{{ a.allergen }}{% if a.severity %} — {{ a.severity }}{% endif %}</div>
+    {% if a.notes %}<div class="allergy-detail">{{ a.notes }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-note">No allergies recorded.</div>
+  {% endif %}
+</div>
+
+<!-- ── ACTIVE GOALS ───────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">Active Goals</div>
+  {% if goals %}
+  {% for g in goals %}
+  <div class="list-row">
+    <div class="list-row-title">{{ g.name or g.description or "Goal" }}</div>
+    <div class="list-row-meta">
+      {% if g.goal_area %}{{ g.goal_area }}{% endif %}{% if g.goal_area and g.support_category %} &middot; {% endif %}{% if g.support_category %}{{ g.support_category }}{% endif %}
+      {% if g.target_date %} &middot; Target: {{ g.target_date }}{% endif %}
+    </div>
+    {% if g.description and g.name %}<div class="list-row-body">{{ g.description }}</div>{% endif %}
+    {% if g.why_it_matters %}<div class="list-row-body">{{ g.why_it_matters }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-note">No active goals recorded.</div>
+  {% endif %}
+</div>
+
+<!-- ── CONTACTS ───────────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">Contacts</div>
+  <table class="kv-table">
+    <tr><td class="kv-label">Emergency contact</td><td class="kv-value">{{ participant.emergency_contact or "—" }}</td></tr>
+    <tr><td class="kv-label">Case manager</td><td class="kv-value">{{ participant.case_manager_name or "—" }}{% if participant.case_manager_phone %} &middot; {{ participant.case_manager_phone }}{% endif %}</td></tr>
+    <tr><td class="kv-label">GP</td><td class="kv-value">{{ participant.gp_name or "—" }}{% if participant.gp_practice %} &middot; {{ participant.gp_practice }}{% endif %}{% if participant.gp_phone %} &middot; {{ participant.gp_phone }}{% endif %}</td></tr>
+  </table>
+</div>
+
+<!-- ── DOCUMENT FOOTER ────────────────────────────────────────────────── -->
+<div class="doc-footer">
+  <table>
+    <tr>
+      <td class="footer-left">
+        <div class="footer-org">{{ org.provider_name }}{% if org.abn %} | ABN: {{ org.abn }}{% endif %}</div>
+        <div class="footer-legal">This document contains personal and health information. Handle in accordance with your organisation's privacy policy.</div>
+      </td>
+      <td class="footer-right">
+        <div class="footer-gen">Generated by CareCliQ</div>
+        <div class="footer-gen">{{ generated.generated_at }}</div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

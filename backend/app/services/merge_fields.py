@@ -7,8 +7,9 @@ small, explicit, namespaced registry so a future record-bound document type
 (a participant service agreement, an HR letter to a specific worker, ...)
 can declare which data it needs via organization_document_templates.merge_scope
 and have it resolved the same way — without adding another one-off dict
-builder each time. Nothing outside this pass's policy-document render path
-consumes 'participant'/'worker' yet; only 'org' is wired end-to-end.
+builder each time. 'participant'/'plan' now has a real caller —
+participant_profile_export_service.py's PDF export — 'worker' is still
+unconsumed scaffolding.
 
 Every loader filters by organization_id in the query itself — never trust a
 bare participant_id/worker_id without also checking it belongs to the
@@ -38,13 +39,22 @@ def _load_org(organization_id: str, _record_id: str | None) -> dict[str, Any]:
     return get_letterhead(organization_id)
 
 
+_PARTICIPANT_COLUMNS = (
+    "full_name, preferred_name, ndis_number, date_of_birth, email, phone, address, "
+    "primary_disability, case_manager_name, case_manager_phone, emergency_contact, "
+    "likes_dislikes, sensory_preferences, cultural_preferences, preferred_activities, "
+    "communication_guidance, behavioural_notes, current_conditions, "
+    "gp_name, gp_phone, gp_practice"
+)
+
+
 def _load_participant(organization_id: str, patient_id: str | None) -> dict[str, Any] | None:
     if not patient_id:
         return None
     resp = (
         get_supabase_admin()
         .table("patients")
-        .select("full_name, preferred_name, ndis_number, date_of_birth, email, phone, address, primary_disability")
+        .select(_PARTICIPANT_COLUMNS)
         .eq("id", patient_id)
         .eq("organization_id", organization_id)
         .limit(1)
@@ -114,6 +124,19 @@ MERGE_FIELD_SOURCES: dict[str, MergeFieldSource] = {
             "phone": "Phone",
             "address": "Address",
             "primary_disability": "Primary disability",
+            "case_manager_name": "Case manager name",
+            "case_manager_phone": "Case manager phone",
+            "emergency_contact": "Emergency contact",
+            "likes_dislikes": "Likes / dislikes",
+            "sensory_preferences": "Sensory preferences",
+            "cultural_preferences": "Cultural preferences",
+            "preferred_activities": "Preferred activities",
+            "communication_guidance": "Communication guidance",
+            "behavioural_notes": "Behavioural notes",
+            "current_conditions": "Current conditions",
+            "gp_name": "GP name",
+            "gp_phone": "GP phone",
+            "gp_practice": "GP practice",
         },
         loader=_load_participant,
     ),
