@@ -72,10 +72,10 @@ async def request_data_export(current_user: dict = Depends(get_current_user)):
 async def download_data_export(
     request_id: str,
     token: str = Query(..., min_length=8),
-    current_user: dict = Depends(get_current_user),
 ):
-    user_id = get_user_id(current_user)
-    data, filename = privacy_service.download_export(request_id, user_id, token)
+    # Opened straight from an emailed link with no session — the token
+    # itself (verified inside download_export) is the authorisation.
+    data, filename = privacy_service.download_export(request_id, token)
     return Response(
         content=data,
         media_type="application/json",

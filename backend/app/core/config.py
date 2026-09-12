@@ -58,6 +58,12 @@ class Settings(BaseSettings):
         "FRONTEND_BASE_URL",
         os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000")),
     )
+    # Public origin of this API itself — needed for links (e.g. the data-export
+    # download link) that point at a backend route rather than a frontend page.
+    backend_base_url: str = os.environ.get(
+        "BACKEND_BASE_URL",
+        os.environ.get("API_BASE_URL", "http://localhost:8000"),
+    )
     secret_key: str = os.environ.get("SESSION_SECRET", "changeme-in-production")
 
     @field_validator("secret_key")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import secrets
@@ -11,8 +12,9 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 
+from ..core.config import settings
 from .compliance_evidence_service import DEFAULT_RETENTION_DAYS, get_evidence_retention_days
-from .email_service import queue_email_job, send_email
+from .email_service import queue_email_job, send_worker_notification_email
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -251,24 +253,41 @@ def request_data_export(user_id: str, organization_id: Optional[str], email: str
                 "expires_at": expires_at.isoformat(),
                 "file_path": file_path,
             }).eq("id", request_id).execute()
-        except Exception:
-            pass
+        except Exception as exc:
+            # The download link is worthless without this row update — the
+            # token it carries would never match anything, so surface this
+            # loudly rather than let the export silently fail downstream.
+            logger.error("Could not mark export %s ready (download link will not work): %s", request_id, exc)
 
-    download_path = f"/api/worker/privacy/export/{request_id}/download?token={token}" if request_id else None
+    # Absolute link to a backend route, not a frontend page — must use the
+    # API's own public origin (there's no frontend screen that consumes this
+    # link), unlike every other emailed link in this codebase.
+    download_path = (
+        f"{settings.backend_base_url.rstrip('/')}/api/worker/privacy/export/{request_id}/download?token={token}"
+        if request_id
+        else None
+    )
 
     def _send_export_email() -> None:
         if not email:
+            logger.warning("No email on file for user %s; export %s ready but not emailed", user_id, request_id)
             return
-        body = (
-            "Your CareCliQ personal data export is ready.\n\n"
-            f"Download link (expires in 48 hours):\n{download_path or 'Available in the app under Your data & privacy.'}\n"
+        if not download_path:
+            logger.warning("No download link for export %s; skipping email", request_id)
+            return
+        send_worker_notification_email(
+            to_email=email,
+            subject="Your CareCliQ data export is ready",
+            title="Your data export is ready",
+            message="Your personal data export is ready to download. This link expires in 48 hours.",
+            action_url=download_path,
+            cta_label="Download your data",
         )
-        send_email(to_email=email, subject="Your CareCliQ data export is ready", text_body=body)
 
     try:
         queue_email_job(label="privacy_data_export", send=_send_export_email)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Could not queue data export email for user %s: %s", user_id, exc)
 
     return {
         "request_id": request_id,
@@ -281,9 +300,13 @@ def request_data_export(user_id: str, organization_id: Optional[str], email: str
 
 def download_export(
     request_id: str,
-    user_id: str,
     token: str,
 ) -> tuple[bytes, str]:
+    """Serves an export file from a link the worker opens straight out of
+    their email — there's no session to authenticate there, so the random,
+    single-purpose, expiring token itself (not a logged-in user) is what
+    proves the request is authorised, the same way a password-reset link
+    works. Looked up by request_id alone; the token match is the auth check."""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     try:
         resp = (
@@ -291,7 +314,6 @@ def download_export(
             .table("data_export_requests")
             .select("*")
             .eq("id", request_id)
-            .eq("user_id", user_id)
             .maybe_single()
             .execute()
         )
@@ -303,21 +325,20 @@ def download_export(
     if not resp or not resp.data:
         raise HTTPException(status_code=404, detail="Export not found")
     row = resp.data
-    if row.get("download_token_hash") != token_hash:
+    if not hmac.compare_digest(str(row.get("download_token_hash") or ""), token_hash):
         raise HTTPException(status_code=403, detail="Invalid download token")
     expires = row.get("expires_at")
     if expires and datetime.fromisoformat(str(expires).replace("Z", "+00:00")) < datetime.now(timezone.utc):
         raise HTTPException(status_code=410, detail="Download link has expired")
 
+    user_id = row.get("user_id")
     file_path = row.get("file_path")
     if file_path:
         try:
             from .object_storage import get_evidence_storage_backend
 
-            backend = get_evidence_storage_backend()
-            if hasattr(backend, "_bucket"):
-                data = backend._bucket.download(file_path)  # noqa: SLF001
-                return data, f"carecliq-export-{user_id[:8]}.json"
+            data = get_evidence_storage_backend().download(file_path)
+            return data, f"carecliq-export-{user_id[:8]}.json"
         except Exception as exc:
             logger.warning("export download from storage failed: %s", exc)
 

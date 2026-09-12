@@ -37,6 +37,8 @@ class EvidenceStorageBackend(Protocol):
 
     def signed_url(self, storage_path: str) -> Optional[str]: ...
 
+    def download(self, storage_path: str) -> bytes: ...
+
 
 def resolve_evidence_storage_provider() -> str:
     explicit = (settings.evidence_storage_provider or os.environ.get("EVIDENCE_STORAGE_PROVIDER", "")).strip().lower()
@@ -99,6 +101,9 @@ class SupabaseEvidenceStorage:
     def signed_url(self, storage_path: str) -> Optional[str]:
         return _supabase_signed_url(self._bucket, storage_path)
 
+    def download(self, storage_path: str) -> bytes:
+        return self._bucket.download(storage_path)
+
 
 class S3EvidenceStorage:
     provider = "s3"
@@ -150,6 +155,10 @@ class S3EvidenceStorage:
         except Exception as exc:
             logger.warning("S3 presigned URL failed for %s: %s", storage_path, exc)
             return None
+
+    def download(self, storage_path: str) -> bytes:
+        response = self._client.get_object(Bucket=self._bucket, Key=storage_path)
+        return response["Body"].read()
 
 
 class AzureEvidenceStorage:
@@ -230,6 +239,10 @@ class AzureEvidenceStorage:
         except Exception as exc:
             logger.warning("Azure SAS URL failed for %s: %s", storage_path, exc)
             return None
+
+    def download(self, storage_path: str) -> bytes:
+        blob = self._container_client.get_blob_client(storage_path)
+        return blob.download_blob().readall()
 
 
 _backends: dict[str, EvidenceStorageBackend] = {}

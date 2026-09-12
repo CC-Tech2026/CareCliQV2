@@ -656,6 +656,7 @@ def queue_worker_notification_email(
     title: str,
     message: str,
     action_url: str,
+    cta_label: str = "View in CareCliQ",
 ) -> dict[str, str]:
     return queue_email_job(
         label=f"worker-notification:{to_email}:{subject[:40]}",
@@ -665,6 +666,7 @@ def queue_worker_notification_email(
             title=title,
             message=message,
             action_url=action_url,
+            cta_label=cta_label,
         ),
     )
 
@@ -676,6 +678,7 @@ def _send_worker_notification_email_safe(
     title: str,
     message: str,
     action_url: str,
+    cta_label: str = "View in CareCliQ",
 ) -> None:
     try:
         send_worker_notification_email(
@@ -684,6 +687,7 @@ def _send_worker_notification_email_safe(
             title=title,
             message=message,
             action_url=action_url,
+            cta_label=cta_label,
         )
     except Exception as exc:
         logger.error("Worker notification email failed for %s: %s", to_email, exc)
@@ -697,8 +701,9 @@ def send_worker_notification_email(
     title: str,
     message: str,
     action_url: str,
+    cta_label: str = "View in CareCliQ",
 ) -> None:
-    text_body = f"{title}\n\n{message}\n\nOpen in CareCliQ:\n{action_url}\n"
+    text_body = f"{title}\n\n{message}\n\n{cta_label}:\n{action_url}\n"
     html_body = f"""\
 <!doctype html>
 <html>
@@ -708,8 +713,12 @@ def send_worker_notification_email(
         <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">{escape(title)}</h1>
         <p style="font-size:15px;line-height:1.6;margin:0 0 24px;white-space:pre-wrap;">{escape(message)}</p>
         <a href="{escape(action_url, quote=True)}" style="display:inline-block;background:#5533CC;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
-          View in CareCliQ
+          {escape(cta_label)}
         </a>
+        <p style="font-size:12px;line-height:1.6;color:#8A82A6;margin:20px 0 0;">
+          If the button doesn't work, copy this link into your browser:<br>
+          <span style="word-break:break-all;">{escape(action_url)}</span>
+        </p>
       </div>
     </div>
   </body>
