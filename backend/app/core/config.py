@@ -160,7 +160,15 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
 
     class Config:
-        env_file = str(_REPO_ROOT_ENV_FILE)
+        # Mirrors the `if "pytest" not in sys.modules` guard above. Without this,
+        # pydantic-settings' own env_file loading — a separate mechanism from the
+        # load_dotenv() call above, and NOT covered by that guard — would still
+        # pull real values out of .env for every field whose name matches its env
+        # var case-insensitively (supabase_url, supabase_service_role_key, etc.),
+        # silently defeating the "tests never see real credentials" intent above
+        # and letting unmocked test calls reach the live production Supabase
+        # project instead of failing safely against an empty default.
+        env_file = None if "pytest" in sys.modules else str(_REPO_ROOT_ENV_FILE)
         extra = "ignore"
 
 
