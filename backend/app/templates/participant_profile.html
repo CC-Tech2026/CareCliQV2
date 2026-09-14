@@ -35,10 +35,21 @@
       padding-top: 4px;
     }
 
+    /* Thin brand-accent rule at the very top edge of every page, so the
+       document reads as this org's letterhead rather than a bare export. */
+    #page-topbar {
+      position: fixed;
+      top: -8mm;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: {{ org.brand_accent_color }};
+    }
+
     /* ── Header ─────────────────────────────────────────────────────────── */
     .header-wrap {
       background: #f8f9fa;
-      border-bottom: 3px solid {{ org.brand_accent_color or '#4B3F91' }};
+      border-bottom: 3px solid {{ org.brand_accent_color }};
       padding: 12px 14px;
       margin-bottom: 14px;
       width: 100%;
@@ -47,7 +58,7 @@
     .hdr-left { vertical-align: top; width: 55%; padding-right: 14px; }
     .hdr-right { vertical-align: top; text-align: right; }
     .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
-    .provider-name { font-size: 12pt; font-weight: bold; color: {{ org.brand_accent_color or '#4B3F91' }}; margin-bottom: 2px; }
+    .provider-name { font-size: 12pt; font-weight: bold; color: {{ org.brand_accent_color }}; margin-bottom: 2px; }
     .provider-info { font-size: 8pt; color: #334155; line-height: 1.65; }
     .provider-info .muted { font-size: 7.5pt; color: #64748b; }
     .doc-type { font-size: 16pt; font-weight: bold; color: #1a1a1a; letter-spacing: 1px; }
@@ -56,7 +67,9 @@
 
     /* ── Participant strip ─────────────────────────────────────────────── */
     .participant-strip {
+      background: #f8f9fa;
       border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ org.brand_accent_color }};
       padding: 10px 14px;
       margin-bottom: 14px;
     }
@@ -69,7 +82,7 @@
       font-size: 8pt;
       font-weight: bold;
       color: #fff;
-      background: {{ org.brand_accent_color or '#4B3F91' }};
+      background: {{ org.brand_accent_color }};
       text-transform: uppercase;
       letter-spacing: 0.8px;
       padding: 5px 10px;
@@ -80,7 +93,13 @@
     .kv-label { color: #64748b; width: 32%; }
     .kv-value { color: #1a1a1a; font-weight: 600; }
 
-    .list-row { border: 1px solid #e2e8f0; padding: 8px 10px; margin-bottom: 6px; }
+    .list-row {
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ org.brand_accent_color }};
+      background: #fafafc;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+    }
     .list-row-title { font-size: 9pt; font-weight: bold; color: #1a1a1a; margin-bottom: 2px; }
     .list-row-meta { font-size: 7.5pt; color: #64748b; margin-bottom: 3px; }
     .list-row-body { font-size: 8.5pt; color: #334155; line-height: 1.6; }
@@ -102,6 +121,7 @@
 </head>
 <body>
 
+<div id="page-topbar"></div>
 <div id="page-footer">
   {{ org.provider_name }}{% if org.abn %} | ABN: {{ org.abn }}{% endif %} | Confidential | Page <pdf:pagenumber />
 </div>

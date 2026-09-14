@@ -16,12 +16,11 @@
     @page {
       size: A4;
       margin: 12mm 14mm 22mm 14mm;
-      /* WeasyPrint renders this via native CSS paged media; xhtml2pdf
-       * doesn't understand @page margin boxes and just ignores the block,
-       * which is fine — it gets its page number from <pdf:pagenumber/>
-       * below instead. Two different mechanisms because the two engines
-       * don't share one: WeasyPrint has no equivalent of <pdf:pagenumber/>,
-       * and xhtml2pdf has no support for CSS page counters. */
+      /* WeasyPrint renders this via native CSS paged media. xhtml2pdf's CSS
+       * parser can't handle @page margin boxes at all — it raises a
+       * TypeError rather than ignoring them — so html_pdf_render.py strips
+       * this block before handing HTML to the xhtml2pdf fallback, which
+       * gets its page number from <pdf:pagenumber/> below instead. */
       @bottom-right {
         content: "Page " counter(page) " of " counter(pages);
         font-size: 7pt;
@@ -42,10 +41,21 @@
       padding-top: 4px;
     }
 
+    /* Thin brand-accent rule at the very top edge of every page, so the
+       invoice reads as this provider's letterhead rather than a bare export. */
+    #page-topbar {
+      position: fixed;
+      top: -8mm;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: {{ brand_accent_color }};
+    }
+
     /* ── Header block ──────────────────────────────────────────────────────── */
     .header-wrap {
       background: #f8f9fa;
-      border-bottom: 3px solid {{ brand_accent_color or '#C27803' }};
+      border-bottom: 3px solid {{ brand_accent_color }};
       padding: 12px 14px;
       margin-bottom: 14px;
       width: 100%;
@@ -60,14 +70,14 @@
       color: #1a1a1a;
       letter-spacing: -0.5px;
     }
-    .logo-dot { color: {{ brand_accent_color or '#C27803' }}; }
+    .logo-dot { color: {{ brand_accent_color }}; }
     .logo-tagline { font-size: 7.5pt; color: #64748b; margin-top: 2px; }
     .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
 
     .provider-name {
       font-size: 10pt;
       font-weight: bold;
-      color: {{ brand_accent_color or '#C27803' }};
+      color: {{ brand_accent_color }};
       margin-top: 7px;
       margin-bottom: 2px;
     }
@@ -75,7 +85,7 @@
     .provider-info .muted { font-size: 7.5pt; color: #64748b; }
 
     .doc-type { font-size: 18pt; font-weight: bold; color: #1a1a1a; letter-spacing: 1px; }
-    .inv-number { font-size: 11pt; font-weight: bold; color: {{ brand_accent_color or '#C27803' }}; margin-top: 3px; }
+    .inv-number { font-size: 11pt; font-weight: bold; color: {{ brand_accent_color }}; margin-top: 3px; }
     .inv-meta { font-size: 8.5pt; color: #475569; line-height: 1.75; margin-top: 5px; }
     .inv-meta b { color: #1a1a1a; }
 
@@ -108,13 +118,14 @@
       vertical-align: top;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ brand_accent_color }};
     }
     .party-cell-left { border-right: none; }
 
     .party-label {
       font-size: 6.5pt;
       font-weight: bold;
-      color: {{ brand_accent_color or '#C27803' }};
+      color: {{ brand_accent_color }};
       text-transform: uppercase;
       letter-spacing: 1px;
       margin-bottom: 5px;
@@ -148,7 +159,7 @@
 
     /* ── Line items table ──────────────────────────────────────────────────── */
     .line-items { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    .line-items thead tr { background: {{ brand_accent_color or '#C27803' }}; }
+    .line-items thead tr { background: {{ brand_accent_color }}; }
     .line-items thead th {
       padding: 7px 8px;
       font-size: 8pt;
@@ -175,11 +186,16 @@
 
     /* ── Totals ────────────────────────────────────────────────────────────── */
     .totals-wrap { text-align: right; margin-bottom: 14px; }
-    .totals-table { width: 250px; border-collapse: collapse; margin-left: auto; }
+    .totals-table {
+      width: 250px;
+      border-collapse: collapse;
+      margin-left: auto;
+      border-top: 2px solid {{ brand_accent_color }};
+    }
     .totals-line td { padding: 5px 8px; font-size: 8.5pt; border-bottom: 1px solid #e2e8f0; }
     .totals-label { text-align: left; color: #64748b; }
     .totals-value { text-align: right; font-weight: 600; color: #1a1a1a; }
-    .totals-grand { background: {{ brand_accent_color or '#C27803' }}; }
+    .totals-grand { background: {{ brand_accent_color }}; }
     .totals-grand td {
       padding: 8px 10px;
       font-size: 10pt;
@@ -197,6 +213,7 @@
       vertical-align: top;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ brand_accent_color }};
       border-right: none;
     }
     .payment-cell-plan {
@@ -204,6 +221,7 @@
       vertical-align: top;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ brand_accent_color }};
     }
     .payment-section-label {
       font-size: 6.5pt;
@@ -244,7 +262,7 @@
     .note-label {
       font-size: 7pt;
       font-weight: bold;
-      color: {{ brand_accent_color or '#C27803' }};
+      color: {{ brand_accent_color }};
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 4px;
@@ -265,6 +283,7 @@
 </head>
 <body>
 
+<div id="page-topbar"></div>
 <!-- Running page footer (repeats every page in xhtml2pdf) -->
 <div id="page-footer">
   {{ provider_name }}{% if provider_abn %} | ABN: {{ provider_abn }}{% endif %} | Page <pdf:pagenumber />
@@ -448,7 +467,7 @@
       <div class="plan-instruction">
         Please forward this invoice to {{ plan_manager_name or 'your plan manager' }}{% if plan_manager_email %} at {{ plan_manager_email }}{% endif %}.
         Payment is expected within 5 business days of their receipt.
-        Do not pay directly &mdash; your plan manager will process this claim.
+        Do not pay directly: your plan manager will process this claim.
       </div>
       {% elif plan_management_code == 'NDIA' %}
       <div class="plan-instruction">Submit this invoice claim via the PRODA / myplace provider portal. Quote the invoice number as your reference.</div>
