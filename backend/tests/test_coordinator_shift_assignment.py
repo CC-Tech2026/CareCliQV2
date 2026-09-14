@@ -311,11 +311,14 @@ class TestAssignShiftCredentialValidation:
         
         app.dependency_overrides.clear()
 
+    @patch("backend.app.services.induction_service.is_induction_incomplete", return_value=False)
+    @patch("backend.app.services.worker_training_service.is_training_overdue", return_value=False)
     @patch("backend.app.api.coordinator.get_supabase_admin")
     @patch("backend.app.api.coordinator.notify_shift_change", new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_assign_shift_succeeds_with_valid_credentials(
-        self, mock_notify, mock_supabase, test_client, coordinator_user
+        self, mock_notify, mock_supabase, _mock_training_overdue, _mock_induction_incomplete,
+        test_client, coordinator_user
     ):
         """Shift assignment should succeed when worker has valid credentials."""
         mock_client = MagicMock()
@@ -557,11 +560,14 @@ class TestAssignShiftCredentialValidation:
 class TestAssignShiftDurationCalculation:
     """Test duration calculation from start/end times."""
 
+    @patch("backend.app.services.induction_service.is_induction_incomplete", return_value=False)
+    @patch("backend.app.services.worker_training_service.is_training_overdue", return_value=False)
     @patch("backend.app.api.coordinator.get_supabase_admin")
     @patch("backend.app.api.coordinator.notify_shift_change", new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_assign_shift_calculates_duration(
-        self, mock_notify, mock_supabase, test_client, coordinator_user
+        self, mock_notify, mock_supabase, _mock_training_overdue, _mock_induction_incomplete,
+        test_client, coordinator_user
     ):
         """Duration should be calculated from start/end times if not provided."""
         mock_client = MagicMock()

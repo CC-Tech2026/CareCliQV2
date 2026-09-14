@@ -66,6 +66,7 @@ def test_ensure_briefing_completed_skips_when_schema_missing(_mock_complete, _mo
     briefing_service.ensure_briefing_completed(_sample_shift(), "worker-1")
 
 
+@patch("backend.app.services.briefing_service._get_briefing_ack", return_value=None)
 @patch("backend.app.services.briefing_service._get_worker_shift")
 @patch("backend.app.services.briefing_service._fetch_patient_briefing_fields")
 @patch("backend.app.services.briefing_service.list_participant_briefing_alerts", return_value=[])
@@ -81,6 +82,7 @@ def test_get_briefing_payload(
     _mock_alerts,
     mock_patient,
     mock_shift,
+    _mock_ack,
 ):
     mock_shift.return_value = _sample_shift()
     mock_patient.return_value = {

@@ -727,14 +727,23 @@ def test_get_support_instructions_for_worker():
             "backend.app.services.shift_service._fetch_participant_context",
             return_value={},
         ):
-            payload = shift_service.get_support_instructions_for_worker(
-                "shift-1", "worker-1", "org-1"
-            )
+            with patch(
+                "backend.app.services.medication_service.list_medications",
+                return_value=[],
+            ), patch(
+                "backend.app.services.medication_service.list_administrations_for_shift",
+                return_value=[],
+            ):
+                payload = shift_service.get_support_instructions_for_worker(
+                    "shift-1", "worker-1", "org-1"
+                )
     assert payload is not None
     assert payload["shift_id"] == "shift-1"
     assert payload["support_instructions"][0]["category"] == "Transfers"
 
 
+@patch("backend.app.services.medication_service.list_administrations_for_shift", return_value=[])
+@patch("backend.app.services.medication_service.list_medications")
 @patch(
     "backend.app.services.safety_protocol_service.build_worker_safety_status",
     return_value=_MOCK_SAFETY_CLEAR,
@@ -743,7 +752,7 @@ def test_get_support_instructions_for_worker():
 @patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_get_shift_detail_rebuilds_support_instructions(
-    mock_get, mock_session, mock_ctx, _mock_safety,
+    mock_get, mock_session, mock_ctx, _mock_safety, mock_meds, _mock_admins,
 ):
     shift = _sample_shift(
         visit_notes="Prompt medications at 9am.",
@@ -755,6 +764,18 @@ def test_get_shift_detail_rebuilds_support_instructions(
         "preferences": {"behaviour_support": "Offer breaks when overwhelmed."},
         "profile": {},
     }
+    # Live medication resolution (never trust a snapshot — see
+    # shift_service._live_medication_support_section) always overrides any
+    # legacy text-detected "Medication Prompts" mention, so this needs a real
+    # active scheduled medication for that category to still appear.
+    mock_meds.return_value = [{
+        "id": "med-1",
+        "name": "Metformin",
+        "strength": "500mg",
+        "frequency_type": "scheduled",
+        "scheduled_times": [datetime.now(timezone.utc).strftime("%H:%M")],
+        "status": "active",
+    }]
     detail = shift_service.get_shift_detail_for_worker("shift-1", "worker-1", "org-1")
     assert detail is not None
     categories = [section["category"] for section in detail["support_instructions"]]
