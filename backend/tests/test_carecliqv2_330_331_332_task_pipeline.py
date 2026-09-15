@@ -192,6 +192,7 @@ def test_upsert_task_completions_sets_verified_status():
         billed_amount=100.0,
         actual_minutes=120,
         verified_at="2026-07-01T12:00:00+00:00",
+        completion_date="2026-07-01",
     )
 
     assert len(rows) == 2

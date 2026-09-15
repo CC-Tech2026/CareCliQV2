@@ -9,12 +9,13 @@ per completed shift, sourced from the real NDIS price catalogue.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from ..core.timezone import parse_shift_datetime
 from . import ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
+from .schads_engine import _day_type, _get_public_holidays
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 
@@ -121,6 +122,7 @@ def _upsert_task_completions_for_verified_shift(
     billed_amount: float,
     actual_minutes: float,
     verified_at: str,
+    completion_date: str,
 ) -> list[dict[str, Any]]:
     shift_task_result = (
         supabase.table("shift_tasks")
@@ -164,7 +166,6 @@ def _upsert_task_completions_for_verified_shift(
     task_count = len(verified_task_ids)
     apportioned_minutes = max(1, int(round(actual_minutes / task_count))) if task_count else int(round(actual_minutes))
     apportioned_amount = round(billed_amount / task_count, 2) if task_count else round(billed_amount, 2)
-    completion_date = _completion_date_for_shift(shift)
 
     payload_template = {
         "shift_id": str(shift.get("id")),
@@ -486,6 +487,8 @@ async def verify_shift(
     if shift.get("status") != "completed":
         raise ValueError("Only completed shifts can be verified.")
 
+    completion_date = _completion_date_for_shift(shift)
+
     existing = (
         supabase.table("shift_verifications")
         .select("id")
@@ -503,9 +506,33 @@ async def verify_shift(
     if not plan:
         raise ValueError("Participant has no active NDIS plan — cannot deduct budget.")
 
-    price = await ndis_pricing_service.resolve_price(price_item_code, org_id)
+    # location_type intentionally omitted (defaults to "national") — this org
+    # has no remote/very-remote participants; revisit if that ever changes.
+    price = await ndis_pricing_service.resolve_price(
+        price_item_code, org_id, as_of_date=completion_date,
+    )
     if not price:
         raise ValueError(f"Price item '{price_item_code}' could not be resolved.")
+
+    day_type_warning: Optional[str] = None
+    try:
+        # schads_engine._day_type returns lowercase snake_case
+        # ("weekday"/"saturday"/"sunday"/"public_holiday"); ndis_price_items.day_type
+        # is free-text from the imported Price Guide (e.g. "Weekday", "Public Holiday")
+        # — normalise both before comparing so casing/spacing never triggers a
+        # false-positive warning.
+        actual_day_type = _day_type(date.fromisoformat(completion_date), _get_public_holidays(supabase))
+        expected_day_type_raw = price.get("day_type")
+        expected_day_type = (
+            str(expected_day_type_raw).strip().lower().replace(" ", "_") if expected_day_type_raw else None
+        )
+        if expected_day_type and actual_day_type and expected_day_type != actual_day_type:
+            day_type_warning = (
+                f"Selected item '{price_item_code}' is priced as {expected_day_type_raw}, "
+                f"but the shift's service date ({completion_date}) is a {actual_day_type.replace('_', ' ')}."
+            )
+    except Exception:
+        logger.warning("shift_verification: day-type check failed for shift %s", shift_id, exc_info=True)
 
     category = resolve_price_item_budget_category(price)
     if not category:
@@ -514,10 +541,10 @@ async def verify_shift(
             f"(support_purpose and item code prefix both unrecognised) — cannot deduct budget."
         )
 
-    # ndis_price_items prices (and resolve_price's effective_price) are stored
-    # in cents — every other consumer (billing.tsx, NdisPriceEditor.tsx)
-    # divides by 100 at point of use; plan_budgets amounts are plain dollars.
-    hourly_rate = float(price.get("effective_price") or 0) / 100
+    # ndis_price_items prices (and resolve_price's effective_price) are plain
+    # dollar amounts — same convention as billing.tsx, NdisPriceEditor.tsx and
+    # billing_service.py; plan_budgets amounts are also plain dollars.
+    hourly_rate = float(price.get("effective_price") or 0)
     actual_minutes = _actual_minutes(shift)
     if actual_minutes is None or actual_minutes <= 0:
         raise ValueError(
@@ -590,9 +617,10 @@ async def verify_shift(
         billed_amount=billed_amount,
         actual_minutes=actual_minutes,
         verified_at=now,
+        completion_date=completion_date,
     )
 
-    return {
+    result: dict[str, Any] = {
         "verification": verification,
         "checks": checks,
         "billed_amount": billed_amount,
@@ -601,3 +629,6 @@ async def verify_shift(
         "new_used_amount": new_used,
         "task_completions": task_completions,
     }
+    if day_type_warning:
+        result["day_type_warning"] = day_type_warning
+    return result

@@ -42,6 +42,8 @@ export type UserProfile = {
   preferred_contact_method?: PreferredContactMethod | null;
   pending_email?: string | null;
   joined_at?: string | null;
+  profile_summary?: string | null;
+  profile_experience_years?: number | null;
 };
 
 export async function getMe(): Promise<UserProfile> {

@@ -860,7 +860,7 @@ function DroppableColumn<T>({
   return (
     <div
       ref={setNodeRef}
-      className="flex min-h-[410px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
+      className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
       style={{
         background: active ? "var(--cc-plum-soft)" : `${color}12`,
         opacity: disabled ? 0.5 : 1,
@@ -900,7 +900,7 @@ function StaticColumn<T>({
   const clampedPage = Math.min(page, totalPages - 1);
   const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
-    <div className="flex min-h-[410px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
+    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
       <ColumnHeading label={label} count={items.length} color={color} onOpenAll={onOpenAll} openAllTitle={openAllTitle} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
@@ -1900,7 +1900,12 @@ export default function StaffOnboardingBoard() {
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => setOverStage((e.over?.id as ApplicantStage) ?? null)}
               >
-                <div className="flex gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory">
+                {/* items-start below lg: so an empty column isn't stretched to
+                    match a sibling full of cards — on a swipeable single-
+                    column-at-a-time mobile view that reads as one giant blank
+                    box. Desktop keeps the default stretch for uniform column
+                    heights across the visible row. */}
+                <div className="flex items-start gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory lg:items-stretch">
                   <DroppableColumn
                     id="interview"
                     label="Interview"

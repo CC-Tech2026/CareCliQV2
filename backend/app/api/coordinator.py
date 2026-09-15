@@ -89,9 +89,10 @@ def _require_coordinator(user: dict) -> str:
 # Same org_id-or-403 shape as _require_coordinator, but for the resources the
 # managing director should also read AND act on: worker-profile tabs (staff
 # detail, availability, skills, training assignment/review, onboarding
-# documents), NDIS goals/tasks, and pay/SCHADS oversight (classification,
-# shift pay preview, pay ledger — the MD is accountable for payroll too).
-# Rostering, shift assignment, messaging, and account-management actions stay
+# documents), NDIS goals/tasks, pay/SCHADS oversight (classification, shift
+# pay preview, pay ledger — the MD is accountable for payroll too), and
+# shift assign/reassign/unassign from the Master Schedule view. Rostering
+# creation, messaging, and account-management actions stay
 # _require_coordinator-only — those remain Coordinator's own operational
 # domain, not MD oversight.
 def _require_org_read(user: dict) -> str:
@@ -234,7 +235,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, onboarding_completed, "
+                    "preferred_contact_method, phone, address, onboarding_completed, "
                     "profile_summary, profile_experience_years, coordinator_id, "
                     "classification_id, employment_type"
                 )
@@ -269,6 +270,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "employee_id": row.get("employee_id"),
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
+            "address": profile.get("address"),
             "onboarding_completed": profile.get("onboarding_completed"),
             "profile_summary": profile.get("profile_summary"),
             "profile_experience_years": profile.get("profile_experience_years"),
@@ -305,7 +307,7 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed, coordinator_id, "
+                "preferred_contact_method, phone, address, onboarding_completed, coordinator_id, "
                 "classification_id, employment_type"
             )
             .eq("organization_id", org_id)
@@ -334,6 +336,8 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "is_active": bool(row.get("is_active")),
             "joined_at": None,
             "last_login": row.get("last_login"),
+            "phone": row.get("phone"),
+            "address": row.get("address"),
             "onboarding_completed": row.get("onboarding_completed"),
             "profile_summary": row.get("profile_summary"),
             "profile_experience_years": row.get("profile_experience_years"),
@@ -2844,7 +2848,7 @@ async def get_worker_conflicts(
     Also checks skill matching if participant_id is provided.
     Returns availability_status: 'available' | 'warning' | 'unavailable'.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     s_dt = _parse_dt(shift_start)
@@ -2984,7 +2988,7 @@ async def assign_existing_shift(
     Returns 409 with conflict list if conflicts exist and confirm_conflicts=False.
     Returns 200 with updated shift + any conflicts on success.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     # Fetch shift
@@ -3128,7 +3132,7 @@ async def unassign_existing_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Remove the assigned worker from a shift, returning it to 'unassigned' status."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
@@ -3379,19 +3383,22 @@ async def reassign_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Reassign a shift to a different worker. Same conflict checks as assign."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id") or "") != org_id:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # Reuse the assign endpoint logic
-    class _Body(BaseModel):
-        worker_id: str = body.new_worker_id
-        confirm_conflicts: bool = body.confirm_conflicts
-
-    return await assign_existing_shift(shift_id, _Body(), current_user)
+    # Reuse the assign endpoint logic. Built from the real ShiftAssignBody
+    # (not an ad-hoc stand-in) so it always carries every field
+    # assign_existing_shift reads — a hand-rolled subset here previously
+    # missed is_shadow_shift/shadow_of_worker_id and 500'd on every call.
+    return await assign_existing_shift(
+        shift_id,
+        ShiftAssignBody(worker_id=body.new_worker_id, confirm_conflicts=body.confirm_conflicts),
+        current_user,
+    )
 
 
 # ── POST /shifts/bulk ─────────────────────────────────────────────────────────
