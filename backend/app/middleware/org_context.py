@@ -3,6 +3,10 @@
 Decodes the Bearer JWT on every request and attaches
 request.state.organisation_id for use in route handlers and services.
 
+Also binds the caller's branch timezone for the request (core.timezone.
+request_timezone) so "today", day boundaries and displayed times follow
+the office the user works from — see 198_branches.sql.
+
 For requests that reach a *protected* path without a valid org claim this
 middleware returns HTTP 403 immediately, so no handler code runs.
 
@@ -11,8 +15,10 @@ Public paths (auth, health, invite validation) are exempt.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Set
+from typing import Callable, Optional, Set
+from zoneinfo import ZoneInfo
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -20,6 +26,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.types import ASGIApp
 
 from ..core.security import decode_access_token
+from ..core.timezone import reset_request_timezone, set_request_timezone, user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +81,17 @@ class OrgContextMiddleware(BaseHTTPMiddleware):
     always exempt.
     """
 
-    def __init__(self, app: ASGIApp, _decode_fn=None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        _decode_fn=None,
+        _timezone_fn: Optional[Callable[[str, str], ZoneInfo]] = None,
+    ) -> None:
         super().__init__(app)
-        # _decode_fn: injectable for tests; production always uses the real decoder.
+        # _decode_fn / _timezone_fn: injectable for tests; production always
+        # uses the real decoder and the cached branch lookup.
         self._decode_fn = _decode_fn if _decode_fn is not None else decode_access_token
+        self._timezone_fn = _timezone_fn if _timezone_fn is not None else user_timezone
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
@@ -109,16 +123,36 @@ class OrgContextMiddleware(BaseHTTPMiddleware):
 
         if org_id:
             request.state.organisation_id = str(org_id)
-        else:
-            # Authenticated user with no org — reject with 403.
-            logger.warning(
-                "CCQ-104: request to %s rejected — JWT has no organisation_id claim (sub=%s)",
-                path,
-                payload.get("sub", "unknown"),
-            )
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "No organisation context — complete onboarding or contact your administrator."},
-            )
+            return await self._call_with_timezone(request, call_next, str(org_id), payload.get("sub"))
 
-        return await call_next(request)
+        # Authenticated user with no org — reject with 403.
+        logger.warning(
+            "CCQ-104: request to %s rejected — JWT has no organisation_id claim (sub=%s)",
+            path,
+            payload.get("sub", "unknown"),
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "No organisation context — complete onboarding or contact your administrator."},
+        )
+
+    async def _call_with_timezone(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
+        org_id: str,
+        user_id: Optional[str],
+    ) -> Response:
+        """Run the request with the caller's branch zone bound in context.
+
+        The lookup is cached per user (core.timezone), so the thread hop is
+        only paid on a cache miss. Any failure falls back to APP_TIMEZONE
+        inside user_timezone — a timezone hiccup must never fail a request.
+        """
+        tz = await asyncio.to_thread(self._timezone_fn, str(user_id or ""), org_id)
+        request.state.timezone = tz
+        token = set_request_timezone(tz)
+        try:
+            return await call_next(request)
+        finally:
+            reset_request_timezone(token)
