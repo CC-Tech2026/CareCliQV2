@@ -2060,7 +2060,7 @@ export default function StaffOnboardingBoard() {
       </Sheet>
 
       <Sheet open={!!selectedWorkerId} onOpenChange={(open) => { if (!open) { setSelectedWorkerId(null); setWorkerFullScreen(false); } }}>
-        <SheetContent side="right" className={`w-full overflow-y-auto p-6 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
+        <SheetContent side="right" className={`w-full overflow-y-auto p-4 pt-12 sm:p-6 sm:pt-12 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
           <SheetHeader className="sr-only">
             <SheetTitle>{selectedWorkerStats ? `${selectedWorkerStats.full_name} · staff profile` : "Staff profile"}</SheetTitle>
           </SheetHeader>

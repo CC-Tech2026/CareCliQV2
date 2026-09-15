@@ -240,7 +240,8 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                     "date_of_birth, onboarding_completed, profile_summary, profile_experience_years, "
                     "coordinator_id, classification_id, employment_type, discipline, "
                     "ahpra_registration_number, professional_indemnity_confirmed, business_name, "
-                    "profile_photo_path"
+                    "profile_photo_path, preferred_language, account_type, profile_completed, "
+                    "role_specific_profile_completed, matching_opt_in"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -294,6 +295,11 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "profile_photo_url": signed_storage_url(
                 PROFILE_PHOTOS_BUCKET, profile.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
             ),
+            "preferred_language": profile.get("preferred_language"),
+            "account_type": profile.get("account_type"),
+            "profile_completed": profile.get("profile_completed"),
+            "role_specific_profile_completed": profile.get("role_specific_profile_completed"),
+            "matching_opt_in": profile.get("matching_opt_in"),
         })
     return output
 
@@ -326,7 +332,9 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
                 "preferred_contact_method, phone, address, suburb, emergency_contact, date_of_birth, "
                 "onboarding_completed, profile_summary, profile_experience_years, coordinator_id, "
                 "classification_id, employment_type, discipline, ahpra_registration_number, "
-                "professional_indemnity_confirmed, business_name, profile_photo_path"
+                "professional_indemnity_confirmed, business_name, profile_photo_path, "
+                "preferred_language, account_type, profile_completed, "
+                "role_specific_profile_completed, matching_opt_in"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -373,6 +381,11 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "profile_photo_url": signed_storage_url(
                 PROFILE_PHOTOS_BUCKET, row.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
             ),
+            "preferred_language": row.get("preferred_language"),
+            "account_type": row.get("account_type"),
+            "profile_completed": row.get("profile_completed"),
+            "role_specific_profile_completed": row.get("role_specific_profile_completed"),
+            "matching_opt_in": row.get("matching_opt_in"),
         })
     return output
 

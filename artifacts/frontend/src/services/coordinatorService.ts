@@ -32,6 +32,11 @@ export type TeamMember = {
   professional_indemnity_confirmed?: boolean | null;
   business_name?: string | null;
   profile_photo_url?: string | null;
+  preferred_language?: string | null;
+  account_type?: "independent_worker" | "small_provider" | null;
+  profile_completed?: boolean | null;
+  role_specific_profile_completed?: boolean | null;
+  matching_opt_in?: boolean | null;
 };
 
 export type WorkerStats = TeamMember & {

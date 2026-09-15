@@ -520,6 +520,7 @@ export default function Team() {
           <IndexHeader title={translate("team.title")} />
           <WorkerDetail
             worker={detailWorker}
+            scrollContext="page"
             onBack={() => {
               setDetailWorkerId(null);
               setDetailInitialTab(undefined);
