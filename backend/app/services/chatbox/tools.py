@@ -17,11 +17,12 @@ version exists anywhere in the codebase.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from langchain_core.tools import tool
 
+from ...core.timezone import APP_TIMEZONE, app_day_bounds_utc, app_today
 from ...core.access import (
     get_coordinator_team_ids,
     get_user_id,
@@ -43,13 +44,11 @@ from .db import quill_client
 from ...api.coordinator import _execute_shift_query_with_legacy_fallback
 from ...api.dashboards import (
     _average_score,
-    _date_part,
     _filter_participants_by_worker_ids,
     _filter_sessions_by_worker_ids,
     _goal_achievement_rate,
     _has_rp_flag,
     _team_members,
-    _today_iso,
 )
 
 logger = logging.getLogger(__name__)
@@ -225,10 +224,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
-        current_month_prefix = _today_iso()[:7]
+        current_month_prefix = app_today().isoformat()[:7]
         rp_flag_count = sum(
             1 for s in sessions
-            if _has_rp_flag(s) and _date_part(s.get("session_date")).startswith(current_month_prefix)
+            if _has_rp_flag(s) and _session_local_date(s.get("session_date")).startswith(current_month_prefix)
         )
         return {"scope": scope, "rp_flag_count_this_month": rp_flag_count}
 
@@ -288,9 +287,18 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
                 "participant_name": participant_names.get(str(participant_id)) or "Unknown participant",
                 "scheduled_start": row.get("scheduled_start"),
                 "scheduled_end": row.get("scheduled_end"),
+                # Local wall-clock strings for the model's prose — the raw
+                # values above are UTC and read as the wrong time of day.
+                "local_start": _format_local(row.get("scheduled_start")),
+                "local_end": _format_local(row.get("scheduled_end")),
             })
 
-        return {"scope": "organisation-wide", "on_shift_now": on_shift, "count": len(on_shift)}
+        return {
+            "scope": "organisation-wide",
+            "timezone": str(APP_TIMEZONE),
+            "on_shift_now": on_shift,
+            "count": len(on_shift),
+        }
 
     @tool
     async def get_goal_achievement_rate() -> dict:
@@ -435,10 +443,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not participant:
             return {"error": f"No participant matching '{participant_name}' found."}
 
+        bounds = _local_date_range_utc(shift_date, shift_date)
+        if bounds is None:
+            return {"error": f"'{shift_date}' is not a valid date — use YYYY-MM-DD."}
         try:
             rows = _execute_shift_query_with_legacy_fallback(
                 supabase=supabase, org_id=org_id, limit=20,
-                start_date=shift_date, end_date=f"{shift_date}T23:59:59",
+                start_date=bounds[0], end_date=bounds[1],
                 worker_id=None, status_filter="completed",
             )
         except Exception:
@@ -498,10 +509,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not participant:
             return {"error": f"No participant matching '{participant_name}' found."}
 
+        bounds = _local_date_range_utc(date_from, date_to)
+        if bounds is None:
+            return {"error": f"'{date_from}' to '{date_to}' is not a valid date range — use YYYY-MM-DD."}
         try:
             rows = _execute_shift_query_with_legacy_fallback(
                 supabase=supabase, org_id=org_id, limit=200,
-                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                start_date=bounds[0], end_date=bounds[1],
                 worker_id=None, status_filter="completed",
             )
         except Exception:
@@ -546,10 +560,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not worker:
             return {"error": f"No worker matching '{worker_name}' found."}
 
+        bounds = _local_date_range_utc(date_from, date_to)
+        if bounds is None:
+            return {"error": f"'{date_from}' to '{date_to}' is not a valid date range — use YYYY-MM-DD."}
         try:
             rows = _execute_shift_query_with_legacy_fallback(
                 supabase=supabase, org_id=org_id, limit=200,
-                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                start_date=bounds[0], end_date=bounds[1],
                 worker_id=str(worker.get("id")), status_filter="completed",
             )
         except Exception:
@@ -587,10 +604,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         else:
             return {"error": "This tool is only available to coordinators and managing directors."}
 
+        bounds = _local_date_range_utc(date_from, date_to)
+        if bounds is None:
+            return {"error": f"'{date_from}' to '{date_to}' is not a valid date range — use YYYY-MM-DD."}
         try:
             rows = _execute_shift_query_with_legacy_fallback(
                 supabase=supabase, org_id=org_id, limit=200,
-                start_date=date_from, end_date=f"{date_to}T23:59:59",
+                start_date=bounds[0], end_date=bounds[1],
                 worker_id=None, status_filter="completed",
             )
         except Exception:
@@ -627,10 +647,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
-        today = _today_iso()
-        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
-        todays_sessions = [s for s in sessions if _date_part(s.get("session_date")) == today]
-        sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
+        today = app_today().isoformat()
+        week_ago = (app_today() - timedelta(days=7)).isoformat()
+        todays_sessions = [s for s in sessions if _session_local_date(s.get("session_date")) == today]
+        sessions_this_week = [s for s in sessions if _session_local_date(s.get("session_date")) >= week_ago]
 
         return {
             "scope": scope,
@@ -692,7 +712,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             }
             for m in (revenue.get("monthly") or [])
         ]
-        current_month_key = _today_iso()[:7]
+        current_month_key = app_today().isoformat()[:7]
         current_month = next((m for m in monthly_dollars if m["month"] == current_month_key), {
             "month": current_month_key, "billed_aud": 0.0, "paid_aud": 0.0, "outstanding_aud": 0.0, "invoice_count": 0,
         })
@@ -800,3 +820,47 @@ def _parse_iso(value) -> datetime | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _format_local(value) -> str | None:
+    """'2026-08-24T07:30:00+00:00' -> '24 Aug 2026, 05:00 PM' in APP_TIMEZONE."""
+    dt = _parse_iso(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(APP_TIMEZONE).strftime("%d %b %Y, %I:%M %p")
+
+
+def _session_local_date(value) -> str:
+    """'2026-08-24T22:30:00+00:00' -> '2026-08-25' (the Adelaide calendar day).
+
+    session_date is a timestamptz returned as UTC. Slicing the first ten
+    characters (what the dashboards do) gives the UTC day, so a session
+    logged before ~9:30 AM local was counted under the previous day — and
+    at month boundaries, the previous month. Falls back to the raw prefix
+    for anything unparseable so date-only strings still work.
+    """
+    dt = _parse_iso(value)
+    if not dt:
+        return str(value or "")[:10]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(APP_TIMEZONE).date().isoformat()
+
+
+def _local_date_range_utc(date_from: str, date_to: str) -> tuple[str, str] | None:
+    """Inclusive local calendar days -> UTC ISO bounds for scheduled_start.
+
+    Shifts are stored in UTC, but users ask about Australian calendar days.
+    Comparing 'YYYY-MM-DD' strings straight against the UTC column missed
+    any shift before ~10:30 AM local (it's still the previous UTC day).
+    Returns None for anything that isn't YYYY-MM-DD.
+    """
+    try:
+        start, _ = app_day_bounds_utc(date.fromisoformat(str(date_from).strip()))
+        _, end_exclusive = app_day_bounds_utc(date.fromisoformat(str(date_to).strip()))
+    except ValueError:
+        return None
+    end = (datetime.fromisoformat(end_exclusive) - timedelta(seconds=1)).isoformat()
+    return start, end

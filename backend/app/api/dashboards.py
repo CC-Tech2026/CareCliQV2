@@ -16,6 +16,7 @@ from ..core.access import (
     is_support_worker,
 )
 from ..core.security import get_current_user
+from ..core.timezone import app_today, shift_local_date
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..services import billing_service, incident_service, participant_service, session_service
 from ..services.dashboard_landing_service import build_worker_landing_dashboard
@@ -28,14 +29,22 @@ router = APIRouter(prefix="/dashboard", tags=["dashboards"])
 
 
 def _today_iso() -> str:
-    return date.today().isoformat()
+    """Today's date in APP_TIMEZONE, not the server machine's local date."""
+    return app_today().isoformat()
 
 
 def _date_part(value: Any) -> str:
+    """Calendar day (YYYY-MM-DD) of a timestamp in APP_TIMEZONE.
+
+    session_date / incident_date are timestamptz and come back as UTC.
+    Slicing the first ten characters gave the UTC day, so anything logged
+    before ~9:30 AM Adelaide was counted under the previous day (and at
+    month boundaries, the previous month). Date-only strings pass through.
+    """
     if not value:
         return ""
-    text = str(value)
-    return text[:10]
+    local = shift_local_date(str(value))
+    return local.isoformat() if local else str(value)[:10]
 
 
 def _score_status(score: Any) -> str:
@@ -368,8 +377,8 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
         if participant.get("id")
     }
     today = _today_iso()
-    week_ago = (date.today() - timedelta(days=7)).isoformat()
-    month_start = date.today().replace(day=1).isoformat()
+    week_ago = (app_today() - timedelta(days=7)).isoformat()
+    month_start = app_today().replace(day=1).isoformat()
     todays_sessions = [s for s in sessions if _date_part(s.get("session_date")) == today]
     sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
     scored_today = [s for s in todays_sessions if s.get("compliance_score") is not None]
@@ -515,7 +524,7 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
 
     # Sessions this week
     from datetime import timedelta
-    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    week_ago = (app_today() - timedelta(days=7)).isoformat()
     sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
 
     # Compliance
@@ -726,8 +735,7 @@ async def compliance_trend(current_user: dict = Depends(get_current_user)):
 
     sessions = await session_service.get_sessions_for_dashboard(800, current_user)
 
-    from datetime import timedelta
-    cutoff = (date.today() - timedelta(days=90)).isoformat()
+    cutoff = (app_today() - timedelta(days=90)).isoformat()
     recent = [
         s for s in sessions
         if s.get("session_date") and _date_part(s.get("session_date")) >= cutoff
