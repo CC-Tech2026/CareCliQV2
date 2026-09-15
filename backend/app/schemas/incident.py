@@ -44,10 +44,13 @@ def worker_status_label(status: str) -> str:
 
 INCIDENT_TYPES = [
     "injury",
+    "injury_worker",
     "medication_error",
     "behaviour_of_concern",
     "property_damage",
     "abuse_neglect",
+    "assault_unlawful_contact",
+    "unexpected_death",
     "restrictive_practice",
     "environmental",
     "elopement",
@@ -59,7 +62,7 @@ INCIDENT_SEVERITIES = ["low", "medium", "high", "critical"]
 INCIDENT_STATUSES = ["reported", "under_investigation", "resolved", "closed"]
 
 # These types are automatically NDIS reportable
-NDIS_REPORTABLE_TYPES = {"abuse_neglect", "restrictive_practice"}
+NDIS_REPORTABLE_TYPES = {"abuse_neglect", "restrictive_practice", "assault_unlawful_contact", "unexpected_death"}
 NDIS_REPORTABLE_SEVERITIES = {"critical"}
 
 # NDIS Practice Standard each incident type relates to
@@ -73,6 +76,9 @@ PRACTICE_STANDARD_MAP: dict[str, str] = {
     "environmental":         "Standard 3.1 — Safe environment",
     "elopement":             "Standard 2.1 — Risk management",
     "near_miss":             "Standard 2.1 — Risk management",
+    "injury_worker":         "Standard 3.1 — Safe environment",
+    "assault_unlawful_contact": "Standard 1.3 — Participant rights",
+    "unexpected_death":      "Standard 2.1 — Risk management",
     "other":                 "Standard 2.3 — Incident management",
 }
 
@@ -90,6 +96,23 @@ def is_ndis_reportable(incident_type: str, severity: str) -> bool:
 
 
 LOCATION_TYPES = ["private_home", "supported_accommodation", "provider_premises", "community", "other"]
+INJURY_MEDICAL_ATTENTION_TYPES = ["ambulance", "hospital_self_transport", "gp", "none"]
+
+# Added for the org's 6-section incident report template (injury_worker, assault_unlawful_contact,
+# unexpected_death). Older values (behaviour_of_concern, restrictive_practice, environmental,
+# elopement) stay valid for existing records; the new form just doesn't offer them.
+TEMPLATE_INCIDENT_TYPES = [
+    "injury", "injury_worker", "near_miss", "property_damage", "medication_error",
+    "abuse_neglect", "assault_unlawful_contact", "unexpected_death", "other",
+]
+
+EMERGENCY_SERVICES_OPTIONS = ["triple_zero", "sa_ambulance_only", "no"]
+FAMILY_NOTIFIED_OPTIONS = ["yes", "not_yet", "not_applicable"]
+MD_NOTIFIED_OPTIONS = ["yes", "not_yet"]
+REPORTABLE_CATEGORIES = [
+    "unexpected_death", "serious_injury", "abuse_neglect", "unlawful_contact",
+    "sexual_misconduct", "unauthorised_restrictive_practice", "none",
+]
 SUBJECT_TYPES = ["worker", "participant", "other"]
 INTERVIEWEE_TYPES = ["worker", "participant", "witness", "other"]
 
@@ -137,10 +160,88 @@ class IncidentCreate(BaseModel):
     behaviour_subtype: Optional[str] = None
     participant_present: Optional[bool] = None
     participant_harmed: Optional[str] = None
+    # Injury-specific fields (only meaningful when incident_type == 'injury')
+    injury_nature: Optional[str] = None
+    injury_medical_attention: Optional[str] = None
+    # Full 6-section incident report template fields
+    incident_type_other: Optional[str] = None
+    support_workers_present: Optional[str] = None
+    other_persons_involved: Optional[str] = None
+    emergency_services_called: Optional[str] = None
+    family_notified: Optional[str] = None
+    family_notified_at: Optional[datetime] = None
+    md_notified: Optional[str] = None
+    md_notified_at: Optional[datetime] = None
+    reportable_categories: Optional[list[str]] = None
+    staff_declaration_name: Optional[str] = None
+    staff_declaration_signature: Optional[str] = None
     # Set only by system-generated incidents (e.g. the medication error/pattern cross-link) —
     # never user-facing input. source_type identifies what kind of record source_id points at.
     source_type: Optional[str] = None
     source_id: Optional[str] = None
+
+    @field_validator("injury_medical_attention")
+    @classmethod
+    def validate_injury_medical_attention(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in INJURY_MEDICAL_ATTENTION_TYPES:
+            raise ValueError(
+                f"injury_medical_attention must be one of: {', '.join(INJURY_MEDICAL_ATTENTION_TYPES)}"
+            )
+        return normalized
+
+    @field_validator("participant_harmed")
+    @classmethod
+    def validate_participant_harmed_create(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in ("yes", "no", "unknown"):
+            raise ValueError("participant_harmed must be yes, no, or unknown")
+        return normalized
+
+    @field_validator("emergency_services_called")
+    @classmethod
+    def validate_emergency_services_called(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in EMERGENCY_SERVICES_OPTIONS:
+            raise ValueError(f"emergency_services_called must be one of: {', '.join(EMERGENCY_SERVICES_OPTIONS)}")
+        return normalized
+
+    @field_validator("family_notified")
+    @classmethod
+    def validate_family_notified(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in FAMILY_NOTIFIED_OPTIONS:
+            raise ValueError(f"family_notified must be one of: {', '.join(FAMILY_NOTIFIED_OPTIONS)}")
+        return normalized
+
+    @field_validator("md_notified")
+    @classmethod
+    def validate_md_notified(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in MD_NOTIFIED_OPTIONS:
+            raise ValueError(f"md_notified must be one of: {', '.join(MD_NOTIFIED_OPTIONS)}")
+        return normalized
+
+    @field_validator("reportable_categories")
+    @classmethod
+    def validate_reportable_categories(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        normalized = [v.strip().lower() for v in value]
+        invalid = [v for v in normalized if v not in REPORTABLE_CATEGORIES]
+        if invalid:
+            raise ValueError(f"reportable_categories contains invalid values: {', '.join(invalid)}")
+        return normalized
 
 
 class WorkerIncidentCreate(BaseModel):
@@ -244,6 +345,20 @@ class IncidentUpdate(BaseModel):
     connection_to_service_reasoning: Optional[str] = None
     participant_impact: Optional[str] = None
     worker_actions: Optional[str] = None
+    injury_nature: Optional[str] = None
+    injury_medical_attention: Optional[str] = None
+    incident_type_other: Optional[str] = None
+    support_workers_present: Optional[str] = None
+    other_persons_involved: Optional[str] = None
+    participant_harmed: Optional[str] = None
+    emergency_services_called: Optional[str] = None
+    family_notified: Optional[str] = None
+    family_notified_at: Optional[datetime] = None
+    md_notified: Optional[str] = None
+    md_notified_at: Optional[datetime] = None
+    reportable_categories: Optional[list[str]] = None
+    staff_declaration_name: Optional[str] = None
+    staff_declaration_signature: Optional[str] = None
     investigation_notes: Optional[str] = None
     corrective_actions: Optional[str] = None
     follow_up_required: Optional[bool] = None
