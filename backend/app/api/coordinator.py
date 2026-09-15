@@ -52,7 +52,15 @@ from ..services import (
 )
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
-from .users import PROFILE_PHOTOS_BUCKET, PROFILE_PHOTO_SIGNED_URL_SECONDS
+
+# Mirrors users.py's PROFILE_PHOTOS_BUCKET/PROFILE_PHOTO_SIGNED_URL_SECONDS —
+# kept as a local duplicate rather than imported from there: users.py pulls in
+# api/security.py -> device_security_service.py -> pyotp transitively, which
+# isolation-test CI installs a deliberately minimal, explicit dependency list
+# for and doesn't include (this constant pair is the only thing coordinator.py
+# actually needs from that module).
+PROFILE_PHOTOS_BUCKET = "profile-photos"
+PROFILE_PHOTO_SIGNED_URL_SECONDS = 60 * 60 * 24
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
