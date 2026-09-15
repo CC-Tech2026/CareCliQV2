@@ -14,6 +14,7 @@ export type TeamMember = {
   last_login?: string;
   employee_id?: string | null;
   phone?: string | null;
+  address?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
   profile_summary?: string | null;

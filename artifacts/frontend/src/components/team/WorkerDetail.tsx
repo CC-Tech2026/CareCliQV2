@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
   GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
-  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
+  Mail, Phone, MapPin, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
   MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
   Maximize2, Minimize2, Star, User, HeartHandshake, CalendarClock,
@@ -697,6 +697,7 @@ export function WorkerDetail({
             <RailCard title="Contact">
               <RailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
               <RailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
+              <RailRow icon={MapPin} label="Address" value={worker.address ?? undefined} emptyText="Not on file" />
               <RailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
               <RailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
               <RailRow icon={LogIn} label={translate("team.detail.lastLogin")} value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined} emptyText={translate("team.detail.noLoginYet")} />
@@ -1063,6 +1064,7 @@ function PersonalInfoTab({
       <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
         <DetailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
         <DetailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
+        <DetailRow icon={MapPin} label="Address" value={worker.address ?? undefined} emptyText="Not on file" />
         <DetailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
         <DetailRow
           icon={MessageCircle}
