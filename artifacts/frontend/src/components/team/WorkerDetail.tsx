@@ -8,6 +8,7 @@ import {
   CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
   MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
   Maximize2, Minimize2, Star, User, HeartHandshake, CalendarClock,
+  Cake, PhoneCall, Stethoscope, Building2, FileCheck,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -31,6 +32,7 @@ import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/ser
 import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
+import { emergencyContactDisplay } from "@/lib/participant-display";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
@@ -505,10 +507,14 @@ export function WorkerDetail({
       <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
         <div className={`flex flex-col sm:flex-row sm:items-start gap-4 ${fullScreen ? "p-6 xl:p-7" : "p-5"}`}>
           <div
-            className={`${fullScreen ? "h-20 w-20 text-2xl" : "h-16 w-16 text-xl"} rounded-full shrink-0 flex items-center justify-center font-black shadow-sm`}
+            className={`${fullScreen ? "h-20 w-20 text-2xl" : "h-16 w-16 text-xl"} rounded-full shrink-0 flex items-center justify-center overflow-hidden font-black shadow-sm`}
             style={{ background: avatar.bg, color: avatar.fg }}
           >
-            {(worker.full_name || "?").charAt(0).toUpperCase()}
+            {worker.profile_photo_url ? (
+              <img src={worker.profile_photo_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (worker.full_name || "?").charAt(0).toUpperCase()
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -1065,12 +1071,20 @@ function PersonalInfoTab({
         <DetailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
         <DetailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
         <DetailRow icon={MapPin} label="Address" value={worker.address ?? undefined} emptyText="Not on file" />
+        <DetailRow icon={MapPin} label="Suburb" value={worker.suburb ?? undefined} emptyText="Not on file" />
         <DetailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
         <DetailRow
           icon={MessageCircle}
           label={translate("team.detail.preferredContact")}
           value={worker.preferred_contact_method}
           emptyText={translate("team.detail.contactNotSet")}
+        />
+        <DetailRow icon={Cake} label="Date of birth" value={worker.date_of_birth ? safeFormat(worker.date_of_birth) : undefined} emptyText="Not on file" />
+        <DetailRow
+          icon={PhoneCall}
+          label="Emergency contact"
+          value={emergencyContactDisplay(worker.emergency_contact as Parameters<typeof emergencyContactDisplay>[0])?.text || undefined}
+          emptyText="Not on file"
         />
         <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
         <DetailRow
@@ -1084,6 +1098,21 @@ function PersonalInfoTab({
         ) : (
           <DetailRow icon={CheckCircle2} tone="success" label={translate("team.detail.onboardingStatus")} value={translate("team.detail.onboardingComplete")} />
         )}
+      </div>
+
+      {/* Professional/registration details — only meaningful for allied-health
+          workers, but shown for everyone (consistent "Not on file" empty state)
+          rather than conditionally hidden, matching every other row here. */}
+      <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <DetailRow icon={Stethoscope} label="Discipline" value={worker.discipline ?? undefined} emptyText="Not on file" />
+        <DetailRow icon={ShieldCheck} label="AHPRA registration" value={worker.ahpra_registration_number ?? undefined} emptyText="Not on file" />
+        <DetailRow icon={Building2} label="Business name" value={worker.business_name ?? undefined} emptyText="Not on file" />
+        <DetailRow
+          icon={FileCheck}
+          label="Professional indemnity"
+          value={worker.professional_indemnity_confirmed == null ? undefined : (worker.professional_indemnity_confirmed ? "Confirmed" : "Not confirmed")}
+          emptyText="Not on file"
+        />
       </div>
 
       {/* Resume-derived bio, experience and skills - captured at onboarding and kept on

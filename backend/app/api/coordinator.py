@@ -51,7 +51,8 @@ from ..services import (
     travel_expense_service,
 )
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
-from ..services.supabase_client import get_supabase_admin
+from ..services.supabase_client import get_supabase_admin, signed_storage_url
+from .users import PROFILE_PHOTOS_BUCKET, PROFILE_PHOTO_SIGNED_URL_SECONDS
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
@@ -235,9 +236,11 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, address, onboarding_completed, "
-                    "profile_summary, profile_experience_years, coordinator_id, "
-                    "classification_id, employment_type"
+                    "preferred_contact_method, phone, address, suburb, emergency_contact, "
+                    "date_of_birth, onboarding_completed, profile_summary, profile_experience_years, "
+                    "coordinator_id, classification_id, employment_type, discipline, "
+                    "ahpra_registration_number, professional_indemnity_confirmed, business_name, "
+                    "profile_photo_path"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -271,6 +274,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
             "address": profile.get("address"),
+            "suburb": profile.get("suburb"),
+            "emergency_contact": profile.get("emergency_contact"),
+            "date_of_birth": profile.get("date_of_birth"),
             "onboarding_completed": profile.get("onboarding_completed"),
             "profile_summary": profile.get("profile_summary"),
             "profile_experience_years": profile.get("profile_experience_years"),
@@ -278,6 +284,16 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "induction_overdue": induction_map.get(str(row.get("user_id")), False),
             "classification_id": profile.get("classification_id"),
             "employment_type": profile.get("employment_type"),
+            "discipline": profile.get("discipline"),
+            "ahpra_registration_number": profile.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": profile.get("professional_indemnity_confirmed"),
+            "business_name": profile.get("business_name"),
+            # profile-photos is a private bucket — never trust a stored URL,
+            # always regenerate a fresh signed one from the path on read (see
+            # the identical comment in users.py::_select_profile).
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, profile.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
         })
     return output
 
@@ -307,8 +323,10 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, address, onboarding_completed, coordinator_id, "
-                "classification_id, employment_type"
+                "preferred_contact_method, phone, address, suburb, emergency_contact, date_of_birth, "
+                "onboarding_completed, profile_summary, profile_experience_years, coordinator_id, "
+                "classification_id, employment_type, discipline, ahpra_registration_number, "
+                "professional_indemnity_confirmed, business_name, profile_photo_path"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -338,6 +356,9 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "last_login": row.get("last_login"),
             "phone": row.get("phone"),
             "address": row.get("address"),
+            "suburb": row.get("suburb"),
+            "emergency_contact": row.get("emergency_contact"),
+            "date_of_birth": row.get("date_of_birth"),
             "onboarding_completed": row.get("onboarding_completed"),
             "profile_summary": row.get("profile_summary"),
             "profile_experience_years": row.get("profile_experience_years"),
@@ -345,6 +366,13 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "induction_overdue": induction_map.get(str(row.get("id")), False),
             "classification_id": row.get("classification_id"),
             "employment_type": row.get("employment_type"),
+            "discipline": row.get("discipline"),
+            "ahpra_registration_number": row.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": row.get("professional_indemnity_confirmed"),
+            "business_name": row.get("business_name"),
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, row.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
         })
     return output
 

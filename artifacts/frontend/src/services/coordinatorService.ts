@@ -15,6 +15,9 @@ export type TeamMember = {
   employee_id?: string | null;
   phone?: string | null;
   address?: string | null;
+  suburb?: string | null;
+  emergency_contact?: Record<string, unknown> | string | null;
+  date_of_birth?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
   profile_summary?: string | null;
@@ -24,6 +27,11 @@ export type TeamMember = {
   coordinator_id?: string | null;
   classification_id?: string | null;
   employment_type?: "casual" | "part_time" | "full_time" | null;
+  discipline?: string | null;
+  ahpra_registration_number?: string | null;
+  professional_indemnity_confirmed?: boolean | null;
+  business_name?: string | null;
+  profile_photo_url?: string | null;
 };
 
 export type WorkerStats = TeamMember & {
