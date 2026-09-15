@@ -16,27 +16,34 @@ Block shapes (kept intentionally small — 4 types cover every tool today):
 from datetime import datetime
 from typing import Any
 
+from ...core.timezone import APP_TIMEZONE, parse_shift_datetime
+
+
+def _to_local(value: Any) -> datetime | None:
+    """Shift timestamps are stored in UTC; display them in the app's
+    Australian timezone, matching the rest of the UI. Formatting the raw
+    UTC value showed a 5:30 PM Adelaide shift as 07:30 AM, and evening
+    shifts on the wrong calendar day."""
+    try:
+        return parse_shift_datetime(str(value)).astimezone(APP_TIMEZONE)
+    except ValueError:
+        return None
+
 
 def _format_shift_date(value: Any) -> Any:
-    """e.g. '2026-08-05T01:30:00+00:00' -> '05 Aug'"""
+    """e.g. '2026-08-24T07:30:00+00:00' -> '24 Aug' (local date)"""
     if not value:
         return value
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return value
-    return dt.strftime("%d %b")
+    dt = _to_local(value)
+    return dt.strftime("%d %b") if dt else value
 
 
 def _format_shift_time(value: Any) -> Any:
-    """e.g. '2026-08-05T01:30:00+00:00' -> '01:30 AM'"""
+    """e.g. '2026-08-24T07:30:00+00:00' -> '05:00 PM' (Adelaide, UTC+9:30)"""
     if not value:
         return value
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return value
-    return dt.strftime("%I:%M %p")
+    dt = _to_local(value)
+    return dt.strftime("%I:%M %p") if dt else value
 
 
 

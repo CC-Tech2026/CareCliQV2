@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     supabase_url: str = os.environ.get("SUPABASE_URL", "")
     supabase_anon_key: str = os.environ.get("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    supabase_jwt_secret: str = os.environ.get("SUPABASE_JWT_SECRET", "")
     # Australian data residency: hosted projects must be in ap-southeast-2 (Sydney).
     supabase_region: str = os.environ.get("SUPABASE_REGION", "")
     supabase_access_token: str = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
