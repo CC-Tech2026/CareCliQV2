@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.access_grants (
     organization_id uuid NOT NULL,
 
     granted_to_user_id uuid NOT NULL,
-    granted_by_user_id uuid NOT NULL,
+    granted_by_user_id uuid,
 
     -- One grant, one capability — never a bundle. Values come from the
     -- capability catalog in access_grant_service.py, not freeform text.
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.access_grants (
     created_at timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT access_grants_org_fk FOREIGN KEY (organization_id)
-        REFERENCES public.organizations(id) ON DELETE CASCADE,
+        REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     CONSTRAINT access_grants_granted_to_fk FOREIGN KEY (granted_to_user_id)
         REFERENCES public.users(id) ON DELETE CASCADE,
     CONSTRAINT access_grants_granted_by_fk FOREIGN KEY (granted_by_user_id)
@@ -55,9 +55,16 @@ CREATE TABLE IF NOT EXISTS public.access_grants (
         'platform_billing'
     )),
     CONSTRAINT access_grants_expiry_after_grant_check CHECK (expires_at > granted_at),
+    -- One-directional on purpose: revoked_by_user_id being set always implies
+    -- revoked_at is too (the only write path, revoke_grant(), sets both
+    -- together), but the reverse can't be required — revoked_by_user_id's FK
+    -- is ON DELETE SET NULL, so it legitimately goes NULL on its own days or
+    -- years later if that MD's account is ever deleted, while revoked_at
+    -- must stay put as the historical record that this grant *was* revoked.
+    -- A two-directional (both-null-or-both-set) check would make that later
+    -- deletion fail outright.
     CONSTRAINT access_grants_revoked_consistency_check CHECK (
-        (revoked_at IS NULL AND revoked_by_user_id IS NULL)
-        OR (revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL)
+        revoked_by_user_id IS NULL OR revoked_at IS NOT NULL
     )
 );
 

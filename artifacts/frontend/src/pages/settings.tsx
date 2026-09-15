@@ -1,5 +1,6 @@
 import { SettingsNavigation } from "@/components/settings/SettingsNavigation";
 import { BillingSection } from "@/components/settings/BillingSection";
+import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,7 @@ import {
   Lightbulb,
   Paperclip,
   Video,
+  Clock,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -109,7 +111,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
@@ -124,6 +126,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
+  { id: "delegatedAccess", labelKey: "settings.nav.delegatedAccess", icon: Clock, mdOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -2572,6 +2575,10 @@ export default function Settings() {
 
         {activeSection === "branding" && isMD && (
           <OrganizationBrandingSection />
+        )}
+
+        {activeSection === "delegatedAccess" && isMD && (
+          <DelegatedAccessSection />
         )}
 
       </main>

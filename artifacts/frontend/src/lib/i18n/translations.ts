@@ -2327,6 +2327,7 @@ export const en: Dict = {
   "settings.nav.improvementFeedback": "Improvements & Feedback",
   "settings.nav.billing": "Billing",
   "settings.nav.branding": "Branding",
+  "settings.nav.delegatedAccess": "Delegated Access",
   "settings.branding.title": "Organisation branding",
   "settings.branding.subtitle": "Your logo and name on offer/invite emails and the first-login welcome screen. The rest of CareCliQ keeps its own design.",
   "settings.branding.logoLabel": "Logo",
