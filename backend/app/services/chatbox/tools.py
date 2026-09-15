@@ -22,7 +22,7 @@ from typing import Optional
 
 from langchain_core.tools import tool
 
-from ...core.timezone import APP_TIMEZONE, app_day_bounds_utc
+from ...core.timezone import APP_TIMEZONE, app_day_bounds_utc, app_today
 from ...core.access import (
     get_coordinator_team_ids,
     get_user_id,
@@ -44,13 +44,11 @@ from .db import quill_client
 from ...api.coordinator import _execute_shift_query_with_legacy_fallback
 from ...api.dashboards import (
     _average_score,
-    _date_part,
     _filter_participants_by_worker_ids,
     _filter_sessions_by_worker_ids,
     _goal_achievement_rate,
     _has_rp_flag,
     _team_members,
-    _today_iso,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,10 +224,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
-        current_month_prefix = _today_iso()[:7]
+        current_month_prefix = app_today().isoformat()[:7]
         rp_flag_count = sum(
             1 for s in sessions
-            if _has_rp_flag(s) and _date_part(s.get("session_date")).startswith(current_month_prefix)
+            if _has_rp_flag(s) and _session_local_date(s.get("session_date")).startswith(current_month_prefix)
         )
         return {"scope": scope, "rp_flag_count_this_month": rp_flag_count}
 
@@ -649,10 +647,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
-        today = _today_iso()
-        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
-        todays_sessions = [s for s in sessions if _date_part(s.get("session_date")) == today]
-        sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
+        today = app_today().isoformat()
+        week_ago = (app_today() - timedelta(days=7)).isoformat()
+        todays_sessions = [s for s in sessions if _session_local_date(s.get("session_date")) == today]
+        sessions_this_week = [s for s in sessions if _session_local_date(s.get("session_date")) >= week_ago]
 
         return {
             "scope": scope,
@@ -714,7 +712,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             }
             for m in (revenue.get("monthly") or [])
         ]
-        current_month_key = _today_iso()[:7]
+        current_month_key = app_today().isoformat()[:7]
         current_month = next((m for m in monthly_dollars if m["month"] == current_month_key), {
             "month": current_month_key, "billed_aud": 0.0, "paid_aud": 0.0, "outstanding_aud": 0.0, "invoice_count": 0,
         })
@@ -832,6 +830,23 @@ def _format_local(value) -> str | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(APP_TIMEZONE).strftime("%d %b %Y, %I:%M %p")
+
+
+def _session_local_date(value) -> str:
+    """'2026-08-24T22:30:00+00:00' -> '2026-08-25' (the Adelaide calendar day).
+
+    session_date is a timestamptz returned as UTC. Slicing the first ten
+    characters (what the dashboards do) gives the UTC day, so a session
+    logged before ~9:30 AM local was counted under the previous day — and
+    at month boundaries, the previous month. Falls back to the raw prefix
+    for anything unparseable so date-only strings still work.
+    """
+    dt = _parse_iso(value)
+    if not dt:
+        return str(value or "")[:10]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(APP_TIMEZONE).date().isoformat()
 
 
 def _local_date_range_utc(date_from: str, date_to: str) -> tuple[str, str] | None:

@@ -12,6 +12,7 @@ APP_TIMEZONE so they don't depend on the machine's environment.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -139,3 +140,60 @@ async def test_progress_note_tool_rejects_a_bad_date_before_querying():
 
     assert "not a valid date" in result["error"]
     mock_query.assert_not_called()
+
+
+# ── Session dates (get_session_activity / get_rp_flag_count) ──────────
+
+
+def test_session_local_date_uses_the_app_timezone_calendar_day():
+    # 22:30 UTC on the 24th is 08:00 on the 25th in Adelaide
+    assert chatbox_tools._session_local_date("2026-08-24T22:30:00+00:00") == "2026-08-25"
+    assert chatbox_tools._session_local_date("2026-08-24T07:30:00Z") == "2026-08-24"
+
+
+def test_session_local_date_falls_back_for_date_only_or_empty_values():
+    assert chatbox_tools._session_local_date("2026-08-24") == "2026-08-24"
+    assert chatbox_tools._session_local_date(None) == ""
+
+
+def _md_user() -> dict:
+    return {"id": str(uuid.uuid4()), "organization_id": str(uuid.uuid4()), "role": "managing_director"}
+
+
+@pytest.mark.asyncio
+async def test_session_activity_counts_an_early_morning_local_session_as_today():
+    """A session logged at 08:00 Adelaide on the 25th is stored as 22:30 UTC
+    on the 24th. It must count towards 'today' when today is the 25th."""
+    sessions = [
+        {"id": "a", "session_date": "2026-08-24T22:30:00+00:00"},   # 25 Aug 08:00 local -> today
+        {"id": "b", "session_date": "2026-08-24T07:30:00+00:00"},   # 24 Aug 17:00 local -> this week
+        {"id": "c", "session_date": "2026-08-10T07:30:00+00:00"},   # too old
+    ]
+    with patch.object(chatbox_tools, "audit_service") as mock_audit, \
+         patch.object(chatbox_tools, "app_today", return_value=date(2026, 8, 25)), \
+         patch.object(chatbox_tools.session_service, "get_sessions_for_dashboard", AsyncMock(return_value=sessions)):
+        mock_audit.log_action = AsyncMock()
+        tool = next(t for t in chatbox_tools.build_tools_for_user(_md_user(), "t") if t.name == "get_session_activity")
+        result, _ = await tool.coroutine()
+
+    assert result["sessions_today"] == 1
+    assert result["sessions_this_week"] == 2
+
+
+@pytest.mark.asyncio
+async def test_rp_flag_count_uses_the_local_month_at_the_boundary():
+    """An RP flag at 08:00 Adelaide on 1 Sep is stored as 22:30 UTC on 31 Aug.
+    It belongs to September, not August."""
+    sessions = [
+        {"id": "a", "session_date": "2026-08-31T22:30:00+00:00", "restrictive_practice_detected": True},  # 1 Sep local
+        {"id": "b", "session_date": "2026-08-20T07:30:00+00:00", "restrictive_practice_detected": True},  # August
+        {"id": "c", "session_date": "2026-09-05T07:30:00+00:00", "restrictive_practice_detected": False},
+    ]
+    with patch.object(chatbox_tools, "audit_service") as mock_audit, \
+         patch.object(chatbox_tools, "app_today", return_value=date(2026, 9, 15)), \
+         patch.object(chatbox_tools.session_service, "get_sessions_for_dashboard", AsyncMock(return_value=sessions)):
+        mock_audit.log_action = AsyncMock()
+        tool = next(t for t in chatbox_tools.build_tools_for_user(_md_user(), "t") if t.name == "get_rp_flag_count")
+        result, _ = await tool.coroutine()
+
+    assert result["rp_flag_count_this_month"] == 1
