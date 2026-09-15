@@ -789,6 +789,7 @@ class ShiftContextUpdate(BaseModel):
     gp_phone: Optional[str] = None
     gp_practice: Optional[str] = None
     emergency_contact: Optional[dict] = None
+    next_of_kin: Optional[dict] = None
     likes_dislikes: Optional[str] = None
     sensory_preferences: Optional[str] = None
     cultural_preferences: Optional[str] = None
@@ -869,6 +870,7 @@ async def update_shift_context(
             "gp_phone": body.gp_phone,
             "gp_practice": body.gp_practice,
             "emergency_contact": body.emergency_contact,
+            "next_of_kin": body.next_of_kin,
             "likes_dislikes": body.likes_dislikes,
             "sensory_preferences": body.sensory_preferences,
             "cultural_preferences": body.cultural_preferences,

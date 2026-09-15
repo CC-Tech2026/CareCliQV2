@@ -209,10 +209,10 @@ async def load_price_schedule(
         HTTPException if user not authorized, data validation fails, etc.
     """
     # ── Authorization ──────────────────────────────────────────
-    if get_user_role(user) != "support_coordinator":
+    if get_user_role(user) not in {"support_coordinator", "managing_director"}:
         raise HTTPException(
             status_code=403,
-            detail="Only support coordinators can load pricing schedules.",
+            detail="Only support coordinators and managing directors can load pricing schedules.",
         )
 
     org_id = get_user_organization_id(user)
@@ -416,10 +416,10 @@ async def edit_item_price(
         HTTPException if validation fails, backdating conflicts with invoices, etc.
     """
     # ── Authorization ──────────────────────────────────────────
-    if get_user_role(user) != "support_coordinator":
+    if get_user_role(user) not in {"support_coordinator", "managing_director"}:
         raise HTTPException(
             status_code=403,
-            detail="Only support coordinators can edit pricing.",
+            detail="Only support coordinators and managing directors can edit pricing.",
         )
 
     org_id = get_user_organization_id(user)

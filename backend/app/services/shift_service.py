@@ -1237,7 +1237,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
     select_cols = (
         "id, full_name, preferred_name, ndis_number, date_of_birth, phone, email, "
         "communication_preferences, allergies, primary_disability, "
-        "emergency_contact, behaviour_support_plan, restricted_behavioural_notes, "
+        "emergency_contact, next_of_kin, behaviour_support_plan, restricted_behavioural_notes, "
         "medications, medical_alerts, current_conditions, "
         "case_manager_name, case_manager_phone, likes_dislikes, sensory_preferences, "
         "cultural_preferences, preferred_activities, communication_guidance, "
@@ -1271,6 +1271,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
 
     preferred_name = (row.get("preferred_name") or row.get("full_name") or "").strip() or None
     emergency = _parse_emergency_contact(row.get("emergency_contact"))
+    next_of_kin = _parse_emergency_contact(row.get("next_of_kin"))
     context_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
 
     return {
@@ -1281,6 +1282,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
             "phone": row.get("phone"),
             "email": row.get("email"),
             "emergency_contact": emergency,
+            "next_of_kin": next_of_kin,
             "case_manager": {
                 "name": row.get("case_manager_name"),
                 "phone": row.get("case_manager_phone"),

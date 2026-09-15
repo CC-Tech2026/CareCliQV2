@@ -89,9 +89,11 @@ def _require_coordinator(user: dict) -> str:
 # Same org_id-or-403 shape as _require_coordinator, but for the resources the
 # managing director should also read AND act on: worker-profile tabs (staff
 # detail, availability, skills, training assignment/review, onboarding
-# documents) and NDIS goals/tasks. Rostering, shift assignment, pay/SCHADS,
-# messaging, and account-management actions stay _require_coordinator-only —
-# those remain Coordinator's own operational domain, not MD oversight.
+# documents), NDIS goals/tasks, and pay/SCHADS oversight (classification,
+# shift pay preview, pay ledger — the MD is accountable for payroll too).
+# Rostering, shift assignment, messaging, and account-management actions stay
+# _require_coordinator-only — those remain Coordinator's own operational
+# domain, not MD oversight.
 def _require_org_read(user: dict) -> str:
     if not has_org_wide_access(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
@@ -1032,7 +1034,7 @@ async def list_award_classifications(current_user: dict = Depends(get_current_us
     """Currently-active SCHADS classifications a coordinator can assign to a
     worker. SACS only this phase (see award_streams / migration 158) - the
     default and only stream with rate data seeded so far."""
-    _require_coordinator(current_user)
+    _require_org_read(current_user)
     supabase = get_supabase_admin()
     result = (
         supabase.table("award_classifications")
@@ -1086,7 +1088,7 @@ async def assign_classification(worker_id: str, body: AssignClassificationBody, 
     the source reference doc's explicit guidance - never derived from a
     worker's qualifications, since classification reflects the duties
     actually performed, not the certificate on file."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     worker = (
@@ -1511,7 +1513,7 @@ async def worker_credential_status(
     current_user: dict = Depends(get_current_user),
 ):
     """Return credential status for a worker/shift-type pair for pre-assignment UI checks."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
 
     # Ensure worker belongs to coordinator's org
     supabase = get_supabase_admin()
@@ -2203,7 +2205,7 @@ async def assign_shift(
 
 @router.get("/workers/{worker_id}/clients")
 async def get_worker_clients(worker_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         allocs = supabase.table("practitioner_allocations").select("patient_id, allocated_role").eq("user_id", worker_id).execute()
@@ -3186,7 +3188,7 @@ async def shift_pay_preview(shift_id: str, current_user: dict = Depends(get_curr
     Returns an empty component list with a `reason` when the shift can't be
     priced yet (e.g. the worker has no classification set) rather than an
     error, since that's an expected, common state."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id") or "") != org_id:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -3216,7 +3218,7 @@ async def worker_pay_ledger(
 ):
     """Paginated pay_transactions for a worker - the data behind a future pay
     ledger screen (not built this phase - see the SCHADS Phase 1 plan)."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     query = (

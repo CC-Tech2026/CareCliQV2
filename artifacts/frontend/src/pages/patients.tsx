@@ -198,6 +198,13 @@ export type ParticipantRecord = {
   assigned_worker_id?: string | null;
   assigned_worker_name?: string | null;
   allied_health_id?: string | null;
+  case_manager_name?: string | null;
+  case_manager_phone?: string | null;
+  gp_name?: string | null;
+  gp_phone?: string | null;
+  gp_practice?: string | null;
+  emergency_contact?: string | { name?: string | null; phone?: string | null; relationship?: string | null; display?: string } | null;
+  next_of_kin?: string | { name?: string | null; phone?: string | null; relationship?: string | null; display?: string } | null;
 };
 
 export type SessionRecord = {
@@ -1580,6 +1587,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
             billingPeriodCurrent={billingPeriodCurrentQuery.data}
             billingPeriodCurrentLoading={billingPeriodCurrentQuery.isLoading}
             billingPeriodHistory={billingPeriodsQuery.data?.items}
+            onEditContacts={() => {
+              setCareProfileSection("context");
+              setActiveTab("care_profile");
+            }}
           />
         )}
 

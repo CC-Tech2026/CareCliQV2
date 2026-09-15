@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Literal
+from datetime import date
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -34,6 +35,8 @@ class InvoiceLineItem(BaseModel):
     quantity: float = Field(default=1, gt=0)
     unit_amount: Optional[float] = Field(default=None, ge=0)
     unit_amount_cents: Optional[int] = Field(default=None, ge=0)
+    service_date: Optional[date] = None
+    location_type: Literal["national", "remote", "very_remote"] = "national"
     item_code: Optional[str] = None  # Optional NDIS item code — if provided, locks price version
 
 

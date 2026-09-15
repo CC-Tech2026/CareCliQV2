@@ -1,6 +1,7 @@
 import { jsonFetch } from "@/services/http";
 
 export type NdisPriceResolution = {
+  unit: string;
   id: string;
   item_code: string;
   name: string;

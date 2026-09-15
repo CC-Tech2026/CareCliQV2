@@ -55,7 +55,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       toast({ title: translate("coordinator.ndis.price.itemCodeRequired"), description: translate("coordinator.ndis.price.enterNdisCode"), variant: "destructive" });
       return;
     }
-    if (!priceNational || Number(priceNational) <= 0) {
+    if (!priceNational || !Number.isFinite(Number(priceNational)) || Number(priceNational) <= 0) {
       toast({ title: translate("coordinator.ndis.price.validPriceRequired"), description: translate("coordinator.ndis.price.priceGreaterThanZero"), variant: "destructive" });
       return;
     }
@@ -72,7 +72,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
     try {
       const res = await requireReAuth(() => editNdisItemPrice(
         itemCode,
-        Number(priceNational) * 100, // Convert to cents
+        Number(priceNational), // Pricing catalogue values are dollars.
         effectiveDate,
         reason,
         null, // price_remote
@@ -117,6 +117,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
             <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.itemCode")}</Label>
             <div className="flex gap-2 mt-1.5">
               <Input 
+                aria-label="NDIS item code"
                 value={itemCode}
                 onChange={e => setItemCode(e.target.value.toUpperCase())}
                 placeholder={translate("coordinator.ndis.price.itemCodePlaceholder")}
@@ -141,6 +142,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
               type="number"
               min={0}
               step={0.01}
+              aria-label="National rate in AUD"
               value={priceNational}
               onChange={e => setPriceNational(e.target.value)}
               placeholder="e.g. 75.50"
@@ -154,6 +156,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
             <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.effectiveDate")}</Label>
             <Input 
               type="date"
+              aria-label="Effective date"
               value={effectiveDate}
               onChange={e => setEffectiveDate(e.target.value)}
               className="mt-1.5 rounded-lg"
@@ -168,6 +171,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           <div>
             <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.reason")} <span className="font-medium">{translate("coordinator.ndis.price.auditTrail")}</span></Label>
             <textarea 
+              aria-label="Reason for price change"
               value={reason}
               onChange={e => setReason(e.target.value)}
               placeholder="e.g., Annual adjustment per NDIS guidance, market review, etc."
@@ -186,7 +190,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
                   <div key={idx} className="py-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-bold" style={{ color: TEXT }}>
-                        ${(item.price_national / 100).toFixed(2)}/h
+                        ${item.price_national.toFixed(2)} per unit
                       </span>
                       <span style={{ color: MUTED }}>
                         {item.valid_from} {item.valid_to ? `→ ${item.valid_to}` : translate("coordinator.ndis.price.current")}

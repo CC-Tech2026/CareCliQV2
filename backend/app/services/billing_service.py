@@ -15,7 +15,7 @@ from ..core.access import (
     get_user_id,
     get_user_organization_id,
     get_user_role,
-    is_coordinator_role,
+    is_managing_director,
 )
 from .supabase_client import get_supabase_admin, signed_storage_url
 from .organization_branding_service import get_letterhead
@@ -100,8 +100,10 @@ def _calculate_totals(line_items: list[dict]) -> tuple[list[dict], int, int, int
             "quantity": float(quantity),
             "unit_amount_cents": unit_amount_cents,
             "line_total_cents": line_total,
+            "service_date": str(item["service_date"]) if item.get("service_date") else None,
+            "location_type": item.get("location_type") or "national",
             "item_code": item.get("item_code"),  # Pass through, may be None
-            "ndis_price_item_id": None,  # Will be resolved later if item_code is present
+            "ndis_price_item_id": item.get("ndis_price_item_id"),
         })
     if not cleaned:
         raise HTTPException(status_code=422, detail="At least one invoice line item is required.")
@@ -126,20 +128,25 @@ async def _resolve_ndis_prices_for_invoice(
             # No item code, leave as-is (free-text manual line item)
             continue
 
+        if not item.get("service_date"):
+            raise HTTPException(status_code=422, detail="A service date is required for NDIS catalogue items.")
         try:
-            # Resolve price for this item as of today
+            # Resolve the catalogue version applicable on the service date.
             resolved = await ndis_pricing_service.resolve_price(
                 item_code=item.get("item_code"),
                 org_id=org_id,
-                location_type="national",
+                as_of_date=item.get("service_date"),
+                location_type=item.get("location_type") or "national",
             )
 
+            if not resolved:
+                raise HTTPException(status_code=422, detail=f"No catalogue price found for NDIS item {item.get('item_code')} on the service date.")
             if resolved:
                 # Lock this line to the resolved price item version
                 item["ndis_price_item_id"] = resolved.get("id")
                 # Use resolved price if no unit_amount_cents was explicitly provided
-                if item.get("unit_amount_cents") is None:
-                    item["unit_amount_cents"] = int(resolved.get("effective_price", 0) * 100)
+                if item.get("unit_amount_cents") is None and item.get("unit_amount") is None:
+                    item["unit_amount_cents"] = _money_to_cents(resolved.get("effective_price", 0))
                     # Recalculate line total with resolved price
                     quantity = Decimal(str(item.get("quantity") or "1"))
                     item["line_total_cents"] = int(
@@ -147,17 +154,17 @@ async def _resolve_ndis_prices_for_invoice(
                             Decimal("1"), rounding=ROUND_HALF_UP
                         )
                     )
-        except Exception as e:
-            # If price resolution fails, continue with manual entry
-            # Don't fail invoice creation just because pricing lookup failed
-            pass
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="NDIS catalogue lookup failed. Resolve the support item before creating the invoice.") from exc
 
     return line_items
 
 
 async def get_subscription(user: dict) -> dict:
-    if not is_coordinator_role(user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can manage subscriptions.")
+    if not is_managing_director(user):
+        raise HTTPException(status_code=403, detail="Only managing directors can manage subscriptions.")
     org_id = _require_org(user)
     supabase = get_supabase_admin()
     result = (
@@ -184,8 +191,8 @@ async def get_subscription(user: dict) -> dict:
 
 
 async def upsert_subscription(user: dict, data: dict) -> dict:
-    if not is_coordinator_role(user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can manage subscriptions.")
+    if not is_managing_director(user):
+        raise HTTPException(status_code=403, detail="Only managing directors can manage subscriptions.")
     org_id = _require_org(user)
     plan_name = data.get("plan_name") or "starter"
     subscription_status = data.get("status") or "trialing"
@@ -343,7 +350,9 @@ async def create_invoice(user: dict, data: dict) -> dict:
     _require_billing_role(user)
     org_id = _require_org(user)
     await _verify_invoice_scope(user, data)
-    line_items = data.get("line_items") or []
+    line_items = await _resolve_ndis_prices_for_invoice(
+        [dict(item) for item in (data.get("line_items") or [])], org_id
+    )
     if data.get("generate_from_verified_tasks"):
         participant_id = data.get("participant_id")
         period_start = data.get("period_start")
@@ -391,8 +400,8 @@ async def create_invoice(user: dict, data: dict) -> dict:
 
     line_items, subtotal, tax, total = _calculate_totals(line_items)
     
-    # Resolve NDIS prices for items with item_code
-    line_items = await _resolve_ndis_prices_for_invoice(line_items, org_id)
+    # Verified task amounts retain their recorded prices; do not relabel them
+    # with a catalogue version resolved at invoice creation time.
     
     # Recalculate totals in case prices were resolved
     total_cents = sum(item.get("line_total_cents", 0) for item in line_items)
@@ -537,7 +546,10 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         "updated_at": _now_iso(),
     }
     if "line_items" in data:
-        line_items, subtotal, tax, total = _calculate_totals(data.get("line_items") or [])
+        resolved_items = await _resolve_ndis_prices_for_invoice(
+            [dict(item) for item in (data.get("line_items") or [])], _require_org(user)
+        )
+        line_items, subtotal, tax, total = _calculate_totals(resolved_items)
         payload.update({
             "line_items": line_items,
             "subtotal_cents": subtotal,
@@ -793,7 +805,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
             "item_code": item.get("item_code") or "",
             "item_name": item.get("description") or "",
             "item_description": item.get("item_description") or "",
-            "shift_date": item.get("shift_date") or item.get("date") or "",
+            "shift_date": item.get("service_date") or item.get("shift_date") or item.get("date") or "",
             "hours": float(item.get("quantity") or 0),
             "unit_price": unit_price,
             "gst_applicable": bool(item.get("gst_applicable", False)),
@@ -863,7 +875,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         # Note
         "invoice_notes": invoice.get("notes") or "",
         # Footer
-        "ndis_price_guide_version": "NDIS Pricing Arrangements 2025-26 V1.1",
+        "ndis_price_guide_version": "NDIS support items - refer to item codes and service dates",
         "generated_at": generated_at,
     }
 

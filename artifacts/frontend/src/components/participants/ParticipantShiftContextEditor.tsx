@@ -9,10 +9,14 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // Allergies, conditions, and GP contact live in ParticipantClinicalRecordEditor now —
 // clinical/health data belongs in the Clinical Record tab, not this operational briefing tab.
+type ContactPerson = { name?: string | null; phone?: string | null; relationship?: string | null };
+
 type ShiftContextPayload = {
   profile?: {
     preferred_name?: string;
     case_manager?: { name?: string; phone?: string };
+    emergency_contact?: ContactPerson | null;
+    next_of_kin?: ContactPerson | null;
   };
   preferences?: {
     likes_dislikes?: string;
@@ -37,6 +41,12 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   const [preferredName, setPreferredName] = useState("");
   const [caseManagerName, setCaseManagerName] = useState("");
   const [caseManagerPhone, setCaseManagerPhone] = useState("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
+  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState("");
+  const [nextOfKinName, setNextOfKinName] = useState("");
+  const [nextOfKinPhone, setNextOfKinPhone] = useState("");
+  const [nextOfKinRelationship, setNextOfKinRelationship] = useState("");
   const [likesDislikes, setLikesDislikes] = useState("");
   const [sensory, setSensory] = useState("");
   const [cultural, setCultural] = useState("");
@@ -52,6 +62,12 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
     setPreferredName(data.profile?.preferred_name ?? "");
     setCaseManagerName(data.profile?.case_manager?.name ?? "");
     setCaseManagerPhone(data.profile?.case_manager?.phone ?? "");
+    setEmergencyContactName(data.profile?.emergency_contact?.name ?? "");
+    setEmergencyContactPhone(data.profile?.emergency_contact?.phone ?? "");
+    setEmergencyContactRelationship(data.profile?.emergency_contact?.relationship ?? "");
+    setNextOfKinName(data.profile?.next_of_kin?.name ?? "");
+    setNextOfKinPhone(data.profile?.next_of_kin?.phone ?? "");
+    setNextOfKinRelationship(data.profile?.next_of_kin?.relationship ?? "");
     setLikesDislikes(data.preferences?.likes_dislikes ?? "");
     setSensory(data.preferences?.sensory_preferences ?? "");
     setCultural(data.preferences?.cultural_preferences ?? "");
@@ -93,6 +109,11 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
     };
   }, [participantId, toast]);
 
+  const contactPayload = (name: string, phone: string, relationship: string) =>
+    name || phone || relationship
+      ? { name: name || null, phone: phone || null, relationship: relationship || null }
+      : null;
+
   const save = async () => {
     setSaving(true);
     try {
@@ -102,6 +123,8 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
           preferred_name: preferredName || null,
           case_manager_name: caseManagerName || null,
           case_manager_phone: caseManagerPhone || null,
+          emergency_contact: contactPayload(emergencyContactName, emergencyContactPhone, emergencyContactRelationship),
+          next_of_kin: contactPayload(nextOfKinName, nextOfKinPhone, nextOfKinRelationship),
           likes_dislikes: likesDislikes || null,
           sensory_preferences: sensory || null,
           cultural_preferences: cultural || null,
@@ -184,6 +207,28 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
         <Field label={translate("participants.shiftContext.preferredName")} value={preferredName} onChange={setPreferredName} />
         <Field label={translate("participants.shiftContext.caseManagerName")} value={caseManagerName} onChange={setCaseManagerName} />
         <Field label={translate("participants.shiftContext.caseManagerPhone")} value={caseManagerPhone} onChange={setCaseManagerPhone} />
+      </div>
+
+      <div className="rounded-xl border border-cc-border p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
+          {translate("participants.shiftContext.emergencyContactHeading")}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={translate("participants.shiftContext.emergencyContactName")} value={emergencyContactName} onChange={setEmergencyContactName} />
+          <Field label={translate("participants.shiftContext.emergencyContactPhone")} value={emergencyContactPhone} onChange={setEmergencyContactPhone} />
+          <Field label={translate("participants.shiftContext.emergencyContactRelationship")} value={emergencyContactRelationship} onChange={setEmergencyContactRelationship} />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-cc-border p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
+          {translate("participants.shiftContext.nextOfKinHeading")}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={translate("participants.shiftContext.nextOfKinName")} value={nextOfKinName} onChange={setNextOfKinName} />
+          <Field label={translate("participants.shiftContext.nextOfKinPhone")} value={nextOfKinPhone} onChange={setNextOfKinPhone} />
+          <Field label={translate("participants.shiftContext.nextOfKinRelationship")} value={nextOfKinRelationship} onChange={setNextOfKinRelationship} />
+        </div>
       </div>
 
       <TextArea label={translate("participants.shiftContext.likesDislikes")} value={likesDislikes} onChange={setLikesDislikes} />

@@ -678,8 +678,8 @@ function Router() {
       </Route>
 
       <Route path="/billing">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><Billing /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><Billing /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

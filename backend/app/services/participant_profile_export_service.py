@@ -8,6 +8,7 @@ render_invoice_pdf uses for invoices.
 """
 from __future__ import annotations
 
+import json
 import pathlib
 from typing import Any
 
@@ -20,6 +21,32 @@ _TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
 
 class ParticipantProfileExportError(Exception):
     pass
+
+
+def _format_emergency_contact(raw: Any) -> str | None:
+    """emergency_contact is free text on most records, but some were written
+    as a JSON-encoded {name, phone, relationship} object — render either
+    shape as readable text instead of the raw braces."""
+    if not raw:
+        return None
+    if not isinstance(raw, str):
+        return str(raw)
+    text = raw.strip()
+    if not text.startswith("{"):
+        return text
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(parsed, dict):
+        return text
+    parts = [
+        parsed.get("name"),
+        parsed.get("relationship"),
+        parsed.get("phone"),
+    ]
+    formatted = " · ".join(str(p) for p in parts if p)
+    return formatted or text
 
 
 def _load_goals(organization_id: str, participant_id: str) -> list[dict[str, Any]]:
@@ -55,6 +82,9 @@ async def render_participant_profile_pdf(org_id: str, participant_id: str) -> tu
     if not context.get("participant"):
         raise ParticipantProfileExportError("Participant not found for this organisation")
 
+    context["participant"]["emergency_contact"] = _format_emergency_contact(
+        context["participant"].get("emergency_contact")
+    )
     context["goals"] = _load_goals(org_id, participant_id)
     context["allergies"] = _load_allergies(org_id, participant_id)
 

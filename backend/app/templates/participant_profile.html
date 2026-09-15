@@ -89,9 +89,65 @@
       margin-bottom: 6px;
     }
     .kv-table { width: 100%; border-collapse: collapse; }
-    .kv-table td { padding: 4px 10px; font-size: 8.5pt; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
-    .kv-label { color: #64748b; width: 32%; }
+    .kv-table td { padding: 5px 10px; font-size: 8.5pt; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+    .kv-table tr:nth-child(even) td { background: #fafbfc; }
+    .kv-label {
+      color: {{ org.brand_accent_color }};
+      width: 30%;
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
     .kv-value { color: #1a1a1a; font-weight: 600; }
+
+    /* ── Info strip (compact scalar facts, e.g. plan summary / contacts) ──── */
+    .info-strip-table { width: 100%; border-collapse: collapse; background: #f1f5f9; border: 1px solid #e2e8f0; }
+    .info-strip-cell { padding: 8px 12px; border-right: 1px solid #e2e8f0; vertical-align: top; }
+    .info-strip-cell-last { border-right: none; }
+    .info-strip-label {
+      font-size: 6.5pt;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 3px;
+    }
+    .info-strip-value { font-size: 8.5pt; font-weight: bold; color: #1a1a1a; }
+
+    .plan-badge-wrap { margin-top: 8px; }
+    .plan-badge {
+      display: inline-block;
+      background: {{ org.brand_accent_color }};
+      color: #fff;
+      font-size: 7.5pt;
+      font-weight: bold;
+      padding: 3px 10px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Accent card (a labelled block of related short facts) ────────────── */
+    .accent-card {
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ org.brand_accent_color }};
+      background: #fafbfc;
+      padding: 8px 10px;
+    }
+    .accent-card-label {
+      font-size: 6.5pt;
+      font-weight: bold;
+      color: {{ org.brand_accent_color }};
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 4px;
+    }
+    .accent-card-value { font-size: 8.5pt; font-weight: 600; color: #1a1a1a; line-height: 1.5; }
+    .accent-card-empty { font-size: 8pt; color: #94a3b8; font-style: italic; }
+
+    .contacts-table { width: 100%; border-collapse: collapse; }
+    .contacts-cell { width: 33.33%; vertical-align: top; padding-right: 8px; }
+    .contacts-cell-last { padding-right: 0; }
 
     .list-row {
       border: 1px solid #e2e8f0;
@@ -166,13 +222,29 @@
 <div class="section">
   <div class="section-title">NDIS Plan</div>
   {% if plan %}
-  <table class="kv-table">
-    <tr><td class="kv-label">Plan number</td><td class="kv-value">{{ plan.plan_number or "—" }}</td></tr>
-    <tr><td class="kv-label">Plan period</td><td class="kv-value">{{ plan.plan_start or "—" }} to {{ plan.plan_end or "—" }}</td></tr>
-    <tr><td class="kv-label">Total funding</td><td class="kv-value">{% if plan.total_funding %}${{ "%.2f"|format(plan.total_funding|float) }}{% else %}—{% endif %}</td></tr>
-    <tr><td class="kv-label">Status</td><td class="kv-value">{{ plan.status or "—" }}</td></tr>
-    <tr><td class="kv-label">Plan management</td><td class="kv-value">{{ plan.plan_management_type or "—" }}</td></tr>
+  <table class="info-strip-table">
+    <tr>
+      <td class="info-strip-cell">
+        <div class="info-strip-label">Plan number</div>
+        <div class="info-strip-value">{{ plan.plan_number or "—" }}</div>
+      </td>
+      <td class="info-strip-cell">
+        <div class="info-strip-label">Plan period</div>
+        <div class="info-strip-value">{{ plan.plan_start or "—" }} to {{ plan.plan_end or "—" }}</div>
+      </td>
+      <td class="info-strip-cell">
+        <div class="info-strip-label">Total funding</div>
+        <div class="info-strip-value">{% if plan.total_funding %}${{ "%.2f"|format(plan.total_funding|float) }}{% else %}—{% endif %}</div>
+      </td>
+      <td class="info-strip-cell info-strip-cell-last">
+        <div class="info-strip-label">Status</div>
+        <div class="info-strip-value">{{ plan.status or "—" }}</div>
+      </td>
+    </tr>
   </table>
+  {% if participant.plan_management_type %}
+  <div class="plan-badge-wrap"><span class="plan-badge">{{ participant.plan_management_type }}</span></div>
+  {% endif %}
   {% else %}
   <div class="empty-note">No NDIS plan on file.</div>
   {% endif %}
@@ -181,16 +253,42 @@
 <!-- ── SUPPORT NEEDS ──────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Support Needs</div>
+  {% if participant.primary_disability or participant.communication_guidance or participant.sensory_preferences
+        or participant.cultural_preferences or participant.likes_dislikes or participant.preferred_activities
+        or participant.behavioural_notes or participant.current_conditions %}
   <table class="kv-table">
-    <tr><td class="kv-label">Primary disability</td><td class="kv-value">{{ participant.primary_disability or "—" }}</td></tr>
-    <tr><td class="kv-label">Communication guidance</td><td class="kv-value">{{ participant.communication_guidance or "—" }}</td></tr>
-    <tr><td class="kv-label">Sensory preferences</td><td class="kv-value">{{ participant.sensory_preferences or "—" }}</td></tr>
-    <tr><td class="kv-label">Cultural preferences</td><td class="kv-value">{{ participant.cultural_preferences or "—" }}</td></tr>
-    <tr><td class="kv-label">Likes / dislikes</td><td class="kv-value">{{ participant.likes_dislikes or "—" }}</td></tr>
-    <tr><td class="kv-label">Preferred activities</td><td class="kv-value">{{ participant.preferred_activities or "—" }}</td></tr>
-    <tr><td class="kv-label">Behavioural notes</td><td class="kv-value">{{ participant.behavioural_notes or "—" }}</td></tr>
-    <tr><td class="kv-label">Current conditions</td><td class="kv-value">{{ participant.current_conditions or "—" }}</td></tr>
+    {% if participant.primary_disability %}
+    <tr><td class="kv-label">Primary disability</td><td class="kv-value">{{ participant.primary_disability }}</td></tr>
+    {% endif %}
+    {% if participant.communication_guidance %}
+    <tr><td class="kv-label">Communication guidance</td><td class="kv-value">{{ participant.communication_guidance }}</td></tr>
+    {% endif %}
+    {% if participant.sensory_preferences %}
+    <tr><td class="kv-label">Sensory preferences</td><td class="kv-value">{{ participant.sensory_preferences }}</td></tr>
+    {% endif %}
+    {% if participant.cultural_preferences %}
+    <tr><td class="kv-label">Cultural preferences</td><td class="kv-value">{{ participant.cultural_preferences }}</td></tr>
+    {% endif %}
+    {% if participant.likes_dislikes %}
+    <tr><td class="kv-label">Likes / dislikes</td><td class="kv-value">{{ participant.likes_dislikes }}</td></tr>
+    {% endif %}
+    {% if participant.preferred_activities %}
+    <tr><td class="kv-label">Preferred activities</td><td class="kv-value">{{ participant.preferred_activities|join(", ") }}</td></tr>
+    {% endif %}
+    {% if participant.behavioural_notes %}
+    <tr><td class="kv-label">Behavioural notes</td><td class="kv-value">
+      {% for note in participant.behavioural_notes %}
+        {% if note.title %}<b>{{ note.title }}:</b> {% endif %}{{ note.body or note }}{% if not loop.last %}<br />{% endif %}
+      {% endfor %}
+    </td></tr>
+    {% endif %}
+    {% if participant.current_conditions %}
+    <tr><td class="kv-label">Current conditions</td><td class="kv-value">{{ participant.current_conditions }}</td></tr>
+    {% endif %}
   </table>
+  {% else %}
+  <div class="empty-note">No support needs details on file.</div>
+  {% endif %}
 </div>
 
 <!-- ── ALLERGIES ──────────────────────────────────────────────────────── -->
@@ -231,10 +329,39 @@
 <!-- ── CONTACTS ───────────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Contacts</div>
-  <table class="kv-table">
-    <tr><td class="kv-label">Emergency contact</td><td class="kv-value">{{ participant.emergency_contact or "—" }}</td></tr>
-    <tr><td class="kv-label">Case manager</td><td class="kv-value">{{ participant.case_manager_name or "—" }}{% if participant.case_manager_phone %} &middot; {{ participant.case_manager_phone }}{% endif %}</td></tr>
-    <tr><td class="kv-label">GP</td><td class="kv-value">{{ participant.gp_name or "—" }}{% if participant.gp_practice %} &middot; {{ participant.gp_practice }}{% endif %}{% if participant.gp_phone %} &middot; {{ participant.gp_phone }}{% endif %}</td></tr>
+  <table class="contacts-table">
+    <tr>
+      <td class="contacts-cell">
+        <div class="accent-card">
+          <div class="accent-card-label">Emergency contact</div>
+          {% if participant.emergency_contact %}
+          <div class="accent-card-value">{{ participant.emergency_contact }}</div>
+          {% else %}
+          <div class="accent-card-empty">Not on file</div>
+          {% endif %}
+        </div>
+      </td>
+      <td class="contacts-cell">
+        <div class="accent-card">
+          <div class="accent-card-label">Case manager</div>
+          {% if participant.case_manager_name %}
+          <div class="accent-card-value">{{ participant.case_manager_name }}{% if participant.case_manager_phone %}<br />{{ participant.case_manager_phone }}{% endif %}</div>
+          {% else %}
+          <div class="accent-card-empty">Not on file</div>
+          {% endif %}
+        </div>
+      </td>
+      <td class="contacts-cell contacts-cell-last">
+        <div class="accent-card">
+          <div class="accent-card-label">GP</div>
+          {% if participant.gp_name %}
+          <div class="accent-card-value">{{ participant.gp_name }}{% if participant.gp_practice %}<br />{{ participant.gp_practice }}{% endif %}{% if participant.gp_phone %}<br />{{ participant.gp_phone }}{% endif %}</div>
+          {% else %}
+          <div class="accent-card-empty">Not on file</div>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
   </table>
 </div>
 

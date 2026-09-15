@@ -1,0 +1,21 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NdisPriceEditor } from "./NdisPriceEditor";
+import { editNdisItemPrice, getNdisItemHistory } from "@/services/ndisService";
+vi.mock("@/contexts/AccessibilityContext", () => ({ useAccessibility: () => ({ translate: (key: string) => key, translateParams: (key: string) => key }) }));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/hooks/useReAuth", () => ({ useReAuth: () => ({ requireReAuth: (action: () => Promise<unknown>) => action() }) }));
+vi.mock("@/services/ndisService", () => ({ editNdisItemPrice: vi.fn(), getNdisItemHistory: vi.fn() }));
+afterEach(() => {cleanup(); vi.clearAllMocks();});
+it("displays and saves catalogue prices in dollars", async () => {
+  vi.mocked(getNdisItemHistory).mockResolvedValue([{id:"v1", item_code:"TEST", name:"Support", description:null,price_national:73.45,price_remote:null,price_very_remote:null,valid_from:"2026-07-01",valid_to:null,edited_by:null,edited_at:null}]);
+  render(<NdisPriceEditor onClose={() => {}} />);
+  fireEvent.change(screen.getByLabelText("NDIS item code"), {target:{value:"TEST"}});
+  fireEvent.click(screen.getByRole("button",{name:"coordinator.ndis.price.viewHistory"}));
+  expect(await screen.findByText("$73.45 per unit")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("National rate in AUD"), {target:{value:"73.45"}});
+  fireEvent.change(screen.getByLabelText("Effective date"), {target:{value:"2026-07-01"}});
+  fireEvent.change(screen.getByLabelText("Reason for price change"), {target:{value:"Verified catalogue update"}});
+  fireEvent.click(screen.getByRole("button",{name:"coordinator.ndis.price.saveChange"}));
+  await waitFor(() => expect(editNdisItemPrice).toHaveBeenCalledWith("TEST",73.45,"2026-07-01","Verified catalogue update",null,null));
+});

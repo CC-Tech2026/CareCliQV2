@@ -83,9 +83,9 @@ const VIEW_MODE_KEY = "cc-vault-view-mode";
 function readStoredViewMode(): ViewMode {
   try {
     const stored = localStorage.getItem(VIEW_MODE_KEY);
-    return stored === "list" ? "list" : "grid";
+    return stored === "grid" ? "grid" : "list";
   } catch {
-    return "grid";
+    return "list";
   }
 }
 
@@ -93,18 +93,36 @@ function formatUpdated(iso: string | null): string {
   if (!iso) return "empty";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "recently";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** A literal folder silhouette (tab + body) rather than a dashboard stat
  * card — record folders carry solid Charcoal Navy, governance/policy
  * folders carry a lighter navy tint, so the two groups read as distinct at
  * a glance using only neutral tones, not brand accent colour. */
-function FolderGlyph({ tint, Icon, size = "lg" }: { tint: string; Icon: LucideIcon; size?: "lg" | "sm" }) {
-  const dims = size === "lg" ? { w: "w-16", h: "h-14", tabW: "w-7", tabH: "h-3", icon: 20 } : { w: "w-10", h: "h-9", tabW: "w-4", tabH: "h-2", icon: 14 };
+function FolderGlyph({
+  tint,
+  Icon,
+  size = "lg",
+}: {
+  tint: string;
+  Icon: LucideIcon;
+  size?: "lg" | "sm";
+}) {
+  const dims =
+    size === "lg"
+      ? { w: "w-16", h: "h-14", tabW: "w-7", tabH: "h-3", icon: 20 }
+      : { w: "w-10", h: "h-9", tabW: "w-4", tabH: "h-2", icon: 14 };
   return (
     <div className={`relative ${dims.h} ${dims.w} shrink-0`}>
-      <div className={`absolute left-0 top-0 ${dims.tabH} ${dims.tabW} rounded-t-[3px]`} style={{ background: tint }} />
+      <div
+        className={`absolute left-0 top-0 ${dims.tabH} ${dims.tabW} rounded-t-[3px]`}
+        style={{ background: tint }}
+      />
       <div
         className="absolute inset-x-0 bottom-0 top-1.5 flex items-center justify-center rounded-lg rounded-tl-none"
         style={{ background: tint, top: size === "lg" ? 8 : 6 }}
@@ -123,7 +141,7 @@ function FlaggedBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <span
-      className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+      className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white"
       style={{ background: "var(--cc-status-warning)" }}
     >
       {count}
@@ -134,16 +152,23 @@ function FlaggedBadge({ count }: { count: number }) {
 function FolderTileContent({ folder }: { folder: VaultFolder }) {
   const Icon = FOLDER_ICONS[folder.category] || Folder;
   return (
-    <div className="flex flex-col items-center gap-1.5 rounded-xl p-3 text-center" style={{ cursor: "grab" }}>
+    <div
+      className="flex flex-col items-center gap-1.5 rounded-xl p-3 text-center"
+      style={{ cursor: "grab" }}
+    >
       <div className="relative">
         <FolderGlyph tint={folderTint(folder)} Icon={Icon} />
         <FlaggedBadge count={folder.flagged_count} />
       </div>
-      <p className="line-clamp-2 text-[12.5px] font-bold leading-tight" style={{ color: "var(--cc-text)" }}>
+      <p
+        className="line-clamp-2 text-[12.5px] font-bold leading-tight"
+        style={{ color: "var(--cc-text)" }}
+      >
         {folder.label}
       </p>
       <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>
-        {folder.count} file{folder.count === 1 ? "" : "s"} · {formatUpdated(folder.updated_at)}
+        {folder.count} file{folder.count === 1 ? "" : "s"} ·{" "}
+        {formatUpdated(folder.updated_at)}
       </p>
     </div>
   );
@@ -156,52 +181,118 @@ function FolderTileContent({ folder }: { folder: VaultFolder }) {
 function FolderListRowContent({ folder }: { folder: VaultFolder }) {
   const Icon = FOLDER_ICONS[folder.category] || Folder;
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5" style={{ cursor: "grab" }}>
-      <GripVertical size={14} style={{ color: "var(--cc-border)" }} className="shrink-0" />
+    <div
+      className="flex items-center gap-3 px-3 py-2.5"
+      style={{ cursor: "grab" }}
+    >
+      <GripVertical
+        size={14}
+        style={{ color: "var(--cc-border)" }}
+        className="shrink-0"
+      />
       <div className="relative shrink-0">
         <FolderGlyph tint={folderTint(folder)} Icon={Icon} size="sm" />
         <FlaggedBadge count={folder.flagged_count} />
       </div>
-      <p className="min-w-0 flex-1 truncate text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>
+      <p
+        className="min-w-0 flex-1 truncate text-[13px] font-bold"
+        style={{ color: "var(--cc-text)" }}
+      >
         {folder.label}
       </p>
-      <p className="hidden w-24 shrink-0 text-[12px] sm:block" style={{ color: "var(--cc-muted)" }}>
+      <p
+        className="hidden w-24 shrink-0 text-[12px] sm:block"
+        style={{ color: "var(--cc-muted)" }}
+      >
         {folder.count} file{folder.count === 1 ? "" : "s"}
       </p>
-      <p className="hidden w-32 shrink-0 text-[12px] sm:block" style={{ color: "var(--cc-muted)" }}>
+      <p
+        className="hidden w-32 shrink-0 text-[12px] sm:block"
+        style={{ color: "var(--cc-muted)" }}
+      >
         {formatUpdated(folder.updated_at)}
       </p>
-      <ChevronRight size={15} className="shrink-0" style={{ color: "var(--cc-muted)" }} />
+      <ChevronRight
+        size={15}
+        className="shrink-0"
+        style={{ color: "var(--cc-muted)" }}
+      />
     </div>
   );
 }
 
-function SortableFolderItem({ folder, mode, onOpen }: { folder: VaultFolder; mode: ViewMode; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: folder.category });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+function SortableFolderItem({
+  folder,
+  mode,
+  onOpen,
+}: {
+  folder: VaultFolder;
+  mode: ViewMode;
+  onOpen: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: folder.category });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
   if (mode === "list") {
     return (
-      <div ref={setNodeRef} style={style} className="hover:bg-[var(--cc-active-bg)]" onClick={onOpen} {...attributes} {...listeners}>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="hover:bg-[var(--cc-active-bg)]"
+        onClick={onOpen}
+        {...attributes}
+        {...listeners}
+      >
         <FolderListRowContent folder={folder} />
       </div>
     );
   }
   return (
-    <div ref={setNodeRef} style={style} className="rounded-xl hover:bg-[var(--cc-active-bg)]" onClick={onOpen} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-xl hover:bg-[var(--cc-active-bg)]"
+      onClick={onOpen}
+      {...attributes}
+      {...listeners}
+    >
       <FolderTileContent folder={folder} />
     </div>
   );
 }
 
-function NewFolderControl({ mode, onClick }: { mode: ViewMode; onClick: () => void }) {
+function NewFolderControl({
+  mode,
+  onClick,
+}: {
+  mode: ViewMode;
+  onClick: () => void;
+}) {
   if (mode === "list") {
     return (
-      <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+      >
         <span className="w-[14px] shrink-0" />
         <span className="flex h-9 w-10 shrink-0 items-center justify-center">
           <FolderPlus size={18} style={{ color: "var(--cc-muted)" }} />
         </span>
-        <span className="text-[13px] font-bold" style={{ color: "var(--cc-muted)" }}>
+        <span
+          className="text-[13px] font-bold"
+          style={{ color: "var(--cc-muted)" }}
+        >
           New folder
         </span>
       </button>
@@ -217,16 +308,28 @@ function NewFolderControl({ mode, onClick }: { mode: ViewMode; onClick: () => vo
       <div className="flex h-14 w-16 items-center justify-center">
         <FolderPlus size={26} style={{ color: "var(--cc-muted)" }} />
       </div>
-      <p className="text-[12.5px] font-bold" style={{ color: "var(--cc-muted)" }}>
+      <p
+        className="text-[12.5px] font-bold"
+        style={{ color: "var(--cc-muted)" }}
+      >
         New folder
       </p>
     </button>
   );
 }
 
-function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewMode) => void }) {
+function ViewModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}) {
   return (
-    <div className="flex items-center rounded-lg border p-0.5" style={{ borderColor: "var(--cc-border)" }}>
+    <div
+      className="flex items-center rounded-lg border p-0.5"
+      style={{ borderColor: "var(--cc-border)" }}
+    >
       {(
         [
           ["grid", LayoutGrid],
@@ -251,7 +354,8 @@ function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: V
   );
 }
 
-const GRID_CLASS = "grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8";
+const GRID_CLASS =
+  "grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8";
 
 function FolderGroup({
   title,
@@ -272,15 +376,23 @@ function FolderGroup({
   trailing?: ReactNode;
   headerExtra?: ReactNode;
 }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>
+          <h2
+            className="text-[15px] font-semibold"
+            style={{ color: "var(--cc-text)" }}
+          >
             {title}
           </h2>
-          <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+          <p
+            className="mt-0.5 text-[12px]"
+            style={{ color: "var(--cc-muted)" }}
+          >
             {subtitle}
           </p>
         </div>
@@ -289,19 +401,34 @@ function FolderGroup({
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext
           items={folders.map((f) => f.category)}
-          strategy={mode === "grid" ? rectSortingStrategy : verticalListSortingStrategy}
+          strategy={
+            mode === "grid" ? rectSortingStrategy : verticalListSortingStrategy
+          }
         >
           {mode === "grid" ? (
             <div className={`mt-3 ${GRID_CLASS}`}>
               {folders.map((f) => (
-                <SortableFolderItem key={f.category} folder={f} mode={mode} onOpen={() => navigate(`/md/vault/${f.category}`)} />
+                <SortableFolderItem
+                  key={f.category}
+                  folder={f}
+                  mode={mode}
+                  onOpen={() => navigate(`/md/vault/${f.category}`)}
+                />
               ))}
               {trailing}
             </div>
           ) : (
-            <div className="mt-3 divide-y rounded-xl border" style={{ borderColor: "var(--cc-border)" }}>
+            <div
+              className="mt-3 divide-y rounded-xl border"
+              style={{ borderColor: "var(--cc-border)" }}
+            >
               {folders.map((f) => (
-                <SortableFolderItem key={f.category} folder={f} mode={mode} onOpen={() => navigate(`/md/vault/${f.category}`)} />
+                <SortableFolderItem
+                  key={f.category}
+                  folder={f}
+                  mode={mode}
+                  onOpen={() => navigate(`/md/vault/${f.category}`)}
+                />
               ))}
               {trailing}
             </div>
@@ -318,11 +445,19 @@ export default function VaultHome() {
   const [stats, setStats] = useState<VaultStats | null>(null);
   const [folders, setFolders] = useState<VaultFolder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
-  const [createFolderGroup, setCreateFolderGroup] = useState<"record" | "governance">("record");
+  const [createFolderGroup, setCreateFolderGroup] = useState<
+    "record" | "governance"
+  >("record");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
-  const [ackSummary, setAckSummary] = useState<{ acknowledged: number; total: number } | null>(null);
+  const [ackSummary, setAckSummary] = useState<{
+    acknowledged: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
     void refresh();
@@ -331,8 +466,14 @@ export default function VaultHome() {
         setAckSummary(
           rows.length === 0
             ? null
-            : rows.reduce((acc, r) => ({ acknowledged: acc.acknowledged + r.acknowledged, total: acc.total + r.total }), { acknowledged: 0, total: 0 })
-        )
+            : rows.reduce(
+                (acc, r) => ({
+                  acknowledged: acc.acknowledged + r.acknowledged,
+                  total: acc.total + r.total,
+                }),
+                { acknowledged: 0, total: 0 },
+              ),
+        ),
       )
       .catch(() => setAckSummary(null));
   }, []);
@@ -348,19 +489,32 @@ export default function VaultHome() {
 
   async function refresh() {
     setLoading(true);
+    setLoadError(false);
     try {
-      const [statsData, foldersData] = await Promise.all([fetchVaultStats(), fetchVaultFolders()]);
+      const [statsData, foldersData] = await Promise.all([
+        fetchVaultStats(),
+        fetchVaultFolders(),
+      ]);
       setStats(statsData);
       setFolders(foldersData);
     } catch {
-      toast({ title: "Could not load the document vault", variant: "destructive" });
+      setLoadError(true);
+      toast({
+        title: "Could not load the document vault",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  function persistOrder(nextRecord: VaultFolder[], nextGovernance: VaultFolder[]) {
-    void setFolderOrder([...nextRecord, ...nextGovernance].map((f) => f.category));
+  function persistOrder(
+    nextRecord: VaultFolder[],
+    nextGovernance: VaultFolder[],
+  ) {
+    void setFolderOrder(
+      [...nextRecord, ...nextGovernance].map((f) => f.category),
+    );
   }
 
   function handleRecordDragEnd(event: DragEndEvent) {
@@ -391,55 +545,118 @@ export default function VaultHome() {
     });
   }
 
-  const recordFolders = folders.filter((f) => f.group === "record");
-  const governanceFolders = folders.filter((f) => f.group === "governance");
+  const visibleFolders = folders.filter(
+    (f) =>
+      f.label.toLowerCase().includes(search.trim().toLowerCase()) &&
+      (!flaggedOnly || f.flagged_count > 0),
+  );
+  const recordFolders = visibleFolders.filter((f) => f.group === "record");
+  const governanceFolders = visibleFolders.filter(
+    (f) => f.group === "governance",
+  );
 
   return (
     <HubLayout>
       <div className="space-y-6 pb-12">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <span
               className="flex h-11 w-11 items-center justify-center rounded-xl"
-              style={{ background: "var(--cc-active-bg)", color: "var(--cc-plum)" }}
+              style={{
+                background: "var(--cc-active-bg)",
+                color: "var(--cc-plum)",
+              }}
             >
               <ShieldCheck size={20} />
             </span>
             <div>
-              <h1 className="text-xl font-black tracking-[-0.025em]" style={{ color: "var(--cc-text)" }}>
+              <h1
+                className="text-xl font-semibold tracking-[-0.025em]"
+                style={{ color: "var(--cc-text)" }}
+              >
                 Documents & Audit Vault
               </h1>
-              <p className="mt-0.5 text-[13px]" style={{ color: "var(--cc-muted)" }}>
-                Every participant, worker and governance record, organised and ready for audit.
+              <p
+                className="mt-0.5 text-[13px]"
+                style={{ color: "var(--cc-muted)" }}
+              >
+                Every participant, worker and governance record, organised and
+                ready for audit.
               </p>
             </div>
           </div>
-          <Button className="gap-2 shrink-0" style={{ background: "var(--cc-plum)", color: "white" }} onClick={() => setShareOpen(true)}>
+          <Button
+            className="gap-2 shrink-0"
+            style={{ background: "var(--cc-plum)", color: "white" }}
+            onClick={() => setShareOpen(true)}
+          >
             <Share2 size={15} />
             Share with auditor
           </Button>
         </div>
 
         <StatCardGroup fill>
-          <StatCard icon={<FileText size={16} />} label="Total documents" value={loading ? "…" : stats?.total_documents ?? 0} tone="info" />
+          <StatCard
+            icon={<FileText size={16} />}
+            label="Total documents"
+            value={loading ? "…" : (stats?.total_documents ?? 0)}
+            tone="info"
+          />
           <StatCard
             icon={<AlertTriangle size={16} />}
             label="Flagged for review"
-            value={loading ? "…" : stats?.flagged_for_review ?? 0}
+            value={loading ? "…" : (stats?.flagged_for_review ?? 0)}
             tone="warning"
           />
           <StatCard
             icon={<Share2 size={16} />}
             label="Shared with auditors"
-            value={loading ? "…" : stats?.shared_last_30_days ?? 0}
+            value={loading ? "…" : (stats?.shared_last_30_days ?? 0)}
             sub="last 30 days"
             tone="success"
           />
         </StatCardGroup>
 
-        <div className="flex items-center justify-end">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-cc-border bg-cc-card p-3">
+          <input
+            aria-label="Search vault folders"
+            type="search"
+            placeholder="Search folders"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 min-w-0 flex-1 basis-48 rounded-md border border-cc-border bg-transparent px-3 text-sm"
+          />
+          <Button
+            variant={flaggedOnly ? "default" : "outline"}
+            aria-pressed={flaggedOnly}
+            onClick={() => setFlaggedOnly((v) => !v)}
+          >
+            Flagged for review
+          </Button>
           <ViewModeToggle mode={viewMode} onChange={changeViewMode} />
+          <Button variant="outline" onClick={() => navigate("/md/staff")}>
+            Staff directory
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/billing")}>
+            NDIS invoices
+          </Button>
         </div>
+        {loadError && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 text-sm"
+          >
+            The vault could not be loaded.{" "}
+            <Button variant="outline" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {!loading && !loadError && visibleFolders.length === 0 && (
+          <p className="py-6 text-sm text-cc-muted">
+            No folders match your filters.
+          </p>
+        )}
 
         <FolderGroup
           title="Browse by record type"
@@ -470,10 +687,14 @@ export default function VaultHome() {
             ackSummary && (
               <div
                 className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold"
-                style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+                style={{
+                  borderColor: "var(--cc-border)",
+                  color: "var(--cc-text)",
+                }}
               >
                 <Users size={13} style={{ color: "var(--cc-muted)" }} />
-                {ackSummary.acknowledged}/{ackSummary.total} policy acknowledgements
+                {ackSummary.acknowledged}/{ackSummary.total} policy
+                acknowledgements
               </div>
             )
           }
@@ -489,7 +710,13 @@ export default function VaultHome() {
         />
       </div>
 
-      <ShareAuditorDialog open={shareOpen} onOpenChange={setShareOpen} documents={[]} folderKeys={[]} targetDescription="Documents across the vault" />
+      <ShareAuditorDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        documents={[]}
+        folderKeys={[]}
+        targetDescription="Documents across the vault"
+      />
       <CreateFolderDialog
         open={createFolderOpen}
         onOpenChange={setCreateFolderOpen}

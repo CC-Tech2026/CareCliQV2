@@ -93,6 +93,7 @@ const MD_NAV_GROUPS = [
     label: "Workforce & People",
     items: [
       { href: "/md/staff", label: "Staff", icon: Users },
+      { href: "/billing", label: "NDIS invoices", icon: DollarSign },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
       { href: "/md/tags", label: "Matching Tags", icon: Tags },

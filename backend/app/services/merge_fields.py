@@ -44,7 +44,7 @@ _PARTICIPANT_COLUMNS = (
     "primary_disability, case_manager_name, case_manager_phone, emergency_contact, "
     "likes_dislikes, sensory_preferences, cultural_preferences, preferred_activities, "
     "communication_guidance, behavioural_notes, current_conditions, "
-    "gp_name, gp_phone, gp_practice"
+    "gp_name, gp_phone, gp_practice, plan_management_type"
 )
 
 
