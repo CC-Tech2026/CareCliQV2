@@ -39,7 +39,7 @@ from .. import (
     session_service,
     shift_pdf_export_service,
 )
-from ..supabase_client import get_supabase_admin
+from .db import quill_client
 from ...api.coordinator import _execute_shift_query_with_legacy_fallback
 from ...api.dashboards import (
     _average_score,
@@ -92,6 +92,34 @@ async def _log_tool_call(current_user: dict, thread_id: str, tool_name: str, res
         logger.warning("Failed to write chatbox tool-call audit log for %s", tool_name)
 
 
+def _resolve_team_or_org_scope(current_user: dict) -> tuple[str, Optional[set]] | None:
+    """Shared shape used by every tool where a managing director sees the
+    whole organisation and a coordinator sees only their own team.
+
+    Returns (scope_label, team_worker_ids) — team_worker_ids is None for
+    org-wide access, or the coordinator's team as a set of worker ids to
+    filter by. Returns None if the caller is neither role; this function
+    only resolves scope, it never decides whether to error, so a tool
+    can't accidentally skip that check — every caller below still does
+    `if scope_result is None: return {"error": ...}` itself.
+
+    Previously this exact if/elif/else was hand-copied into eight separate
+    tools — the risk being a future tool copying it wrong (or dropping the
+    else) and silently widening access. The direct queries in this module
+    now run as the read-only ``quill_agent`` Postgres role (see db.py), so
+    the org boundary is also enforced by RLS — but the *team* boundary for
+    coordinators is still Python-only, and helpers borrowed from other
+    services still run on the service-role key, so this check remains the
+    real boundary for those."""
+    if is_managing_director(current_user):
+        return "organisation-wide", None
+    if is_coordinator_role(current_user):
+        supabase = quill_client(current_user)
+        team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
+        return "your team", team_worker_ids
+    return None
+
+
 def build_tools_for_user(current_user: dict, thread_id: str) -> list:
     """Build the tool list scoped to *current_user*.
 
@@ -111,19 +139,15 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-            team = await _team_members(org_id)
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
-            team = await _team_members(org_id, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        if team_worker_ids is not None:
+            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
+        team = await _team_members(org_id, team_worker_ids)
 
         compliance_score = _average_score(sessions)
         compliance_target = 90
@@ -192,17 +216,14 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        if team_worker_ids is not None:
+            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
         current_month_prefix = _today_iso()[:7]
         rp_flag_count = sum(
@@ -222,7 +243,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not (is_managing_director(current_user) or is_coordinator_role(current_user)):
             return {"error": "This tool is only available to coordinators and managing directors."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         now = datetime.now(timezone.utc)
         window_start = (now - timedelta(hours=16)).isoformat()
         window_end = (now + timedelta(hours=16)).isoformat()
@@ -280,17 +301,14 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        participants = await participant_service.get_participants_list_light(current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        participants = await participant_service.get_participants_list_light(current_user)
+        if team_worker_ids is not None:
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
         return {"scope": scope, "goal_achievement_rate_pct": _goal_achievement_rate(participants)}
 
@@ -306,17 +324,14 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        participants = await participant_service.get_participants_list_light(current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        participants = await participant_service.get_participants_list_light(current_user)
+        if team_worker_ids is not None:
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
         return {"scope": scope, "participant_count": len(participants)}
 
@@ -331,17 +346,14 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        participants = await participant_service.get_participants_list_light(current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        participants = await participant_service.get_participants_list_light(current_user)
+        if team_worker_ids is not None:
+            participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
         return {
             "scope": scope,
@@ -362,16 +374,11 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-            team = await _team_members(org_id)
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            team = await _team_members(org_id, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+        team = await _team_members(org_id, team_worker_ids)
 
         active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
         return {"scope": scope, "active_worker_count": len(active_workers)}
@@ -387,16 +394,11 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-            team = await _team_members(org_id)
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            team = await _team_members(org_id, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+        team = await _team_members(org_id, team_worker_ids)
 
         active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
         return {
@@ -421,7 +423,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not (is_managing_director(current_user) or is_coordinator_role(current_user)):
             return {"error": "This tool is only available to coordinators and managing directors."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         team_worker_ids: Optional[set] = None
         if is_coordinator_role(current_user) and not is_managing_director(current_user):
             team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
@@ -484,7 +486,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not (is_managing_director(current_user) or is_coordinator_role(current_user)):
             return {"error": "This tool is only available to coordinators and managing directors."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         team_worker_ids: Optional[set] = None
         if is_coordinator_role(current_user) and not is_managing_director(current_user):
             team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
@@ -531,7 +533,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         if is_managing_director(current_user):
             team = await _team_members(org_id)
         elif is_coordinator_role(current_user):
@@ -576,7 +578,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         team_worker_ids: Optional[set] = None
         if is_managing_director(current_user):
             pass
@@ -616,17 +618,14 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
-
-        if is_managing_director(current_user):
-            scope = "organisation-wide"
-        elif is_coordinator_role(current_user):
-            scope = "your team"
-            supabase = get_supabase_admin()
-            team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
-        else:
+        scope_result = _resolve_team_or_org_scope(current_user)
+        if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        if team_worker_ids is not None:
+            sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
         today = _today_iso()
         week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
@@ -650,7 +649,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        supabase = get_supabase_admin()
+        supabase = quill_client(current_user)
         try:
             result = (
                 supabase.table("organization_members")
