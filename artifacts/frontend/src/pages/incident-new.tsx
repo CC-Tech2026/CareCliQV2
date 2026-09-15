@@ -126,7 +126,7 @@ const emptyForm = {
   injury_medical_attention: "",
   participant_impact: "",
   worker_actions: "",
-  emergency_services_called: "",
+  emergency_services_called: "" as "" | "no" | "triple_zero" | "sa_ambulance_only",
   family_notified: "" as "" | "yes" | "not_yet" | "not_applicable",
   md_notified: "" as "" | "yes" | "not_yet",
   staff_declaration_name: "",
