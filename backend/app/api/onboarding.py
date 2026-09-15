@@ -190,6 +190,19 @@ async def get_my_buddy(current_user: dict = Depends(get_current_user)):
 async def get_my_completion_status(current_user: dict = Depends(get_current_user)):
     worker_id = get_user_id(current_user)
     profile = _load_user(worker_id)
+    onboarding_completed = bool(profile.get("onboarding_completed"))
+    org_id = profile.get("organization_id")
+    if not onboarding_completed and org_id:
+        # A worker who onboarded entirely through the mobile app has no
+        # equivalent of the web-only full checklist that normally sets this
+        # flag — without this, this endpoint (which the mobile app polls to
+        # decide whether to show the "you made it" screen) would report
+        # onboarding_completed: false forever even once fully credentialed
+        # and trained. get_pipeline_for_worker computes and persists the
+        # same objective readiness check the MD's pipeline board uses.
+        pipeline = worker_pipeline_service.get_pipeline_for_worker(worker_id, org_id)
+        if pipeline and pipeline.get("current_stage") == "active":
+            onboarding_completed = True
     stats = {"credentials_verified": 0, "training_completed": 0}
     try:
         cred_resp = (
@@ -216,7 +229,7 @@ async def get_my_completion_status(current_user: dict = Depends(get_current_user
     except Exception:
         pass
     return {
-        "onboarding_completed": bool(profile.get("onboarding_completed")),
+        "onboarding_completed": onboarding_completed,
         "onboarding_completed_seen_at": profile.get("onboarding_completed_seen_at"),
         "stats": stats,
     }

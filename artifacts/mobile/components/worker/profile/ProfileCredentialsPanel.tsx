@@ -16,7 +16,7 @@ import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
-import { needsCredentialUpdate } from "@/lib/credential-utils";
+import { CREDENTIAL_TYPES, needsCredentialUpdate } from "@/lib/credential-utils";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
 
 function statusMeta(
@@ -91,6 +91,16 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
     [data],
   );
 
+  const requiredRows = useMemo(
+    () =>
+      CREDENTIAL_TYPES.filter((meta) => meta.mandatory).map((meta) => ({
+        meta,
+        credential: data.find((item) => item.credential_type === meta.type),
+      })),
+    [data],
+  );
+  const requiredUploaded = requiredRows.filter((row) => Boolean(row.credential)).length;
+
   if (isLoading) {
     return (
       <View style={styles.center}>
@@ -117,6 +127,26 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
       <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
         {t("settings.credentials.subtitle")}
       </Text>
+
+      <View style={[styles.requiredCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.requiredHeader}>
+          <Text style={[styles.requiredTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            {t("profile.credentials.requiredTitle")}
+          </Text>
+          <Text style={[styles.requiredProgress, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("profile.credentials.requiredProgress", { done: requiredUploaded, total: requiredRows.length })}
+          </Text>
+        </View>
+        <Text style={[styles.requiredSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("profile.credentials.requiredSubtitle")}
+        </Text>
+        <View style={styles.requiredList}>
+          {requiredRows.map(({ meta, credential }) => (
+            <RequiredCredentialRow key={meta.type} type={meta.type} label={meta.label} credential={credential} />
+          ))}
+        </View>
+      </View>
+
       <View style={styles.summaryRow}>
         <SummaryPill
           label={t("profile.credentials.summary.valid", { count: summary.valid })}
@@ -160,6 +190,54 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+function RequiredCredentialRow({
+  type,
+  label,
+  credential,
+}: {
+  type: string;
+  label: string;
+  credential?: Credential;
+}) {
+  const colors = useColors();
+  const router = useRouter();
+  const t = useT();
+  const missing = !credential;
+  const updatable = Boolean(credential && needsCredentialUpdate(credential.status));
+  const meta = credential ? statusMeta(credential.status, colors) : null;
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (missing) {
+          router.push(`/worker/credentials/add?type=${type}` as never);
+        } else if (updatable) {
+          router.push(`/worker/credentials/${credential!.id}/update` as never);
+        }
+      }}
+      style={styles.requiredRow}
+    >
+      <Feather
+        name={missing ? "circle" : credential!.status === "valid" ? "check-circle" : "alert-circle"}
+        size={18}
+        color={missing ? colors.mutedForeground : (meta?.color ?? colors.mutedForeground)}
+      />
+      <Text style={[styles.requiredRowLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={2}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.requiredRowStatus,
+          { color: missing ? colors.destructive : (meta?.color ?? colors.mutedForeground), fontFamily: "Inter_700Bold" },
+        ]}
+      >
+        {missing ? t("profile.credentials.requiredMissing") : statusBadgeLabel(credential!.status, t)}
+      </Text>
+      {missing || updatable ? <Feather name="chevron-right" size={16} color={colors.mutedForeground} /> : null}
+    </Pressable>
   );
 }
 
@@ -267,6 +345,25 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
   subtitle: { fontSize: 12, lineHeight: 17 },
+  requiredCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  requiredHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  requiredTitle: { fontSize: 15, flex: 1 },
+  requiredProgress: { fontSize: 12 },
+  requiredSubtitle: { fontSize: 12, lineHeight: 17 },
+  requiredList: { gap: 2 },
+  requiredRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+  },
+  requiredRowLabel: { flex: 1, fontSize: 13, lineHeight: 18 },
+  requiredRowStatus: { fontSize: 11, textAlign: "right" },
   summaryRow: { flexDirection: "row", gap: 10 },
   summaryPill: {
     flex: 1,

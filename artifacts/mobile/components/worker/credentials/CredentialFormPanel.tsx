@@ -34,8 +34,12 @@ type PickedFile = { uri: string; name: string; type: string };
  * one — passing `credential` switches it into update mode: the type is
  * fixed (it's the same requirement, not a new one), fields are prefilled,
  * and saving patches that same row (plus re-uploading a document onto it)
- * instead of inserting a second record for the same requirement. */
-export function CredentialFormPanel({ credential }: { credential?: Credential }) {
+ * instead of inserting a second record for the same requirement.
+ *
+ * `presetType` is used when arriving from the "required to get rostered"
+ * checklist for a specific missing credential — the type is locked so it's
+ * unambiguous which requirement is being fulfilled. */
+export function CredentialFormPanel({ credential, presetType }: { credential?: Credential; presetType?: CredentialTypeOption }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const t = useT();
@@ -43,11 +47,12 @@ export function CredentialFormPanel({ credential }: { credential?: Credential })
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const isUpdate = Boolean(credential);
+  const typeLocked = isUpdate || Boolean(presetType);
 
   const [credentialType, setCredentialType] = useState<CredentialTypeOption>(
-    (credential?.credential_type as CredentialTypeOption) ?? CREDENTIAL_TYPE_OPTIONS[0],
+    (credential?.credential_type as CredentialTypeOption) ?? presetType ?? CREDENTIAL_TYPE_OPTIONS[0],
   );
-  const [title, setTitle] = useState(credential?.title ?? "");
+  const [title, setTitle] = useState(credential?.title ?? (presetType ? credentialTypeLabel(presetType) : ""));
   const [credentialNumber, setCredentialNumber] = useState(credential?.credential_number ?? "");
   const [issuer, setIssuer] = useState(credential?.issuer ?? "");
   const [issueDate, setIssueDate] = useState(credential?.issue_date ?? "");
@@ -124,7 +129,7 @@ export function CredentialFormPanel({ credential }: { credential?: Credential })
               <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                 {t("credentials.type")}
               </Text>
-              {isUpdate ? (
+              {typeLocked ? (
                 <View style={[styles.select, styles.selectDisabled, { borderColor: colors.border, backgroundColor: colors.background }]}>
                   <Text style={[styles.selectText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                     {credentialTypeLabel(credentialType)}

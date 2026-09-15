@@ -25,12 +25,22 @@ an existing data model rather than a new one:
                          not which column a worker is placed in.
 - Training            -> worker_training_service.team_training_overdue_map
                          and induction_service.team_induction_incomplete_map
-- Active               -> users.onboarding_completed
+- Active               -> users.onboarding_completed, which this module also
+                         auto-sets the moment credentials+training+induction
+                         are objectively done (see _mark_onboarding_completed)
+                         — the web app has a fuller onboarding checklist that
+                         normally sets this flag once a worker ticks every
+                         item (including non-gating acknowledgements like
+                         reading the note-writing guide), but mobile-only
+                         workers have no way to reach that page at all, so
+                         without this they'd stay stuck in Training forever
+                         no matter how complete their setup actually was.
 
-This board never writes anything — no drag-and-drop, no stage transitions.
-Moving a candidate forward still happens on the pages that already own that
-action (the Applicants Board, the Hires signature flow, the worker's own
-checklist).
+This board never does a user-facing stage transition — no drag-and-drop.
+Moving a candidate through Interview/Offer/Hires still only happens on the
+pages that already own that action (the Applicants Board, the Hires
+signature flow). The one exception is the auto-completion above, which is a
+system-derived status correction, not a manual move.
 """
 
 from __future__ import annotations
@@ -58,6 +68,19 @@ STAGE_LABELS = {
 def _is_missing_schema_error(exc: Exception) -> bool:
     err = str(exc).lower()
     return "does not exist" in err or "42703" in err or "pgrst" in err or "could not find" in err
+
+
+def _mark_onboarding_completed(worker_ids: list[str]) -> None:
+    """Best-effort — a failed write here just means the next read of this
+    board (or of /onboarding/me/completion-status on mobile) retries it."""
+    if not worker_ids:
+        return
+    try:
+        get_supabase_admin().table("users").update(
+            {"onboarding_completed": True, "onboarding_complete": True}
+        ).in_("id", worker_ids).execute()
+    except Exception:
+        pass
 
 
 def _classify_mid_onboarding(
@@ -122,10 +145,23 @@ def get_pipeline_overview(organization_id: str) -> dict[str, Any]:
 
     credentials_col: list[dict[str, Any]] = []
     training_col: list[dict[str, Any]] = []
+    newly_ready_ids: list[str] = []
     for w in onboarding_workers:
         overdue = bool(training_overdue_map.get(w["id"])) or bool(induction_incomplete_map.get(w["id"]))
+        if w["id"] in cred_approved and not overdue:
+            # Objectively ready (mandatory credentials verified, training and
+            # induction current) but onboarding_completed was never set —
+            # always true for a worker who onboarded entirely through the
+            # mobile app, which has no equivalent of the web-only full
+            # checklist that normally flips this flag. Mutating `w` in place
+            # here means the active_col comprehension below picks it up
+            # immediately, not just on the next load.
+            newly_ready_ids.append(w["id"])
+            w["onboarding_completed"] = True
+            continue
         stage, flag = _classify_mid_onboarding(w["id"] in cred_approved, w["id"] in cred_blocked, overdue)
         (credentials_col if stage == "credentials" else training_col).append({**w, "flag": flag})
+    _mark_onboarding_completed(newly_ready_ids)
 
     active_col = [w for w in workers if w.get("is_active") and w.get("onboarding_completed")]
 
@@ -220,9 +256,16 @@ def get_pipeline_for_worker(worker_id: str, organization_id: str) -> dict[str, A
         cred_blocked = bool(escalation.credentials_blocked([worker_id]))
         training_overdue = training.is_training_overdue(worker_id, organization_id)
         induction_incomplete = induction_service.is_induction_incomplete(worker_id, organization_id)
-        current_stage, _flag = _classify_mid_onboarding(
-            cred_approved, cred_blocked, training_overdue or induction_incomplete
-        )
+        if worker.get("is_active") and cred_approved and not training_overdue and not induction_incomplete:
+            # See _mark_onboarding_completed in get_pipeline_overview — same
+            # auto-completion, just computed for one worker instead of a
+            # whole org's board.
+            _mark_onboarding_completed([worker_id])
+            current_stage = "active"
+        else:
+            current_stage, _flag = _classify_mid_onboarding(
+                cred_approved, cred_blocked, training_overdue or induction_incomplete
+            )
         if current_stage == "credentials" and cred_blocked:
             outstanding.append("Submit your outstanding mandatory credentials")
         elif current_stage == "training":
