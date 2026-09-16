@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   createAccessGrant,
   getGrantableCapabilities,
@@ -191,8 +192,15 @@ function CreateGrantSheet({
 
 export function DelegatedAccessSection() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // useOrgQuery auto-prepends organizationId to the query key
+  // ([orgId, "access-grants", "org"]) — invalidation has to target that same
+  // prefix, or it silently matches nothing and the list never refreshes.
+  const orgId = user?.organizationId ?? "__no_org__";
+  const invalidateGrants = () => qc.invalidateQueries({ queryKey: [orgId, "access-grants", "org"] });
 
   const grantsQuery = useOrgQuery(["access-grants", "org"], {
     queryFn: listAccessGrants,
@@ -210,7 +218,7 @@ export function DelegatedAccessSection() {
     mutationFn: (grantId: string) => revokeAccessGrant(grantId),
     onSuccess: () => {
       toast({ title: "Access revoked" });
-      void qc.invalidateQueries({ queryKey: ["access-grants"] });
+      void invalidateGrants();
     },
     onError: (err) => {
       toast({
@@ -316,7 +324,7 @@ export function DelegatedAccessSection() {
         onOpenChange={setSheetOpen}
         capabilities={capabilities}
         coordinators={coordinators}
-        onCreated={() => qc.invalidateQueries({ queryKey: ["access-grants"] })}
+        onCreated={() => invalidateGrants()}
       />
     </section>
   );

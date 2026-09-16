@@ -13,6 +13,7 @@ const fixtures = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { organizationId: "org-1" } }) }));
 vi.mock("@/hooks/useOrgQuery", () => ({
   useOrgQuery: (key: string[]) => {
     if (key[1] === "org") return { isLoading: false, data: fixtures.grants };
@@ -39,11 +40,13 @@ vi.mock("@/services/coordinatorService", () => ({
 }));
 
 function renderSection() {
-  return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const result = render(
+    <QueryClientProvider client={queryClient}>
       <DelegatedAccessSection />
     </QueryClientProvider>,
   );
+  return { ...result, queryClient };
 }
 
 afterEach(() => {
@@ -107,7 +110,8 @@ it("creates a grant with the selected coordinator, capability, and expiry", asyn
     status: "active",
   });
   fixtures.coordinators = [{ id: "coord-1", full_name: "Casey Coordinator", role: "support_coordinator" }];
-  renderSection();
+  const { queryClient } = renderSection();
+  const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
   fireEvent.click(screen.getByRole("button", { name: /Grant access/ }));
 
@@ -126,9 +130,16 @@ it("creates a grant with the selected coordinator, capability, and expiry", asyn
   expect(payload.granted_to_user_id).toBe("coord-1");
   expect(payload.capability).toBe("governance_vault");
   expect(typeof payload.expires_at).toBe("string");
+
+  // useOrgQuery prepends organizationId to the query key — invalidation must
+  // target that same prefixed key, or the grant list silently never
+  // refetches after a successful create (the exact bug this asserts against).
+  await waitFor(() =>
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["org-1", "access-grants", "org"] }),
+  );
 });
 
-it("revokes an active grant", async () => {
+it("revokes an active grant and invalidates the org-scoped grants query", async () => {
   revokeAccessGrantMock.mockResolvedValue({ id: "grant-1", status: "revoked" });
   fixtures.grants = [
     {
@@ -143,9 +154,13 @@ it("revokes an active grant", async () => {
     },
   ];
   fixtures.coordinators = [{ id: "coord-1", full_name: "Casey Coordinator", role: "support_coordinator" }];
-  renderSection();
+  const { queryClient } = renderSection();
+  const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
   fireEvent.click(screen.getByRole("button", { name: /Revoke/ }));
 
   await waitFor(() => expect(revokeAccessGrantMock).toHaveBeenCalledWith("grant-1"));
+  await waitFor(() =>
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["org-1", "access-grants", "org"] }),
+  );
 });
