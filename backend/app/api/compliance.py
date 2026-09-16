@@ -15,7 +15,7 @@ from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_c
 from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 import logging
-from ..core.timezone import app_today, shift_local_date
+from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
 def _local_day(value) -> str:
@@ -837,6 +837,7 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
             "ndis_reportable": r.get("ndis_reportable"),
             "notification_due_at": due_at.isoformat() if due_at else None,
             "overdue": bool(due_at and now > due_at),
+            "timezone": str(participant_timezone(r, organization_id=org_id)),
         })
 
     return {

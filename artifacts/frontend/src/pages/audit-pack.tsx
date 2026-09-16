@@ -5,6 +5,7 @@ import {
   TrendingUp, TrendingDown, Minus, Flag,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { formatAppDate } from "@/lib/datetime";
 import {
   getCoordinatorComplianceOverview,
   getCoordinatorRpFlags,
@@ -372,8 +373,8 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                         })}
                       </p>
                       <p className="text-xs" style={{ color: MUTED }}>
-                        {s.session_date ? format(parseISO(s.session_date), "d MMM yyyy") : translate("auditPack.unknownDate")}
-                        {s.review_requested_at && translateParams("auditPack.flaggedOn", { date: format(parseISO(s.review_requested_at), "d MMM") })}
+                        {s.session_date ? formatAppDate(s.session_date, s.timezone) : translate("auditPack.unknownDate")}
+                        {s.review_requested_at && translateParams("auditPack.flaggedOn", { date: formatAppDate(s.review_requested_at, s.timezone, { day: "numeric", month: "short" }) })}
                       </p>
                     </div>
                     <a

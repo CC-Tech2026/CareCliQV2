@@ -17,6 +17,8 @@ export type TravelSubmission = {
   status: string;
   submitted_at: string;
   expenses: TravelSubmissionExpense[];
+  /** The submitting worker's own branch zone. */
+  timezone?: string | null;
 };
 
 export function getCoordinatorTravelSubmissions() {

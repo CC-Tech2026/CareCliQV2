@@ -1,4 +1,3 @@
-import { format, parseISO } from "date-fns";
 import { Link } from "wouter";
 import { Clock3, MapPin, Navigation, X } from "lucide-react";
 import {
@@ -9,6 +8,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { BORDER, TEXT, MUTED, PLUM, formatShiftTimeRange } from "@/lib/shift-utils";
+import { formatAppTime, zoneAbbreviation } from "@/lib/datetime";
 import type { CalendarShift } from "@/services/workerCalendarService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -36,7 +36,7 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
                 {shift.participant_name || translate("shift.calendar.fallbackTitle")}
               </DrawerTitle>
               <p className="mt-1 text-sm font-semibold" style={{ color: MUTED }}>
-                {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+                {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
               </p>
             </div>
             <DrawerClose className="rounded-full p-2 hover:bg-slate-100">
@@ -130,12 +130,13 @@ export function shiftBlockStyle(shift: CalendarShift) {
   };
 }
 
-export function formatShiftBlockTime(start?: string, end?: string) {
+export function formatShiftBlockTime(start?: string, end?: string, tz?: string | null) {
   if (!start) return "";
   try {
-    const s = format(parseISO(start), "h:mm a");
-    const e = end ? format(parseISO(end), "h:mm a") : "";
-    return e ? `${s} – ${e}` : s;
+    const s = formatAppTime(start, tz);
+    const e = end ? formatAppTime(end, tz) : "";
+    const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
+    return e ? `${s} – ${e}${zone}` : `${s}${zone}`;
   } catch {
     return "";
   }

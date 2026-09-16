@@ -7,6 +7,7 @@ import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import { LoadingBlock, EmptyState, StatusBadge } from "@/pages/compliance";
 import {
   fileMedicationCorrection,
@@ -151,7 +152,7 @@ export function MedicationRegisterPanel() {
   );
 }
 
-function AdministrationEventCard({ admin, medicationId }: { admin: MedicationAdministrationRecord; medicationId: string }) {
+function AdministrationEventCard({ admin, medicationId, tz }: { admin: MedicationAdministrationRecord; medicationId: string; tz?: string | null }) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -178,7 +179,7 @@ function AdministrationEventCard({ admin, medicationId }: { admin: MedicationAdm
           {admin.outcome.replace(/_/g, " ")}
         </span>
         <span className="text-[11px]" style={{ color: MUTED }}>
-          {new Date(admin.administered_time).toLocaleString()}
+          {formatAppTimeWithZone(admin.administered_time, tz)}
         </span>
       </div>
       {admin.administered_by_name && (
@@ -213,7 +214,7 @@ function AdministrationEventCard({ admin, medicationId }: { admin: MedicationAdm
           {admin.corrects_administration_id && (
             <p className="text-[11px]" style={{ color: MUTED }}>
               {translate("compliance.centre.medications.discoveredLate")}
-              {admin.error_discovered_at ? ` — ${new Date(admin.error_discovered_at).toLocaleString()}` : ""}. {translate("compliance.centre.medications.correctsEntry")}.
+              {admin.error_discovered_at ? ` — ${formatAppTimeWithZone(admin.error_discovered_at, tz)}` : ""}. {translate("compliance.centre.medications.correctsEntry")}.
             </p>
           )}
         </div>
@@ -316,7 +317,7 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
               <div className="space-y-2">
                 {data.timeline.map((event, idx) => {
                   if (event.event_type === "administration") {
-                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} medicationId={data.medication.id} />;
+                    return <AdministrationEventCard key={`admin-${event.administration.id}`} admin={event.administration} medicationId={data.medication.id} tz={data.timezone} />;
                   }
                   if (event.event_type === "document_uploaded") {
                     const doc = event.document;
@@ -327,7 +328,7 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[12px] font-bold truncate" style={{ color: TEXT }}>{doc.file_name}</p>
                             <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
-                              {new Date(event.timestamp).toLocaleString()}
+                              {formatAppTimeWithZone(event.timestamp, data.timezone)}
                             </span>
                           </div>
                           <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
@@ -350,7 +351,7 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
                               : translate(`participants.medications.status.${change.to_status}`)}
                           </p>
                           <span className="text-[11px] shrink-0" style={{ color: MUTED }}>
-                            {new Date(event.timestamp).toLocaleString()}
+                            {formatAppTimeWithZone(event.timestamp, data.timezone)}
                           </span>
                         </div>
                         {change.users?.full_name && (

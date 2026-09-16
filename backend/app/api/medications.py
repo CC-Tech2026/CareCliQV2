@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_support_worker
 from ..core.security import get_current_user
+from ..core.timezone import participant_timezone
 from ..services import medication_document_service, medication_pattern_service, medication_service
 
 router = APIRouter(tags=["medications"])
@@ -354,7 +355,15 @@ async def coordinator_medication_audit_timeline(
         })
     events.sort(key=lambda e: e["timestamp"])
 
-    return {"medication": medication, "documents": documents, "timeline": events}
+    return {
+        "medication": medication,
+        "documents": documents,
+        "timeline": events,
+        # Every event here belongs to this one medication's participant —
+        # clients show the whole timeline in it and label it when it
+        # differs from the coordinator's own branch.
+        "timezone": str(participant_timezone(medication, organization_id=org_id)),
+    }
 
 
 

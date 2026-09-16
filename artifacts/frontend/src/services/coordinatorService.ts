@@ -95,6 +95,8 @@ export type FlaggedSession = {
   review_note?: string;
   review_requested_by?: string;
   review_requested_at?: string;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type RevenueReport = {
@@ -1311,6 +1313,9 @@ export type LiveShift = {
     outcome?: string | null;
   }>;
   workflow_stage: "not_clocked_in" | "clocked_in" | "documenting" | "wrapping_up";
+  /** Participant's branch zone — label clock-in/medication times with it
+   * when it differs from the coordinator's own branch. */
+  timezone?: string | null;
 };
 
 export type CoordinatorAlert = {
@@ -1697,6 +1702,8 @@ export type ShiftVerificationQueueItem = {
   clocked_out_at?: string | null;
   duration_minutes?: number | null;
   checks: ShiftVerificationChecks;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type ShiftPriceItemOption = {
@@ -2118,6 +2125,8 @@ export type ComplianceIncidentRow = {
   ndis_reportable: boolean;
   notification_due_at?: string | null;
   overdue?: boolean;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type ComplianceCentreIncidents = {

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
-from ..core.timezone import app_today, shift_local_date
+from ..core.timezone import app_today, participant_timezone, shift_local_date
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..schemas.session import GoalProgressNote, SessionCreate
 from ..services import (
@@ -1068,6 +1068,7 @@ async def worker_shift_offer_summary(shift_id: str, current_user: dict = Depends
         "scheduled_end": shift.get("scheduled_end"),
         "shift_type": shift.get("shift_type"),
         "offered_at": offer.get("offered_at"),
+        "timezone": str(participant_timezone(shift, organization_id=org_id)),
     }
 
 

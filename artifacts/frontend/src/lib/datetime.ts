@@ -85,6 +85,17 @@ export function formatAppTime(iso: string, tz?: string | null): string {
   }).format(new Date(iso));
 }
 
+/**
+ * e.g. "9:00 am AEST" — a time paired with its zone abbreviation, always
+ * shown (not just when it differs from the viewer's own branch). Records
+ * that matter for audit — shift times, medication administrations,
+ * progress notes, incidents, invoices — must never be ambiguous about
+ * which branch's clock they're on, regardless of who's looking.
+ */
+export function formatAppTimeWithZone(iso: string, tz?: string | null): string {
+  return `${formatAppTime(iso, tz)} ${zoneAbbreviation(iso, tz)}`;
+}
+
 /** Short zone name at that instant, e.g. "AEST" / "ACDT". */
 export function zoneAbbreviation(iso: string | Date, tz?: string | null): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
@@ -92,6 +103,16 @@ export function zoneAbbreviation(iso: string | Date, tz?: string | null): string
     .formatToParts(d)
     .find((p) => p.type === "timeZoneName");
   return part?.value ?? "";
+}
+
+/** e.g. "12 Sep 2026" — the calendar date in the branch zone (no time-of-day,
+ * so no zone abbreviation attached; the day itself is what could shift). */
+export function formatAppDate(
+  iso: string,
+  tz?: string | null,
+  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" },
+): string {
+  return new Intl.DateTimeFormat("en-AU", { ...opts, timeZone: resolveZone(tz) }).format(new Date(iso));
 }
 
 /**

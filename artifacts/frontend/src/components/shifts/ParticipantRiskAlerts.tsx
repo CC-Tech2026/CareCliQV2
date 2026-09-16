@@ -11,6 +11,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ParticipantRiskAlert, ParticipantRiskType, ShiftHealthAlert } from "@/services/shiftService";
 import { MUTED, TEXT } from "@/lib/shift-utils";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const RISK_ICONS: Record<ParticipantRiskType, LucideIcon> = {
@@ -131,6 +132,8 @@ type SectionProps = {
   onRequestAcknowledge: () => void;
   onUncheck: () => void;
   onViewSupportInstructions?: () => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 export function ParticipantRiskAcknowledgementSection({
@@ -145,6 +148,7 @@ export function ParticipantRiskAcknowledgementSection({
   onRequestAcknowledge,
   onUncheck,
   onViewSupportInstructions,
+  tz,
 }: SectionProps) {
   const { translate, translateParams } = useAccessibility();
 
@@ -167,7 +171,7 @@ export function ParticipantRiskAcknowledgementSection({
             {acknowledgedAt && (
               <p className="mt-1 text-xs font-semibold text-emerald-700">
                 {translateParams("safety.loggedAt", {
-                  date: new Date(acknowledgedAt).toLocaleString(),
+                  date: formatAppTimeWithZone(acknowledgedAt, tz),
                   by: acknowledgedByName
                     ? translateParams("safety.loggedBy", { name: acknowledgedByName })
                     : "",

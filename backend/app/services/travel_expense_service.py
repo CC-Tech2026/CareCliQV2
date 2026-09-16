@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
 
+from ..core.timezone import user_timezone
 from .supabase_client import get_supabase_admin
 from .travel_distance_service import estimate_shift_mileage
 from ..core.timezone import shift_local_date
@@ -544,11 +545,18 @@ def list_draft_expenses(worker_id: str, organization_id: str) -> list[dict[str, 
             .order("created_at", desc=True)
             .execute()
         )
-        return resp.data or []
+        rows = resp.data or []
     except Exception as exc:
         if _is_missing_schema(exc):
             return []
         raise
+    # The worker's own branch zone — an expense claim is the worker's own
+    # action, not a participant care record, so it's unambiguous even
+    # though a shift ties to one participant.
+    tz = str(user_timezone(worker_id, organization_id))
+    for row in rows:
+        row["timezone"] = tz
+    return rows
 
 
 def submit_expense_batch(worker_id: str, organization_id: str) -> dict[str, Any]:
@@ -600,6 +608,7 @@ def monthly_summary(worker_id: str, organization_id: str, months: int = 12) -> l
             return []
         raise
 
+    tz = str(user_timezone(worker_id, organization_id))
     buckets: dict[str, dict[str, Any]] = {}
     for row in rows:
         submitted = row.get("submitted_at") or row.get("created_at") or ""
@@ -623,6 +632,7 @@ def monthly_summary(worker_id: str, organization_id: str, months: int = 12) -> l
             bucket["approved_cents"] += amount
         if status == "paid":
             bucket["paid_cents"] += amount
+        row["timezone"] = tz
         bucket["items"].append(row)
 
     ordered = sorted(buckets.values(), key=lambda b: b["month"], reverse=True)
@@ -703,6 +713,10 @@ def list_pending_for_coordinator(organization_id: str) -> list[dict[str, Any]]:
             **sub,
             "worker_name": workers.get(str(sub.get("worker_id")), "Worker"),
             "expenses": by_batch.get(sid, []),
+            # The worker's own branch zone — a batch belongs to exactly one
+            # worker, so this is unambiguous regardless of which shifts (and
+            # participants) its expenses came from.
+            "timezone": str(user_timezone(sub.get("worker_id"), organization_id)),
         })
     return enriched
 

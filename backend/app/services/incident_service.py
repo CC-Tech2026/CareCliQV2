@@ -423,6 +423,8 @@ async def get_all_incidents(
         except Exception:
             visible_participant_ids = set()
 
+    from ..core.timezone import participant_timezone
+
     for row in rows:
         if current_user and not is_coordinator_role(current_user) and not reporter_id:
             participant_id = row.get("participant_id")
@@ -437,6 +439,7 @@ async def get_all_incidents(
             participant_key,
             "",
         )
+        row["timezone"] = str(participant_timezone(row, organization_id=row.get("organization_id")))
 
         enriched_rows.append(_enrich(row))
 
@@ -535,6 +538,12 @@ async def get_incident_by_id(
                     row["worker_name"] = str(worker_rows[0].get("full_name") or "")
             except Exception as exc:
                 logger.warning("Reporting worker lookup failed: %s", exc)
+
+        from ..core.timezone import participant_timezone
+
+        # Participant's branch zone — this incident's own timestamps (and its
+        # audit trail, which is all about this one incident) are shown in it.
+        row["timezone"] = str(participant_timezone(row, organization_id=row.get("organization_id")))
 
         return _enrich(row)
 

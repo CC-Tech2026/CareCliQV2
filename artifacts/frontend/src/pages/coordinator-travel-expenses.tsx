@@ -17,6 +17,7 @@ import {
   updateCoordinatorTravelRate,
   type TravelSubmission,
 } from "@/services/coordinatorTravelService";
+import { formatAppDate } from "@/lib/datetime";
 
 const PLUM = "var(--cc-plum)";
 const BORDER = "var(--cc-border)";
@@ -27,13 +28,9 @@ function formatAud(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatDate(iso?: string | null) {
+function formatDate(iso?: string | null, tz?: string | null) {
   if (!iso) return "N/A";
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatAppDate(iso, tz);
 }
 
 export default function CoordinatorTravelExpenses() {
@@ -170,7 +167,7 @@ export default function CoordinatorTravelExpenses() {
                     </p>
                     <p className="text-xs" style={{ color: MUTED }}>
                       {translateParams("coordinator.travel.submitted", {
-                        date: formatDate(sub.submitted_at),
+                        date: formatDate(sub.submitted_at, sub.timezone),
                         amount: formatAud(sub.total_amount_cents),
                       })}
                     </p>

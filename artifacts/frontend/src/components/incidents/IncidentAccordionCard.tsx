@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   ChevronDown, Flag, Bell, Clock, FileText, MessageSquare,
   CircleCheck, ShieldAlert, Pill, FileX, Bot, ArrowRight, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 
 export interface IncidentCardData {
   id: string;
@@ -23,6 +24,8 @@ export interface IncidentCardData {
   overdue?: boolean;
   notification_due_at?: string | null;
   auto_detected?: boolean;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 }
 
 /** "Due in 6h 12m" / "Overdue by 2h 5m" — same deadline the backend escalation job uses. */
@@ -92,7 +95,7 @@ export function IncidentAccordionCard({
   const typeCfg = TYPE_BADGE[incident.incident_type] ?? TYPE_BADGE.other;
   const TypeIcon = typeCfg.icon;
   const dateStr = incident.incident_date
-    ? format(parseISO(incident.incident_date), "d MMM yyyy · h:mm a")
+    ? `${formatAppDate(incident.incident_date, incident.timezone)} · ${formatAppTimeWithZone(incident.incident_date, incident.timezone)}`
     : "—";
 
   const statusClass =
@@ -186,7 +189,7 @@ export function IncidentAccordionCard({
                 [translate("incidents.detail.location"), incident.location || "—"],
                 [translate("incidents.register.ndisReportable"), incident.ndis_reportable ? translate("common.yes") : translate("common.no")],
                 ...(incident.ndis_pending && incident.notification_due_at
-                  ? [[translate("incidents.register.notificationDue"), format(parseISO(incident.notification_due_at), "d MMM yyyy, h:mm a")]]
+                  ? [[translate("incidents.register.notificationDue"), `${formatAppDate(incident.notification_due_at, incident.timezone)}, ${formatAppTimeWithZone(incident.notification_due_at, incident.timezone)}`]]
                   : []),
               ].map(([label, val]) => (
                 <div key={label} className="flex gap-2 text-xs">

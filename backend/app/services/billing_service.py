@@ -33,7 +33,7 @@ def _with_signed_pdf_url(invoice: dict) -> dict:
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
-from ..core.timezone import app_today, shift_local_date
+from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
@@ -49,8 +49,6 @@ def _now_iso() -> str:
 def _as_of_date_from_due(due_date: Any, participant_id: Any = None, org_id: Any = None) -> date:
     """Date an invoice is billed as-of: its due date, else today in the
     participant's branch zone."""
-    from ..core.timezone import app_today, participant_timezone
-
     if due_date:
         try:
             return date.fromisoformat(str(due_date)[:10])
@@ -255,6 +253,8 @@ async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[
     for inv in invoices:
         pid = inv.get("participant_id")
         inv["service_category"] = category_by_id.get(str(pid)) if pid else None
+        # Participant's branch zone — clients show the invoice date in it.
+        inv["timezone"] = str(participant_timezone(inv, organization_id=inv.get("organization_id")))
     return invoices
 
 

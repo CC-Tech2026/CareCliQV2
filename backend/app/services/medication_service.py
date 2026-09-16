@@ -963,6 +963,8 @@ def attach_administration_reason(
 
 def list_org_medications(organization_id: str, participant_id: str | None = None) -> list[dict[str, Any]]:
     """All medications for the org (or one participant), with participant name attached."""
+    from ..core.timezone import participant_timezone
+
     try:
         query = (
             get_supabase_admin()
@@ -982,6 +984,9 @@ def list_org_medications(organization_id: str, participant_id: str | None = None
     for row in rows:
         patient = row.pop("patients", None) or {}
         row["participant_name"] = patient.get("full_name")
+        # Participant's branch zone; clients show this medication's own
+        # times in it, labelled when it differs from the viewer's own branch.
+        row["timezone"] = str(participant_timezone(row, organization_id=organization_id))
     return rows
 
 

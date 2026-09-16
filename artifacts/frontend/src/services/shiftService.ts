@@ -213,6 +213,8 @@ export type WorkerShift = {
   special_instructions?: string | null;
   break_status?: ActiveBreakStatus;
   checkin_status?: CheckinWindowStatus;
+  /** Participant's branch zone — display this shift's times in it, not the viewer's own. */
+  timezone?: string | null;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -392,6 +394,8 @@ export type ShiftOfferSummary = {
   scheduled_end: string | null;
   shift_type: string | null;
   offered_at: string | null;
+  /** Participant's branch zone. */
+  timezone: string;
 };
 
 /** Decision-only summary for a shift this worker has been offered but not

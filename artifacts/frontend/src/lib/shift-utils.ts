@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, parseISO, differenceInMinutes, subMinutes, addDays } from "date-fns";
 import type { ShiftTask, ShiftVisualState } from "@/services/shiftService";
 import { CC, CC_STATUS } from "@/lib/brand-tokens";
-import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
+import { appLocalDateKey, formatAppTime, zoneAbbreviation } from "@/lib/datetime";
 
 export const PLUM = CC.plum;
 export const PLUM_SUBTLE = CC.plumSubtle;
@@ -52,24 +52,33 @@ export function shiftInitials(name?: string) {
   return (name || "Client").split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export function formatShiftSchedule(start?: string, end?: string) {
+/**
+ * `tz` is the shift's own participant/worker branch zone — pass it whenever
+ * the caller has one (e.g. `shift.timezone`) so the schedule shows in that
+ * branch's time, not whichever branch the viewer happens to be in. Omitting
+ * it falls back to the viewer's own branch, which is only correct when the
+ * shift and the viewer are known to share a branch.
+ */
+export function formatShiftSchedule(start?: string, end?: string, tz?: string | null) {
   if (!start) return "Time not set";
   try {
-    const s = formatAppTime(start);
-    const e = end ? formatAppTime(end) : null;
-    const day = format(parseISO(`${appLocalDateKey(start)}T12:00:00`), "EEE d MMM");
-    return e ? `${s} – ${e}, ${day}` : `${s}, ${day}`;
+    const s = formatAppTime(start, tz);
+    const e = end ? formatAppTime(end, tz) : null;
+    const day = format(parseISO(`${appLocalDateKey(start, tz)}T12:00:00`), "EEE d MMM");
+    const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
+    return e ? `${s} – ${e}${zone}, ${day}` : `${s}${zone}, ${day}`;
   } catch {
     return start;
   }
 }
 
-export function formatShiftTimeRange(start?: string, end?: string) {
+export function formatShiftTimeRange(start?: string, end?: string, tz?: string | null) {
   if (!start) return "Time not set";
   try {
-    const s = formatAppTime(start);
-    const e = end ? formatAppTime(end) : null;
-    return e ? `${s} – ${e}` : s;
+    const s = formatAppTime(start, tz);
+    const e = end ? formatAppTime(end, tz) : null;
+    const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
+    return e ? `${s} – ${e}${zone}` : `${s}${zone}`;
   } catch {
     return start;
   }

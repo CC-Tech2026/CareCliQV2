@@ -46,6 +46,8 @@ type Props = {
   longShiftBreak?: ReturnType<typeof useLongShiftBreak>;
   initialCheckinStatus?: CheckinWindowStatus | null;
   focusTaskId?: string | null;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]) {
@@ -112,6 +114,7 @@ export function WorkerMobileSessionScreen({
   longShiftBreak,
   initialCheckinStatus,
   focusTaskId,
+  tz,
 }: Props) {
   const { toast } = useToast();
   const { translate } = useAccessibility();
@@ -269,7 +272,7 @@ export function WorkerMobileSessionScreen({
         <WorkerMobileRiskStrip alerts={healthAlerts} />
 
         {clockedInAt && (
-          <ClockedInBanner clockedInAt={clockedInAt} />
+          <ClockedInBanner clockedInAt={clockedInAt} tz={tz} />
         )}
 
         {longShiftBreak?.onBreak && (
@@ -345,6 +348,7 @@ export function WorkerMobileSessionScreen({
                     goalTitle={localTasks.find((t) => t.task_id === note.task_id)?.goal_title || undefined}
                     flag={flag}
                     onIncidentReport={flag?.severity === "fail" ? handleOpenIncident : undefined}
+                    tz={tz}
                   />
                 );
               })}

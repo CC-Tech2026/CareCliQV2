@@ -149,6 +149,9 @@ def _session_payload(session: dict) -> dict:
         "compliance_score": session.get("compliance_score"),
         "compliance_status": _score_status(session.get("compliance_score")),
         "translation_status": session.get("translation_status"),
+        # Participant's branch zone — clients show session_date and any
+        # review-flag timestamps in it.
+        "timezone": str(participant_timezone(session, organization_id=session.get("organization_id"))),
     }
 
 
@@ -4488,6 +4491,10 @@ async def get_live_shifts(
             "checklist": checklist,
             "medications": medications,
             "workflow_stage": workflow_stage,
+            # Participant's branch zone; the live monitor labels clock-in/
+            # medication times with it when it differs from the coordinator's
+            # own branch (same pattern as /coordinator/shifts and shift_service).
+            "timezone": str(participant_timezone(shift, organization_id=org_id)),
         })
 
     return result

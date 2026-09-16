@@ -397,6 +397,9 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 "clocked_out_at": shift.get("clocked_out_at"),
                 "duration_minutes": shift.get("duration_minutes"),
                 "checks": checks,
+                # Participant's branch zone — the coordinator verifies (and
+                # bills) this shift's times in it, not their own.
+                "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
             }
         )
     return out

@@ -17,6 +17,8 @@ export type CalendarShift = {
   participant_colour?: string;
   visual_state?: string;
   coordinator_notes?: string | null;
+  /** Participant's branch zone — the backend already resolves this. */
+  timezone?: string | null;
 };
 
 export type TimeOffBlock = {

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { SectionInfo } from "@/components/ui/section-info";
-import { format, parseISO } from "date-fns";
+import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Loader2,
   X, AlertTriangle, Clock, DollarSign,
@@ -23,9 +23,9 @@ const T3     = "#6A6A77";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-function safeDateTime(v?: string | null) {
+function safeDateTime(v?: string | null, tz?: string | null) {
   if (!v) return "N/A";
-  try { return format(parseISO(v), "d MMM yyyy, h:mm a"); }
+  try { return `${formatAppDate(v, tz)}, ${formatAppTimeWithZone(v, tz)}`; }
   catch { return v; }
 }
 
@@ -113,7 +113,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium" style={{ color: T3 }}>
             <Clock size={11} />
-            {safeDateTime(item.scheduled_start)} · scheduled {formatMinutes(hours_sanity.scheduled_minutes)}, actual {formatMinutes(hours_sanity.actual_minutes)}
+            {safeDateTime(item.scheduled_start, item.timezone)} · scheduled {formatMinutes(hours_sanity.scheduled_minutes)}, actual {formatMinutes(hours_sanity.actual_minutes)}
           </div>
         </div>
 

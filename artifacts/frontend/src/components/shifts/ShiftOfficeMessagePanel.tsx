@@ -6,6 +6,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { compressImageFile } from "@/lib/task-evidence-storage";
 import { cn } from "@/lib/utils";
 import { sendShiftOfficeMessage, type ShiftOfficeMessage } from "@/services/shiftService";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 
 const PRIORITY_DOT: Record<"normal" | "urgent" | "emergency", string> = {
   normal: "bg-cc-muted",
@@ -20,6 +21,8 @@ type Props = {
   onCancel?: () => void;
   showHeader?: boolean;
   variant?: "embedded" | "page";
+  /** Participant's branch zone — message times are shown in it. */
+  tz?: string | null;
 };
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -38,6 +41,7 @@ export function ShiftOfficeMessagePanel({
   onCancel,
   showHeader = true,
   variant = "embedded",
+  tz,
 }: Props) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
@@ -199,7 +203,7 @@ export function ShiftOfficeMessagePanel({
                   />
                   <span className="capitalize text-cc-text">{msg.priority}</span>
                   <span>·</span>
-                  <span>{new Date(msg.created_at).toLocaleString()}</span>
+                  <span>{formatAppTimeWithZone(msg.created_at, tz)}</span>
                 </div>
                 <p className="mt-1 text-sm leading-relaxed text-cc-text">{msg.message}</p>
               </li>

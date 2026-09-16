@@ -347,6 +347,7 @@ export function WorkerMobileShiftView({
           onSubmit={handleSubmit}
           onViewComplianceReport={() => setComplianceOpen(true)}
           onOpenIncidentReport={(noteId, content) => openIncidentReport(noteId, content)}
+          tz={shift.timezone}
         />
         {incidentDraft && (
           <WorkerMobileIncidentSheet
@@ -393,7 +394,7 @@ export function WorkerMobileShiftView({
               {shift.participant_name}
             </p>
             <p className="mt-1 text-[13px]" style={{ color: WM.muted }}>
-              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)} · {duration}
+              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)} · {duration}
             </p>
             {shift.participant_address && (
               <p className="mt-1 flex items-center gap-1 text-[12px]" style={{ color: WM.muted }}>
@@ -449,6 +450,7 @@ export function WorkerMobileShiftView({
             acknowledged
             acknowledgedAt={shift.risks_acknowledged_at}
             acknowledgedByName={shift.risks_acknowledged_by_name}
+            tz={shift.timezone}
             ackChecked
             busy={false}
             onRequestAcknowledge={onRequestAcknowledge}
@@ -523,6 +525,7 @@ export function WorkerMobileShiftView({
         onNotesRefresh={refreshComplianceNotes}
         tutorialDemo={isTutorialDemo}
         disabled={busy !== null || endValidating || endingReview}
+        tz={shift.timezone}
       />
 
       {incidentDraft && (

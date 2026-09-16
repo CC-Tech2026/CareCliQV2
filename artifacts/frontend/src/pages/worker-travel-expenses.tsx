@@ -28,6 +28,7 @@ import {
   type TravelExpense,
 } from "@/services/travelExpenseService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { formatAppDate } from "@/lib/datetime";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -35,13 +36,9 @@ function formatAud(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatDate(iso?: string | null) {
+function formatDate(iso?: string | null, tz?: string | null) {
   if (!iso) return "N/A";
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatAppDate(iso, tz);
 }
 
 function ExpenseIcon({ type }: { type: string }) {
@@ -91,15 +88,15 @@ function ClaimDetailRow({ item }: { item: TravelExpense }) {
       <dl className="mt-2 grid gap-1 text-xs" style={{ color: MUTED }}>
         <div className="flex justify-between gap-4">
           <dt>{translate("travel.submitted")}</dt>
-          <dd className="font-semibold text-cc-text">{formatDate(item.submitted_at)}</dd>
+          <dd className="font-semibold text-cc-text">{formatDate(item.submitted_at, item.timezone)}</dd>
         </div>
         <div className="flex justify-between gap-4">
           <dt>{translate("travel.approved")}</dt>
-          <dd className="font-semibold text-cc-text">{formatDate(item.approved_at)}</dd>
+          <dd className="font-semibold text-cc-text">{formatDate(item.approved_at, item.timezone)}</dd>
         </div>
         <div className="flex justify-between gap-4">
           <dt>{translate("travel.paid")}</dt>
-          <dd className="font-semibold text-cc-text">{formatDate(item.paid_at)}</dd>
+          <dd className="font-semibold text-cc-text">{formatDate(item.paid_at, item.timezone)}</dd>
         </div>
         {item.status === "rejected" && item.rejection_reason && (
           <div className="mt-1 rounded-md bg-red-50 px-2 py-1.5 text-red-700">
