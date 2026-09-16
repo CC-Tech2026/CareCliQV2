@@ -8,8 +8,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ..core.access import has_active_grant
 from ..core.security import get_current_user
 from ..services import organization_branding_service as svc
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/organization/branding", tags=["organization-branding"])
 
@@ -27,7 +29,9 @@ def _org_id(current_user: dict) -> str:
 
 
 def _require_md(current_user: dict) -> str:
-    if current_user.get("role") != "managing_director":
+    if current_user.get("role") != "managing_director" and not has_active_grant(
+        current_user, "org_branding", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Only a managing director can update organisation branding.")
     return _org_id(current_user)
 

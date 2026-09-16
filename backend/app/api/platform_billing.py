@@ -9,16 +9,20 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from ..core.access import has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
 from ..services import stripe_service
+from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/platform-billing", tags=["platform-billing"])
 
 
 def _require_md(current_user: dict) -> str:
-    if current_user.get("role") != "managing_director":
+    if current_user.get("role") != "managing_director" and not has_active_grant(
+        current_user, "platform_billing", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Only a managing director can manage billing.")
     org_id = current_user.get("organization_id")
     if not org_id:

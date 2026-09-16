@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from ..core.access import has_active_grant
 from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
@@ -138,7 +139,7 @@ async def create_invite(
 ):
     """Create an invitation for a new staff member (managing director only)."""
     user_role = current_user.get("role", "")
-    if user_role != "managing_director":
+    if user_role != "managing_director" and not has_active_grant(current_user, "staff_invitations", get_supabase_admin()):
         raise HTTPException(status_code=403, detail="Only managing directors can send staff invitations")
     require_recent_reauth(request, current_user)
 

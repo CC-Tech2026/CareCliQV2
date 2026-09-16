@@ -11,6 +11,7 @@ from ..core.access import (
     get_coordinator_team_ids,
     get_user_id,
     get_user_organization_id,
+    has_active_grant,
     is_coordinator_role,
     is_managing_director,
     is_support_worker,
@@ -491,7 +492,9 @@ def _retention_rate(team: list[dict]) -> float:
 @router.get("/managing-director")
 async def md_dashboard(current_user: dict = Depends(get_current_user)):
     """Executive dashboard aggregate for managing_director role."""
-    if not is_managing_director(current_user):
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "executive_dashboard", get_supabase_admin()
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:

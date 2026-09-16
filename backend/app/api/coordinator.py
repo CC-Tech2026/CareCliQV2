@@ -13,7 +13,7 @@ from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
 from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
@@ -1019,12 +1019,12 @@ async def delete_worker_account(worker_id: str, current_user: dict = Depends(get
     deactivation (which both coordinators and MD can do), so it's gated to
     the managing director specifically. Queues the same pending deletion
     request record self-service deletion uses, for manual processing."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "delete_staff_account", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
-    supabase = get_supabase_admin()
     target = _require_target_support_worker(supabase, worker_id, org_id)
     result = privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
     await audit_service.log_action(
@@ -1048,13 +1048,13 @@ async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, curren
     dashboard/session-review/credential-alert purposes (users.coordinator_id).
     Not gated to support_coordinator like most team-management endpoints: this
     is org structure, an MD decision, not day-to-day coordinator work."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "reassign_coordinator", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    supabase = get_supabase_admin()
     worker = (
         supabase.table("users")
         .select("id")
@@ -5683,7 +5683,9 @@ class TrainingModuleLockBody(BaseModel):
 @router.patch("/training-modules/{module_id}/lock")
 async def set_training_module_lock(module_id: str, body: TrainingModuleLockBody,
                                    current_user: dict = Depends(get_current_user)):
-    if not is_managing_director(current_user):
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "lock_training_module", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Managing Director access required.")
     org_id = _require_org_read(current_user)
     from ..services.worker_training_service import update_training_module
