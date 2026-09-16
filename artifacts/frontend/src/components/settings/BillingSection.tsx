@@ -3,6 +3,8 @@ import { Link } from "wouter";
 import { ArrowUpRight, CreditCard, RefreshCw, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { Button } from "@/components/ui/button";
 
 type SubscriptionStatus = {
@@ -29,7 +31,10 @@ const STATUS_NAMES: Record<string, string> = {
 
 export function BillingSection() {
   const { user } = useAuth();
-  const allowed = user?.role === "managing_director";
+  const isMD = user?.role === "managing_director";
+  const { hasCapability, grantFor } = useMyAccessGrants();
+  const allowed = isMD || hasCapability("platform_billing");
+  const billingGrant = !isMD ? grantFor("platform_billing") : undefined;
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -78,6 +83,7 @@ export function BillingSection() {
       className="min-w-0 space-y-5"
       aria-labelledby="subscription-heading"
     >
+      {billingGrant && <TemporaryAccessBanner grant={billingGrant} label="Platform subscription billing" />}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2

@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useReAuth } from "@/hooks/useReAuth";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { getOnboardingAlerts } from "@/services/hubService";
@@ -1613,7 +1615,20 @@ export default function StaffOnboardingBoard() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { requireReAuth, modal: reauthModal } = useReAuth();
-  const isHireManager = user?.role === "managing_director";
+  const isMD = user?.role === "managing_director";
+  const { hasCapability, grantFor } = useMyAccessGrants();
+  // Both hire-paperwork management and extend-offer/reject are distinct
+  // grantable capabilities, but they share this one board's UI — the
+  // backend independently re-checks the exact capability for each specific
+  // action (applicant_service.move_applicant_stage for offer/reject,
+  // employee_onboarding.py for hire paperwork), so a coordinator holding
+  // only one of the two sees slightly more UI affordance than they can act
+  // on, but can never actually perform the action they weren't granted.
+  const isHireManager = isMD || hasCapability("hire_paperwork") || hasCapability("applicant_offer_reject");
+  const hireGrant = !isMD ? (grantFor("hire_paperwork") ?? grantFor("applicant_offer_reject")) : undefined;
+  const hireGrantLabel = !isMD && grantFor("hire_paperwork") && grantFor("applicant_offer_reject")
+    ? "New-hire paperwork & extend offer/reject"
+    : hasCapability("hire_paperwork") ? "New-hire employment paperwork" : "Extend an offer / reject an applicant";
 
   const [openHireId, setOpenHireId] = useState<string | null>(null);
   const [openApplicantId, setOpenApplicantId] = useState<string | null>(null);
@@ -1776,6 +1791,7 @@ export default function StaffOnboardingBoard() {
   return (
     <>
       <div className="space-y-5 pb-10">
+        {hireGrant && <TemporaryAccessBanner grant={hireGrant} label={hireGrantLabel} />}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <button

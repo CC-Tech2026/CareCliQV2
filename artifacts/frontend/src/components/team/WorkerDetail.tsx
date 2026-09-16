@@ -111,6 +111,8 @@ import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
 import { emergencyContactDisplay } from "@/lib/participant-display";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
@@ -1817,6 +1819,7 @@ function PersonalInfoTab({
 function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hasCapability, grantFor } = useMyAccessGrants();
   const { data: coordinators = [] } = useOrgQuery(["org-coordinators"], {
     queryFn: () =>
       getCoordinatorWorkerStats().then((list) =>
@@ -1839,8 +1842,12 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
       }),
   });
 
-  if (user?.role !== "managing_director" || worker.role !== "support_worker")
+  const isMD = user?.role === "managing_director";
+  const viaGrant = !isMD && hasCapability("reassign_coordinator");
+  if ((!isMD && !viaGrant) || worker.role !== "support_worker")
     return null;
+
+  const grant = viaGrant ? grantFor("reassign_coordinator") : undefined;
 
   return (
     <div
@@ -1851,6 +1858,7 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
         boxShadow: CARD_SHADOW,
       }}
     >
+      {grant && <TemporaryAccessBanner grant={grant} label="Reassign a worker's coordinator" />}
       <p
         className="text-[11px] font-semibold uppercase tracking-wide"
         style={{ color: MUTED }}

@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TrainingModuleEditor } from "./TrainingModuleEditor";
 import {
   setTrainingModuleLock,
@@ -18,6 +19,12 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { role: "managing_director" } }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// TrainingModuleEditor also accepts lock_training_module via a delegated-
+// access grant — these tests are all managing_director, so useMyAccessGrants
+// never fetches, but useOrgQuery still needs mocking since it's called
+// unconditionally (React Query's `enabled: false` skips fetching, not the
+// hook call itself).
+vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: () => ({ data: [], isLoading: false }) }));
 vi.mock("./TrainingMaterialsEditor", () => ({
   TrainingMaterialsEditor: () => <p>Materials editor</p>,
 }));
@@ -52,14 +59,17 @@ function Editor({
   onSaved?: (module: TrainingModule) => void;
 }) {
   const [module, setModule] = useState(initial);
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return (
-    <TrainingModuleEditor
-      module={module}
-      credentials={[{ value: "", label: "None" }]}
-      onClose={onClose}
-      onSaved={onSaved}
-      onChanged={setModule}
-    />
+    <QueryClientProvider client={client}>
+      <TrainingModuleEditor
+        module={module}
+        credentials={[{ value: "", label: "None" }]}
+        onClose={onClose}
+        onSaved={onSaved}
+        onChanged={setModule}
+      />
+    </QueryClientProvider>
   );
 }
 

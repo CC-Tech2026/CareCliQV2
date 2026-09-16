@@ -3,12 +3,16 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { BillingSection } from "./BillingSection";
 import { apiFetch } from "@/lib/api-fetch";
 const auth = vi.hoisted(() => ({ role: "managing_director" }));
+const fixtures = vi.hoisted(() => ({ grants: [] as Record<string, unknown>[] }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: auth }) }));
 vi.mock("@/lib/api-fetch", () => ({ apiFetch: vi.fn() }));
+// BillingSection also accepts platform_billing via a delegated-access grant.
+vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: () => ({ data: fixtures.grants, isLoading: false }) }));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   auth.role = "managing_director";
+  fixtures.grants = [];
 });
 it("shows a trial even before a Stripe customer is linked", async () => {
   vi.mocked(apiFetch).mockResolvedValue({
@@ -52,4 +56,21 @@ it("does not request or display subscription data for coordinators", () => {
   const { container } = render(<BillingSection />);
   expect(container.textContent).toBe("");
   expect(apiFetch).not.toHaveBeenCalled();
+});
+it("shows the section, with a temporary-access banner, for a coordinator holding a platform_billing grant", async () => {
+  auth.role = "support_coordinator";
+  fixtures.grants = [{
+    id: "grant-1",
+    capability: "platform_billing",
+    expires_at: "2026-10-01T00:00:00Z",
+    revoked_at: null,
+    status: "active",
+  }];
+  vi.mocked(apiFetch).mockResolvedValue({
+    ok: true,
+    json: async () => ({ plan_tier: "small", subscription_status: "active", stripe_customer_id: "cus_1" }),
+  } as Response);
+  render(<BillingSection />);
+  expect(await screen.findByText(/Temporary access/)).toBeTruthy();
+  expect(screen.getByText("Small")).toBeTruthy();
 });

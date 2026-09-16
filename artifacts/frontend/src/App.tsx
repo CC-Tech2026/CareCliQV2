@@ -239,7 +239,7 @@ function Router() {
 
       {/* ── Managing Director Workspaces ──────────────────────────────────── */}
       <Route path="/md/executive">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="executive_dashboard" capabilityLabel="Executive dashboard">
           <MDExecutivePage />
         </ProtectedRoute>
       </Route>
@@ -269,14 +269,14 @@ function Router() {
       </Route>
 
       <Route path="/md/vault">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
           <MDVaultHomePage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/md/vault/:category">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
             <MDVaultFolderPage category={params.category} />
           </ProtectedRoute>
         )}
@@ -307,7 +307,7 @@ function Router() {
       </Route>
 
       <Route path="/md/onboarding/training">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="onboarding_program_design" capabilityLabel="Staff onboarding program design">
           <MDOnboardingTrainingPage />
         </ProtectedRoute>
       </Route>

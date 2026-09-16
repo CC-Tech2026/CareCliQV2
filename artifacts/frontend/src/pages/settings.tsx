@@ -1,6 +1,8 @@
 import { SettingsNavigation } from "@/components/settings/SettingsNavigation";
 import { BillingSection } from "@/components/settings/BillingSection";
 import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +115,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
-const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
@@ -123,9 +125,13 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
   { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
+  // improvementFeedback and delegatedAccess stay strictly MD-only — neither
+  // is in the delegated-access capability catalog (product feedback to the
+  // vendor isn't a delegable capability, and letting a coordinator grant
+  // *more* delegated access would be a privilege-escalation hole).
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
-  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
-  { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
+  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
+  { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
   { id: "delegatedAccess", labelKey: "settings.nav.delegatedAccess", icon: Clock, mdOnly: true },
 ];
 
@@ -1193,6 +1199,9 @@ function ImprovementFeedbackCard() {
 function OrganizationBrandingSection() {
   const { toast } = useToast();
   const { translate } = useAccessibility();
+  const { user } = useAuth();
+  const { grantFor } = useMyAccessGrants();
+  const brandingGrant = user?.role !== "managing_director" ? grantFor("org_branding") : undefined;
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [accentColor, setAccentColor] = useState("");
@@ -1281,6 +1290,7 @@ function OrganizationBrandingSection() {
       description={translate("settings.branding.subtitle")}
       icon={ImageIcon}
     >
+      {brandingGrant && <TemporaryAccessBanner grant={brandingGrant} label="Organisation branding" />}
       <PanelCard label={translate("settings.branding.logoLabel")}>
         <div className="flex items-center gap-4">
           <div
@@ -1377,7 +1387,11 @@ export default function Settings() {
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const isMD = user?.role === "managing_director";
-  const visibleNavItems = NAV_ITEMS.filter((item) => (!item.coordinatorOnly || isCoordinator) && (!item.mdOnly || isMD));
+  const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
+  const visibleNavItems = NAV_ITEMS.filter((item) =>
+    (!item.coordinatorOnly || isCoordinator) &&
+    (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
+  );
 
   const [activeSection, setActiveSection] = useState<SectionId>(() => isMD && new URLSearchParams(window.location.search).has("billing") ? "billing" : "account");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);

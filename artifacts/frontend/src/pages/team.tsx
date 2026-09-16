@@ -16,10 +16,13 @@ import {
   getCoordinatorCredentialAlerts, sendBulkReminders,
   getTeamCredentials, getPendingTrainingCompletions,
   createShiftCredentialRequirement, deleteShiftCredentialRequirement, listShiftCredentialRequirements,
+  deleteWorkerAccount,
   type WorkerStats, type ShiftCredentialRequirement, type DeactivationReason,
 } from "@/services/coordinatorService";
 import { getTeamOnboarding } from "@/services/onboardingService";
 import { useToast } from "@/hooks/use-toast";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { WorkerDetail, isWorkerCredentialsComplete } from "@/components/team/WorkerDetail";
 import { DeactivateWorkerPanel } from "@/components/team/DeactivateWorkerPanel";
@@ -183,6 +186,10 @@ export default function Team() {
   }, []);
 
   const { user } = useAuth();
+  const isMD = user?.role === "managing_director";
+  const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
+  const canDeleteAccount = isMD || hasDelegatedCapability("delete_staff_account");
+  const canInviteStaff = isMD || hasDelegatedCapability("staff_invitations");
 
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -236,6 +243,25 @@ export default function Team() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: translate("team.toast.reactivated") }); },
     onError: () => toast({ title: translate("team.toast.reactivateFailed"), variant: "destructive" }),
   });
+
+  const deleteAccountMut = useMutation({
+    mutationFn: (id: string) => deleteWorkerAccount(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
+      toast({ title: "Account removal requested" });
+      setDetailWorkerId(null);
+    },
+    onError: (err) => toast({
+      title: "Could not queue account removal",
+      description: err instanceof Error ? err.message : "Try again shortly.",
+      variant: "destructive",
+    }),
+  });
+
+  function handleDeleteAccount(worker: WorkerStats) {
+    if (!window.confirm(`Remove ${worker.full_name}'s account? This queues it for removal and can't be undone once processed.`)) return;
+    deleteAccountMut.mutate(worker.id);
+  }
 
   const assignMut = useMutation({
     mutationFn: ({ workerId, patientId }: { workerId: string; patientId: string }) =>
@@ -518,6 +544,9 @@ export default function Team() {
       {detailWorker ? (
         <>
           <IndexHeader title={translate("team.title")} />
+          {!isMD && delegatedGrantFor("delete_staff_account") && (
+            <TemporaryAccessBanner grant={delegatedGrantFor("delete_staff_account")!} label="Delete a staff account" />
+          )}
           <WorkerDetail
             worker={detailWorker}
             scrollContext="page"
@@ -534,6 +563,7 @@ export default function Team() {
             onReminder={() => reminderMut.mutate([detailWorker.id])}
             onDeactivate={() => setDeactivateTarget(detailWorker)}
             onActivate={() => activateMut.mutate(detailWorker.id)}
+            onDeleteAccount={canDeleteAccount ? () => handleDeleteAccount(detailWorker) : undefined}
           />
         </>
       ) : (
@@ -544,15 +574,21 @@ export default function Team() {
         count={workers.length}
         info="Your support workers: compliance, credentials, availability, and shift history, all in one place."
         primaryAction={
-          <Button
-            variant="navy"
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
-          >
-            <UserPlus size={16} /> {translate("team.inviteWorker")}
-          </Button>
+          canInviteStaff ? (
+            <Button
+              variant="navy"
+              onClick={() => setInviteOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
+            >
+              <UserPlus size={16} /> {translate("team.inviteWorker")}
+            </Button>
+          ) : undefined
         }
       />
+
+      {!isMD && delegatedGrantFor("staff_invitations") && (
+        <TemporaryAccessBanner grant={delegatedGrantFor("staff_invitations")!} label="Send a staff invitation" />
+      )}
 
       {stats.isLoading && (
         <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
