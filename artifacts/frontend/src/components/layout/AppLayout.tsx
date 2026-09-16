@@ -5,8 +5,8 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText,
+  BarChart2, BarChart3, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
+  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -29,6 +29,7 @@ import { getIncidentStats } from "@/services/incidentService";
 import { getOrganizationBranding, type OrganizationBranding } from "@/services/organizationBrandingService";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
 import {
   bottomNavLabelForHref,
   groupLabelForName,
@@ -132,6 +133,17 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/md/executive",  label: "Executive", icon: BarChart2       },
     { href: "/md/compliance", label: "Compliance",icon: ShieldCheck     },
   ],
+};
+
+// ── Route-level delegated-access capabilities → their nav entry ──────────────
+// Mirrors the requiredCapability values wired into ProtectedRoute in App.tsx.
+// A coordinator holding an active grant for one of these sees it appended to
+// their sidebar under a "Temporary Access" group so it's actually discoverable
+// (the route itself already allows them in — this just makes it visible).
+const GRANT_NAV_ITEMS: Record<string, NavItem> = {
+  governance_vault: { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
+  executive_dashboard: { href: "/md/executive", label: "Strategic Insights", icon: BarChart3 },
+  onboarding_program_design: { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
 };
 
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
@@ -391,7 +403,14 @@ function SidebarContents({
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
   const role = (user?.role ?? "support_worker") as NavRole;
-  const sections = SECTIONED_NAV[role] ?? SECTIONED_NAV.support_worker;
+  const baseSections = SECTIONED_NAV[role] ?? SECTIONED_NAV.support_worker;
+  const { hasCapability } = useMyAccessGrants();
+  const grantItems = Object.entries(GRANT_NAV_ITEMS)
+    .filter(([capability]) => hasCapability(capability))
+    .map(([, item]) => item);
+  const sections = grantItems.length > 0
+    ? [...baseSections, { group: "Temporary Access", items: grantItems }]
+    : baseSections;
 
   return (
     <div className="flex flex-col h-full select-none overflow-hidden">
