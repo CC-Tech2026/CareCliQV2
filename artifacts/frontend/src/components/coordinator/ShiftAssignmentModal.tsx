@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
+import { useBranches } from "@/hooks/useBranches";
+import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -211,6 +213,12 @@ export function ShiftAssignmentModal({
   }, [initialDate, open]);
 
   const participants   = useGetParticipants();
+  const { zoneFor }    = useBranches();
+  const participantList     = (participants.data as Array<{ id: string; full_name: string; branch_id?: string | null }> | undefined) ?? [];
+  // Times the coordinator types are wall-clock in the *participant's*
+  // office, which may not be the coordinator's own (Adelaide HQ rostering
+  // a Melbourne participant). Undefined → the coordinator's zone.
+  const participantZone = zoneFor(participantList.find((p) => p.id === selectedParticipantId)?.branch_id);
   const credAlertsQuery = useOrgQuery([orgId, "coordinator-credential-alerts"], {
     queryFn: getCoordinatorCredentialAlerts,
     staleTime: 5 * 60_000,
@@ -231,8 +239,8 @@ export function ShiftAssignmentModal({
     [orgId, "coordinator-available-workers", selectedParticipantId, scheduledStart, scheduledEnd, isSleepover],
     {
       queryFn: () => getAvailableWorkers({
-        shiftStart: datetimeLocalValueToUtcIso(scheduledStart),
-        shiftEnd: datetimeLocalValueToUtcIso(scheduledEnd || scheduledStart),
+        shiftStart: datetimeLocalValueToUtcIso(scheduledStart, participantZone),
+        shiftEnd: datetimeLocalValueToUtcIso(scheduledEnd || scheduledStart, participantZone),
         participantId: selectedParticipantId || undefined,
         isSleepover,
       }),
@@ -290,13 +298,13 @@ export function ShiftAssignmentModal({
     mutationFn: async (): Promise<AssignShiftResult> => {
       const payload = {
         participant_id: selectedParticipantId,
-        scheduled_start: datetimeLocalValueToUtcIso(scheduledStart),
-        scheduled_end: scheduledEnd ? datetimeLocalValueToUtcIso(scheduledEnd) : undefined,
+        scheduled_start: datetimeLocalValueToUtcIso(scheduledStart, participantZone),
+        scheduled_end: scheduledEnd ? datetimeLocalValueToUtcIso(scheduledEnd, participantZone) : undefined,
         shift_type: shiftType,
         duty_type: dutyType,
         is_sleepover: isSleepover,
-        sleepover_start: isSleepover && sleepoverStart ? datetimeLocalValueToUtcIso(sleepoverStart) : undefined,
-        sleepover_end: isSleepover && sleepoverEnd ? datetimeLocalValueToUtcIso(sleepoverEnd) : undefined,
+        sleepover_start: isSleepover && sleepoverStart ? datetimeLocalValueToUtcIso(sleepoverStart, participantZone) : undefined,
+        sleepover_end: isSleepover && sleepoverEnd ? datetimeLocalValueToUtcIso(sleepoverEnd, participantZone) : undefined,
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       };
       if (selectedWorkerId) {
@@ -349,17 +357,17 @@ export function ShiftAssignmentModal({
   const handleSetDuration = (hours: number) => {
     if (!scheduledStart) return;
     try {
-      const startUtc = datetimeLocalValueToUtcIso(scheduledStart);
+      const startUtc = datetimeLocalValueToUtcIso(scheduledStart, participantZone);
       const endUtc = new Date(new Date(startUtc).getTime() + hours * 60 * 60 * 1000).toISOString();
-      setScheduledEnd(utcIsoToDatetimeLocalValue(endUtc));
+      setScheduledEnd(utcIsoToDatetimeLocalValue(endUtc, participantZone));
     } catch {}
   };
 
   const activeDurationHours = (() => {
     if (!scheduledStart || !scheduledEnd) return null;
     try {
-      const startMs = new Date(datetimeLocalValueToUtcIso(scheduledStart)).getTime();
-      const endMs = new Date(datetimeLocalValueToUtcIso(scheduledEnd)).getTime();
+      const startMs = new Date(datetimeLocalValueToUtcIso(scheduledStart, participantZone)).getTime();
+      const endMs = new Date(datetimeLocalValueToUtcIso(scheduledEnd, participantZone)).getTime();
       const diffHours = (endMs - startMs) / (60 * 60 * 1000);
       return Number.isInteger(diffHours) && diffHours > 0 ? diffHours : null;
     } catch {
@@ -373,7 +381,6 @@ export function ShiftAssignmentModal({
   const hasExpired          = workerAlerts.some((a) => a.status === "expired");
   const hasExpiring         = workerAlerts.some((a) => a.status === "expiring");
   const hasBlock            = selectedWorkerId ? (credStatus ? !credStatus.valid : hasExpired) : false;
-  const participantList     = (participants.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
   const selectedParticipant = participantList.find((p) => p.id === selectedParticipantId);
 
   const goalsTasksValid = goalsTasksCheckQuery.data?.has_valid ?? false;
@@ -688,7 +695,9 @@ export function ShiftAssignmentModal({
           {!hasGoalsTasksError && (
             <div className="space-y-3">
               <div className="space-y-2">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>
+                  {translate("coordinator.shiftAssign.start")} <ZoneLabel tz={participantZone} className="ml-1" />
+                </label>
                 <DateTimePicker
                   value={scheduledStart}
                   onChange={setScheduledStart}
@@ -804,8 +813,8 @@ export function ShiftAssignmentModal({
                   [translate("common.worker"),      selectedWorkerData?.full_name ?? translate("coordinator.shiftAssign.unassigned")],
                   [translate("common.participant"), selectedParticipant.full_name],
                   [translate("coordinator.shiftAssign.type"),        translate(SHIFT_TYPE_KEYS[shiftType] ?? shiftType)],
-                  [translate("coordinator.shiftAssign.start"),       `${format(new Date(datetimeLocalValueToUtcIso(scheduledStart)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledStart))}`],
-                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), `${format(new Date(datetimeLocalValueToUtcIso(scheduledEnd)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledEnd))}`] as [string, string]] : []),
+                  [translate("coordinator.shiftAssign.start"),       `${format(new Date(datetimeLocalValueToUtcIso(scheduledStart, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledStart, participantZone), participantZone)}`],
+                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), `${format(new Date(datetimeLocalValueToUtcIso(scheduledEnd, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledEnd, participantZone), participantZone)}`] as [string, string]] : []),
                   ...(selectedTaskIds.length > 0
                     ? [[
                         translate("coordinator.shiftAssign.tasksOptional").split(" (")[0],

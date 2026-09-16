@@ -542,6 +542,10 @@ components:
           type: string
           enum: [male, female, unspecified]
           nullable: true
+        branch_id:
+          type: string
+          nullable: true
+          description: Office (branch) serving the participant; sets their timezone.
         goals:
           type: array
           items:

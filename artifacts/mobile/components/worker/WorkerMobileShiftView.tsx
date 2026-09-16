@@ -1213,7 +1213,7 @@ function WorkerMobileShiftContent({
             ]}
           >
             {shift.scheduled_start
-              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)
+              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)
               : "Time TBC"}
           </Text>
 

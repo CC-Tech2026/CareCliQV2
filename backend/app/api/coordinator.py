@@ -1627,6 +1627,9 @@ async def coordinator_shifts(
             "participant_name": row.get("participant_name")
             or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
             or "Participant",
+            # Participant's branch zone; the roster labels it when it
+            # differs from the coordinator's own branch.
+            "timezone": str(participant_timezone(row, organization_id=org_id)),
         }
         for row in rows
     ]

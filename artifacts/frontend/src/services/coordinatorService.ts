@@ -591,6 +591,8 @@ export type WorkerCredentialStatusResponse = {
 };
 
 export type CoordinatorShiftRecord = {
+  /** IANA zone of the participant's branch — show times in it; label when it differs from the viewer's. */
+  timezone?: string | null;
   id: string;
   organization_id?: string;
   worker_id?: string;

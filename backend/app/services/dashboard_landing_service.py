@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import get_user_id, get_user_organization_id
-from ..core.timezone import app_today, request_timezone, shift_local_date
+from ..core.timezone import app_today, coerce_timezone, participant_timezone, request_timezone, shift_local_date
 from . import session_service, shift_service
 from .supabase_client import get_supabase_admin
 
@@ -69,15 +69,18 @@ def _shift_duration_minutes(shift: dict[str, Any]) -> int:
 
 
 def _shift_summary(shift: dict[str, Any]) -> dict[str, Any]:
+    # Labels are in the participant's branch zone (a worker's shifts are in
+    # their own office, so this normally equals the request zone).
+    tz = shift.get("timezone") and coerce_timezone(shift.get("timezone")) or participant_timezone(shift)
     start = shift.get("scheduled_start")
     start_dt = _parse_iso_datetime(start)
-    start_local = start_dt.astimezone(request_timezone()) if start_dt else None
+    start_local = start_dt.astimezone(tz) if start_dt else None
     date_label = start_local.date().isoformat() if start_local else None
     time_label = None
     if start_local:
         time_label = start_local.strftime("%H:%M")
     end_dt = _parse_iso_datetime(shift.get("scheduled_end"))
-    end_local = end_dt.astimezone(request_timezone()) if end_dt else None
+    end_local = end_dt.astimezone(tz) if end_dt else None
     if start_local and end_local:
         time_label = f"{start_local.strftime('%H:%M')} – {end_local.strftime('%H:%M')}"
 
@@ -87,6 +90,7 @@ def _shift_summary(shift: dict[str, Any]) -> dict[str, Any]:
         "participant_name": shift.get("participant_name") or "Participant",
         "scheduled_start": start,
         "scheduled_end": shift.get("scheduled_end"),
+        "timezone": str(tz),
         "date_label": date_label,
         "time_label": time_label,
         "status": shift.get("status") or "scheduled",

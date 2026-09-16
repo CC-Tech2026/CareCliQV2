@@ -24,6 +24,8 @@ import { useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { useBranches } from "@/hooks/useBranches";
+import { zoneAbbreviation } from "@/lib/datetime";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { SectionInfo } from "@/components/ui/section-info";
 
@@ -44,6 +46,8 @@ const RED_SOFT = "#FBEAE9";
 const BLUE_SOFT = "#EAF1F7";
 
 interface MDData {
+  timezone?: string;
+  branch?: { id: string; name: string; state: string } | null;
   active_participants: number;
   active_staff: number;
   support_workers: number;
@@ -331,12 +335,17 @@ export default function MDExecutivePage() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Branch filter: "" = whole organisation on the MD's own branch clock;
+  // a branch id = that office's people, counted on that office's clock.
+  const [branchId, setBranchId] = useState("");
+  const { branches, multiBranch } = useBranches();
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
     Promise.all([
-      apiFetch("/api/dashboard/managing-director").then((response) =>
+      apiFetch(`/api/dashboard/managing-director${branchId ? `?branch_id=${encodeURIComponent(branchId)}` : ""}`).then((response) =>
         response.ok ? response.json() : Promise.reject()
       ),
       apiFetch("/api/dashboard/compliance-trend").then((response) =>
@@ -363,7 +372,7 @@ export default function MDExecutivePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [branchId]);
 
   const chartData = useMemo(() => {
     return trend
@@ -479,9 +488,29 @@ export default function MDExecutivePage() {
                 className="mt-2 flex items-center gap-2 text-[28px] font-black tracking-[-0.035em] sm:text-[34px]"
                 style={{ color: TEXT }}
               >
-                Organisation at a glance
+                {data.branch ? `${data.branch.name} at a glance` : "Organisation at a glance"}
                 <SectionInfo text="A governance view across compliance, workforce health, and service delivery for the whole organisation." />
               </h1>
+              {multiBranch && (
+                <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold" style={{ color: MUTED }}>
+                  Branch
+                  <select
+                    value={branchId}
+                    onChange={(e) => setBranchId(e.target.value)}
+                    className="rounded-lg border bg-white px-2 py-1 text-[12px] font-semibold"
+                    style={{ color: TEXT }}
+                    aria-label="Filter by branch"
+                  >
+                    <option value="">All branches</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
+                      </option>
+                    ))}
+                  </select>
+                  {data.timezone && <span>· times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
+                </label>
+              )}
             </div>
 
             <div className="hidden text-right sm:block">

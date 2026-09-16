@@ -18,6 +18,9 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Edit, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useBranches } from "@/hooks/useBranches";
+import { zoneAbbreviation } from "@/lib/datetime";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM        = "#E8457A";
@@ -41,6 +44,7 @@ const schema = z.object({
   plan_start_date:    z.string().optional(),
   plan_end_date:      z.string().optional(),
   total_budget:       z.coerce.number().min(0).optional(),
+  branch_id:          z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -92,12 +96,19 @@ export default function ParticipantEdit({ id }: { id: string }) {
       plan_start_date:    participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date:      participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget:       Number(participant.total_budget ?? 0),
+      branch_id:          participant.branch_id ? String(participant.branch_id) : "",
     });
   }, [participant, form]);
+
+  const { user } = useAuth();
+  const { branches, multiBranch } = useBranches();
+  const canMoveBranch = user?.role === "managing_director" && multiBranch;
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormValues) => {
       const payload: Record<string, unknown> = { ...data };
+      // Only the MD moves a participant between offices (changes their clock).
+      if (!canMoveBranch || !payload.branch_id) delete payload.branch_id;
       if (!payload.email)              delete payload.email;
       if (!payload.phone)              delete payload.phone;
       if (!payload.primary_disability) delete payload.primary_disability;
@@ -264,6 +275,35 @@ export default function ParticipantEdit({ id }: { id: string }) {
                 <FormMessage />
               </FormItem>
             )} />
+
+            {/* Branch (office) — sets the participant's timezone for shifts, pay and billing */}
+            {multiBranch && (
+              <FormField control={form.control} name="branch_id" render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Branch</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!canMoveBranch}>
+                    <FormControl>
+                      <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-branch" style={{ borderColor: BORDER }}>
+                        <SelectValue placeholder="Head office" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name} · {b.state} ({zoneAbbreviation(new Date(), b.timezone)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] mt-1" style={{ color: T2 }}>
+                    {canMoveBranch
+                      ? "Shift times, penalty rates and billing periods follow this office's clock. Change at a pay-period boundary."
+                      : "Only a managing director can move a participant to another branch."}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
           </FormCard>
 
           {/* SECTION 2: NDIS Plan */}

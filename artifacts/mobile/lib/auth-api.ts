@@ -7,6 +7,9 @@ export type AuthUser = {
   full_name?: string;
   role?: string;
   organizationId?: string;
+  /** Office the worker belongs to; times and "today" follow its zone. */
+  branchId?: string;
+  timezone?: string;
   profile_photo_url?: string | null;
 };
 
@@ -25,6 +28,8 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
       : raw.organizationId
         ? String(raw.organizationId)
         : undefined,
+    branchId: raw.branch_id ? String(raw.branch_id) : undefined,
+    timezone: typeof raw.timezone === "string" && raw.timezone ? raw.timezone : undefined,
     profile_photo_url:
       raw.profile_photo_url != null && String(raw.profile_photo_url).trim()
         ? String(raw.profile_photo_url)

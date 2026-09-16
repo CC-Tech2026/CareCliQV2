@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
+from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.supabase_client import get_supabase_admin
 
@@ -758,7 +759,7 @@ async def list_members(current_user: dict = Depends(get_current_user)):
         supabase = get_supabase_admin()
         result = (
             supabase.table("organization_members")
-            .select("id, user_id, role, is_active, joined_at")
+            .select("id, user_id, role, is_active, joined_at, branch_id")
             .eq("organization_id", org_id)
             .eq("is_active", "true")
             .execute()
@@ -950,13 +951,20 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # 4. Link to organization via organization_members
     # ------------------------------------------------------------------
     try:
-        supabase.table("organization_members").insert({
+        member_row = {
             "user_id": user_id,
             "organization_id": org_id,
             "role": role,
             "is_active": True,
             "invited_by": invite.get("invited_by"),
-        }).execute()
+        }
+        # New staff join the inviter's office (a Melbourne coordinator
+        # invites Melbourne staff). The DB falls back to head office if the
+        # inviter's branch is unknown; the MD can move them under Team.
+        inviter_branch = member_branch_id(invite.get("invited_by"), org_id)
+        if inviter_branch:
+            member_row["branch_id"] = inviter_branch
+        supabase.table("organization_members").insert(member_row).execute()
     except Exception as e:
         logger.error("accept_invite organization_members insert error: %s", e)
 

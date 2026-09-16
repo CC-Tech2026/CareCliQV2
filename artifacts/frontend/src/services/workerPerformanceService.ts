@@ -5,6 +5,8 @@ export type ComplianceBand = "green" | "amber" | "red" | "unknown";
 export type ShiftHistoryRow = {
   id: string;
   shift_date?: string;
+  /** IANA zone of the participant's branch (shift_date is that branch's calendar day). */
+  timezone?: string | null;
   scheduled_start?: string;
   scheduled_end?: string;
   clocked_in_at?: string;

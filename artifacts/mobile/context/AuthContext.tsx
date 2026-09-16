@@ -23,6 +23,7 @@ import {
   readStoredUserJson,
 } from "@/lib/session";
 import { setWorkerUnauthorizedHandler, WorkerApiError } from "@/lib/worker-fetch";
+import { setAppTimezone } from "@/lib/shift-utils";
 import { clearQueue, clearWorkerQueue } from "@/hooks/useOfflineCache";
 
 type AuthContextValue = {
@@ -51,6 +52,11 @@ export function useAuth(): AuthContextValue {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+
+  // Times and "today" follow the worker's branch (198_branches.sql).
+  useEffect(() => {
+    setAppTimezone(user?.timezone);
+  }, [user?.timezone]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

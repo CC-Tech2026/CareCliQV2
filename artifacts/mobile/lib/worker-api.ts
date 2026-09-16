@@ -64,6 +64,8 @@ export type ParticipantProfile = {
 export type WorkerShift = {
   id: string;
   participant_id?: string;
+  /** IANA zone of the participant's branch; label it when it differs from the worker's. */
+  timezone?: string | null;
   participant_name?: string;
   participant_phone?: string;
   participant_address?: string;

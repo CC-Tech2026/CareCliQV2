@@ -50,6 +50,7 @@ import {
   Lightbulb,
   Paperclip,
   Video,
+  MapPin,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -65,6 +66,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { BranchesSection } from "@/components/branches/BranchesSection";
+import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Link } from "wouter";
 import {
@@ -107,7 +110,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
@@ -122,6 +125,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
+  { id: "branches",      labelKey: "settings.nav.branches",          icon: MapPin, mdOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -270,6 +274,8 @@ interface OrgMember {
   joined_at: string;
   full_name: string;
   email: string;
+  /** Office the member works from (198_branches.sql). */
+  branch_id?: string | null;
 }
 
 interface PendingInvite {
@@ -1560,6 +1566,29 @@ export default function Settings() {
     }
   };
 
+  const { branches: branchList, byId: branchById, multiBranch: branchesMulti } = useBranches();
+  const invalidateBranches = useInvalidateBranches();
+
+  const handleChangeBranch = async (userId: string, branchId: string) => {
+    if (!authToken || !branchId) return;
+    try {
+      const res = await apiFetch(`/api/branches/members/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branch_id: branchId }),
+      });
+      if (!res.ok) throw new Error();
+      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, branch_id: branchId } : m)));
+      invalidateBranches();
+      toast({
+        title: "Branch updated",
+        description: `${branchById.get(branchId)?.name ?? "Branch"} — their shifts and pay now follow that office's time.`,
+      });
+    } catch {
+      toast({ title: "Could not update branch", variant: "destructive" });
+    }
+  };
+
   const handleChangeRole = async (memberId: string, newRole: string) => {
     if (!authToken) return;
     try {
@@ -2591,6 +2620,27 @@ export default function Settings() {
                           </span>
                         )}
 
+                        {/* Branch (office) — sets the member's timezone */}
+                        {branchesMulti && (
+                          isMD ? (
+                            <select
+                              title="Branch"
+                              value={m.branch_id ?? ""}
+                              onChange={(e) => handleChangeBranch(m.user_id, e.target.value)}
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full border outline-none cursor-pointer shrink-0 bg-white"
+                              style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+                            >
+                              {branchList.map((b) => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-[11px] shrink-0" style={{ color: "var(--cc-muted)" }}>
+                              {branchById.get(m.branch_id ?? "")?.name ?? ""}
+                            </span>
+                          )
+                        )}
+
                         {/* Joined date */}
                         <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
@@ -2704,6 +2754,10 @@ export default function Settings() {
 
         {activeSection === "branding" && isMD && (
           <OrganizationBrandingSection />
+        )}
+
+        {activeSection === "branches" && isMD && (
+          <BranchesSection />
         )}
 
       </main>

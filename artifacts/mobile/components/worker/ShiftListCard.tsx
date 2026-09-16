@@ -234,7 +234,7 @@ export function ShiftListCard({
               },
             ]}
           >
-            {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+            {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
           </Text>
         </View>
         {isCancelled ? (

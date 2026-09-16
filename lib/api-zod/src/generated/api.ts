@@ -35,6 +35,7 @@ export const GetParticipantsResponseItem = zod.object({
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.union([
@@ -96,6 +97,7 @@ export const CreateParticipantBody = zod.object({
     .default(createParticipantBodyUsedBudgetDefault),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.object({
@@ -145,6 +147,7 @@ export const GetParticipantResponse = zod.object({
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.union([
@@ -200,6 +203,7 @@ export const UpdateParticipantBody = zod.object({
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.union([
@@ -252,6 +256,7 @@ export const UpdateParticipantResponse = zod.object({
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.union([
@@ -336,6 +341,7 @@ export const UpdateParticipantGoalsResponse = zod.object({
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
   biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
+  branch_id: zod.string().nullish(),
   goals: zod
     .array(
       zod.union([

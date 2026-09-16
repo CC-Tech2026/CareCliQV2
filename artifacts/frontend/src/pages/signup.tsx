@@ -97,7 +97,20 @@ interface FormData {
   sp_participant_volume: string;
   sp_contact_number: string;
   sp_address: string;
+  /** Head-office state — sets the organisation's timezone. */
+  sp_state: string;
 }
+
+const AU_STATES = [
+  { value: "SA", label: "South Australia" },
+  { value: "NSW", label: "New South Wales" },
+  { value: "VIC", label: "Victoria" },
+  { value: "QLD", label: "Queensland" },
+  { value: "WA", label: "Western Australia" },
+  { value: "TAS", label: "Tasmania" },
+  { value: "NT", label: "Northern Territory" },
+  { value: "ACT", label: "Australian Capital Territory" },
+];
 
 const EMPTY: FormData = {
   account_type: "small_provider",
@@ -114,6 +127,7 @@ const EMPTY: FormData = {
   sp_participant_volume: "",
   sp_contact_number: "",
   sp_address: "",
+  sp_state: "",
 };
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -425,7 +439,8 @@ export default function Signup() {
       form.sp_team_size.trim() !== "" &&
       form.sp_participant_volume.trim() !== "" &&
       form.sp_contact_number.trim() !== "" &&
-      form.sp_address.trim() !== ""
+      form.sp_address.trim() !== "" &&
+      form.sp_state.trim() !== ""
     );
   }
 
@@ -550,6 +565,7 @@ export default function Signup() {
               contact_number: form.sp_contact_number || undefined,
               address: form.sp_address || undefined,
               org_address: form.sp_address || undefined,
+              state: form.sp_state || undefined,
             }),
           });
           updateUser({ onboarding_complete: true });
@@ -1623,6 +1639,7 @@ function buildPayload(form: FormData) {
     contact_number: form.sp_contact_number || undefined,
     address: form.sp_address || undefined,
     org_address: form.sp_address || undefined,
+    state: form.sp_state || undefined,
     onboarding_data: {
       provider_type: form.sp_provider_type,
       org_type: form.sp_org_type,
@@ -1784,6 +1801,23 @@ function SmallProviderFields({
           placeholder={t("auth.signup.placeholder.address")}
           disabled={disabled}
         />
+      </div>
+
+      <div>
+        <Label>State</Label>
+
+        <StyledSelect
+          name="sp_state"
+          value={form.sp_state}
+          onChange={(v) => updateField("sp_state", v)}
+          placeholder="Select your head office state"
+          disabled={disabled}
+          required
+          options={AU_STATES}
+        />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Sets your organisation's timezone for rosters, pay and billing. Add other offices later under Settings → Branches.
+        </p>
       </div>
     </>
   );

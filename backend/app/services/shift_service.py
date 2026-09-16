@@ -965,6 +965,9 @@ def _shift_card_payload(
         "participant_address": shift.get("participant_address"),
         "scheduled_start": scheduled_start,
         "scheduled_end": scheduled_end,
+        # Zone of the participant's branch — clients show times in it and
+        # label it when it differs from the viewer's own branch.
+        "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
         "duration_minutes": shift.get("duration_minutes"),
         "clocked_in_at": shift.get("clocked_in_at"),
         "clocked_out_at": shift.get("clocked_out_at"),
