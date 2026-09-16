@@ -13,9 +13,11 @@ and working, and vice versa.
 """
 
 import logging
+from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 
+from ...core.timezone import request_timezone
 from . import tracing  # noqa: F401 — sets up LangSmith env vars at import time
 from .blocks import build_blocks
 from .llm import fallback_provider, get_chat_model, preferred_provider
@@ -25,10 +27,15 @@ from langgraph.prebuilt import create_react_agent
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are Quill, the CareCliQ assistant for NDIS support \
+_SYSTEM_PROMPT_TEMPLATE = """You are Quill, the CareCliQ assistant for NDIS support \
 coordinators and managing directors. You answer plain-English questions about \
 compliance and operational data using the tools available to you — never guess \
 or invent numbers.
+
+{current_datetime}
+When a question or a tool argument depends on "today", "yesterday", "this \
+week", or "this month", compute it from the date above — never from your own \
+sense of the current date, which is not reliable and will be wrong.
 
 Rules:
 - Always call a tool to get real data before answering any factual question.
@@ -42,11 +49,22 @@ text only needs to summarise it in one or two sentences. You may use \
 """
 
 
+def _current_datetime_line() -> str:
+    """The real clock, in the asker's branch timezone — Quill has no other
+    way to know "today"; a language model's own sense of the date is not
+    reliable and drifts from the truth. Bound per-request by
+    OrgContextMiddleware (core.timezone.request_timezone); falls back to
+    the deployment default outside a request (e.g. a background job)."""
+    now = datetime.now(request_timezone())
+    return f'Current date and time: {now.strftime("%A, %d %B %Y, %H:%M")} ({now.tzname()}).'
+
+
 def _build_agent(provider: str, tools):
+    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(current_datetime=_current_datetime_line())
     return create_react_agent(
         model=get_chat_model(provider),
         tools=tools,
-        prompt=_SYSTEM_PROMPT,
+        prompt=system_prompt,
     )
 
 
