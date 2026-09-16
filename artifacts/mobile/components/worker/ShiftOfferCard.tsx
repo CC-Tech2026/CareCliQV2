@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useColors } from "@/hooks/useColors";
 import type { ShiftOfferSummary } from "@/lib/worker-api";
+import { formatDateInZone, formatTimeWithZone } from "@/lib/shift-utils";
 
 type Props = {
   offer: ShiftOfferSummary;
@@ -22,15 +23,8 @@ export function ShiftOfferCard({ offer, onAccept, onDecline }: Props) {
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
 
-  const start = offer.scheduled_start ? new Date(offer.scheduled_start) : null;
-  const timeLabel = start
-    ? start.toLocaleString("en-AU", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      })
+  const timeLabel = offer.scheduled_start
+    ? `${formatDateInZone(offer.scheduled_start, offer.timezone, { weekday: "short", day: "numeric", month: "short" })} ${formatTimeWithZone(offer.scheduled_start, offer.timezone)}`
     : "Time TBC";
 
   const handleAccept = async () => {

@@ -136,6 +136,32 @@ function formatTime(iso: string, tz?: string | null): string {
   }
 }
 
+/**
+ * e.g. "9:00 am AEST" — a time paired with its zone abbreviation, always
+ * shown (not just when it differs from the viewer's own branch). Records
+ * that matter for audit — shift times, medication administrations,
+ * progress notes, incidents — must never be ambiguous about which
+ * branch's clock they're on, regardless of who's looking.
+ */
+export function formatTimeWithZone(iso?: string | null, tz?: string | null): string {
+  if (!iso) return "";
+  return `${formatTime(iso, tz)} ${zoneAbbreviation(iso, tz)}`;
+}
+
+/** e.g. "12 Sep 2026" — the calendar date in the branch zone. */
+export function formatDateInZone(
+  iso?: string | null,
+  tz?: string | null,
+  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" },
+): string {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-AU", { ...opts, timeZone: resolveZone(tz) }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 export function formatShiftDate(iso?: string, tz?: string | null): string | null {
   if (!iso) return null;
   try {
@@ -157,8 +183,10 @@ export function formatShiftTimeRange(start?: string, end?: string, tz?: string |
     const date = formatShiftDate(start, tz);
     const s = formatTime(start, tz);
     const e = end ? formatTime(end, tz) : null;
-    // Zone suffix only when the shift's office differs from the worker's
-    const time = (e ? `${s} – ${e}` : s) + zoneSuffix(start, tz);
+    // Always show the zone when the caller has one — an ambiguous time is
+    // exactly what caused the branch-timezone bug in the first place.
+    const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
+    const time = (e ? `${s} – ${e}` : s) + zone;
     return date ? `${date} · ${time}` : time;
   } catch {
     return start;

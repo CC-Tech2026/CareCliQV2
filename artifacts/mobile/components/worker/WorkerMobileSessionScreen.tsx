@@ -56,6 +56,8 @@ type Props = {
   checkinStatus?: CheckinWindowStatus;
   breakStatus?: ActiveBreakStatus;
   onCheckin?: () => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 function taskStarted(task: ShiftTask, notes: SessionNoteRecord[]): boolean {
@@ -160,6 +162,7 @@ export function WorkerMobileSessionScreen({
   checkinStatus,
   breakStatus,
   onCheckin,
+  tz,
 }: Props) {
   const colors = useColors();
   const { isOnline, queueWorkerUpdate } = useOffline();
@@ -327,6 +330,7 @@ export function WorkerMobileSessionScreen({
         <ClockedInBanner
           clockedInAt={clockedInAt}
           participantName={participantName}
+          tz={tz}
         />
 
         <LongShiftEngagementPanel
@@ -392,6 +396,7 @@ export function WorkerMobileSessionScreen({
             compliance={compliance}
             onNoteSaved={handleNoteSaved}
             onOpenIncidentReport={onOpenIncidentReport}
+            tz={tz}
           />
         </View>
 
@@ -427,6 +432,7 @@ export function WorkerMobileSessionScreen({
             <WorkerMobileMedicationChecklist
               shiftId={shiftId}
               disabled={disabled || busy}
+              tz={tz}
             />
             <WorkerMobilePrnMedications
               shiftId={shiftId}
@@ -478,6 +484,7 @@ export function WorkerMobileSessionScreen({
                   onIncidentReport={
                     flag?.severity === "fail" ? onOpenIncidentReport : undefined
                   }
+                  tz={tz}
                 />
               );
             })}

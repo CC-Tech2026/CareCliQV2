@@ -310,6 +310,8 @@ export type ShiftOfferSummary = {
   scheduled_end: string | null;
   shift_type: string | null;
   offered_at: string | null;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 /** Decision-only summary for a shift this worker has been offered but not

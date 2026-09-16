@@ -3,18 +3,18 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { APP_TIMEZONE } from "@/lib/shift-utils";
+import { formatTimeWithZone } from "@/lib/shift-utils";
 
 type Props = {
   clockedInAt: string | null;
   participantName?: string;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
-export function ClockedInBanner({ clockedInAt }: Props) {
+export function ClockedInBanner({ clockedInAt, tz }: Props) {
   const colors = useColors();
-  const timeLabel = clockedInAt
-    ? new Date(clockedInAt).toLocaleTimeString("en-AU", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" })
-    : null;
+  const timeLabel = clockedInAt ? formatTimeWithZone(clockedInAt, tz) : null;
 
   return (
     <View style={[styles.banner, { backgroundColor: colors.clockInBg, borderColor: colors.clockInBorder }]}>

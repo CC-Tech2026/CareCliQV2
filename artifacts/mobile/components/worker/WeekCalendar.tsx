@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { FontFamily } from "@/constants/typography";
-import { APP_TIMEZONE } from "@/lib/shift-utils";
+import { getAppTimezone } from "@/lib/shift-utils";
 
 export function localDayKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -48,7 +48,7 @@ export function WeekCalendar({
           style={[styles.month, { color: colors.foreground }]}
         >
           {selected.toLocaleDateString("en-AU", {
-            timeZone: APP_TIMEZONE,
+            timeZone: getAppTimezone(),
             month: "long",
             year: "numeric",
           })}
@@ -105,7 +105,7 @@ export function WeekCalendar({
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               aria-pressed={active}
-              accessibilityLabel={`${date.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE, weekday: "long", day: "numeric", month: "long" })}${key === today ? ", today" : ""}${counts[key] ? `, ${counts[key]} shift${counts[key] === 1 ? "" : "s"}` : ""}`}
+              accessibilityLabel={`${date.toLocaleDateString("en-AU", { timeZone: getAppTimezone(), weekday: "long", day: "numeric", month: "long" })}${key === today ? ", today" : ""}${counts[key] ? `, ${counts[key]} shift${counts[key] === 1 ? "" : "s"}` : ""}`}
               onLayout={(event) => {
                 positions.current[key] = event.nativeEvent.layout.x;
                 if (active)
@@ -124,7 +124,7 @@ export function WeekCalendar({
               ]}
             >
               <Text style={[styles.weekday, { color: foreground }]}>
-                {date.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE, weekday: "short" })}
+                {date.toLocaleDateString("en-AU", { timeZone: getAppTimezone(), weekday: "short" })}
               </Text>
               <Text style={[styles.date, { color: foreground }]}>
                 {date.getDate()}

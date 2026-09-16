@@ -23,6 +23,7 @@ import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { useWorkerShift } from "@/hooks/worker/useWorkerShift";
 import { showAlert } from "@/lib/alert";
+import { formatTimeWithZone } from "@/lib/shift-utils";
 import {
   listShiftMessages,
   sendShiftOfficeMessage,
@@ -234,7 +235,7 @@ export default function ShiftMessageOfficeScreen() {
                         {meta.label}
                       </Text>
                       <Text style={[styles.historyTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {new Date(msg.created_at).toLocaleString("en-AU")}
+                        {formatTimeWithZone(msg.created_at, shift?.timezone)}
                       </Text>
                     </View>
                     <Text style={[styles.historyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>

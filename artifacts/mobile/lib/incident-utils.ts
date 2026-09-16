@@ -1,4 +1,5 @@
 import type { TranslationKey } from "@/lib/i18n/translations";
+import { formatDateInZone, formatTimeWithZone } from "@/lib/shift-utils";
 
 export const INCIDENT_SEVERITIES = ["low", "medium", "high", "critical"] as const;
 export const INCIDENT_STATUSES = ["reported", "under_investigation", "resolved", "closed"] as const;
@@ -81,28 +82,21 @@ export function statusMeta(status: string): { color: string; bg: string; border:
   return { color: "#1D4ED8", bg: "#DBEAFE", border: "#BFDBFE" };
 }
 
-export function formatIncidentDate(iso?: string | null): string {
+export function formatIncidentDate(iso?: string | null, tz?: string | null): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateInZone(iso, tz, { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function formatIncidentDateTime(iso?: string | null): string {
+export function formatIncidentDateTime(iso?: string | null, tz?: string | null): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return `${formatDateInZone(iso, tz, { day: "numeric", month: "short", year: "numeric" })} ${formatTimeWithZone(iso, tz)}`;
 }
 
-export function formatIncidentRelativeTime(iso?: string | null): string {
+export function formatIncidentRelativeTime(iso?: string | null, tz?: string | null): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -118,5 +112,5 @@ export function formatIncidentRelativeTime(iso?: string | null): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  return formatDateInZone(iso, tz, { day: "numeric", month: "short" });
 }

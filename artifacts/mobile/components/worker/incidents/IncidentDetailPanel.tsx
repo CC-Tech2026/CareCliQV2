@@ -268,7 +268,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
               {t("incidents.detail.incidentDate")}
             </Text>
             <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {incident.incident_date ? formatIncidentDate(incident.incident_date) : emDash}
+              {incident.incident_date ? formatIncidentDate(incident.incident_date, incident.timezone) : emDash}
             </Text>
           </View>
           <View style={styles.metaCol}>
@@ -462,7 +462,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
             {t("incidents.detail.incidentReported")}
           </Text>
           <Text style={[styles.auditValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            {incident.reported_date ? formatIncidentDateTime(incident.reported_date) : emDash}
+            {incident.reported_date ? formatIncidentDateTime(incident.reported_date, incident.timezone) : emDash}
           </Text>
         </View>
         {incident.ndis_reportable ? (
@@ -483,7 +483,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
               {t("incidents.detail.reportedToNdisQsc")}
             </Text>
             <Text style={[styles.auditValue, { color: "#15803D", fontFamily: "Inter_600SemiBold" }]}>
-              {formatIncidentDate(incident.ndis_reported_at)}
+              {formatIncidentDate(incident.ndis_reported_at, incident.timezone)}
             </Text>
           </View>
         ) : null}
@@ -493,7 +493,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
               {t("incidents.detail.incidentResolved")}
             </Text>
             <Text style={[styles.auditValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {formatIncidentDate(incident.resolved_date)}
+              {formatIncidentDate(incident.resolved_date, incident.timezone)}
             </Text>
           </View>
         ) : null}

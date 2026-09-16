@@ -26,6 +26,8 @@ type Props = {
   compliance: ComplianceEvaluation;
   onNoteSaved: (note: SessionNoteRecord) => void | Promise<void>;
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 /**
@@ -51,6 +53,7 @@ export function WorkerMobileTaskList({
   compliance,
   onNoteSaved,
   onOpenIncidentReport,
+  tz,
 }: Props) {
   const colors = useColors();
   const active = tasks.filter((t) => !t.marked_na);
@@ -186,6 +189,7 @@ export function WorkerMobileTaskList({
                           onToggleTask(task.task_id);
                         }
                       }}
+                      tz={tz}
                     />
                     <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled} />
                   </View>
@@ -218,6 +222,7 @@ export function WorkerMobileTaskList({
                               ? onOpenIncidentReport
                               : undefined
                           }
+                          tz={tz}
                         />
                       ))}
                     </View>

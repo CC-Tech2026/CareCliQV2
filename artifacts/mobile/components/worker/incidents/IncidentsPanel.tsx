@@ -97,7 +97,7 @@ function IncidentCard({
   const t = useT();
   const sev = severityMeta(incident.severity);
   const st = statusMeta(incident.status);
-  const relativeTime = formatIncidentRelativeTime(incident.incident_date);
+  const relativeTime = formatIncidentRelativeTime(incident.incident_date, incident.timezone);
   const metaParts = [
     incident.participant_name || t("incidents.noParticipant"),
     t(incidentTypeLabelKey(incident.incident_type)),

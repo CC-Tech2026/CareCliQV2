@@ -61,6 +61,8 @@ export type IncidentSummary = {
   participant_name?: string;
   ndis_pending?: boolean;
   overdue?: boolean;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type IncidentDetail = {
@@ -87,6 +89,8 @@ export type IncidentDetail = {
   worker_actions?: string | null;
   investigation_notes?: string | null;
   corrective_actions?: string | null;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type IncidentStats = {
