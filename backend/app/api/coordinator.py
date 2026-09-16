@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
 from ..core.config import settings
 from ..core.security import get_current_user
-from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ..core.timezone import parse_shift_datetime, participant_timezone
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.pattern_detection_service import (
     dismiss_pattern,
@@ -2245,8 +2245,11 @@ def _detect_worker_conflicts(
     shift_end: datetime,
     exclude_shift_id: str | None = None,
     is_sleepover: bool = False,
+    tz=None,
 ) -> list[dict]:
     """Return a list of conflict descriptions for a worker over a time window.
+    ``tz`` is the branch zone the shift is worked in (availability slots are
+    the worker's local day-of-week/time); defaults to the request zone.
 
     Checks:
     1. Existing shifts that overlap the window.
@@ -2359,7 +2362,7 @@ def _detect_worker_conflicts(
     # unavailable or preferred independent of blackout dates and shift overlaps.
     try:
         slot_status = worker_matching_service.availability_status_for_shift(
-            worker_id, shift_start.isoformat(), shift_end.isoformat()
+            worker_id, shift_start.isoformat(), shift_end.isoformat(), tz=tz
         )
         if slot_status == "unavailable":
             conflicts.append({
@@ -2915,7 +2918,8 @@ async def get_available_workers(
     skill_warnings_by_worker = _skill_warnings_batch(supabase, worker_ids, participant_id)
     try:
         preferred_by_worker = worker_matching_service.availability_statuses_for_shift_batch(
-            worker_ids, s_dt.isoformat(), e_dt.isoformat()
+            worker_ids, s_dt.isoformat(), e_dt.isoformat(),
+            tz=participant_timezone(participant_id, organization_id=org_id) if participant_id else None,
         )
     except Exception:
         preferred_by_worker = {}
@@ -3448,6 +3452,8 @@ async def bulk_create_shifts(
     created: list[dict] = []
     skipped: list[dict] = []
     conflicts_summary: list[dict] = []
+    # The coordinator types wall-clock times for the participant's office.
+    bulk_tz = participant_timezone(body.participant_id, organization_id=org_id)
 
     for week in range(body.weeks):
         for dow in sorted(set(body.days_of_week)):
@@ -3456,11 +3462,11 @@ async def bulk_create_shifts(
             shift_date = first_day + timedelta(days=week * 7 + days_ahead)
             shift_start_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, sh, sm,
-                tzinfo=APP_TIMEZONE,
+                tzinfo=bulk_tz,
             ).astimezone(timezone.utc)
             shift_end_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, eh, em,
-                tzinfo=APP_TIMEZONE,
+                tzinfo=bulk_tz,
             ).astimezone(timezone.utc)
             if shift_end_dt <= shift_start_dt:
                 shift_end_dt += timedelta(days=1)
@@ -3468,7 +3474,7 @@ async def bulk_create_shifts(
             conflicts: list[dict] = []
             if body.worker_id:
                 conflicts = _detect_worker_conflicts(
-                    supabase, body.worker_id, org_id, shift_start_dt, shift_end_dt
+                    supabase, body.worker_id, org_id, shift_start_dt, shift_end_dt, tz=bulk_tz
                 )
                 hard = any(c["severity"] == "error" for c in conflicts)
                 if hard and not body.confirm_conflicts:

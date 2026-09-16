@@ -33,6 +33,7 @@ def _with_signed_pdf_url(invoice: dict) -> dict:
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
+from ..core.timezone import app_today, shift_local_date
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
@@ -564,7 +565,7 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         payload["finalized_at"] = _now_iso()
     if status_value == "paid" and not existing.get("paid_at"):
         payload["paid_at"] = _now_iso()
-        payload["payment_date"] = data.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
+        payload["payment_date"] = data.get("payment_date") or app_today().isoformat()
     if "payment_reference" in data:
         payload["payment_reference"] = data.get("payment_reference")
 
@@ -947,7 +948,8 @@ async def get_revenue_report(user: dict) -> dict:
     total_outstanding = 0
 
     for inv in invoices:
-        month_key = str(inv.get("created_at") or "")[:7]
+        month_day = shift_local_date(inv.get("created_at"))
+        month_key = month_day.isoformat()[:7] if month_day else str(inv.get("created_at") or "")[:7]
         amount = int(inv.get("total_cents") or 0)
         total_billed += amount
         monthly[month_key]["billed"] += amount

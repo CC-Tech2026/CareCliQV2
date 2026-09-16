@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
 from ..core.security import get_current_user
+from ..core.timezone import app_today, shift_local_date
 from ..schemas.incident import NDIS_NOTIFICATION_HOURS
 from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
@@ -138,7 +139,7 @@ async def _invoice_aging_alerts(org_id: str) -> list[dict]:
     except Exception:
         return []
 
-    today = date.today()
+    today = app_today()
     alerts: list[dict] = []
 
     for row in rows:
@@ -223,7 +224,7 @@ async def get_compliance_alerts(current_user: dict = Depends(get_current_user)):
     except Exception:
         return []
 
-    today = date.today()
+    today = app_today()
 
     def _live_status(row: dict) -> str:
         exp = row.get("expiry_date")
@@ -456,11 +457,11 @@ async def _participant_quiet_alerts(
         if not pid or not sdate:
             continue
         pid = str(pid)
-        sdate = str(sdate)[:10]
+        sdate = (shift_local_date(sdate) or date.fromisoformat(str(sdate)[:10])).isoformat()
         if pid not in last_session_by_participant or sdate > last_session_by_participant[pid]:
             last_session_by_participant[pid] = sdate
 
-    today = date.today()
+    today = app_today()
     alerts: list[dict] = []
     for p in participants:
         if p.get("is_purged"):
@@ -572,7 +573,7 @@ async def list_org_events(current_user: dict = Depends(get_current_user)):
         return []
     supabase = get_supabase_admin()
     try:
-        today = date.today().isoformat()
+        today = app_today().isoformat()
         result = (
             supabase.table("org_events")
             .select("*")
@@ -706,7 +707,7 @@ async def get_community(current_user: dict = Depends(get_current_user)):
     if not org_id:
         return []
     supabase = get_supabase_admin()
-    today = date.today()
+    today = app_today()
 
     try:
         mem_res = (

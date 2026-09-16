@@ -431,6 +431,15 @@ async def create_participant(
         if key in ownership:
             payload[key] = ownership[key]
 
+    # A participant belongs to the office that serves them. Default to the
+    # creator's branch; the DB falls back to head office if that's unknown.
+    if not payload.get("branch_id"):
+        from .branch_service import member_branch_id
+
+        branch_id = member_branch_id(user_id(current_user), organization_id(current_user))
+        if branch_id:
+            payload["branch_id"] = branch_id
+
     try:
 
         result = (
@@ -473,6 +482,10 @@ async def update_participant(
     supabase = get_supabase_admin()
 
     payload: dict = data.model_dump(exclude_unset=True)
+    # Moving a participant between offices changes their pay/billing clock;
+    # only the MD does that (PUT /api/branches/participants/{id}).
+    if "branch_id" in payload and get_user_role(current_user) != "managing_director":
+        payload.pop("branch_id")
 
     payload.pop("address", None)
 

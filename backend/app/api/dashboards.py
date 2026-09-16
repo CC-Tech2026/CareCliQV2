@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone, timedelta
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..core.access import (
     get_coordinator_team_ids,
@@ -16,7 +16,14 @@ from ..core.access import (
     is_support_worker,
 )
 from ..core.security import get_current_user
-from ..core.timezone import app_today, shift_local_date
+from ..core.timezone import (
+    app_today,
+    coerce_timezone,
+    request_timezone,
+    reset_request_timezone,
+    set_request_timezone,
+    shift_local_date,
+)
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..services import billing_service, incident_service, participant_service, session_service
 from ..services.dashboard_landing_service import build_worker_landing_dashboard
@@ -488,19 +495,73 @@ def _retention_rate(team: list[dict]) -> float:
     return round((active / len(team)) * 100, 1)
 
 
+def _branch_scope(org_id: str, branch_id: str) -> tuple[dict, set[str]]:
+    """Resolve a branch filter for the MD dashboard: the branch row (must
+    belong to this org) and the user ids of its members."""
+    supabase = get_supabase_admin()
+    branch_rows = (
+        supabase.table("branches")
+        .select("id, name, state, timezone, is_head_office")
+        .eq("id", branch_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+        .data
+    ) or []
+    if not branch_rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found.")
+    member_rows = (
+        supabase.table("organization_members")
+        .select("user_id")
+        .eq("organization_id", org_id)
+        .eq("branch_id", branch_id)
+        .execute()
+        .data
+    ) or []
+    return branch_rows[0], {str(m.get("user_id")) for m in member_rows if m.get("user_id")}
+
+
 @router.get("/managing-director")
-async def md_dashboard(current_user: dict = Depends(get_current_user)):
-    """Executive dashboard aggregate for managing_director role."""
+async def md_dashboard(
+    branch_id: Optional[str] = Query(None, description="Restrict to one branch and use its timezone"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Executive dashboard aggregate for managing_director role.
+
+    Org-wide figures are counted on the MD's own branch day. With
+    ``branch_id`` the figures are restricted to that branch's participants,
+    staff and sessions, and "today"/"this month" turn over on that
+    branch's clock — so a Melbourne branch is read on Melbourne time."""
     if not is_managing_director(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    participants = await participant_service.get_participants_list_light(current_user)
-    sessions = await session_service.get_sessions_for_dashboard(400, current_user)
-    team = await _team_members(org_id)
+    branch: dict | None = None
+    tz_token = None
+    if branch_id:
+        branch, branch_member_ids = _branch_scope(org_id, branch_id)
+        tz_token = set_request_timezone(coerce_timezone(branch.get("timezone")) or request_timezone())
+    try:
+        participants = await participant_service.get_participants_list_light(current_user)
+        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        if branch:
+            participants = [p for p in participants if str(p.get("branch_id") or "") == str(branch_id)]
+            participant_ids = {str(p.get("id")) for p in participants}
+            sessions = [s for s in sessions if str(s.get("patient_id") or "") in participant_ids]
+            team = await _team_members(org_id, branch_member_ids)
+        else:
+            team = await _team_members(org_id)
+        return await _md_dashboard_payload(current_user, org_id, participants, sessions, team, branch)
+    finally:
+        if tz_token is not None:
+            reset_request_timezone(tz_token)
 
+
+async def _md_dashboard_payload(
+    current_user: dict, org_id: str, participants: list, sessions: list, team: list, branch: dict | None,
+) -> dict:
     today = _today_iso()
     active_workers = [m for m in team if m.get("is_active")]
     support_workers = [m for m in active_workers if m.get("role") == "support_worker"]
@@ -724,6 +785,11 @@ async def md_dashboard(current_user: dict = Depends(get_current_user)):
         "revenue_summary": revenue_summary,
         "staff_directory": staff_directory,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "timezone": str(request_timezone()),
+        "branch": (
+            {"id": branch.get("id"), "name": branch.get("name"), "state": branch.get("state")}
+            if branch else None
+        ),
     }
 
 

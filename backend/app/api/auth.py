@@ -17,7 +17,8 @@ from ..services.supabase_client import get_supabase, get_supabase_admin, signed_
 
 PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
-from ..core.timezone import timezone_for_state
+from ..core.timezone import request_timezone, timezone_for_state
+from ..services.branch_service import member_branch_id
 from ..services import email_service
 from ..services import device_security_service as dss
 
@@ -1216,5 +1217,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "is_active": profile.get("is_active") is not False,
             "deactivation_reason": profile.get("deactivation_reason"),
             "deactivation_note": profile.get("deactivation_note"),
+            # The office this user works from; clients format times and
+            # compute "today" in this zone (198_branches.sql).
+            "branch_id": member_branch_id(user_id, profile.get("organization_id") or current_user.get("organization_id")),
+            "timezone": str(request_timezone()),
         }
     }

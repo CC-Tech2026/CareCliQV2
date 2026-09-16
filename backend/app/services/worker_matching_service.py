@@ -18,7 +18,7 @@ from .worker_availability_service import (
     raw_slot_statuses_batch,
     slot_for_hour,
 )
-from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ..core.timezone import parse_shift_datetime, request_timezone
 
 _SLOT_HOUR_BOUNDARIES = (
     (0, 12, "morning"),
@@ -55,12 +55,13 @@ def _worst_status(statuses: list[Optional[str]]) -> str:
     return "available"
 
 
-def availability_status_for_shift(worker_id: str, scheduled_start: str, scheduled_end: Optional[str]) -> str:
+def availability_status_for_shift(worker_id: str, scheduled_start: str, scheduled_end: Optional[str], tz=None) -> str:
     """'preferred' | 'available' | 'unavailable' for this worker across every
     weekly-availability slot the shift touches. Reuses get_slot_status_for_shift
     (handles the emergency-override edge case already)."""
-    start_local = parse_shift_datetime(scheduled_start).astimezone(APP_TIMEZONE)
-    end_local = parse_shift_datetime(scheduled_end).astimezone(APP_TIMEZONE) if scheduled_end else None
+    zone = tz or request_timezone()
+    start_local = parse_shift_datetime(scheduled_start).astimezone(zone)
+    end_local = parse_shift_datetime(scheduled_end).astimezone(zone) if scheduled_end else None
     statuses = [
         get_slot_status_for_shift(worker_id, start_local.replace(hour=_PROBE_HOUR_BY_SLOT[slot], minute=0))
         for slot in _slots_touched(start_local, end_local)
@@ -69,7 +70,7 @@ def availability_status_for_shift(worker_id: str, scheduled_start: str, schedule
 
 
 def availability_statuses_for_shift_batch(
-    worker_ids: list[str], scheduled_start: str, scheduled_end: Optional[str]
+    worker_ids: list[str], scheduled_start: str, scheduled_end: Optional[str], tz=None
 ) -> dict[str, str]:
     """Batch form of availability_status_for_shift for many workers against
     one shift window - two queries total regardless of how many workers or
@@ -80,8 +81,9 @@ def availability_statuses_for_shift_batch(
     call availability_status_for_shift once per team member in a loop."""
     if not worker_ids:
         return {}
-    start_local = parse_shift_datetime(scheduled_start).astimezone(APP_TIMEZONE)
-    end_local = parse_shift_datetime(scheduled_end).astimezone(APP_TIMEZONE) if scheduled_end else None
+    zone = tz or request_timezone()
+    start_local = parse_shift_datetime(scheduled_start).astimezone(zone)
+    end_local = parse_shift_datetime(scheduled_end).astimezone(zone) if scheduled_end else None
     touched = _slots_touched(start_local, end_local)
     dow = start_local.isoweekday()
 

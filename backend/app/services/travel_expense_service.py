@@ -14,6 +14,7 @@ from fastapi import HTTPException, UploadFile
 
 from .supabase_client import get_supabase_admin
 from .travel_distance_service import estimate_shift_mileage
+from ..core.timezone import shift_local_date
 
 logger = logging.getLogger(__name__)
 
@@ -635,7 +636,8 @@ def export_tax_csv(worker_id: str, organization_id: str) -> str:
     writer.writerow(["date", "type", "amount_aud", "status", "shift_id"])
     for month in summary:
         for item in month.get("items") or []:
-            submitted = str(item.get("submitted_at") or item.get("created_at") or "")[:10]
+            submitted_raw = item.get("submitted_at") or item.get("created_at")
+            submitted = (shift_local_date(submitted_raw) or date.fromisoformat(str(submitted_raw or "")[:10])).isoformat() if submitted_raw else ""
             amount = int(item.get("amount_cents") or 0) / 100
             writer.writerow([
                 submitted,

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import get_user_id, get_user_organization_id
-from ..core.timezone import APP_TIMEZONE, app_today, shift_local_date
+from ..core.timezone import app_today, request_timezone, shift_local_date
 from . import session_service, shift_service
 from .supabase_client import get_supabase_admin
 
@@ -71,13 +71,13 @@ def _shift_duration_minutes(shift: dict[str, Any]) -> int:
 def _shift_summary(shift: dict[str, Any]) -> dict[str, Any]:
     start = shift.get("scheduled_start")
     start_dt = _parse_iso_datetime(start)
-    start_local = start_dt.astimezone(APP_TIMEZONE) if start_dt else None
+    start_local = start_dt.astimezone(request_timezone()) if start_dt else None
     date_label = start_local.date().isoformat() if start_local else None
     time_label = None
     if start_local:
         time_label = start_local.strftime("%H:%M")
     end_dt = _parse_iso_datetime(shift.get("scheduled_end"))
-    end_local = end_dt.astimezone(APP_TIMEZONE) if end_dt else None
+    end_local = end_dt.astimezone(request_timezone()) if end_dt else None
     if start_local and end_local:
         time_label = f"{start_local.strftime('%H:%M')} – {end_local.strftime('%H:%M')}"
 
@@ -135,7 +135,7 @@ def _worker_compliance_alerts(user_id: str) -> list[dict[str, Any]]:
     except Exception:
         return []
 
-    today = date.today()
+    today = app_today()
     alerts: list[dict[str, Any]] = []
 
     def _live_status(row: dict[str, Any]) -> str:
@@ -203,7 +203,7 @@ def _session_action_item(session: dict[str, Any], kind: str, title: str) -> dict
         "id": f"{kind}:{session.get('id')}",
         "kind": kind,
         "title": title,
-        "detail": f"{participant_name} · {str(session.get('session_date') or '')[:10]}",
+        "detail": f"{participant_name} · {(shift_local_date(session.get('session_date')) or str(session.get('session_date') or '')[:10])}",
         "severity": "high" if kind == "compliance_fix" else "medium",
         "action_url": f"/sessions/{session.get('id')}" if session.get("id") else "/sessions",
         "reference_id": session.get("id"),
@@ -296,7 +296,7 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
         },
         "greeting_context": {
             "date_label": app_today().strftime("%A, %d %B"),
-            "timezone": str(APP_TIMEZONE),
+            "timezone": str(request_timezone()),
         },
         "today_shifts": today_summaries,
         "next_shift": next_shift,
