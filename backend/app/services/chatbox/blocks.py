@@ -112,6 +112,38 @@ def _blocks_for_shift_coverage(a: dict) -> list[dict]:
     }]
 
 
+_STATUS_LABELS = {
+    "scheduled": "Scheduled",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+}
+
+
+def _blocks_for_shift_schedule(a: dict) -> list[dict]:
+    shifts = a.get("shifts") or []
+    if not shifts:
+        return [{"type": "stat", "label": "Shifts in range", "value": 0}]
+    asker_zone = a.get("timezone")
+    rows = []
+    for s in shifts:
+        zone = s.get("timezone") or asker_zone
+        other_branch = bool(zone and asker_zone and zone != asker_zone)
+        rows.append([
+            s.get("worker_name"),
+            s.get("participant_name"),
+            _format_shift_date(s.get("scheduled_start"), zone),
+            _format_shift_time(s.get("scheduled_start"), zone, label_zone=other_branch),
+            _format_shift_time(s.get("scheduled_end"), zone, label_zone=other_branch),
+            _STATUS_LABELS.get(s.get("status"), s.get("status") or "—"),
+        ])
+    return [{
+        "type": "table",
+        "title": f"Shifts — {a.get('date_from')} to {a.get('date_to')}",
+        "columns": ["Worker", "Participant", "Date", "Start", "End", "Status"],
+        "rows": rows,
+    }]
+
+
 def _blocks_for_goal_achievement_rate(a: dict) -> list[dict]:
     return [{
         "type": "stat",
@@ -222,6 +254,7 @@ _BUILDERS = {
     "get_incident_summary": _blocks_for_incident_summary,
     "get_rp_flag_count": _blocks_for_rp_flag_count,
     "get_shift_coverage": _blocks_for_shift_coverage,
+    "get_shift_schedule": _blocks_for_shift_schedule,
     "get_goal_achievement_rate": _blocks_for_goal_achievement_rate,
     "get_retention_rate": _blocks_for_retention_rate,
     "get_revenue_summary": _blocks_for_revenue_summary,
