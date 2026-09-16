@@ -6,6 +6,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
+from ..core.timezone import participant_timezone, shift_local_date
 from .shift_service import get_shift_by_id
 from .shift_validation_service import (
     build_compliance_explanation,
@@ -184,7 +185,12 @@ def _history_row(shift: dict[str, Any]) -> dict[str, Any]:
     validation = _get_session_validation(shift)
     score = validation.get("compliance_score")
     feedback = _feedback_summary_for_shift(str(shift.get("id") or ""))
-    shift_date = shift.get("scheduled_start") or shift.get("clocked_out_at") or shift.get("updated_at")
+    # Calendar day in the participant's branch zone (a UTC timestamp sliced
+    # to a date filed early-morning shifts under the previous day).
+    tz = participant_timezone(shift, organization_id=shift.get("organization_id"))
+    shift_when = shift.get("scheduled_start") or shift.get("clocked_out_at") or shift.get("updated_at")
+    shift_day = shift_local_date(shift_when, tz)
+    shift_date = shift_day.isoformat() if shift_day else shift_when
     worker_id = shift.get("worker_id")
     created_by = shift.get("created_by")
     coordinator_email = None
@@ -206,6 +212,7 @@ def _history_row(shift: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": shift.get("id"),
         "shift_date": shift_date,
+        "timezone": str(tz),
         "scheduled_start": shift.get("scheduled_start"),
         "scheduled_end": shift.get("scheduled_end"),
         "clocked_in_at": shift.get("clocked_in_at"),
@@ -271,7 +278,7 @@ def list_completed_shifts(
         if participant_ids and pid not in participant_ids:
             continue
 
-        shift_day = _parse_date(str(shift.get("scheduled_start") or "")[:10])
+        shift_day = shift_local_date(shift.get("scheduled_start"), participant_timezone(shift))
         if date_from and shift_day and shift_day < date_from:
             continue
         if date_to and shift_day and shift_day > date_to:

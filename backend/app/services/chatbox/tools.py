@@ -22,7 +22,13 @@ from typing import Optional
 
 from langchain_core.tools import tool
 
-from ...core.timezone import APP_TIMEZONE, app_day_bounds_utc, app_today
+from ...core.timezone import (
+    app_day_bounds_utc,
+    app_today,
+    participant_timezone,
+    request_timezone,
+    user_timezone,
+)
 from ...core.access import (
     get_coordinator_team_ids,
     get_user_id,
@@ -277,9 +283,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         participants = await participant_service.get_participants_list_light(current_user)
         participant_names = {str(p.get("id")): p.get("full_name") for p in participants}
 
+        asker_tz = request_timezone()
         for row in matching_rows:
             worker_id = row.get("worker_id")
             participant_id = row.get("participant_id")
+            # Times are in the participant's branch zone; the abbreviation
+            # is included whenever that differs from the asker's branch.
+            tz = participant_timezone(row, organization_id=org_id)
             on_shift.append({
                 "worker_id": worker_id,
                 "worker_name": worker_names.get(str(worker_id)) or "Unknown worker",
@@ -287,15 +297,16 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
                 "participant_name": participant_names.get(str(participant_id)) or "Unknown participant",
                 "scheduled_start": row.get("scheduled_start"),
                 "scheduled_end": row.get("scheduled_end"),
+                "timezone": str(tz),
                 # Local wall-clock strings for the model's prose — the raw
                 # values above are UTC and read as the wrong time of day.
-                "local_start": _format_local(row.get("scheduled_start")),
-                "local_end": _format_local(row.get("scheduled_end")),
+                "local_start": _format_local(row.get("scheduled_start"), tz, label_zone=tz != asker_tz),
+                "local_end": _format_local(row.get("scheduled_end"), tz, label_zone=tz != asker_tz),
             })
 
         return {
             "scope": "organisation-wide",
-            "timezone": str(APP_TIMEZONE),
+            "timezone": str(asker_tz),
             "on_shift_now": on_shift,
             "count": len(on_shift),
         }
@@ -443,7 +454,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not participant:
             return {"error": f"No participant matching '{participant_name}' found."}
 
-        bounds = _local_date_range_utc(shift_date, shift_date)
+        bounds = _local_date_range_utc(shift_date, shift_date, participant_timezone(participant, organization_id=org_id))
         if bounds is None:
             return {"error": f"'{shift_date}' is not a valid date — use YYYY-MM-DD."}
         try:
@@ -509,7 +520,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not participant:
             return {"error": f"No participant matching '{participant_name}' found."}
 
-        bounds = _local_date_range_utc(date_from, date_to)
+        bounds = _local_date_range_utc(date_from, date_to, participant_timezone(participant, organization_id=org_id))
         if bounds is None:
             return {"error": f"'{date_from}' to '{date_to}' is not a valid date range — use YYYY-MM-DD."}
         try:
@@ -560,7 +571,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not worker:
             return {"error": f"No worker matching '{worker_name}' found."}
 
-        bounds = _local_date_range_utc(date_from, date_to)
+        bounds = _local_date_range_utc(date_from, date_to, user_timezone(worker.get("id"), org_id))
         if bounds is None:
             return {"error": f"'{date_from}' to '{date_to}' is not a valid date range — use YYYY-MM-DD."}
         try:
@@ -822,14 +833,16 @@ def _parse_iso(value) -> datetime | None:
         return None
 
 
-def _format_local(value) -> str | None:
-    """'2026-08-24T07:30:00+00:00' -> '24 Aug 2026, 05:00 PM' in APP_TIMEZONE."""
+def _format_local(value, tz=None, *, label_zone: bool = False) -> str | None:
+    """'2026-08-24T07:30:00+00:00' -> '24 Aug 2026, 05:00 PM' in ``tz``
+    (default: the asker's branch); ``label_zone`` appends e.g. ' AEST'."""
     dt = _parse_iso(value)
     if not dt:
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(APP_TIMEZONE).strftime("%d %b %Y, %I:%M %p")
+    local = dt.astimezone(tz or request_timezone())
+    return local.strftime("%d %b %Y, %I:%M %p %Z" if label_zone else "%d %b %Y, %I:%M %p")
 
 
 def _session_local_date(value) -> str:
@@ -846,10 +859,10 @@ def _session_local_date(value) -> str:
         return str(value or "")[:10]
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(APP_TIMEZONE).date().isoformat()
+    return dt.astimezone(request_timezone()).date().isoformat()
 
 
-def _local_date_range_utc(date_from: str, date_to: str) -> tuple[str, str] | None:
+def _local_date_range_utc(date_from: str, date_to: str, tz=None) -> tuple[str, str] | None:
     """Inclusive local calendar days -> UTC ISO bounds for scheduled_start.
 
     Shifts are stored in UTC, but users ask about Australian calendar days.
@@ -858,8 +871,8 @@ def _local_date_range_utc(date_from: str, date_to: str) -> tuple[str, str] | Non
     Returns None for anything that isn't YYYY-MM-DD.
     """
     try:
-        start, _ = app_day_bounds_utc(date.fromisoformat(str(date_from).strip()))
-        _, end_exclusive = app_day_bounds_utc(date.fromisoformat(str(date_to).strip()))
+        start, _ = app_day_bounds_utc(date.fromisoformat(str(date_from).strip()), tz)
+        _, end_exclusive = app_day_bounds_utc(date.fromisoformat(str(date_to).strip()), tz)
     except ValueError:
         return None
     end = (datetime.fromisoformat(end_exclusive) - timedelta(seconds=1)).isoformat()

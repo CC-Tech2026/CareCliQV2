@@ -23,10 +23,11 @@ from .session_service import _prepare_session_payload
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 from ..core.timezone import (
-    APP_TIMEZONE,
     app_day_bounds_utc,
     app_today,
     parse_shift_datetime,
+    participant_timezone,
+    request_timezone,
     shift_local_date,
 )
 
@@ -328,16 +329,20 @@ def validate_shift_scheduled_today(
     scheduled_start: str,
     *,
     today: Optional[date] = None,
+    tz=None,
 ) -> None:
-    """Reject clock-in when the shift is not scheduled for today (CARECLIQV2-90)."""
+    """Reject clock-in when the shift is not scheduled for today (CARECLIQV2-90).
+
+    "Today" is the participant's branch day (``tz``); defaults to the
+    request zone."""
     if not scheduled_start:
         return
     try:
         start = parse_shift_datetime(scheduled_start)
-        shift_day = start.astimezone(APP_TIMEZONE).date()
+        shift_day = start.astimezone(tz or request_timezone()).date()
     except ValueError:
         return
-    if shift_day != (today or app_today()):
+    if shift_day != (today or app_today(tz)):
         raise ShiftNotScheduledToday("Shift not scheduled for today")
 
 
@@ -2436,7 +2441,10 @@ def clock_in_shift(
 
     ensure_briefing_completed(shift, worker_id)
 
-    validate_shift_scheduled_today(str(shift.get("scheduled_start") or ""))
+    validate_shift_scheduled_today(
+        str(shift.get("scheduled_start") or ""),
+        tz=participant_timezone(shift, organization_id=organization_id),
+    )
     check_in_meta: dict[str, Any] = {}
     verification_distance: Optional[float] = None
     qr_code_id: Optional[str] = None
@@ -2904,7 +2912,7 @@ def start_shift_session(
 
     payload = _prepare_session_payload({
         "participant_id": str(participant_id),
-        "session_date": app_today(),
+        "session_date": app_today(participant_timezone(shift, organization_id=organization_id)),
         "duration_minutes": duration,
         "session_type": "support_work",
         "status": "draft",

@@ -34,7 +34,7 @@ import uuid
 from datetime import datetime, timedelta, date as date_cls
 from datetime import timezone as dt_timezone
 
-from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ..core.timezone import APP_TIMEZONE, parse_shift_datetime, participant_timezone
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -106,14 +106,16 @@ def _day_type(local_date: date_cls, public_holidays: set[str]) -> str:
     return "weekday"
 
 
-def _segment_shift_by_local_day(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+def _segment_shift_by_local_day(start: datetime, end: datetime, tz=APP_TIMEZONE) -> list[tuple[datetime, datetime]]:
     """Split [start, end) at each local-midnight boundary so a shift crossing
     into a new day-type (e.g. Saturday evening into Sunday) prices each part
-    at its own rate instead of one rate for the whole span."""
+    at its own rate instead of one rate for the whole span. ``tz`` is the
+    branch the shift is worked in — midnight in Melbourne is not midnight
+    in Adelaide."""
     segments: list[tuple[datetime, datetime]] = []
     cursor = start
     while cursor < end:
-        local_cursor = cursor.astimezone(APP_TIMEZONE)
+        local_cursor = cursor.astimezone(tz)
         next_local_midnight = (local_cursor.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         boundary = min(end, next_local_midnight.astimezone(dt_timezone.utc))
         segments.append((cursor, boundary))
@@ -158,6 +160,9 @@ def calculate_shift_pay(shift: dict, *, dry_run: bool = False) -> dict:
     empty = {"components": [], "total_cents": 0, "reason": None}
     if not shift_id or not worker_id or not org_id:
         return {**empty, "reason": "missing_shift_worker_or_org"}
+    # Penalty-rate boundaries and the overtime day are in the zone where
+    # the work happened — the participant's branch.
+    tz = participant_timezone(shift, organization_id=org_id)
 
     supabase = get_supabase_admin()
 
@@ -190,7 +195,7 @@ def calculate_shift_pay(shift: dict, *, dry_run: bool = False) -> dict:
     if shift.get("is_sleepover"):
         return _price_sleepover_shift(
             shift=shift, classification=classification, is_casual=is_casual,
-            org_id=org_id, worker_id=worker_id, shift_id=shift_id, dry_run=dry_run,
+            org_id=org_id, worker_id=worker_id, shift_id=shift_id, dry_run=dry_run, tz=tz,
         )
 
     base_rate = float(classification["base_rate"])
@@ -202,12 +207,12 @@ def calculate_shift_pay(shift: dict, *, dry_run: bool = False) -> dict:
     rows: list[dict] = []
     total_hours = 0.0
 
-    for seg_start, seg_end in _segment_shift_by_local_day(start, end):
+    for seg_start, seg_end in _segment_shift_by_local_day(start, end, tz):
         hours = (seg_end - seg_start).total_seconds() / 3600
         if hours <= 0:
             continue
         total_hours += hours
-        local_date = seg_start.astimezone(APP_TIMEZONE).date()
+        local_date = seg_start.astimezone(tz).date()
         day_type = _day_type(local_date, public_holidays)
         multiplier = _DAY_MULTIPLIER[day_type]
         day_rate = base_rate * multiplier
@@ -252,8 +257,8 @@ def calculate_shift_pay(shift: dict, *, dry_run: bool = False) -> dict:
 
     if not dry_run:
         try:
-            local_date = start.astimezone(APP_TIMEZONE).date()
-            recompute_daily_overtime(worker_id=worker_id, organization_id=org_id, local_date=local_date)
+            local_date = start.astimezone(tz).date()
+            recompute_daily_overtime(worker_id=worker_id, organization_id=org_id, local_date=local_date, tz=tz)
         except Exception:
             logger.exception("schads_engine: overtime recompute failed for worker %s on %s", worker_id, start)
 
@@ -262,7 +267,7 @@ def calculate_shift_pay(shift: dict, *, dry_run: bool = False) -> dict:
 
 def _price_sleepover_shift(
     *, shift: dict, classification: dict, is_casual: bool,
-    org_id: str, worker_id: str, shift_id: str, dry_run: bool,
+    org_id: str, worker_id: str, shift_id: str, dry_run: bool, tz=APP_TIMEZONE,
 ) -> dict:
     """Prices a sleepover shift from its shift_segments rows instead of the
     plain-shift day-segmenter path. Verified against Fair Work Full Bench
@@ -306,11 +311,11 @@ def _price_sleepover_shift(
             continue
 
         if seg_type == "active_work":
-            for sub_start, sub_end in _segment_shift_by_local_day(seg_start, seg_end):
+            for sub_start, sub_end in _segment_shift_by_local_day(seg_start, seg_end, tz):
                 hours = (sub_end - sub_start).total_seconds() / 3600
                 if hours <= 0:
                     continue
-                local_date = sub_start.astimezone(APP_TIMEZONE).date()
+                local_date = sub_start.astimezone(tz).date()
                 day_type = _day_type(local_date, public_holidays)
                 multiplier = _DAY_MULTIPLIER[day_type]
                 day_rate = base_rate * multiplier
@@ -458,11 +463,12 @@ def calculate_cancellation_pay(shift: dict, cancelled_at: datetime, *, dry_run: 
     run_id = str(uuid.uuid4())
     rows: list[dict] = []
 
-    for seg_start, seg_end in _segment_shift_by_local_day(scheduled_start, scheduled_end):
+    tz = participant_timezone(shift, organization_id=org_id)
+    for seg_start, seg_end in _segment_shift_by_local_day(scheduled_start, scheduled_end, tz):
         hours = (seg_end - seg_start).total_seconds() / 3600
         if hours <= 0:
             continue
-        local_date = seg_start.astimezone(APP_TIMEZONE).date()
+        local_date = seg_start.astimezone(tz).date()
         day_type = _day_type(local_date, public_holidays)
         multiplier = _DAY_MULTIPLIER[day_type]
         day_rate = base_rate * multiplier
@@ -481,7 +487,7 @@ def calculate_cancellation_pay(shift: dict, cancelled_at: datetime, *, dry_run: 
     return {"components": rows, "total_cents": total_cents, "reason": None}
 
 
-def recompute_daily_overtime(*, worker_id: str, organization_id: str, local_date: date_cls) -> None:
+def recompute_daily_overtime(*, worker_id: str, organization_id: str, local_date: date_cls, tz=APP_TIMEZONE) -> None:
     """Re-derive a worker's whole calendar day across every completed shift
     that day and reconcile the overtime_1_5x/overtime_2x ledger rows to
     match. Triggered synchronously by calculate_shift_pay rather than a
@@ -490,7 +496,7 @@ def recompute_daily_overtime(*, worker_id: str, organization_id: str, local_date
     ends instead of waiting for a batch run."""
     supabase = get_supabase_admin()
 
-    day_start_local = datetime.combine(local_date, datetime.min.time()).replace(tzinfo=APP_TIMEZONE)
+    day_start_local = datetime.combine(local_date, datetime.min.time()).replace(tzinfo=tz)
     day_end_local = day_start_local + timedelta(days=1)
     day_start_utc = day_start_local.astimezone(dt_timezone.utc).isoformat()
     day_end_utc = day_end_local.astimezone(dt_timezone.utc).isoformat()

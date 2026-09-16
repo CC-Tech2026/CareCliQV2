@@ -45,15 +45,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _as_of_date_from_due(due_date: Any) -> date:
-    if not due_date:
-        from ..core.timezone import app_today
-        return app_today()
-    try:
-        return date.fromisoformat(str(due_date)[:10])
-    except ValueError:
-        from ..core.timezone import app_today
-        return app_today()
+def _as_of_date_from_due(due_date: Any, participant_id: Any = None, org_id: Any = None) -> date:
+    """Date an invoice is billed as-of: its due date, else today in the
+    participant's branch zone."""
+    from ..core.timezone import app_today, participant_timezone
+
+    if due_date:
+        try:
+            return date.fromisoformat(str(due_date)[:10])
+        except ValueError:
+            pass
+    return app_today(participant_timezone(participant_id, organization_id=org_id))
 
 
 def _money_to_cents(value: Any) -> int:
@@ -424,7 +426,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
     billing_period_id = None
     participant_id = data.get("participant_id")
     if participant_id:
-        as_of = _as_of_date_from_due(data.get("due_date"))
+        as_of = _as_of_date_from_due(data.get("due_date"), participant_id, org_id)
         supabase = get_supabase_admin()
         participant_result = (
             supabase.table("patients")

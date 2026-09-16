@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ..core.timezone import parse_shift_datetime, participant_timezone
 
 from ..core.config import settings
 from ..schemas.alert import AlertCreate
@@ -343,7 +343,7 @@ async def notify_shift_change(
     if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     shift_id = str(shift.get("id") or "")
 
     old_str = ""
@@ -352,12 +352,12 @@ async def notify_shift_change(
         parts = []
         for key, label in (("scheduled_start", "Start"), ("scheduled_end", "End"), ("location", "Location")):
             if old_values and key in old_values:
-                parts.append(f"{label}: {_format_shift_time(old_values[key]) if 'start' in key or 'end' in key else old_values[key]}")
+                parts.append(f"{label}: {_format_shift_time(old_values[key], shift) if 'start' in key or 'end' in key else old_values[key]}")
         old_str = " · ".join(parts) if parts else ""
         parts_new = []
         for key, label in (("scheduled_start", "Start"), ("scheduled_end", "End"), ("location", "Location")):
             if new_values and key in new_values:
-                parts_new.append(f"{label}: {_format_shift_time(new_values[key]) if 'start' in key or 'end' in key else new_values[key]}")
+                parts_new.append(f"{label}: {_format_shift_time(new_values[key], shift) if 'start' in key or 'end' in key else new_values[key]}")
         new_str = " · ".join(parts_new) if parts_new else start_label
 
     message = (
@@ -386,7 +386,7 @@ async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str,
     if not worker_id or worker_id == _UNASSIGNED_SHIFT_PLACEHOLDER_ID:
         return None
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     shift_id = str(shift.get("id") or "")
     return await notify_worker(
         user_id=worker_id,
@@ -414,7 +414,7 @@ async def notify_worker_cannot_attend(
     if not org_id:
         return []
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     shift_id = str(shift.get("id") or "")
     message = f"A worker can't make their shift: {start_label} with {participant}."
     if reason:
@@ -443,7 +443,7 @@ async def notify_shift_offer(*, shift: dict[str, Any], worker_id: str, rank: int
     alerts-backed notification panel, where generateMessageActions renders
     the Accept/Decline buttons for alert_type == 'shift_offer'."""
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     shift_id = str(shift.get("id") or "")
     return await notify_worker(
         user_id=worker_id,
@@ -472,7 +472,7 @@ async def notify_shift_offer_exhausted(
     if not org_id:
         return []
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     shift_id = str(shift.get("id") or "")
     message = f"Every suggested worker declined or didn't respond: {start_label} with {participant}. Please assign manually."
     if reason:
@@ -512,7 +512,7 @@ async def notify_shift_reminder(
         return None
 
     participant = _participant_first_name(shift)
-    start_label = _format_shift_time(shift.get("scheduled_start"))
+    start_label = _format_shift_time(shift.get("scheduled_start"), shift)
     return await notify_worker(
         user_id=worker_id,
         org_id=str(shift.get("organization_id") or "") or None,
@@ -822,12 +822,14 @@ async def notify_office_worker_message(
     )
 
 
-def _format_shift_time(value: Any) -> str:
+def _format_shift_time(value: Any, shift: Optional[dict[str, Any]] = None) -> str:
+    """Wall-clock time in the participant's branch zone, with the zone
+    abbreviation so a Melbourne shift reads 'AEST' to an Adelaide reader."""
     if not value:
         return "TBC"
     try:
         dt = parse_shift_datetime(str(value))
-        local = dt.astimezone(APP_TIMEZONE)
+        local = dt.astimezone(participant_timezone(shift or {}))
         return local.strftime("%a %d %b %Y, %H:%M %Z")
     except ValueError:
         return str(value)[:16]

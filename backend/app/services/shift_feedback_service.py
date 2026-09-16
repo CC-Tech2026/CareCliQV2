@@ -10,6 +10,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.config import settings
+from ..core.timezone import participant_timezone, shift_local_date
 from .notification_service import notify_worker
 from .push_service import send_push_to_user
 from .shift_service import get_shift_by_id
@@ -133,7 +134,8 @@ async def submit_shift_feedback(
             logger.warning("feedback tags insert failed: %s", exc)
 
     coord_name = _coordinator_display_name(coordinator_id)
-    shift_date = str(shift.get("scheduled_start") or "")[:10]
+    shift_day = shift_local_date(shift.get("scheduled_start"), participant_timezone(shift))
+    shift_date = shift_day.isoformat() if shift_day else str(shift.get("scheduled_start") or "")[:10]
     message = f"New feedback from {coord_name} for your shift on {shift_date}."
     action_url = f"{settings.frontend_base_url.rstrip('/')}/worker/feedback/{feedback_id}"
 

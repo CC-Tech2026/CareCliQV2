@@ -241,10 +241,11 @@ def _find_affected_shifts_today(participant_id: str, organization_id: str) -> li
     """Shifts for this participant that are currently in progress, or still scheduled to
     start later today — the set of shifts a mid-shift medication status change needs to
     reach, per the Shift Content Synchronization spec."""
-    from ..core.timezone import app_day_bounds_utc, app_today
+    from ..core.timezone import app_day_bounds_utc, app_today, participant_timezone
 
     supabase = get_supabase_admin()
-    _, day_end = app_day_bounds_utc(app_today())
+    tz = participant_timezone(participant_id, organization_id=organization_id)
+    _, day_end = app_day_bounds_utc(app_today(tz), tz)
     shifts: dict[str, dict[str, Any]] = {}
     try:
         upcoming = (

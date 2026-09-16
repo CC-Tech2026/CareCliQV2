@@ -16,34 +16,40 @@ Block shapes (kept intentionally small — 4 types cover every tool today):
 from datetime import datetime
 from typing import Any
 
-from ...core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ...core.timezone import coerce_timezone, parse_shift_datetime, request_timezone
 
 
-def _to_local(value: Any) -> datetime | None:
-    """Shift timestamps are stored in UTC; display them in the app's
-    Australian timezone, matching the rest of the UI. Formatting the raw
-    UTC value showed a 5:30 PM Adelaide shift as 07:30 AM, and evening
-    shifts on the wrong calendar day."""
+def _to_local(value: Any, tz_name: Any = None) -> datetime | None:
+    """Shift timestamps are stored in UTC; display them in the zone of the
+    branch the shift belongs to (``tz_name``), else the asker's branch.
+    Formatting the raw UTC value showed a 5:00 PM Adelaide shift as
+    07:30 AM, and evening shifts on the wrong calendar day."""
     try:
-        return parse_shift_datetime(str(value)).astimezone(APP_TIMEZONE)
+        zone = coerce_timezone(tz_name) or request_timezone()
+        return parse_shift_datetime(str(value)).astimezone(zone)
     except ValueError:
         return None
 
 
-def _format_shift_date(value: Any) -> Any:
+def _format_shift_date(value: Any, tz_name: Any = None) -> Any:
     """e.g. '2026-08-24T07:30:00+00:00' -> '24 Aug' (local date)"""
     if not value:
         return value
-    dt = _to_local(value)
+    dt = _to_local(value, tz_name)
     return dt.strftime("%d %b") if dt else value
 
 
-def _format_shift_time(value: Any) -> Any:
-    """e.g. '2026-08-24T07:30:00+00:00' -> '05:00 PM' (Adelaide, UTC+9:30)"""
+def _format_shift_time(value: Any, tz_name: Any = None, *, label_zone: bool = False) -> Any:
+    """e.g. '2026-08-24T07:30:00+00:00' -> '05:00 PM' (Adelaide, UTC+9:30).
+    With ``label_zone`` the abbreviation is appended ('05:00 PM AEST') —
+    used when a row's branch differs from the asker's so a Melbourne time
+    is never misread as an Adelaide one."""
     if not value:
         return value
-    dt = _to_local(value)
-    return dt.strftime("%I:%M %p") if dt else value
+    dt = _to_local(value, tz_name)
+    if not dt:
+        return value
+    return dt.strftime("%I:%M %p %Z") if label_zone else dt.strftime("%I:%M %p")
 
 
 
@@ -86,20 +92,23 @@ def _blocks_for_shift_coverage(a: dict) -> list[dict]:
     on_shift = a.get("on_shift_now") or []
     if not on_shift:
         return [{"type": "stat", "label": "On shift right now", "value": 0}]
+    asker_zone = a.get("timezone")
+    rows = []
+    for s in on_shift:
+        zone = s.get("timezone") or asker_zone
+        other_branch = bool(zone and asker_zone and zone != asker_zone)
+        rows.append([
+            s.get("worker_name"),
+            s.get("participant_name"),
+            _format_shift_date(s.get("scheduled_start"), zone),
+            _format_shift_time(s.get("scheduled_start"), zone, label_zone=other_branch),
+            _format_shift_time(s.get("scheduled_end"), zone, label_zone=other_branch),
+        ])
     return [{
         "type": "table",
         "title": "On shift right now",
         "columns": ["Worker", "Participant", "Date", "Start", "End"],
-        "rows": [
-            [
-                s.get("worker_name"),
-                s.get("participant_name"),
-                _format_shift_date(s.get("scheduled_start")),
-                _format_shift_time(s.get("scheduled_start")),
-                _format_shift_time(s.get("scheduled_end")),
-            ]
-            for s in on_shift
-        ],
+        "rows": rows,
     }]
 
 

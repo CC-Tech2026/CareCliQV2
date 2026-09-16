@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, status
 
-from ..core.timezone import app_today
+from ..core.timezone import app_today, participant_timezone
 from ..models.billing_period import (
     VALID_PLAN_MANAGEMENT_TYPES,
     normalize_plan_management_type,
@@ -81,7 +81,7 @@ def close_stale_open_periods(
     Close open billing periods that ended before the target period month.
     Returns the number of periods closed.
     """
-    as_of = as_of_date or app_today()
+    as_of = as_of_date or app_today(participant_timezone(participant_id, organization_id=organization_id))
     target_start, _ = period_bounds_for_date(as_of)
     supabase = get_supabase_admin()
     result = (
@@ -134,7 +134,8 @@ def get_or_open_billing_period(
     Return the billing period for as_of_date, opening it with a locked type if needed.
     The locked type is immutable once the period row exists.
     """
-    as_of = as_of_date or app_today()
+    # A billing period turns over at midnight in the participant's branch.
+    as_of = as_of_date or app_today(participant_timezone(participant_id, organization_id=organization_id))
     period_start, period_end = period_bounds_for_date(as_of)
 
     if participant is None:
@@ -266,7 +267,7 @@ def get_current_billing_period_view(
         raise HTTPException(status_code=404, detail="Participant not found.")
 
     current_type = resolve_participant_plan_management_type(participant)
-    today = app_today()
+    today = app_today(participant_timezone(participant, organization_id=organization_id))
     close_stale_open_periods(participant_id, organization_id, as_of_date=today)
     period_start, _ = period_bounds_for_date(today)
 

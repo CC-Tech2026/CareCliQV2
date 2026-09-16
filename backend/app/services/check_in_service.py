@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.config import settings
-from ..core.timezone import APP_TIMEZONE, get_timezone_for_location
+from ..core.timezone import get_timezone_for_location, request_timezone
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -314,7 +314,7 @@ def normalize_client_timestamp(client_timestamp: Optional[str]) -> Optional[str]
     """
     Normalize client timestamp to UTC ISO string.
     
-    Treats naive timestamps as APP_TIMEZONE local time (not UTC).
+    Treats naive timestamps as local time in the worker's branch zone (not UTC).
     Use normalize_client_timestamp_with_location() for worker-location-aware handling.
     """
     if not client_timestamp:
@@ -322,8 +322,8 @@ def normalize_client_timestamp(client_timestamp: Optional[str]) -> Optional[str]
     try:
         parsed = _parse_iso(client_timestamp)
         if parsed.tzinfo is None:
-            # ✅ FIX: Treat naive as APP_TIMEZONE, not UTC
-            parsed = parsed.replace(tzinfo=APP_TIMEZONE)
+            # Naive = the worker's local wall clock (their branch), not UTC
+            parsed = parsed.replace(tzinfo=request_timezone())
         now = datetime.now(timezone.utc)
         if abs((now - parsed).total_seconds()) > OFFLINE_SYNC_MAX_SKEW_HOURS * 3600:
             return None
@@ -341,7 +341,7 @@ def normalize_client_timestamp_with_location(
     Normalize client timestamp with location-based timezone support.
     
     If location provided, treats naive timestamps as local time in the worker's detected timezone.
-    Falls back to APP_TIMEZONE if location-based detection is disabled or unavailable.
+    Falls back to the worker's branch zone if location-based detection is disabled or unavailable.
     
     Args:
         client_timestamp: ISO datetime string from client (may be naive)

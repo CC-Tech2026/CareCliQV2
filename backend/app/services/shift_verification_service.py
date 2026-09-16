@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..core.timezone import parse_shift_datetime
+from ..core.timezone import app_today, parse_shift_datetime, participant_timezone
 from . import ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
 from .shift_validation_service import compute_shift_validation
@@ -99,15 +99,19 @@ def _actual_minutes(shift: dict[str, Any]) -> Optional[float]:
 
 
 def _completion_date_for_shift(shift: dict[str, Any]) -> str:
+    """Calendar day the shift belongs to, in the participant's branch zone.
+    (Taking .date() of the UTC instant filed anything before ~9:30 AM
+    local under the previous day.)"""
+    tz = participant_timezone(shift, organization_id=shift.get("organization_id"))
     for key in ("scheduled_start", "clocked_out_at", "clocked_in_at", "created_at"):
         value = shift.get(key)
         if not value:
             continue
         try:
-            return parse_shift_datetime(value).date().isoformat()
+            return parse_shift_datetime(value).astimezone(tz).date().isoformat()
         except Exception:
             continue
-    return datetime.now(timezone.utc).date().isoformat()
+    return app_today(tz).isoformat()
 
 
 def _upsert_task_completions_for_verified_shift(
