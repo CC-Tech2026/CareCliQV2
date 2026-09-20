@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from .supabase_client import get_supabase_admin
@@ -42,7 +42,11 @@ async def verify_worker_credentials(
             credential types in valid/non-expired state.
     """
     client = supabase or get_supabase_admin()
-    today = date.today()
+    # UTC, not the server's local system date — expiry_date is UTC-anchored,
+    # and comparing it against a local-timezone "today" makes a credential
+    # expiring "tomorrow" read as already-expired whenever the server's local
+    # date has rolled over ahead of UTC's (e.g. ACST is UTC+9:30).
+    today = datetime.now(timezone.utc).date()
 
     try:
         creds_resp = (

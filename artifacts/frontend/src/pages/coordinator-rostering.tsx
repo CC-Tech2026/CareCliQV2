@@ -94,7 +94,7 @@ function ShiftChip({ shift }: { shift: CoordinatorShiftRecord }) {
   );
 }
 
-function MonthGrid({
+export function MonthGrid({
   month, shifts, selectedDay, onSelectDay,
 }: {
   month: Date;
@@ -129,7 +129,7 @@ function MonthGrid({
 
   return (
     <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
-      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
+      <div className="grid grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
         {dayLabels.map((d) => (
           <div key={d} className="py-2.5 text-center text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
             {d}

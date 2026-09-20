@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone, date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -19,6 +20,8 @@ from ..core.access import (
 )
 from .supabase_client import get_supabase_admin, signed_storage_url
 from .organization_branding_service import get_letterhead
+
+logger = logging.getLogger(__name__)
 
 INVOICE_FILES_BUCKET = "invoice-files"
 
@@ -145,9 +148,10 @@ async def _resolve_ndis_prices_for_invoice(
             if resolved:
                 # Lock this line to the resolved price item version
                 item["ndis_price_item_id"] = resolved.get("id")
+                catalogue_unit_amount_cents = _money_to_cents(resolved.get("effective_price", 0))
                 # Use resolved price if no unit_amount_cents was explicitly provided
                 if item.get("unit_amount_cents") is None and item.get("unit_amount") is None:
-                    item["unit_amount_cents"] = _money_to_cents(resolved.get("effective_price", 0))
+                    item["unit_amount_cents"] = catalogue_unit_amount_cents
                     # Recalculate line total with resolved price
                     quantity = Decimal(str(item.get("quantity") or "1"))
                     item["line_total_cents"] = int(
@@ -155,6 +159,24 @@ async def _resolve_ndis_prices_for_invoice(
                             Decimal("1"), rounding=ROUND_HALF_UP
                         )
                     )
+                else:
+                    # Client supplied an explicit amount for a catalogue-linked
+                    # item — respect it (don't silently override), but flag any
+                    # divergence from the resolved catalogue price so it's
+                    # visible on the invoice record rather than silently lost.
+                    supplied_cents = (
+                        item.get("unit_amount_cents")
+                        if item.get("unit_amount_cents") is not None
+                        else _money_to_cents(item.get("unit_amount") or 0)
+                    )
+                    if abs(int(supplied_cents) - catalogue_unit_amount_cents) > 1:
+                        item["catalogue_price_mismatch"] = True
+                        item["catalogue_unit_amount_cents"] = catalogue_unit_amount_cents
+                        logger.warning(
+                            "billing: invoice line item %s supplied amount %s cents diverges "
+                            "from catalogue price %s cents for org %s",
+                            item.get("item_code"), supplied_cents, catalogue_unit_amount_cents, org_id,
+                        )
         except HTTPException:
             raise
         except Exception as exc:

@@ -1,49 +1,147 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Clock3,
-  GraduationCap, Plus, Check, X as XIcon, FileText, Download, Trash2,
-  Mail, Phone, IdCard, Hourglass, AlertCircle, ShieldCheck, Sparkles,
-  CalendarDays, LogIn, MessageCircle, ArrowRight, TrendingUp,
-  MoreHorizontal, Clock, Link2, UserX, UserCheck, Copy, ClipboardCheck, KeyRound, ChevronUp, ChevronDown, ChevronRight,
-  Maximize2, Minimize2, Star, User, HeartHandshake, CalendarClock,
+  ArrowLeft,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Clock3,
+  GraduationCap,
+  Plus,
+  Check,
+  X as XIcon,
+  FileText,
+  Download,
+  Trash2,
+  Mail,
+  Phone,
+  MapPin,
+  IdCard,
+  Hourglass,
+  AlertCircle,
+  ShieldCheck,
+  Sparkles,
+  CalendarDays,
+  LogIn,
+  MessageCircle,
+  ArrowRight,
+  TrendingUp,
+  MoreHorizontal,
+  Clock,
+  Link2,
+  UserX,
+  UserCheck,
+  Copy,
+  ClipboardCheck,
+  KeyRound,
+  ChevronUp,
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Star,
+  User,
+  HeartHandshake,
+  CalendarClock,
+  Cake,
+  PhoneCall,
+  Stethoscope,
+  Building2,
+  FileCheck,
+  Languages,
+  Briefcase,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
-  getTeamCredentials, getTrainingModules, getWorkerTrainingAssignments, getWorkerAvailability,
-  assignTraining, dismissTrainingAssignment, reviewTrainingCompletion, createTrainingModule,
-  getWorkerOnboardingDocuments, uploadWorkerOnboardingDocument, deleteWorkerOnboardingDocument,
-  getWorkerSkills, getWorkerShiftHistory, getWorkerShiftHistoryDetail, getWorkerPerformanceDashboard, getWorkerAssignments,
-  getWorkerTags, addWorkerTag, removeWorkerTag, getTagCatalog,
-  getShiftMatchFeedback, postShiftMatchFeedback,
-  getCoordinatorWorkerStats, assignWorkerCoordinator,
-  getAwardClassifications, assignWorkerClassification, getShiftPayPreview,
-  markShiftSleepover, logShiftCallOut, getWorkerShiftEventTimeline,
-  getWorkerBuddy, getBuddySuggestions, assignWorkerBuddy,
-  type WorkerStats, type TrainingModule, type WorkerOnboardingDocument, type WorkerOnboardingDocumentType,
+  getTeamCredentials,
+  getTrainingModules,
+  getWorkerTrainingAssignments,
+  getWorkerAvailability,
+  assignTraining,
+  dismissTrainingAssignment,
+  reviewTrainingCompletion,
+  createTrainingModule,
+  getWorkerOnboardingDocuments,
+  uploadWorkerOnboardingDocument,
+  deleteWorkerOnboardingDocument,
+  getWorkerSkills,
+  getWorkerShiftHistory,
+  getWorkerShiftHistoryDetail,
+  getWorkerPerformanceDashboard,
+  getWorkerAssignments,
+  getWorkerTags,
+  addWorkerTag,
+  removeWorkerTag,
+  getTagCatalog,
+  getShiftMatchFeedback,
+  postShiftMatchFeedback,
+  getCoordinatorWorkerStats,
+  assignWorkerCoordinator,
+  getAwardClassifications,
+  assignWorkerClassification,
+  getShiftPayPreview,
+  markShiftSleepover,
+  logShiftCallOut,
+  getWorkerShiftEventTimeline,
+  getWorkerBuddy,
+  getBuddySuggestions,
+  assignWorkerBuddy,
+  type WorkerStats,
+  type TrainingModule,
+  type WorkerOnboardingDocument,
+  type WorkerOnboardingDocumentType,
 } from "@/services/coordinatorService";
-import type { ShiftHistoryRow, ShiftHistoryDetail } from "@/services/workerPerformanceService";
+import type {
+  ShiftHistoryRow,
+  ShiftHistoryDetail,
+} from "@/services/workerPerformanceService";
 import { listIncidents } from "@/services/incidentService";
 import { getWorkerInduction } from "@/services/inductionService";
-import { reviewCredential, type Credential } from "@/services/credentialsService";
-import { getTeamOnboarding, CHECKLIST_STEP_ORDER, CHECKLIST_LABELS } from "@/services/onboardingService";
+import {
+  reviewCredential,
+  type Credential,
+} from "@/services/credentialsService";
+import {
+  getTeamOnboarding,
+  CHECKLIST_STEP_ORDER,
+  CHECKLIST_LABELS,
+} from "@/services/onboardingService";
 import { getWorkerCoachingSignal } from "@/services/medicationService";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { safeFormat } from "@/lib/participant-format";
+import { emergencyContactDisplay } from "@/lib/participant-display";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { FileDropzone } from "@/components/ui/file-dropzone";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { datetimeLocalValueToUtcIso } from "@/lib/datetime";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 const PLUM = "var(--cc-plum)";
@@ -54,14 +152,45 @@ const SOFT = "var(--cc-soft)";
 const SURFACE = "var(--cc-surface)";
 const CARD_SHADOW = "var(--cc-card-shadow)";
 
+// Mirrors AccessibilityPanel.tsx's LANGUAGE_OPTIONS — kept local rather than
+// imported since that file doesn't export it and this is the only other
+// place a language code needs a display label.
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  vi: "Tiếng Việt",
+  ar: "العربية",
+  "zh-Hans": "简体中文",
+};
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  independent_worker: "Independent worker",
+  small_provider: "Small provider",
+};
+
 // "overview" stays a valid value (not in ALL_WORKER_DETAIL_TABS, so no tab
 // button renders for it) purely so an old bookmarked ?tab=overview deep link
 // still resolves to something - it's treated as an alias for "personal"
 // wherever tab is read, rather than the two staying separate tabs.
-export type WorkerDetailTab = "overview" | "personal" | "documents" | "credentials" | "availability" | "training" | "induction" | "shifts" | "participants";
+export type WorkerDetailTab =
+  | "overview"
+  | "personal"
+  | "documents"
+  | "credentials"
+  | "availability"
+  | "training"
+  | "induction"
+  | "shifts"
+  | "participants";
 
 const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
-  "personal", "shifts", "participants", "documents", "credentials", "availability", "training", "induction",
+  "personal",
+  "shifts",
+  "participants",
+  "documents",
+  "credentials",
+  "availability",
+  "training",
+  "induction",
 ];
 
 const TAB_ICON: Record<WorkerDetailTab, typeof User> = {
@@ -105,7 +234,10 @@ const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
 };
 
 /** A worker is "verified" once every mandatory credential type is on file and valid/expiring (not missing/expired/rejected). */
-export function isWorkerCredentialsComplete(credentials: Credential[], workerId: string): boolean {
+export function isWorkerCredentialsComplete(
+  credentials: Credential[],
+  workerId: string,
+): boolean {
   const workerCreds = credentials.filter((c) => c.user_id === workerId);
   const byType = new Map(workerCreds.map((c) => [c.credential_type, c]));
   return REQUIRED_CREDENTIAL_TYPES.every((type) => {
@@ -115,7 +247,10 @@ export function isWorkerCredentialsComplete(credentials: Credential[], workerId:
 }
 
 function credentialLabel(type: string) {
-  return CREDENTIAL_TYPE_LABELS[type] ?? type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    CREDENTIAL_TYPE_LABELS[type] ??
+    type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 // Every status tab on this page uses the same three colors for the same meanings — green for
@@ -127,17 +262,47 @@ function credentialLabel(type: string) {
 function statusStyle(status: string) {
   switch (status) {
     case "valid":
-      return { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)", Icon: CheckCircle2, label: "Valid" };
+      return {
+        bg: "var(--cc-status-success-bg)",
+        color: "var(--cc-status-success)",
+        Icon: CheckCircle2,
+        label: "Valid",
+      };
     case "expiring":
-      return { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)", Icon: Clock3, label: "Expiring soon" };
+      return {
+        bg: "var(--cc-status-warning-bg)",
+        color: "var(--cc-status-warning)",
+        Icon: Clock3,
+        label: "Expiring soon",
+      };
     case "expired":
-      return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: AlertTriangle, label: "Expired" };
+      return {
+        bg: "var(--cc-status-danger-bg)",
+        color: "var(--cc-status-danger)",
+        Icon: AlertTriangle,
+        label: "Expired",
+      };
     case "pending_review":
-      return { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)", Icon: Clock3, label: "Pending review" };
+      return {
+        bg: "var(--cc-status-warning-bg)",
+        color: "var(--cc-status-warning)",
+        Icon: Clock3,
+        label: "Pending review",
+      };
     case "rejected":
-      return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: XCircle, label: "Rejected" };
+      return {
+        bg: "var(--cc-status-danger-bg)",
+        color: "var(--cc-status-danger)",
+        Icon: XCircle,
+        label: "Rejected",
+      };
     default:
-      return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", Icon: XCircle, label: "Not on file" };
+      return {
+        bg: "var(--cc-status-danger-bg)",
+        color: "var(--cc-status-danger)",
+        Icon: XCircle,
+        label: "Not on file",
+      };
   }
 }
 
@@ -151,10 +316,13 @@ const SCREENING_RECHECK_EXPIRY_LEAD_DAYS = 60;
 
 function isScreeningRecheckDue(credential: Credential): boolean {
   if (!credential.last_checked_against_nwsd) return true;
-  const daysSinceChecked = (Date.now() - new Date(credential.last_checked_against_nwsd).getTime()) / 86_400_000;
+  const daysSinceChecked =
+    (Date.now() - new Date(credential.last_checked_against_nwsd).getTime()) /
+    86_400_000;
   if (daysSinceChecked > SCREENING_RECHECK_STALE_DAYS) return true;
   if (credential.expiry_date) {
-    const daysUntilExpiry = (new Date(credential.expiry_date).getTime() - Date.now()) / 86_400_000;
+    const daysUntilExpiry =
+      (new Date(credential.expiry_date).getTime() - Date.now()) / 86_400_000;
     if (daysUntilExpiry <= SCREENING_RECHECK_EXPIRY_LEAD_DAYS) return true;
   }
   return false;
@@ -178,14 +346,26 @@ const AVATAR_PALETTE = [
 ];
 function avatarColor(name: string) {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < name.length; i++)
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
 /** Small rounded icon square used to give list rows (documents/credentials/training) consistent visual weight. */
-function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: string; bg: string }) {
+function IconBadge({
+  icon: Icon,
+  color,
+  bg,
+}: {
+  icon: typeof FileText;
+  color: string;
+  bg: string;
+}) {
   return (
-    <div className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: bg }}>
+    <div
+      className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center"
+      style={{ background: bg }}
+    >
       <Icon size={15} style={{ color }} />
     </div>
   );
@@ -194,26 +374,38 @@ function IconBadge({ icon: Icon, color, bg }: { icon: typeof FileText; color: st
 /** Turns a static phone/email row into something you can act on: click the value to call/email
  * (tel:/mailto:), or copy it without leaving the page. Mirrors ParticipantProfileCard's
  * conditional-link convention so contact info reads consistently across the app. */
-export function ContactLink({ icon: Icon, value, href }: { icon: typeof Mail; value: string; href: string }) {
+export function ContactLink({
+  icon: Icon,
+  value,
+  href,
+}: {
+  icon: typeof Mail;
+  value: string;
+  href: string;
+}) {
   const { toast } = useToast();
   return (
-    <span className="group inline-flex items-center gap-1">
+    <span className="group inline-flex max-w-full min-w-0 items-center gap-1">
       <a
         href={href}
-        className="inline-flex items-center gap-1.5 hover:underline"
+        className="inline-flex min-h-11 min-w-0 items-center gap-1.5 break-all hover:underline"
         style={{ color: "inherit" }}
       >
-        <Icon size={13} /> {value}
+        <Icon size={13} className="shrink-0" />{" "}
+        <span className="min-w-0 break-all">{value}</span>
       </a>
       <button
         type="button"
         onClick={(e) => {
           e.preventDefault();
-          navigator.clipboard.writeText(value)
+          Promise.resolve()
+            .then(() => navigator.clipboard.writeText(value))
             .then(() => toast({ title: "Copied" }))
-            .catch(() => toast({ title: "Could not copy", variant: "destructive" }));
+            .catch(() =>
+              toast({ title: "Could not copy", variant: "destructive" }),
+            );
         }}
-        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 rounded p-0.5 transition-opacity hover:bg-black/5"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded transition-opacity hover:bg-black/5"
         title="Copy"
         aria-label={`Copy ${value}`}
       >
@@ -231,19 +423,45 @@ function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
   const r = (size - 6) / 2;
   const circ = 2 * Math.PI * r;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }} aria-hidden="true">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={SOFT} strokeWidth="4" />
+    <div
+      className="relative shrink-0"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="-rotate-90"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={SOFT}
+          strokeWidth="4"
+        />
         <motion.circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="4"
-          strokeDasharray={circ} strokeLinecap="round"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          strokeDasharray={circ}
+          strokeLinecap="round"
           initial={{ strokeDashoffset: circ }}
           animate={{ strokeDashoffset: circ * (1 - score / 100) }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
+          transition={
+            reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }
+          }
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[11px] font-black" style={{ color }}>{Math.round(score)}</span>
+        <span className="text-[11px] font-semibold" style={{ color }}>
+          {Math.round(score)}
+        </span>
       </div>
     </div>
   );
@@ -273,10 +491,16 @@ function computeTopReason(
     return { level: "warning", label: "Blocked by onboarding" };
   }
   if (!credentialsComplete) {
-    return { level: "warning", label: `Blocked by credentials · ${credentialsCompleteCount}/${credentialsTotal}` };
+    return {
+      level: "warning",
+      label: `Blocked by credentials · ${credentialsCompleteCount}/${credentialsTotal}`,
+    };
   }
   if (worker.flagged_count > 0) {
-    return { level: "danger", label: translateFlagged(worker.flagged_count, translate) };
+    return {
+      level: "danger",
+      label: translateFlagged(worker.flagged_count, translate),
+    };
   }
   return null;
 }
@@ -284,7 +508,11 @@ function computeTopReason(
 /** Unifies the compliance ring + onboarding pill + credentials pill into one "can I roster
  * this person" answer, with a single most-urgent blocking reason and an action to fix it. */
 function ReadinessSummary({
-  worker, topReason, credentialsComplete, translate, onAction,
+  worker,
+  topReason,
+  credentialsComplete,
+  translate,
+  onAction,
 }: {
   worker: WorkerStats;
   topReason: TopReason;
@@ -298,20 +526,44 @@ function ReadinessSummary({
   // message now states explicitly that the percentage is the overall readiness score and
   // names whatever's currently blocking it as a separate, clearly-labelled reason.
   const level: ReadinessLevel = topReason?.level ?? "good";
-  const actionLabel = !credentialsComplete ? translate("team.detail.completeCredentials") : null;
+  const actionLabel = !credentialsComplete
+    ? translate("team.detail.completeCredentials")
+    : null;
 
-  const levelColor = level === "good" ? "var(--cc-status-success)" : level === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
+  const levelColor =
+    level === "good"
+      ? "var(--cc-status-success)"
+      : level === "warning"
+        ? "var(--cc-status-warning)"
+        : "var(--cc-status-danger)";
   const score = worker.avg_compliance;
-  const message = score != null
-    ? (topReason ? `Readiness ${Math.round(score)}% · ${topReason.label}` : `Readiness ${Math.round(score)}%`)
-    : (topReason?.label ?? translate("team.detail.readyToRoster"));
+  const message =
+    score != null
+      ? topReason
+        ? `Readiness ${Math.round(score)}% · ${topReason.label}`
+        : `Readiness ${Math.round(score)}%`
+      : (topReason?.label ?? translate("team.detail.readyToRoster"));
   const a11yText = message;
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border px-3 py-2" style={{ background: SURFACE, borderColor: levelColor, boxShadow: CARD_SHADOW }} role="status" aria-label={a11yText}>
+    <div
+      className="flex items-center gap-3 rounded-2xl border px-3 py-2"
+      style={{
+        background: SURFACE,
+        borderColor: levelColor,
+        boxShadow: CARD_SHADOW,
+      }}
+      role="status"
+      aria-label={a11yText}
+    >
       {score != null && <ScoreRing score={score} />}
       <div className="min-w-0">
-        <p className="text-[12px] font-bold leading-tight" style={{ color: levelColor }}>{message}</p>
+        <p
+          className="text-[12px] font-bold leading-tight"
+          style={{ color: levelColor }}
+        >
+          {message}
+        </p>
         {actionLabel && (
           <button
             type="button"
@@ -327,14 +579,27 @@ function ReadinessSummary({
   );
 }
 
-function translateFlagged(count: number, translate: (k: string) => string): string {
+function translateFlagged(
+  count: number,
+  translate: (k: string) => string,
+): string {
   return `${count} ${translate(count === 1 ? "team.detail.flaggedSession" : "team.detail.flaggedSessions")}`;
 }
 
 export function WorkerDetail({
-  worker, onBack, initialTab,
-  onAssignShift, onAssignClient, onReminder, onDeactivate, onActivate, onSendPasswordReset, onDeleteAccount,
-  fullScreen, onToggleFullScreen,
+  worker,
+  onBack,
+  initialTab,
+  onAssignShift,
+  onAssignClient,
+  onReminder,
+  onDeactivate,
+  onActivate,
+  onSendPasswordReset,
+  onDeleteAccount,
+  fullScreen,
+  onToggleFullScreen,
+  scrollContext = "panel",
 }: {
   worker: WorkerStats;
   onBack: () => void;
@@ -353,81 +618,164 @@ export function WorkerDetail({
   onDeleteAccount?: () => void;
   /** Optional — only set when this profile is rendered inside a Sheet whose
    * parent controls the panel width (e.g. md/staff.tsx). */
+  /** Page profiles leave room for the portal header; panels use their own scroll area. */
+  scrollContext?: "page" | "panel";
   fullScreen?: boolean;
   onToggleFullScreen?: () => void;
 }) {
   const { translate } = useAccessibility();
-  const [tab, setTab] = useState<WorkerDetailTab>(!initialTab || initialTab === "overview" ? "personal" : initialTab);
-  const [focusCredentialType, setFocusCredentialType] = useState<string | null>(null);
+  const [tab, setTab] = useState<WorkerDetailTab>(
+    !initialTab || initialTab === "overview" ? "personal" : initialTab,
+  );
+  const reduceProfileMotion = useReducedMotion();
+  const sectionsRef = useRef<HTMLDivElement>(null);
+  function selectProfileTab(nextTab: WorkerDetailTab) {
+    setTab(nextTab);
+    const sections = sectionsRef.current;
+    if (!sections) return;
+    const offset = parseFloat(getComputedStyle(sections).scrollMarginTop) || 0;
+    if (sections.getBoundingClientRect().top < offset) {
+      sections.scrollIntoView({ block: "start", behavior: "instant" });
+    }
+  }
+  useEffect(() => {
+    setTab(!initialTab || initialTab === "overview" ? "personal" : initialTab);
+    setFocusCredentialType(null);
+  }, [worker.id, initialTab]);
+  const [focusCredentialType, setFocusCredentialType] = useState<string | null>(
+    null,
+  );
 
   // Next Steps rows for missing credentials jump straight to that specific row in the
   // Credentials tab (scrolled into view + briefly highlighted), not just the tab in general.
   function jumpToTab(nextTab: WorkerDetailTab, credentialType?: string) {
-    setTab(nextTab);
+    selectProfileTab(nextTab);
     setFocusCredentialType(credentialType ?? null);
   }
 
   const credentialsQuery = useOrgQuery(["team-credentials"], {
     queryFn: getTeamCredentials,
   });
-  const documentsQuery = useOrgQuery(["worker-onboarding-documents", worker.id], {
-    queryFn: () => getWorkerOnboardingDocuments(worker.id),
-  });
-  const trainingQuery = useOrgQuery(["worker-training-assignments", worker.id], {
-    queryFn: () => getWorkerTrainingAssignments(worker.id),
-  });
+  const documentsQuery = useOrgQuery(
+    ["worker-onboarding-documents", worker.id],
+    {
+      queryFn: () => getWorkerOnboardingDocuments(worker.id),
+    },
+  );
+  const trainingQuery = useOrgQuery(
+    ["worker-training-assignments", worker.id],
+    {
+      queryFn: () => getWorkerTrainingAssignments(worker.id),
+    },
+  );
 
-  const workerCredentials = (credentialsQuery.data ?? []).filter((c: Credential) => c.user_id === worker.id);
-  const credentialsComplete = !credentialsQuery.isLoading && isWorkerCredentialsComplete(credentialsQuery.data ?? [], worker.id);
-  const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+  const workerCredentials = (credentialsQuery.data ?? []).filter(
+    (c: Credential) => c.user_id === worker.id,
+  );
+  const credentialsKnown =
+    !credentialsQuery.isLoading &&
+    !credentialsQuery.isError &&
+    credentialsQuery.data !== undefined;
+  const credentialsComplete =
+    credentialsKnown &&
+    isWorkerCredentialsComplete(credentialsQuery.data ?? [], worker.id);
+  const onboardingPending =
+    worker.role === "support_worker" && worker.onboarding_completed === false;
   const credentialsCompleteCount = REQUIRED_CREDENTIAL_TYPES.filter((type) => {
     const cred = workerCredentials.find((c) => c.credential_type === type);
     return cred && (cred.status === "valid" || cred.status === "expiring");
   }).length;
-  const missingCredentialTypes = REQUIRED_CREDENTIAL_TYPES.filter((type) => {
+  const missingCredentialTypes = (
+    credentialsKnown ? REQUIRED_CREDENTIAL_TYPES : []
+  ).filter((type) => {
     const cred = workerCredentials.find((c) => c.credential_type === type);
     return !cred || !(cred.status === "valid" || cred.status === "expiring");
   });
   const topReason = computeTopReason(
-    worker, credentialsComplete, credentialsCompleteCount, REQUIRED_CREDENTIAL_TYPES.length, onboardingPending, translate,
+    worker,
+    credentialsComplete,
+    credentialsCompleteCount,
+    REQUIRED_CREDENTIAL_TYPES.length,
+    onboardingPending,
+    translate,
   );
   const documentsCount = documentsQuery.data?.length ?? 0;
-  const trainingPendingCount = (trainingQuery.data?.recommendations ?? [])
-    .filter((r) => !(trainingQuery.data?.history ?? []).some((h) => h.module_id === r.training_module_id)).length;
+  const trainingPendingCount = (
+    trainingQuery.data?.recommendations ?? []
+  ).filter(
+    (r) =>
+      !(trainingQuery.data?.history ?? []).some(
+        (h) => h.module_id === r.training_module_id,
+      ),
+  ).length;
 
-  const tabBadges: Partial<Record<WorkerDetailTab, { text: string; severity: "neutral" | "warning" | "danger" }>> = {
-    documents: documentsCount > 0 ? { text: String(documentsCount), severity: "neutral" } : undefined,
-    credentials: {
-      text: `${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`,
-      severity: credentialsComplete ? "neutral" : credentialsCompleteCount === 0 ? "danger" : "warning",
-    },
-    training: trainingPendingCount > 0 ? { text: String(trainingPendingCount), severity: "warning" } : undefined,
+  const tabBadges: Partial<
+    Record<
+      WorkerDetailTab,
+      { text: string; severity: "neutral" | "warning" | "danger" }
+    >
+  > = {
+    documents:
+      documentsCount > 0
+        ? { text: String(documentsCount), severity: "neutral" }
+        : undefined,
+    credentials: credentialsKnown
+      ? {
+          text: `${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`,
+          severity: credentialsComplete
+            ? "neutral"
+            : credentialsCompleteCount === 0
+              ? "danger"
+              : "warning",
+        }
+      : undefined,
+    training:
+      trainingPendingCount > 0
+        ? { text: String(trainingPendingCount), severity: "warning" }
+        : undefined,
   };
 
-  const statCells: { label: string; value: string | number; color?: string }[] = [
-    { label: translate("team.col.sessions"), value: worker.total_sessions },
-    { label: translate("team.col.thisWeek"), value: worker.sessions_this_week },
-    { label: translate("team.detail.draftCount"), value: worker.draft_count },
-    {
-      label: translate("team.detail.flaggedCount"),
-      value: worker.flagged_count,
-      color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
-    },
-  ];
+  const statCells: { label: string; value: string | number; color?: string }[] =
+    [
+      { label: translate("team.col.sessions"), value: worker.total_sessions },
+      {
+        label: translate("team.col.thisWeek"),
+        value: worker.sessions_this_week,
+      },
+      { label: translate("team.detail.draftCount"), value: worker.draft_count },
+      {
+        label: translate("team.detail.flaggedCount"),
+        value: worker.flagged_count,
+        color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
+      },
+    ];
   const avatar = avatarColor(worker.full_name || "?");
 
-  const hasQuickActions = onAssignShift || onAssignClient || onReminder || onDeactivate || onActivate || onSendPasswordReset || onDeleteAccount;
+  const hasQuickActions =
+    onAssignShift ||
+    onAssignClient ||
+    onReminder ||
+    onDeactivate ||
+    onActivate ||
+    onSendPasswordReset ||
+    onDeleteAccount;
 
   return (
-    <div className={fullScreen ? "mx-auto w-full max-w-[1400px] space-y-4 xl:px-6" : "space-y-4"}>
+    <div
+      className={
+        fullScreen
+          ? "mx-auto w-full min-w-0 max-w-[1400px] space-y-4 xl:px-6"
+          : "w-full min-w-0 space-y-4"
+      }
+    >
       {/* Back + quick actions - pr-8 keeps the "..." trigger clear of a Sheet's
           own built-in close (X) button, which sits fixed top-right whenever
           this panel is opened inside one (e.g. md/staff.tsx). */}
-      <div className="flex items-center justify-between pr-8">
+      <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold transition-colors"
+          className="flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] font-bold transition-colors"
           style={{ color: PLUM }}
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
@@ -437,7 +785,7 @@ export function WorkerDetail({
             <button
               type="button"
               onClick={onToggleFullScreen}
-              className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-black/5"
               style={{ borderColor: BORDER, color: PLUM }}
             >
               {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -445,186 +793,300 @@ export function WorkerDetail({
             </button>
           )}
           {hasQuickActions && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="rounded-lg p-2 transition-colors hover:bg-black/5"
-                style={{ color: MUTED }}
-                aria-label={`Actions for ${worker.full_name}`}
-              >
-                <MoreHorizontal size={18} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onAssignShift && (
-                <DropdownMenuItem onClick={onAssignShift}>
-                  <Clock size={13} className="mr-1.5" /> {translate("team.assignShift")}
-                </DropdownMenuItem>
-              )}
-              {onAssignClient && (
-                <DropdownMenuItem onClick={onAssignClient}>
-                  <Link2 size={13} className="mr-1.5" /> {translate("team.assignClient")}
-                </DropdownMenuItem>
-              )}
-              {onReminder && (
-                <DropdownMenuItem onClick={onReminder}>
-                  <Mail size={13} className="mr-1.5" /> {translate("team.reminder")}
-                </DropdownMenuItem>
-              )}
-              {onSendPasswordReset && (
-                <DropdownMenuItem onClick={onSendPasswordReset}>
-                  <KeyRound size={13} className="mr-1.5" /> Send password reset email
-                </DropdownMenuItem>
-              )}
-              {(onDeactivate || onActivate) && <DropdownMenuSeparator />}
-              {onDeactivate && worker.is_active !== false && (
-                <DropdownMenuItem onClick={onDeactivate} className="text-red-600 focus:text-red-600">
-                  <UserX size={13} className="mr-1.5" /> {translate("team.deactivate")}
-                </DropdownMenuItem>
-              )}
-              {onActivate && worker.is_active === false && (
-                <DropdownMenuItem onClick={onActivate} className="text-green-700 focus:text-green-700">
-                  <UserCheck size={13} className="mr-1.5" /> {translate("team.reactivate")}
-                </DropdownMenuItem>
-              )}
-              {onDeleteAccount && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onDeleteAccount} className="text-red-600 focus:text-red-600">
-                    <Trash2 size={13} className="mr-1.5" /> Remove account
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="min-h-11 min-w-11 rounded-lg p-2 transition-colors hover:bg-black/5"
+                  style={{ color: MUTED }}
+                  aria-label={`Actions for ${worker.full_name}`}
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onAssignShift && (
+                  <DropdownMenuItem onClick={onAssignShift}>
+                    <Clock size={13} className="mr-1.5" />{" "}
+                    {translate("team.assignShift")}
                   </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+                {onAssignClient && (
+                  <DropdownMenuItem onClick={onAssignClient}>
+                    <Link2 size={13} className="mr-1.5" />{" "}
+                    {translate("team.assignClient")}
+                  </DropdownMenuItem>
+                )}
+                {onReminder && (
+                  <DropdownMenuItem onClick={onReminder}>
+                    <Mail size={13} className="mr-1.5" />{" "}
+                    {translate("team.reminder")}
+                  </DropdownMenuItem>
+                )}
+                {onSendPasswordReset && (
+                  <DropdownMenuItem onClick={onSendPasswordReset}>
+                    <KeyRound size={13} className="mr-1.5" /> Send password
+                    reset email
+                  </DropdownMenuItem>
+                )}
+                {(onDeactivate || onActivate) && <DropdownMenuSeparator />}
+                {onDeactivate && worker.is_active !== false && (
+                  <DropdownMenuItem
+                    onClick={onDeactivate}
+                    className="text-red-600 focus:text-red-600"
+                  >
+                    <UserX size={13} className="mr-1.5" />{" "}
+                    {translate("team.deactivate")}
+                  </DropdownMenuItem>
+                )}
+                {onActivate && worker.is_active === false && (
+                  <DropdownMenuItem
+                    onClick={onActivate}
+                    className="text-green-700 focus:text-green-700"
+                  >
+                    <UserCheck size={13} className="mr-1.5" />{" "}
+                    {translate("team.reactivate")}
+                  </DropdownMenuItem>
+                )}
+                {onDeleteAccount && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={onDeleteAccount}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 size={13} className="mr-1.5" /> Remove account
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
 
       {/* Identity + at-a-glance header */}
-      <div className="rounded-2xl overflow-hidden border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <div className={`flex flex-col sm:flex-row sm:items-start gap-4 ${fullScreen ? "p-6 xl:p-7" : "p-5"}`}>
+      <div
+        className="rounded-2xl overflow-hidden border"
+        style={{
+          background: SURFACE,
+          borderColor: BORDER,
+          boxShadow: CARD_SHADOW,
+        }}
+      >
+        <div
+          className={`flex flex-wrap items-start gap-3 ${fullScreen ? "p-4 sm:p-5" : "p-4 sm:p-5"}`}
+        >
           <div
-            className={`${fullScreen ? "h-20 w-20 text-2xl" : "h-16 w-16 text-xl"} rounded-full shrink-0 flex items-center justify-center font-black shadow-sm`}
+            className={`${fullScreen ? "h-14 w-14 text-xl" : "h-14 w-14 text-xl"} rounded-full shrink-0 flex items-center justify-center overflow-hidden font-semibold shadow-sm`}
             style={{ background: avatar.bg, color: avatar.fg }}
           >
-            {(worker.full_name || "?").charAt(0).toUpperCase()}
+            {worker.profile_photo_url ? (
+              <img
+                src={worker.profile_photo_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              (worker.full_name || "?").charAt(0).toUpperCase()
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className={`${fullScreen ? "text-2xl" : "text-lg"} font-black truncate`} style={{ color: TEXT }}>{worker.full_name}</h2>
+              <h2
+                className={`${fullScreen ? "text-2xl" : "text-lg"} font-semibold break-words`}
+                style={{ color: TEXT }}
+              >
+                {worker.full_name}
+              </h2>
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{
-                  background: worker.is_active !== false ? "var(--cc-status-success-bg)" : "var(--cc-status-danger-bg)",
-                  color: worker.is_active !== false ? "var(--cc-status-success)" : "var(--cc-status-danger)",
+                  background:
+                    worker.is_active !== false
+                      ? "var(--cc-status-success-bg)"
+                      : "var(--cc-status-danger-bg)",
+                  color:
+                    worker.is_active !== false
+                      ? "var(--cc-status-success)"
+                      : "var(--cc-status-danger)",
                 }}
               >
-                {worker.is_active !== false ? translate("team.status.active") : translate("team.status.inactive")}
+                {worker.is_active !== false
+                  ? translate("team.status.active")
+                  : translate("team.status.inactive")}
               </span>
               {onboardingPending && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                  style={{ borderColor: "var(--cc-status-warning)", color: "var(--cc-status-warning)" }}
+                  style={{
+                    borderColor: "var(--cc-status-warning)",
+                    color: "var(--cc-status-warning)",
+                  }}
                 >
-                  <Hourglass size={10} /> {translate("team.detail.onboardingPending")}
+                  <Hourglass size={10} />{" "}
+                  {translate("team.detail.onboardingPending")}
                 </span>
               )}
               {worker.training_overdue && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)" }}
+                  style={{
+                    background: "var(--cc-status-danger-bg)",
+                    color: "var(--cc-status-danger)",
+                  }}
                 >
-                  <AlertCircle size={10} /> {translate("team.detail.trainingOverdue")}
+                  <AlertCircle size={10} />{" "}
+                  {translate("team.detail.trainingOverdue")}
                 </span>
               )}
             </div>
             <p className="text-xs mt-1 capitalize" style={{ color: MUTED }}>
               {(worker.role || "").replace(/_/g, " ")}
               <span className="mx-1.5">·</span>
-              <span className="font-bold" style={{ color: TEXT }}>{worker.employee_id || worker.id.slice(0, 8)}</span>
+              <span className="font-bold" style={{ color: TEXT }}>
+                {worker.employee_id || worker.id.slice(0, 8)}
+              </span>
             </p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs" style={{ color: MUTED }}>
-              {worker.email && <ContactLink icon={Mail} value={worker.email} href={`mailto:${worker.email}`} />}
-              {worker.phone && <ContactLink icon={Phone} value={worker.phone} href={`tel:${worker.phone.replace(/\s/g, "")}`} />}
+            <div
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs"
+              style={{ color: MUTED }}
+            >
+              {worker.email && (
+                <ContactLink
+                  icon={Mail}
+                  value={worker.email}
+                  href={`mailto:${worker.email}`}
+                />
+              )}
+              {worker.phone && (
+                <ContactLink
+                  icon={Phone}
+                  value={worker.phone}
+                  href={`tel:${worker.phone.replace(/\s/g, "")}`}
+                />
+              )}
             </div>
           </div>
-          <div className="shrink-0 w-full sm:w-auto">
-            <ReadinessSummary
-              worker={worker}
-              topReason={topReason}
-              credentialsComplete={credentialsComplete}
-              translate={translate}
-              onAction={() => setTab("credentials")}
-            />
+          <div
+            className="w-full min-w-0 border-t pt-3 xl:w-auto xl:max-w-sm xl:border-t-0 xl:pt-0"
+            style={{ borderColor: BORDER }}
+          >
+            {credentialsKnown ? (
+              <ReadinessSummary
+                worker={worker}
+                topReason={topReason}
+                credentialsComplete={credentialsComplete}
+                translate={translate}
+                onAction={() => setTab("credentials")}
+              />
+            ) : (
+              <div
+                role={credentialsQuery.isError ? "alert" : "status"}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm text-cc-muted"
+              >
+                <span>
+                  {credentialsQuery.isError
+                    ? "Credential status could not be loaded."
+                    : "Loading credential status..."}
+                </span>
+                {credentialsQuery.isError && (
+                  <Button
+                    variant="outline"
+                    onClick={() => void credentialsQuery.refetch()}
+                  >
+                    Retry credentials
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* At-a-glance stat strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x" style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}>
+        <div
+          className="grid grid-cols-2 sm:grid-cols-4 divide-x"
+          style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}
+        >
           {statCells.map((cell) => (
-            <div key={cell.label} className={fullScreen ? "px-5 py-4" : "px-4 py-3"} style={{ borderColor: BORDER }}>
-              <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{cell.label}</p>
-              <p className={`${fullScreen ? "text-lg" : "text-base"} font-black tabular-nums mt-0.5`} style={{ color: cell.color ?? TEXT }}>{cell.value}</p>
+            <div
+              key={cell.label}
+              className={fullScreen ? "px-3 py-2.5" : "px-3 py-2.5"}
+              style={{ borderColor: BORDER }}
+            >
+              <p
+                className="text-[10px] font-bold uppercase tracking-wide"
+                style={{ color: MUTED }}
+              >
+                {cell.label}
+              </p>
+              <p
+                className={`${fullScreen ? "text-lg" : "text-base"} font-semibold tabular-nums mt-0.5`}
+                style={{ color: cell.color ?? TEXT }}
+              >
+                {cell.value}
+              </p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Tabs + content - vertical sidebar tabs on wide screens (this panel is
-          wide enough now to earn it, and 8 tabs was starting to overflow a
-          horizontal scroller), falling back to the original horizontal
-          scrollable strip on narrow/mobile widths. */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-        <div role="tablist" className="flex gap-1 overflow-x-auto scrollbar-none border-b lg:hidden" style={{ borderColor: BORDER }}>
-          {ALL_WORKER_DETAIL_TABS.map((t) => {
-            const badge = tabBadges[t];
-            const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
-            const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
-            return (
-              <button
-                key={t}
-                role="tab"
-                aria-selected={tab === t ? "true" : "false"}
-                onClick={() => setTab(t)}
-                className="relative shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 pb-3 pt-1 text-sm font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded-t-lg"
-                style={{ color: tab === t ? TEXT : MUTED, outlineColor: PLUM }}
-              >
-                {translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}
-                {badge && (
-                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: badgeBg, color: badgeColor }}>
-                    {badge.text}
-                  </span>
-                )}
-                {tab === t && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full" style={{ background: PLUM }} />}
-              </button>
-            );
-          })}
+      {/* Keep section navigation within the profile's existing scroll container. */}
+      <div
+        ref={sectionsRef}
+        className={`flex flex-col gap-5 scroll-mt-[var(--profile-nav-top)] lg:flex-row lg:items-start ${scrollContext === "page" ? "[--profile-nav-top:90px] lg:[--profile-nav-top:152px]" : "[--profile-nav-top:12px]"}`}
+      >
+        <div className="sticky top-[var(--profile-nav-top)] z-20 w-full rounded-xl border border-cc-border bg-[var(--cc-bg)] p-3 shadow-sm lg:hidden">
+          <label
+            htmlFor={`worker-section-${worker.id}`}
+            className="mb-1.5 block text-xs font-medium text-cc-muted"
+          >
+            Profile section
+          </label>
+          <select
+            id={`worker-section-${worker.id}`}
+            value={tab}
+            onChange={(e) =>
+              selectProfileTab(e.target.value as WorkerDetailTab)
+            }
+            className="h-11 w-full min-w-0 rounded-lg border border-cc-border bg-transparent px-3 text-sm font-medium text-cc-text"
+          >
+            {ALL_WORKER_DETAIL_TABS.map((t) => (
+              <option key={t} value={t}>
+                {translate(`team.detail.tab.${t}`)}
+                {tabBadges[t] ? ` (${tabBadges[t]?.text})` : ""}
+              </option>
+            ))}
+          </select>
         </div>
-
-        <div role="tablist" className={`hidden shrink-0 flex-col gap-1 lg:flex ${fullScreen ? "lg:w-56 xl:w-64" : "lg:w-52"}`}>
+        <div
+          role="navigation"
+          aria-label="Worker profile sections"
+          className={`sticky top-[var(--profile-nav-top)] hidden max-h-[calc(100dvh-var(--profile-nav-top)-24px)] shrink-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-cc-border bg-[var(--cc-surface)] p-2 [scrollbar-width:thin] lg:flex ${fullScreen ? "lg:w-52" : "lg:w-48"}`}
+        >
           {ALL_WORKER_DETAIL_TABS.map((t) => {
             const badge = tabBadges[t];
-            const badgeColor = badge?.severity === "danger" ? "var(--cc-status-danger)" : badge?.severity === "warning" ? "var(--cc-status-warning)" : MUTED;
-            const badgeBg = badge?.severity === "danger" ? "var(--cc-status-danger-bg)" : badge?.severity === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
+            const badgeColor =
+              badge?.severity === "danger"
+                ? "var(--cc-status-danger)"
+                : badge?.severity === "warning"
+                  ? "var(--cc-status-warning)"
+                  : MUTED;
+            const badgeBg =
+              badge?.severity === "danger"
+                ? "var(--cc-status-danger-bg)"
+                : badge?.severity === "warning"
+                  ? "var(--cc-status-warning-bg)"
+                  : SOFT;
             const active = tab === t;
             const Icon = TAB_ICON[t];
             return (
               <button
                 key={t}
-                role="tab"
-                aria-selected={active ? "true" : "false"}
-                onClick={() => setTab(t)}
-                className="relative flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => selectProfileTab(t)}
+                className="relative flex min-h-11 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
                 style={{
-                  // Deliberately NOT trying to visually merge with the content
-                  // column beside it - that cross-column "bleed" technique
-                  // (matching background + negative margin) went through
-                  // several rounds here without landing right, and this repo
-                  // has no way to render/verify it live. A plain
-                  // self-contained pill is a safer, more predictable choice:
-                  // it doesn't depend on precise alignment with a sibling
-                  // column to look correct.
                   background: active ? SOFT : "transparent",
                   color: active ? TEXT : MUTED,
                   outlineColor: PLUM,
@@ -633,14 +1095,24 @@ export function WorkerDetail({
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
-                    style={{ background: active ? PLUM : SOFT, color: active ? "#fff" : MUTED }}
+                    style={{
+                      background: active ? PLUM : SOFT,
+                      color: active ? "#fff" : MUTED,
+                    }}
                   >
                     <Icon size={13} />
                   </span>
-                  <span className="truncate">{translate(`team.detail.tab.${t}` as "team.detail.tab.overview")}</span>
+                  <span className="min-w-0 break-words leading-5">
+                    {translate(
+                      `team.detail.tab.${t}` as "team.detail.tab.overview",
+                    )}
+                  </span>
                 </span>
                 {badge && (
-                  <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: badgeBg, color: badgeColor }}>
+                  <span
+                    className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                    style={{ background: badgeBg, color: badgeColor }}
+                  >
                     {badge.text}
                   </span>
                 )}
@@ -649,28 +1121,39 @@ export function WorkerDetail({
           })}
         </div>
 
-        <div className={`min-w-0 flex-1 ${fullScreen ? "xl:max-w-3xl" : ""}`}>
+        <div className="w-full min-w-0 flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={tab}
+              key={`${worker.id}-${tab}`}
+              role="region"
+              aria-label={translate(`team.detail.tab.${tab}`)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: reduceProfileMotion ? 0 : 0.15 }}
             >
               {(tab === "personal" || tab === "overview") && (
                 <PersonalInfoTab
                   worker={worker}
                   translate={translate}
                   missingCredentialTypes={missingCredentialTypes}
+                  statusKnown={
+                    credentialsKnown &&
+                    !trainingQuery.isLoading &&
+                    !trainingQuery.isError
+                  }
                   trainingPendingCount={trainingPendingCount}
                   onJumpToTab={jumpToTab}
                 />
               )}
-              {tab === "shifts" && <ShiftsTab worker={worker} translate={translate} />}
+              {tab === "shifts" && (
+                <ShiftsTab worker={worker} translate={translate} />
+              )}
               {tab === "participants" && <ParticipantsTab worker={worker} />}
-              {tab === "documents" && <DocumentsTab worker={worker} translate={translate} />}
-              {tab === "credentials" && (
+              {tab === "documents" && (
+                <DocumentsTab worker={worker} translate={translate} />
+              )}
+              {tab === "credentials" && !credentialsQuery.isError && (
                 <CredentialsTab
                   credentials={workerCredentials}
                   isLoading={credentialsQuery.isLoading}
@@ -686,160 +1169,30 @@ export function WorkerDetail({
                   <WorkerAvailabilityPanel worker={worker} />
                 </div>
               )}
-              {tab === "training" && <TrainingTab worker={worker} topReason={topReason} translate={translate} />}
-              {tab === "induction" && <InductionTab worker={worker} translate={translate} />}
+              {tab === "training" && (
+                <TrainingTab
+                  worker={worker}
+                  topReason={topReason}
+                  translate={translate}
+                />
+              )}
+              {tab === "induction" && (
+                <InductionTab worker={worker} translate={translate} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
-
-        {fullScreen && (
-          <div className="hidden xl:flex xl:w-80 xl:shrink-0 xl:flex-col gap-4">
-            <RailCard title="Contact">
-              <RailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
-              <RailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
-              <RailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
-              <RailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
-              <RailRow icon={LogIn} label={translate("team.detail.lastLogin")} value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined} emptyText={translate("team.detail.noLoginYet")} />
-            </RailCard>
-
-            <RailCard title="Compliance snapshot">
-              <RailStatusRow
-                label="Credentials"
-                value={`${credentialsCompleteCount}/${REQUIRED_CREDENTIAL_TYPES.length}`}
-                tone={credentialsComplete ? "success" : credentialsCompleteCount === 0 ? "danger" : "warning"}
-                onClick={() => setTab("credentials")}
-              />
-              <RailStatusRow
-                label="Training"
-                value={worker.training_overdue ? "Overdue" : trainingPendingCount > 0 ? `${trainingPendingCount} to review` : "Up to date"}
-                tone={worker.training_overdue ? "danger" : trainingPendingCount > 0 ? "warning" : "success"}
-                onClick={() => setTab("training")}
-              />
-              <RailStatusRow
-                label="Documents"
-                value={`${documentsCount} on file`}
-                tone="neutral"
-                onClick={() => setTab("documents")}
-              />
-              {onboardingPending && (
-                <RailStatusRow
-                  label="Onboarding"
-                  value="In progress"
-                  tone="warning"
-                  onClick={() => setTab("personal")}
-                />
-              )}
-            </RailCard>
-
-            {hasQuickActions && (
-              <RailCard title="Quick actions">
-                <div className="flex flex-col gap-1.5">
-                  {onAssignShift && <RailActionButton icon={Clock} label={translate("team.assignShift")} onClick={onAssignShift} />}
-                  {onAssignClient && <RailActionButton icon={Link2} label={translate("team.assignClient")} onClick={onAssignClient} />}
-                  {onReminder && <RailActionButton icon={Mail} label={translate("team.reminder")} onClick={onReminder} />}
-                  {onSendPasswordReset && <RailActionButton icon={KeyRound} label="Send password reset email" onClick={onSendPasswordReset} />}
-                  {onDeactivate && worker.is_active !== false && (
-                    <RailActionButton icon={UserX} label={translate("team.deactivate")} onClick={onDeactivate} tone="danger" />
-                  )}
-                  {onActivate && worker.is_active === false && (
-                    <RailActionButton icon={UserCheck} label={translate("team.reactivate")} onClick={onActivate} tone="success" />
-                  )}
-                  {onDeleteAccount && (
-                    <RailActionButton icon={Trash2} label="Remove account" onClick={onDeleteAccount} tone="danger" />
-                  )}
-                </div>
-              </RailCard>
-            )}
-          </div>
-        )}
       </div>
     </div>
-  );
-}
-
-/** Compact card shell for the full-screen right rail — same visual language as the
- * main content cards (SURFACE/BORDER/CARD_SHADOW), just tighter padding since it's
- * secondary, at-a-glance context rather than primary content. */
-function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border overflow-hidden" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <p className="px-4 pt-3.5 pb-2 text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{title}</p>
-      <div className="divide-y" style={{ borderColor: BORDER }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function RailRow({
-  icon: Icon, label, value, emptyText,
-}: {
-  icon: typeof Mail;
-  label: string;
-  value?: string | null;
-  emptyText: string;
-}) {
-  return (
-    <div className="flex items-start gap-2.5 px-4 py-2.5">
-      <Icon size={13} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
-        <p className={`text-[13px] font-semibold mt-0.5 truncate ${value ? "" : "italic"}`} style={{ color: value ? TEXT : MUTED }}>
-          {value || emptyText}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function RailStatusRow({
-  label, value, tone, onClick,
-}: {
-  label: string;
-  value: string;
-  tone: "success" | "warning" | "danger" | "neutral";
-  onClick: () => void;
-}) {
-  const color = tone === "success" ? "var(--cc-status-success)" : tone === "warning" ? "var(--cc-status-warning)" : tone === "danger" ? "var(--cc-status-danger)" : TEXT;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
-    >
-      <span className="text-[13px] font-bold" style={{ color: TEXT }}>{label}</span>
-      <span className="flex items-center gap-1 text-[12px] font-black" style={{ color }}>
-        {value}
-        <ArrowRight size={11} />
-      </span>
-    </button>
-  );
-}
-
-function RailActionButton({
-  icon: Icon, label, onClick, tone,
-}: {
-  icon: typeof Mail;
-  label: string;
-  onClick: () => void;
-  tone?: "danger" | "success";
-}) {
-  const color = tone === "danger" ? "var(--cc-status-danger)" : tone === "success" ? "var(--cc-status-success)" : PLUM;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-bold transition-colors hover:bg-black/[0.04]"
-      style={{ color }}
-    >
-      <Icon size={13} className="shrink-0" />
-      {label}
-    </button>
   );
 }
 
 function DetailRow({
-  label, value, icon, tone, emptyText,
+  label,
+  value,
+  icon,
+  tone,
+  emptyText,
 }: {
   label: string;
   value?: string | null;
@@ -848,17 +1201,42 @@ function DetailRow({
   /** Shown, in muted italic, when value is empty — a designed empty state instead of "N/A". */
   emptyText?: string;
 }) {
-  const color = tone === "success" ? "var(--cc-status-success)" : tone === "warning" ? "var(--cc-status-warning)" : MUTED;
-  const bg = tone === "success" ? "var(--cc-status-success-bg)" : tone === "warning" ? "var(--cc-status-warning-bg)" : SOFT;
+  const color =
+    tone === "success"
+      ? "var(--cc-status-success)"
+      : tone === "warning"
+        ? "var(--cc-status-warning)"
+        : MUTED;
+  const bg =
+    tone === "success"
+      ? "var(--cc-status-success-bg)"
+      : tone === "warning"
+        ? "var(--cc-status-warning-bg)"
+        : SOFT;
   return (
-    <div className="flex items-center gap-3 px-5 py-3.5" style={{ background: SURFACE }}>
+    <div
+      className="flex min-w-0 items-start gap-3 px-4 py-3 sm:[&:last-child:nth-child(odd)]:col-span-2"
+      style={{ background: SURFACE }}
+    >
       <IconBadge icon={icon} color={color} bg={bg} />
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+        <p
+          className="text-[10px] font-bold uppercase tracking-wide"
+          style={{ color: MUTED }}
+        >
+          {label}
+        </p>
         {value ? (
-          <p className="text-sm font-semibold mt-0.5" style={{ color: TEXT }}>{value}</p>
+          <p
+            className="break-words text-sm font-medium mt-0.5"
+            style={{ color: TEXT }}
+          >
+            {value}
+          </p>
         ) : (
-          <p className="text-sm italic mt-0.5" style={{ color: MUTED }}>{emptyText}</p>
+          <p className="text-sm italic mt-0.5" style={{ color: MUTED }}>
+            {emptyText}
+          </p>
         )}
       </div>
     </div>
@@ -883,18 +1261,32 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
   const a = data?.availability;
 
   return (
-    <div className="rounded-2xl border px-5 py-4" style={{ background: SOFT, borderColor: BORDER }}>
+    <div
+      className="rounded-2xl border px-5 py-4"
+      style={{ background: SOFT, borderColor: BORDER }}
+    >
       <div className="flex items-center gap-2 mb-1">
         <Clock size={14} style={{ color: PLUM }} />
-        <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Availability</p>
+        <p
+          className="text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: MUTED }}
+        >
+          Availability
+        </p>
       </div>
       {a ? (
         <p className="text-sm font-bold" style={{ color: TEXT }}>
           Available up to {a.max_hours_per_week} hours per week
-          {a.available_days?.length > 0 && ` · ${a.available_days.map((d) => DAY_ABBR[d - 1]).filter(Boolean).join(", ")}`}
+          {a.available_days?.length > 0 &&
+            ` · ${a.available_days
+              .map((d) => DAY_ABBR[d - 1])
+              .filter(Boolean)
+              .join(", ")}`}
         </p>
       ) : (
-        <p className="text-sm" style={{ color: MUTED }}>No availability set yet.</p>
+        <p className="text-sm" style={{ color: MUTED }}>
+          No availability set yet.
+        </p>
       )}
     </div>
   );
@@ -906,21 +1298,37 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
   });
   const skills = skillsQuery.data ?? [];
 
-  if (!worker.profile_summary && !worker.profile_experience_years && skills.length === 0) {
+  if (
+    !worker.profile_summary &&
+    !worker.profile_experience_years &&
+    skills.length === 0
+  ) {
     return null;
   }
 
   return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+    <div
+      className="rounded-2xl border p-4"
+      style={{ borderColor: BORDER, background: SURFACE }}
+    >
       <div className="flex items-center gap-2">
         <Sparkles size={14} style={{ color: PLUM }} />
-        <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+        <p
+          className="text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: MUTED }}
+        >
+          Profile
+        </p>
       </div>
       {worker.profile_summary && (
-        <p className="mt-2.5 text-sm leading-relaxed" style={{ color: TEXT }}>{worker.profile_summary}</p>
+        <p className="mt-2.5 text-sm leading-relaxed" style={{ color: TEXT }}>
+          {worker.profile_summary}
+        </p>
       )}
       {worker.profile_experience_years && (
-        <p className="mt-2 text-xs font-semibold" style={{ color: TEXT }}>{worker.profile_experience_years}</p>
+        <p className="mt-2 text-xs font-semibold" style={{ color: TEXT }}>
+          {worker.profile_experience_years}
+        </p>
       )}
       {skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -928,7 +1336,12 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
             <span
               key={s.skill}
               className="rounded-full px-2.5 py-1 text-[10px] font-bold"
-              style={{ background: s.is_certified ? "var(--cc-status-success-bg)" : SOFT, color: s.is_certified ? "var(--cc-status-success)" : MUTED }}
+              style={{
+                background: s.is_certified
+                  ? "var(--cc-status-success-bg)"
+                  : SOFT,
+                color: s.is_certified ? "var(--cc-status-success)" : MUTED,
+              }}
               title={s.is_certified ? "Certified" : "Unverified — from resume"}
             >
               {s.skill}
@@ -940,21 +1353,69 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
   );
 }
 
-function PersonalInfoTab({
-  worker, translate, missingCredentialTypes, trainingPendingCount, onJumpToTab,
+function ProfileDetailsGroup({
+  title,
+  description,
+  children,
 }: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      className="group overflow-hidden rounded-xl border"
+      style={{ borderColor: BORDER, background: SURFACE }}
+    >
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-cc-text">
+            {title}
+          </span>
+          <span className="mt-0.5 block text-xs leading-5 text-cc-muted">
+            {description}
+          </span>
+        </span>
+        <ChevronDown
+          size={16}
+          className="shrink-0 text-cc-muted transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div
+        className="space-y-3 border-t p-3 sm:p-4"
+        style={{ borderColor: BORDER }}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function PersonalInfoTab({
+  statusKnown,
+  worker,
+  translate,
+  missingCredentialTypes,
+  trainingPendingCount,
+  onJumpToTab,
+}: {
+  statusKnown: boolean;
   worker: WorkerStats;
   translate: (k: string) => string;
   missingCredentialTypes: string[];
   trainingPendingCount: number;
   onJumpToTab: (tab: WorkerDetailTab, credentialType?: string) => void;
 }) {
-  const onboardingPending = worker.role === "support_worker" && worker.onboarding_completed === false;
+  const onboardingPending =
+    worker.role === "support_worker" && worker.onboarding_completed === false;
 
-  const coachingQuery = useOrgQuery(["worker-medication-coaching-signal", worker.id], {
-    queryFn: () => getWorkerCoachingSignal(worker.id),
-    enabled: worker.role === "support_worker",
-  });
+  const coachingQuery = useOrgQuery(
+    ["worker-medication-coaching-signal", worker.id],
+    {
+      queryFn: () => getWorkerCoachingSignal(worker.id),
+      enabled: worker.role === "support_worker",
+    },
+  );
   const coaching = coachingQuery.data?.signal;
 
   // Discrete checklist step the worker is currently on, not just a pending/complete boolean —
@@ -963,19 +1424,24 @@ function PersonalInfoTab({
     queryFn: getTeamOnboarding,
     enabled: onboardingPending,
   });
-  const workerChecklist = (onboardingQuery.data ?? []).find((row) => String(row.id) === worker.id)
-    ?.onboarding_checklist as Record<string, boolean> | undefined;
+  const workerChecklist = (onboardingQuery.data ?? []).find(
+    (row) => String(row.id) === worker.id,
+  )?.onboarding_checklist as Record<string, boolean> | undefined;
   const currentStepKey = workerChecklist
     ? CHECKLIST_STEP_ORDER.find((key) => !workerChecklist[key])
     : undefined;
-  const currentStepLabel = currentStepKey ? CHECKLIST_LABELS[currentStepKey] : undefined;
+  const currentStepLabel = currentStepKey
+    ? CHECKLIST_LABELS[currentStepKey]
+    : undefined;
 
-  const [nextStepsOpen, setNextStepsOpen] = useState(true);
+  const [nextStepsOpen, setNextStepsOpen] = useState(false);
 
   const nextSteps: { label: string; onClick?: () => void }[] = [];
   if (onboardingPending) {
     nextSteps.push({
-      label: currentStepLabel ? `Onboarding: currently on "${currentStepLabel}"` : "Onboarding checklist not yet complete",
+      label: currentStepLabel
+        ? `Onboarding: currently on "${currentStepLabel}"`
+        : "Onboarding checklist not yet complete",
     });
   }
   // One row per missing credential, each linking straight to that credential's row in the
@@ -987,7 +1453,10 @@ function PersonalInfoTab({
     });
   }
   if (worker.training_overdue) {
-    nextSteps.push({ label: "Mandatory training is overdue", onClick: () => onJumpToTab("training") });
+    nextSteps.push({
+      label: "Mandatory training is overdue",
+      onClick: () => onJumpToTab("training"),
+    });
   }
   if (trainingPendingCount > 0) {
     nextSteps.push({
@@ -1002,23 +1471,49 @@ function PersonalInfoTab({
           each row names the actual gap and jumps straight to where it's fixed. Collapsible
           since once reviewed it's mostly reference, not something to keep taking up space. */}
       {nextSteps.length > 0 ? (
-        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: "var(--cc-status-warning)", background: "var(--cc-status-warning-bg)" }}>
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{
+            borderColor: "var(--cc-status-warning)",
+            background: "var(--cc-status-warning-bg)",
+          }}
+        >
           <button
             type="button"
+            aria-expanded={nextStepsOpen}
             onClick={() => setNextStepsOpen((v) => !v)}
             className="flex w-full items-center justify-between gap-2 px-4 py-3"
           >
             <span className="flex items-center gap-2">
-              <AlertCircle size={15} style={{ color: "var(--cc-status-warning)" }} />
-              <span className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>
+              <AlertCircle
+                size={15}
+                style={{ color: "var(--cc-status-warning)" }}
+              />
+              <span
+                className="text-[11px] font-semibold uppercase tracking-wide"
+                style={{ color: "var(--cc-status-warning)" }}
+              >
                 Next steps ({nextSteps.length})
               </span>
             </span>
-            {nextStepsOpen ? <ChevronUp size={14} style={{ color: "var(--cc-status-warning)" }} /> : <ChevronDown size={14} style={{ color: "var(--cc-status-warning)" }} />}
+            {nextStepsOpen ? (
+              <ChevronUp
+                size={14}
+                style={{ color: "var(--cc-status-warning)" }}
+              />
+            ) : (
+              <ChevronDown
+                size={14}
+                style={{ color: "var(--cc-status-warning)" }}
+              />
+            )}
           </button>
           {nextStepsOpen && (
-            <div className="divide-y" style={{ borderColor: "var(--cc-status-warning)" }}>
-              {nextSteps.map((step) => (
+            <div
+              className="divide-y"
+              style={{ borderColor: "var(--cc-status-warning)" }}
+            >
+              {nextSteps.map((step) =>
                 step.onClick ? (
                   <button
                     key={step.label}
@@ -1026,75 +1521,287 @@ function PersonalInfoTab({
                     onClick={step.onClick}
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-black/[0.03]"
                   >
-                    <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
-                    <ArrowRight size={14} className="shrink-0" style={{ color: "var(--cc-status-warning)" }} />
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: TEXT }}
+                    >
+                      {step.label}
+                    </span>
+                    <ArrowRight
+                      size={14}
+                      className="shrink-0"
+                      style={{ color: "var(--cc-status-warning)" }}
+                    />
                   </button>
                 ) : (
                   <div key={step.label} className="px-4 py-3">
-                    <span className="text-sm font-semibold" style={{ color: TEXT }}>{step.label}</span>
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: TEXT }}
+                    >
+                      {step.label}
+                    </span>
                   </div>
-                )
-              ))}
+                ),
+              )}
             </div>
           )}
         </div>
-      ) : (
-        <div className="rounded-2xl border p-4 flex items-center gap-2.5" style={{ borderColor: "var(--cc-status-success)", background: "var(--cc-status-success-bg)" }}>
-          <CheckCircle2 size={16} style={{ color: "var(--cc-status-success)" }} />
-          <p className="text-sm font-bold" style={{ color: "var(--cc-status-success)" }}>Nothing outstanding — fully up to date.</p>
+      ) : statusKnown ? (
+        <div
+          className="rounded-2xl border p-4 flex items-center gap-2.5"
+          style={{
+            borderColor: "var(--cc-status-success)",
+            background: "var(--cc-status-success-bg)",
+          }}
+        >
+          <CheckCircle2
+            size={16}
+            style={{ color: "var(--cc-status-success)" }}
+          />
+          <p
+            className="text-sm font-bold"
+            style={{ color: "var(--cc-status-success)" }}
+          >
+            Nothing outstanding — fully up to date.
+          </p>
         </div>
-      )}
+      ) : null}
 
       {/* Coaching input, not a compliance flag — deliberately its own card, never mixed
           into the stat strip or any compliance-facing surface. */}
       {coaching?.triggered && (
-        <div className="rounded-2xl p-4" style={{ background: SOFT, boxShadow: CARD_SHADOW }}>
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: SOFT, boxShadow: CARD_SHADOW }}
+        >
           <div className="flex items-center gap-2 mb-1.5">
             <TrendingUp size={15} style={{ color: PLUM }} />
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: PLUM }}>
+            <p
+              className="text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: PLUM }}
+            >
               {translate("team.detail.coachingTitle")}
             </p>
           </div>
-          <p className="text-sm" style={{ color: TEXT }}>{coaching.trigger_reason}</p>
+          <p className="text-sm" style={{ color: TEXT }}>
+            {coaching.trigger_reason}
+          </p>
         </div>
       )}
 
-      {/* Contact + employment basics */}
-      <div className="rounded-2xl overflow-hidden border sm:grid sm:grid-cols-2 sm:gap-px divide-y sm:divide-y-0" style={{ background: BORDER, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <DetailRow icon={Mail} label="Email" value={worker.email} emptyText="Not on file" />
-        <DetailRow icon={Phone} label="Phone" value={worker.phone ?? undefined} emptyText="Not on file" />
-        <DetailRow icon={IdCard} label="Employee ID" value={worker.employee_id ?? undefined} emptyText="Not assigned" />
-        <DetailRow
-          icon={MessageCircle}
-          label={translate("team.detail.preferredContact")}
-          value={worker.preferred_contact_method}
-          emptyText={translate("team.detail.contactNotSet")}
-        />
-        <DetailRow icon={CalendarDays} label={translate("team.detail.joined")} value={safeFormat(worker.joined_at)} emptyText={translate("team.detail.noJoinDate")} />
-        <DetailRow
-          icon={LogIn}
-          label={translate("team.detail.lastLogin")}
-          value={worker.last_login ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a") : undefined}
-          emptyText={translate("team.detail.noLoginYet")}
-        />
-        {onboardingPending ? (
-          <DetailRow icon={Hourglass} tone="warning" label="Onboarding" value="In progress" />
-        ) : (
-          <DetailRow icon={CheckCircle2} tone="success" label={translate("team.detail.onboardingStatus")} value={translate("team.detail.onboardingComplete")} />
-        )}
-      </div>
+      <section
+        className="overflow-hidden rounded-xl border"
+        style={{ borderColor: BORDER, background: SURFACE }}
+        aria-label="Personal details"
+      >
+        <h3
+          className="border-b px-4 py-3 text-sm font-semibold text-cc-text"
+          style={{ borderColor: BORDER }}
+        >
+          Personal details
+        </h3>
+        <div
+          className="grid gap-px sm:grid-cols-2"
+          style={{ background: BORDER }}
+        >
+          <DetailRow
+            icon={MapPin}
+            label="Address"
+            value={worker.address ?? undefined}
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={MapPin}
+            label="Suburb"
+            value={worker.suburb ?? undefined}
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={Cake}
+            label="Date of birth"
+            value={
+              worker.date_of_birth
+                ? safeFormat(worker.date_of_birth)
+                : undefined
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={PhoneCall}
+            label="Emergency contact"
+            value={
+              emergencyContactDisplay(
+                worker.emergency_contact as Parameters<
+                  typeof emergencyContactDisplay
+                >[0],
+              )?.text || undefined
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={MessageCircle}
+            label={translate("team.detail.preferredContact")}
+            value={worker.preferred_contact_method}
+            emptyText={translate("team.detail.contactNotSet")}
+          />
+          <DetailRow
+            icon={IdCard}
+            label="Employee ID"
+            value={worker.employee_id ?? undefined}
+            emptyText="Not assigned"
+          />
+        </div>
+      </section>
 
-      {/* Resume-derived bio, experience and skills - captured at onboarding and kept on
-          their live profile permanently, not just during the hiring process. */}
-      <ProfileCard worker={worker} />
+      <ProfileDetailsGroup
+        title="Work details"
+        description="Coordinator, classification, buddy and registrations"
+      >
+        <div className="grid min-w-0 gap-3 xl:grid-cols-2">
+          <CoordinatorAssignmentSection worker={worker} />
+          <ClassificationLevelSection worker={worker} />
+          <BuddyAssignmentSection worker={worker} />
+        </div>
+        <div
+          className="grid gap-px overflow-hidden rounded-lg border sm:grid-cols-2"
+          style={{ background: BORDER, borderColor: BORDER }}
+        >
+          <DetailRow
+            icon={Stethoscope}
+            label="Discipline"
+            value={worker.discipline ?? undefined}
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={ShieldCheck}
+            label="AHPRA registration"
+            value={worker.ahpra_registration_number ?? undefined}
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={Building2}
+            label="Business name"
+            value={worker.business_name ?? undefined}
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={FileCheck}
+            label="Professional indemnity"
+            value={
+              worker.professional_indemnity_confirmed == null
+                ? undefined
+                : worker.professional_indemnity_confirmed
+                  ? "Confirmed"
+                  : "Not confirmed"
+            }
+            emptyText="Not on file"
+          />
+        </div>
+      </ProfileDetailsGroup>
 
-      <CoordinatorAssignmentSection worker={worker} />
+      <ProfileDetailsGroup
+        title="Account & preferences"
+        description="Account activity, onboarding and communication preferences"
+      >
+        <div
+          className="grid gap-px overflow-hidden rounded-lg border sm:grid-cols-2"
+          style={{ background: BORDER, borderColor: BORDER }}
+        >
+          <DetailRow
+            icon={CalendarDays}
+            label={translate("team.detail.joined")}
+            value={worker.joined_at ? safeFormat(worker.joined_at) : undefined}
+            emptyText={translate("team.detail.noJoinDate")}
+          />
+          <DetailRow
+            icon={LogIn}
+            label={translate("team.detail.lastLogin")}
+            value={
+              worker.last_login
+                ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a")
+                : undefined
+            }
+            emptyText={translate("team.detail.noLoginYet")}
+          />
+          <DetailRow
+            icon={ClipboardCheck}
+            label={translate("team.detail.onboardingStatus")}
+            value={
+              worker.onboarding_completed == null
+                ? undefined
+                : worker.onboarding_completed
+                  ? translate("team.detail.onboardingComplete")
+                  : "In progress"
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={Languages}
+            label="Preferred language"
+            value={
+              LANGUAGE_LABELS[worker.preferred_language ?? ""] ??
+              worker.preferred_language ??
+              undefined
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={Briefcase}
+            label="Account type"
+            value={
+              ACCOUNT_TYPE_LABELS[worker.account_type ?? ""] ??
+              worker.account_type ??
+              undefined
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={ClipboardCheck}
+            label="Profile completed"
+            value={
+              worker.profile_completed == null
+                ? undefined
+                : worker.profile_completed
+                  ? "Yes"
+                  : "No"
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={ClipboardCheck}
+            label="Role-specific profile completed"
+            value={
+              worker.role_specific_profile_completed == null
+                ? undefined
+                : worker.role_specific_profile_completed
+                  ? "Yes"
+                  : "No"
+            }
+            emptyText="Not on file"
+          />
+          <DetailRow
+            icon={Sparkles}
+            label="Matching opt-in"
+            value={
+              worker.matching_opt_in == null
+                ? undefined
+                : worker.matching_opt_in
+                  ? "Yes"
+                  : "No"
+            }
+            emptyText="Not on file"
+          />
+        </div>
+      </ProfileDetailsGroup>
 
-      <ClassificationLevelSection worker={worker} />
-
-      <BuddyAssignmentSection worker={worker} />
-
-      <WorkerTagsSection workerId={worker.id} />
+      <ProfileDetailsGroup
+        title="Experience & interests"
+        description="Profile summary, skills and matching preferences"
+      >
+        <ProfileCard worker={worker} />
+        <WorkerTagsSection workerId={worker.id} />
+      </ProfileDetailsGroup>
     </div>
   );
 }
@@ -1112,29 +1819,62 @@ function PersonalInfoTab({
 function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hasCapability, grantFor } = useMyAccessGrants();
   const { data: coordinators = [] } = useOrgQuery(["org-coordinators"], {
-    queryFn: () => getCoordinatorWorkerStats().then((list) => list.filter((w) => w.role === "support_coordinator")),
+    queryFn: () =>
+      getCoordinatorWorkerStats().then((list) =>
+        list.filter((w) => w.role === "support_coordinator"),
+      ),
   });
-  const [coordinatorId, setCoordinatorId] = useState<string | null>(worker.coordinator_id ?? null);
+  const [coordinatorId, setCoordinatorId] = useState<string | null>(
+    worker.coordinator_id ?? null,
+  );
 
   const assignMutation = useMutation({
-    mutationFn: (nextId: string | null) => assignWorkerCoordinator(worker.id, nextId),
+    mutationFn: (nextId: string | null) =>
+      assignWorkerCoordinator(worker.id, nextId),
     onSuccess: (_, nextId) => setCoordinatorId(nextId),
-    onError: (err) => toast({ title: "Could not update coordinator", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not update coordinator",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
-  if (user?.role !== "managing_director" || worker.role !== "support_worker") return null;
+  const isMD = user?.role === "managing_director";
+  const viaGrant = !isMD && hasCapability("reassign_coordinator");
+  if ((!isMD && !viaGrant) || worker.role !== "support_worker")
+    return null;
+
+  const grant = viaGrant ? grantFor("reassign_coordinator") : undefined;
 
   return (
-    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Assigned coordinator</p>
+    <div
+      className="rounded-2xl overflow-hidden border p-5"
+      style={{
+        background: SURFACE,
+        borderColor: BORDER,
+        boxShadow: CARD_SHADOW,
+      }}
+    >
+      {grant && <TemporaryAccessBanner grant={grant} label="Reassign a worker's coordinator" />}
+      <p
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: MUTED }}
+      >
+        Assigned coordinator
+      </p>
       <p className="mt-1 text-xs" style={{ color: MUTED }}>
-        Who this worker's dashboard, session review, and credential alerts are scoped to.
+        Who this worker's dashboard, session review, and credential alerts are
+        scoped to.
       </p>
       <div className="mt-3 max-w-xs">
         <Select
           value={coordinatorId ?? "unassigned"}
-          onValueChange={(value) => assignMutation.mutate(value === "unassigned" ? null : value)}
+          onValueChange={(value) =>
+            assignMutation.mutate(value === "unassigned" ? null : value)
+          }
           disabled={assignMutation.isPending}
         >
           <SelectTrigger className="h-9 text-xs">
@@ -1143,7 +1883,9 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
           <SelectContent>
             <SelectItem value="unassigned">Unassigned</SelectItem>
             {coordinators.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+              <SelectItem key={c.id} value={c.id}>
+                {c.full_name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1158,25 +1900,52 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
  * reflects the duties actually performed, not the certificate on file. */
 function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
   const { toast } = useToast();
-  const { data: classifications = [] } = useOrgQuery(["award-classifications"], {
-    queryFn: getAwardClassifications,
-  });
-  const [classificationId, setClassificationId] = useState<string | null>(worker.classification_id ?? null);
-  const [employmentType, setEmploymentType] = useState<string | null>(worker.employment_type ?? null);
+  const { data: classifications = [] } = useOrgQuery(
+    ["award-classifications"],
+    {
+      queryFn: getAwardClassifications,
+    },
+  );
+  const [classificationId, setClassificationId] = useState<string | null>(
+    worker.classification_id ?? null,
+  );
+  const [employmentType, setEmploymentType] = useState<string | null>(
+    worker.employment_type ?? null,
+  );
 
   const assignMutation = useMutation({
-    mutationFn: (payload: { classification_id?: string | null; employment_type?: string | null }) =>
-      assignWorkerClassification(worker.id, payload),
-    onError: (err) => toast({ title: "Could not update classification", description: (err as Error).message, variant: "destructive" }),
+    mutationFn: (payload: {
+      classification_id?: string | null;
+      employment_type?: string | null;
+    }) => assignWorkerClassification(worker.id, payload),
+    onError: (err) =>
+      toast({
+        title: "Could not update classification",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   if (worker.role !== "support_worker") return null;
 
   return (
-    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>SCHADS classification</p>
+    <div
+      className="rounded-2xl overflow-hidden border p-5"
+      style={{
+        background: SURFACE,
+        borderColor: BORDER,
+        boxShadow: CARD_SHADOW,
+      }}
+    >
+      <p
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: MUTED }}
+      >
+        SCHADS classification
+      </p>
       <p className="mt-1 text-xs" style={{ color: MUTED }}>
-        Sets the Award level and employment type used to calculate this worker's pay per shift.
+        Sets the Award level and employment type used to calculate this worker's
+        pay per shift.
       </p>
       <div className="mt-3 flex flex-wrap gap-3">
         <div className="max-w-[220px] flex-1">
@@ -1195,7 +1964,9 @@ function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
             <SelectContent>
               <SelectItem value="unset">Not set</SelectItem>
               {classifications.map((c) => (
-                <SelectItem key={c.id} value={c.id}>SACS Level {c.level}</SelectItem>
+                <SelectItem key={c.id} value={c.id}>
+                  SACS Level {c.level}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1237,9 +2008,12 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
   const { data: currentBuddy } = useOrgQuery(["worker-buddy", worker.id], {
     queryFn: () => getWorkerBuddy(worker.id),
   });
-  const { data: suggestions = [] } = useOrgQuery(["buddy-suggestions", worker.id], {
-    queryFn: () => getBuddySuggestions(worker.id),
-  });
+  const { data: suggestions = [] } = useOrgQuery(
+    ["buddy-suggestions", worker.id],
+    {
+      queryFn: () => getBuddySuggestions(worker.id),
+    },
+  );
 
   const [buddyId, setBuddyId] = useState<string | null>(null);
   useEffect(() => {
@@ -1249,26 +2023,53 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
   const assignMutation = useMutation({
     mutationFn: (nextId: string | null) => assignWorkerBuddy(worker.id, nextId),
     onSuccess: (_, nextId) => setBuddyId(nextId),
-    onError: (err) => toast({ title: "Could not update buddy", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not update buddy",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   if (worker.role !== "support_worker") return null;
 
   const options = [...suggestions];
-  if (buddyId && currentBuddy?.full_name && !options.some((o) => o.id === buddyId)) {
-    options.unshift({ id: buddyId, full_name: currentBuddy.full_name, same_suburb: false });
+  if (
+    buddyId &&
+    currentBuddy?.full_name &&
+    !options.some((o) => o.id === buddyId)
+  ) {
+    options.unshift({
+      id: buddyId,
+      full_name: currentBuddy.full_name,
+      same_suburb: false,
+    });
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Buddy</p>
+    <div
+      className="rounded-2xl overflow-hidden border p-5"
+      style={{
+        background: SURFACE,
+        borderColor: BORDER,
+        boxShadow: CARD_SHADOW,
+      }}
+    >
+      <p
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: MUTED }}
+      >
+        Buddy
+      </p>
       <p className="mt-1 text-xs" style={{ color: MUTED }}>
         An experienced worker to help them settle in before their first shift.
       </p>
       <div className="mt-3 max-w-xs">
         <Select
           value={buddyId ?? "none"}
-          onValueChange={(value) => assignMutation.mutate(value === "none" ? null : value)}
+          onValueChange={(value) =>
+            assignMutation.mutate(value === "none" ? null : value)
+          }
           disabled={assignMutation.isPending}
         >
           <SelectTrigger className="h-9 text-xs">
@@ -1278,7 +2079,8 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
             <SelectItem value="none">No buddy assigned</SelectItem>
             {options.map((o) => (
               <SelectItem key={o.id} value={o.id}>
-                {o.full_name}{o.same_suburb ? " · same suburb" : ""}
+                {o.full_name}
+                {o.same_suburb ? " · same suburb" : ""}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1294,46 +2096,85 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
   const tagsKey = ["worker-tags", workerId];
   const catalogKey = ["coordinator-tags"];
 
-  const { data: tags = [], isLoading } = useOrgQuery(tagsKey, { queryFn: () => getWorkerTags(workerId) });
-  const { data: catalog = [] } = useOrgQuery(catalogKey, { queryFn: getTagCatalog });
+  const { data: tags = [], isLoading } = useOrgQuery(tagsKey, {
+    queryFn: () => getWorkerTags(workerId),
+  });
+  const { data: catalog = [] } = useOrgQuery(catalogKey, {
+    queryFn: getTagCatalog,
+  });
 
   const [selectedTagId, setSelectedTagId] = useState("");
 
   const availableTags = (() => {
     const already = new Set(tags.map((t) => t.tag_id));
     return catalog.flatMap((category) =>
-      category.tags.filter((t) => t.is_active && !already.has(t.id)).map((t) => ({ ...t, categoryName: category.name }))
+      category.tags
+        .filter((t) => t.is_active && !already.has(t.id))
+        .map((t) => ({ ...t, categoryName: category.name })),
     );
   })();
 
   // useOrgQuery scopes tagsKey's actual cache entry under [orgId, ...tagsKey], so a bare-key
   // invalidate wouldn't match it - use the predicate pattern already established elsewhere in
   // this file (DocumentsTab, TrainingTab) instead of threading orgId through here too.
-  const invalidate = () => queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-tags") });
+  const invalidate = () =>
+    queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey.includes("worker-tags"),
+    });
 
   const addMutation = useMutation({
     mutationFn: (tagId: string) => addWorkerTag(workerId, tagId),
-    onSuccess: () => { setSelectedTagId(""); invalidate(); },
-    onError: (err) => toast({ title: "Could not add tag", description: (err as Error).message, variant: "destructive" }),
+    onSuccess: () => {
+      setSelectedTagId("");
+      invalidate();
+    },
+    onError: (err) =>
+      toast({
+        title: "Could not add tag",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   const removeMutation = useMutation({
     mutationFn: (tagId: string) => removeWorkerTag(workerId, tagId),
     onSuccess: invalidate,
-    onError: (err) => toast({ title: "Could not remove tag", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not remove tag",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   if (isLoading) return null;
 
   return (
-    <div className="rounded-2xl overflow-hidden border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-      <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Interests & lived experience</p>
+    <div
+      className="rounded-2xl overflow-hidden border p-5"
+      style={{
+        background: SURFACE,
+        borderColor: BORDER,
+        boxShadow: CARD_SHADOW,
+      }}
+    >
+      <p
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: MUTED }}
+      >
+        Interests & lived experience
+      </p>
       <p className="mt-1 text-xs" style={{ color: MUTED }}>
-        Self-reported by the worker (or added here) - used to suggest a better-fitting participant match.
+        Self-reported by the worker (or added here) - used to suggest a
+        better-fitting participant match.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {tags.length === 0 && <p className="text-xs italic" style={{ color: MUTED }}>Nothing on file yet.</p>}
+        {tags.length === 0 && (
+          <p className="text-xs italic" style={{ color: MUTED }}>
+            Nothing on file yet.
+          </p>
+        )}
         {tags.map((tag) => (
           <span
             key={tag.id}
@@ -1342,9 +2183,19 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
           >
             {tag.label}
             {tag.visible_to_coordinator_only && (
-              <span className="text-[9px] font-black uppercase" style={{ color: PLUM }}>Private</span>
+              <span
+                className="text-[9px] font-semibold uppercase"
+                style={{ color: PLUM }}
+              >
+                Private
+              </span>
             )}
-            <button type="button" onClick={() => removeMutation.mutate(tag.tag_id)} aria-label={`Remove ${tag.label}`} className="opacity-60 hover:opacity-100">
+            <button
+              type="button"
+              onClick={() => removeMutation.mutate(tag.tag_id)}
+              aria-label={`Remove ${tag.label}`}
+              className="opacity-60 hover:opacity-100"
+            >
               <XIcon size={11} />
             </button>
           </span>
@@ -1361,7 +2212,9 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
         >
           <option value="">Add an interest...</option>
           {availableTags.map((tag) => (
-            <option key={tag.id} value={tag.id}>{tag.categoryName} · {tag.label}</option>
+            <option key={tag.id} value={tag.id}>
+              {tag.categoryName} · {tag.label}
+            </option>
           ))}
         </select>
         <button
@@ -1378,28 +2231,48 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
   );
 }
 
-function documentTypeLabel(type: WorkerOnboardingDocumentType, translate: (k: string) => string): string {
-  return translate(`team.documents.type.${type}` as "team.documents.type.other");
+function documentTypeLabel(
+  type: WorkerOnboardingDocumentType,
+  translate: (k: string) => string,
+): string {
+  return translate(
+    `team.documents.type.${type}` as "team.documents.type.other",
+  );
 }
 
-function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+function DocumentsTab({
+  worker,
+  translate,
+}: {
+  worker: WorkerStats;
+  translate: (k: string) => string;
+}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
 
-  const documentsQuery = useOrgQuery(["worker-onboarding-documents", worker.id], {
-    queryFn: () => getWorkerOnboardingDocuments(worker.id),
-  });
+  const documentsQuery = useOrgQuery(
+    ["worker-onboarding-documents", worker.id],
+    {
+      queryFn: () => getWorkerOnboardingDocuments(worker.id),
+    },
+  );
   const documents = documentsQuery.data ?? [];
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteWorkerOnboardingDocument(id),
     onSuccess: () => {
-      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-onboarding-documents") });
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("worker-onboarding-documents"),
+      });
       toast({ title: translate("team.documents.removed") });
     },
-    onError: () => toast({ title: translate("team.documents.saveFailed"), variant: "destructive" }),
+    onError: () =>
+      toast({
+        title: translate("team.documents.saveFailed"),
+        variant: "destructive",
+      }),
   });
 
   return (
@@ -1407,10 +2280,17 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
       {/* Summary strip — same pattern as every other tab. No "expiring within 30 days" count:
           these documents (offer letters, references, correspondence) have no expiry concept in
           this data model at all, not just none set, so that clause never applies here. */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: SOFT, color: TEXT }}>
+      <div
+        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        style={{ background: SOFT, color: TEXT }}
+      >
         <div>
-          <p className="text-lg font-black">{documents.length} document{documents.length !== 1 ? "s" : ""}</p>
-          <p className="text-xs font-bold mt-0.5" style={{ color: MUTED }}>General storage — offer letters, references, correspondence</p>
+          <p className="text-lg font-semibold">
+            {documents.length} document{documents.length !== 1 ? "s" : ""}
+          </p>
+          <p className="text-xs font-bold mt-0.5" style={{ color: MUTED }}>
+            General storage — offer letters, references, correspondence
+          </p>
         </div>
         <FileText size={22} style={{ color: MUTED }} />
       </div>
@@ -1418,43 +2298,110 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileText size={16} style={{ color: PLUM }} />
-          <p className="text-sm font-black" style={{ color: TEXT }}>{translate("team.documents.title")}</p>
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>
+            {translate("team.documents.title")}
+          </p>
         </div>
-        <Button variant="navy" size="sm" className="gap-1.5 rounded-xl" onClick={() => setAddOpen(true)}>
+        <Button
+          variant="navy"
+          size="sm"
+          className="gap-1.5 rounded-xl"
+          onClick={() => setAddOpen(true)}
+        >
           <Plus size={13} /> {translate("team.documents.add")}
         </Button>
       </div>
 
-      {documentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
+      {documentsQuery.isLoading && (
+        <p className="text-sm" style={{ color: MUTED }}>
+          {translate("common.loading")}
+        </p>
+      )}
 
-      {!documentsQuery.isLoading && documents.length === 0 && (
-        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-          <FileText size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
-          <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.documents.empty")}</p>
-          <Button variant="navy" size="sm" className="mt-4 gap-1.5 rounded-xl" onClick={() => setAddOpen(true)}>
-            <Plus size={13} /> {translate("team.documents.add")}
+      {documentsQuery.isError && (
+        <div
+          role="alert"
+          className="rounded-xl border border-cc-border p-4 text-sm text-cc-text"
+        >
+          Documents could not be loaded.
+          <Button
+            variant="outline"
+            className="ml-2"
+            onClick={() => void documentsQuery.refetch()}
+          >
+            Retry documents
           </Button>
         </div>
       )}
+      {!documentsQuery.isLoading &&
+        !documentsQuery.isError &&
+        documents.length === 0 && (
+          <div
+            className="rounded-2xl p-8 text-center border"
+            style={{
+              background: SURFACE,
+              borderColor: BORDER,
+              boxShadow: CARD_SHADOW,
+            }}
+          >
+            <FileText
+              size={28}
+              className="mx-auto mb-2"
+              style={{ color: MUTED }}
+            />
+            <p className="text-sm font-bold" style={{ color: MUTED }}>
+              {translate("team.documents.empty")}
+            </p>
+            <Button
+              variant="navy"
+              size="sm"
+              className="mt-4 gap-1.5 rounded-xl"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus size={13} /> {translate("team.documents.add")}
+            </Button>
+          </div>
+        )}
 
       {documents.length > 0 && (
-        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <div
+          className="rounded-2xl divide-y border"
+          style={{
+            background: SURFACE,
+            boxShadow: CARD_SHADOW,
+            borderColor: BORDER,
+          }}
+        >
           {documents.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between gap-4 px-5 py-4">
+            <div
+              key={doc.id}
+              className="flex items-center justify-between gap-4 px-5 py-4"
+            >
               <div className="min-w-0 flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: SOFT }}>
+                <div
+                  className="h-9 w-9 rounded-xl shrink-0 flex items-center justify-center"
+                  style={{ background: SOFT }}
+                >
                   <FileText size={15} style={{ color: PLUM }} />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold" style={{ color: TEXT }}>{doc.title}</p>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>
+                      {doc.title}
+                    </p>
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: SOFT, color: PLUM }}
+                    >
                       {documentTypeLabel(doc.document_type, translate)}
                     </span>
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                    {translate("team.documents.uploadedOn")} {safeFormat(doc.created_at)}
-                    {doc.uploaded_by && doc.uploaded_by === user?.id ? " · Uploaded by you" : ""}
+                    {translate("team.documents.uploadedOn")}{" "}
+                    {safeFormat(doc.created_at)}
+                    {doc.uploaded_by && doc.uploaded_by === user?.id
+                      ? " · Uploaded by you"
+                      : ""}
                     {doc.notes ? ` · ${doc.notes}` : ""}
                   </p>
                 </div>
@@ -1474,7 +2421,10 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
                 ) : null}
                 <button
                   onClick={() => {
-                    if (window.confirm(translate("team.documents.removeConfirm"))) deleteMut.mutate(doc.id);
+                    if (
+                      window.confirm(translate("team.documents.removeConfirm"))
+                    )
+                      deleteMut.mutate(doc.id);
                   }}
                   className="rounded-lg p-1.5 hover:bg-black/5"
                   title={translate("team.documents.remove")}
@@ -1488,13 +2438,21 @@ function DocumentsTab({ worker, translate }: { worker: WorkerStats; translate: (
         </div>
       )}
 
-      <AddDocumentDialog open={addOpen} onOpenChange={setAddOpen} worker={worker} translate={translate} />
+      <AddDocumentDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        worker={worker}
+        translate={translate}
+      />
     </div>
   );
 }
 
 function AddDocumentDialog({
-  open, onOpenChange, worker, translate,
+  open,
+  onOpenChange,
+  worker,
+  translate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1503,20 +2461,24 @@ function AddDocumentDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [docType, setDocType] = useState<WorkerOnboardingDocumentType>("offer_letter");
+  const [docType, setDocType] =
+    useState<WorkerOnboardingDocumentType>("offer_letter");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   const saveMut = useMutation({
-    mutationFn: () => uploadWorkerOnboardingDocument(worker.id, {
-      document_type: docType,
-      title: title.trim(),
-      notes: notes.trim() || undefined,
-      file: file || undefined,
-    }),
+    mutationFn: () =>
+      uploadWorkerOnboardingDocument(worker.id, {
+        document_type: docType,
+        title: title.trim(),
+        notes: notes.trim() || undefined,
+        file: file || undefined,
+      }),
     onSuccess: () => {
-      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-onboarding-documents") });
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("worker-onboarding-documents"),
+      });
       toast({ title: translate("team.documents.saved") });
       onOpenChange(false);
       setDocType("offer_letter");
@@ -1524,49 +2486,105 @@ function AddDocumentDialog({
       setNotes("");
       setFile(null);
     },
-    onError: () => toast({ title: translate("team.documents.saveFailed"), variant: "destructive" }),
+    onError: () =>
+      toast({
+        title: translate("team.documents.saveFailed"),
+        variant: "destructive",
+      }),
   });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md overflow-y-auto"
+        style={{ background: SURFACE }}
+      >
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-            <FileText size={18} style={{ color: PLUM }} /> {translate("team.documents.dialogTitle").replace("{name}", worker.full_name)}
+          <SheetTitle
+            className="flex items-center gap-2"
+            style={{ color: TEXT }}
+          >
+            <FileText size={18} style={{ color: PLUM }} />{" "}
+            {translate("team.documents.dialogTitle").replace(
+              "{name}",
+              worker.full_name,
+            )}
           </SheetTitle>
         </SheetHeader>
 
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.docType")}</label>
-            <Select value={docType} onValueChange={(v) => setDocType(v as WorkerOnboardingDocumentType)}>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: MUTED }}
+            >
+              {translate("team.documents.docType")}
+            </label>
+            <Select
+              value={docType}
+              onValueChange={(v) =>
+                setDocType(v as WorkerOnboardingDocumentType)
+              }
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="offer_letter">{translate("team.documents.type.offer_letter")}</SelectItem>
-                <SelectItem value="service_agreement">{translate("team.documents.type.service_agreement")}</SelectItem>
-                <SelectItem value="other">{translate("team.documents.type.other")}</SelectItem>
+                <SelectItem value="offer_letter">
+                  {translate("team.documents.type.offer_letter")}
+                </SelectItem>
+                <SelectItem value="service_agreement">
+                  {translate("team.documents.type.service_agreement")}
+                </SelectItem>
+                <SelectItem value="other">
+                  {translate("team.documents.type.other")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.docTitle")}</label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={translate("team.documents.docTitlePlaceholder")} />
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: MUTED }}
+            >
+              {translate("team.documents.docTitle")}
+            </label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={translate("team.documents.docTitlePlaceholder")}
+            />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.notes")}</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={translate("team.documents.notesPlaceholder")} />
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: MUTED }}
+            >
+              {translate("team.documents.notes")}
+            </label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={translate("team.documents.notesPlaceholder")}
+            />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.documents.file")}</label>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: MUTED }}
+            >
+              {translate("team.documents.file")}
+            </label>
             {/* Same drag-and-drop widget already built for medication documents
                 (ParticipantMedicationsPanel), reused here instead of a third upload pattern. */}
             <FileDropzone
               accept="application/pdf,image/jpeg,image/png"
               maxSizeBytes={10 * 1024 * 1024}
               onFile={setFile}
-              onRejected={(reason) => toast({ title: reason, variant: "destructive" })}
+              onRejected={(reason) =>
+                toast({ title: reason, variant: "destructive" })
+              }
               label={file ? file.name : "Drag a file here, or click to browse"}
               hint={file ? undefined : "PDF, JPEG or PNG, up to 10MB"}
             />
@@ -1574,13 +2592,17 @@ function AddDocumentDialog({
         </div>
 
         <SheetFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
           <Button
             variant="navy"
             onClick={() => saveMut.mutate()}
             disabled={saveMut.isPending || !title.trim()}
           >
-            {saveMut.isPending ? translate("common.saving") : translate("team.documents.save")}
+            {saveMut.isPending
+              ? translate("common.saving")
+              : translate("team.documents.save")}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -1614,8 +2636,13 @@ function CredentialsTab({
   const orgId = user?.organizationId ?? "__no_org__";
 
   const byType = new Map(credentials.map((c) => [c.credential_type, c]));
-  const rows = REQUIRED_CREDENTIAL_TYPES.map((type) => ({ type, credential: byType.get(type) ?? null }));
-  const extras = credentials.filter((c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type));
+  const rows = REQUIRED_CREDENTIAL_TYPES.map((type) => ({
+    type,
+    credential: byType.get(type) ?? null,
+  }));
+  const extras = credentials.filter(
+    (c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type),
+  );
   const total = REQUIRED_CREDENTIAL_TYPES.length;
   const complete = credentialsCompleteCount >= total;
 
@@ -1626,123 +2653,244 @@ function CredentialsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusCredentialType]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: [orgId, "team-credentials"] });
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: [orgId, "team-credentials"] });
 
   const reviewMutation = useMutation({
-    mutationFn: ({ credential, status }: { credential: Credential; status: "valid" | "rejected" }) =>
-      requireReAuth(() => reviewCredential(credential.id, { status })),
-    onSuccess: () => { invalidate(); toast({ title: "Credential review saved" }); },
-    onError: (err) => toast({ title: "Review failed", description: (err as Error).message, variant: "destructive" }),
+    mutationFn: ({
+      credential,
+      status,
+    }: {
+      credential: Credential;
+      status: "valid" | "rejected";
+    }) => requireReAuth(() => reviewCredential(credential.id, { status })),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Credential review saved" });
+    },
+    onError: (err) =>
+      toast({
+        title: "Review failed",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   const recheckMutation = useMutation({
     mutationFn: (credential: Credential) =>
-      requireReAuth(() => reviewCredential(credential.id, {
-        status: "valid",
-        last_checked_against_nwsd: new Date().toISOString().slice(0, 10),
-      })),
-    onSuccess: () => { invalidate(); toast({ title: "Recorded as rechecked on the NDIS Commission portal" }); },
-    onError: (err) => toast({ title: "Could not record recheck", description: (err as Error).message, variant: "destructive" }),
+      requireReAuth(() =>
+        reviewCredential(credential.id, {
+          status: "valid",
+          last_checked_against_nwsd: new Date().toISOString().slice(0, 10),
+        }),
+      ),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Recorded as rechecked on the NDIS Commission portal" });
+    },
+    onError: (err) =>
+      toast({
+        title: "Could not record recheck",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   if (isLoading) {
-    return <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>;
+    return (
+      <p className="text-sm" style={{ color: MUTED }}>
+        {translate("common.loading")}
+      </p>
+    );
   }
 
   // Strip colour follows the same carried-over topReason as Overview and Training, not a
   // locally-recomputed complete/incomplete framing — if training overdue outranks credentials
   // as the true top blocker, this strip says so too instead of quietly disagreeing.
   const stripLevel: ReadinessLevel = topReason?.level ?? "good";
-  const stripBg = stripLevel === "good" ? "var(--cc-status-success-bg)" : stripLevel === "warning" ? "var(--cc-status-warning-bg)" : "var(--cc-status-danger-bg)";
-  const stripColor = stripLevel === "good" ? "var(--cc-status-success)" : stripLevel === "warning" ? "var(--cc-status-warning)" : "var(--cc-status-danger)";
+  const stripBg =
+    stripLevel === "good"
+      ? "var(--cc-status-success-bg)"
+      : stripLevel === "warning"
+        ? "var(--cc-status-warning-bg)"
+        : "var(--cc-status-danger-bg)";
+  const stripColor =
+    stripLevel === "good"
+      ? "var(--cc-status-success)"
+      : stripLevel === "warning"
+        ? "var(--cc-status-warning)"
+        : "var(--cc-status-danger)";
 
   return (
     <div className="space-y-4">
       {modal}
-      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
+      <div
+        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        style={{ background: stripBg, color: stripColor }}
+      >
         <div>
-          <p className="text-lg font-black">{credentialsCompleteCount} / {total} complete</p>
+          <p className="text-lg font-semibold">
+            {credentialsCompleteCount} / {total} complete
+          </p>
           <p className="text-xs font-bold mt-0.5">
-            {topReason ? topReason.label : translate("team.detail.credentialsComplete")}
+            {topReason
+              ? topReason.label
+              : translate("team.detail.credentialsComplete")}
           </p>
         </div>
-        {stripLevel === "good" ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+        {stripLevel === "good" ? (
+          <CheckCircle2 size={22} />
+        ) : (
+          <AlertTriangle size={22} />
+        )}
       </div>
 
-      <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
-      {[...rows, ...extras.map((c) => ({ type: c.credential_type, credential: c }))].map(({ type, credential }, i) => {
-        const style = statusStyle(credential?.status ?? "missing");
-        const { Icon } = style;
-        const reviewable = !!credential && credential.status !== "valid";
-        const canRecheck = !!credential && type === "ndis_screening" && credential.status === "valid";
-        const recheckDue = !!credential && type === "ndis_screening" && isScreeningRecheckDue(credential);
-        const focused = focusCredentialType === type;
-        return (
-          <div
-            key={`${type}-${i}`}
-            id={`cred-row-${type}`}
-            className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center transition-colors"
-            style={focused ? { background: "var(--cc-status-info-bg)", boxShadow: "inset 3px 0 0 var(--cc-status-info)" } : undefined}
-          >
-            {/* Status dot + name */}
-            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.color }} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold" style={{ color: TEXT }}>{credentialLabel(type)}</p>
-              <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                {credential
-                  ? [
-                      credential.credential_number ? `#${credential.credential_number}` : null,
-                      credential.issuer,
-                      credential.expiry_date ? `Expires ${safeFormat(credential.expiry_date)}` : null,
-                    ].filter(Boolean).join(" · ") || translate("team.detail.onFile")
-                  : translate("team.detail.notOnFile")}
-              </p>
-              {type === "ndis_screening" && credential && (
-                <p className="text-xs mt-0.5 font-semibold" style={{ color: recheckDue ? "var(--cc-status-warning)" : MUTED }}>
-                  {credential.screening_number ? `Screening #: ${credential.screening_number} · ` : ""}
-                  {credential.last_checked_against_nwsd
-                    ? `Last checked on NDIS Commission portal: ${safeFormat(credential.last_checked_against_nwsd)}`
-                    : "Not yet checked on the NDIS Commission portal"}
-                  {recheckDue ? " · Recheck due" : ""}
+      <div
+        className="rounded-2xl divide-y border"
+        style={{
+          background: SURFACE,
+          boxShadow: CARD_SHADOW,
+          borderColor: BORDER,
+        }}
+      >
+        {[
+          ...rows,
+          ...extras.map((c) => ({ type: c.credential_type, credential: c })),
+        ].map(({ type, credential }, i) => {
+          const style = statusStyle(credential?.status ?? "missing");
+          const { Icon } = style;
+          const reviewable = !!credential && credential.status !== "valid";
+          const canRecheck =
+            !!credential &&
+            type === "ndis_screening" &&
+            credential.status === "valid";
+          const recheckDue =
+            !!credential &&
+            type === "ndis_screening" &&
+            isScreeningRecheckDue(credential);
+          const focused = focusCredentialType === type;
+          return (
+            <div
+              key={`${type}-${i}`}
+              id={`cred-row-${type}`}
+              className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center transition-colors"
+              style={
+                focused
+                  ? {
+                      background: "var(--cc-status-info-bg)",
+                      boxShadow: "inset 3px 0 0 var(--cc-status-info)",
+                    }
+                  : undefined
+              }
+            >
+              {/* Status dot + name */}
+              <span
+                className="h-2.5 w-2.5 rounded-full shrink-0"
+                style={{ background: style.color }}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold" style={{ color: TEXT }}>
+                  {credentialLabel(type)}
                 </p>
-              )}
-            </div>
-            {/* Right-aligned action: expiry date if complete, a status badge if awaiting review
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  {credential
+                    ? [
+                        credential.credential_number
+                          ? `#${credential.credential_number}`
+                          : null,
+                        credential.issuer,
+                        credential.expiry_date
+                          ? `Expires ${safeFormat(credential.expiry_date)}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || translate("team.detail.onFile")
+                    : translate("team.detail.notOnFile")}
+                </p>
+                {type === "ndis_screening" && credential && (
+                  <p
+                    className="text-xs mt-0.5 font-semibold"
+                    style={{
+                      color: recheckDue ? "var(--cc-status-warning)" : MUTED,
+                    }}
+                  >
+                    {credential.screening_number
+                      ? `Screening #: ${credential.screening_number} · `
+                      : ""}
+                    {credential.last_checked_against_nwsd
+                      ? `Last checked on NDIS Commission portal: ${safeFormat(credential.last_checked_against_nwsd)}`
+                      : "Not yet checked on the NDIS Commission portal"}
+                    {recheckDue ? " · Recheck due" : ""}
+                  </p>
+                )}
+              </div>
+              {/* Right-aligned action: expiry date if complete, a status badge if awaiting review
                 or otherwise not simply missing, nothing manufactured if missing entirely — this
                 app doesn't let coordinators upload on a worker's behalf, so no fake "Upload"
                 control pretending that's possible. */}
-            <div className="flex items-center gap-2 shrink-0">
-              {credential?.status === "valid" ? (
-                <span className="text-xs font-semibold" style={{ color: MUTED }}>
-                  {credential.expiry_date ? `Expires ${safeFormat(credential.expiry_date)}` : translate("team.detail.onFile")}
-                </span>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full"
-                  style={{ background: style.bg, color: style.color }}
-                >
-                  <Icon size={12} /> {style.label}
-                </span>
-              )}
-              {reviewable && (
-                <>
-                  <Button variant="outline" size="sm" className="gap-1" onClick={() => reviewMutation.mutate({ credential: credential!, status: "valid" })}>
-                    <ShieldCheck className="h-3.5 w-3.5" /> Verify
+              <div className="flex items-center gap-2 shrink-0">
+                {credential?.status === "valid" ? (
+                  <span
+                    className="text-xs font-semibold"
+                    style={{ color: MUTED }}
+                  >
+                    {credential.expiry_date
+                      ? `Expires ${safeFormat(credential.expiry_date)}`
+                      : translate("team.detail.onFile")}
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                    style={{ background: style.bg, color: style.color }}
+                  >
+                    <Icon size={12} /> {style.label}
+                  </span>
+                )}
+                {reviewable && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() =>
+                        reviewMutation.mutate({
+                          credential: credential!,
+                          status: "valid",
+                        })
+                      }
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" /> Verify
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[#7C3AED]"
+                      onClick={() =>
+                        reviewMutation.mutate({
+                          credential: credential!,
+                          status: "rejected",
+                        })
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
+                {canRecheck && (
+                  <Button
+                    variant={recheckDue ? "outline" : "ghost"}
+                    size="sm"
+                    className="gap-1 text-[#7C3AED]"
+                    onClick={() => recheckMutation.mutate(credential!)}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" /> Mark rechecked
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-[#7C3AED]" onClick={() => reviewMutation.mutate({ credential: credential!, status: "rejected" })}>
-                    Reject
-                  </Button>
-                </>
-              )}
-              {canRecheck && (
-                <Button variant={recheckDue ? "outline" : "ghost"} size="sm" className="gap-1 text-[#7C3AED]" onClick={() => recheckMutation.mutate(credential!)}>
-                  <ShieldCheck className="h-3.5 w-3.5" /> Mark rechecked
-                </Button>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
       </div>
     </div>
   );
@@ -1751,18 +2899,32 @@ function CredentialsTab({
 function completionStatusStyle(status: string) {
   switch (status) {
     case "confirmed":
-      return { bg: "var(--cc-status-success-bg)", color: "var(--cc-status-success)", label: "Completed" };
+      return {
+        bg: "var(--cc-status-success-bg)",
+        color: "var(--cc-status-success)",
+        label: "Completed",
+      };
     case "awaiting_confirmation":
-      return { bg: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)", label: "Awaiting review" };
+      return {
+        bg: "var(--cc-status-warning-bg)",
+        color: "var(--cc-status-warning)",
+        label: "Awaiting review",
+      };
     case "rejected":
-      return { bg: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)", label: "Rejected" };
+      return {
+        bg: "var(--cc-status-danger-bg)",
+        color: "var(--cc-status-danger)",
+        label: "Rejected",
+      };
     default:
       return { bg: SOFT, color: MUTED, label: status };
   }
 }
 
 function TrainingTab({
-  worker, topReason, translate,
+  worker,
+  topReason,
+  translate,
 }: {
   worker: WorkerStats;
   /** Same value shown on Overview and Credentials — carried over, not recomputed. */
@@ -1772,37 +2934,77 @@ function TrainingTab({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
-  const [revisionFeedback, setRevisionFeedback] = useState<Record<string,string>>({});
+  const [revisionFeedback, setRevisionFeedback] = useState<
+    Record<string, string>
+  >({});
 
-  const assignmentsQuery = useOrgQuery(["worker-training-assignments", worker.id], {
-    queryFn: () => getWorkerTrainingAssignments(worker.id),
-  });
+  const assignmentsQuery = useOrgQuery(
+    ["worker-training-assignments", worker.id],
+    {
+      queryFn: () => getWorkerTrainingAssignments(worker.id),
+    },
+  );
 
   const dismissMut = useMutation({
     mutationFn: (id: string) => dismissTrainingAssignment(id),
-    onSuccess: () => { qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-training-assignments") }); toast({ title: "Assignment removed" }); },
-    onError: (error: Error) => toast({ title: "Could not remove assignment", description: error.message, variant: "destructive" }),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("worker-training-assignments"),
+      });
+      toast({ title: "Assignment removed" });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: "Could not remove assignment",
+        description: error.message,
+        variant: "destructive",
+      }),
   });
 
   const reviewMut = useMutation({
-    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => reviewTrainingCompletion(id, approved, approved ? undefined : revisionFeedback[id]?.trim()),
-    onSuccess: () => { qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-training-assignments") }); toast({ title: "Training completion reviewed" }); },
-    onError: (error: Error) => toast({ title: "Could not review completion", description: error.message, variant: "destructive" }),
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) =>
+      reviewTrainingCompletion(
+        id,
+        approved,
+        approved ? undefined : revisionFeedback[id]?.trim(),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("worker-training-assignments"),
+      });
+      toast({ title: "Training completion reviewed" });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: "Could not review completion",
+        description: error.message,
+        variant: "destructive",
+      }),
   });
 
   const recommendations = assignmentsQuery.data?.recommendations ?? [];
   const history = assignmentsQuery.data?.history ?? [];
-  const completedModuleIds = new Set(history.filter(h => h.status === "confirmed" || h.status === "awaiting_confirmation").map((h) => h.module_id));
+  const completedModuleIds = new Set(
+    history
+      .filter(
+        (h) => h.status === "confirmed" || h.status === "awaiting_confirmation",
+      )
+      .map((h) => h.module_id),
+  );
 
   // Overdue first, then soonest-due, then no-due-date last — a coordinator scanning this tab
   // should see what's overdue immediately, not have to search for it among upcoming modules.
   const now = Date.now();
   const inProgress = recommendations
     .filter((r) => !completedModuleIds.has(r.training_module_id))
-    .map((r) => ({ ...r, overdue: !!r.due_at && new Date(r.due_at).getTime() < now }))
+    .map((r) => ({
+      ...r,
+      overdue: !!r.due_at && new Date(r.due_at).getTime() < now,
+    }))
     .sort((a, b) => {
       if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-      if (a.due_at && b.due_at) return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
+      if (a.due_at && b.due_at)
+        return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
       if (a.due_at) return -1;
       if (b.due_at) return 1;
       return 0;
@@ -1811,40 +3013,104 @@ function TrainingTab({
 
   return (
     <div className="space-y-4">
-      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && overdueCount > 0 && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Some assigned training is overdue. Review the deadlines below.</p>}
+      {!assignmentsQuery.isLoading &&
+        !assignmentsQuery.isError &&
+        overdueCount > 0 && (
+          <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+            Some assigned training is overdue. Review the deadlines below.
+          </p>
+        )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <GraduationCap size={16} style={{ color: PLUM }} />
-          <p className="text-sm font-black" style={{ color: TEXT }}>{translate("team.training.title")}</p>
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>
+            {translate("team.training.title")}
+          </p>
         </div>
-        <Button variant="navy" size="sm" className="gap-1.5 rounded-xl" onClick={() => setAssignOpen(true)}>
+        <Button
+          variant="navy"
+          size="sm"
+          className="gap-1.5 rounded-xl"
+          onClick={() => setAssignOpen(true)}
+        >
           <Plus size={13} /> {translate("team.training.assign")}
         </Button>
       </div>
 
-      {assignmentsQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
-
-      {assignmentsQuery.isError && <p role="alert" className="text-sm">Unable to load training. <button onClick={() => void assignmentsQuery.refetch()} className="underline">Try again</button></p>}
-      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && recommendations.length === 0 && history.length === 0 && (
-        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-          <GraduationCap size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
-          <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.training.empty")}</p>
-        </div>
+      {assignmentsQuery.isLoading && (
+        <p className="text-sm" style={{ color: MUTED }}>
+          {translate("common.loading")}
+        </p>
       )}
 
+      {assignmentsQuery.isError && (
+        <p role="alert" className="text-sm">
+          Unable to load training.{" "}
+          <button
+            onClick={() => void assignmentsQuery.refetch()}
+            className="underline"
+          >
+            Try again
+          </button>
+        </p>
+      )}
+      {!assignmentsQuery.isLoading &&
+        !assignmentsQuery.isError &&
+        recommendations.length === 0 &&
+        history.length === 0 && (
+          <div
+            className="rounded-2xl p-8 text-center border"
+            style={{
+              background: SURFACE,
+              borderColor: BORDER,
+              boxShadow: CARD_SHADOW,
+            }}
+          >
+            <GraduationCap
+              size={28}
+              className="mx-auto mb-2"
+              style={{ color: MUTED }}
+            />
+            <p className="text-sm font-bold" style={{ color: MUTED }}>
+              {translate("team.training.empty")}
+            </p>
+          </div>
+        )}
+
       {inProgress.length > 0 && (
-        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <div
+          className="rounded-2xl divide-y border"
+          style={{
+            background: SURFACE,
+            boxShadow: CARD_SHADOW,
+            borderColor: BORDER,
+          }}
+        >
           {inProgress.map((rec) => (
-            <div key={rec.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <div
+              key={rec.id}
+              className="flex flex-wrap items-center gap-3 px-4 py-3"
+            >
               <IconBadge
                 icon={GraduationCap}
-                color={rec.overdue ? "var(--cc-status-danger)" : "var(--cc-status-info)"}
-                bg={rec.overdue ? "var(--cc-status-danger-bg)" : "var(--cc-status-info-bg)"}
+                color={
+                  rec.overdue
+                    ? "var(--cc-status-danger)"
+                    : "var(--cc-status-info)"
+                }
+                bg={
+                  rec.overdue
+                    ? "var(--cc-status-danger-bg)"
+                    : "var(--cc-status-info-bg)"
+                }
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold" style={{ color: TEXT }}>{rec.title}</p>
+                <p className="text-sm font-bold" style={{ color: TEXT }}>
+                  {rec.title}
+                </p>
                 <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                  {translate("team.training.assignedOn")} {safeFormat(rec.recommended_at)}
+                  {translate("team.training.assignedOn")}{" "}
+                  {safeFormat(rec.recommended_at)}
                   {rec.due_at ? ` · Due ${safeFormat(rec.due_at)}` : ""}
                 </p>
               </div>
@@ -1852,11 +3118,17 @@ function TrainingTab({
                 <span
                   className="text-[11px] font-bold px-2.5 py-1 rounded-full"
                   style={{
-                    background: rec.overdue ? "var(--cc-status-danger-bg)" : "var(--cc-status-info-bg)",
-                    color: rec.overdue ? "var(--cc-status-danger)" : "var(--cc-status-info)",
+                    background: rec.overdue
+                      ? "var(--cc-status-danger-bg)"
+                      : "var(--cc-status-info-bg)",
+                    color: rec.overdue
+                      ? "var(--cc-status-danger)"
+                      : "var(--cc-status-info)",
                   }}
                 >
-                  {rec.overdue ? "Overdue" : translate("team.training.inProgress")}
+                  {rec.overdue
+                    ? "Overdue"
+                    : translate("team.training.inProgress")}
                 </span>
                 <button
                   disabled={dismissMut.isPending}
@@ -1875,31 +3147,98 @@ function TrainingTab({
 
       {history.length > 0 && (
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] mb-2" style={{ color: MUTED }}>{translate("team.training.history")}</p>
-          <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+          <p
+            className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
+            style={{ color: MUTED }}
+          >
+            {translate("team.training.history")}
+          </p>
+          <div
+            className="rounded-2xl divide-y border"
+            style={{
+              background: SURFACE,
+              boxShadow: CARD_SHADOW,
+              borderColor: BORDER,
+            }}
+          >
             {history.map((h) => {
               const style = completionStatusStyle(h.status);
               return (
-                <div key={h.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <IconBadge icon={GraduationCap} color={style.color} bg={style.bg} />
+                <div
+                  key={h.id}
+                  className="flex flex-wrap items-center gap-3 px-4 py-3"
+                >
+                  <IconBadge
+                    icon={GraduationCap}
+                    color={style.color}
+                    bg={style.bg}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold" style={{ color: TEXT }}>{h.training_modules?.title ?? translate("team.training.module")}</p>
-                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>{translate("team.training.completedOn")} {safeFormat(h.completed_at)}</p>
-                    {h.note && <p className="text-xs mt-0.5 italic" style={{ color: MUTED }}>"{h.note}"</p>}
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>
+                      {h.training_modules?.title ??
+                        translate("team.training.module")}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                      {translate("team.training.completedOn")}{" "}
+                      {safeFormat(h.completed_at)}
+                    </p>
+                    {h.note && (
+                      <p
+                        className="text-xs mt-0.5 italic"
+                        style={{ color: MUTED }}
+                      >
+                        "{h.note}"
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {h.status === "awaiting_confirmation" ? (
                       <>
-                        <input aria-label={`Revision feedback for ${h.training_modules?.title ?? "training"}`} placeholder="Feedback for revision" value={revisionFeedback[h.id] ?? ""} onChange={e => setRevisionFeedback(prev => ({ ...prev, [h.id]: e.target.value }))} className="h-9 min-w-0 rounded-lg border bg-background px-3 text-xs" />
-                        <Button disabled={reviewMut.isPending} size="sm" variant="outline" className="text-xs gap-1 text-green-700 border-green-200 hover:bg-green-50" onClick={() => reviewMut.mutate({ id: h.id, approved: true })}>
-                          <Check size={12} /> {translate("team.training.approve")}
+                        <input
+                          aria-label={`Revision feedback for ${h.training_modules?.title ?? "training"}`}
+                          placeholder="Feedback for revision"
+                          value={revisionFeedback[h.id] ?? ""}
+                          onChange={(e) =>
+                            setRevisionFeedback((prev) => ({
+                              ...prev,
+                              [h.id]: e.target.value,
+                            }))
+                          }
+                          className="h-9 min-w-0 rounded-lg border bg-background px-3 text-xs"
+                        />
+                        <Button
+                          disabled={reviewMut.isPending}
+                          size="sm"
+                          variant="outline"
+                          className="text-xs gap-1 text-green-700 border-green-200 hover:bg-green-50"
+                          onClick={() =>
+                            reviewMut.mutate({ id: h.id, approved: true })
+                          }
+                        >
+                          <Check size={12} />{" "}
+                          {translate("team.training.approve")}
                         </Button>
-                        <Button disabled={reviewMut.isPending || !revisionFeedback[h.id]?.trim()} size="sm" variant="outline" className="text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => reviewMut.mutate({ id: h.id, approved: false })}>
-                          <XIcon size={12} /> {translate("team.training.reject")}
+                        <Button
+                          disabled={
+                            reviewMut.isPending ||
+                            !revisionFeedback[h.id]?.trim()
+                          }
+                          size="sm"
+                          variant="outline"
+                          className="text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() =>
+                            reviewMut.mutate({ id: h.id, approved: false })
+                          }
+                        >
+                          <XIcon size={12} />{" "}
+                          {translate("team.training.reject")}
                         </Button>
                       </>
                     ) : (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: style.bg, color: style.color }}>
+                      <span
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                        style={{ background: style.bg, color: style.color }}
+                      >
                         {style.label}
                       </span>
                     )}
@@ -1911,7 +3250,12 @@ function TrainingTab({
         </div>
       )}
 
-      <AssignTrainingDialog open={assignOpen} onOpenChange={setAssignOpen} worker={worker} translate={translate} />
+      <AssignTrainingDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        worker={worker}
+        translate={translate}
+      />
     </div>
   );
 }
@@ -1919,58 +3263,148 @@ function TrainingTab({
 /** One-time first-day checklist, distinct from ongoing TrainingTab — read-only
  * here (the worker ticks items off themselves), no assign/dismiss/review
  * actions since induction has no coordinator-review workflow. */
-function InductionTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+function InductionTab({
+  worker,
+  translate,
+}: {
+  worker: WorkerStats;
+  translate: (k: string) => string;
+}) {
   const progressQuery = useOrgQuery(["worker-induction", worker.id], {
     queryFn: () => getWorkerInduction(worker.id),
   });
 
-  const items = [...(progressQuery.data?.items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  const items = [...(progressQuery.data?.items ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  );
   const mandatoryTotal = progressQuery.data?.mandatory_total ?? 0;
   const mandatoryComplete = progressQuery.data?.mandatory_complete ?? 0;
   const allDone = mandatoryTotal > 0 && mandatoryComplete >= mandatoryTotal;
-  const stripBg = mandatoryTotal === 0 ? SOFT : allDone ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
-  const stripColor = mandatoryTotal === 0 ? MUTED : allDone ? "var(--cc-status-success)" : "var(--cc-status-warning)";
+  const stripBg =
+    mandatoryTotal === 0
+      ? SOFT
+      : allDone
+        ? "var(--cc-status-success-bg)"
+        : "var(--cc-status-warning-bg)";
+  const stripColor =
+    mandatoryTotal === 0
+      ? MUTED
+      : allDone
+        ? "var(--cc-status-success)"
+        : "var(--cc-status-warning)";
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ background: stripBg, color: stripColor }}>
+      <div
+        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        style={{ background: stripBg, color: stripColor }}
+      >
         <div>
-          <p className="text-lg font-black">{mandatoryComplete} / {mandatoryTotal} mandatory complete</p>
+          <p className="text-lg font-semibold">
+            {mandatoryComplete} / {mandatoryTotal} mandatory complete
+          </p>
           <p className="text-xs font-bold mt-0.5">
-            {mandatoryTotal === 0 ? "No induction items set up yet" : allDone ? "Induction complete" : "Induction in progress"}
+            {mandatoryTotal === 0
+              ? "No induction items set up yet"
+              : allDone
+                ? "Induction complete"
+                : "Induction in progress"}
           </p>
         </div>
         {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
       </div>
 
-      {progressQuery.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
-
-      {!progressQuery.isLoading && items.length === 0 && (
-        <div className="rounded-2xl p-8 text-center border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-          <ClipboardCheck size={28} className="mx-auto mb-2" style={{ color: MUTED }} />
-          <p className="text-sm font-bold" style={{ color: MUTED }}>No induction items configured for this organisation yet.</p>
-        </div>
+      {progressQuery.isLoading && (
+        <p className="text-sm" style={{ color: MUTED }}>
+          {translate("common.loading")}
+        </p>
       )}
 
+      {progressQuery.isError && (
+        <div
+          role="alert"
+          className="rounded-xl border border-cc-border p-4 text-sm text-cc-text"
+        >
+          Induction progress could not be loaded.
+          <Button
+            variant="outline"
+            className="ml-2"
+            onClick={() => void progressQuery.refetch()}
+          >
+            Retry induction
+          </Button>
+        </div>
+      )}
+      {!progressQuery.isLoading &&
+        !progressQuery.isError &&
+        items.length === 0 && (
+          <div
+            className="rounded-2xl p-8 text-center border"
+            style={{
+              background: SURFACE,
+              borderColor: BORDER,
+              boxShadow: CARD_SHADOW,
+            }}
+          >
+            <ClipboardCheck
+              size={28}
+              className="mx-auto mb-2"
+              style={{ color: MUTED }}
+            />
+            <p className="text-sm font-bold" style={{ color: MUTED }}>
+              No induction items configured for this organisation yet.
+            </p>
+          </div>
+        )}
+
       {items.length > 0 && (
-        <div className="rounded-2xl divide-y border" style={{ background: SURFACE, boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+        <div
+          className="rounded-2xl divide-y border"
+          style={{
+            background: SURFACE,
+            boxShadow: CARD_SHADOW,
+            borderColor: BORDER,
+          }}
+        >
           {items.map((item) => (
             <div key={item.id} className="flex items-center gap-3 px-5 py-4">
               <IconBadge
                 icon={ClipboardCheck}
-                color={item.completed_at ? "var(--cc-status-success)" : "var(--cc-status-warning)"}
-                bg={item.completed_at ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)"}
+                color={
+                  item.completed_at
+                    ? "var(--cc-status-success)"
+                    : "var(--cc-status-warning)"
+                }
+                bg={
+                  item.completed_at
+                    ? "var(--cc-status-success-bg)"
+                    : "var(--cc-status-warning-bg)"
+                }
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold" style={{ color: TEXT }}>{item.title}</p>
+                <p className="text-sm font-bold" style={{ color: TEXT }}>
+                  {item.title}
+                </p>
                 <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                  {item.completed_at ? "Completed" : item.is_mandatory ? "Mandatory — not yet completed" : "Optional"}
+                  {item.completed_at
+                    ? "Completed"
+                    : item.is_mandatory
+                      ? "Mandatory — not yet completed"
+                      : "Optional"}
                 </p>
               </div>
               {item.completed_at ? (
-                <CheckCircle2 size={16} style={{ color: "var(--cc-status-success)" }} />
+                <CheckCircle2
+                  size={16}
+                  style={{ color: "var(--cc-status-success)" }}
+                />
               ) : !item.is_mandatory ? (
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>Optional</span>
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ background: SOFT, color: MUTED }}
+                >
+                  Optional
+                </span>
               ) : null}
             </div>
           ))}
@@ -1981,70 +3415,146 @@ function InductionTab({ worker, translate }: { worker: WorkerStats; translate: (
 }
 
 function complianceBandColor(band: string | undefined) {
-  if (band === "green") return { color: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" };
-  if (band === "amber") return { color: "var(--cc-status-warning)", bg: "var(--cc-status-warning-bg)" };
-  if (band === "red") return { color: "var(--cc-status-danger)", bg: "var(--cc-status-danger-bg)" };
+  if (band === "green")
+    return {
+      color: "var(--cc-status-success)",
+      bg: "var(--cc-status-success-bg)",
+    };
+  if (band === "amber")
+    return {
+      color: "var(--cc-status-warning)",
+      bg: "var(--cc-status-warning-bg)",
+    };
+  if (band === "red")
+    return {
+      color: "var(--cc-status-danger)",
+      bg: "var(--cc-status-danger-bg)",
+    };
   return { color: MUTED, bg: SOFT };
 }
 
-function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: string) => string }) {
+function ShiftsTab({
+  worker,
+  translate,
+}: {
+  worker: WorkerStats;
+  translate: (k: string) => string;
+}) {
   const historyQuery = useOrgQuery(["worker-shift-history", worker.id], {
     queryFn: () => getWorkerShiftHistory(worker.id),
   });
-  const dashboardQuery = useOrgQuery(["worker-performance-dashboard", worker.id], {
-    queryFn: () => getWorkerPerformanceDashboard(worker.id),
-  });
+  const dashboardQuery = useOrgQuery(
+    ["worker-performance-dashboard", worker.id],
+    {
+      queryFn: () => getWorkerPerformanceDashboard(worker.id),
+    },
+  );
   const [openShiftId, setOpenShiftId] = useState<string | null>(null);
 
   const shifts = historyQuery.data?.shifts ?? [];
   const dashboard = dashboardQuery.data;
-  const openShift = openShiftId ? shifts.find((s) => s.id === openShiftId) ?? null : null;
+  const openShift = openShiftId
+    ? (shifts.find((s) => s.id === openShiftId) ?? null)
+    : null;
 
   return (
     <div className="space-y-4">
       {/* Performance breakdown - the detail behind a single compliance number */}
-      <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+      <div
+        className="rounded-2xl border p-5"
+        style={{
+          background: SURFACE,
+          borderColor: BORDER,
+          boxShadow: CARD_SHADOW,
+        }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Last 30 days</p>
-            <p className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
-              {dashboard?.average_score_30d != null ? `${Math.round(dashboard.average_score_30d)}%` : "—"}
+            <p
+              className="text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: MUTED }}
+            >
+              Last 30 days
+            </p>
+            <p className="mt-1 text-2xl font-semibold" style={{ color: TEXT }}>
+              {dashboard?.average_score_30d != null
+                ? `${Math.round(dashboard.average_score_30d)}%`
+                : "—"}
             </p>
           </div>
           {dashboard?.trend && (
             <div className="text-right">
               <span
-                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-black"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
                 style={complianceBandColor(dashboard.compliance_band)}
               >
-                <TrendingUp size={11} style={{ transform: dashboard.trend.direction === "down" ? "scaleY(-1)" : undefined }} />
-                {dashboard.trend.direction === "up" ? "Improving" : dashboard.trend.direction === "down" ? "Declining" : "Steady"}
+                <TrendingUp
+                  size={11}
+                  style={{
+                    transform:
+                      dashboard.trend.direction === "down"
+                        ? "scaleY(-1)"
+                        : undefined,
+                  }}
+                />
+                {dashboard.trend.direction === "up"
+                  ? "Improving"
+                  : dashboard.trend.direction === "down"
+                    ? "Declining"
+                    : "Steady"}
               </span>
             </div>
           )}
         </div>
         {dashboard?.trend?.sentence && (
-          <p className="mt-2 text-xs" style={{ color: MUTED }}>{dashboard.trend.sentence}</p>
+          <p className="mt-2 text-xs" style={{ color: MUTED }}>
+            {dashboard.trend.sentence}
+          </p>
         )}
 
-        {(!!dashboard?.strengths?.length || !!dashboard?.focus_areas?.length) && (
+        {(!!dashboard?.strengths?.length ||
+          !!dashboard?.focus_areas?.length) && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {!!dashboard?.strengths?.length && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-success)" }}>Strengths</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--cc-status-success)" }}
+                >
+                  Strengths
+                </p>
                 <ul className="mt-1.5 space-y-1">
                   {dashboard.strengths.map((s) => (
-                    <li key={s.label} className="text-xs" style={{ color: TEXT }}>{s.label} <span style={{ color: MUTED }}>({s.count})</span></li>
+                    <li
+                      key={s.label}
+                      className="text-xs"
+                      style={{ color: TEXT }}
+                    >
+                      {s.label}{" "}
+                      <span style={{ color: MUTED }}>({s.count})</span>
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
             {!!dashboard?.focus_areas?.length && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "var(--cc-status-warning)" }}>Focus areas</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--cc-status-warning)" }}
+                >
+                  Focus areas
+                </p>
                 <ul className="mt-1.5 space-y-1">
                   {dashboard.focus_areas.map((s) => (
-                    <li key={s.label} className="text-xs" style={{ color: TEXT }}>{s.label} <span style={{ color: MUTED }}>({s.count})</span></li>
+                    <li
+                      key={s.label}
+                      className="text-xs"
+                      style={{ color: TEXT }}
+                    >
+                      {s.label}{" "}
+                      <span style={{ color: MUTED }}>({s.count})</span>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -2053,26 +3563,54 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
         )}
 
         {!!dashboard?.badges?.some((b) => b.unlocked) && (
-          <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3" style={{ borderColor: BORDER }}>
-            {dashboard.badges.filter((b) => b.unlocked).map((b) => (
-              <span key={b.key} title={b.description} className="rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
-                {b.title}
-              </span>
-            ))}
+          <div
+            className="mt-4 flex flex-wrap gap-1.5 border-t pt-3"
+            style={{ borderColor: BORDER }}
+          >
+            {dashboard.badges
+              .filter((b) => b.unlocked)
+              .map((b) => (
+                <span
+                  key={b.key}
+                  title={b.description}
+                  className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  style={{ background: "var(--cc-plum-soft)", color: PLUM }}
+                >
+                  {b.title}
+                </span>
+              ))}
           </div>
         )}
       </div>
 
       {/* Shift-by-shift history */}
-      <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-          <p className="text-sm font-black" style={{ color: TEXT }}>Completed shifts</p>
-          <span className="text-xs font-bold" style={{ color: MUTED }}>{shifts.length}</span>
+      <div
+        className="rounded-2xl border"
+        style={{
+          background: SURFACE,
+          borderColor: BORDER,
+          boxShadow: CARD_SHADOW,
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b"
+          style={{ borderColor: BORDER }}
+        >
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>
+            Completed shifts
+          </p>
+          <span className="text-xs font-bold" style={{ color: MUTED }}>
+            {shifts.length}
+          </span>
         </div>
         {historyQuery.isLoading ? (
-          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
+          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>
+            {translate("common.loading")}
+          </p>
         ) : shifts.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>No completed shifts on file yet.</p>
+          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>
+            No completed shifts on file yet.
+          </p>
         ) : (
           <ShiftHistoryList shifts={shifts} onOpenShift={setOpenShiftId} />
         )}
@@ -2081,9 +3619,20 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
       {/* Per-shift audit trail - a side panel rather than an inline dropdown,
           so a shift with a lot to show (incidents, flagged tasks, notes) gets
           real room instead of squeezing into an expanding row. */}
-      <Sheet open={!!openShift} onOpenChange={(open) => { if (!open) setOpenShiftId(null); }}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto" style={{ background: SURFACE }}>
-          {openShift && <ShiftAuditPanel workerId={worker.id} shift={openShift} />}
+      <Sheet
+        open={!!openShift}
+        onOpenChange={(open) => {
+          if (!open) setOpenShiftId(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-lg overflow-y-auto"
+          style={{ background: SURFACE }}
+        >
+          {openShift && (
+            <ShiftAuditPanel workerId={worker.id} shift={openShift} />
+          )}
         </SheetContent>
       </Sheet>
     </div>
@@ -2095,14 +3644,24 @@ function ShiftsTab({ worker, translate }: { worker: WorkerStats; translate: (k: 
  * shift" badge, prompting the coordinator toward the light-touch check-in
  * the design spec calls for on new pairings. Computed client-side from the
  * already-fetched shift list rather than a new backend field. */
-function ShiftHistoryList({ shifts, onOpenShift }: { shifts: ShiftHistoryRow[]; onOpenShift: (id: string) => void }) {
+function ShiftHistoryList({
+  shifts,
+  onOpenShift,
+}: {
+  shifts: ShiftHistoryRow[];
+  onOpenShift: (id: string) => void;
+}) {
   const firstPairingShiftIds = useMemo(() => {
-    const earliestByParticipant = new Map<string, { id: string; time: number }>();
+    const earliestByParticipant = new Map<
+      string,
+      { id: string; time: number }
+    >();
     for (const s of shifts) {
       if (!s.participant_id || !s.scheduled_start) continue;
       const time = new Date(s.scheduled_start).getTime();
       const current = earliestByParticipant.get(s.participant_id);
-      if (!current || time < current.time) earliestByParticipant.set(s.participant_id, { id: s.id, time });
+      if (!current || time < current.time)
+        earliestByParticipant.set(s.participant_id, { id: s.id, time });
     }
     return new Set(Array.from(earliestByParticipant.values()).map((v) => v.id));
   }, [shifts]);
@@ -2110,7 +3669,12 @@ function ShiftHistoryList({ shifts, onOpenShift }: { shifts: ShiftHistoryRow[]; 
   return (
     <div className="divide-y" style={{ borderColor: BORDER }}>
       {shifts.slice(0, 30).map((s) => (
-        <ShiftHistoryRowItem key={s.id} shift={s} isFirstPairing={firstPairingShiftIds.has(s.id)} onOpen={() => onOpenShift(s.id)} />
+        <ShiftHistoryRowItem
+          key={s.id}
+          shift={s}
+          isFirstPairing={firstPairingShiftIds.has(s.id)}
+          onOpen={() => onOpenShift(s.id)}
+        />
       ))}
     </div>
   );
@@ -2133,7 +3697,9 @@ function formatShiftTimeRange(s: ShiftHistoryRow): string | null {
  * panel (ShiftAuditPanel) rather than expanding inline, so incidents,
  * flagged tasks, and notes all get proper room instead of a cramped dropdown. */
 function ShiftHistoryRowItem({
-  shift: s, isFirstPairing, onOpen,
+  shift: s,
+  isFirstPairing,
+  onOpen,
 }: {
   shift: ShiftHistoryRow;
   isFirstPairing: boolean;
@@ -2150,9 +3716,14 @@ function ShiftHistoryRowItem({
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
+          <p className="text-sm font-bold truncate" style={{ color: TEXT }}>
+            {s.participant_name || "Participant"}
+          </p>
           {isFirstPairing && (
-            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+              style={{ background: "var(--cc-plum-soft)", color: PLUM }}
+            >
               First shift
             </span>
           )}
@@ -2160,15 +3731,24 @@ function ShiftHistoryRowItem({
         <p className="text-xs mt-0.5" style={{ color: MUTED }}>
           {safeFormat(s.scheduled_start, "d MMM yyyy")}
           {timeRange ? ` · ${timeRange}` : ""}
-          {s.duration_minutes ? ` · ${Math.round(s.duration_minutes / 60 * 10) / 10}h` : ""}
+          {s.duration_minutes
+            ? ` · ${Math.round((s.duration_minutes / 60) * 10) / 10}h`
+            : ""}
         </p>
         {s.compliance_explanation && (
-          <p className="mt-1 text-xs truncate" style={{ color: MUTED }}>{s.compliance_explanation}</p>
+          <p className="mt-1 text-xs truncate" style={{ color: MUTED }}>
+            {s.compliance_explanation}
+          </p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="rounded-full px-2 py-1 text-[10px] font-black" style={band}>
-          {s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : s.compliance_band}
+        <span
+          className="rounded-full px-2 py-1 text-[10px] font-semibold"
+          style={band}
+        >
+          {s.compliance_score != null
+            ? `${Math.round(s.compliance_score)}%`
+            : s.compliance_band}
         </span>
         <ChevronRight size={14} style={{ color: MUTED }} />
       </div>
@@ -2200,19 +3780,31 @@ type ShiftIncidentSummary = {
  * incidents reported during this shift (what happened, action taken, when),
  * flagged tasks, what went well, shift notes, and coordinator feedback. This
  * is the "what did they actually do" view behind a single shift's score. */
-function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHistoryRow }) {
+function ShiftAuditPanel({
+  workerId,
+  shift,
+}: {
+  workerId: string;
+  shift: ShiftHistoryRow;
+}) {
   const band = complianceBandColor(shift.compliance_band);
   const timeRange = formatShiftTimeRange(shift);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { translate } = useAccessibility();
 
-  const { data, isLoading } = useOrgQuery(["worker-shift-history-detail", workerId, shift.id], {
-    queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
-  });
+  const { data, isLoading } = useOrgQuery(
+    ["worker-shift-history-detail", workerId, shift.id],
+    {
+      queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
+    },
+  );
   const { data: incidents, isLoading: incidentsLoading } = useOrgQuery(
     ["shift-incidents", shift.id],
-    { queryFn: () => listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }) },
+    {
+      queryFn: () =>
+        listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }),
+    },
   );
   const { data: payPreview } = useOrgQuery(["shift-pay-preview", shift.id], {
     queryFn: () => getShiftPayPreview(shift.id),
@@ -2233,45 +3825,68 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
   // useOrgQuery scopes this under [orgId, "shift-pay-preview", shift.id], so a bare-key
   // invalidate wouldn't match it - predicate pattern instead, as used elsewhere in this file.
   const invalidatePay = () => {
-    qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("shift-pay-preview") });
+    qc.invalidateQueries({
+      predicate: (q) => q.queryKey.includes("shift-pay-preview"),
+    });
   };
 
   const sleepoverMut = useMutation({
-    mutationFn: () => markShiftSleepover(shift.id, {
-      sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart),
-      sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd),
-    }),
+    mutationFn: () =>
+      markShiftSleepover(shift.id, {
+        sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart),
+        sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd),
+      }),
     onSuccess: () => {
       toast({ title: "Shift marked as sleepover" });
       setMarkingSleepover(false);
       invalidatePay();
     },
-    onError: (err) => toast({ title: "Could not mark sleepover", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not mark sleepover",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   const callOutMut = useMutation({
-    mutationFn: () => logShiftCallOut(shift.id, {
-      start: datetimeLocalValueToUtcIso(callOutStart),
-      end: datetimeLocalValueToUtcIso(callOutEnd),
-      note: callOutNote || undefined,
-    }),
+    mutationFn: () =>
+      logShiftCallOut(shift.id, {
+        start: datetimeLocalValueToUtcIso(callOutStart),
+        end: datetimeLocalValueToUtcIso(callOutEnd),
+        note: callOutNote || undefined,
+      }),
     onSuccess: () => {
       toast({ title: "Call-out logged" });
       setLoggingCallOut(false);
-      setCallOutStart(""); setCallOutEnd(""); setCallOutNote("");
+      setCallOutStart("");
+      setCallOutEnd("");
+      setCallOutNote("");
       invalidatePay();
     },
-    onError: (err) => toast({ title: "Could not log call-out", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not log call-out",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   const flagged = data?.flagged_tasks ?? [];
   const tasks = (data?.tasks ?? []) as Array<{
-    task_id?: string; label?: string; completed?: boolean; marked_na?: boolean;
-    has_photo?: boolean; has_voice?: boolean; note?: string;
+    task_id?: string;
+    label?: string;
+    completed?: boolean;
+    marked_na?: boolean;
+    has_photo?: boolean;
+    has_voice?: boolean;
+    note?: string;
   }>;
   const doneWell = tasks.filter(
-    (t) => !t.marked_na && t.completed
-      && (t.has_photo || t.has_voice || (t.note && t.note.trim().length >= 20)),
+    (t) =>
+      !t.marked_na &&
+      t.completed &&
+      (t.has_photo || t.has_voice || (t.note && t.note.trim().length >= 20)),
   );
 
   return (
@@ -2285,24 +3900,39 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
 
       <div className="mt-4 space-y-5">
         {/* Summary: date, time, duration, participant, score, outcome */}
-        <div className="rounded-xl border p-4 space-y-1.5" style={{ borderColor: BORDER, background: SOFT }}>
+        <div
+          className="rounded-xl border p-4 space-y-1.5"
+          style={{ borderColor: BORDER, background: SOFT }}
+        >
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-black" style={{ color: TEXT }}>
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>
               {safeFormat(shift.scheduled_start, "EEEE d MMM yyyy")}
             </p>
-            <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black" style={band}>
-              {shift.compliance_score != null ? `${Math.round(shift.compliance_score)}%` : shift.compliance_band}
+            <span
+              className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={band}
+            >
+              {shift.compliance_score != null
+                ? `${Math.round(shift.compliance_score)}%`
+                : shift.compliance_band}
             </span>
           </div>
           <p className="text-xs" style={{ color: MUTED }}>
             {timeRange || "Clock in/out not recorded"}
-            {shift.duration_minutes ? ` · ${Math.round(shift.duration_minutes / 60 * 10) / 10}h` : ""}
+            {shift.duration_minutes
+              ? ` · ${Math.round((shift.duration_minutes / 60) * 10) / 10}h`
+              : ""}
           </p>
           <p className="text-xs" style={{ color: MUTED }}>
-            Participant: <span style={{ color: TEXT }}>{shift.participant_name || "Not recorded"}</span>
+            Participant:{" "}
+            <span style={{ color: TEXT }}>
+              {shift.participant_name || "Not recorded"}
+            </span>
           </p>
           {shift.compliance_explanation && (
-            <p className="pt-1.5 text-xs" style={{ color: TEXT }}>{shift.compliance_explanation}</p>
+            <p className="pt-1.5 text-xs" style={{ color: TEXT }}>
+              {shift.compliance_explanation}
+            </p>
           )}
           {payPreview && payPreview.total_cents > 0 && (
             <p className="pt-1.5 text-xs font-bold" style={{ color: TEXT }}>
@@ -2311,77 +3941,148 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
             </p>
           )}
           {payPreview?.emergency_flagged && (
-            <p className="pt-1.5 text-xs" style={{ color: "var(--cc-status-danger)" }}>
-              Emergency flagged{payPreview.emergency_note ? `: ${payPreview.emergency_note}` : ""}
+            <p
+              className="pt-1.5 text-xs"
+              style={{ color: "var(--cc-status-danger)" }}
+            >
+              Emergency flagged
+              {payPreview.emergency_note
+                ? `: ${payPreview.emergency_note}`
+                : ""}
             </p>
           )}
         </div>
 
         {/* Sleepover marking / call-out logging - see schads_engine.py's
             sleepover pricing path, verified against FWCFB 292. */}
-        <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: BORDER }}>
+        <div
+          className="rounded-xl border p-3 space-y-2"
+          style={{ borderColor: BORDER }}
+        >
           {!payPreview?.is_sleepover ? (
             markingSleepover ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverStart")}</label>
-                  <DateTimePicker value={sleepoverStart} onChange={setSleepoverStart} />
+                  <label
+                    className="text-[11px] font-semibold"
+                    style={{ color: TEXT }}
+                  >
+                    {translate("coordinator.shiftAssign.sleepoverStart")}
+                  </label>
+                  <DateTimePicker
+                    value={sleepoverStart}
+                    onChange={setSleepoverStart}
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.sleepoverEnd")}</label>
-                  <DateTimePicker value={sleepoverEnd} onChange={setSleepoverEnd} />
+                  <label
+                    className="text-[11px] font-semibold"
+                    style={{ color: TEXT }}
+                  >
+                    {translate("coordinator.shiftAssign.sleepoverEnd")}
+                  </label>
+                  <DateTimePicker
+                    value={sleepoverEnd}
+                    onChange={setSleepoverEnd}
+                  />
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => sleepoverMut.mutate()}
-                    disabled={!sleepoverStart || !sleepoverEnd || sleepoverMut.isPending}
+                    disabled={
+                      !sleepoverStart || !sleepoverEnd || sleepoverMut.isPending
+                    }
                     className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                     style={{ background: PLUM }}
                   >
                     {translate("coordinator.shiftAssign.markSleepover")}
                   </button>
-                  <button type="button" onClick={() => setMarkingSleepover(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                  <button
+                    type="button"
+                    onClick={() => setMarkingSleepover(false)}
+                    className="text-[12px] font-bold"
+                    style={{ color: MUTED }}
+                  >
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <button type="button" onClick={() => setMarkingSleepover(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+              <button
+                type="button"
+                onClick={() => setMarkingSleepover(true)}
+                className="text-[12px] font-bold"
+                style={{ color: PLUM }}
+              >
                 {translate("coordinator.shiftAssign.markSleepover")}
               </button>
             )
           ) : loggingCallOut ? (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutStart")}</label>
-                <DateTimePicker value={callOutStart} onChange={setCallOutStart} />
+                <label
+                  className="text-[11px] font-semibold"
+                  style={{ color: TEXT }}
+                >
+                  {translate("coordinator.shiftAssign.callOutStart")}
+                </label>
+                <DateTimePicker
+                  value={callOutStart}
+                  onChange={setCallOutStart}
+                />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutEnd")}</label>
+                <label
+                  className="text-[11px] font-semibold"
+                  style={{ color: TEXT }}
+                >
+                  {translate("coordinator.shiftAssign.callOutEnd")}
+                </label>
                 <DateTimePicker value={callOutEnd} onChange={setCallOutEnd} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.callOutNote")}</label>
-                <Input value={callOutNote} onChange={(e) => setCallOutNote(e.target.value)} className="h-9 text-xs" />
+                <label
+                  className="text-[11px] font-semibold"
+                  style={{ color: TEXT }}
+                >
+                  {translate("coordinator.shiftAssign.callOutNote")}
+                </label>
+                <Input
+                  value={callOutNote}
+                  onChange={(e) => setCallOutNote(e.target.value)}
+                  className="h-9 text-xs"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => callOutMut.mutate()}
-                  disabled={!callOutStart || !callOutEnd || callOutMut.isPending}
+                  disabled={
+                    !callOutStart || !callOutEnd || callOutMut.isPending
+                  }
                   className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                   style={{ background: PLUM }}
                 >
                   {translate("coordinator.shiftAssign.callOutSave")}
                 </button>
-                <button type="button" onClick={() => setLoggingCallOut(false)} className="text-[12px] font-bold" style={{ color: MUTED }}>
+                <button
+                  type="button"
+                  onClick={() => setLoggingCallOut(false)}
+                  className="text-[12px] font-bold"
+                  style={{ color: MUTED }}
+                >
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setLoggingCallOut(true)} className="text-[12px] font-bold" style={{ color: PLUM }}>
+            <button
+              type="button"
+              onClick={() => setLoggingCallOut(true)}
+              className="text-[12px] font-bold"
+              style={{ color: PLUM }}
+            >
               {translate("coordinator.shiftAssign.logCallOut")}
             </button>
           )}
@@ -2391,25 +4092,45 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
             wrote to audit_logs (clock-in, task updates, notes, evidence,
             acknowledgements, clock-out), for full audit-trail visibility. */}
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+          <p
+            className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+            style={{ color: MUTED }}
+          >
             Event timeline
           </p>
           {timelineLoading ? (
-            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+            <p className="text-xs" style={{ color: MUTED }}>
+              Loading…
+            </p>
           ) : !eventTimeline || eventTimeline.length === 0 ? (
-            <p className="text-xs" style={{ color: MUTED }}>No events recorded for this shift.</p>
+            <p className="text-xs" style={{ color: MUTED }}>
+              No events recorded for this shift.
+            </p>
           ) : (
             <div className="space-y-2">
               {eventTimeline.map((event, i) => (
-                <div key={i} className="flex items-start justify-between gap-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+                <div
+                  key={i}
+                  className="flex items-start justify-between gap-3 rounded-xl border p-3"
+                  style={{ borderColor: BORDER, background: SOFT }}
+                >
                   <div className="min-w-0">
-                    <p className="text-xs font-bold" style={{ color: TEXT }}>{event.label}</p>
+                    <p className="text-xs font-bold" style={{ color: TEXT }}>
+                      {event.label}
+                    </p>
                     {event.actor_name && (
-                      <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{event.actor_name}</p>
+                      <p
+                        className="text-[11px] mt-0.5"
+                        style={{ color: MUTED }}
+                      >
+                        {event.actor_name}
+                      </p>
                     )}
                   </div>
                   <p className="shrink-0 text-[11px]" style={{ color: MUTED }}>
-                    {event.created_at ? safeFormat(event.created_at, "d MMM, h:mm a") : ""}
+                    {event.created_at
+                      ? safeFormat(event.created_at, "d MMM, h:mm a")
+                      : ""}
                   </p>
                 </div>
               ))}
@@ -2420,45 +4141,72 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
         {/* Incidents - explicit audit-trail requirement: what happened, what
             action was taken, and when, for anything reported off this shift. */}
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>
+          <p
+            className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+            style={{ color: MUTED }}
+          >
             Incidents this shift
           </p>
           {incidentsLoading ? (
-            <p className="text-xs" style={{ color: MUTED }}>Loading…</p>
+            <p className="text-xs" style={{ color: MUTED }}>
+              Loading…
+            </p>
           ) : !incidents || incidents.length === 0 ? (
-            <p className="text-xs" style={{ color: MUTED }}>No incidents reported for this shift.</p>
+            <p className="text-xs" style={{ color: MUTED }}>
+              No incidents reported for this shift.
+            </p>
           ) : (
             <div className="space-y-2">
               {incidents.map((inc) => (
                 <div
                   key={inc.id}
                   className="rounded-xl border p-3"
-                  style={{ borderColor: "var(--cc-status-danger)", background: "var(--cc-status-danger-bg)" }}
+                  style={{
+                    borderColor: "var(--cc-status-danger)",
+                    background: "var(--cc-status-danger-bg)",
+                  }}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-black" style={{ color: TEXT }}>
-                      {inc.title || (inc.incident_type ?? "incident").replace(/_/g, " ")}
+                    <p
+                      className="text-xs font-semibold"
+                      style={{ color: TEXT }}
+                    >
+                      {inc.title ||
+                        (inc.incident_type ?? "incident").replace(/_/g, " ")}
                     </p>
                     {inc.severity && (
-                      <span className="shrink-0 text-[9px] font-black uppercase" style={{ color: "var(--cc-status-danger)" }}>
+                      <span
+                        className="shrink-0 text-[9px] font-semibold uppercase"
+                        style={{ color: "var(--cc-status-danger)" }}
+                      >
                         {inc.severity}
                       </span>
                     )}
                   </div>
                   {inc.description && (
-                    <p className="mt-1 text-xs" style={{ color: TEXT }}>{inc.description}</p>
+                    <p className="mt-1 text-xs" style={{ color: TEXT }}>
+                      {inc.description}
+                    </p>
                   )}
                   {(inc.worker_actions || inc.corrective_actions) && (
                     <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
-                      <span className="font-bold" style={{ color: TEXT }}>Action taken: </span>
+                      <span className="font-bold" style={{ color: TEXT }}>
+                        Action taken:{" "}
+                      </span>
                       {inc.worker_actions || inc.corrective_actions}
                     </p>
                   )}
                   <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>
-                    {inc.incident_date ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a") : "Date not recorded"}
+                    {inc.incident_date
+                      ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a")
+                      : "Date not recorded"}
                     {" · "}
-                    {inc.status ? String(inc.status).replace(/_/g, " ") : "Status not set"}
-                    {inc.resolved_date ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}` : ""}
+                    {inc.status
+                      ? String(inc.status).replace(/_/g, " ")
+                      : "Status not set"}
+                    {inc.resolved_date
+                      ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}`
+                      : ""}
                     {inc.ndis_reportable ? " · NDIS reportable" : ""}
                   </p>
                 </div>
@@ -2468,19 +4216,36 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
         </div>
 
         {isLoading ? (
-          <p className="text-xs" style={{ color: MUTED }}>Loading shift detail…</p>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Loading shift detail…
+          </p>
         ) : (
           <>
             {flagged.length > 0 && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-danger)" }}>Flagged</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: "var(--cc-status-danger)" }}
+                >
+                  Flagged
+                </p>
                 <ul className="space-y-1">
                   {flagged.map((f, i) => (
-                    <li key={`${f.task_id ?? "overall"}-${i}`} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
-                      <AlertTriangle size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-danger)" }} />
+                    <li
+                      key={`${f.task_id ?? "overall"}-${i}`}
+                      className="flex items-start gap-1.5 text-xs"
+                      style={{ color: TEXT }}
+                    >
+                      <AlertTriangle
+                        size={12}
+                        className="mt-0.5 shrink-0"
+                        style={{ color: "var(--cc-status-danger)" }}
+                      />
                       <span>
                         {(f.label as string) || "Overall compliance"}
-                        {f.flag_type ? ` — ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}` : ""}
+                        {f.flag_type
+                          ? ` — ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}`
+                          : ""}
                       </span>
                     </li>
                   ))}
@@ -2490,11 +4255,24 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
 
             {doneWell.length > 0 && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: "var(--cc-status-success)" }}>Done well</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: "var(--cc-status-success)" }}
+                >
+                  Done well
+                </p>
                 <ul className="space-y-1">
                   {doneWell.map((t) => (
-                    <li key={t.task_id} className="flex items-start gap-1.5 text-xs" style={{ color: TEXT }}>
-                      <CheckCircle2 size={12} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-success)" }} />
+                    <li
+                      key={t.task_id}
+                      className="flex items-start gap-1.5 text-xs"
+                      style={{ color: TEXT }}
+                    >
+                      <CheckCircle2
+                        size={12}
+                        className="mt-0.5 shrink-0"
+                        style={{ color: "var(--cc-status-success)" }}
+                      />
                       {t.label}
                     </li>
                   ))}
@@ -2504,18 +4282,36 @@ function ShiftAuditPanel({ workerId, shift }: { workerId: string; shift: ShiftHi
 
             {data?.notes && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Shift notes</p>
-                <p className="whitespace-pre-wrap text-xs" style={{ color: TEXT }}>{data.notes}</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: MUTED }}
+                >
+                  Shift notes
+                </p>
+                <p
+                  className="whitespace-pre-wrap text-xs"
+                  style={{ color: TEXT }}
+                >
+                  {data.notes}
+                </p>
               </div>
             )}
 
             {data?.feedback && data.feedback.length > 0 && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide mb-1.5" style={{ color: MUTED }}>Coordinator feedback</p>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: MUTED }}
+                >
+                  Coordinator feedback
+                </p>
                 <ul className="space-y-1.5">
                   {data.feedback.map((f) => (
                     <li key={f.id} className="text-xs" style={{ color: TEXT }}>
-                      <span className="font-bold">{f.coordinator_name ?? "Coordinator"}:</span> {f.strengths}
+                      <span className="font-bold">
+                        {f.coordinator_name ?? "Coordinator"}:
+                      </span>{" "}
+                      {f.strengths}
                       {f.areas_to_improve ? ` · ${f.areas_to_improve}` : ""}
                     </li>
                   ))}
@@ -2541,7 +4337,9 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const feedbackKey = ["shift-match-feedback", shiftId];
-  const { data: feedback, isLoading } = useOrgQuery(feedbackKey, { queryFn: () => getShiftMatchFeedback(shiftId) });
+  const { data: feedback, isLoading } = useOrgQuery(feedbackKey, {
+    queryFn: () => getShiftMatchFeedback(shiftId),
+  });
 
   const [rating, setRating] = useState<number | null>(null);
   const [wouldRepeat, setWouldRepeat] = useState<boolean | null>(null);
@@ -2556,21 +4354,41 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => postShiftMatchFeedback(shiftId, { outcome_rating: rating, would_repeat: wouldRepeat, participant_response: note || null }),
+    mutationFn: () =>
+      postShiftMatchFeedback(shiftId, {
+        outcome_rating: rating,
+        would_repeat: wouldRepeat,
+        participant_response: note || null,
+      }),
     onSuccess: () => {
       toast({ title: "Saved" });
       // useOrgQuery scopes feedbackKey's actual cache entry under [orgId, ...feedbackKey],
       // so a bare-key invalidate wouldn't match it - predicate instead, as used elsewhere in this file.
-      queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("shift-match-feedback") });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("shift-match-feedback"),
+      });
     },
-    onError: (err) => toast({ title: "Could not save", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Could not save",
+        description: (err as Error).message,
+        variant: "destructive",
+      }),
   });
 
   if (isLoading) return null;
 
   return (
-    <div className="mt-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
-      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>How did this pairing go?</p>
+    <div
+      className="mt-3 rounded-xl border p-3"
+      style={{ borderColor: BORDER, background: SOFT }}
+    >
+      <p
+        className="text-[10px] font-semibold uppercase tracking-wide"
+        style={{ color: MUTED }}
+      >
+        How did this pairing go?
+      </p>
       <div className="mt-2 flex items-center gap-3">
         <div className="flex items-center gap-0.5">
           {[1, 2, 3, 4, 5].map((n) => (
@@ -2581,7 +4399,11 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
               aria-label={`${n} star${n === 1 ? "" : "s"}`}
               className="p-0.5"
             >
-              <Star size={16} fill={rating != null && n <= rating ? PLUM : "none"} style={{ color: PLUM }} />
+              <Star
+                size={16}
+                fill={rating != null && n <= rating ? PLUM : "none"}
+                style={{ color: PLUM }}
+              />
             </button>
           ))}
         </div>
@@ -2590,7 +4412,13 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
             type="button"
             onClick={() => setWouldRepeat(true)}
             className="rounded-lg px-2 py-1 text-[11px] font-bold"
-            style={{ background: wouldRepeat === true ? "var(--cc-status-success-bg)" : "transparent", color: wouldRepeat === true ? "var(--cc-status-success)" : MUTED }}
+            style={{
+              background:
+                wouldRepeat === true
+                  ? "var(--cc-status-success-bg)"
+                  : "transparent",
+              color: wouldRepeat === true ? "var(--cc-status-success)" : MUTED,
+            }}
           >
             Would repeat
           </button>
@@ -2598,7 +4426,13 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
             type="button"
             onClick={() => setWouldRepeat(false)}
             className="rounded-lg px-2 py-1 text-[11px] font-bold"
-            style={{ background: wouldRepeat === false ? "var(--cc-status-danger-bg)" : "transparent", color: wouldRepeat === false ? "var(--cc-status-danger)" : MUTED }}
+            style={{
+              background:
+                wouldRepeat === false
+                  ? "var(--cc-status-danger-bg)"
+                  : "transparent",
+              color: wouldRepeat === false ? "var(--cc-status-danger)" : MUTED,
+            }}
           >
             Wouldn't repeat
           </button>
@@ -2613,7 +4447,9 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
         style={{ borderColor: BORDER, background: SURFACE }}
       />
       {feedback?.worker_feedback && (
-        <p className="mt-2 text-xs italic" style={{ color: MUTED }}>Worker's note: "{feedback.worker_feedback}"</p>
+        <p className="mt-2 text-xs italic" style={{ color: MUTED }}>
+          Worker's note: "{feedback.worker_feedback}"
+        </p>
       )}
       <div className="mt-2 flex justify-end">
         <button
@@ -2650,7 +4486,10 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
 
   const workedWith = useMemo(() => {
     const assignedIds = new Set(assignments.map((a) => a.patient_id));
-    const byParticipant = new Map<string, { id: string; name: string; count: number; lastShift: string }>();
+    const byParticipant = new Map<
+      string,
+      { id: string; name: string; count: number; lastShift: string }
+    >();
     for (const s of shifts) {
       if (!s.participant_id || assignedIds.has(s.participant_id)) continue;
       const shiftDate = s.scheduled_start ?? "";
@@ -2667,22 +4506,42 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
         });
       }
     }
-    return Array.from(byParticipant.values()).sort((a, b) => (b.lastShift || "").localeCompare(a.lastShift || ""));
+    return Array.from(byParticipant.values()).sort((a, b) =>
+      (b.lastShift || "").localeCompare(a.lastShift || ""),
+    );
   }, [shifts, assignments]);
 
   const isLoading = assignmentsQuery.isLoading || historyQuery.isLoading;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-          <p className="text-sm font-black" style={{ color: TEXT }}>Assigned participants</p>
-          <span className="text-xs font-bold" style={{ color: MUTED }}>{assignments.length}</span>
+      <div
+        className="rounded-2xl border"
+        style={{
+          background: SURFACE,
+          borderColor: BORDER,
+          boxShadow: CARD_SHADOW,
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b"
+          style={{ borderColor: BORDER }}
+        >
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>
+            Assigned participants
+          </p>
+          <span className="text-xs font-bold" style={{ color: MUTED }}>
+            {assignments.length}
+          </span>
         </div>
         {assignmentsQuery.isLoading ? (
-          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>Loading…</p>
+          <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>
+            Loading…
+          </p>
         ) : assignments.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>Not currently assigned to any participant.</p>
+          <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>
+            Not currently assigned to any participant.
+          </p>
         ) : (
           <div className="divide-y" style={{ borderColor: BORDER }}>
             {assignments.map((a) => (
@@ -2692,12 +4551,22 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
                 className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{a.participant?.full_name || "Participant"}</p>
+                  <p
+                    className="text-sm font-bold truncate"
+                    style={{ color: TEXT }}
+                  >
+                    {a.participant?.full_name || "Participant"}
+                  </p>
                   {a.participant?.ndis_number && (
-                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>NDIS {a.participant.ndis_number}</p>
+                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                      NDIS {a.participant.ndis_number}
+                    </p>
                   )}
                 </div>
-                <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black capitalize" style={{ background: SOFT, color: MUTED }}>
+                <span
+                  className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold capitalize"
+                  style={{ background: SOFT, color: MUTED }}
+                >
                   {a.allocated_role.replace(/_/g, " ")}
                 </span>
               </a>
@@ -2707,13 +4576,26 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
       </div>
 
       {!isLoading && workedWith.length > 0 && (
-        <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div
+          className="rounded-2xl border"
+          style={{
+            background: SURFACE,
+            borderColor: BORDER,
+            boxShadow: CARD_SHADOW,
+          }}
+        >
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-black" style={{ color: TEXT }}>Also worked with</p>
-              <span className="text-xs font-bold" style={{ color: MUTED }}>{workedWith.length}</span>
+              <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                Also worked with
+              </p>
+              <span className="text-xs font-bold" style={{ color: MUTED }}>
+                {workedWith.length}
+              </span>
             </div>
-            <p className="mt-0.5 text-xs" style={{ color: MUTED }}>From completed shifts, not a standing assignment.</p>
+            <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+              From completed shifts, not a standing assignment.
+            </p>
           </div>
           <div className="divide-y" style={{ borderColor: BORDER }}>
             {workedWith.map((p) => (
@@ -2722,10 +4604,17 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
                 href={`/patients?id=${encodeURIComponent(p.id)}`}
                 className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
               >
-                <p className="text-sm font-bold truncate" style={{ color: TEXT }}>{p.name}</p>
+                <p
+                  className="text-sm font-bold truncate"
+                  style={{ color: TEXT }}
+                >
+                  {p.name}
+                </p>
                 <span className="shrink-0 text-xs" style={{ color: MUTED }}>
                   {p.count} shift{p.count !== 1 ? "s" : ""}
-                  {p.lastShift ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}` : ""}
+                  {p.lastShift
+                    ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}`
+                    : ""}
                 </span>
               </a>
             ))}
@@ -2737,7 +4626,10 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
 }
 
 function AssignTrainingDialog({
-  open, onOpenChange, worker, translate,
+  open,
+  onOpenChange,
+  worker,
+  translate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -2755,21 +4647,31 @@ function AssignTrainingDialog({
     queryFn: getTrainingModules,
     enabled: open,
   });
-  const modules = (modulesQuery.data ?? []).filter(m => !m.is_locked);
+  const modules = (modulesQuery.data ?? []).filter((m) => !m.is_locked);
 
   const createModuleMut = useMutation({
-    mutationFn: () => createTrainingModule({ title: newTitle.trim(), description: newDescription.trim() || undefined }),
+    mutationFn: () =>
+      createTrainingModule({
+        title: newTitle.trim(),
+        description: newDescription.trim() || undefined,
+      }),
     onSuccess: (mod: TrainingModule) => {
-      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("training-modules") });
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("training-modules"),
+      });
       assignMut.mutate({ id: mod.id, title: mod.title });
     },
-    onError: () => toast({ title: "Failed to create module", variant: "destructive" }),
+    onError: () =>
+      toast({ title: "Failed to create module", variant: "destructive" }),
   });
 
   const assignMut = useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) => assignTraining(worker.id, id, title),
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      assignTraining(worker.id, id, title),
     onSuccess: () => {
-      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("worker-training-assignments") });
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes("worker-training-assignments"),
+      });
       toast({ title: translate("team.training.assignedToast") });
       onOpenChange(false);
       setSelectedModuleId("");
@@ -2777,7 +4679,8 @@ function AssignTrainingDialog({
       setNewDescription("");
       setMode("existing");
     },
-    onError: () => toast({ title: "Failed to assign training", variant: "destructive" }),
+    onError: () =>
+      toast({ title: "Failed to assign training", variant: "destructive" }),
   });
 
   const handleAssign = () => {
@@ -2795,10 +4698,21 @@ function AssignTrainingDialog({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md overflow-y-auto"
+        style={{ background: SURFACE }}
+      >
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-            <GraduationCap size={18} style={{ color: PLUM }} /> {translate("team.training.assignTo").replace("{name}", worker.full_name)}
+          <SheetTitle
+            className="flex items-center gap-2"
+            style={{ color: TEXT }}
+          >
+            <GraduationCap size={18} style={{ color: PLUM }} />{" "}
+            {translate("team.training.assignTo").replace(
+              "{name}",
+              worker.full_name,
+            )}
           </SheetTitle>
         </SheetHeader>
 
@@ -2808,26 +4722,45 @@ function AssignTrainingDialog({
               key={m}
               onClick={() => setMode(m)}
               className="flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors"
-              style={{ background: mode === m ? "var(--cc-bg)" : "transparent", color: mode === m ? PLUM : MUTED }}
+              style={{
+                background: mode === m ? "var(--cc-bg)" : "transparent",
+                color: mode === m ? PLUM : MUTED,
+              }}
             >
-              {m === "existing" ? translate("team.training.pickExisting") : translate("team.training.createNew")}
+              {m === "existing"
+                ? translate("team.training.pickExisting")
+                : translate("team.training.createNew")}
             </button>
           ))}
         </div>
 
         {mode === "existing" ? (
           <div className="space-y-1.5 py-1">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.training.module")}</label>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: MUTED }}
+            >
+              {translate("team.training.module")}
+            </label>
             {modules.length === 0 && !modulesQuery.isLoading ? (
-              <p className="text-xs" style={{ color: MUTED }}>{translate("team.training.noModules")}</p>
+              <p className="text-xs" style={{ color: MUTED }}>
+                {translate("team.training.noModules")}
+              </p>
             ) : (
-              <Select value={selectedModuleId} onValueChange={setSelectedModuleId}>
+              <Select
+                value={selectedModuleId}
+                onValueChange={setSelectedModuleId}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder={translate("team.training.chooseModule")} />
+                  <SelectValue
+                    placeholder={translate("team.training.chooseModule")}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {modules.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -2836,28 +4769,54 @@ function AssignTrainingDialog({
         ) : (
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.training.moduleTitle")}</label>
-              <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={translate("team.training.moduleTitlePlaceholder")} />
+              <label
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ color: MUTED }}
+              >
+                {translate("team.training.moduleTitle")}
+              </label>
+              <Input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder={translate("team.training.moduleTitlePlaceholder")}
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.training.moduleDescription")}</label>
-              <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder={translate("team.training.moduleDescriptionPlaceholder")} />
+              <label
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ color: MUTED }}
+              >
+                {translate("team.training.moduleDescription")}
+              </label>
+              <Input
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder={translate(
+                  "team.training.moduleDescriptionPlaceholder",
+                )}
+              />
             </div>
           </div>
         )}
 
         <SheetFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{translate("common.cancel")}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
           <Button
             variant="navy"
             onClick={handleAssign}
-            disabled={pending || (mode === "existing" ? !selectedModuleId : !newTitle.trim())}
+            disabled={
+              pending ||
+              (mode === "existing" ? !selectedModuleId : !newTitle.trim())
+            }
           >
-            {pending ? translate("common.saving") : translate("team.training.assign")}
+            {pending
+              ? translate("common.saving")
+              : translate("team.training.assign")}
           </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
   );
 }
-

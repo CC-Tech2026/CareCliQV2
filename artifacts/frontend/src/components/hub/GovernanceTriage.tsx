@@ -259,7 +259,7 @@ export function GovernanceTriage({
               <div className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: BORDER }}>
                 <div className="min-w-0">
                   <h2 className="text-[13px] font-black" style={{ color: TEXT }}>Needs your attention</h2>
-                  <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
+                  <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
                 </div>
                 <button onClick={() => setFloatingOpen(false)} aria-label="Close" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-cc-soft">
                   <X size={14} style={{ color: MUTED }} />
@@ -353,7 +353,7 @@ export function GovernanceTriage({
           </div>
           <div className="min-w-0">
             <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Needs your attention</h2>
-            <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{subtitle}</p>
           </div>
         </button>
         <div className="flex items-center gap-2.5">

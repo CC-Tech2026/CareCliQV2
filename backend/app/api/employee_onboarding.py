@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
+from ..core.access import has_active_grant
 from ..core.security import get_current_user
 from ..services import applicant_service, applicant_documents_service
 from ..services import employee_onboarding_service as svc
+from ..services.supabase_client import get_supabase_admin
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/employee-onboarding", tags=["employee-onboarding"])
@@ -18,9 +20,11 @@ HIRE_MANAGER_ROLES = frozenset({"managing_director"})
 
 
 def _require_hire_manager(user: dict) -> tuple[str, str]:
-    if user.get("role") not in HIRE_MANAGER_ROLES:
-        raise HTTPException(status_code=403, detail="Only managing directors can manage new hires.")
     org_id = user.get("organization_id")
+    if user.get("role") not in HIRE_MANAGER_ROLES and not (
+        org_id and has_active_grant(user, "hire_paperwork", get_supabase_admin())
+    ):
+        raise HTTPException(status_code=403, detail="Only managing directors can manage new hires.")
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization membership required.")
     return org_id, user.get("sub")

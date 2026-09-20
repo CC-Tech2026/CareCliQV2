@@ -583,6 +583,7 @@ export default function SignupScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  const [profileSaveWarning, setProfileSaveWarning] = useState<string | null>(null);
 
   const mismatch = Boolean(confirmPassword) && password !== confirmPassword;
   const short = Boolean(password) && password.length < 10;
@@ -641,38 +642,68 @@ export default function SignupScreen() {
     }
   };
 
+  /** The account itself is already created and the worker is logged in by the
+   * time these run, so a failure here must never be swallowed silently —
+   * that would leave the worker believing their phone/address/photo saved
+   * when it didn't, with no prompt to redo it. One retry after a short delay
+   * absorbs a transient network blip; a warning on the success screen covers
+   * the rest so the worker knows to fix it in Settings instead of assuming
+   * it's on file. */
+  const saveWithRetry = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await fn();
+      return true;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      try {
+        await fn();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
+
   const handleCompleteSetup = async () => {
     if (!invite || !yourDetailsValid || !profileValid || busy) return;
     setBusy(true);
     setError(null);
+    setProfileSaveWarning(null);
     try {
       const result = await acceptInvite(invite.token, {
         full_name: fullName.trim(),
         password,
       });
       await updateSession(result.accessToken, result.user);
+
+      const failedParts: string[] = [];
+
       if (profilePhotoUri) {
-        try {
-          await uploadProfilePhoto({
-            uri: profilePhotoUri,
-            name: "avatar.jpg",
-            type: "image/jpeg",
-          });
-        } catch {
-          /* photo is optional best-effort */
-        }
+        const photoSaved = await saveWithRetry(() =>
+          uploadProfilePhoto({ uri: profilePhotoUri, name: "avatar.jpg", type: "image/jpeg" }),
+        );
+        if (!photoSaved) failedParts.push("photo");
       }
-      try {
-        await completeOnboarding({
+
+      const detailsSaved = await saveWithRetry(() =>
+        completeOnboarding({
           account_type: invite.role === "support_worker" ? "independent_worker" : "small_provider",
           organization_name: invite.organization_name || undefined,
           contact_number: contactNumber.trim() || undefined,
           address: address.trim(),
           org_address: address.trim(),
-        });
-      } catch {
-        /* profile extras are best-effort after join */
+        }),
+      );
+      if (!detailsSaved) failedParts.push("details");
+
+      if (failedParts.length > 0) {
+        setProfileSaveWarning(
+          failedParts.includes("details")
+            ? t("auth.signup.join.saveWarningDetails")
+            : t("auth.signup.join.saveWarningPhoto"),
+        );
       }
+
       setJoinStep(5);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.signup.error.tryAgain"));
@@ -1107,11 +1138,24 @@ export default function SignupScreen() {
                       org: invite?.organization_name || t("auth.signup.join.yourOrganisation"),
                     })}
                   </Text>
+                  {profileSaveWarning ? (
+                    <View style={[styles.saveWarning, { borderColor: auth.plum }]}>
+                      <Feather name="alert-triangle" size={14} color={auth.plum} />
+                      <Text style={[styles.saveWarningText, { color: auth.text, fontFamily: "Inter_500Medium" }]}>
+                        {profileSaveWarning}
+                      </Text>
+                    </View>
+                  ) : null}
                   <Pressable
-                    onPress={() => router.replace("/(tabs)" as never)}
+                    onPress={() => router.replace("/worker/credentials/add" as never)}
                     style={[styles.primaryBtn, styles.successBtn, { backgroundColor: auth.plum }]}
                   >
                     <Text style={[styles.primaryBtnText, { fontFamily: "Inter_700Bold" }]}>
+                      {t("auth.signup.join.uploadCredentials")}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => router.replace("/(tabs)" as never)} style={styles.successSkip}>
+                    <Text style={[styles.successSkipText, { color: auth.muted, fontFamily: "Inter_600SemiBold" }]}>
                       {t("auth.signup.goToDashboard")}
                     </Text>
                   </Pressable>
@@ -1302,6 +1346,17 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 24, textAlign: "center", marginTop: 8 },
   successBody: { fontSize: 14, textAlign: "center", lineHeight: 20 },
   successBtn: { width: "100%", marginTop: 12 },
+  successSkip: { paddingVertical: 10 },
+  successSkipText: { fontSize: 13, textAlign: "center" },
+  saveWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  saveWarningText: { flex: 1, fontSize: 12, lineHeight: 17 },
   signInLine: { textAlign: "center", fontSize: 13 },
   askLine: { textAlign: "center", fontSize: 13 },
   askSteps: { gap: 12, marginTop: 4 },

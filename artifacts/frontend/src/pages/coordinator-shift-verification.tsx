@@ -179,7 +179,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           {priceItems.map((p) => (
             <option key={p.item_code} value={p.item_code}>
               {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-              {p.price_national != null ? ` ($${(p.price_national / 100).toFixed(2)}/hr)` : ""}
+              {p.price_national != null ? ` ($${p.price_national.toFixed(2)}/hr)` : ""}
             </option>
           ))}
         </select>

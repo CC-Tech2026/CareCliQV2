@@ -13,7 +13,7 @@ from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
 from ..core.timezone import parse_shift_datetime, participant_timezone
@@ -51,7 +51,16 @@ from ..services import (
     travel_expense_service,
 )
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
-from ..services.supabase_client import get_supabase_admin
+from ..services.supabase_client import get_supabase_admin, signed_storage_url
+
+# Mirrors users.py's PROFILE_PHOTOS_BUCKET/PROFILE_PHOTO_SIGNED_URL_SECONDS —
+# kept as a local duplicate rather than imported from there: users.py pulls in
+# api/security.py -> device_security_service.py -> pyotp transitively, which
+# isolation-test CI installs a deliberately minimal, explicit dependency list
+# for and doesn't include (this constant pair is the only thing coordinator.py
+# actually needs from that module).
+PROFILE_PHOTOS_BUCKET = "profile-photos"
+PROFILE_PHOTO_SIGNED_URL_SECONDS = 60 * 60 * 24
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
@@ -89,9 +98,10 @@ def _require_coordinator(user: dict) -> str:
 # Same org_id-or-403 shape as _require_coordinator, but for the resources the
 # managing director should also read AND act on: worker-profile tabs (staff
 # detail, availability, skills, training assignment/review, onboarding
-# documents), NDIS goals/tasks, and pay/SCHADS oversight (classification,
-# shift pay preview, pay ledger — the MD is accountable for payroll too).
-# Rostering, shift assignment, messaging, and account-management actions stay
+# documents), NDIS goals/tasks, pay/SCHADS oversight (classification, shift
+# pay preview, pay ledger — the MD is accountable for payroll too), and
+# shift assign/reassign/unassign from the Master Schedule view. Rostering
+# creation, messaging, and account-management actions stay
 # _require_coordinator-only — those remain Coordinator's own operational
 # domain, not MD oversight.
 def _require_org_read(user: dict) -> str:
@@ -237,9 +247,12 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, onboarding_completed, "
-                    "profile_summary, profile_experience_years, coordinator_id, "
-                    "classification_id, employment_type"
+                    "preferred_contact_method, phone, address, suburb, emergency_contact, "
+                    "date_of_birth, onboarding_completed, profile_summary, profile_experience_years, "
+                    "coordinator_id, classification_id, employment_type, discipline, "
+                    "ahpra_registration_number, professional_indemnity_confirmed, business_name, "
+                    "profile_photo_path, preferred_language, account_type, profile_completed, "
+                    "role_specific_profile_completed, matching_opt_in"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -272,6 +285,10 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "employee_id": row.get("employee_id"),
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
+            "address": profile.get("address"),
+            "suburb": profile.get("suburb"),
+            "emergency_contact": profile.get("emergency_contact"),
+            "date_of_birth": profile.get("date_of_birth"),
             "onboarding_completed": profile.get("onboarding_completed"),
             "profile_summary": profile.get("profile_summary"),
             "profile_experience_years": profile.get("profile_experience_years"),
@@ -279,6 +296,21 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "induction_overdue": induction_map.get(str(row.get("user_id")), False),
             "classification_id": profile.get("classification_id"),
             "employment_type": profile.get("employment_type"),
+            "discipline": profile.get("discipline"),
+            "ahpra_registration_number": profile.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": profile.get("professional_indemnity_confirmed"),
+            "business_name": profile.get("business_name"),
+            # profile-photos is a private bucket — never trust a stored URL,
+            # always regenerate a fresh signed one from the path on read (see
+            # the identical comment in users.py::_select_profile).
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, profile.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
+            "preferred_language": profile.get("preferred_language"),
+            "account_type": profile.get("account_type"),
+            "profile_completed": profile.get("profile_completed"),
+            "role_specific_profile_completed": profile.get("role_specific_profile_completed"),
+            "matching_opt_in": profile.get("matching_opt_in"),
         })
     return output
 
@@ -308,8 +340,12 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed, coordinator_id, "
-                "classification_id, employment_type"
+                "preferred_contact_method, phone, address, suburb, emergency_contact, date_of_birth, "
+                "onboarding_completed, profile_summary, profile_experience_years, coordinator_id, "
+                "classification_id, employment_type, discipline, ahpra_registration_number, "
+                "professional_indemnity_confirmed, business_name, profile_photo_path, "
+                "preferred_language, account_type, profile_completed, "
+                "role_specific_profile_completed, matching_opt_in"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -337,6 +373,11 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "is_active": bool(row.get("is_active")),
             "joined_at": None,
             "last_login": row.get("last_login"),
+            "phone": row.get("phone"),
+            "address": row.get("address"),
+            "suburb": row.get("suburb"),
+            "emergency_contact": row.get("emergency_contact"),
+            "date_of_birth": row.get("date_of_birth"),
             "onboarding_completed": row.get("onboarding_completed"),
             "profile_summary": row.get("profile_summary"),
             "profile_experience_years": row.get("profile_experience_years"),
@@ -344,6 +385,18 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "induction_overdue": induction_map.get(str(row.get("id")), False),
             "classification_id": row.get("classification_id"),
             "employment_type": row.get("employment_type"),
+            "discipline": row.get("discipline"),
+            "ahpra_registration_number": row.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": row.get("professional_indemnity_confirmed"),
+            "business_name": row.get("business_name"),
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, row.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
+            "preferred_language": row.get("preferred_language"),
+            "account_type": row.get("account_type"),
+            "profile_completed": row.get("profile_completed"),
+            "role_specific_profile_completed": row.get("role_specific_profile_completed"),
+            "matching_opt_in": row.get("matching_opt_in"),
         })
     return output
 
@@ -969,12 +1022,12 @@ async def delete_worker_account(worker_id: str, current_user: dict = Depends(get
     deactivation (which both coordinators and MD can do), so it's gated to
     the managing director specifically. Queues the same pending deletion
     request record self-service deletion uses, for manual processing."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "delete_staff_account", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
-    supabase = get_supabase_admin()
     target = _require_target_support_worker(supabase, worker_id, org_id)
     result = privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
     await audit_service.log_action(
@@ -998,13 +1051,13 @@ async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, curren
     dashboard/session-review/credential-alert purposes (users.coordinator_id).
     Not gated to support_coordinator like most team-management endpoints: this
     is org structure, an MD decision, not day-to-day coordinator work."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "reassign_coordinator", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    supabase = get_supabase_admin()
     worker = (
         supabase.table("users")
         .select("id")
@@ -2853,7 +2906,7 @@ async def get_worker_conflicts(
     Also checks skill matching if participant_id is provided.
     Returns availability_status: 'available' | 'warning' | 'unavailable'.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     s_dt = _parse_dt(shift_start)
@@ -2994,7 +3047,7 @@ async def assign_existing_shift(
     Returns 409 with conflict list if conflicts exist and confirm_conflicts=False.
     Returns 200 with updated shift + any conflicts on success.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     # Fetch shift
@@ -3138,7 +3191,7 @@ async def unassign_existing_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Remove the assigned worker from a shift, returning it to 'unassigned' status."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
@@ -3389,19 +3442,22 @@ async def reassign_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Reassign a shift to a different worker. Same conflict checks as assign."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id") or "") != org_id:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # Reuse the assign endpoint logic
-    class _Body(BaseModel):
-        worker_id: str = body.new_worker_id
-        confirm_conflicts: bool = body.confirm_conflicts
-
-    return await assign_existing_shift(shift_id, _Body(), current_user)
+    # Reuse the assign endpoint logic. Built from the real ShiftAssignBody
+    # (not an ad-hoc stand-in) so it always carries every field
+    # assign_existing_shift reads — a hand-rolled subset here previously
+    # missed is_shadow_shift/shadow_of_worker_id and 500'd on every call.
+    return await assign_existing_shift(
+        shift_id,
+        ShiftAssignBody(worker_id=body.new_worker_id, confirm_conflicts=body.confirm_conflicts),
+        current_user,
+    )
 
 
 # ── POST /shifts/bulk ─────────────────────────────────────────────────────────
@@ -5643,7 +5699,9 @@ class TrainingModuleLockBody(BaseModel):
 @router.patch("/training-modules/{module_id}/lock")
 async def set_training_module_lock(module_id: str, body: TrainingModuleLockBody,
                                    current_user: dict = Depends(get_current_user)):
-    if not is_managing_director(current_user):
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "lock_training_module", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Managing Director access required.")
     org_id = _require_org_read(current_user)
     from ..services.worker_training_service import update_training_module

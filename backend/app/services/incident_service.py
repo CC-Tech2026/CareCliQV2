@@ -601,6 +601,8 @@ async def create_incident(
         "incident_date",
         "follow_up_date",
         "identified_at",
+        "family_notified_at",
+        "md_notified_at",
     ):
         if payload.get(key) is not None:
             payload[key] = str(payload[key])
@@ -618,6 +620,13 @@ async def create_incident(
         severity,
     )
 
+    # Section 5 self-assessment checklist: any ticked category (other than "none") also
+    # marks the incident reportable, alongside the existing type/severity heuristic above.
+    # The Managing Director still makes the final call via the ndis_reportable_override flow.
+    reportable_categories = payload.get("reportable_categories") or []
+    if any(cat != "none" for cat in reportable_categories):
+        payload["ndis_reportable"] = True
+
     payload["practice_standard"] = PRACTICE_STANDARD_MAP.get(
         incident_type,
         "Standard 2.3 — Incident management",
@@ -625,9 +634,17 @@ async def create_incident(
 
     payload["status"] = "reported"
 
-    payload["reported_date"] = (
-        datetime.now(timezone.utc).isoformat()
-    )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload["reported_date"] = now_iso
+
+    # Section 6 declaration is signed at submission time; Section 4 MD/family notification
+    # timestamps default to "now" when marked "yes" but no explicit time was supplied.
+    if payload.get("staff_declaration_name") or payload.get("staff_declaration_signature"):
+        payload["staff_declaration_at"] = now_iso
+    if payload.get("family_notified") == "yes" and not payload.get("family_notified_at"):
+        payload["family_notified_at"] = now_iso
+    if payload.get("md_notified") == "yes" and not payload.get("md_notified_at"):
+        payload["md_notified_at"] = now_iso
 
     if data.escalate:
         payload["severity"] = "critical"

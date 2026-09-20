@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ..core.access import (
     get_user_id,
     get_user_organization_id,
+    has_active_grant,
     is_managing_director,
 )
 from ..core.security import get_current_user
@@ -16,7 +17,9 @@ router = APIRouter(prefix="/md/onboarding", tags=["md-onboarding"])
 
 
 def _require_md(current_user: dict) -> None:
-    if not is_managing_director(current_user):
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "onboarding_program_design", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Managing Director access required.")
 
 

@@ -107,6 +107,8 @@ async def record_task_completion(
                     "p_item_code": price_item_code,
                     "p_org_id": org_id,
                     "p_as_of_date": body.completion_date,
+                    # Hardcoded "national" — this org has no remote/very-remote
+                    # participants; revisit if that ever changes.
                     "p_location_type": "national",
                 }
             ).execute()

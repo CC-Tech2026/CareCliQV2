@@ -264,6 +264,8 @@ from .api import launch_waitlist as launch_waitlist_api
 app.include_router(launch_waitlist_api.router, prefix="/api")
 from .api import md_vault as md_vault_api
 app.include_router(md_vault_api.router, prefix="/api")
+from .api import access_grants as access_grants_api
+app.include_router(access_grants_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 
 

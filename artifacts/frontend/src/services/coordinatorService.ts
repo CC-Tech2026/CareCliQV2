@@ -14,6 +14,10 @@ export type TeamMember = {
   last_login?: string;
   employee_id?: string | null;
   phone?: string | null;
+  address?: string | null;
+  suburb?: string | null;
+  emergency_contact?: Record<string, unknown> | string | null;
+  date_of_birth?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
   profile_summary?: string | null;
@@ -23,6 +27,16 @@ export type TeamMember = {
   coordinator_id?: string | null;
   classification_id?: string | null;
   employment_type?: "casual" | "part_time" | "full_time" | null;
+  discipline?: string | null;
+  ahpra_registration_number?: string | null;
+  professional_indemnity_confirmed?: boolean | null;
+  business_name?: string | null;
+  profile_photo_url?: string | null;
+  preferred_language?: string | null;
+  account_type?: "independent_worker" | "small_provider" | null;
+  profile_completed?: boolean | null;
+  role_specific_profile_completed?: boolean | null;
+  matching_opt_in?: boolean | null;
 };
 
 export type WorkerStats = TeamMember & {

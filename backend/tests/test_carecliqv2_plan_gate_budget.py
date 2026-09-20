@@ -106,7 +106,11 @@ async def test_verify_shift_records_budget_usage():
         "duration_minutes": 120,
         "session_id": "session-1",
     }
-    price = {"item_code": "01_011_0107_1_1", "effective_price": 6756, "support_purpose": "Core Supports"}
+    price = {
+        "item_code": "01_011_0107_1_1",
+        "effective_price": 67.56,  # ndis_price_items stores plain dollars, not cents
+        "support_purpose": "Core Supports",
+    }
     verification_row = {"id": "ver-1"}
 
     mock_supabase = MagicMock()

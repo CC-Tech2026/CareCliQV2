@@ -111,17 +111,23 @@ describe("coordinator invoice workspace", () => {
   });
 });
 
-it("gives directors invoice access without requesting coordinator subscriptions", async () => {
-  auth.role = "managing_director";
-  render(<Billing />);
-  await screen.findByText("Alex Morgan");
-  expect(screen.getByRole("button", { name: "New invoice" })).toBeTruthy();
-  expect(
-    vi
-      .mocked(apiFetch)
-      .mock.calls.some(([url]) => String(url).endsWith("subscription")),
-  ).toBe(false);
-});
+it.each([
+  ["managing_director", false],
+  ["support_coordinator", false],
+] as const)(
+  "keeps subscriptions off the invoice page for %s",
+  async (role, loadsSubscription) => {
+    auth.role = role;
+    render(<Billing />);
+    await screen.findByText("Alex Morgan");
+    expect(screen.getByRole("button", { name: "New invoice" })).toBeTruthy();
+    expect(
+      vi
+        .mocked(apiFetch)
+        .mock.calls.some(([url]) => String(url).endsWith("subscription")),
+    ).toBe(loadsSubscription);
+  },
+);
 it("resolves dollars for the selected date and region and clears a failed lookup", async () => {
   vi.mocked(resolveNdisPrice).mockResolvedValue({
     id: "v1",

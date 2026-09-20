@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
 import { isVoluntaryLogoutInProgress, saveAuthRestoreContext } from "@/lib/auth-session";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,6 +21,16 @@ interface ProtectedRouteProps {
    * of showing restricted message.
    */
   redirectTo?: string;
+
+  /**
+   * Delegated-access escape hatch: a coordinator without an allowed role can
+   * still reach this route while they hold a live grant for this capability
+   * (see access_grant_service.py's CAPABILITIES catalog for valid values).
+   * Ignored for roles that already satisfy allowedRoles. Requires
+   * capabilityLabel for the "you have temporary access" banner.
+   */
+  requiredCapability?: string;
+  capabilityLabel?: string;
 }
 
 const ROLE_LABEL_KEYS: Record<UserRole, string> = {
@@ -40,10 +52,17 @@ export function ProtectedRoute({
   children,
   allowedRoles,
   redirectTo,
+  requiredCapability,
+  capabilityLabel,
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuth();
   const [location] = useLocation();
   const { translate, translateParams } = useAccessibility();
+  // Called unconditionally (rules of hooks) even though it's only needed
+  // past the early-return checks below; useMyAccessGrants no-ops for MDs and
+  // for anyone before allowedRoles is even evaluated is harmless (it's just
+  // an org-scoped query keyed off the current user).
+  const { isLoading: grantsLoading, hasCapability, grantFor } = useMyAccessGrants();
 
   /**
    * Not logged in
@@ -100,6 +119,22 @@ export function ProtectedRoute({
    * Role restriction
    */
   const hasRequiredRole = !allowedRoles || allowedRoles.includes(user.role);
+
+  if (!hasRequiredRole && requiredCapability) {
+    // Give the grants query a chance to resolve before deciding — otherwise
+    // a coordinator with a live grant would flash the restricted-access page
+    // on every load while it's fetching.
+    if (grantsLoading) return null;
+    const grant = grantFor(requiredCapability);
+    if (grant) {
+      return (
+        <>
+          <TemporaryAccessBanner grant={grant} label={capabilityLabel ?? requiredCapability} />
+          {children}
+        </>
+      );
+    }
+  }
 
   if (!hasRequiredRole) {
     /**

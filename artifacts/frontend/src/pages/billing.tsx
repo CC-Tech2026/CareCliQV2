@@ -51,18 +51,6 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 
-interface Subscription {
-  plan_name: string;
-  status: string;
-  billing_email?: string | null;
-  seats: number;
-  price_cents: number;
-  currency: string;
-  renewal_date?: string | null;
-  payment_provider?: string | null;
-  notes?: string | null;
-}
-
 interface Invoice {
   id: string;
   invoice_number: string;
@@ -137,9 +125,7 @@ export default function Billing() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyInvoice, setBusyInvoice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savingSubscription, setSavingSubscription] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [resolvingPrice, setResolvingPrice] = useState(false);
   const [resolvedPrice, setResolvedPrice] =
@@ -269,11 +255,6 @@ export default function Billing() {
       const r = await apiFetch("/api/billing/invoices");
       if (!r.ok) throw new Error("Could not load invoices.");
       setInvoices(await r.json());
-      if (isManagingDirector) {
-        const s = await apiFetch("/api/billing/subscription");
-        if (!s.ok) throw new Error("Could not load subscription.");
-        setSubscription(await s.json());
-      }
     } catch (err) {
       setLoadError((err as Error).message);
       toast({
@@ -325,36 +306,7 @@ export default function Billing() {
 
   useEffect(() => {
     if (canInvoice) void loadBilling();
-  }, [canInvoice, isManagingDirector]);
-
-  async function saveSubscription() {
-    if (!subscription) return;
-    setSavingSubscription(true);
-    try {
-      const res = await requireReAuth(() =>
-        apiFetch("/api/billing/subscription", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(subscription),
-        }),
-      );
-      if (!res) return;
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}));
-        throw new Error(b.detail || "Could not save.");
-      }
-      setSubscription(await res.json());
-      toast({ title: translate("billing.toast.subscriptionSaved") });
-    } catch (err) {
-      toast({
-        title: translate("billing.toast.saveFailed"),
-        description: (err as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setSavingSubscription(false);
-    }
-  }
+  }, [canInvoice]);
 
   async function createInvoice() {
     if (!canCreateDraft || creatingInvoice) return;
@@ -1255,159 +1207,9 @@ export default function Billing() {
 
         <details className="rounded-2xl border border-cc-border bg-white p-4">
           <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">
-            Billing settings & NDIS pricing
+            NDIS pricing catalogue
           </summary>
           <div className="mt-4 space-y-4">
-            {" "}
-            {isManagingDirector && subscription && (
-              <Card
-                title={translate("billing.subscription")}
-                action={
-                  <button
-                    onClick={saveSubscription}
-                    disabled={savingSubscription}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white bg-cc-plum shadow-sm transition hover:opacity-90 disabled:opacity-60"
-                  >
-                    {savingSubscription ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Check className="h-3 w-3" />
-                    )}
-                    {translate("common.save")}
-                  </button>
-                }
-              >
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.plan")}
-                    </Label>
-                    <select
-                      title={translate("billing.plan")}
-                      value={subscription.plan_name}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          plan_name: e.target.value,
-                        })
-                      }
-                      className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
-                    >
-                      {["starter", "team", "pro", "enterprise"].map((p) => (
-                        <option key={p} value={p}>
-                          {p.charAt(0).toUpperCase() + p.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.status")}
-                    </Label>
-                    <select
-                      title={translate("billing.status")}
-                      value={subscription.status}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          status: e.target.value,
-                        })
-                      }
-                      className="mt-1.5 h-10 w-full rounded-lg border border-cc-border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#E8457A]/20"
-                    >
-                      {[
-                        "trialing",
-                        "active",
-                        "past_due",
-                        "cancelled",
-                        "manual_review",
-                      ].map((s) => (
-                        <option key={s} value={s}>
-                          {s.replace("_", " ")}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.seats")}
-                    </Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={subscription.seats}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          seats: Number(e.target.value),
-                        })
-                      }
-                      className="mt-1.5 rounded-lg border-cc-border"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.monthly")}
-                    </Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={(subscription.price_cents || 0) / 100}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          price_cents: Math.round(
-                            Number(e.target.value || 0) * 100,
-                          ),
-                        })
-                      }
-                      className="mt-1.5 rounded-lg border-cc-border"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.billingEmail")}
-                    </Label>
-                    <Input
-                      value={subscription.billing_email || ""}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          billing_email: e.target.value,
-                        })
-                      }
-                      className="mt-1.5 rounded-lg border-cc-border"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.renewalDate")}
-                    </Label>
-                    <Input
-                      type="date"
-                      value={subscription.renewal_date || ""}
-                      onChange={(e) =>
-                        setSubscription({
-                          ...subscription,
-                          renewal_date: e.target.value,
-                        })
-                      }
-                      className="mt-1.5 rounded-lg border-cc-border"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold text-cc-muted">
-                      {translate("billing.provider")}
-                    </Label>
-                    <Input
-                      value={subscription.payment_provider || "manual"}
-                      readOnly
-                      className="mt-1.5 rounded-lg border-cc-border bg-cc-soft"
-                    />
-                  </div>
-                </div>
-              </Card>
-            )}
             {/* NDIS Pricing Administration — Coordinator Only */}
             {canInvoice && (
               <Card

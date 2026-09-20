@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, LockKeyhole, Pencil, Save, UserRound, X } from "lucide-react";
+import { Briefcase, Loader2, LockKeyhole, Pencil, Save, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -30,6 +31,7 @@ import {
   requestPasswordReset,
   saveNotificationPreferences,
   updateContact,
+  updateMe,
   type NotificationChannel,
   type NotificationEvent,
   type NotificationPreferences,
@@ -95,6 +97,11 @@ export default function WorkerProfile() {
   const [draftEmail, setDraftEmail] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
   const [draftPreferredContact, setDraftPreferredContact] = useState<PreferredContactMethod>("in_app_message");
+
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [draftSummary, setDraftSummary] = useState("");
+  const [draftExperienceYears, setDraftExperienceYears] = useState("");
+  const [savingSummary, setSavingSummary] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -163,6 +170,10 @@ export default function WorkerProfile() {
         setDraftEmail(me.email || "");
         setDraftPhone(me.phone || "");
         setDraftPreferredContact(me.preferred_contact_method || "in_app_message");
+        setDraftSummary(me.profile_summary || "");
+        setDraftExperienceYears(
+          me.profile_experience_years != null ? String(me.profile_experience_years) : "",
+        );
         setNotificationPrefs(prefs.preferences);
       })
       .catch((error) => {
@@ -210,6 +221,37 @@ export default function WorkerProfile() {
       });
     } finally {
       setSavingContact(false);
+    }
+  }
+
+  async function handleSaveSummary() {
+    if (!profile) return;
+    const trimmedYears = draftExperienceYears.trim();
+    if (trimmedYears && (!/^\d+$/.test(trimmedYears) || Number(trimmedYears) > 80)) {
+      toast({
+        title: translate("profile.saveFailed"),
+        description: translate("profile.experienceYearsInvalid"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setSavingSummary(true);
+    try {
+      const result = await updateMe({
+        profile_summary: draftSummary.trim() || null,
+        profile_experience_years: trimmedYears ? Number(trimmedYears) : null,
+      });
+      setProfile(result);
+      setEditingSummary(false);
+      toast({ title: translate("profile.updated") });
+    } catch (error) {
+      toast({
+        title: translate("profile.saveFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSummary(false);
     }
   }
 
@@ -468,6 +510,94 @@ export default function WorkerProfile() {
       </section>
 
       {user?.role === "support_worker" && <MyInterestsCard />}
+
+      {user?.role === "support_worker" && (
+        <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECECEC]">
+                <Briefcase className="h-5 w-5 text-[#E8457A]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.professionalSummary")}</h2>
+                <p className="text-sm text-[#6A6A77]">{translate("profile.professionalSummaryHint")}</p>
+              </div>
+            </div>
+            {!editingSummary && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDraftSummary(profile.profile_summary || "");
+                  setDraftExperienceYears(
+                    profile.profile_experience_years != null ? String(profile.profile_experience_years) : "",
+                  );
+                  setEditingSummary(true);
+                }}
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                {translate("profile.edit")}
+              </Button>
+            )}
+          </div>
+
+          {editingSummary ? (
+            <div className="grid gap-5">
+              <div>
+                <Label htmlFor="profile-summary">{translate("profile.professionalSummary")}</Label>
+                <Textarea
+                  id="profile-summary"
+                  value={draftSummary}
+                  onChange={(e) => setDraftSummary(e.target.value)}
+                  className="mt-1 rounded-xl"
+                  rows={4}
+                />
+              </div>
+              <div className="max-w-[200px]">
+                <Label htmlFor="profile-experience-years">{translate("profile.experienceYears")}</Label>
+                <Input
+                  id="profile-experience-years"
+                  type="number"
+                  min={0}
+                  max={80}
+                  value={draftExperienceYears}
+                  onChange={(e) => setDraftExperienceYears(e.target.value)}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveSummary} disabled={savingSummary}>
+                  {savingSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                    <>
+                      <Save className="mr-1.5 h-3.5 w-3.5" />
+                      {translate("profile.saveChanges")}
+                    </>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={() => setEditingSummary(false)} disabled={savingSummary}>
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                  {translate("common.cancel")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2">
+              <ReadOnlyField
+                label={translate("profile.professionalSummary")}
+                value={profile.profile_summary}
+                emptyLabel={translate("common.emDash")}
+              />
+              <ReadOnlyField
+                label={translate("profile.experienceYears")}
+                value={
+                  profile.profile_experience_years != null ? String(profile.profile_experience_years) : undefined
+                }
+                emptyLabel={translate("common.emDash")}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
