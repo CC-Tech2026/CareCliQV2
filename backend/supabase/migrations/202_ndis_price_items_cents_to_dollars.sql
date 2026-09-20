@@ -36,7 +36,7 @@ INSERT INTO public.audit_log (
     '00000000-0000-0000-0000-000000000000',
     (SELECT id FROM auth.users WHERE email = 'system@carecliQ.local' LIMIT 1),
     NULL,
-    '{"version": "197"}'::jsonb,
-    '{"version": "198", "tables": ["ndis_price_items"], "change": "price_national/remote/very_remote divided by 100 (cents -> dollars) where price_national > 1000"}'::jsonb,
+    '{"version": "201"}'::jsonb,
+    '{"version": "202", "tables": ["ndis_price_items"], "change": "price_national/remote/very_remote divided by 100 (cents -> dollars) where price_national > 1000"}'::jsonb,
     now()
 ) ON CONFLICT DO NOTHING;
