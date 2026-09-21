@@ -12,6 +12,7 @@ from ..services.compliance_engine import (
     run_compliance_check,
 )
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
+from ..services.credential_status import live_status
 from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 import logging
@@ -291,14 +292,20 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
         warn_date = (app_today() + timedelta(days=30)).isoformat()
         exp_resp = (
             supabase.table("credentials")
-            .select("id, user_id, credential_type, expiry_date")
+            .select("id, user_id, credential_type, expiry_date, status")
             .eq("organization_id", org_id)
-            .in_("status", ["expiring", "expired"])
+            # See coordinator.py's credential_alerts for why this can't filter
+            # on the raw `status` column — recomputed live below instead.
+            .not_.in_("status", ["rejected", "pending_review"])
             .lte("expiry_date", warn_date)
             .order("expiry_date")
             .execute()
         )
-        exp_rows = exp_resp.data or []
+        exp_rows = [
+            {**row, "status": live_status(row.get("expiry_date"), row.get("status"))}
+            for row in (exp_resp.data or [])
+        ]
+        exp_rows = [row for row in exp_rows if row["status"] in ("expiring", "expired")]
     except Exception:
         exp_rows = []
     seen_workers: set[str] = set()

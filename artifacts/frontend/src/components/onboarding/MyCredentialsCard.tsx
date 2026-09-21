@@ -102,25 +102,31 @@ function CredentialRow({
       </div>
       <div className="flex flex-wrap gap-2">
         {credential.status !== "valid" && (
-          <>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#E8E8EA] px-3 py-2 text-xs font-bold text-[#E8457A] hover:bg-[#F8F6FE]">
-              <FileUp className="h-4 w-4" />
-              {translate("credentials.uploadFile")}
-              <input
-                type="file"
-                className="hidden"
-                accept="application/pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onUpload(credential, file);
-                }}
-              />
-            </label>
-            <Button variant="ghost" size="sm" className="gap-1 text-[#7C3AED]" onClick={() => onDelete(credential)}>
-              <Trash2 className="h-3.5 w-3.5" />
-              {translate("credentials.delete")}
-            </Button>
-          </>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#E8E8EA] px-3 py-2 text-xs font-bold text-[#E8457A] hover:bg-[#F8F6FE]">
+            <FileUp className="h-4 w-4" />
+            {translate("credentials.uploadFile")}
+            <input
+              type="file"
+              className="hidden"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onUpload(credential, file);
+              }}
+            />
+          </label>
+        )}
+        {/* The backend blocks deleting any credential once verified_at is
+            set, regardless of its current status — a previously-verified
+            credential that later ages into "expiring"/"expired" still has
+            verified_at set, so gating on status alone showed this button
+            for every credential a worker has ever had verified, and
+            clicking it always 403'd. */}
+        {!credential.verified_at && (
+          <Button variant="ghost" size="sm" className="gap-1 text-[#7C3AED]" onClick={() => onDelete(credential)}>
+            <Trash2 className="h-3.5 w-3.5" />
+            {translate("credentials.delete")}
+          </Button>
         )}
       </div>
     </div>

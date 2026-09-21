@@ -51,6 +51,7 @@ from ..services import (
     travel_expense_service,
 )
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
+from ..services.credential_status import live_status
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
 
 # Mirrors users.py's PROFILE_PHOTOS_BUCKET/PROFILE_PHOTO_SIGNED_URL_SECONDS —
@@ -504,11 +505,22 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
             supabase.table("credentials")
             .select("id, user_id, credential_type, title, expiry_date, status")
             .eq("organization_id", org_id)
-            .in_("status", ["expiring", "expired"])
+            # Excludes rejected/pending_review here (those were never approved,
+            # so they're not "an expiring valid credential"); the date filter
+            # then narrows to candidates, but the actual expiring/expired
+            # classification below is computed live — nothing recomputes the
+            # stored `status` column on a schedule, so a credential verified
+            # "valid" long ago with a since-passed expiry_date would otherwise
+            # never surface here at all.
+            .not_.in_("status", ["rejected", "pending_review"])
             .lte("expiry_date", warn_date)
             .execute()
         )
-        rows = result.data or []
+        rows = [
+            {**row, "status": live_status(row.get("expiry_date"), row.get("status"))}
+            for row in (result.data or [])
+        ]
+        rows = [row for row in rows if row["status"] in ("expiring", "expired")]
     except Exception:
         rows = []
 
@@ -990,6 +1002,21 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
         supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
+
+    try:
+        # Clear any onboarding_stage_reminders rows for this worker so the
+        # 3-day/14-day escalation clock restarts cleanly if they stall again.
+        # Without this, a worker reactivated before the resolution sweep next
+        # runs keeps their already-escalated row (escalated_at set) — which
+        # _upsert_stage_flags treats as "already tracked" (skips inserting a
+        # fresh one) and _process_due_reminders permanently ignores (it only
+        # considers escalated_at IS NULL) — silently disabling any future
+        # reminder/escalation for that stage for this worker.
+        supabase.table("onboarding_stage_reminders").delete().eq("worker_id", worker_id).eq(
+            "organization_id", org_id
+        ).execute()
+    except Exception as exc:
+        logger.warning("Failed to clear onboarding stage reminders for reactivated worker %s: %s", worker_id, exc)
 
     await audit_service.log_action(
         action_type="coordinator.worker.activated",
@@ -1554,6 +1581,9 @@ class AssignShiftBody(BaseModel):
     # flags it as supervised and records who's supervising.
     is_shadow_shift: bool = False
     shadow_of_worker_id: Optional[str] = None
+    # Care coordinator override — when omitted, defaults to the participant's
+    # own care_coordinator_id (see _resolve_care_coordinator_id).
+    care_coordinator_id: Optional[str] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1626,10 +1656,35 @@ async def coordinator_shifts(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
 
+    # care_coordinator_id is fetched as its own best-effort query rather than
+    # folded into the main shifts select above: that select already has a
+    # two-tier legacy fallback (see _execute_shift_query_with_legacy_fallback),
+    # and bundling a third, newer column into the same all-or-nothing query
+    # would force deployments that haven't run migration 201 yet back onto
+    # the legacy tier, silently losing is_shadow_shift/shadow_of_worker_id too.
+    shift_ids = [str(r.get("id")) for r in rows if r.get("id")]
+    if shift_ids:
+        try:
+            cc_resp = (
+                supabase.table("shifts")
+                .select("id, care_coordinator_id")
+                .in_("id", shift_ids)
+                .execute()
+            )
+            care_coordinator_by_shift = {
+                str(r.get("id")): r.get("care_coordinator_id")
+                for r in (cc_resp.data or [])
+                if isinstance(r, dict) and r.get("id")
+            }
+        except Exception:
+            care_coordinator_by_shift = {}
+        for row in rows:
+            row["care_coordinator_id"] = care_coordinator_by_shift.get(str(row.get("id")))
+
     worker_ids = sorted({
         str(r.get(key))
         for r in rows
-        for key in ("worker_id", "shadow_of_worker_id")
+        for key in ("worker_id", "shadow_of_worker_id", "care_coordinator_id")
         if r.get(key)
     })
     participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
@@ -1679,6 +1734,14 @@ async def coordinator_shifts(
             "shadow_of_worker_name": (
                 (workers_by_id.get(str(row.get("shadow_of_worker_id")), {}) or {}).get("full_name")
                 if row.get("shadow_of_worker_id") else None
+            ),
+            "care_coordinator_name": (
+                (workers_by_id.get(str(row.get("care_coordinator_id")), {}) or {}).get("full_name")
+                if row.get("care_coordinator_id") else None
+            ),
+            "care_coordinator_email": (
+                (workers_by_id.get(str(row.get("care_coordinator_id")), {}) or {}).get("email")
+                if row.get("care_coordinator_id") else None
             ),
             "participant_name": row.get("participant_name")
             or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
@@ -1771,12 +1834,59 @@ def _insert_shift_with_legacy_fallback(supabase, payload: dict[str, Any]):
             raise
 
         # Legacy deployments may not yet have these columns on public.shifts.
+        # Drop this older set first and retry before also giving up on the
+        # newer care_coordinator_id column — a deployment missing
+        # shift_type/created_by shouldn't lose care_coordinator_id too just
+        # because both happened to go through the same fallback.
         fallback_payload = dict(payload)
         fallback_payload.pop("created_by", None)
         fallback_payload.pop("shift_type", None)
         fallback_payload.pop("is_shadow_shift", None)
         fallback_payload.pop("shadow_of_worker_id", None)
-        return supabase.table("shifts").insert(fallback_payload).execute()
+        try:
+            return supabase.table("shifts").insert(fallback_payload).execute()
+        except Exception as exc2:
+            if not _is_missing_schema_error(exc2):
+                raise
+            fallback_payload.pop("care_coordinator_id", None)
+            return supabase.table("shifts").insert(fallback_payload).execute()
+
+
+def _resolve_care_coordinator_id(
+    supabase, participant_id: str, org_id: str, override: Optional[str] = None
+) -> Optional[str]:
+    """Care coordinator to snapshot onto a new shift: an explicit override if
+    given and valid, else the participant's own care_coordinator_id."""
+    if override:
+        coordinator = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("id", override)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        if not coordinator or not coordinator.data or coordinator.data.get("role") not in (
+            "support_coordinator",
+            "managing_director",
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="care_coordinator_id must be an existing coordinator or managing director in this organization.",
+            )
+        return override
+    try:
+        participant = (
+            supabase.table("patients")
+            .select("care_coordinator_id")
+            .eq("id", participant_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        return (participant.data or {}).get("care_coordinator_id") if participant and participant.data else None
+    except Exception:
+        return None
 
 
 async def _check_worker_credentials(
@@ -2141,7 +2251,10 @@ async def assign_shift(
     try:
         shift_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        
+        care_coordinator_id = _resolve_care_coordinator_id(
+            supabase, body.participant_id, org_id, body.care_coordinator_id
+        )
+
         shift_payload = {
             "id": shift_id,
             "organization_id": org_id,
@@ -2160,6 +2273,7 @@ async def assign_shift(
             "updated_at": now,
             "is_shadow_shift": body.is_shadow_shift,
             "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
+            "care_coordinator_id": care_coordinator_id,
         }
 
         result = _insert_shift_with_legacy_fallback(supabase, shift_payload)
@@ -3516,6 +3630,7 @@ async def bulk_create_shifts(
     conflicts_summary: list[dict] = []
     # The coordinator types wall-clock times for the participant's office.
     bulk_tz = participant_timezone(body.participant_id, organization_id=org_id)
+    care_coordinator_id = _resolve_care_coordinator_id(supabase, body.participant_id, org_id)
 
     for week in range(body.weeks):
         for dow in sorted(set(body.days_of_week)):
@@ -3562,6 +3677,7 @@ async def bulk_create_shifts(
                 "created_by": get_user_id(current_user),
                 "created_at": now_iso,
                 "updated_at": now_iso,
+                "care_coordinator_id": care_coordinator_id,
             }
             if body.worker_id:
                 payload["worker_id"] = body.worker_id
@@ -3666,6 +3782,7 @@ async def create_unassigned_shift(
         "created_by": get_user_id(current_user),
         "created_at": now_iso,
         "updated_at": now_iso,
+        "care_coordinator_id": _resolve_care_coordinator_id(supabase, body.participant_id, org_id),
     }
     result = _insert_shift_with_legacy_fallback(supabase, payload)
     shift = (result.data or [None])[0] or payload
@@ -4750,7 +4867,7 @@ async def emergency_stop_shift(
         await _send_worker_notification(
             supabase, worker_id, org_id,
             "shift_unassigned", shift_id,
-            "⚠️ Emergency — Contact Coordinator",
+            "Emergency: Contact Coordinator",
             body.note,
         )
         # Also create a high-severity alert

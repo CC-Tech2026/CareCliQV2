@@ -706,6 +706,24 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         except Exception:
             pass
 
+    # ── Care coordinator (informational only — never used for billed_to_*
+    # or plan_manager_* above, which stay driven by case_manager_* alone).
+    # Fetched as its own best-effort query, not folded into the participant
+    # select above, so a not-yet-migrated deployment can't lose participant
+    # name/NDIS number/plan-management fields over one missing column.
+    care_coordinator_name = ""
+    if invoice.get("participant_id"):
+        try:
+            cc = supabase.table("patients").select("care_coordinator_id").eq(
+                "id", invoice["participant_id"]
+            ).limit(1).execute()
+            cc_id = (cc.data or [{}])[0].get("care_coordinator_id")
+            if cc_id:
+                user_r = supabase.table("users").select("full_name").eq("id", cc_id).limit(1).execute()
+                care_coordinator_name = (user_r.data or [{}])[0].get("full_name") or ""
+        except Exception:
+            pass
+
     # ── Plan dates + reference from ndis_plans ─────────────────────────────
     plan_start_date = ""
     plan_end_date = ""
@@ -897,6 +915,8 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "plan_manager_name": plan_manager_name,
         "plan_manager_email": plan_manager_email,
         "plan_management_instruction": "",
+        # Care coordinator — informational only, never a billing recipient
+        "care_coordinator_name": care_coordinator_name,
         # Note
         "invoice_notes": invoice.get("notes") or "",
         # Footer
