@@ -1,0 +1,3655 @@
+{
+  "metadata": {
+    "financial_year": "2026-27",
+    "effective_date": "2026-07-01",
+    "source": "NDIS Support Catalogue 2026-27 v1.1 (official, ndis.gov.au)",
+    "version": "1.1"
+  },
+  "support_categories": [
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0102",
+      "items": [
+        {
+          "item_code": "01_799_0102_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0104",
+      "items": [
+        {
+          "item_code": "01_016_0104_1_1",
+          "name": "Specialised Home Based Assistance For A Child",
+          "description": "Specialised Home Based Assistance For A Child",
+          "unit": "H",
+          "price_national": 61.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_049_0104_1_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_400_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Weekday Daytime",
+          "description": "Assistance With Self-Care Activities - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_401_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Weekday Evening",
+          "description": "Assistance With Self-Care Activities - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_402_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Saturday",
+          "description": "Assistance With Self-Care Activities - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_403_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Sunday",
+          "description": "Assistance With Self-Care Activities - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_404_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Public Holiday",
+          "description": "Assistance With Self-Care Activities - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_405_0104_1_1",
+          "name": "Assistance With Self-Care Activities - High Intensity - Weekday Night",
+          "description": "Assistance With Self-Care Activities - High Intensity - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_799_0104_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "01_799_0106_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_850_0106_1_1",
+          "name": "Individualised Living Options - Exploration and Design",
+          "description": "Individualised Living Options - Exploration and Design",
+          "unit": "H",
+          "price_national": 100.14,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0107",
+      "items": [
+        {
+          "item_code": "01_002_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Weekday Night",
+          "description": "Assistance With Self-Care Activities - Standard - Weekday Night",
+          "unit": "H",
+          "price_national": 82.57,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_004_0107_1_1",
+          "name": "Assistance with Personal Domestic Activities",
+          "description": "Assistance with Personal Domestic Activities",
+          "unit": "H",
+          "price_national": 61.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_010_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Night-Time Sleepover",
+          "description": "Assistance With Self-Care Activities - Night-Time Sleepover",
+          "unit": "E",
+          "price_national": 311.79,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_011_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Weekday Daytime",
+          "description": "Assistance With Self-Care Activities - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_012_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Public Holiday",
+          "description": "Assistance With Self-Care Activities - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_013_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Saturday",
+          "description": "Assistance With Self-Care Activities - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_014_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Sunday",
+          "description": "Assistance With Self-Care Activities - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_015_0107_1_1",
+          "name": "Assistance With Self-Care Activities - Standard - Weekday Evening",
+          "description": "Assistance With Self-Care Activities - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_049_0107_1_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_450_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_451_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_452_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Saturday",
+          "description": "Intensive and Complex Behaviour Supports - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_453_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Sunday",
+          "description": "Intensive and Complex Behaviour Supports - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_454_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "description": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_455_0107_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_799_0107_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0110",
+      "items": [
+        {
+          "item_code": "01_799_0110_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0114",
+      "items": [
+        {
+          "item_code": "01_600_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 103.44,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_601_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 114.1,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_602_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Saturday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Saturday",
+          "unit": "H",
+          "price_national": 147.55,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_603_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Sunday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Sunday",
+          "unit": "H",
+          "price_national": 169.62,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_604_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 191.67,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_605_0114_1_1",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 116.22,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_606_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 128.05,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_607_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 141.27,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_608_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Saturday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Saturday",
+          "unit": "H",
+          "price_national": 182.75,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_609_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Sunday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Sunday",
+          "unit": "H",
+          "price_national": 210.09,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_610_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 237.43,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_611_0114_1_1",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 143.9,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_612_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 148.13,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_613_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 163.39,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_614_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Saturday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Saturday",
+          "unit": "H",
+          "price_national": 211.39,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_615_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Sunday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Sunday",
+          "unit": "H",
+          "price_national": 243.02,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_616_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 274.64,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_617_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 166.45,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_618_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Daytime",
+          "unit": "H",
+          "price_national": 175.18,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_619_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Evening",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Evening",
+          "unit": "H",
+          "price_national": 193.27,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_620_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Saturday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Saturday",
+          "unit": "H",
+          "price_national": 250.12,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_621_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Sunday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Sunday",
+          "unit": "H",
+          "price_national": 287.58,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_622_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Public Holiday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Public Holiday",
+          "unit": "H",
+          "price_national": 325.03,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_623_0114_1_1",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Night",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Night",
+          "unit": "H",
+          "price_national": 196.89,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_624_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Daytime",
+          "unit": "H",
+          "price_national": 183.15,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_625_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Evening",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Evening",
+          "unit": "H",
+          "price_national": 202.04,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_626_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Saturday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Saturday",
+          "unit": "H",
+          "price_national": 261.5,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_627_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Sunday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Sunday",
+          "unit": "H",
+          "price_national": 300.67,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_628_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Public Holiday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Public Holiday",
+          "unit": "H",
+          "price_national": 339.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_629_0114_1_1",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Night",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Night",
+          "unit": "H",
+          "price_national": 205.83,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_799_0114_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0115",
+      "items": [
+        {
+          "item_code": "01_050_0115_1_1",
+          "name": "Assistance With Daily Life Tasks Provided In Residential Aged Care Facility",
+          "description": "Assistance With Daily Life Tasks Provided In Residential Aged Care Facility",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_200_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Weekday Daytime",
+          "description": "Short Term Accommodation - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_201_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Weekday Evening",
+          "description": "Short Term Accommodation - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_202_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Saturday",
+          "description": "Short Term Accommodation - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_203_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Sunday",
+          "description": "Short Term Accommodation - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_204_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Public Holiday",
+          "description": "Short Term Accommodation - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_205_0115_1_1",
+          "name": "Short Term Accommodation - Standard - Weekday Night",
+          "description": "Short Term Accommodation - Standard - Weekday Night",
+          "unit": "H",
+          "price_national": 82.57,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_206_0115_1_1",
+          "name": "Short Term Accommodation - Sleepover",
+          "description": "Short Term Accommodation - Sleepover",
+          "unit": "E",
+          "price_national": 311.79,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_252_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Weekday Daytime",
+          "description": "Short Term Accommodation - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_253_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Weekday Evening",
+          "description": "Short Term Accommodation - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_254_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Weekday Night",
+          "description": "Short Term Accommodation - High Intensity - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_255_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Saturday",
+          "description": "Short Term Accommodation - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_256_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Sunday",
+          "description": "Short Term Accommodation - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_257_0115_1_1",
+          "name": "Short Term Accommodation - High Intensity - Public Holiday",
+          "description": "Short Term Accommodation - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_450_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_451_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_452_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Saturday",
+          "description": "Intensive and Complex Behaviour Supports - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_453_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Sunday",
+          "description": "Intensive and Complex Behaviour Supports - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_454_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "description": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_455_0115_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_799_0115_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_801_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Weekday Daytime",
+          "description": "Assistance in Supported Independent Living - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_802_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Weekday Evening",
+          "description": "Assistance in Supported Independent Living - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_803_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Weekday Night",
+          "description": "Assistance in Supported Independent Living - Standard - Weekday Night",
+          "unit": "H",
+          "price_national": 82.57,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_804_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Saturday",
+          "description": "Assistance in Supported Independent Living - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_805_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Sunday",
+          "description": "Assistance in Supported Independent Living - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_806_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Standard - Public Holiday",
+          "description": "Assistance in Supported Independent Living - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_811_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Weekday Daytime",
+          "description": "Assistance in Supported Independent Living - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_812_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Weekday Evening",
+          "description": "Assistance in Supported Independent Living - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_813_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Weekday Night",
+          "description": "Assistance in Supported Independent Living - High Intensity - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_814_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Saturday",
+          "description": "Assistance in Supported Independent Living - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_815_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Sunday",
+          "description": "Assistance in Supported Independent Living - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_816_0115_1_1",
+          "name": "Assistance in Supported Independent Living - High Intensity - Public Holiday",
+          "description": "Assistance in Supported Independent Living - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_832_0115_1_1",
+          "name": "Assistance in Supported Independent Living - Night-Time Sleepover",
+          "description": "Assistance in Supported Independent Living - Night-Time Sleepover",
+          "unit": "E",
+          "price_national": 311.79,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "01_134_0117_8_1",
+          "name": "Capacity Building and Training in Self-Management and Plan Management",
+          "description": "Capacity Building and Training in Self-Management and Plan Management",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_799_0117_8_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0118",
+      "items": [
+        {
+          "item_code": "01_650_0118_1_3",
+          "name": "ECI Professional - Occupational Therapist - Direct Service",
+          "description": "ECI Professional - Occupational Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_653_0118_1_3",
+          "name": "ECI Professional - Speech Pathologist - Direct Service",
+          "description": "ECI Professional - Speech Pathologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_663_0118_1_3",
+          "name": "ECI Professional - Podiatrist - Direct Service",
+          "description": "ECI Professional - Podiatrist - Direct Service",
+          "unit": "H",
+          "price_national": 188.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_700_0118_1_3",
+          "name": "ECI Professional - Psychologist - Direct Service",
+          "description": "ECI Professional - Psychologist - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_720_0118_1_3",
+          "name": "ECI Professional - Physiotherapist - Direct Service",
+          "description": "ECI Professional - Physiotherapist - Direct Service",
+          "unit": "H",
+          "price_national": 183.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_740_0118_1_3",
+          "name": "ECI Professional - Other Early Childhood Professional - Direct Service",
+          "description": "ECI Professional - Other Early Childhood Professional - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_760_0118_1_3",
+          "name": "ECI Professional - Dietitian - Direct Service",
+          "description": "ECI Professional - Dietitian - Direct Service",
+          "unit": "H",
+          "price_national": 178.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_799_0118_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0119",
+      "items": [
+        {
+          "item_code": "01_799_0119_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0120",
+      "items": [
+        {
+          "item_code": "01_019_0120_1_1",
+          "name": "House or Yard Maintenance",
+          "description": "House or Yard Maintenance",
+          "unit": "H",
+          "price_national": 59.01,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_020_0120_1_1",
+          "name": "House Cleaning And Other Household Activities",
+          "description": "House Cleaning And Other Household Activities",
+          "unit": "H",
+          "price_national": 60.1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_023_0120_1_1",
+          "name": "Assistance with the cost of the preparation and delivery of meals",
+          "description": "Assistance with the cost of the preparation and delivery of meals",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_799_0120_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0126",
+      "items": [
+        {
+          "item_code": "01_799_0126_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0128",
+      "items": [
+        {
+          "item_code": "01_661_0128_1_3",
+          "name": "Therapy - Occupational Therapist - Direct Service",
+          "description": "Therapy - Occupational Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_663_0128_1_3",
+          "name": "Therapy - Podiatrist - Direct Service",
+          "description": "Therapy - Podiatrist - Direct Service",
+          "unit": "H",
+          "price_national": 188.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_665_0128_1_3",
+          "name": "Therapy - Speech Pathologist - Direct Service",
+          "description": "Therapy - Speech Pathologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_701_0128_1_3",
+          "name": "Therapy - Psychologist - Direct Service",
+          "description": "Therapy - Psychologist - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_721_0128_1_3",
+          "name": "Therapy - Physiotherapist - Direct Service",
+          "description": "Therapy - Physiotherapist - Direct Service",
+          "unit": "H",
+          "price_national": 183.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_741_0128_1_3",
+          "name": "Therapy - Other Professional - Direct Service",
+          "description": "Therapy - Other Professional - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_760_0128_3_3",
+          "name": "Therapy - Dietitian - Direct Service",
+          "description": "Therapy - Dietitian - Direct Service",
+          "unit": "H",
+          "price_national": 178.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_799_0128_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0129",
+      "items": [
+        {
+          "item_code": "01_799_0129_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0132",
+      "items": [
+        {
+          "item_code": "01_799_0132_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0134",
+      "items": [
+        {
+          "item_code": "01_799_0134_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0135",
+      "items": [
+        {
+          "item_code": "01_799_0135_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life (Includes SIL)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0138",
+      "items": [
+        {
+          "item_code": "01_450_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_451_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_452_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Saturday",
+          "description": "Intensive and Complex Behaviour Supports - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_453_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Sunday",
+          "description": "Intensive and Complex Behaviour Supports - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_454_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "description": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_455_0138_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_799_0138_1_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "01_801_0138_1_1",
+          "name": "Supported Independent Living - Standard - Weekday Daytime",
+          "description": "Supported Independent Living - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_802_0138_1_1",
+          "name": "Supported Independent Living - Standard - Weekday Evening",
+          "description": "Supported Independent Living - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_803_0138_1_1",
+          "name": "Supported Independent Living - Standard - Weekday Night",
+          "description": "Supported Independent Living - Standard - Weekday Night",
+          "unit": "H",
+          "price_national": 82.57,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_804_0138_1_1",
+          "name": "Supported Independent Living - Standard - Saturday",
+          "description": "Supported Independent Living - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_805_0138_1_1",
+          "name": "Supported Independent Living - Standard - Sunday",
+          "description": "Supported Independent Living - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_806_0138_1_1",
+          "name": "Supported Independent Living - Standard - Public Holiday",
+          "description": "Supported Independent Living - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_811_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Weekday Daytime",
+          "description": "Supported Independent Living - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_812_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Weekday Evening",
+          "description": "Supported Independent Living - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "01_813_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Weekday Night",
+          "description": "Supported Independent Living - High Intensity - Weekday Night",
+          "unit": "H",
+          "price_national": 89.32,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "01_814_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Saturday",
+          "description": "Supported Independent Living - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_815_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Sunday",
+          "description": "Supported Independent Living - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_816_0138_1_1",
+          "name": "Supported Independent Living - High Intensity - Public Holiday",
+          "description": "Supported Independent Living - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "01_832_0138_1_1",
+          "name": "Supported Independent Living - Night-Time Sleepover",
+          "description": "Supported Independent Living - Night-Time Sleepover",
+          "unit": "E",
+          "price_national": 311.79,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0103",
+      "items": [
+        {
+          "item_code": "03_040000919_0103_1_1",
+          "name": "Disability-Related Health Consumables - Low Cost",
+          "description": "Disability-Related Health Consumables - Low Cost",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_050903053_0103_1_1",
+          "name": "Incontinence Alarms",
+          "description": "Incontinence Alarms",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_090000911_0103_1_1",
+          "name": "Low Cost AT - Personal Care And Safety",
+          "description": "Low Cost AT - Personal Care And Safety",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_090348111_0103_1_2",
+          "name": "Extra cost for adapted or adapting clothing and/or footwear for disability need",
+          "description": "Extra cost for adapted or adapting clothing and/or footwear for disability need",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_090900111_0103_1_2",
+          "name": "Assistive products for dressing or undressing",
+          "description": "Assistive products for dressing or undressing",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_091800084_0103_1_1",
+          "name": "Continence - bowel care",
+          "description": "Continence - bowel care",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_092100082_0103_1_1",
+          "name": "Continence - consumables",
+          "description": "Continence - consumables",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_092400080_0103_1_1",
+          "name": "Continence - catheters/sheaths",
+          "description": "Continence - catheters/sheaths",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_092700081_0103_1_1",
+          "name": "Continence - drain/leg bags",
+          "description": "Continence - drain/leg bags",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_092700083_0103_1_1",
+          "name": "Continence - urinary collection items and accessories",
+          "description": "Continence - urinary collection items and accessories",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_093021078_0103_1_1",
+          "name": "Continence - reusable/washable personal protection",
+          "description": "Continence - reusable/washable personal protection",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_093021079_0103_1_1",
+          "name": "Continence - disposable personal protection",
+          "description": "Continence - disposable personal protection",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_093040085_0103_1_1",
+          "name": "Continence - bed/chair/floor protection",
+          "description": "Continence - bed/chair/floor protection",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_501509092_0103_1_1",
+          "name": "Repairs and Maintenance - HEN AT",
+          "description": "Repairs and Maintenance - HEN AT",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_710400002_0103_1_1",
+          "name": "Disability-Related Health Equipment and Consumables - Set Up/Training",
+          "description": "Disability-Related Health Equipment and Consumables - Set Up/Training",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_710930080_0103_1_1",
+          "name": "Delivery - Personal care Safety and Disability-related Health Consumables",
+          "description": "Delivery - Personal care Safety and Disability-related Health Consumables",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0105",
+      "items": [
+        {
+          "item_code": "03_120000911_0105_1_1",
+          "name": "Low Cost AT - Personal Mobility",
+          "description": "Low Cost AT - Personal Mobility",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0113",
+      "items": [
+        {
+          "item_code": "03_220300911_0113_1_1",
+          "name": "Low Cost AT - Vision Related AT",
+          "description": "Low Cost AT - Vision Related AT",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0122",
+      "items": [
+        {
+          "item_code": "03_220600911_0122_1_1",
+          "name": "Low Cost AT - Hearing Related AT",
+          "description": "Low Cost AT - Hearing Related AT",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0124",
+      "items": [
+        {
+          "item_code": "03_222100911_0124_1_1",
+          "name": "Low Cost AT - Communication Or Cognitive Support",
+          "description": "Low Cost AT - Communication Or Cognitive Support",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0130",
+      "items": [
+        {
+          "item_code": "03_900100156_0130_1_1",
+          "name": "Assistance Animal - Dog Guide - Dietary Needs",
+          "description": "Assistance Animal - Dog Guide - Dietary Needs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_900100157_0130_1_1",
+          "name": "Assistance Animal - Dog Guide - Grooming",
+          "description": "Assistance Animal - Dog Guide - Grooming",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_900100158_0130_1_1",
+          "name": "Assistance Animal - Dog Guide - Veterinary Services",
+          "description": "Assistance Animal - Dog Guide - Veterinary Services",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "03_900100159_0130_1_1",
+          "name": "Assistance Animal - Dog Guide - Annual Accreditation",
+          "description": "Assistance Animal - Dog Guide - Annual Accreditation",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "0135",
+      "items": [
+        {
+          "item_code": "03_060000911_0135_1_1",
+          "name": "Low Cost AT - Prosthetics And Orthotics",
+          "description": "Low Cost AT - Prosthetics And Orthotics",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "04",
+      "category_name": "Assistance with Social, Economic and Community Participation",
+      "support_purpose": "Core Supports",
+      "registration_group": "0104",
+      "items": [
+        {
+          "item_code": "04_049_0104_1_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_400_0104_1_1",
+          "name": "Access Community Social and Rec Activ - High Intensity - Weekday Daytime",
+          "description": "Access Community Social and Rec Activ - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_401_0104_1_1",
+          "name": "Access Community Social and Rec Activ - High Intensity - Weekday Evening",
+          "description": "Access Community Social and Rec Activ - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_402_0104_1_1",
+          "name": "Access Community Social and Rec Activ - High Intensity - Saturday",
+          "description": "Access Community Social and Rec Activ - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_403_0104_1_1",
+          "name": "Access Community Social and Rec Activ - High Intensity - Sunday",
+          "description": "Access Community Social and Rec Activ - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_404_0104_1_1",
+          "name": "Access Community Social and Rec Activ - High Intensity - Public Holiday",
+          "description": "Access Community Social and Rec Activ - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_592_0104_6_1",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_599_0104_6_1",
+          "name": "Centre Capital Cost",
+          "description": "Centre Capital Cost",
+          "unit": "H",
+          "price_national": 2.71,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_600_0104_6_1",
+          "name": "Group Activities - High Intensity - Weekday Daytime",
+          "description": "Group Activities - High Intensity - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_601_0104_6_1",
+          "name": "Group Activities - High Intensity - Weekday Evening",
+          "description": "Group Activities - High Intensity - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_602_0104_6_1",
+          "name": "Group Activities - High Intensity - Saturday",
+          "description": "Group Activities - High Intensity - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_603_0104_6_1",
+          "name": "Group Activities - High Intensity - Sunday",
+          "description": "Group Activities - High Intensity - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_604_0104_6_1",
+          "name": "Group Activities - High Intensity - Public Holiday",
+          "description": "Group Activities - High Intensity - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_799_0104_6_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "04",
+      "category_name": "Assistance with Social, Economic and Community Participation",
+      "support_purpose": "Core Supports",
+      "registration_group": "0125",
+      "items": [
+        {
+          "item_code": "04_049_0125_1_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_102_0125_6_1",
+          "name": "Access Community Social and Rec Activ - Standard - Public Holiday",
+          "description": "Access Community Social and Rec Activ - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_103_0125_6_1",
+          "name": "Access Community Social and Rec Activ - Standard - Weekday Evening",
+          "description": "Access Community Social and Rec Activ - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_104_0125_6_1",
+          "name": "Access Community Social and Rec Activ - Standard - Weekday Daytime",
+          "description": "Access Community Social and Rec Activ - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_105_0125_6_1",
+          "name": "Access Community Social and Rec Activ - Standard - Saturday",
+          "description": "Access Community Social and Rec Activ - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_106_0125_6_1",
+          "name": "Access Community Social and Rec Activ - Standard - Sunday",
+          "description": "Access Community Social and Rec Activ - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_450_0125_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_451_0125_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_452_0125_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Saturday",
+          "description": "Intensive and Complex Behaviour Supports - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_453_0125_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Sunday",
+          "description": "Intensive and Complex Behaviour Supports - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_454_0125_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "description": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_590_0125_6_1",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_799_0125_6_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "04",
+      "category_name": "Assistance with Social, Economic and Community Participation",
+      "support_purpose": "Core Supports",
+      "registration_group": "0133",
+      "items": [
+        {
+          "item_code": "04_049_0133_5_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_599_0133_5_1",
+          "name": "Centre Capital Cost",
+          "description": "Centre Capital Cost",
+          "unit": "H",
+          "price_national": 2.71,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_799_0133_5_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_801_0133_5_1",
+          "name": "Supports in Employment - Weekday Daytime",
+          "description": "Supports in Employment - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_802_0133_5_1",
+          "name": "Supports in Employment - Weekday Evening",
+          "description": "Supports in Employment - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_803_0133_5_1",
+          "name": "Supports in Employment - Saturday",
+          "description": "Supports in Employment - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_804_0133_5_1",
+          "name": "Supports in Employment - Sunday",
+          "description": "Supports in Employment - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_805_0133_5_1",
+          "name": "Supports in Employment - Public Holiday",
+          "description": "Supports in Employment - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_821_0133_6_1",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "04",
+      "category_name": "Assistance with Social, Economic and Community Participation",
+      "support_purpose": "Core Supports",
+      "registration_group": "0136",
+      "items": [
+        {
+          "item_code": "04_049_0136_1_1",
+          "name": "Establishment Fee For Personal Care/Participation",
+          "description": "Establishment Fee For Personal Care/Participation",
+          "unit": "E",
+          "price_national": 735.8,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_102_0136_6_1",
+          "name": "Group Activities - Standard - Weekday Daytime",
+          "description": "Group Activities - Standard - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_103_0136_6_1",
+          "name": "Group Activities - Standard - Weekday Evening",
+          "description": "Group Activities - Standard - Weekday Evening",
+          "unit": "H",
+          "price_national": 81.07,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_104_0136_6_1",
+          "name": "Group Activities - Standard - Saturday",
+          "description": "Group Activities - Standard - Saturday",
+          "unit": "H",
+          "price_national": 103.54,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_105_0136_6_1",
+          "name": "Group Activities - Standard - Sunday",
+          "description": "Group Activities - Standard - Sunday",
+          "unit": "H",
+          "price_national": 133.5,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_106_0136_6_1",
+          "name": "Group Activities - Standard - Public Holiday",
+          "description": "Group Activities - Standard - Public Holiday",
+          "unit": "H",
+          "price_national": 163.46,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_450_0136_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Daytime",
+          "unit": "H",
+          "price_national": 79.6,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "04_451_0136_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "description": "Intensive and Complex Behaviour Supports - Weekday Evening",
+          "unit": "H",
+          "price_national": 87.7,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "04_452_0136_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Saturday",
+          "description": "Intensive and Complex Behaviour Supports - Saturday",
+          "unit": "H",
+          "price_national": 112.01,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_453_0136_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Sunday",
+          "description": "Intensive and Complex Behaviour Supports - Sunday",
+          "unit": "H",
+          "price_national": 144.42,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_454_0136_1_1",
+          "name": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "description": "Intensive and Complex Behaviour Supports - Public Holiday",
+          "unit": "H",
+          "price_national": 176.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "04_591_0136_6_1",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_599_0136_6_1",
+          "name": "Centre Capital Cost",
+          "description": "Centre Capital Cost",
+          "unit": "H",
+          "price_national": 2.71,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "04_799_0136_6_1",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "07",
+      "category_name": "Support Coordination",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "07_001_0106_8_3",
+          "name": "Support Coordination Level 1: Support Connection",
+          "description": "Support Coordination Level 1: Support Connection",
+          "unit": "H",
+          "price_national": 80.06,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "07_002_0106_8_3",
+          "name": "Support Coordination Level 2: Coordination of Supports",
+          "description": "Support Coordination Level 2: Coordination of Supports",
+          "unit": "H",
+          "price_national": 100.14,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "07_101_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Weekday Daytime",
+          "description": "Psychosocial Recovery Coaching - Weekday Daytime",
+          "unit": "H",
+          "price_national": 110.44,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "07_102_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Weekday Evening",
+          "description": "Psychosocial Recovery Coaching - Weekday Evening",
+          "unit": "H",
+          "price_national": 121.68,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "07_103_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Weekday Night",
+          "description": "Psychosocial Recovery Coaching - Weekday Night",
+          "unit": "H",
+          "price_national": 123.93,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "07_104_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Saturday",
+          "description": "Psychosocial Recovery Coaching - Saturday",
+          "unit": "H",
+          "price_national": 155.41,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "07_105_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Sunday",
+          "description": "Psychosocial Recovery Coaching - Sunday",
+          "unit": "H",
+          "price_national": 200.39,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "07_106_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Public Holiday",
+          "description": "Psychosocial Recovery Coaching - Public Holiday",
+          "unit": "H",
+          "price_national": 245.36,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "07_501_0106_6_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "07_799_0106_6_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "07",
+      "category_name": "Support Coordination",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "07_799_0117_8_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "07",
+      "category_name": "Support Coordination",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0132",
+      "items": [
+        {
+          "item_code": "07_004_0132_8_3",
+          "name": "Support Coordination Level 3: Specialist Support Coordination",
+          "description": "Support Coordination Level 3: Specialist Support Coordination",
+          "unit": "H",
+          "price_national": 190.54,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "07_799_0132_8_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "08",
+      "category_name": "Improved Living Arrangements",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "08_005_0106_2_3",
+          "name": "Assistance With Accommodation And Tenancy Obligations",
+          "description": "Assistance With Accommodation And Tenancy Obligations",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "08_590_0106_2_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "08_799_0106_2_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "09",
+      "category_name": "Increased Social and Community Participation",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "09_006_0106_6_3",
+          "name": "Life Transition Planning Incl. Mentoring Peer-Support And Indiv Skill Develop",
+          "description": "Life Transition Planning Incl. Mentoring Peer-Support And Indiv Skill Develop",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "09_590_0106_6_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "09_799_0106_6_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "09",
+      "category_name": "Increased Social and Community Participation",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "09_009_0117_6_3",
+          "name": "Skills Development And Training",
+          "description": "Skills Development And Training",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "09_591_0117_6_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "09_799_0117_6_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "10",
+      "category_name": "Finding and Keeping a Job",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0102",
+      "items": [
+        {
+          "item_code": "10_016_0102_5_3",
+          "name": "Employment Assistance",
+          "description": "Employment Assistance",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_590_0102_5_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_799_0102_5_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "10",
+      "category_name": "Finding and Keeping a Job",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "10_002_0106_8_3",
+          "name": "Support Coordination Level 2: Coordination of Supports",
+          "description": "Support Coordination Level 2: Coordination of Supports",
+          "unit": "H",
+          "price_national": 100.14,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_101_0106_6_3",
+          "name": "Psychosocial Recovery Coaching - Weekday Daytime",
+          "description": "Psychosocial Recovery Coaching - Weekday Daytime",
+          "unit": "H",
+          "price_national": 110.44,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        }
+      ]
+    },
+    {
+      "category_number": "10",
+      "category_name": "Finding and Keeping a Job",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0128",
+      "items": [
+        {
+          "item_code": "10_011_0128_5_3",
+          "name": "Employment Therapy - Other Professional - Direct Service",
+          "description": "Employment Therapy - Other Professional - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_054_0128_5_3",
+          "name": "Employment Therapy - Psychologist - Direct Service",
+          "description": "Employment Therapy - Psychologist - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_055_0128_5_3",
+          "name": "Employment Therapy - Physiotherapist - Direct Service",
+          "description": "Employment Therapy - Physiotherapist - Direct Service",
+          "unit": "H",
+          "price_national": 183.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_613_0128_5_3",
+          "name": "Employment Therapy - Developmental Educator - Direct Service",
+          "description": "Employment Therapy - Developmental Educator - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_617_0128_5_3",
+          "name": "Employment Therapy - Occupational Therapist - Direct Service",
+          "description": "Employment Therapy - Occupational Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_620_0128_5_3",
+          "name": "Employment Therapy - Rehabilitation Counsellor - Direct Service",
+          "description": "Employment Therapy - Rehabilitation Counsellor - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_622_0128_5_3",
+          "name": "Employment Therapy - Speech Pathologist - Direct Service",
+          "description": "Employment Therapy - Speech Pathologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_799_0128_5_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "10",
+      "category_name": "Finding and Keeping a Job",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0133",
+      "items": [
+        {
+          "item_code": "10_590_0133_5_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_599_0133_5_3",
+          "name": "Centre Capital Cost",
+          "description": "Centre Capital Cost",
+          "unit": "H",
+          "price_national": 2.71,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_799_0133_5_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "10_806_0133_5_1",
+          "name": "Supports in Employment - Weekday Daytime",
+          "description": "Supports in Employment - Weekday Daytime",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        }
+      ]
+    },
+    {
+      "category_number": "11",
+      "category_name": "Improved Relationships",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0110",
+      "items": [
+        {
+          "item_code": "11_022_0110_7_3",
+          "name": "Specialist Behavioural Intervention Support - Direct Service",
+          "description": "Specialist Behavioural Intervention Support - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "11_023_0110_7_3",
+          "name": "Behaviour Management Plan Implementation - Direct Service",
+          "description": "Behaviour Management Plan Implementation - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "11_799_0110_7_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "11",
+      "category_name": "Improved Relationships",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "11_024_0117_7_3",
+          "name": "Individual Social Skills Development",
+          "description": "Individual Social Skills Development",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "11_590_0117_7_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "11_799_0117_7_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "12",
+      "category_name": "Improved Health and Wellbeing",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0126",
+      "items": [
+        {
+          "item_code": "12_027_0126_3_3",
+          "name": "Therapy - Exercise Physiologist - Direct Service",
+          "description": "Therapy - Exercise Physiologist - Direct Service",
+          "unit": "H",
+          "price_national": 161.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "12_029_0126_3_3",
+          "name": "Personal training provided by a Personal Trainer to a participant",
+          "description": "Personal training provided by a Personal Trainer to a participant",
+          "unit": "H",
+          "price_national": 69.39,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "12_799_0126_3_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "12",
+      "category_name": "Improved Health and Wellbeing",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0128",
+      "items": [
+        {
+          "item_code": "12_025_0128_3_3",
+          "name": "Therapy - Dietitian - Direct Service",
+          "description": "Therapy - Dietitian - Direct Service",
+          "unit": "H",
+          "price_national": 178.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "12_027_0128_3_3",
+          "name": "Therapy - Exercise Physiologist - Direct Service",
+          "description": "Therapy - Exercise Physiologist - Direct Service",
+          "unit": "H",
+          "price_national": 161.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "12_799_0128_3_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "13",
+      "category_name": "Improved Learning",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0102",
+      "items": [
+        {
+          "item_code": "13_030_0102_4_3",
+          "name": "Transition Through School And To Further Education",
+          "description": "Transition Through School And To Further Education",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "13_590_0102_4_3",
+          "name": "Activity Based Transport",
+          "description": "Activity Based Transport",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "13_799_0102_4_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0103",
+      "items": [
+        {
+          "item_code": "15_300_0103_1_3",
+          "name": "Assistive Technology Mentoring",
+          "description": "Assistive Technology Mentoring",
+          "unit": "H",
+          "price_national": 110.44,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0103_6_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0106",
+      "items": [
+        {
+          "item_code": "15_035_0106_1_3",
+          "name": "Assistance With Decision Making Daily Planning and Budgeting",
+          "description": "Assistance With Decision Making Daily Planning and Budgeting",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0106_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0114",
+      "items": [
+        {
+          "item_code": "15_400_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 103.44,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "15_401_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 114.1,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "15_402_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Saturday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Saturday",
+          "unit": "H",
+          "price_national": 147.55,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_403_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Sunday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Sunday",
+          "unit": "H",
+          "price_national": 169.62,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_404_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 191.67,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_405_0114_1_3",
+          "name": "Delivery of Health Supports by an Enrolled Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by an Enrolled Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 116.22,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "15_406_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 128.05,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "15_407_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 141.27,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "15_408_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Saturday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Saturday",
+          "unit": "H",
+          "price_national": 182.75,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_409_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Sunday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Sunday",
+          "unit": "H",
+          "price_national": 210.09,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_410_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by a Registered Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 237.43,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_411_0114_1_3",
+          "name": "Delivery of Health Supports by a Registered Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by a Registered Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 143.9,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "15_412_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Daytime",
+          "unit": "H",
+          "price_national": 148.13,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "15_413_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Evening",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Evening",
+          "unit": "H",
+          "price_national": 163.39,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "15_414_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Saturday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Saturday",
+          "unit": "H",
+          "price_national": 211.39,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_415_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Sunday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Sunday",
+          "unit": "H",
+          "price_national": 243.02,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_416_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Public Holiday",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Public Holiday",
+          "unit": "H",
+          "price_national": 274.64,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_417_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse - Weekday Night",
+          "description": "Delivery of Health Supports by a Clinical Nurse - Weekday Night",
+          "unit": "H",
+          "price_national": 166.45,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "15_418_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Daytime",
+          "unit": "H",
+          "price_national": 175.18,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "15_419_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Evening",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Evening",
+          "unit": "H",
+          "price_national": 193.27,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "15_420_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Saturday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Saturday",
+          "unit": "H",
+          "price_national": 250.12,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_421_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Sunday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Sunday",
+          "unit": "H",
+          "price_national": 287.58,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_422_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Public Holiday",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Public Holiday",
+          "unit": "H",
+          "price_national": 325.03,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_423_0114_1_3",
+          "name": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Night",
+          "description": "Delivery of Health Supports by a Clinical Nurse Consultant - Weekday Night",
+          "unit": "H",
+          "price_national": 196.89,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "15_424_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Daytime",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Daytime",
+          "unit": "H",
+          "price_national": 183.15,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "15_425_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Evening",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Evening",
+          "unit": "H",
+          "price_national": 202.04,
+          "day_type": "Weekday",
+          "time_type": "Evening"
+        },
+        {
+          "item_code": "15_426_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Saturday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Saturday",
+          "unit": "H",
+          "price_national": 261.5,
+          "day_type": "Saturday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_427_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Sunday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Sunday",
+          "unit": "H",
+          "price_national": 300.67,
+          "day_type": "Sunday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_428_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Public Holiday",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Public Holiday",
+          "unit": "H",
+          "price_national": 339.84,
+          "day_type": "Public Holiday",
+          "time_type": null
+        },
+        {
+          "item_code": "15_429_0114_1_3",
+          "name": "Delivery of Health Supports by a Nurse Practitioner - Weekday Night",
+          "description": "Delivery of Health Supports by a Nurse Practitioner - Weekday Night",
+          "unit": "H",
+          "price_national": 205.83,
+          "day_type": "Weekday",
+          "time_type": "Night"
+        },
+        {
+          "item_code": "15_799_0114_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "15_037_0117_1_3",
+          "name": "Skill Development And Training\u00a0including Public Transport Training",
+          "description": "Skill Development And Training\u00a0including Public Transport Training",
+          "unit": "H",
+          "price_national": 73.58,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_038_0117_1_3",
+          "name": "Training For Carers/Parents",
+          "description": "Training For Carers/Parents",
+          "unit": "H",
+          "price_national": 83.87,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0117_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0118",
+      "items": [
+        {
+          "item_code": "15_001_0118_1_3",
+          "name": "ECI Professional - Psychologist - Direct Service",
+          "description": "ECI Professional - Psychologist - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_003_0118_1_3",
+          "name": "ECI Professional - Physiotherapist - Direct Service",
+          "description": "ECI Professional - Physiotherapist - Direct Service",
+          "unit": "H",
+          "price_national": 183.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_005_0118_1_3",
+          "name": "ECI Professional - Other Early Childhood Professional - Direct Service",
+          "description": "ECI Professional - Other Early Childhood Professional - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_007_0118_1_3",
+          "name": "ECI Professional - Therapy Assistant - Level 1 - Direct Service",
+          "description": "ECI Professional - Therapy Assistant - Level 1 - Direct Service",
+          "unit": "H",
+          "price_national": 56.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_008_0118_1_3",
+          "name": "ECI Professional - Therapy Assistant - Level 2 - Direct Service",
+          "description": "ECI Professional - Therapy Assistant - Level 2 - Direct Service",
+          "unit": "H",
+          "price_national": 86.79,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_062_0118_1_3",
+          "name": "ECI Professional - Dietitian - Direct Service",
+          "description": "ECI Professional - Dietitian - Direct Service",
+          "unit": "H",
+          "price_national": 178.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_606_0118_1_3",
+          "name": "ECI Professional - Counsellor - Direct Service",
+          "description": "ECI Professional - Counsellor - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_609_0118_1_3",
+          "name": "ECI Professional - Exercise Physiologist - Direct Service",
+          "description": "ECI Professional - Exercise Physiologist - Direct Service",
+          "unit": "H",
+          "price_national": 161.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_610_0118_1_3",
+          "name": "ECI Professional - Art Therapist - Direct Service",
+          "description": "ECI Professional - Art Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_613_0118_1_3",
+          "name": "ECI Professional - Developmental educator - Direct Service",
+          "description": "ECI Professional - Developmental educator - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_615_0118_1_3",
+          "name": "ECI Professional - Music Therapist - Direct Service",
+          "description": "ECI Professional - Music Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_617_0118_1_3",
+          "name": "ECI Professional - Occupational Therapist - Direct Service",
+          "description": "ECI Professional - Occupational Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_619_0118_1_3",
+          "name": "ECI Professional - Podiatrist - Direct Service",
+          "description": "ECI Professional - Podiatrist - Direct Service",
+          "unit": "H",
+          "price_national": 188.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_621_0118_1_3",
+          "name": "ECI Professional - Social worker - Direct Service",
+          "description": "ECI Professional - Social worker - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_622_0118_1_3",
+          "name": "ECI Professional - Speech Pathologist - Direct Service",
+          "description": "ECI Professional - Speech Pathologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_625_0118_1_3",
+          "name": "ECI Professional - Early Childhood Teacher or Educator - Direct Service",
+          "description": "ECI Professional - Early Childhood Teacher or Educator - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_626_0118_1_3",
+          "name": "ECI Professional - Orientation Mobility Specialist - Direct Service",
+          "description": "ECI Professional - Orientation Mobility Specialist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0118_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0119",
+      "items": [
+        {
+          "item_code": "15_501_0119_1_3",
+          "name": "Audiologist - Direct Service",
+          "description": "Audiologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0119_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0126",
+      "items": [
+        {
+          "item_code": "15_200_0126_1_3",
+          "name": "Therapy - Exercise Physiologist - Direct Service",
+          "description": "Therapy - Exercise Physiologist - Direct Service",
+          "unit": "H",
+          "price_national": 161.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0126_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0128",
+      "items": [
+        {
+          "item_code": "15_043_0128_1_3",
+          "name": "Therapy - Counsellor - Direct Service",
+          "description": "Therapy - Counsellor - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_045_0128_1_3",
+          "name": "Community Engagement Assistance",
+          "description": "Community Engagement Assistance",
+          "unit": "H",
+          "price_national": 53.02,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_052_0128_1_3",
+          "name": "Therapy Assistant - Level 1 - Direct Service",
+          "description": "Therapy Assistant - Level 1 - Direct Service",
+          "unit": "H",
+          "price_national": 56.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_053_0128_1_3",
+          "name": "Therapy Assistant - Level 2 - Direct Service",
+          "description": "Therapy Assistant - Level 2 - Direct Service",
+          "unit": "H",
+          "price_national": 86.79,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_054_0128_1_3",
+          "name": "Therapy - Psychologist - Direct Service",
+          "description": "Therapy - Psychologist - Direct Service",
+          "unit": "H",
+          "price_national": 252.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_055_0128_1_3",
+          "name": "Therapy - Physiotherapist - Direct Service",
+          "description": "Therapy - Physiotherapist - Direct Service",
+          "unit": "H",
+          "price_national": 183.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_056_0128_1_3",
+          "name": "Therapy - Other Professional - Direct Service",
+          "description": "Therapy - Other Professional - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_062_0128_3_3",
+          "name": "Therapy - Dietitian - Direct Service",
+          "description": "Therapy - Dietitian - Direct Service",
+          "unit": "H",
+          "price_national": 178.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_200_0128_1_3",
+          "name": "Therapy - Exercise Physiologist - Direct Service",
+          "description": "Therapy - Exercise Physiologist - Direct Service",
+          "unit": "H",
+          "price_national": 161.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_610_0128_1_3",
+          "name": "Therapy - Art Therapist - Direct Service",
+          "description": "Therapy - Art Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_611_0128_1_3",
+          "name": "Therapy - Audiologist - Direct Service",
+          "description": "Therapy - Audiologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_613_0128_1_3",
+          "name": "Therapy - Developmental Educator - Direct Service",
+          "description": "Therapy - Developmental Educator - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_615_0128_1_3",
+          "name": "Therapy - Music Therapist - Direct Service",
+          "description": "Therapy - Music Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_617_0128_1_3",
+          "name": "Therapy - Occupational Therapist - Direct Service",
+          "description": "Therapy - Occupational Therapist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_618_0128_1_3",
+          "name": "Therapy - Orthoptist - Direct Service",
+          "description": "Therapy - Orthoptist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_619_0128_1_3",
+          "name": "Therapy - Podiatrist - Direct Service",
+          "description": "Therapy - Podiatrist - Direct Service",
+          "unit": "H",
+          "price_national": 188.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_620_0128_1_3",
+          "name": "Therapy - Rehabilitation Counsellor - Direct Service",
+          "description": "Therapy - Rehabilitation Counsellor - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_621_0128_1_3",
+          "name": "Therapy - Social Worker - Direct Service",
+          "description": "Therapy - Social Worker - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_622_0128_1_3",
+          "name": "Therapy - Speech Pathologist - Direct Service",
+          "description": "Therapy - Speech Pathologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_626_0128_1_3",
+          "name": "Therapy - Orientation Mobility Specialist - Direct Service",
+          "description": "Therapy - Orientation Mobility Specialist - Direct Service",
+          "unit": "H",
+          "price_national": 156.16,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0128_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0134",
+      "items": [
+        {
+          "item_code": "15_502_0134_1_3",
+          "name": "Audiologist - Direct Service",
+          "description": "Audiologist - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_503_0134_1_3",
+          "name": "Audiometrist - Direct Service",
+          "description": "Audiometrist - Direct Service",
+          "unit": "H",
+          "price_national": 166.83,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0134_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0135",
+      "items": [
+        {
+          "item_code": "15_047_0135_1_3",
+          "name": "Selection or Manufacture of Individualised Technology - Direct Service",
+          "description": "Selection or Manufacture of Individualised Technology - Direct Service",
+          "unit": "H",
+          "price_national": 193.99,
+          "day_type": null,
+          "time_type": null
+        },
+        {
+          "item_code": "15_799_0135_1_3",
+          "name": "Provider travel - non-labour costs",
+          "description": "Provider travel - non-labour costs",
+          "unit": "E",
+          "price_national": 1,
+          "day_type": null,
+          "time_type": null
+        }
+      ]
+    }
+  ]
+}
