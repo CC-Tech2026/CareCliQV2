@@ -16,6 +16,7 @@ import {
   getNdisGoals,
   getParticipantTasks,
   getAvailableWorkers,
+  getParticipantPriceItemOptions,
   type WorkerStats,
   type NdisGoal,
   type ParticipantTask,
@@ -23,6 +24,7 @@ import {
   type AssignShiftResult,
   type AvailableWorker,
   type AvailabilityStatus,
+  type ShiftPriceItemOption,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -199,6 +201,7 @@ export function ShiftAssignmentModal({
   const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
   const [isShadowShift,         setIsShadowShift]         = useState(false);
   const [shadowOfWorkerId,      setShadowOfWorkerId]      = useState("");
+  const [expectedPriceItemCode, setExpectedPriceItemCode] = useState("");
 
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
@@ -294,6 +297,15 @@ export function ShiftAssignmentModal({
     }
   );
 
+  const priceItemsQuery = useOrgQuery<ShiftPriceItemOption[]>(
+    [orgId, "participant-price-items", selectedParticipantId],
+    {
+      queryFn: () => getParticipantPriceItemOptions(selectedParticipantId),
+      enabled: !!selectedParticipantId,
+      staleTime: 60_000,
+    }
+  );
+
   const assignMut = useMutation({
     mutationFn: async (): Promise<AssignShiftResult> => {
       const payload = {
@@ -306,6 +318,7 @@ export function ShiftAssignmentModal({
         sleepover_start: isSleepover && sleepoverStart ? datetimeLocalValueToUtcIso(sleepoverStart, participantZone) : undefined,
         sleepover_end: isSleepover && sleepoverEnd ? datetimeLocalValueToUtcIso(sleepoverEnd, participantZone) : undefined,
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
+        expected_price_item_code: expectedPriceItemCode || undefined,
       };
       if (selectedWorkerId) {
         return assignShift({
@@ -352,6 +365,7 @@ export function ShiftAssignmentModal({
     setSelectedTaskIds([]);
     setIsShadowShift(false);
     setShadowOfWorkerId("");
+    setExpectedPriceItemCode("");
   };
 
   const handleSetDuration = (hours: number) => {
@@ -757,6 +771,38 @@ export function ShiftAssignmentModal({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Expected NDIS item — recorded now, cross-checked against
+              whatever's actually picked when the coordinator verifies this
+              shift later (a mismatch warns but doesn't block). */}
+          {!hasGoalsTasksError && selectedParticipantId && (
+            <div className="space-y-2">
+              <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
+                Expected NDIS item
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate("common.optional")}</span>
+              </label>
+              <Select
+                value={expectedPriceItemCode || "__none__"}
+                onValueChange={(val) => setExpectedPriceItemCode(val === "__none__" ? "" : val)}
+                disabled={priceItemsQuery.isLoading}
+              >
+                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                  <SelectValue placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None recorded</SelectItem>
+                  {(priceItemsQuery.data ?? []).map((p) => (
+                    <SelectItem key={p.item_code} value={p.item_code}>
+                      {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px]" style={{ color: MUTED }}>
+                What this shift should be billed under. If a different item is picked at verification, the coordinator sees a warning — it won't block them.
+              </p>
             </div>
           )}
 

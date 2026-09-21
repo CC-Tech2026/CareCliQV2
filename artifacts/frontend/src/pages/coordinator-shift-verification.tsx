@@ -72,9 +72,14 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
 
   const verifyMutation = useMutation({
     mutationFn: () => confirmShiftVerification(item.shift_id, priceItemCode),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [orgId, "shift-verification-queue"] });
-      toast({ title: "Shift verified", description: "Budget deducted from the participant's plan." });
+      const warning = result.expected_item_warning || result.day_type_warning;
+      toast(
+        warning
+          ? { title: "Shift verified — check the price item", description: warning }
+          : { title: "Shift verified", description: "Budget deducted from the participant's plan." }
+      );
       onVerified();
     },
     onError: (err: unknown) => {
@@ -160,6 +165,17 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
               <li key={i}>{String((t as Record<string, unknown>).label ?? "Task")}: {String((t as Record<string, unknown>).flag_type ?? "")}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {item.expected_price_item_code && (
+        <div className="border-t px-5 py-2 text-[11px] font-medium" style={{ borderColor: BORDER, color: T3 }}>
+          Expected item: <span className="font-bold" style={{ color: T1 }}>{item.expected_price_item_code}</span>
+          {priceItemCode && priceItemCode !== item.expected_price_item_code && (
+            <span className="ml-1.5 inline-flex items-center gap-1 font-bold" style={{ color: "#B45309" }}>
+              <AlertTriangle size={10} /> different item selected
+            </span>
+          )}
         </div>
       )}
 

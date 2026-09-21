@@ -591,6 +591,7 @@ export type AssignShiftPayload = {
   selected_task_ids?: string[];
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string;
+  expected_price_item_code?: string;
 };
 
 export type AssignShiftResult = {
@@ -779,6 +780,7 @@ export type BulkShiftPayload = {
   shift_type?: string;
   worker_id?: string;
   confirm_conflicts?: boolean;
+  expected_price_item_code?: string;
 };
 
 export type BulkShiftResult = {
@@ -941,6 +943,7 @@ export function createUnassignedShift(payload: {
   scheduled_end?: string;
   shift_type?: string;
   duty_type?: string;
+  expected_price_item_code?: string;
 }) {
   return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
     "/api/coordinator/shifts/unassigned",
@@ -1718,6 +1721,8 @@ export type ShiftVerificationQueueItem = {
   checks: ShiftVerificationChecks;
   /** Participant's branch zone. */
   timezone?: string | null;
+  /** NDIS item code recorded when this shift was created, if any — cross-checked against whatever's picked here. */
+  expected_price_item_code?: string | null;
 };
 
 export type ShiftPriceItemOption = {
@@ -1740,6 +1745,8 @@ export type VerifyShiftResult = {
   hourly_rate_applied: number;
   support_category: string;
   new_used_amount: number;
+  day_type_warning?: string;
+  expected_item_warning?: string;
 };
 
 export function getShiftVerificationQueue() {
@@ -1749,6 +1756,15 @@ export function getShiftVerificationQueue() {
 export function getShiftPriceItemOptions(shiftId: string) {
   return jsonFetch<ShiftPriceItemOption[]>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/price-items`
+  );
+}
+
+/** Same candidate list as getShiftPriceItemOptions, keyed by participant
+ * instead of an existing shift — for picking an expected item at shift
+ * creation, before any shift exists yet. */
+export function getParticipantPriceItemOptions(participantId: string) {
+  return jsonFetch<ShiftPriceItemOption[]>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/price-items`
   );
 }
 

@@ -401,6 +401,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 # Participant's branch zone — the coordinator verifies (and
                 # bills) this shift's times in it, not their own.
                 "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
+                "expected_price_item_code": shift.get("expected_price_item_code"),
             }
         )
     return out
@@ -422,6 +423,17 @@ async def list_price_item_options(shift_id: str, org_id: str) -> list[dict[str, 
         return []
 
     participant_id = shift_rows[0].get("participant_id")
+    if not participant_id:
+        return []
+    return await list_price_item_options_for_participant(str(participant_id), org_id)
+
+
+async def list_price_item_options_for_participant(participant_id: str, org_id: str) -> list[dict[str, Any]]:
+    """Candidate ndis_price_items rows for a participant's plan — same
+    filtering list_price_item_options uses for an existing shift, but keyed
+    directly by participant so a coordinator can record an expected item
+    before any shift exists yet."""
+    supabase = get_supabase_admin()
     allowed_categories: Optional[set[str]] = None
     if participant_id:
         plan = await get_plan_for_participant(str(participant_id))

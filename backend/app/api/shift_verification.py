@@ -43,6 +43,14 @@ async def get_shift_price_items(shift_id: str, current_user: dict = Depends(get_
     return await shift_verification_service.list_price_item_options(shift_id, org_id)
 
 
+@router.get("/participants/{participant_id}/price-items")
+async def get_participant_price_items(participant_id: str, current_user: dict = Depends(get_current_user)):
+    """Candidate NDIS price items for a participant's plan — used at shift
+    creation, before a shift exists, to record an expected item."""
+    org_id = _require_coordinator(current_user)
+    return await shift_verification_service.list_price_item_options_for_participant(participant_id, org_id)
+
+
 @router.post("/shifts/{shift_id}/verify")
 async def post_verify_shift(
     shift_id: str,
