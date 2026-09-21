@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
@@ -558,9 +558,8 @@ async def edit_item_price(
         new_row_payload = {
             "organization_id": str(org_id),
             "item_code": item_code,
-            "schedule_id": None,  # Signal: manual edit
-            "support_category_number": current_row["support_category_number"],
-            "support_category_name": current_row["support_category_name"],
+            "schedule_id": current_row["schedule_id"],  # carried forward; not NULL live
+            "category_number": current_row["category_number"],
             "support_purpose": current_row["support_purpose"],
             "registration_group": current_row["registration_group"],
             "name": current_row["name"],
@@ -569,14 +568,12 @@ async def edit_item_price(
             "price_national": price_national,
             "price_remote": price_remote,
             "price_very_remote": price_very_remote,
+            "effective_date": effective_date.isoformat(),
             "day_type": current_row["day_type"],
             "time_type": current_row["time_type"],
             "support_intensity": current_row["support_intensity"],
-            "notes": current_row["notes"],
             "valid_from": effective_date.isoformat() + "T00:00:00Z",
             "valid_to": None,
-            "edited_by": user_id,
-            "edited_at": datetime.now(timezone.utc).isoformat(),
         }
 
         insert_result = supabase.table("ndis_price_items").insert(new_row_payload).execute()
