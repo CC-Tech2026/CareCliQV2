@@ -114,7 +114,7 @@ def get_completed_tasks_for_period(
                 supabase.table("ndis_price_items")
                 .select(
                     "item_code, name, price_national, price_remote, price_very_remote, "
-                    "day_type, time_type, support_category_name, support_intensity"
+                    "day_type, time_type, support_intensity"
                 )
                 .in_("item_code", price_codes)
                 .eq("organization_id", organization_id)
