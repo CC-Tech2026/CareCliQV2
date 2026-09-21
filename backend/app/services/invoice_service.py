@@ -108,28 +108,44 @@ def get_completed_tasks_for_period(
                 if isinstance(row, dict) and row.get("id")
             }
 
-        prices_by_code: dict[str, dict[str, Any]] = {}
+        # Fetch every version of each referenced item code (not just the
+        # currently active one) so each completion can be matched to the
+        # price actually in effect on its own completion_date — a
+        # completion from before a price update must keep showing that
+        # update's predecessor, not today's rate.
+        versions_by_code: dict[str, list[dict[str, Any]]] = {}
         if price_codes:
             price_resp = (
                 supabase.table("ndis_price_items")
                 .select(
                     "item_code, name, price_national, price_remote, price_very_remote, "
-                    "day_type, time_type, support_intensity"
+                    "day_type, time_type, support_intensity, valid_from, valid_to"
                 )
                 .in_("item_code", price_codes)
                 .eq("organization_id", organization_id)
-                .is_("valid_to", "null")
                 .execute()
             )
-            prices_by_code = {
-                str(row["item_code"]): row
-                for row in (price_resp.data or [])
-                if isinstance(row, dict) and row.get("item_code")
-            }
+            for row in price_resp.data or []:
+                if isinstance(row, dict) and row.get("item_code"):
+                    versions_by_code.setdefault(str(row["item_code"]), []).append(row)
+
+        def _price_as_of(item_code: str, as_of: str) -> dict[str, Any]:
+            for version in versions_by_code.get(item_code, []):
+                valid_from = str(version.get("valid_from") or "")[:10]
+                valid_to = version.get("valid_to")
+                valid_to = str(valid_to)[:10] if valid_to else None
+                if valid_from <= as_of and (valid_to is None or as_of < valid_to):
+                    return version
+            return {}
 
         for row in completions:
             row["participant_tasks"] = tasks_by_id.get(str(row.get("task_id")), {})
-            row["ndis_price_items"] = prices_by_code.get(str(row.get("price_item_code")), {})
+            price_item_code = row.get("price_item_code")
+            row["ndis_price_items"] = (
+                _price_as_of(str(price_item_code), str(row.get("completion_date") or ""))
+                if price_item_code
+                else {}
+            )
         return completions
     except Exception as e:
         logger.error(f"Failed to get completed tasks: {e}")
