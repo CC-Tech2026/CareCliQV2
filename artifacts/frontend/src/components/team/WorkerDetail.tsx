@@ -125,6 +125,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import {
@@ -150,6 +151,7 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const SURFACE = "var(--cc-surface)";
+const CORAL = "var(--cc-coral)";
 const CARD_SHADOW = "var(--cc-card-shadow)";
 
 // Mirrors AccessibilityPanel.tsx's LANGUAGE_OPTIONS — kept local rather than
@@ -186,12 +188,48 @@ const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
   "personal",
   "shifts",
   "participants",
+  "availability",
   "documents",
   "credentials",
-  "availability",
   "training",
   "induction",
 ];
+
+const TAB_DESCRIPTION: Record<WorkerDetailTab, string> = {
+  overview: "Personal information, work arrangements and account preferences.",
+  personal: "Personal information, work arrangements and account preferences.",
+  shifts: "Review completed shifts, documentation and delivery quality.",
+  participants:
+    "View current participant assignments and previous care relationships.",
+  availability:
+    "Review regular working hours, time off and scheduling preferences.",
+  documents: "Find employment records, references and other staff documents.",
+  credentials:
+    "Check required credentials, review evidence and track expiry dates.",
+  training:
+    "Assign learning, review submissions and follow up on overdue training.",
+  induction: "Track the first-day checklist and mandatory induction progress.",
+};
+
+function ProfileLoadError({
+  label,
+  retry,
+}: {
+  label: string;
+  retry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border bg-[var(--cc-surface)] p-4 text-sm text-cc-text"
+    >
+      <span>{label} could not be loaded.</span>
+      <Button variant="outline" size="sm" onClick={retry}>
+        Retry {label.toLowerCase()}
+      </Button>
+    </div>
+  );
+}
 
 const TAB_ICON: Record<WorkerDetailTab, typeof User> = {
   overview: User,
@@ -233,17 +271,22 @@ const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
   qualification: "Qualification",
 };
 
-/** A worker is "verified" once every mandatory credential type is on file and valid/expiring (not missing/expired/rejected). */
+/** A worker is "verified" once every mandatory credential type is on file
+ * and strictly valid. Must match the backend's actual pipeline gate
+ * (onboarding_escalation_service.mandatory_credentials_approved), which
+ * requires strictly "valid" too — treating "expiring" as complete here
+ * would show a worker as fully ready on this screen while the MD's
+ * Worker Onboarding Pipeline board simultaneously keeps them in
+ * "Screening & Credentials", for the exact same underlying data. */
 export function isWorkerCredentialsComplete(
   credentials: Credential[],
   workerId: string,
 ): boolean {
   const workerCreds = credentials.filter((c) => c.user_id === workerId);
   const byType = new Map(workerCreds.map((c) => [c.credential_type, c]));
-  return REQUIRED_CREDENTIAL_TYPES.every((type) => {
-    const cred = byType.get(type);
-    return !!cred && (cred.status === "valid" || cred.status === "expiring");
-  });
+  return REQUIRED_CREDENTIAL_TYPES.every(
+    (type) => byType.get(type)?.status === "valid",
+  );
 }
 
 function credentialLabel(type: string) {
@@ -547,7 +590,7 @@ function ReadinessSummary({
 
   return (
     <div
-      className="flex items-center gap-3 rounded-2xl border px-3 py-2"
+      className="flex items-center gap-3 rounded-xl border px-3 py-2"
       style={{
         background: SURFACE,
         borderColor: levelColor,
@@ -681,16 +724,25 @@ export function WorkerDetail({
     isWorkerCredentialsComplete(credentialsQuery.data ?? [], worker.id);
   const onboardingPending =
     worker.role === "support_worker" && worker.onboarding_completed === false;
-  const credentialsCompleteCount = REQUIRED_CREDENTIAL_TYPES.filter((type) => {
-    const cred = workerCredentials.find((c) => c.credential_type === type);
-    return cred && (cred.status === "valid" || cred.status === "expiring");
-  }).length;
-  const missingCredentialTypes = (
-    credentialsKnown ? REQUIRED_CREDENTIAL_TYPES : []
-  ).filter((type) => {
-    const cred = workerCredentials.find((c) => c.credential_type === type);
-    return !cred || !(cred.status === "valid" || cred.status === "expiring");
-  });
+  // One pass building {type -> status}, so the count and the missing-list
+  // below can never disagree about what "complete" means (they used to be
+  // two separately-maintained filters) — and both now require strictly
+  // "valid", matching isWorkerCredentialsComplete and the backend's actual
+  // pipeline gate.
+  const credentialStatusByType = new Map(
+    REQUIRED_CREDENTIAL_TYPES.map((type) => [
+      type,
+      workerCredentials.find((c) => c.credential_type === type)?.status,
+    ]),
+  );
+  const credentialsCompleteCount = REQUIRED_CREDENTIAL_TYPES.filter(
+    (type) => credentialStatusByType.get(type) === "valid",
+  ).length;
+  const missingCredentialTypes = credentialsKnown
+    ? REQUIRED_CREDENTIAL_TYPES.filter(
+        (type) => credentialStatusByType.get(type) !== "valid",
+      )
+    : [];
   const topReason = computeTopReason(
     worker,
     credentialsComplete,
@@ -866,7 +918,7 @@ export function WorkerDetail({
 
       {/* Identity + at-a-glance header */}
       <div
-        className="rounded-2xl overflow-hidden border"
+        className="rounded-xl overflow-hidden border"
         style={{
           background: SURFACE,
           borderColor: BORDER,
@@ -1085,7 +1137,7 @@ export function WorkerDetail({
                 type="button"
                 aria-current={active ? "page" : undefined}
                 onClick={() => selectProfileTab(t)}
-                className="relative flex min-h-11 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
+                className="relative flex min-h-11 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
                 style={{
                   background: active ? SOFT : "transparent",
                   color: active ? TEXT : MUTED,
@@ -1121,7 +1173,7 @@ export function WorkerDetail({
           })}
         </div>
 
-        <div className="w-full min-w-0 flex-1">
+        <div className="w-full min-w-0 flex-1 [overflow-wrap:anywhere]">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${worker.id}-${tab}`}
@@ -1132,6 +1184,14 @@ export function WorkerDetail({
               exit={{ opacity: 0 }}
               transition={{ duration: reduceProfileMotion ? 0 : 0.15 }}
             >
+              <header className="mb-5 border-b border-cc-border pb-4">
+                <h2 className="text-xl font-semibold tracking-tight text-cc-text">
+                  {translate(`team.detail.tab.${tab}`)}
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-cc-muted">
+                  {TAB_DESCRIPTION[tab]}
+                </p>
+              </header>
               {(tab === "personal" || tab === "overview") && (
                 <PersonalInfoTab
                   worker={worker}
@@ -1262,7 +1322,7 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-2xl border px-5 py-4"
+      className="rounded-xl border px-5 py-4"
       style={{ background: SOFT, borderColor: BORDER }}
     >
       <div className="flex items-center gap-2 mb-1">
@@ -1308,7 +1368,7 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-2xl border p-4"
+      className="rounded-xl border p-4"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       <div className="flex items-center gap-2">
@@ -1342,7 +1402,7 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
                   : SOFT,
                 color: s.is_certified ? "var(--cc-status-success)" : MUTED,
               }}
-              title={s.is_certified ? "Certified" : "Unverified — from resume"}
+              title={s.is_certified ? "Certified" : "Unverified: from resume"}
             >
               {s.skill}
             </span>
@@ -1472,7 +1532,7 @@ function PersonalInfoTab({
           since once reviewed it's mostly reference, not something to keep taking up space. */}
       {nextSteps.length > 0 ? (
         <div
-          className="rounded-2xl border overflow-hidden"
+          className="rounded-xl border overflow-hidden"
           style={{
             borderColor: "var(--cc-status-warning)",
             background: "var(--cc-status-warning-bg)",
@@ -1549,7 +1609,7 @@ function PersonalInfoTab({
         </div>
       ) : statusKnown ? (
         <div
-          className="rounded-2xl border p-4 flex items-center gap-2.5"
+          className="rounded-xl border p-4 flex items-center gap-2.5"
           style={{
             borderColor: "var(--cc-status-success)",
             background: "var(--cc-status-success-bg)",
@@ -1563,7 +1623,7 @@ function PersonalInfoTab({
             className="text-sm font-bold"
             style={{ color: "var(--cc-status-success)" }}
           >
-            Nothing outstanding — fully up to date.
+            Nothing outstanding, fully up to date.
           </p>
         </div>
       ) : null}
@@ -1572,7 +1632,7 @@ function PersonalInfoTab({
           into the stat strip or any compliance-facing surface. */}
       {coaching?.triggered && (
         <div
-          className="rounded-2xl p-4"
+          className="rounded-xl p-4"
           style={{ background: SOFT, boxShadow: CARD_SHADOW }}
         >
           <div className="flex items-center gap-2 mb-1.5">
@@ -1844,21 +1904,25 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
 
   const isMD = user?.role === "managing_director";
   const viaGrant = !isMD && hasCapability("reassign_coordinator");
-  if ((!isMD && !viaGrant) || worker.role !== "support_worker")
-    return null;
+  if ((!isMD && !viaGrant) || worker.role !== "support_worker") return null;
 
   const grant = viaGrant ? grantFor("reassign_coordinator") : undefined;
 
   return (
     <div
-      className="rounded-2xl overflow-hidden border p-5"
+      className="rounded-xl overflow-hidden border p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
         boxShadow: CARD_SHADOW,
       }}
     >
-      {grant && <TemporaryAccessBanner grant={grant} label="Reassign a worker's coordinator" />}
+      {grant && (
+        <TemporaryAccessBanner
+          grant={grant}
+          label="Reassign a worker's coordinator"
+        />
+      )}
       <p
         className="text-[11px] font-semibold uppercase tracking-wide"
         style={{ color: MUTED }}
@@ -1930,7 +1994,7 @@ function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden border p-5"
+      className="rounded-xl overflow-hidden border p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
@@ -2048,7 +2112,7 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden border p-5"
+      className="rounded-xl overflow-hidden border p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
@@ -2151,7 +2215,7 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden border p-5"
+      className="rounded-xl overflow-hidden border p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
@@ -2251,6 +2315,7 @@ function DocumentsTab({
   const { user } = useAuth();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const documentsQuery = useOrgQuery(
     ["worker-onboarding-documents", worker.id],
@@ -2259,6 +2324,13 @@ function DocumentsTab({
     },
   );
   const documents = documentsQuery.data ?? [];
+  const visibleDocuments = documents.filter((doc) =>
+    [doc.title, doc.notes, documentTypeLabel(doc.document_type, translate)]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
+  );
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteWorkerOnboardingDocument(id),
@@ -2281,21 +2353,25 @@ function DocumentsTab({
           these documents (offer letters, references, correspondence) have no expiry concept in
           this data model at all, not just none set, so that clause never applies here. */}
       <div
-        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
         style={{ background: SOFT, color: TEXT }}
       >
         <div>
           <p className="text-lg font-semibold">
-            {documents.length} document{documents.length !== 1 ? "s" : ""}
+            {documentsQuery.isLoading
+              ? "Loading documents"
+              : documentsQuery.isError
+                ? "Documents unavailable"
+                : `${documents.length} document${documents.length !== 1 ? "s" : ""}`}
           </p>
           <p className="text-xs font-bold mt-0.5" style={{ color: MUTED }}>
-            General storage — offer letters, references, correspondence
+            General storage: offer letters, references, correspondence
           </p>
         </div>
         <FileText size={22} style={{ color: MUTED }} />
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText size={16} style={{ color: PLUM }} />
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
@@ -2312,6 +2388,31 @@ function DocumentsTab({
         </Button>
       </div>
 
+      {documents.length > 0 && (
+        <div className="space-y-2">
+          <label
+            htmlFor="worker-document-search"
+            className="text-sm font-medium text-cc-text"
+          >
+            Find a document
+          </label>
+          <Input
+            id="worker-document-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by title, type or notes"
+          />
+          <p role="status" className="text-xs text-cc-muted">
+            {visibleDocuments.length} of {documents.length} documents
+          </p>
+        </div>
+      )}
+      {documents.length > 0 && visibleDocuments.length === 0 && (
+        <p className="rounded-xl border border-cc-border p-5 text-sm text-cc-muted">
+          No matching documents. Try another search.
+        </p>
+      )}
       {documentsQuery.isLoading && (
         <p className="text-sm" style={{ color: MUTED }}>
           {translate("common.loading")}
@@ -2337,7 +2438,7 @@ function DocumentsTab({
         !documentsQuery.isError &&
         documents.length === 0 && (
           <div
-            className="rounded-2xl p-8 text-center border"
+            className="rounded-xl p-8 text-center border"
             style={{
               background: SURFACE,
               borderColor: BORDER,
@@ -2365,17 +2466,17 @@ function DocumentsTab({
 
       {documents.length > 0 && (
         <div
-          className="rounded-2xl divide-y border"
+          className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
             boxShadow: CARD_SHADOW,
             borderColor: BORDER,
           }}
         >
-          {documents.map((doc) => (
+          {visibleDocuments.map((doc) => (
             <div
               key={doc.id}
-              className="flex items-center justify-between gap-4 px-5 py-4"
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5"
             >
               <div className="min-w-0 flex items-start gap-3">
                 <div
@@ -2412,7 +2513,7 @@ function DocumentsTab({
                     href={doc.file_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-lg p-1.5 hover:bg-black/5"
+                    className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     title={translate("team.documents.download")}
                     aria-label={translate("team.documents.download")}
                   >
@@ -2426,7 +2527,7 @@ function DocumentsTab({
                     )
                       deleteMut.mutate(doc.id);
                   }}
-                  className="rounded-lg p-1.5 hover:bg-black/5"
+                  className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                   title={translate("team.documents.remove")}
                   aria-label={translate("team.documents.remove")}
                 >
@@ -2629,6 +2730,7 @@ function CredentialsTab({
   topReason: TopReason;
   translate: (k: string) => string;
 }) {
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -2643,11 +2745,24 @@ function CredentialsTab({
   const extras = credentials.filter(
     (c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type),
   );
+  const allRows = [
+    ...rows,
+    ...extras.map((c) => ({ type: c.credential_type, credential: c })),
+  ];
+  const needsAttention = (credential: Credential | null) =>
+    !credential ||
+    credential.status !== "valid" ||
+    (credential.credential_type === "ndis_screening" &&
+      isScreeningRecheckDue(credential));
+  const visibleRows = attentionOnly
+    ? allRows.filter((row) => needsAttention(row.credential))
+    : allRows;
   const total = REQUIRED_CREDENTIAL_TYPES.length;
   const complete = credentialsCompleteCount >= total;
 
   useEffect(() => {
     if (!focusCredentialType) return;
+    setAttentionOnly(false);
     const el = document.getElementById(`cred-row-${focusCredentialType}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2725,7 +2840,7 @@ function CredentialsTab({
     <div className="space-y-4">
       {modal}
       <div
-        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
         style={{ background: stripBg, color: stripColor }}
       >
         <div>
@@ -2745,25 +2860,47 @@ function CredentialsTab({
         )}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-cc-text">
+          <input
+            type="checkbox"
+            checked={attentionOnly}
+            onChange={(event) => setAttentionOnly(event.target.checked)}
+            className="h-4 w-4 accent-[var(--cc-plum)]"
+          />
+          Needs attention (
+          {allRows.filter((row) => needsAttention(row.credential)).length})
+        </label>
+        <p role="status" className="text-xs text-cc-muted">
+          {visibleRows.length} of {allRows.length} credentials
+        </p>
+      </div>
+      {attentionOnly && visibleRows.length === 0 && (
+        <p className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted">
+          No credentials need attention.
+        </p>
+      )}
       <div
-        className="rounded-2xl divide-y border"
+        className="rounded-xl divide-y border"
         style={{
           background: SURFACE,
           boxShadow: CARD_SHADOW,
           borderColor: BORDER,
         }}
       >
-        {[
-          ...rows,
-          ...extras.map((c) => ({ type: c.credential_type, credential: c })),
-        ].map(({ type, credential }, i) => {
+        {visibleRows.map(({ type, credential }, i) => {
           const style = statusStyle(credential?.status ?? "missing");
           const { Icon } = style;
           const reviewable = !!credential && credential.status !== "valid";
+          // Include "expiring" — isScreeningRecheckDue flags a recheck as due
+          // starting at the same 60-day-to-expiry mark that flips a
+          // credential's status from "valid" to "expiring" (see
+          // _status_for in credentials.py), so requiring strictly "valid"
+          // here made the action disappear right when it becomes needed.
           const canRecheck =
             !!credential &&
             type === "ndis_screening" &&
-            credential.status === "valid";
+            (credential.status === "valid" || credential.status === "expiring");
           const recheckDue =
             !!credential &&
             type === "ndis_screening" &&
@@ -2773,7 +2910,7 @@ function CredentialsTab({
             <div
               key={`${type}-${i}`}
               id={`cred-row-${type}`}
-              className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center transition-colors"
+              className="flex flex-col gap-3 px-5 py-4 xl:flex-row xl:items-center transition-colors"
               style={
                 focused
                   ? {
@@ -2829,7 +2966,7 @@ function CredentialsTab({
                 or otherwise not simply missing, nothing manufactured if missing entirely — this
                 app doesn't let coordinators upload on a worker's behalf, so no fake "Upload"
                 control pretending that's possible. */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
                 {credential?.status === "valid" ? (
                   <span
                     className="text-xs font-semibold"
@@ -2865,7 +3002,7 @@ function CredentialsTab({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-[#7C3AED]"
+                      style={{ color: CORAL }}
                       onClick={() =>
                         reviewMutation.mutate({
                           credential: credential!,
@@ -2881,7 +3018,8 @@ function CredentialsTab({
                   <Button
                     variant={recheckDue ? "outline" : "ghost"}
                     size="sm"
-                    className="gap-1 text-[#7C3AED]"
+                    className="gap-1"
+                    style={{ color: CORAL }}
                     onClick={() => recheckMutation.mutate(credential!)}
                   >
                     <ShieldCheck className="h-3.5 w-3.5" /> Mark rechecked
@@ -3013,6 +3151,30 @@ function TrainingTab({
 
   return (
     <div className="space-y-4">
+      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && (
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[
+            { label: "In progress", value: inProgress.length },
+            { label: "Overdue", value: overdueCount },
+            {
+              label: "Awaiting review",
+              value: history.filter(
+                (item) => item.status === "awaiting_confirmation",
+              ).length,
+            },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-cc-border bg-[var(--cc-surface)] px-4 py-3"
+            >
+              <dt className="text-xs text-cc-muted">{label}</dt>
+              <dd className="mt-1 text-xl font-semibold tabular-nums text-cc-text">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {!assignmentsQuery.isLoading &&
         !assignmentsQuery.isError &&
         overdueCount > 0 && (
@@ -3020,7 +3182,7 @@ function TrainingTab({
             Some assigned training is overdue. Review the deadlines below.
           </p>
         )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <GraduationCap size={16} style={{ color: PLUM }} />
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
@@ -3059,7 +3221,7 @@ function TrainingTab({
         recommendations.length === 0 &&
         history.length === 0 && (
           <div
-            className="rounded-2xl p-8 text-center border"
+            className="rounded-xl p-8 text-center border"
             style={{
               background: SURFACE,
               borderColor: BORDER,
@@ -3079,7 +3241,7 @@ function TrainingTab({
 
       {inProgress.length > 0 && (
         <div
-          className="rounded-2xl divide-y border"
+          className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
             boxShadow: CARD_SHADOW,
@@ -3133,7 +3295,7 @@ function TrainingTab({
                 <button
                   disabled={dismissMut.isPending}
                   onClick={() => dismissMut.mutate(rec.id)}
-                  className="rounded-lg p-1.5 hover:bg-black/5"
+                  className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                   title={translate("team.training.remove")}
                   aria-label={translate("team.training.remove")}
                 >
@@ -3154,7 +3316,7 @@ function TrainingTab({
             {translate("team.training.history")}
           </p>
           <div
-            className="rounded-2xl divide-y border"
+            className="rounded-xl divide-y border"
             style={{
               background: SURFACE,
               boxShadow: CARD_SHADOW,
@@ -3296,19 +3458,25 @@ function InductionTab({
   return (
     <div className="space-y-4">
       <div
-        className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4"
+        className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
         style={{ background: stripBg, color: stripColor }}
       >
         <div>
           <p className="text-lg font-semibold">
-            {mandatoryComplete} / {mandatoryTotal} mandatory complete
+            {progressQuery.isLoading
+              ? "Loading induction"
+              : progressQuery.isError
+                ? "Induction unavailable"
+                : `${mandatoryComplete} / ${mandatoryTotal} mandatory complete`}
           </p>
           <p className="text-xs font-bold mt-0.5">
-            {mandatoryTotal === 0
-              ? "No induction items set up yet"
-              : allDone
-                ? "Induction complete"
-                : "Induction in progress"}
+            {progressQuery.isLoading || progressQuery.isError
+              ? "Progress will appear when the checklist is available"
+              : mandatoryTotal === 0
+                ? "No induction items set up yet"
+                : allDone
+                  ? "Induction complete"
+                  : "Induction in progress"}
           </p>
         </div>
         {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
@@ -3339,7 +3507,7 @@ function InductionTab({
         !progressQuery.isError &&
         items.length === 0 && (
           <div
-            className="rounded-2xl p-8 text-center border"
+            className="rounded-xl p-8 text-center border"
             style={{
               background: SURFACE,
               borderColor: BORDER,
@@ -3359,7 +3527,7 @@ function InductionTab({
 
       {items.length > 0 && (
         <div
-          className="rounded-2xl divide-y border"
+          className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
             boxShadow: CARD_SHADOW,
@@ -3389,7 +3557,7 @@ function InductionTab({
                   {item.completed_at
                     ? "Completed"
                     : item.is_mandatory
-                      ? "Mandatory — not yet completed"
+                      ? "Mandatory, not yet completed"
                       : "Optional"}
                 </p>
               </div>
@@ -3459,9 +3627,15 @@ function ShiftsTab({
 
   return (
     <div className="space-y-4">
+      {dashboardQuery.isError && (
+        <ProfileLoadError
+          label="Performance summary"
+          retry={() => void dashboardQuery.refetch()}
+        />
+      )}
       {/* Performance breakdown - the detail behind a single compliance number */}
       <div
-        className="rounded-2xl border p-5"
+        className="rounded-xl border p-5"
         style={{
           background: SURFACE,
           borderColor: BORDER,
@@ -3479,7 +3653,7 @@ function ShiftsTab({
             <p className="mt-1 text-2xl font-semibold" style={{ color: TEXT }}>
               {dashboard?.average_score_30d != null
                 ? `${Math.round(dashboard.average_score_30d)}%`
-                : "—"}
+                : "N/A"}
             </p>
           </div>
           {dashboard?.trend && (
@@ -3585,7 +3759,7 @@ function ShiftsTab({
 
       {/* Shift-by-shift history */}
       <div
-        className="rounded-2xl border"
+        className="rounded-xl border"
         style={{
           background: SURFACE,
           borderColor: BORDER,
@@ -3600,13 +3774,20 @@ function ShiftsTab({
             Completed shifts
           </p>
           <span className="text-xs font-bold" style={{ color: MUTED }}>
-            {shifts.length}
+            {historyQuery.isLoading || historyQuery.isError
+              ? "Not available"
+              : shifts.length}
           </span>
         </div>
         {historyQuery.isLoading ? (
           <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>
             {translate("common.loading")}
           </p>
+        ) : historyQuery.isError ? (
+          <ProfileLoadError
+            label="Shift history"
+            retry={() => void historyQuery.refetch()}
+          />
         ) : shifts.length === 0 ? (
           <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>
             No completed shifts on file yet.
@@ -3627,11 +3808,15 @@ function ShiftsTab({
       >
         <SheetContent
           side="right"
-          className="w-full sm:max-w-lg overflow-y-auto"
+          className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&>button]:z-20 [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center"
           style={{ background: SURFACE }}
         >
           {openShift && (
-            <ShiftAuditPanel workerId={worker.id} shift={openShift} />
+            <ShiftAuditPanel
+              key={openShift.id}
+              workerId={worker.id}
+              shift={openShift}
+            />
           )}
         </SheetContent>
       </Sheet>
@@ -3780,39 +3965,56 @@ type ShiftIncidentSummary = {
  * incidents reported during this shift (what happened, action taken, when),
  * flagged tasks, what went well, shift notes, and coordinator feedback. This
  * is the "what did they actually do" view behind a single shift's score. */
-function ShiftAuditPanel({
+export function ShiftAuditPanel({
   workerId,
   shift,
 }: {
   workerId: string;
   shift: ShiftHistoryRow;
 }) {
+  const [section, setSection] = useState<
+    "summary" | "timeline" | "incidents" | "pay"
+  >("summary");
+  const contentRef = useRef<HTMLDivElement>(null);
   const band = complianceBandColor(shift.compliance_band);
   const timeRange = formatShiftTimeRange(shift);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { translate } = useAccessibility();
 
-  const { data, isLoading } = useOrgQuery(
-    ["worker-shift-history-detail", workerId, shift.id],
-    {
-      queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
-    },
-  );
-  const { data: incidents, isLoading: incidentsLoading } = useOrgQuery(
-    ["shift-incidents", shift.id],
-    {
-      queryFn: () =>
-        listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }),
-    },
-  );
-  const { data: payPreview } = useOrgQuery(["shift-pay-preview", shift.id], {
+  const {
+    data,
+    isLoading,
+    isError: detailError,
+    refetch: retryDetail,
+  } = useOrgQuery(["worker-shift-history-detail", workerId, shift.id], {
+    queryFn: () => getWorkerShiftHistoryDetail(workerId, shift.id),
+  });
+  const {
+    data: incidents,
+    isLoading: incidentsLoading,
+    isError: incidentsError,
+    refetch: retryIncidents,
+  } = useOrgQuery(["shift-incidents", shift.id], {
+    queryFn: () =>
+      listIncidents<ShiftIncidentSummary[]>({ shift_id: shift.id }),
+  });
+  const {
+    data: payPreview,
+    isLoading: payLoading,
+    isError: payError,
+    refetch: retryPay,
+  } = useOrgQuery(["shift-pay-preview", shift.id], {
     queryFn: () => getShiftPayPreview(shift.id),
   });
-  const { data: eventTimeline, isLoading: timelineLoading } = useOrgQuery(
-    ["shift-event-timeline", workerId, shift.id],
-    { queryFn: () => getWorkerShiftEventTimeline(workerId, shift.id) },
-  );
+  const {
+    data: eventTimeline,
+    isLoading: timelineLoading,
+    isError: timelineError,
+    refetch: retryTimeline,
+  } = useOrgQuery(["shift-event-timeline", workerId, shift.id], {
+    queryFn: () => getWorkerShiftEventTimeline(workerId, shift.id),
+  });
 
   const [markingSleepover, setMarkingSleepover] = useState(false);
   const [sleepoverStart, setSleepoverStart] = useState("");
@@ -3891,438 +4093,583 @@ function ShiftAuditPanel({
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-          <ClipboardCheck size={18} style={{ color: PLUM }} />
-          Shift audit — {shift.participant_name || "Participant"}
+      <SheetHeader className="shrink-0 border-b border-cc-border px-5 pb-4 pt-6 pr-16 text-left sm:px-6 sm:pr-16">
+        <p className="text-sm font-medium text-cc-muted">Shift history</p>
+        <SheetTitle
+          className="break-words text-xl font-semibold"
+          style={{ color: TEXT }}
+        >
+          {shift.participant_name || "Participant"}
         </SheetTitle>
+        <SheetDescription className="text-sm text-cc-muted">
+          {safeFormat(shift.scheduled_start, "EEE d MMM yyyy")}{" "}
+          {timeRange ? ` | ${timeRange}` : ""}
+        </SheetDescription>
       </SheetHeader>
-
-      <div className="mt-4 space-y-5">
-        {/* Summary: date, time, duration, participant, score, outcome */}
-        <div
-          className="rounded-xl border p-4 space-y-1.5"
-          style={{ borderColor: BORDER, background: SOFT }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold" style={{ color: TEXT }}>
-              {safeFormat(shift.scheduled_start, "EEEE d MMM yyyy")}
-            </p>
-            <span
-              className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-              style={band}
-            >
-              {shift.compliance_score != null
-                ? `${Math.round(shift.compliance_score)}%`
-                : shift.compliance_band}
-            </span>
-          </div>
-          <p className="text-xs" style={{ color: MUTED }}>
-            {timeRange || "Clock in/out not recorded"}
-            {shift.duration_minutes
-              ? ` · ${Math.round((shift.duration_minutes / 60) * 10) / 10}h`
+      <nav
+        aria-label="Shift detail sections"
+        className="grid shrink-0 grid-cols-4 gap-1 border-b border-cc-border px-3 py-2"
+      >
+        {(
+          [
+            ["summary", "Summary"],
+            ["timeline", "Timeline"],
+            ["incidents", "Incidents"],
+            ["pay", "Pay"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={section === key}
+            onClick={() => {
+              setSection(key);
+              contentRef.current?.scrollTo({ top: 0 });
+            }}
+            className="min-h-11 rounded-lg px-1 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              background: section === key ? SOFT : "transparent",
+              color: section === key ? PLUM : MUTED,
+            }}
+          >
+            {label}
+            {key === "incidents" && !incidentsError && incidents?.length
+              ? ` (${incidents.length})`
               : ""}
-          </p>
-          <p className="text-xs" style={{ color: MUTED }}>
-            Participant:{" "}
-            <span style={{ color: TEXT }}>
-              {shift.participant_name || "Not recorded"}
-            </span>
-          </p>
-          {shift.compliance_explanation && (
-            <p className="pt-1.5 text-xs" style={{ color: TEXT }}>
-              {shift.compliance_explanation}
-            </p>
-          )}
-          {payPreview && payPreview.total_cents > 0 && (
-            <p className="pt-1.5 text-xs font-bold" style={{ color: TEXT }}>
-              SCHADS pay: ${(payPreview.total_cents / 100).toFixed(2)}
-              {payPreview.is_sleepover ? " · sleepover" : ""}
-            </p>
-          )}
-          {payPreview?.emergency_flagged && (
-            <p
-              className="pt-1.5 text-xs"
-              style={{ color: "var(--cc-status-danger)" }}
+          </button>
+        ))}
+      </nav>
+      <div
+        ref={contentRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 [overflow-wrap:anywhere]"
+      >
+        <div className="space-y-5">
+          <section
+            hidden={section !== "summary"}
+            aria-label="Shift summary"
+            className="space-y-5"
+          >
+            {/* Summary: date, time, duration, participant, score, outcome */}
+            <div
+              className="rounded-xl border p-4 space-y-1.5"
+              style={{ borderColor: BORDER, background: SOFT }}
             >
-              Emergency flagged
-              {payPreview.emergency_note
-                ? `: ${payPreview.emergency_note}`
-                : ""}
-            </p>
-          )}
-        </div>
-
-        {/* Sleepover marking / call-out logging - see schads_engine.py's
-            sleepover pricing path, verified against FWCFB 292. */}
-        <div
-          className="rounded-xl border p-3 space-y-2"
-          style={{ borderColor: BORDER }}
-        >
-          {!payPreview?.is_sleepover ? (
-            markingSleepover ? (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label
-                    className="text-[11px] font-semibold"
-                    style={{ color: TEXT }}
-                  >
-                    {translate("coordinator.shiftAssign.sleepoverStart")}
-                  </label>
-                  <DateTimePicker
-                    value={sleepoverStart}
-                    onChange={setSleepoverStart}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label
-                    className="text-[11px] font-semibold"
-                    style={{ color: TEXT }}
-                  >
-                    {translate("coordinator.shiftAssign.sleepoverEnd")}
-                  </label>
-                  <DateTimePicker
-                    value={sleepoverEnd}
-                    onChange={setSleepoverEnd}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => sleepoverMut.mutate()}
-                    disabled={
-                      !sleepoverStart || !sleepoverEnd || sleepoverMut.isPending
-                    }
-                    className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
-                    style={{ background: PLUM }}
-                  >
-                    {translate("coordinator.shiftAssign.markSleepover")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMarkingSleepover(false)}
-                    className="text-[12px] font-bold"
-                    style={{ color: MUTED }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setMarkingSleepover(true)}
-                className="text-[12px] font-bold"
-                style={{ color: PLUM }}
-              >
-                {translate("coordinator.shiftAssign.markSleepover")}
-              </button>
-            )
-          ) : loggingCallOut ? (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label
-                  className="text-[11px] font-semibold"
-                  style={{ color: TEXT }}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                  {safeFormat(shift.scheduled_start, "EEEE d MMM yyyy")}
+                </p>
+                <span
+                  className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+                  style={band}
                 >
-                  {translate("coordinator.shiftAssign.callOutStart")}
-                </label>
-                <DateTimePicker
-                  value={callOutStart}
-                  onChange={setCallOutStart}
-                />
+                  {shift.compliance_score != null
+                    ? `${Math.round(shift.compliance_score)}%`
+                    : shift.compliance_band}
+                </span>
               </div>
-              <div className="space-y-1.5">
-                <label
-                  className="text-[11px] font-semibold"
-                  style={{ color: TEXT }}
-                >
-                  {translate("coordinator.shiftAssign.callOutEnd")}
-                </label>
-                <DateTimePicker value={callOutEnd} onChange={setCallOutEnd} />
-              </div>
-              <div className="space-y-1.5">
-                <label
-                  className="text-[11px] font-semibold"
-                  style={{ color: TEXT }}
-                >
-                  {translate("coordinator.shiftAssign.callOutNote")}
-                </label>
-                <Input
-                  value={callOutNote}
-                  onChange={(e) => setCallOutNote(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => callOutMut.mutate()}
-                  disabled={
-                    !callOutStart || !callOutEnd || callOutMut.isPending
-                  }
-                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
-                  style={{ background: PLUM }}
-                >
-                  {translate("coordinator.shiftAssign.callOutSave")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLoggingCallOut(false)}
-                  className="text-[12px] font-bold"
-                  style={{ color: MUTED }}
-                >
-                  Cancel
-                </button>
-              </div>
+              <p className="text-sm" style={{ color: MUTED }}>
+                {timeRange || "Clock in/out not recorded"}
+                {shift.duration_minutes
+                  ? ` · ${Math.round((shift.duration_minutes / 60) * 10) / 10}h`
+                  : ""}
+              </p>
+              <p className="text-sm" style={{ color: MUTED }}>
+                Participant:{" "}
+                <span style={{ color: TEXT }}>
+                  {shift.participant_name || "Not recorded"}
+                </span>
+              </p>
+              {shift.compliance_explanation && (
+                <p className="pt-1.5 text-sm" style={{ color: TEXT }}>
+                  {shift.compliance_explanation}
+                </p>
+              )}
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setLoggingCallOut(true)}
-              className="text-[12px] font-bold"
-              style={{ color: PLUM }}
-            >
-              {translate("coordinator.shiftAssign.logCallOut")}
-            </button>
-          )}
-        </div>
-
-        {/* Event timeline - every clock-in-to-clock-out event this shift
+          </section>
+          <section
+            hidden={section !== "pay"}
+            aria-label="Shift pay"
+            className="space-y-4"
+          >
+            <div>
+              <h3 className="text-base font-semibold text-cc-text">
+                Pay and adjustments
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-cc-muted">
+                Review the recorded pay estimate and sleepover or call-out
+                details.
+              </p>
+            </div>
+            {payLoading ? (
+              <p role="status" className="text-sm text-cc-muted">
+                Loading pay details...
+              </p>
+            ) : payError ? (
+              <ProfileLoadError
+                label="Pay details"
+                retry={() => void retryPay()}
+              />
+            ) : !payPreview ? (
+              <p className="text-sm text-cc-muted">
+                No pay preview is available for this shift.
+              </p>
+            ) : (
+              <>
+                {payPreview && payPreview.total_cents >= 0 && (
+                  <p
+                    className="pt-1.5 text-sm font-bold"
+                    style={{ color: TEXT }}
+                  >
+                    SCHADS pay estimate: $
+                    {(payPreview.total_cents / 100).toFixed(2)}
+                    {payPreview.is_sleepover ? " · sleepover" : ""}
+                  </p>
+                )}
+                {payPreview?.emergency_flagged && (
+                  <p
+                    className="pt-1.5 text-sm"
+                    style={{ color: "var(--cc-status-danger)" }}
+                  >
+                    Emergency flagged
+                    {payPreview.emergency_note
+                      ? `: ${payPreview.emergency_note}`
+                      : ""}
+                  </p>
+                )}
+                {/* Sleepover marking / call-out logging - see schads_engine.py's
+            sleepover pricing path, verified against FWCFB 292. */}
+                <div
+                  className="rounded-xl border p-3 space-y-2"
+                  style={{ borderColor: BORDER }}
+                >
+                  {!payPreview?.is_sleepover ? (
+                    markingSleepover ? (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <label
+                            className="text-xs font-semibold"
+                            style={{ color: TEXT }}
+                          >
+                            {translate(
+                              "coordinator.shiftAssign.sleepoverStart",
+                            )}
+                          </label>
+                          <DateTimePicker
+                            value={sleepoverStart}
+                            onChange={setSleepoverStart}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label
+                            className="text-xs font-semibold"
+                            style={{ color: TEXT }}
+                          >
+                            {translate("coordinator.shiftAssign.sleepoverEnd")}
+                          </label>
+                          <DateTimePicker
+                            value={sleepoverEnd}
+                            onChange={setSleepoverEnd}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => sleepoverMut.mutate()}
+                            disabled={
+                              !sleepoverStart ||
+                              !sleepoverEnd ||
+                              new Date(sleepoverEnd) <=
+                                new Date(sleepoverStart) ||
+                              sleepoverMut.isPending
+                            }
+                            className="rounded-full px-3.5 py-1.5 text-sm font-bold text-white disabled:opacity-50"
+                            style={{ background: PLUM }}
+                          >
+                            {translate("coordinator.shiftAssign.markSleepover")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMarkingSleepover(false)}
+                            className="text-sm font-bold"
+                            style={{ color: MUTED }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setMarkingSleepover(true)}
+                        className="text-sm font-bold"
+                        style={{ color: PLUM }}
+                      >
+                        {translate("coordinator.shiftAssign.markSleepover")}
+                      </button>
+                    )
+                  ) : loggingCallOut ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label
+                          className="text-xs font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {translate("coordinator.shiftAssign.callOutStart")}
+                        </label>
+                        <DateTimePicker
+                          value={callOutStart}
+                          onChange={setCallOutStart}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label
+                          className="text-xs font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {translate("coordinator.shiftAssign.callOutEnd")}
+                        </label>
+                        <DateTimePicker
+                          value={callOutEnd}
+                          onChange={setCallOutEnd}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label
+                          className="text-xs font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {translate("coordinator.shiftAssign.callOutNote")}
+                        </label>
+                        <Input
+                          value={callOutNote}
+                          onChange={(e) => setCallOutNote(e.target.value)}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => callOutMut.mutate()}
+                          disabled={
+                            !callOutStart ||
+                            !callOutEnd ||
+                            new Date(callOutEnd) <= new Date(callOutStart) ||
+                            callOutMut.isPending
+                          }
+                          className="rounded-full px-3.5 py-1.5 text-sm font-bold text-white disabled:opacity-50"
+                          style={{ background: PLUM }}
+                        >
+                          {translate("coordinator.shiftAssign.callOutSave")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLoggingCallOut(false)}
+                          className="text-sm font-bold"
+                          style={{ color: MUTED }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLoggingCallOut(true)}
+                      className="text-sm font-bold"
+                      style={{ color: PLUM }}
+                    >
+                      {translate("coordinator.shiftAssign.logCallOut")}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+          <section hidden={section !== "timeline"} aria-label="Shift timeline">
+            {/* Event timeline - every clock-in-to-clock-out event this shift
             wrote to audit_logs (clock-in, task updates, notes, evidence,
             acknowledgements, clock-out), for full audit-trail visibility. */}
-        <div>
-          <p
-            className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-            style={{ color: MUTED }}
+            <div>
+              <p
+                className="text-sm font-semibold mb-3"
+                style={{ color: MUTED }}
+              >
+                Shift activity
+              </p>
+              {timelineLoading ? (
+                <p className="text-sm" style={{ color: MUTED }}>
+                  Loading…
+                </p>
+              ) : timelineError ? (
+                <ProfileLoadError
+                  label="Timeline"
+                  retry={() => void retryTimeline()}
+                />
+              ) : !eventTimeline || eventTimeline.length === 0 ? (
+                <p className="text-sm" style={{ color: MUTED }}>
+                  No events recorded for this shift.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {eventTimeline.map((event, i) => (
+                    <div
+                      key={i}
+                      className="relative flex flex-col gap-1 border-l-2 py-3 pl-4 sm:flex-row sm:justify-between sm:gap-3"
+                      style={{ borderColor: BORDER, background: SOFT }}
+                    >
+                      <div className="min-w-0">
+                        <p
+                          className="text-sm font-bold"
+                          style={{ color: TEXT }}
+                        >
+                          {event.label}
+                        </p>
+                        {event.actor_name && (
+                          <p
+                            className="text-xs mt-0.5"
+                            style={{ color: MUTED }}
+                          >
+                            {event.actor_name}
+                          </p>
+                        )}
+                      </div>
+                      <p className="shrink-0 text-xs" style={{ color: MUTED }}>
+                        {event.created_at
+                          ? safeFormat(event.created_at, "d MMM, h:mm a")
+                          : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+          <section
+            hidden={section !== "incidents"}
+            aria-label="Shift incidents"
           >
-            Event timeline
-          </p>
-          {timelineLoading ? (
-            <p className="text-xs" style={{ color: MUTED }}>
-              Loading…
-            </p>
-          ) : !eventTimeline || eventTimeline.length === 0 ? (
-            <p className="text-xs" style={{ color: MUTED }}>
-              No events recorded for this shift.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {eventTimeline.map((event, i) => (
-                <div
-                  key={i}
-                  className="flex items-start justify-between gap-3 rounded-xl border p-3"
-                  style={{ borderColor: BORDER, background: SOFT }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold" style={{ color: TEXT }}>
-                      {event.label}
-                    </p>
-                    {event.actor_name && (
+            {/* Incidents - explicit audit-trail requirement: what happened, what
+            action was taken, and when, for anything reported off this shift. */}
+            <div>
+              <p
+                className="text-sm font-semibold mb-3"
+                style={{ color: MUTED }}
+              >
+                Incidents this shift
+              </p>
+              {incidentsLoading ? (
+                <p className="text-sm" style={{ color: MUTED }}>
+                  Loading…
+                </p>
+              ) : incidentsError ? (
+                <ProfileLoadError
+                  label="Incidents"
+                  retry={() => void retryIncidents()}
+                />
+              ) : !incidents || incidents.length === 0 ? (
+                <p className="text-sm" style={{ color: MUTED }}>
+                  No incidents reported for this shift.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {incidents.map((inc) => (
+                    <div
+                      key={inc.id}
+                      className="rounded-xl border p-3"
+                      style={{
+                        borderColor: "var(--cc-status-danger)",
+                        background: "var(--cc-status-danger-bg)",
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p
+                          className="text-sm font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {inc.title ||
+                            (inc.incident_type ?? "incident").replace(
+                              /_/g,
+                              " ",
+                            )}
+                        </p>
+                        {inc.severity && (
+                          <span
+                            className="shrink-0 text-[9px] font-semibold uppercase"
+                            style={{ color: "var(--cc-status-danger)" }}
+                          >
+                            {inc.severity}
+                          </span>
+                        )}
+                      </div>
+                      {inc.description && (
+                        <p className="mt-1 text-sm" style={{ color: TEXT }}>
+                          {inc.description}
+                        </p>
+                      )}
+                      {(inc.worker_actions || inc.corrective_actions) && (
+                        <p className="mt-1.5 text-sm" style={{ color: MUTED }}>
+                          <span className="font-bold" style={{ color: TEXT }}>
+                            Action taken:{" "}
+                          </span>
+                          {inc.worker_actions || inc.corrective_actions}
+                        </p>
+                      )}
                       <p
-                        className="text-[11px] mt-0.5"
+                        className="mt-1.5 text-[10px]"
                         style={{ color: MUTED }}
                       >
-                        {event.actor_name}
-                      </p>
-                    )}
-                  </div>
-                  <p className="shrink-0 text-[11px]" style={{ color: MUTED }}>
-                    {event.created_at
-                      ? safeFormat(event.created_at, "d MMM, h:mm a")
-                      : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Incidents - explicit audit-trail requirement: what happened, what
-            action was taken, and when, for anything reported off this shift. */}
-        <div>
-          <p
-            className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-            style={{ color: MUTED }}
-          >
-            Incidents this shift
-          </p>
-          {incidentsLoading ? (
-            <p className="text-xs" style={{ color: MUTED }}>
-              Loading…
-            </p>
-          ) : !incidents || incidents.length === 0 ? (
-            <p className="text-xs" style={{ color: MUTED }}>
-              No incidents reported for this shift.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {incidents.map((inc) => (
-                <div
-                  key={inc.id}
-                  className="rounded-xl border p-3"
-                  style={{
-                    borderColor: "var(--cc-status-danger)",
-                    background: "var(--cc-status-danger-bg)",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p
-                      className="text-xs font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {inc.title ||
-                        (inc.incident_type ?? "incident").replace(/_/g, " ")}
-                    </p>
-                    {inc.severity && (
-                      <span
-                        className="shrink-0 text-[9px] font-semibold uppercase"
-                        style={{ color: "var(--cc-status-danger)" }}
-                      >
-                        {inc.severity}
-                      </span>
-                    )}
-                  </div>
-                  {inc.description && (
-                    <p className="mt-1 text-xs" style={{ color: TEXT }}>
-                      {inc.description}
-                    </p>
-                  )}
-                  {(inc.worker_actions || inc.corrective_actions) && (
-                    <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
-                      <span className="font-bold" style={{ color: TEXT }}>
-                        Action taken:{" "}
-                      </span>
-                      {inc.worker_actions || inc.corrective_actions}
-                    </p>
-                  )}
-                  <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>
-                    {inc.incident_date
-                      ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a")
-                      : "Date not recorded"}
-                    {" · "}
-                    {inc.status
-                      ? String(inc.status).replace(/_/g, " ")
-                      : "Status not set"}
-                    {inc.resolved_date
-                      ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}`
-                      : ""}
-                    {inc.ndis_reportable ? " · NDIS reportable" : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {isLoading ? (
-          <p className="text-xs" style={{ color: MUTED }}>
-            Loading shift detail…
-          </p>
-        ) : (
-          <>
-            {flagged.length > 0 && (
-              <div>
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-                  style={{ color: "var(--cc-status-danger)" }}
-                >
-                  Flagged
-                </p>
-                <ul className="space-y-1">
-                  {flagged.map((f, i) => (
-                    <li
-                      key={`${f.task_id ?? "overall"}-${i}`}
-                      className="flex items-start gap-1.5 text-xs"
-                      style={{ color: TEXT }}
-                    >
-                      <AlertTriangle
-                        size={12}
-                        className="mt-0.5 shrink-0"
-                        style={{ color: "var(--cc-status-danger)" }}
-                      />
-                      <span>
-                        {(f.label as string) || "Overall compliance"}
-                        {f.flag_type
-                          ? ` — ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}`
+                        {inc.incident_date
+                          ? safeFormat(inc.incident_date, "d MMM yyyy, h:mm a")
+                          : "Date not recorded"}
+                        {" · "}
+                        {inc.status
+                          ? String(inc.status).replace(/_/g, " ")
+                          : "Status not set"}
+                        {inc.resolved_date
+                          ? ` · resolved ${safeFormat(inc.resolved_date, "d MMM yyyy")}`
                           : ""}
-                      </span>
-                    </li>
+                        {inc.ndis_reportable ? " · NDIS reportable" : ""}
+                      </p>
+                    </div>
                   ))}
-                </ul>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          </section>
+          <section
+            hidden={section !== "summary"}
+            aria-label="Shift documentation"
+            className="space-y-5"
+          >
+            {isLoading ? (
+              <p className="text-sm" style={{ color: MUTED }}>
+                Loading shift detail…
+              </p>
+            ) : detailError ? (
+              <ProfileLoadError
+                label="Shift documentation"
+                retry={() => void retryDetail()}
+              />
+            ) : (
+              <>
+                {flagged.length > 0 && (
+                  <div>
+                    <p
+                      className="text-sm font-semibold mb-3"
+                      style={{ color: "var(--cc-status-danger)" }}
+                    >
+                      Needs review
+                    </p>
+                    <ul className="space-y-1">
+                      {flagged.map((f, i) => (
+                        <li
+                          key={`${f.task_id ?? "overall"}-${i}`}
+                          className="flex items-start gap-1.5 text-sm"
+                          style={{ color: TEXT }}
+                        >
+                          <AlertTriangle
+                            size={12}
+                            className="mt-0.5 shrink-0"
+                            style={{ color: "var(--cc-status-danger)" }}
+                          />
+                          <span>
+                            {(f.label as string) || "Overall compliance"}
+                            {f.flag_type
+                              ? `: ${FLAG_TYPE_LABEL[f.flag_type as string] ?? f.flag_type}`
+                              : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            {doneWell.length > 0 && (
-              <div>
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-                  style={{ color: "var(--cc-status-success)" }}
-                >
-                  Done well
-                </p>
-                <ul className="space-y-1">
-                  {doneWell.map((t) => (
-                    <li
-                      key={t.task_id}
-                      className="flex items-start gap-1.5 text-xs"
+                {doneWell.length > 0 && (
+                  <div>
+                    <p
+                      className="text-sm font-semibold mb-3"
+                      style={{ color: "var(--cc-status-success)" }}
+                    >
+                      Completed with supporting evidence
+                    </p>
+                    <ul className="space-y-1">
+                      {doneWell.map((t) => (
+                        <li
+                          key={t.task_id}
+                          className="flex items-start gap-1.5 text-sm"
+                          style={{ color: TEXT }}
+                        >
+                          <CheckCircle2
+                            size={12}
+                            className="mt-0.5 shrink-0"
+                            style={{ color: "var(--cc-status-success)" }}
+                          />
+                          {t.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!data?.notes && (
+                  <p className="rounded-lg border border-cc-border p-4 text-sm text-cc-muted">
+                    No shift notes recorded.
+                  </p>
+                )}
+                {data?.notes && (
+                  <div>
+                    <p
+                      className="text-sm font-semibold mb-3"
+                      style={{ color: MUTED }}
+                    >
+                      Shift notes
+                    </p>
+                    <p
+                      className="whitespace-pre-wrap text-sm"
                       style={{ color: TEXT }}
                     >
-                      <CheckCircle2
-                        size={12}
-                        className="mt-0.5 shrink-0"
-                        style={{ color: "var(--cc-status-success)" }}
-                      />
-                      {t.label}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                      {data.notes}
+                    </p>
+                  </div>
+                )}
+
+                {data?.feedback && data.feedback.length > 0 && (
+                  <div>
+                    <p
+                      className="text-sm font-semibold mb-3"
+                      style={{ color: MUTED }}
+                    >
+                      Coordinator feedback
+                    </p>
+                    <ul className="space-y-1.5">
+                      {data.feedback.map((f) => (
+                        <li
+                          key={f.id}
+                          className="text-sm"
+                          style={{ color: TEXT }}
+                        >
+                          <span className="font-bold">
+                            {f.coordinator_name ?? "Coordinator"}:
+                          </span>{" "}
+                          {f.strengths}
+                          {f.areas_to_improve ? ` · ${f.areas_to_improve}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
 
-            {data?.notes && (
-              <div>
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-                  style={{ color: MUTED }}
-                >
-                  Shift notes
-                </p>
-                <p
-                  className="whitespace-pre-wrap text-xs"
-                  style={{ color: TEXT }}
-                >
-                  {data.notes}
-                </p>
+            <details className="rounded-xl border border-cc-border p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-cc-text">
+                Feedback on participant support
+              </summary>
+              <div className="mt-4">
+                <ShiftMatchFeedbackForm shiftId={shift.id} />
               </div>
-            )}
-
-            {data?.feedback && data.feedback.length > 0 && (
-              <div>
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
-                  style={{ color: MUTED }}
-                >
-                  Coordinator feedback
-                </p>
-                <ul className="space-y-1.5">
-                  {data.feedback.map((f) => (
-                    <li key={f.id} className="text-xs" style={{ color: TEXT }}>
-                      <span className="font-bold">
-                        {f.coordinator_name ?? "Coordinator"}:
-                      </span>{" "}
-                      {f.strengths}
-                      {f.areas_to_improve ? ` · ${f.areas_to_improve}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-
-        <div className="border-t pt-4" style={{ borderColor: BORDER }}>
-          <ShiftMatchFeedbackForm shiftId={shift.id} />
+            </details>
+          </section>
         </div>
       </div>
     </>
@@ -4420,7 +4767,7 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
               color: wouldRepeat === true ? "var(--cc-status-success)" : MUTED,
             }}
           >
-            Would repeat
+            Would roster together again
           </button>
           <button
             type="button"
@@ -4434,7 +4781,7 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
               color: wouldRepeat === false ? "var(--cc-status-danger)" : MUTED,
             }}
           >
-            Wouldn't repeat
+            Would not roster together again
           </button>
         </div>
       </div>
@@ -4516,7 +4863,7 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
   return (
     <div className="space-y-4">
       <div
-        className="rounded-2xl border"
+        className="rounded-xl border"
         style={{
           background: SURFACE,
           borderColor: BORDER,
@@ -4531,13 +4878,20 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
             Assigned participants
           </p>
           <span className="text-xs font-bold" style={{ color: MUTED }}>
-            {assignments.length}
+            {assignmentsQuery.isLoading || assignmentsQuery.isError
+              ? "Not available"
+              : assignments.length}
           </span>
         </div>
         {assignmentsQuery.isLoading ? (
           <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>
             Loading…
           </p>
+        ) : assignmentsQuery.isError ? (
+          <ProfileLoadError
+            label="Participant assignments"
+            retry={() => void assignmentsQuery.refetch()}
+          />
         ) : assignments.length === 0 ? (
           <p className="px-5 py-6 text-sm text-center" style={{ color: MUTED }}>
             Not currently assigned to any participant.
@@ -4575,52 +4929,61 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
         )}
       </div>
 
-      {!isLoading && workedWith.length > 0 && (
-        <div
-          className="rounded-2xl border"
-          style={{
-            background: SURFACE,
-            borderColor: BORDER,
-            boxShadow: CARD_SHADOW,
-          }}
-        >
-          <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold" style={{ color: TEXT }}>
-                Also worked with
-              </p>
-              <span className="text-xs font-bold" style={{ color: MUTED }}>
-                {workedWith.length}
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
-              From completed shifts, not a standing assignment.
-            </p>
-          </div>
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {workedWith.map((p) => (
-              <a
-                key={p.id}
-                href={`/patients?id=${encodeURIComponent(p.id)}`}
-                className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
-              >
-                <p
-                  className="text-sm font-bold truncate"
-                  style={{ color: TEXT }}
-                >
-                  {p.name}
-                </p>
-                <span className="shrink-0 text-xs" style={{ color: MUTED }}>
-                  {p.count} shift{p.count !== 1 ? "s" : ""}
-                  {p.lastShift
-                    ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}`
-                    : ""}
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
+      {historyQuery.isError && (
+        <ProfileLoadError
+          label="Participant shift history"
+          retry={() => void historyQuery.refetch()}
+        />
       )}
+      {!isLoading &&
+        !historyQuery.isError &&
+        !assignmentsQuery.isError &&
+        workedWith.length > 0 && (
+          <div
+            className="rounded-xl border"
+            style={{
+              background: SURFACE,
+              borderColor: BORDER,
+              boxShadow: CARD_SHADOW,
+            }}
+          >
+            <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                  Also worked with
+                </p>
+                <span className="text-xs font-bold" style={{ color: MUTED }}>
+                  {workedWith.length}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                From completed shifts, not a standing assignment.
+              </p>
+            </div>
+            <div className="divide-y" style={{ borderColor: BORDER }}>
+              {workedWith.map((p) => (
+                <a
+                  key={p.id}
+                  href={`/patients?id=${encodeURIComponent(p.id)}`}
+                  className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
+                >
+                  <p
+                    className="text-sm font-bold truncate"
+                    style={{ color: TEXT }}
+                  >
+                    {p.name}
+                  </p>
+                  <span className="shrink-0 text-xs" style={{ color: MUTED }}>
+                    {p.count} shift{p.count !== 1 ? "s" : ""}
+                    {p.lastShift
+                      ? ` · last ${safeFormat(p.lastShift, "d MMM yyyy")}`
+                      : ""}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
     </div>
   );
 }
