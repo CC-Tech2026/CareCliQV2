@@ -12,6 +12,7 @@ export type Credential = {
   expiry_date?: string | null;
   file_url?: string | null;
   status: string;
+  screening_number?: string | null;
 };
 
 export type CredentialPayload = {
@@ -22,6 +23,7 @@ export type CredentialPayload = {
   issue_date?: string | null;
   expiry_date?: string | null;
   notes?: string | null;
+  screening_number?: string | null;
 };
 
 export type ToolkitItem = {

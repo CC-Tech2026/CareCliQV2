@@ -59,7 +59,12 @@ function QuickAccessTile({
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
-        { backgroundColor: `${tile.accent}16`, opacity: pressed ? 0.7 : 1 },
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          borderWidth: 1,
+          opacity: pressed ? 0.7 : 1,
+        },
       ]}
     >
       <View style={[styles.tileIcon, { backgroundColor: tile.accent }]}>
@@ -67,7 +72,6 @@ function QuickAccessTile({
       </View>
       <View style={styles.tileCopy}>
         <Text
-          numberOfLines={1}
           style={[
             styles.tileLabel,
             { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
@@ -77,7 +81,6 @@ function QuickAccessTile({
         </Text>
         {tile.badge ? (
           <Text
-            numberOfLines={1}
             style={[
               styles.tileBadgeText,
               { color: tile.accent, fontFamily: FontFamily.interBold },
@@ -152,7 +155,7 @@ function HomeShiftCard({
             },
           ]}
         >
-          {meta || "—"}
+          {meta || ""}
         </Text>
         <View style={{ alignSelf: "flex-start", marginTop: 6 }}>
           <ShiftStatusBadge visualState={visualState} />
@@ -310,7 +313,12 @@ export default function HomeScreen() {
               },
             ]}
           >
-            {t("dashboard.shiftsTodayMeta", { date: dateLabel, count: total })}
+            {landing.data
+              ? t("dashboard.shiftsTodayMeta", {
+                  date: dateLabel,
+                  count: total,
+                })
+              : dateLabel}
           </Text>
 
           {landing.isError ? (
@@ -369,7 +377,11 @@ export default function HomeScreen() {
                 ]}
               >
                 {featuredShift?.participant_name ??
-                  t("dashboard.homeDayComplete")}
+                  t(
+                    total === 0
+                      ? "dashboard.noShiftsToday"
+                      : "dashboard.homeDayComplete",
+                  )}
               </Text>
               <Text style={[styles.heroDetail, { color: colors.heroMuted }]}>
                 {featuredShift
@@ -379,7 +391,11 @@ export default function HomeScreen() {
                     ]
                       .filter(Boolean)
                       .join(" / ")
-                  : t("dashboard.homeDayCompleteDetail")}
+                  : t(
+                      total === 0
+                        ? "dashboard.noShiftsDetail"
+                        : "dashboard.homeDayCompleteDetail",
+                    )}
               </Text>
               <Pressable
                 onPress={openContinue}
@@ -445,7 +461,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {!landing.data || (shifts.length > 0 && remainingShifts.length === 0) ? null : (
+          {!landing.data || remainingShifts.length === 0 ? null : (
             <>
               <Text
                 style={[
@@ -519,12 +535,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
   },
-  greeting: { fontSize: 28, lineHeight: 35, marginBottom: 8 },
+  greeting: { fontSize: 24, lineHeight: 31, marginBottom: 8 },
   subtitle: { fontSize: 14, lineHeight: 21, marginBottom: 24 },
   hero: {
-    borderRadius: 28,
-    padding: 24,
-    marginBottom: 28,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
   },
   heroLabel: {
     flexShrink: 1,
@@ -568,7 +584,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: 12,
   },
   continueText: { flexShrink: 1, fontSize: 16, lineHeight: 22 },
   quickAccessTitle: { marginTop: 24 },

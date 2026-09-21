@@ -30,6 +30,25 @@ import { createCredential, updateCredential, uploadCredentialFile, type Credenti
 
 type PickedFile = { uri: string; name: string; type: string };
 
+const EXTENSION_MIME_FALLBACK: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+/** Some Android content providers/file pickers don't report a `mimeType` —
+ * falling back to "application/octet-stream" there guarantees the backend
+ * rejects an otherwise-valid PDF/photo (it only accepts pdf/jpeg/png/webp),
+ * so the upload could never succeed for those providers. Guess from the
+ * filename extension instead when the picker didn't tell us. */
+function resolveFileType(name: string, mimeType: string | undefined | null): string {
+  if (mimeType) return mimeType;
+  const ext = name.split(".").pop()?.toLowerCase();
+  return (ext && EXTENSION_MIME_FALLBACK[ext]) || "application/octet-stream";
+}
+
 /** One form for both adding a brand-new credential and renewing an existing
  * one — passing `credential` switches it into update mode: the type is
  * fixed (it's the same requirement, not a new one), fields are prefilled,
@@ -57,6 +76,7 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
   const [issuer, setIssuer] = useState(credential?.issuer ?? "");
   const [issueDate, setIssueDate] = useState(credential?.issue_date ?? "");
   const [expiryDate, setExpiryDate] = useState(credential?.expiry_date ?? "");
+  const [screeningNumber, setScreeningNumber] = useState(credential?.screening_number ?? "");
   const [typeOpen, setTypeOpen] = useState(false);
   const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
 
@@ -67,10 +87,11 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    const name = asset.name || "credential-document";
     setPickedFile({
       uri: asset.uri,
-      name: asset.name || "credential-document",
-      type: asset.mimeType || "application/octet-stream",
+      name,
+      type: resolveFileType(name, asset.mimeType),
     });
   }
 
@@ -88,6 +109,7 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
         issuer: issuer.trim() || null,
         issue_date: issueDate.trim() || null,
         expiry_date: expiryDate.trim() || null,
+        ...(credentialType === "ndis_screening" ? { screening_number: screeningNumber.trim() || null } : {}),
       };
 
       const saved = credential
@@ -173,6 +195,22 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
                 style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
               />
             </View>
+
+            {credentialType === "ndis_screening" ? (
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                  {t("credentials.screeningNumber")}
+                </Text>
+                <TextInput
+                  value={screeningNumber}
+                  onChangeText={setScreeningNumber}
+                  placeholder={t("credentials.screeningNumberPlaceholder")}
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCapitalize="characters"
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+                />
+              </View>
+            ) : null}
 
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
