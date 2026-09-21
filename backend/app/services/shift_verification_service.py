@@ -329,7 +329,7 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
 _SHIFT_COLUMNS = (
     "id, organization_id, participant_id, participant_name, worker_id, "
     "scheduled_start, scheduled_end, clocked_in_at, clocked_out_at, "
-    "duration_minutes, status, session_id, tasks"
+    "duration_minutes, status, session_id, tasks, expected_price_item_code"
 )
 
 
@@ -541,6 +541,14 @@ async def verify_shift(
     except Exception:
         logger.warning("shift_verification: day-type check failed for shift %s", shift_id, exc_info=True)
 
+    expected_item_warning: Optional[str] = None
+    expected_price_item_code = shift.get("expected_price_item_code")
+    if expected_price_item_code and expected_price_item_code != price_item_code:
+        expected_item_warning = (
+            f"This shift was expected to be billed as '{expected_price_item_code}' "
+            f"but '{price_item_code}' was selected instead."
+        )
+
     category = resolve_price_item_budget_category(price)
     if not category:
         raise ValueError(
@@ -638,4 +646,6 @@ async def verify_shift(
     }
     if day_type_warning:
         result["day_type_warning"] = day_type_warning
+    if expected_item_warning:
+        result["expected_item_warning"] = expected_item_warning
     return result
