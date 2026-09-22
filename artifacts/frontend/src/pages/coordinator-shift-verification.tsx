@@ -168,16 +168,34 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
         </div>
       )}
 
-      {item.expected_price_item_code && (
-        <div className="border-t px-5 py-2 text-[11px] font-medium" style={{ borderColor: BORDER, color: T3 }}>
-          Expected item: <span className="font-bold" style={{ color: T1 }}>{item.expected_price_item_code}</span>
-          {priceItemCode && priceItemCode !== item.expected_price_item_code && (
-            <span className="ml-1.5 inline-flex items-center gap-1 font-bold" style={{ color: "#B45309" }}>
-              <AlertTriangle size={10} /> different item selected
-            </span>
-          )}
-        </div>
-      )}
+      {item.expected_price_item_code && (() => {
+        const expectedItem = priceItems.find((p) => p.item_code === item.expected_price_item_code);
+        const selectedItem = priceItems.find((p) => p.item_code === priceItemCode);
+        const estimate = (p?: typeof expectedItem) => {
+          if (!p || p.price_national == null) return null;
+          if (p.unit === "E") return p.price_national;
+          return hours_sanity.actual_minutes != null
+            ? p.price_national * (hours_sanity.actual_minutes / 60)
+            : null;
+        };
+        const expectedCost = estimate(expectedItem);
+        const selectedCost = estimate(selectedItem);
+        const mismatch = priceItemCode && priceItemCode !== item.expected_price_item_code;
+        return (
+          <div className="border-t px-5 py-2 text-[11px] font-medium" style={{ borderColor: BORDER, color: T3 }}>
+            Expected item: <span className="font-bold" style={{ color: T1 }}>{item.expected_price_item_code}</span>
+            {expectedCost != null && <span className="font-bold" style={{ color: T1 }}> (${expectedCost.toFixed(2)})</span>}
+            {mismatch && (
+              <>
+                <span className="ml-1.5 inline-flex items-center gap-1 font-bold" style={{ color: "#B45309" }}>
+                  <AlertTriangle size={10} /> selected {priceItemCode}
+                  {selectedCost != null && ` ($${selectedCost.toFixed(2)})`} instead
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="flex flex-wrap items-center gap-2 border-t px-5 py-3" style={{ borderColor: BORDER }}>
         <DollarSign size={13} style={{ color: T3 }} className="shrink-0" />
@@ -195,7 +213,11 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           {priceItems.map((p) => (
             <option key={p.item_code} value={p.item_code}>
               {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-              {p.price_national != null ? ` ($${p.price_national.toFixed(2)}/hr)` : ""}
+              {p.price_national != null
+                ? p.unit === "E"
+                  ? ` ($${p.price_national.toFixed(2)} flat)`
+                  : ` ($${p.price_national.toFixed(2)}/hr)`
+                : ""}
             </option>
           ))}
         </select>

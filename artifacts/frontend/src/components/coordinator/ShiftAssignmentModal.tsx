@@ -796,10 +796,37 @@ export function ShiftAssignmentModal({
                   {(priceItemsQuery.data ?? []).map((p) => (
                     <SelectItem key={p.item_code} value={p.item_code}>
                       {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
+                      {p.price_national != null
+                        ? p.unit === "E"
+                          ? ` ($${p.price_national.toFixed(2)} flat)`
+                          : ` ($${p.price_national.toFixed(2)}/hr)`
+                        : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {(() => {
+                const selected = (priceItemsQuery.data ?? []).find((p) => p.item_code === expectedPriceItemCode);
+                if (!selected || selected.price_national == null) return null;
+                const isFlat = selected.unit === "E";
+                const estimate = isFlat
+                  ? selected.price_national
+                  : activeDurationHours != null
+                  ? selected.price_national * activeDurationHours
+                  : null;
+                return (
+                  <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                    Estimated cost: {estimate != null ? `$${estimate.toFixed(2)}` : "—"}
+                    <span className="ml-1 font-normal" style={{ color: MUTED }}>
+                      {isFlat
+                        ? "(flat fee, not affected by shift duration)"
+                        : activeDurationHours != null
+                        ? `(${activeDurationHours}h × $${selected.price_national.toFixed(2)}/hr)`
+                        : "(set start and end time to estimate)"}
+                    </span>
+                  </p>
+                );
+              })()}
               <p className="text-[11px]" style={{ color: MUTED }}>
                 What this shift should be billed under. If a different item is picked at verification, the coordinator sees a warning — it won't block them.
               </p>
