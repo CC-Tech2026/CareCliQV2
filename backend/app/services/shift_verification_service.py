@@ -578,7 +578,14 @@ async def verify_shift(
             "Shift has no usable actual duration (clock times or duration_minutes "
             "is missing or invalid) — cannot bill. Check the shift record."
         )
-    billed_amount = round((actual_minutes / 60) * hourly_rate, 2)
+    # "E" (per-event) items are a flat fee regardless of how long the shift
+    # ran — e.g. a $735.80 establishment fee stays $735.80, not scaled by
+    # hours worked the way an "H" (hourly) item's rate is. actual_minutes is
+    # still tracked below for the shift's own duration record either way.
+    if str(price.get("unit") or "").upper() == "E":
+        billed_amount = round(hourly_rate, 2)
+    else:
+        billed_amount = round((actual_minutes / 60) * hourly_rate, 2)
 
     session = _get_session_for_shift(shift)
     checks = compute_verification_checks(shift, session)
