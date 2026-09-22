@@ -7,10 +7,18 @@ import { SIGNATURE, DISPLAY_FONT } from "@/components/get-started/shared";
 import { GetStartedFlow } from "@/components/get-started/GetStartedFlow";
 import { LaunchCountdown, isBeforeLaunch } from "@/components/get-started/LaunchCountdown";
 
+// Lets the team test the real signup flow before the public launch date
+// without moving LAUNCH_INSTANT itself (which every other visitor's
+// countdown targets) — remove once launched, at which point isBeforeLaunch()
+// is false for everyone anyway and this has no effect.
+function hasPreviewBypass(): boolean {
+  return new URLSearchParams(window.location.search).get("preview") === "carecliq";
+}
+
 export default function GetStarted() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [beforeLaunch, setBeforeLaunch] = useState(isBeforeLaunch);
+  const [beforeLaunch, setBeforeLaunch] = useState(() => isBeforeLaunch() && !hasPreviewBypass());
   const [paidSuccess, setPaidSuccess] = useState(false);
   const [signupEmail, setSignupEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
