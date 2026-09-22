@@ -26,6 +26,7 @@ from .supabase_client import get_supabase_admin
 from .task_reminder_service import run_task_reminder_pass
 from .unassigned_shift_expiry_service import run_unassigned_shift_expiry_pass
 from .overdue_documentation_escalation_service import run_overdue_documentation_escalation_pass
+from .incident_pending_completion_service import run_incident_pending_completion_pass
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ async def run_notification_pass() -> dict[str, int]:
         screening_recheck_count, onboarding_escalation_stats,
         offer_letter_stats, applicant_stage_reminder_count,
         shift_offer_stats, unassigned_shift_expiry_count,
-        overdue_documentation_count,
+        overdue_documentation_count, incident_pending_stats,
     ) = await asyncio.gather(
         run_shift_reminder_pass(),
         run_credential_expiry_pass(),
@@ -188,6 +189,7 @@ async def run_notification_pass() -> dict[str, int]:
         run_shift_offer_pass(),
         run_unassigned_shift_expiry_pass(),
         run_overdue_documentation_escalation_pass(),
+        run_incident_pending_completion_pass(),
     )
     return {
         "shift_reminders": shift_count,
@@ -211,6 +213,8 @@ async def run_notification_pass() -> dict[str, int]:
         "shift_offers_exhausted": shift_offer_stats["exhausted"],
         "unassigned_shift_expirations": unassigned_shift_expiry_count,
         "overdue_documentation_escalations": overdue_documentation_count,
+        "incident_pending_reminders": incident_pending_stats["reminders"],
+        "incident_pending_escalations": incident_pending_stats["escalations"],
     }
 
 

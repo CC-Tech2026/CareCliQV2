@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 from datetime import date, datetime
 
@@ -113,6 +113,12 @@ REPORTABLE_CATEGORIES = [
     "unexpected_death", "serious_injury", "abuse_neglect", "unlawful_contact",
     "sexual_misconduct", "unauthorised_restrictive_practice", "none",
 ]
+
+# "Fill it later" — the only fields deferrable at submission time (the long written-summary
+# ones). Everything else on the form (type, severity, date, title, participant_harmed,
+# notifications, declaration) stays required.
+DEFERRABLE_FIELDS = ["description", "participant_impact", "worker_actions", "injury_nature"]
+PENDING_PLACEHOLDER = "[Pending — to be completed]"
 SUBJECT_TYPES = ["worker", "participant", "other"]
 INTERVIEWEE_TYPES = ["worker", "participant", "witness", "other"]
 
@@ -175,6 +181,7 @@ class IncidentCreate(BaseModel):
     reportable_categories: Optional[list[str]] = None
     staff_declaration_name: Optional[str] = None
     staff_declaration_signature: Optional[str] = None
+    pending_fields: Optional[list[str]] = None
     # Set only by system-generated incidents (e.g. the medication error/pattern cross-link) —
     # never user-facing input. source_type identifies what kind of record source_id points at.
     source_type: Optional[str] = None
@@ -242,6 +249,27 @@ class IncidentCreate(BaseModel):
         if invalid:
             raise ValueError(f"reportable_categories contains invalid values: {', '.join(invalid)}")
         return normalized
+
+    @field_validator("pending_fields")
+    @classmethod
+    def validate_pending_fields(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        normalized = [v.strip().lower() for v in value]
+        invalid = [v for v in normalized if v not in DEFERRABLE_FIELDS]
+        if invalid:
+            raise ValueError(f"pending_fields contains non-deferrable values: {', '.join(invalid)}")
+        return normalized
+
+    @model_validator(mode="after")
+    def apply_pending_placeholder(self) -> "IncidentCreate":
+        # description is NOT NULL in the DB; when it's deferred via pending_fields the caller
+        # sends "" rather than typing a summary — fill the placeholder here (after all fields
+        # are parsed, so pending_fields is available) so the insert never violates the
+        # NOT NULL constraint. Runs regardless of field declaration order.
+        if "description" in (self.pending_fields or []) and not (self.description or "").strip():
+            self.description = PENDING_PLACEHOLDER
+        return self
 
 
 class WorkerIncidentCreate(BaseModel):
@@ -359,6 +387,7 @@ class IncidentUpdate(BaseModel):
     reportable_categories: Optional[list[str]] = None
     staff_declaration_name: Optional[str] = None
     staff_declaration_signature: Optional[str] = None
+    pending_fields: Optional[list[str]] = None
     investigation_notes: Optional[str] = None
     corrective_actions: Optional[str] = None
     follow_up_required: Optional[bool] = None

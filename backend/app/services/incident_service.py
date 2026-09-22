@@ -637,6 +637,15 @@ async def create_incident(
     if payload.get("md_notified") == "yes" and not payload.get("md_notified_at"):
         payload["md_notified_at"] = now_iso
 
+    # "Fill it later" — the worker deferred one or more long written-summary fields; give
+    # them a 6-hour window and let the hourly notification pass (incident_pending_reminder_service)
+    # nudge them, escalating to coordinators if the window lapses.
+    pending_fields = payload.get("pending_fields") or []
+    if pending_fields:
+        payload["pending_deadline_at"] = (
+            datetime.now(timezone.utc) + timedelta(hours=6)
+        ).isoformat()
+
     if data.escalate:
         payload["severity"] = "critical"
 
@@ -995,6 +1004,15 @@ async def update_incident(
     ):
         if payload.get(key) is not None:
             payload[key] = str(payload[key])
+
+    # "Fill it later" completion: an explicit empty pending_fields list means the caller just
+    # finished the deferred fields (PATCH /api/incidents/{id}/complete-pending) — stop the
+    # hourly reminders and clear the deadline/escalation markers.
+    if "pending_fields" in payload and not payload.get("pending_fields"):
+        payload["pending_fields"] = []
+        payload["pending_completed_at"] = datetime.now(timezone.utc).isoformat()
+        payload["pending_deadline_at"] = None
+        payload["pending_escalated_at"] = None
 
     # Auto-set resolved timestamp
     if (

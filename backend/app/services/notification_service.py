@@ -46,6 +46,8 @@ NOTIFICATION_EVENTS = (
     "shift_documentation_overdue",
     "account_deactivated",
     "account_reactivated",
+    "incident_pending_reminder",
+    "incident_pending_overdue",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
@@ -72,6 +74,8 @@ EVENT_ALERT_TYPES = {
     "shift_documentation_overdue": "shift_documentation_overdue",
     "account_deactivated": "account_deactivated",
     "account_reactivated": "account_reactivated",
+    "incident_pending_reminder": "incident_pending_reminder",
+    "incident_pending_overdue": "incident_pending_overdue",
 }
 
 

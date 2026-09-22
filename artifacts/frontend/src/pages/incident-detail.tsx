@@ -208,6 +208,8 @@ interface Incident {
   ndis_notification_content?: string;
   user_id?: string;
   worker_name?: string;
+  pending_fields?: string[];
+  pending_deadline_at?: string;
 }
 
 const SUBJECT_TYPES = ["worker", "participant", "other"] as const;
@@ -260,6 +262,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   const [investigationNotes, setInvestigationNotes] = useState("");
   const [correctiveActions, setCorrectiveActions] = useState("");
+  const [pendingDraft, setPendingDraft] = useState<Record<string, string>>({});
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideValue, setOverrideValue] = useState(false);
@@ -297,6 +300,13 @@ export default function IncidentDetail({ id }: { id: string }) {
     if (incident) {
       setInvestigationNotes(incident.investigation_notes ?? "");
       setCorrectiveActions(incident.corrective_actions ?? "");
+      const draft: Record<string, string> = {};
+      for (const f of incident.pending_fields ?? []) {
+        draft[f] = (incident as unknown as Record<string, string>)[f] === "[Pending — to be completed]"
+          ? ""
+          : (incident as unknown as Record<string, string>)[f] ?? "";
+      }
+      setPendingDraft(draft);
     }
   }, [incident]);
 
@@ -486,6 +496,59 @@ export default function IncidentDetail({ id }: { id: string }) {
           <p className="text-sm text-orange-800 font-medium">
             {translate("incidents.detail.overdueWarning")}
           </p>
+        </div>
+      )}
+
+      {(incident.pending_fields?.length ?? 0) > 0 && (
+        <div className="cc-surface-card">
+          <div className="cc-card-header flex items-start gap-3">
+            <Clock size={16} className="text-orange-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest cc-card-muted">
+                {translate("incidents.detail.pendingTitle")}
+              </p>
+              <p className="text-[12px] cc-card-muted mt-0.5">
+                {incident.pending_deadline_at
+                  ? translate("incidents.detail.pendingDeadline").replace(
+                      "{time}",
+                      formatDistanceToNow(parseISO(incident.pending_deadline_at), { addSuffix: true })
+                    )
+                  : translate("incidents.detail.pendingBody")}
+              </p>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            {(incident.pending_fields ?? []).map((field) => (
+              <div key={field}>
+                <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">
+                  {translate(`incidents.detail.pendingField.${field}`)}
+                </Label>
+                <Textarea
+                  rows={3}
+                  value={pendingDraft[field] ?? ""}
+                  onChange={(e) => setPendingDraft((prev) => ({ ...prev, [field]: e.target.value }))}
+                  className="text-[13px] resize-none rounded-xl"
+                />
+              </div>
+            ))}
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                disabled={(incident.pending_fields ?? []).some((f) => !(pendingDraft[f] ?? "").trim())}
+                onClick={() => {
+                  const updates: Record<string, unknown> = { pending_fields: [] };
+                  for (const f of incident.pending_fields ?? []) {
+                    updates[f] = pendingDraft[f];
+                  }
+                  updateMutation.mutate(updates);
+                }}
+                className="text-xs h-9 rounded-xl text-white"
+                style={{ background: "var(--cc-cta)" }}
+              >
+                {translate("incidents.detail.pendingComplete")}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

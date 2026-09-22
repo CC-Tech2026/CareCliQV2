@@ -69,6 +69,7 @@ export interface IncidentPayload {
   reportable_categories?: string[];
   staff_declaration_name?: string;
   staff_declaration_signature?: string;
+  pending_fields?: string[];
   incident_date: string;
   follow_up_required?: boolean;
   escalate?: boolean;
