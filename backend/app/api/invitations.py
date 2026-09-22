@@ -1,7 +1,10 @@
 """Invitation system — create and accept staff invitations.
 
 Flow:
-  1. Support coordinator calls POST /invitations/create with email + role.
+  1. Managing director calls POST /invitations/create with email + role.
+     Support coordinators can still view the invite list (GET /list) and
+     deactivate accounts (DELETE /members/{id}), but cannot originate new
+     invitations themselves.
   2. Backend stores invite record with a secure token; returns invite_url.
   3. Backend emails the invite link when SMTP is configured; link is also returned.
   4. Staff member opens /accept-invite?token=X in browser.
@@ -21,9 +24,11 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from ..core.access import has_active_grant
 from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
+from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.supabase_client import get_supabase_admin
 
@@ -133,10 +138,10 @@ async def create_invite(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create an invitation for a new staff member (support coordinator only)."""
+    """Create an invitation for a new staff member (managing director only)."""
     user_role = current_user.get("role", "")
-    if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Only support coordinators and managing directors can send invitations")
+    if user_role != "managing_director" and not has_active_grant(current_user, "staff_invitations", get_supabase_admin()):
+        raise HTTPException(status_code=403, detail="Only managing directors can send staff invitations")
     require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
@@ -153,8 +158,6 @@ async def create_invite(
         )
 
     if body.onboarding_id:
-        if user_role != "managing_director":
-            raise HTTPException(status_code=403, detail="Only managing directors can send new-hire login invites.")
         from ..services import employee_onboarding_service as onboarding_svc
         hire = onboarding_svc.get_hire(body.onboarding_id, org_id)
         # "signed" is the first invite; "invited" is a resend (the candidate's original
@@ -758,7 +761,7 @@ async def list_members(current_user: dict = Depends(get_current_user)):
         supabase = get_supabase_admin()
         result = (
             supabase.table("organization_members")
-            .select("id, user_id, role, is_active, joined_at")
+            .select("id, user_id, role, is_active, joined_at, branch_id")
             .eq("organization_id", org_id)
             .eq("is_active", "true")
             .execute()
@@ -950,13 +953,20 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # 4. Link to organization via organization_members
     # ------------------------------------------------------------------
     try:
-        supabase.table("organization_members").insert({
+        member_row = {
             "user_id": user_id,
             "organization_id": org_id,
             "role": role,
             "is_active": True,
             "invited_by": invite.get("invited_by"),
-        }).execute()
+        }
+        # New staff join the inviter's office (a Melbourne coordinator
+        # invites Melbourne staff). The DB falls back to head office if the
+        # inviter's branch is unknown; the MD can move them under Team.
+        inviter_branch = member_branch_id(invite.get("invited_by"), org_id)
+        if inviter_branch:
+            member_row["branch_id"] = inviter_branch
+        supabase.table("organization_members").insert(member_row).execute()
     except Exception as e:
         logger.error("accept_invite organization_members insert error: %s", e)
 

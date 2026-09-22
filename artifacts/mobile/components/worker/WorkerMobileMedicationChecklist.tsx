@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Tex
 
 import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
+import { formatTimeWithZone } from "@/lib/shift-utils";
 import {
   attachMedicationReason,
   getMedicationChecklist,
@@ -25,6 +26,8 @@ type Props = {
    * so a parent (the medication task row) can drive its own completion off
    * real doses instead of a manual tick. */
   onStatusChange?: (allLogged: boolean, hasScheduled: boolean) => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -61,7 +64,7 @@ function dueMeta(item: MedicationChecklistItem, colors: ReturnType<typeof useCol
   return { label: "Upcoming", color: colors.mutedForeground, bg: colors.soft };
 }
 
-export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusChange }: Props) {
+export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusChange, tz }: Props) {
   const colors = useColors();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -246,13 +249,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusCha
       {checklist.map((item) => {
         const meta = dueMeta(item, colors);
         const logged = !!item.administration;
-        const time = (() => {
-          try {
-            return new Date(item.scheduled_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-          } catch {
-            return item.scheduled_time;
-          }
-        })();
+        const time = formatTimeWithZone(item.scheduled_time, tz) || item.scheduled_time;
         return (
           <Pressable
             key={`${item.medication_id}-${item.scheduled_time}`}

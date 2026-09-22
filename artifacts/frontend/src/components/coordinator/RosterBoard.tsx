@@ -39,6 +39,8 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPanel";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
+import { ZoneLabel } from "@/components/branches/ZoneLabel";
+import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -133,7 +135,8 @@ function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShift
         </p>
         {start && (
           <p className="truncate text-[9.5px] font-medium opacity-80" style={{ color: clrs.color }}>
-            {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
+            {formatAppTime(shift.scheduled_start!, shift.timezone)}{end ? `–${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}
+            <ZoneLabel tz={shift.timezone} at={shift.scheduled_start!} className="ml-1" />
           </p>
         )}
       </div>
@@ -156,7 +159,8 @@ function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
       </p>
       {start && (
         <p className="text-[11px] font-medium opacity-80" style={{ color: clrs.color }}>
-          {format(start, "EEE d MMM, h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}
+          {format(start, "EEE d MMM")}, {formatAppTime(shift.scheduled_start!, shift.timezone)}{end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}
+          <ZoneLabel tz={shift.timezone} at={shift.scheduled_start!} className="ml-1" />
         </p>
       )}
     </div>
@@ -291,7 +295,8 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
     for (const s of shifts) {
       const d = parseStart(s);
       if (!d || !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
-      const key = `${s.worker_id}|${format(d, "yyyy-MM-dd")}`;
+      // Column = the shift's own local day (its participant's branch)
+      const key = `${s.worker_id}|${appLocalDateKey(s.scheduled_start!, s.timezone)}`;
       map.set(key, [...(map.get(key) ?? []), s]);
     }
     return map;

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
@@ -250,7 +250,6 @@ async def load_price_schedule(
 
     for category in support_categories:
         cat_num = category.get("category_number", "")
-        cat_name = category.get("category_name", "")
         support_purpose = category.get("support_purpose", "")
         reg_group = category.get("registration_group", "")
 
@@ -297,9 +296,7 @@ async def load_price_schedule(
                 "organization_id": str(org_id),
                 "item_code": item_code,
                 "schedule_id": None,  # Will be set after schedule is created
-                "support_category_number": cat_num,
                 "category_number": cat_num,
-                "support_category_name": cat_name,
                 "support_purpose": support_purpose,
                 "registration_group": reg_group,
                 "name": item.get("name", ""),
@@ -337,6 +334,7 @@ async def load_price_schedule(
         "effective_date": effective_date.isoformat(),
         "source_document": source_document,
         "version": version_str,
+        "source_json": source_json,
     }
 
     schedule_result = supabase.table("ndis_price_schedules").insert(schedule_payload).execute()
@@ -347,6 +345,17 @@ async def load_price_schedule(
         )
 
     schedule_id = schedule_result.data[0]["id"]
+
+    # ── Close out prior active versions of these item codes ─────
+    # Only one row per (item_code, organization_id) may have valid_to
+    # IS NULL at a time — close the old ones before inserting the new
+    # active versions, same as edit_item_price does for a single item.
+    incoming_item_codes = sorted({item["item_code"] for item in items_to_insert})
+    supabase.table("ndis_price_items").update(
+        {"valid_to": effective_date.isoformat() + "T00:00:00Z"}
+    ).eq("organization_id", str(org_id)).in_(
+        "item_code", incoming_item_codes
+    ).is_("valid_to", "null").execute()
 
     # ── Update all items with schedule FK and insert ──────────
     for item in items_to_insert:
@@ -549,9 +558,8 @@ async def edit_item_price(
         new_row_payload = {
             "organization_id": str(org_id),
             "item_code": item_code,
-            "schedule_id": None,  # Signal: manual edit
-            "support_category_number": current_row["support_category_number"],
-            "support_category_name": current_row["support_category_name"],
+            "schedule_id": current_row["schedule_id"],  # carried forward; not NULL live
+            "category_number": current_row["category_number"],
             "support_purpose": current_row["support_purpose"],
             "registration_group": current_row["registration_group"],
             "name": current_row["name"],
@@ -560,14 +568,12 @@ async def edit_item_price(
             "price_national": price_national,
             "price_remote": price_remote,
             "price_very_remote": price_very_remote,
+            "effective_date": effective_date.isoformat(),
             "day_type": current_row["day_type"],
             "time_type": current_row["time_type"],
             "support_intensity": current_row["support_intensity"],
-            "notes": current_row["notes"],
             "valid_from": effective_date.isoformat() + "T00:00:00Z",
             "valid_to": None,
-            "edited_by": user_id,
-            "edited_at": datetime.now(timezone.utc).isoformat(),
         }
 
         insert_result = supabase.table("ndis_price_items").insert(new_row_payload).execute()

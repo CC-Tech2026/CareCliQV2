@@ -10,6 +10,7 @@ from datetime import date, datetime, time, timezone
 from typing import Any, Optional
 
 from ..core.timezone import APP_TIMEZONE as DEFAULT_TZ
+from ..core.timezone import user_timezone
 from .shift_service import (
     _enrich_worker_shift_card,
     _get_session_for_shift,
@@ -94,9 +95,13 @@ def list_shifts_for_calendar(
     """Shifts in inclusive date range for worker calendar views."""
     if end_date < start_date:
         return []
-    # Use org-local day boundaries (Australia/Adelaide) so morning shifts are not dropped from the range.
-    start_local = datetime.combine(start_date, time.min, tzinfo=DEFAULT_TZ)
-    end_local = datetime.combine(end_date, time(23, 59, 59), tzinfo=DEFAULT_TZ)
+    # Use the worker's own branch day boundaries, not the deployment default —
+    # otherwise a Melbourne worker's Monday-morning shift could fall just
+    # outside a range computed in Adelaide time and silently drop off the
+    # calendar.
+    tz = user_timezone(worker_id, organization_id)
+    start_local = datetime.combine(start_date, time.min, tzinfo=tz)
+    end_local = datetime.combine(end_date, time(23, 59, 59), tzinfo=tz)
     start_iso = start_local.astimezone(timezone.utc).isoformat()
     end_iso = end_local.astimezone(timezone.utc).isoformat()
     try:

@@ -78,6 +78,8 @@ export interface Participant {
   used_budget?: number | null;
   primary_disability?: string | null;
   biological_sex?: ParticipantBiologicalSex;
+  /** Office (branch) serving the participant; sets their timezone. */
+  branch_id?: string | null;
   goals?: (NDISGoal | ParticipantGoal)[] | null;
   created_at?: string | null;
 }

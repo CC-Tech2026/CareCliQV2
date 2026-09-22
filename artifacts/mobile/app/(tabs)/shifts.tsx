@@ -31,7 +31,7 @@ import {
 } from "@/hooks/useOfflineCache";
 import type { WorkerShift } from "@/lib/worker-api";
 import {
-  APP_TIMEZONE,
+  getAppTimezone,
   getPrimaryTodayShiftId,
   sortTodayShiftsForList,
 } from "@/lib/shift-utils";
@@ -154,12 +154,12 @@ export default function MyShiftsScreen() {
         {selectedKey === todayKey
           ? "Today"
           : selectedDate.toLocaleDateString("en-AU", {
-              timeZone: APP_TIMEZONE,
+              timeZone: getAppTimezone(),
               weekday: "long",
             })}
         {" - "}
         {selectedDate.toLocaleDateString("en-AU", {
-          timeZone: APP_TIMEZONE,
+          timeZone: getAppTimezone(),
           day: "numeric",
           month: "short",
         })}

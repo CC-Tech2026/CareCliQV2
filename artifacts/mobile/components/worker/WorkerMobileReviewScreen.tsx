@@ -19,7 +19,7 @@ import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import type { MissedCheckin, SessionNoteRecord, ShiftHealthAlert, ShiftTask } from "@/lib/worker-api";
-import { isMandatoryTask } from "@/lib/shift-utils";
+import { formatTimeWithZone, isMandatoryTask } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
 type Props = {
@@ -37,13 +37,13 @@ type Props = {
   onSubmit: () => void;
   onViewComplianceReport: () => void;
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
-function formatMissedTime(iso: string | null): string {
+function formatMissedTime(iso: string | null, tz?: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  return formatTimeWithZone(iso, tz).toLowerCase();
 }
 
 function medicationTask(tasks: ShiftTask[]) {
@@ -74,6 +74,7 @@ export function WorkerMobileReviewScreen({
   onSubmit,
   onViewComplianceReport,
   onOpenIncidentReport,
+  tz,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -225,7 +226,7 @@ export function WorkerMobileReviewScreen({
             style={[styles.medSection, { borderColor: colors.border, backgroundColor: colors.card }]}
           >
             <Text style={[styles.missedCheckinLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              Missed check-in{formatMissedTime(m.scheduled_at) ? ` around ${formatMissedTime(m.scheduled_at)}` : ""}
+              Missed check-in{formatMissedTime(m.scheduled_at, tz) ? ` around ${formatMissedTime(m.scheduled_at, tz)}` : ""}
             </Text>
             <TextInput
               value={missedReasons[m.id] ?? ""}
@@ -272,6 +273,7 @@ export function WorkerMobileReviewScreen({
                 onSave={onSaveNote}
                 onRemove={onRemoveNote}
                 onIncidentReport={flag?.severity === "fail" ? onOpenIncidentReport : undefined}
+                tz={tz}
               />
             );
           })

@@ -426,7 +426,7 @@ export default function WorkerScheduleCalendar() {
       y += 5;
       doc.setFont("helvetica", "normal");
       for (const s of dayShifts) {
-        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end)} · ${anonymiseName(s.participant_name)}`;
+        const line = `${formatShiftBlockTime(s.scheduled_start, s.scheduled_end, s.timezone)} · ${anonymiseName(s.participant_name)}`;
         doc.text(line, 18, y);
         y += 5;
       }
@@ -649,7 +649,7 @@ export default function WorkerScheduleCalendar() {
                       >
                         <p className="text-sm font-black">{shift.participant_first_name || translate("calendar.shiftFallback")}</p>
                         <p className="text-xs font-semibold opacity-90">
-                          {formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end)}
+                          {formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
                         </p>
                         {shift.participant_suburb && (
                           <p className="text-[11px] font-medium opacity-80">{shift.participant_suburb}</p>

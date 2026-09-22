@@ -12,6 +12,7 @@ export type Credential = {
   expiry_date?: string | null;
   file_url?: string | null;
   status: string;
+  screening_number?: string | null;
 };
 
 export type CredentialPayload = {
@@ -22,6 +23,7 @@ export type CredentialPayload = {
   issue_date?: string | null;
   expiry_date?: string | null;
   notes?: string | null;
+  screening_number?: string | null;
 };
 
 export type ToolkitItem = {
@@ -61,6 +63,8 @@ export type IncidentSummary = {
   participant_name?: string;
   ndis_pending?: boolean;
   overdue?: boolean;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type IncidentDetail = {
@@ -87,6 +91,8 @@ export type IncidentDetail = {
   worker_actions?: string | null;
   investigation_notes?: string | null;
   corrective_actions?: string | null;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type IncidentStats = {

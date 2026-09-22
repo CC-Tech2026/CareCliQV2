@@ -3,7 +3,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { safeFormat, money } from "@/lib/participant-format";
 import { emergencyContactDisplay } from "@/lib/participant-display";
-import { planManagementTypeLabel, type BillingPeriod, type BillingPeriodCurrent } from "@/services/coordinatorService";
+import {
+  planManagementTypeLabel,
+  getCoordinatorWorkerStats,
+  type BillingPeriod,
+  type BillingPeriodCurrent,
+} from "@/services/coordinatorService";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import type { ParticipantRecord, BudgetSummary } from "@/pages/patients";
 
 interface ParticipantOverviewTabProps {
@@ -94,6 +100,16 @@ export function ParticipantOverviewTab({
   const emergencyContact = emergencyContactDisplay(participant.emergency_contact ?? undefined);
   const nextOfKin = emergencyContactDisplay(participant.next_of_kin ?? undefined);
 
+  const { data: coordinators = [] } = useOrgQuery(["org-coordinators", "care-coordinator-picker"], {
+    queryFn: () =>
+      getCoordinatorWorkerStats().then((list) =>
+        list.filter((w) => w.role === "support_coordinator" || w.role === "managing_director"),
+      ),
+  });
+  const careCoordinator = participant.care_coordinator_id
+    ? coordinators.find((c) => c.id === participant.care_coordinator_id)
+    : undefined;
+
   return (
     <>
       <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
@@ -142,7 +158,12 @@ export function ParticipantOverviewTab({
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <ContactCard
-            label={translate("patients.field.caseManager")}
+            label={translate("patients.field.careCoordinator")}
+            name={careCoordinator?.full_name}
+            notSet={notSet}
+          />
+          <ContactCard
+            label={translate("patients.field.billingContact")}
             name={participant.case_manager_name}
             phone={participant.case_manager_phone}
             notSet={notSet}

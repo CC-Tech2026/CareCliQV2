@@ -1,3 +1,8 @@
+import { SettingsNavigation } from "@/components/settings/SettingsNavigation";
+import { BillingSection } from "@/components/settings/BillingSection";
+import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +55,8 @@ import {
   Lightbulb,
   Paperclip,
   Video,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -65,6 +72,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { BranchesSection } from "@/components/branches/BranchesSection";
+import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Link } from "wouter";
 import {
@@ -107,9 +116,9 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "bugReport" | "improvementFeedback";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
-const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean }[] = [
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
@@ -119,9 +128,15 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
   { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
   { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
+  // improvementFeedback and delegatedAccess stay strictly MD-only — neither
+  // is in the delegated-access capability catalog (product feedback to the
+  // vendor isn't a delegable capability, and letting a coordinator grant
+  // *more* delegated access would be a privilege-escalation hole).
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
-  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
-  { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true },
+  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
+  { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
+  { id: "branches",      labelKey: "settings.nav.branches",          icon: MapPin, mdOnly: true },
+  { id: "delegatedAccess", labelKey: "settings.nav.delegatedAccess", icon: Clock, mdOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -139,12 +154,12 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 py-4">
+    <div className="flex items-center justify-between gap-4 py-3">
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>{title}</p>
-        <p className="text-[14px] mt-1 font-medium leading-relaxed" style={{ color: "var(--cc-text)" }}>{description}</p>
+        <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{title}</p>
+        <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch aria-label={title} className="shrink-0" checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
@@ -166,7 +181,7 @@ function Section({
   return (
     <div className="space-y-6">
       <div className="pb-1">
-        <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
+        <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
         <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
       </div>
       {children}
@@ -188,12 +203,12 @@ function PanelCard({
 }) {
   return (
     <div
-      className={cn("bg-white rounded-2xl overflow-hidden", className)}
-      style={{ border: "1px solid var(--cc-border)" }}
+      className={cn("rounded-xl overflow-hidden", className)}
+      style={{ border: "1px solid var(--cc-border)", background: "var(--cc-surface)" }}
     >
-      <div className="p-6">
+      <div className="p-4 sm:p-5">
         {label && (
-          <p className="text-[15px] font-bold mb-4" style={{ color: "var(--cc-text)" }}>{label}</p>
+          <p className="text-sm font-semibold mb-4" style={{ color: "var(--cc-text)" }}>{label}</p>
         )}
         {children}
       </div>
@@ -270,6 +285,8 @@ interface OrgMember {
   joined_at: string;
   full_name: string;
   email: string;
+  /** Office the member works from (198_branches.sql). */
+  branch_id?: string | null;
 }
 
 interface PendingInvite {
@@ -411,9 +428,9 @@ function NotificationsSection() {
         <table className="w-full text-[13px]">
           <thead>
             <tr style={{ background: "var(--cc-soft)" }}>
-              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: "var(--cc-muted)" }}>Event</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-[11px] uppercase tracking-widest" style={{ color: "var(--cc-muted)" }}>Event</th>
               {NOTIF_CHANNELS.map((ch) => (
-                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: "var(--cc-muted)" }}>
+                <th key={ch} className="px-4 py-2.5 text-center font-semibold text-[11px] uppercase tracking-widest w-24" style={{ color: "var(--cc-muted)" }}>
                   {CHANNEL_LABELS[ch]}
                   {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
                 </th>
@@ -1188,6 +1205,9 @@ function ImprovementFeedbackCard() {
 function OrganizationBrandingSection() {
   const { toast } = useToast();
   const { translate } = useAccessibility();
+  const { user } = useAuth();
+  const { grantFor } = useMyAccessGrants();
+  const brandingGrant = user?.role !== "managing_director" ? grantFor("org_branding") : undefined;
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [accentColor, setAccentColor] = useState("");
@@ -1276,6 +1296,7 @@ function OrganizationBrandingSection() {
       description={translate("settings.branding.subtitle")}
       icon={ImageIcon}
     >
+      {brandingGrant && <TemporaryAccessBanner grant={brandingGrant} label="Organisation branding" />}
       <PanelCard label={translate("settings.branding.logoLabel")}>
         <div className="flex items-center gap-4">
           <div
@@ -1365,93 +1386,6 @@ function OrganizationBrandingSection() {
 // duplicating that page's logic inline.
 // -----------------------------------------------------------------------------
 
-const BILLING_TIER_LABELS: Record<string, string> = { micro: "Micro", small: "Small", medium: "Medium" };
-const BILLING_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  trialing: { label: "Free trial", color: "var(--cc-coral)" },
-  active: { label: "Active", color: "#22C55E" },
-  past_due: { label: "Payment failed", color: "#EF4444" },
-  canceled: { label: "Cancelled", color: "var(--cc-muted)" },
-  unpaid: { label: "Unpaid", color: "#EF4444" },
-};
-
-function BillingSection() {
-  const { toast } = useToast();
-  const [status, setStatus] = useState<{
-    plan_tier: string | null;
-    subscription_status: string | null;
-    trial_ends_at: string | null;
-    stripe_customer_id: string | null;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch("/api/platform-billing/status")
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Could not load subscription status."))))
-      .then((data) => { if (!cancelled) setStatus(data); })
-      .catch((err) => {
-        if (!cancelled) toast({ title: "Couldn't load billing", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const statusInfo = status?.subscription_status ? BILLING_STATUS_LABELS[status.subscription_status] : null;
-  const hasSubscription = Boolean(status?.stripe_customer_id);
-
-  return (
-    <div className="space-y-6">
-      <div className="pb-1">
-        <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>Billing &amp; Subscription</h2>
-        <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
-          Manage CareCliQ's platform subscription for your organisation.
-        </p>
-      </div>
-
-      <PanelCard label="Current plan">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cc-plum)" }} />
-          </div>
-        ) : hasSubscription ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-[20px] font-black" style={{ color: "var(--cc-text)" }}>
-                {status?.plan_tier ? BILLING_TIER_LABELS[status.plan_tier] ?? status.plan_tier : "—"}
-                {statusInfo && (
-                  <span className="ml-2 text-[12px] font-bold" style={{ color: statusInfo.color }}>{statusInfo.label}</span>
-                )}
-              </p>
-              {status?.trial_ends_at && status.subscription_status === "trialing" && (
-                <p className="text-[12px] mt-1" style={{ color: "var(--cc-muted)" }}>
-                  Trial ends {new Date(status.trial_ends_at).toLocaleDateString("en-AU")}
-                </p>
-              )}
-            </div>
-            <Link href="/platform-billing">
-              <Button size="sm" className="gap-1.5">
-                <CreditCard className="h-3.5 w-3.5" /> Manage plan &amp; billing
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-[13px]" style={{ color: "var(--cc-muted)" }}>No subscription on file yet.</p>
-            <Link href="/platform-billing">
-              <Button size="sm" className="gap-1.5">
-                <CreditCard className="h-3.5 w-3.5" /> Choose a plan
-              </Button>
-            </Link>
-          </div>
-        )}
-      </PanelCard>
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
-
 export default function Settings() {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
@@ -1459,9 +1393,13 @@ export default function Settings() {
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const isMD = user?.role === "managing_director";
-  const visibleNavItems = NAV_ITEMS.filter((item) => (!item.coordinatorOnly || isCoordinator) && (!item.mdOnly || isMD));
+  const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
+  const visibleNavItems = NAV_ITEMS.filter((item) =>
+    (!item.coordinatorOnly || isCoordinator) &&
+    (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
+  );
 
-  const [activeSection, setActiveSection] = useState<SectionId>("account");
+  const [activeSection, setActiveSection] = useState<SectionId>(() => isMD && new URLSearchParams(window.location.search).has("billing") ? "billing" : "account");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
 
@@ -1557,6 +1495,29 @@ export default function Settings() {
       toast({ title: translate("settings.toast.memberRemoved") });
     } catch {
       toast({ title: translate("settings.toast.memberRemoveFailed"), variant: "destructive" });
+    }
+  };
+
+  const { branches: branchList, byId: branchById, multiBranch: branchesMulti } = useBranches();
+  const invalidateBranches = useInvalidateBranches();
+
+  const handleChangeBranch = async (userId: string, branchId: string) => {
+    if (!authToken || !branchId) return;
+    try {
+      const res = await apiFetch(`/api/branches/members/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branch_id: branchId }),
+      });
+      if (!res.ok) throw new Error();
+      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, branch_id: branchId } : m)));
+      invalidateBranches();
+      toast({
+        title: "Branch updated",
+        description: `${branchById.get(branchId)?.name ?? "Branch"} — their shifts and pay now follow that office's time.`,
+      });
+    } catch {
+      toast({ title: "Could not update branch", variant: "destructive" });
     }
   };
 
@@ -1965,69 +1926,22 @@ export default function Settings() {
 
   // -- Render -----------------------------------------------------------------
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 min-h-full pb-12">
+    <div className="mx-auto flex min-h-full w-full min-w-0 max-w-6xl flex-col gap-5 pb-12">
       {modal}
 
       {/* -- Page header ------------------------------------------------------- */}
       <div>
-        <h1 className="text-[26px] font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
         <p className="text-[13px] mt-1" style={{ color: "var(--cc-muted)" }}>
           {translate("settings.subtitle")}
         </p>
       </div>
 
-      {/* -- Mobile nav (outside flex row, stacks vertically on mobile) ------ */}
-      <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
-        {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveSection(id)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
-            style={{
-              background: activeSection === id ? "var(--cc-cta)" : "var(--cc-soft)",
-              color: activeSection === id ? "white" : "var(--cc-text)",
-            }}
-          >
-            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "var(--cc-muted)" }} />
-            {translate(labelKey)}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-6">
-
-      {/* -- Sticky sidebar ---------------------------------------------------- */}
-      {/* top-[160px] clears HubLayout's own sticky header (75px) plus its
-          floating Command Deck dock (~80px) that sit above this page on the
-          MD portal - top-0 stuck this nav underneath both of them instead of
-          below them, so scrolling looked like the nav wasn't sticking at all. */}
-      <aside className="hidden lg:flex flex-col w-56 shrink-0">
-        <div className="sticky top-[160px] space-y-0.5">
-          <p className="text-[11px] font-bold uppercase tracking-widest px-3 pb-3" style={{ color: "var(--cc-muted)" }}>
-            Settings
-          </p>
-          {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveSection(id)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-150 text-left"
-              style={{
-                background: activeSection === id ? "var(--cc-cta)" : "transparent",
-                color: activeSection === id ? "white" : "var(--cc-text)",
-              }}
-            >
-              <Icon
-                className="h-4 w-4 shrink-0"
-                style={{ color: activeSection === id ? "white" : "var(--cc-muted)" }}
-              />
-              {translate(labelKey)}
-            </button>
-          ))}
-        </div>
-      </aside>
+      <div className="flex min-w-0 flex-col items-start gap-5 lg:flex-row lg:gap-7">
+        <SettingsNavigation<SectionId> items={visibleNavItems.map(item=>({...item,label:translate(item.labelKey)}))} active={activeSection} onChange={setActiveSection} />
 
       {/* -- Content panel ----------------------------------------------------- */}
-      <main className="flex-1 min-w-0 space-y-6">
+      <main className="w-full min-w-0 flex-1 space-y-5">
 
         {/* -- Account section ----------------------------------------------- */}
         {activeSection === "account" && (
@@ -2048,10 +1962,10 @@ export default function Settings() {
 
                   <ProfilePhotoUpload cropCircle />
 
-                  <div className="flex items-center justify-between gap-4 rounded-xl px-4 py-3" style={{ background: "var(--cc-soft)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3" style={{ background: "var(--cc-soft)" }}>
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>{translate("profile.email")}</p>
-                      <p className="mt-0.5 text-[14px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{user?.email || "N/A"}</p>
+                      <p className="mt-0.5 text-[14px] font-medium break-all" style={{ color: "var(--cc-text)" }}>{user?.email || "N/A"}</p>
                     </div>
                     <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
                   </div>
@@ -2591,6 +2505,27 @@ export default function Settings() {
                           </span>
                         )}
 
+                        {/* Branch (office) — sets the member's timezone */}
+                        {branchesMulti && (
+                          isMD ? (
+                            <select
+                              title="Branch"
+                              value={m.branch_id ?? ""}
+                              onChange={(e) => handleChangeBranch(m.user_id, e.target.value)}
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full border outline-none cursor-pointer shrink-0 bg-white"
+                              style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+                            >
+                              {branchList.map((b) => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-[11px] shrink-0" style={{ color: "var(--cc-muted)" }}>
+                              {branchById.get(m.branch_id ?? "")?.name ?? ""}
+                            </span>
+                          )
+                        )}
+
                         {/* Joined date */}
                         <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
@@ -2704,6 +2639,14 @@ export default function Settings() {
 
         {activeSection === "branding" && isMD && (
           <OrganizationBrandingSection />
+        )}
+
+        {activeSection === "branches" && isMD && (
+          <BranchesSection />
+        )}
+
+        {activeSection === "delegatedAccess" && isMD && (
+          <DelegatedAccessSection />
         )}
 
       </main>

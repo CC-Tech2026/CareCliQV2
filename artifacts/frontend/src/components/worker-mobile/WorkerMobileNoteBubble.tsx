@@ -15,6 +15,8 @@ type Props = {
   editable?: boolean;
   onSave?: (noteId: string, content: string) => void;
   onIncidentReport?: (noteId: string, content: string) => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 function wordCount(text: string) {
@@ -29,12 +31,13 @@ export function WorkerMobileNoteBubble({
   editable,
   onSave,
   onIncidentReport,
+  tz,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content);
   const type = inferNoteType(note);
   const isCheckin = isCheckinSessionNote(note);
-  const ts = noteTimestamp(note);
+  const ts = noteTimestamp(note, tz);
   const wc = wordCount(note.content);
   const isFlagged = Boolean(flag);
   const isFail = flag?.severity === "fail";

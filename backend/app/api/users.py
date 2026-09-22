@@ -46,7 +46,7 @@ def _select_profile(user_id: str) -> dict:
             "emergency_contact, discipline, ahpra_registration_number, professional_indemnity_confirmed, "
             "business_name, email_verified, profile_completed, onboarding_completed, "
             "role_specific_profile_completed, profile_photo_url, profile_photo_path, onboarding_checklist, "
-            "preferred_contact_method, pending_email"
+            "preferred_contact_method, pending_email, profile_summary, profile_experience_years"
         )
         .eq("id", user_id)
         .maybe_single()
@@ -131,10 +131,20 @@ async def update_my_profile(body: dict, current_user: dict = Depends(get_current
         "professional_indemnity_confirmed",
         "business_name",
         "preferred_contact_method",
+        "profile_summary",
+        "profile_experience_years",
     }
     payload = {k: v for k, v in (body or {}).items() if k in allowed}
     if payload.get("preferred_contact_method") not in (None, *PREFERRED_CONTACT_METHODS):
         raise HTTPException(status_code=422, detail="Invalid preferred contact method.")
+    if payload.get("profile_experience_years") is not None:
+        try:
+            years = int(payload["profile_experience_years"])
+            if years < 0 or years > 80:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Years of experience must be a whole number between 0 and 80.")
+        payload["profile_experience_years"] = years
     role = current_user.get("role")
     required_common = bool(payload.get("full_name")) and bool(payload.get("phone"))
     role_complete = False

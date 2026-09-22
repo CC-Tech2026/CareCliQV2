@@ -12,7 +12,7 @@ import {
   type MyCompletionStats,
 } from "@/lib/worker-api";
 
-const EXCLUDED_ROUTES = ["splash", "onboarding", "login", "forgot-password", "signup"];
+const EXCLUDED_ROUTES = ["splash", "onboarding", "login", "forgot-password", "signup", "activate-account"];
 
 /** Shown once when a support worker reaches Active (cleared Credentials and
  * Training), closing the loop on the onboarding pipeline — the mobile mirror

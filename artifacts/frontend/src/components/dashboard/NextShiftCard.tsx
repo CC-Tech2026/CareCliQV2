@@ -111,7 +111,7 @@ export function NextShiftCard({ shift }: Props) {
               {shift.participant_name}
             </h2>
             <p className="text-sm font-semibold" style={{ color: MUTED }}>
-              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
             </p>
           </div>
         </div>

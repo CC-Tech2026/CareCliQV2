@@ -21,6 +21,8 @@ type Props = {
   onSubmit: () => void;
   onViewComplianceReport: () => void;
   onOpenIncidentReport?: (noteId: string, content: string) => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 function medicationTask(tasks: ShiftTask[]) {
@@ -48,6 +50,7 @@ export function WorkerMobileReviewScreen({
   onSubmit,
   onViewComplianceReport,
   onOpenIncidentReport,
+  tz,
 }: Props) {
   const medTask = medicationTask(tasks);
   const medMissing = Boolean(medTask && !hasMedicationNote(medTask, notes));
@@ -270,6 +273,7 @@ export function WorkerMobileReviewScreen({
                 editable
                 onSave={onSaveNote}
                 onIncidentReport={onOpenIncidentReport}
+                tz={tz}
               />
             );
           })}

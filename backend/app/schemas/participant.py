@@ -69,6 +69,7 @@ class NDISGoal(BaseModel):
 
 class ParticipantCreate(BaseModel):
     full_name: str
+    branch_id: Optional[str] = None  # office serving the participant (198_branches.sql)
     ndis_number: str
     date_of_birth: date
     email: Optional[str] = None
@@ -91,6 +92,7 @@ class ParticipantUpdate(BaseModel):
     """All fields optional — used for both PATCH (partial) and PUT (full replace)."""
 
     full_name: Optional[str] = None
+    branch_id: Optional[str] = None  # office serving the participant (198_branches.sql)
     date_of_birth: Optional[date] = None
     email: Optional[str] = None
     phone: Optional[str] = None

@@ -13,6 +13,7 @@ import { unlockPageInteraction } from "@/lib/unlock-page-interaction";
 import { listIncidents } from "@/services/incidentService";
 import { WorkerIncidentReportForm } from "@/components/shifts/WorkerIncidentReportForm";
 import { listShiftMessages, type ShiftOfficeMessage } from "@/services/shiftService";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -41,6 +42,8 @@ type Props = {
   incidentFormOpen?: boolean;
   onIncidentFormOpenChange?: (open: boolean) => void;
   onIncidentSubmitted?: () => void;
+  /** Participant's branch zone — incident times below are shown in it. */
+  tz?: string | null;
 };
 
 export function DuringShiftAccordion({
@@ -53,6 +56,7 @@ export function DuringShiftAccordion({
   onToggle,
   officePhone,
   incidentFormOpen,
+  tz,
   onIncidentFormOpenChange,
   onIncidentSubmitted,
 }: Props) {
@@ -181,7 +185,7 @@ export function DuringShiftAccordion({
                     <span className="font-bold">{item.reference_number || item.title || item.incident_type}</span>
                     {item.incident_date && (
                       <span className="ml-1 text-muted-foreground">
-                        · {new Date(item.incident_date).toLocaleString()}
+                        · {formatAppTimeWithZone(item.incident_date, tz)}
                       </span>
                     )}
                   </li>
@@ -211,6 +215,7 @@ export function DuringShiftAccordion({
               setMessageModalOpen(false);
             }}
             onCancel={() => setMessageModalOpen(false)}
+            tz={tz}
           />
         </DialogContent>
       </Dialog>

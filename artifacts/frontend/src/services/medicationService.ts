@@ -205,7 +205,7 @@ export function getMedicationDocuments(medicationId: string) {
 
 // ── Compliance Centre Medication Register (coordinator, org-wide) ────────────────────────────
 
-export type OrgMedication = Medication & { participant_name?: string | null };
+export type OrgMedication = Medication & { participant_name?: string | null; timezone?: string | null };
 
 export type MedicationAdministrationOutcome = "given_on_time" | "given_late" | "given_early" | "refused" | "missed" | "withheld" | "administration_error";
 export type MedicationErrorSubtype = "wrong_medication" | "wrong_dose" | "wrong_participant" | "wrong_route" | "other";
@@ -256,9 +256,13 @@ export type MedicationTimelineEvent =
 /** Everything that's ever happened to this medication, in one chronological view — the
  * document trail, verification/status changes, and every administration with its outcome. */
 export function getMedicationAuditTimeline(medicationId: string) {
-  return jsonFetch<{ medication: OrgMedication; documents: MedicationDocument[]; timeline: MedicationTimelineEvent[] }>(
-    `/api/medications/${medicationId}/audit-timeline`,
-  );
+  return jsonFetch<{
+    medication: OrgMedication;
+    documents: MedicationDocument[];
+    timeline: MedicationTimelineEvent[];
+    /** The medication's participant's branch zone — every event in the timeline is theirs. */
+    timezone: string;
+  }>(`/api/medications/${medicationId}/audit-timeline`);
 }
 
 // ── Pattern detection (build order step 7) ────────────────────────────────────────────────

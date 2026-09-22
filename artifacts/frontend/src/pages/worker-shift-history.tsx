@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import {
   ChevronDown,
   ChevronRight,
@@ -530,7 +531,7 @@ function HistoryRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-black" style={{ color: TEXT }}>{formatShiftDate(row.shift_date)}</p>
+          <p className="text-sm font-black" style={{ color: TEXT }}>{formatShiftDate(row.shift_date)} <ZoneLabel tz={row.timezone} at={row.scheduled_start ?? undefined} /></p>
           {row.has_unread_feedback && (
             <span className="h-2 w-2 rounded-full" style={{ background: CORAL }} title="Unread feedback" />
           )}

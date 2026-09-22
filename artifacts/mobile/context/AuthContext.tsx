@@ -15,7 +15,11 @@ import {
   type AuthUser,
   type LoginResult,
 } from "@/lib/auth-api";
-import { saveBiometricCredentials } from "@/lib/biometric-auth";
+import { isSupportWorker, requireSupportWorker } from "@/lib/worker-access";
+import {
+  saveBiometricCredentials,
+  clearBiometricCredentials,
+} from "@/lib/biometric-auth";
 import {
   clearMobileAuthSession,
   persistMobileAuthSession,
@@ -23,13 +27,20 @@ import {
   readStoredUserJson,
 } from "@/lib/session";
 import { setWorkerUnauthorizedHandler, WorkerApiError } from "@/lib/worker-fetch";
+import { setAppTimezone } from "@/lib/shift-utils";
 import { clearQueue, clearWorkerQueue } from "@/hooks/useOfflineCache";
 
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
+  activationInProgress: boolean;
+  setActivationInProgress: (active: boolean) => void;
+  login: (
+    identifier: string,
+    password: string,
+    rememberDevice?: boolean,
+  ) => Promise<LoginResult>;
   completeMfa: (
     challengeToken: string,
     code: string,
@@ -51,7 +62,13 @@ export function useAuth(): AuthContextValue {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+
+  // Times and "today" follow the worker's branch (198_branches.sql).
+  useEffect(() => {
+    setAppTimezone(user?.timezone);
+  }, [user?.timezone]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activationInProgress, setActivationInProgress] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedJson) {
         try {
           cached = JSON.parse(storedJson) as AuthUser;
-          if (!cancelled) setUser(cached);
+          if (isSupportWorker(cached)) {
+            if (!cancelled) setUser(cached);
+          } else {
+            cached = null;
+            await clearMobileAuthSession();
+            await clearBiometricCredentials();
+            if (!cancelled) setIsLoading(false);
+            return;
+          }
         } catch {
           /* fall through to /me */
         }
@@ -84,14 +109,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // a 5xx from a backend that's mid-restart) is not the token's fault;
         // keep the cached session and let the app carry on with it rather
         // than bouncing an otherwise-valid session back to login.
-        authRejected = err instanceof WorkerApiError && (err.status === 401 || err.status === 403);
+        authRejected =
+          err instanceof WorkerApiError &&
+          (err.status === 401 || err.status === 403);
       }
       if (!cancelled) {
-        if (fresh) {
+        if (fresh && !isSupportWorker(fresh)) {
+          await clearMobileAuthSession();
+          await clearBiometricCredentials();
+          setUser(null);
+        } else if (fresh) {
           const merged: AuthUser = {
             ...fresh,
             full_name: fresh.full_name || cached?.full_name,
-            profile_photo_url: fresh.profile_photo_url ?? cached?.profile_photo_url ?? null,
+            profile_photo_url:
+              fresh.profile_photo_url ?? cached?.profile_photo_url ?? null,
           };
           setUser(merged);
           await persistMobileAuthSession(token, JSON.stringify(merged));
@@ -118,15 +150,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setWorkerUnauthorizedHandler(null);
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string, rememberDevice = true) => {
-    const result = await loginWithPassword(identifier, password, rememberDevice);
-    if (result.status === "authenticated") {
-      await persistMobileAuthSession(result.accessToken, JSON.stringify(result.user));
-      setUser(result.user);
-      await saveBiometricCredentials({ identifier: identifier.trim(), password });
-    }
-    return result;
-  }, []);
+  const login = useCallback(
+    async (identifier: string, password: string, rememberDevice = true) => {
+      const result = await loginWithPassword(
+        identifier,
+        password,
+        rememberDevice,
+      );
+      if (result.status === "authenticated") {
+        requireSupportWorker(result.user);
+        await persistMobileAuthSession(
+          result.accessToken,
+          JSON.stringify(result.user),
+        );
+        setUser(result.user);
+        await saveBiometricCredentials({
+          identifier: identifier.trim(),
+          password,
+        });
+      }
+      return result;
+    },
+    [],
+  );
 
   const completeMfa = useCallback(
     async (
@@ -140,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         code,
         trustDevice,
       );
+      requireSupportWorker(authUser);
       await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
       setUser(authUser);
       if (credentials) {
@@ -150,12 +197,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const updateSession = useCallback(async (accessToken: string, authUser: AuthUser) => {
-    await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
-    setUser(authUser);
-  }, []);
+  const updateSession = useCallback(
+    async (accessToken: string, authUser: AuthUser) => {
+      requireSupportWorker(authUser);
+      await persistMobileAuthSession(accessToken, JSON.stringify(authUser));
+      setUser(authUser);
+    },
+    [],
+  );
 
   const updateUser = useCallback(async (patch: Partial<AuthUser>) => {
+    if (patch.role !== undefined) requireSupportWorker(patch);
     setUser((prev) => {
       if (!prev) return prev;
       const next = { ...prev, ...patch };
@@ -182,14 +234,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isLoading,
-      isAuthenticated: Boolean(user),
+      isAuthenticated: isSupportWorker(user),
+      activationInProgress,
+      setActivationInProgress,
       login,
       completeMfa,
       updateSession,
       updateUser,
       logout,
     }),
-    [user, isLoading, login, completeMfa, updateSession, updateUser, logout],
+    [
+      user,
+      isLoading,
+      activationInProgress,
+      login,
+      completeMfa,
+      updateSession,
+      updateUser,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

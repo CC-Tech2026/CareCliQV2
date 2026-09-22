@@ -10,7 +10,7 @@ import { showAlert } from "@/lib/alert";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord } from "@/lib/worker-api";
 import type { NoteComplianceFlag } from "@workspace/worker-compliance";
-import { buildAttachmentFileName, SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import { buildAttachmentFileName, formatTimeWithZone, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
 type Props = {
   note: SessionNoteRecord;
@@ -23,6 +23,8 @@ type Props = {
   onRemove?: (noteId: string) => void;
   onIncidentReport?: (noteId: string, content: string) => void;
   onPress?: () => void;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 const CLAMP_LINES = 4;
@@ -64,6 +66,7 @@ export function WorkerMobileNoteBubble({
   onRemove,
   onIncidentReport,
   onPress,
+  tz,
 }: Props) {
   const colors = useColors();
   const t = useT();
@@ -77,9 +80,7 @@ export function WorkerMobileNoteBubble({
     if (!editing) setDraft(note.content);
   }, [note.content, editing]);
 
-  const time = note.created_at
-    ? new Date(note.created_at).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
-    : "";
+  const time = formatTimeWithZone(note.created_at, tz);
   const categoryLabel = [taskLabel, goalTitle].filter(Boolean).join(" · ");
   const type = note.note_type ?? "text";
   const isCheckin = isCheckinSessionNote(note);

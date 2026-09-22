@@ -3,6 +3,8 @@ import { LockKeyhole, Unlock, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import {
   uploadTrainingCover,
   createTrainingModule,
@@ -30,6 +32,10 @@ export function TrainingModuleEditor({
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasCapability, grantFor } = useMyAccessGrants();
+  const isMD = user?.role === "managing_director";
+  const lockGrant = !isMD ? grantFor("lock_training_module") : undefined;
+  const canLock = isMD || hasCapability("lock_training_module");
   const client = useQueryClient();
   const uploadedCover = useRef<{ file: File; path: string } | null>(null);
   const [saveError, setSaveError] = useState("");
@@ -224,8 +230,9 @@ export function TrainingModuleEditor({
                 </p>
               </div>
             </div>
-            {user?.role === "managing_director" && (
+            {canLock && (
               <div className="mt-4 space-y-3">
+                {lockGrant && <TemporaryAccessBanner grant={lockGrant} label="Lock/unlock a training module" />}
                 {!module.is_locked && (
                   <label className="block text-xs font-semibold">
                     Update notice (optional)

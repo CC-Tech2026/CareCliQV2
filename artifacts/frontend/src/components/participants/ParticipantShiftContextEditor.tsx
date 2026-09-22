@@ -2,10 +2,19 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { jsonFetch } from "@/services/http";
 import type { ParticipantContext } from "@/services/shiftService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { getCoordinatorWorkerStats } from "@/services/coordinatorService";
 
 // Allergies, conditions, and GP contact live in ParticipantClinicalRecordEditor now —
 // clinical/health data belongs in the Clinical Record tab, not this operational briefing tab.
@@ -15,6 +24,10 @@ type ShiftContextPayload = {
   profile?: {
     preferred_name?: string;
     case_manager?: { name?: string; phone?: string };
+    // Structured reference to an internal coordinator/MD account — distinct
+    // from case_manager above, which is the free-text NDIS plan-management
+    // billing contact and is untouched by this field.
+    care_coordinator?: { id?: string; name?: string } | null;
     emergency_contact?: ContactPerson | null;
     next_of_kin?: ContactPerson | null;
   };
@@ -41,6 +54,13 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   const [preferredName, setPreferredName] = useState("");
   const [caseManagerName, setCaseManagerName] = useState("");
   const [caseManagerPhone, setCaseManagerPhone] = useState("");
+  const [careCoordinatorId, setCareCoordinatorId] = useState<string | null>(null);
+  const { data: coordinators = [] } = useOrgQuery(["org-coordinators", "care-coordinator-picker"], {
+    queryFn: () =>
+      getCoordinatorWorkerStats().then((list) =>
+        list.filter((w) => w.role === "support_coordinator" || w.role === "managing_director"),
+      ),
+  });
   const [emergencyContactName, setEmergencyContactName] = useState("");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState("");
@@ -62,6 +82,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
     setPreferredName(data.profile?.preferred_name ?? "");
     setCaseManagerName(data.profile?.case_manager?.name ?? "");
     setCaseManagerPhone(data.profile?.case_manager?.phone ?? "");
+    setCareCoordinatorId(data.profile?.care_coordinator?.id ?? null);
     setEmergencyContactName(data.profile?.emergency_contact?.name ?? "");
     setEmergencyContactPhone(data.profile?.emergency_contact?.phone ?? "");
     setEmergencyContactRelationship(data.profile?.emergency_contact?.relationship ?? "");
@@ -123,6 +144,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
           preferred_name: preferredName || null,
           case_manager_name: caseManagerName || null,
           case_manager_phone: caseManagerPhone || null,
+          care_coordinator_id: careCoordinatorId || null,
           emergency_contact: contactPayload(emergencyContactName, emergencyContactPhone, emergencyContactRelationship),
           next_of_kin: contactPayload(nextOfKinName, nextOfKinPhone, nextOfKinRelationship),
           likes_dislikes: likesDislikes || null,
@@ -205,8 +227,49 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={translate("participants.shiftContext.preferredName")} value={preferredName} onChange={setPreferredName} />
-        <Field label={translate("participants.shiftContext.caseManagerName")} value={caseManagerName} onChange={setCaseManagerName} />
-        <Field label={translate("participants.shiftContext.caseManagerPhone")} value={caseManagerPhone} onChange={setCaseManagerPhone} />
+      </div>
+
+      <div className="rounded-xl border border-cc-border p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
+          {translate("participants.shiftContext.careCoordinatorHeading")}
+        </p>
+        <p className="text-[12px] text-cc-muted">
+          {translate("participants.shiftContext.careCoordinatorHint")}
+        </p>
+        <div className="max-w-xs space-y-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
+            {translate("participants.shiftContext.careCoordinator")}
+          </p>
+          <Select
+            value={careCoordinatorId ?? "unassigned"}
+            onValueChange={(value) => setCareCoordinatorId(value === "unassigned" ? null : value)}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder={translate("participants.shiftContext.unassigned")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">{translate("participants.shiftContext.unassigned")}</SelectItem>
+              {coordinators.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-cc-border p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
+          {translate("participants.shiftContext.billingContactHeading")}
+        </p>
+        <p className="text-[12px] text-cc-muted">
+          {translate("participants.shiftContext.billingContactHint")}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={translate("participants.shiftContext.caseManagerName")} value={caseManagerName} onChange={setCaseManagerName} />
+          <Field label={translate("participants.shiftContext.caseManagerPhone")} value={caseManagerPhone} onChange={setCaseManagerPhone} />
+        </div>
       </div>
 
       <div className="rounded-xl border border-cc-border p-3 space-y-3">

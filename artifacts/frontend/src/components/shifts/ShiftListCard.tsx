@@ -108,7 +108,7 @@ function ShiftListCardContent({
               )}
             </div>
             <p className="mt-1 text-[12px] font-semibold leading-snug text-cc-muted sm:text-[13px]">
-              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
             </p>
             <p className="mt-1 flex items-start gap-1.5 text-[12px] font-medium leading-snug text-cc-muted sm:text-[13px]">
               <MapPin size={12} className={cn("mt-0.5 shrink-0", hasAddress ? "text-cc-plum" : "text-cc-muted")} />

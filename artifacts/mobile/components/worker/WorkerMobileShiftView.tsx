@@ -63,10 +63,11 @@ import {
   type WorkerShift,
 } from "@/lib/worker-api";
 import {
-  APP_TIMEZONE,
+  formatDateInZone,
   formatElapsedTimer,
   formatMobileShiftDuration,
   formatShiftTimeRange,
+  formatTimeWithZone,
   hasIncompleteMandatoryTasks,
   incompleteMandatoryTasks,
   MIN_EVIDENCE_NOTE_CHARS,
@@ -91,16 +92,14 @@ export type WorkerMobilePhase =
   | "submitted"
   | "completed";
 
-function formatSubmittedAt(iso: string | null): string {
+function formatSubmittedAt(iso: string | null, tz?: string | null): string {
   if (!iso) return "just now";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "just now";
-  const time = d
-    .toLocaleTimeString("en-AU", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" })
-    .toLowerCase();
-  return d.toDateString() === new Date().toDateString()
-    ? `${time} today`
-    : d.toLocaleDateString("en-AU", { timeZone: APP_TIMEZONE });
+  const time = formatTimeWithZone(iso, tz).toLowerCase();
+  const isToday = formatDateInZone(iso, tz, { year: "numeric", month: "2-digit", day: "2-digit" })
+    === formatDateInZone(new Date().toISOString(), tz, { year: "numeric", month: "2-digit", day: "2-digit" });
+  return isToday ? `${time} today` : formatDateInZone(iso, tz);
 }
 
 type Props = {
@@ -859,7 +858,7 @@ function WorkerMobileShiftContent({
         tasksCompleted={summaryTasksDone}
         tasksTotal={summaryTasks.length}
         score={compliance.score}
-        submittedAt={formatSubmittedAt(submittedAt)}
+        submittedAt={formatSubmittedAt(submittedAt, shift.timezone)}
         onDone={onShiftComplete}
       />
     );
@@ -870,14 +869,7 @@ function WorkerMobileShiftContent({
       const dueMs = parseIsoMs(shift.documentation_due_at);
       const overdue = dueMs != null && dueMs < Date.now();
       const dueLabel = dueMs
-        ? new Date(dueMs).toLocaleString("en-AU", {
-            timeZone: APP_TIMEZONE,
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            hour: "numeric",
-            minute: "2-digit",
-          })
+        ? `${formatDateInZone(shift.documentation_due_at, shift.timezone, { weekday: "short", day: "numeric", month: "short" })} ${formatTimeWithZone(shift.documentation_due_at, shift.timezone)}`
         : null;
       return (
         <View
@@ -963,6 +955,7 @@ function WorkerMobileShiftContent({
         score={compliance.score}
         submittedAt={formatSubmittedAt(
           submittedAt ?? shift.clocked_out_at ?? null,
+          shift.timezone,
         )}
         onDone={onBack ?? onShiftComplete}
       />
@@ -1030,6 +1023,7 @@ function WorkerMobileShiftContent({
           onSubmit={handleSubmitReview}
           onViewComplianceReport={() => setPhase("compliance")}
           onOpenIncidentReport={openIncidentReport}
+          tz={shift.timezone}
         />
         <Modal
           visible={incidentDraft !== null}
@@ -1133,6 +1127,7 @@ function WorkerMobileShiftContent({
           checkinStatus={checkinStatus ?? shift.checkin_status}
           breakStatus={breakStatus ?? shift.break_status}
           onCheckin={onCheckin}
+          tz={shift.timezone}
         />
         <IncompleteDocsEndShiftModal
           visible={showIncompleteEndModal}
@@ -1213,7 +1208,7 @@ function WorkerMobileShiftContent({
             ]}
           >
             {shift.scheduled_start
-              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)
+              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)
               : "Time TBC"}
           </Text>
 

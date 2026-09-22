@@ -8,10 +8,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
+from ..core.access import has_active_grant
 from ..core.security import get_current_user
 from ..services import applicant_documents_service as docs_svc
 from ..services import applicant_service as svc
 from ..services import resume_extraction_service as resume_svc
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/applicants", tags=["applicants"])
 
@@ -26,7 +28,8 @@ def _require_board_access(user: dict) -> tuple[str, str, bool]:
     org_id = user.get("organization_id")
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization membership required.")
-    return org_id, user.get("sub"), role in HIRE_MANAGER_ROLES
+    is_hire_manager = role in HIRE_MANAGER_ROLES or has_active_grant(user, "applicant_offer_reject", get_supabase_admin())
+    return org_id, user.get("sub"), is_hire_manager
 
 
 class ApplicantCreateBody(BaseModel):

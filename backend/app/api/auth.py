@@ -17,6 +17,8 @@ from ..services.supabase_client import get_supabase, get_supabase_admin, signed_
 
 PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
+from ..core.timezone import request_timezone, timezone_for_state
+from ..services.branch_service import member_branch_id
 from ..services import email_service
 from ..services import device_security_service as dss
 
@@ -309,10 +311,35 @@ class OnboardingCompleteRequest(BaseModel):
     contact_number: Optional[str] = None
     address: Optional[str] = None
     org_address: Optional[str] = None
+    # Head-office state (SA/NSW/VIC/…). Sets the organisation's timezone
+    # (198_branches.sql); omitted → the deployment default.
+    state: Optional[str] = None
 
 
 class PasswordResetRequest(BaseModel):
     email: str
+
+
+def _set_head_office_state(supabase, organization_id: Optional[str], state: Optional[str]) -> None:
+    """Point the auto-created head office at the provider's state.
+
+    The organizations insert trigger creates the head office in the default
+    zone; the branches trigger derives timezone from state on update.
+    Best-effort — a failure here leaves the org on the default zone, which
+    the MD can change under Settings → Branches.
+    """
+    if not organization_id or not timezone_for_state(state):
+        return
+    try:
+        (
+            supabase.table("branches")
+            .update({"state": str(state).strip().upper()})
+            .eq("organization_id", str(organization_id))
+            .eq("is_head_office", True)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Could not set head office state for org %s: %s", organization_id, exc)
 
 
 class PasswordResetConfirmRequest(BaseModel):
@@ -1010,9 +1037,9 @@ async def complete_onboarding(
             org_result = supabase.table("organizations").insert(org_payload).execute()
             if org_result.data:
                 row = org_result.data[0]
-                update_payload["organization_id"] = (
-                    row.get("organization_id") or row.get("id")
-                )
+                new_org_id = row.get("organization_id") or row.get("id")
+                update_payload["organization_id"] = new_org_id
+                _set_head_office_state(supabase, new_org_id, body.state)
         except Exception as e:
             logger.warning(f"Could not create organisation for {user_id}: {e}")
     elif existing_org_id:
@@ -1190,5 +1217,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "is_active": profile.get("is_active") is not False,
             "deactivation_reason": profile.get("deactivation_reason"),
             "deactivation_note": profile.get("deactivation_note"),
+            # The office this user works from; clients format times and
+            # compute "today" in this zone (198_branches.sql).
+            "branch_id": member_branch_id(user_id, profile.get("organization_id") or current_user.get("organization_id")),
+            "timezone": str(request_timezone()),
         }
     }

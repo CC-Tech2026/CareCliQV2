@@ -20,10 +20,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { useBranches } from "@/hooks/useBranches";
+import { zoneAbbreviation } from "@/lib/datetime";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { SectionInfo } from "@/components/ui/section-info";
 
@@ -44,6 +46,8 @@ const RED_SOFT = "#FBEAE9";
 const BLUE_SOFT = "#EAF1F7";
 
 interface MDData {
+  timezone?: string;
+  branch?: { id: string; name: string; state: string } | null;
   active_participants: number;
   active_staff: number;
   support_workers: number;
@@ -160,9 +164,9 @@ function SectionEyebrow({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <span
-        className="text-[9px] font-black uppercase tracking-[0.18em]"
+        className="text-xs font-semibold uppercase tracking-[0.18em]"
         style={{ color: MUTED }}
       >
         {children}
@@ -193,7 +197,7 @@ function Signal({
         />
 
         <span
-          className="truncate text-[9px] font-black uppercase tracking-[0.12em]"
+          className="break-words text-xs font-medium"
           style={{ color: MUTED }}
         >
           {label}
@@ -201,16 +205,13 @@ function Signal({
       </div>
 
       <p
-        className="mt-2 text-2xl font-black tracking-tight"
+        className="mt-2 text-2xl font-semibold tracking-tight"
         style={{ color: TEXT }}
       >
         {value}
       </p>
 
-      <p
-        className="mt-1 text-[9px] font-medium"
-        style={{ color: MUTED }}
-      >
+      <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
         {detail}
       </p>
     </div>
@@ -249,7 +250,7 @@ function GovernanceMetric({
         </div>
 
         <span
-          className="text-[9px] font-black uppercase tracking-wide"
+          className="text-xs font-semibold uppercase tracking-wide"
           style={{ color: statusColor }}
         >
           {status}
@@ -257,23 +258,20 @@ function GovernanceMetric({
       </div>
 
       <p
-        className="text-[9px] font-black uppercase tracking-[0.13em]"
+        className="text-xs font-semibold uppercase tracking-[0.13em]"
         style={{ color: MUTED }}
       >
         {label}
       </p>
 
       <p
-        className="mt-1.5 text-2xl font-black tracking-tight"
+        className="mt-1.5 text-2xl font-semibold tracking-tight"
         style={{ color: TEXT }}
       >
         {value}
       </p>
 
-      <p
-        className="mt-1 text-[9px] leading-4"
-        style={{ color: MUTED }}
-      >
+      <p className="mt-1 text-xs leading-4" style={{ color: MUTED }}>
         {detail}
       </p>
     </div>
@@ -290,7 +288,7 @@ function LoadingState() {
         />
 
         <div
-          className="h-9 w-72 animate-pulse rounded-lg"
+          className="h-9 w-72 max-w-full animate-pulse rounded-lg"
           style={{ background: SOFT }}
         />
 
@@ -331,17 +329,29 @@ export default function MDExecutivePage() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Branch filter: "" = whole organisation on the MD's own branch clock;
+  // a branch id = that office's people, counted on that office's clock.
+  const [branchId, setBranchId] = useState("");
+  const { branches, multiBranch } = useBranches();
+  const [trendError, setTrendError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setTrendError(false);
 
     Promise.all([
-      apiFetch("/api/dashboard/managing-director").then((response) =>
+      apiFetch(`/api/dashboard/managing-director${branchId ? `?branch_id=${encodeURIComponent(branchId)}` : ""}`).then((response) =>
         response.ok ? response.json() : Promise.reject()
       ),
-      apiFetch("/api/dashboard/compliance-trend").then((response) =>
-        response.ok ? response.json() : { trend: [] }
-      ),
+      apiFetch("/api/dashboard/compliance-trend")
+        .then((response) => (response.ok ? response.json() : Promise.reject()))
+        .catch(() => {
+          if (!cancelled) setTrendError(true);
+          return { trend: [] };
+        }),
     ])
       .then(([md, trendResponse]) => {
         if (cancelled) return;
@@ -363,7 +373,7 @@ export default function MDExecutivePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [branchId, refreshKey]);
 
   const chartData = useMemo(() => {
     return trend
@@ -388,11 +398,8 @@ export default function MDExecutivePage() {
   const compliantPercentage = useMemo(() => {
     if (!data) return 0;
 
-    const {
-      compliant,
-      at_risk,
-      non_compliant,
-    } = data.team_compliance_breakdown;
+    const { compliant, at_risk, non_compliant } =
+      data.team_compliance_breakdown;
 
     const total = compliant + at_risk + non_compliant;
 
@@ -413,7 +420,7 @@ export default function MDExecutivePage() {
     return (
       <HubLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="max-w-sm text-center">
+          <div role="alert" className="max-w-sm text-center">
             <div
               className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
               style={{
@@ -425,23 +432,20 @@ export default function MDExecutivePage() {
             </div>
 
             <h2
-              className="mt-4 text-base font-black"
+              className="mt-4 text-base font-semibold"
               style={{ color: TEXT }}
             >
               {translate("md.executive.loadFailed")}
             </h2>
 
-            <p
-              className="mt-1 text-[11px] leading-5"
-              style={{ color: MUTED }}
-            >
+            <p className="mt-1 text-sm leading-5" style={{ color: MUTED }}>
               We couldn't load the executive overview.
             </p>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="mt-5 rounded-xl px-4 py-2 text-[10px] font-black text-white"
+              onClick={() => setRefreshKey((key) => key + 1)}
+              className="mt-5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
               style={{ background: PLUM }}
             >
               Try again
@@ -452,67 +456,108 @@ export default function MDExecutivePage() {
     );
   }
 
-  const health = getHealthState(
-    data.compliance_score,
-    data.compliance_target
-  );
+  const health = getHealthState(data.compliance_score, data.compliance_target);
 
   const HealthIcon = health.icon;
 
   return (
     <HubLayout>
-      <main className="pb-14">
+      <div className="min-w-0 space-y-5 pb-10">
         {/* ============================================================
             HEADER
         ============================================================ */}
-        <header className="mb-9">
+        <header className="border-b pb-5" style={{ borderColor: BORDER }}>
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <span
-                className="text-[9px] font-bold"
-                style={{ color: MUTED }}
-              >
+              <span className="text-xs font-bold" style={{ color: MUTED }}>
                 {formatDate(data.generated_at)}
               </span>
 
               <h1
-                className="mt-2 flex items-center gap-2 text-[28px] font-black tracking-[-0.035em] sm:text-[34px]"
+                className="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl"
                 style={{ color: TEXT }}
               >
-                Organisation at a glance
+                {data.branch ? `${data.branch.name} at a glance` : "Organisation at a glance"}
                 <SectionInfo text="A governance view across compliance, workforce health, and service delivery for the whole organisation." />
               </h1>
+              {multiBranch && (
+                <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold" style={{ color: MUTED }}>
+                  Branch
+                  <select
+                    value={branchId}
+                    onChange={(e) => setBranchId(e.target.value)}
+                    className="rounded-lg border bg-white px-2 py-1 text-[12px] font-semibold"
+                    style={{ color: TEXT }}
+                    aria-label="Filter by branch"
+                  >
+                    <option value="">All branches</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
+                      </option>
+                    ))}
+                  </select>
+                  {data.timezone && <span>· times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
+                </label>
+              )}
             </div>
 
             <div className="hidden text-right sm:block">
               <p
-                className="text-[9px] font-black uppercase tracking-[0.15em]"
+                className="text-xs font-semibold uppercase tracking-[0.15em]"
                 style={{ color: MUTED }}
               >
                 Last updated
               </p>
 
-              <p
-                className="mt-1 text-[10px] font-bold"
-                style={{ color: TEXT }}
-              >
+              <p className="mt-1 text-xs font-bold" style={{ color: TEXT }}>
                 {formatTime(data.generated_at)}
               </p>
             </div>
           </div>
+          <nav
+            aria-label="Management shortcuts"
+            className="mt-4 flex flex-wrap gap-2"
+          >
+            {[
+              ["Master schedule", "/md/schedule"],
+              ["Staff directory", "/md/staff"],
+              ["Document vault", "/md/vault"],
+              ["NDIS invoices", "/md/financial"],
+              ["Settings", "/settings"],
+            ].map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                className="inline-flex min-h-11 items-center rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-medium text-cc-text hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+              >
+                {label}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRefreshKey((key) => key + 1)}
+              className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum hover:bg-cc-soft"
+            >
+              Refresh overview
+            </button>
+          </nav>
         </header>
 
         {/* ============================================================
             NEEDS ACTION / EXPOSURE — the triage list
         ============================================================ */}
-        <GovernanceTriage onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
+        <GovernanceTriage
+          onNavigate={navigate}
+          workersAtRisk={data.workers_at_risk}
+        />
 
         {/* ============================================================
             HOW WE'RE TRACKING — demoted below the triage list
         ============================================================ */}
         <div className="mt-10 mb-5 flex items-center gap-2">
           <span
-            className="text-[10px] font-black uppercase tracking-[0.18em]"
+            className="text-xs font-semibold uppercase tracking-[0.18em]"
             style={{ color: MUTED }}
           >
             How we're tracking
@@ -520,350 +565,322 @@ export default function MDExecutivePage() {
           <span className="h-px flex-1" style={{ background: BORDER }} />
         </div>
 
-        <section
-          className="overflow-hidden rounded-[28px] border bg-white"
-          style={{ borderColor: BORDER }}
-        >
-          <div>
-            {/* Organisation health */}
-            <div className="relative min-h-[370px] overflow-hidden p-7 sm:p-9">
-              <div
-                className="pointer-events-none absolute -right-24 -top-24 h-[340px] w-[340px] rounded-full opacity-50 blur-3xl"
-                style={{ background: `${PLUM}16` }}
-              />
+        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+          <section
+            className="overflow-hidden rounded-2xl border bg-white"
+            style={{ borderColor: BORDER }}
+          >
+            <div>
+              {/* Organisation health */}
+              <div className="relative p-4 sm:p-6">
+                <div className="relative">
+                  <SectionEyebrow
+                    right={
+                      <div
+                        className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5"
+                        style={{
+                          color: health.color,
+                          background: health.soft,
+                        }}
+                      >
+                        <HealthIcon size={11} strokeWidth={2.7} />
 
-              <div className="relative">
-                <SectionEyebrow
-                  right={
-                    <div
-                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5"
-                      style={{
-                        color: health.color,
-                        background: health.soft,
-                      }}
+                        <span className="text-xs font-semibold">
+                          {health.label}
+                        </span>
+                      </div>
+                    }
+                  >
+                    Organisation health
+                  </SectionEyebrow>
+
+                  <div className="mt-4 flex flex-wrap items-end gap-x-5 gap-y-3">
+                    <span
+                      className="text-5xl font-semibold leading-none tracking-tight sm:text-6xl"
+                      style={{ color: TEXT }}
                     >
-                      <HealthIcon size={11} strokeWidth={2.7} />
+                      {data.compliance_score}%
+                    </span>
 
-                      <span className="text-[9px] font-black">
-                        {health.label}
-                      </span>
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1.5">
+                        {trendChange !== null && (
+                          <>
+                            {trendChange >= 0 ? (
+                              <TrendingUp
+                                size={14}
+                                strokeWidth={2.8}
+                                style={{ color: GREEN }}
+                              />
+                            ) : (
+                              <TrendingDown
+                                size={14}
+                                strokeWidth={2.8}
+                                style={{ color: RED }}
+                              />
+                            )}
+
+                            <span
+                              className="text-sm font-semibold"
+                              style={{
+                                color: trendChange >= 0 ? GREEN : RED,
+                              }}
+                            >
+                              {trendChange >= 0 ? "+" : ""}
+                              {trendChange} pts
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <p
+                        className="mt-1 text-xs font-medium"
+                        style={{ color: MUTED }}
+                      >
+                        {trendChange !== null
+                          ? "versus previous period"
+                          : "No previous period available"}
+                      </p>
                     </div>
-                  }
-                >
-                  Organisation health
-                </SectionEyebrow>
+                  </div>
 
-                <div className="mt-8 flex flex-wrap items-end gap-x-5 gap-y-3">
-                  <span
-                    className="text-[78px] font-black leading-[0.8] tracking-[-0.075em] sm:text-[94px]"
+                  <p
+                    className="mt-6 max-w-md text-sm leading-5"
+                    style={{ color: MUTED }}
+                  >
+                    Organisation-wide compliance is currently{" "}
+                    <strong style={{ color: TEXT }}>
+                      {data.compliance_score >= data.compliance_target
+                        ? "above"
+                        : "below"}
+                    </strong>{" "}
+                    the {data.compliance_target}% governance target.
+                  </p>
+
+                  {/* Signal strip */}
+                  <div
+                    className="mt-5 grid grid-cols-3 gap-3 border-t pt-4"
+                    style={{ borderColor: BORDER }}
+                  >
+                    <Signal
+                      label="Compliance"
+                      value={`${data.compliance_score}%`}
+                      detail={`Target ${data.compliance_target}%`}
+                      color={health.color}
+                    />
+
+                    <Signal
+                      label="Goals"
+                      value={`${data.goal_achievement_rate}%`}
+                      detail="Achievement rate"
+                      color={data.goal_achievement_rate >= 85 ? GREEN : AMBER}
+                    />
+
+                    <Signal
+                      label="Retention"
+                      value={`${data.staff_retention_rate}%`}
+                      detail="Staff retention"
+                      color={data.staff_retention_rate >= 90 ? GREEN : AMBER}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ============================================================
+            TREND
+        ============================================================ */}
+          <section className="min-w-0">
+            <div
+              className="h-full overflow-hidden rounded-2xl border bg-white"
+              style={{ borderColor: BORDER }}
+            >
+              <div className="flex flex-wrap items-end justify-between gap-5 px-6 pt-7 sm:px-8">
+                <div>
+                  <h2
+                    className="text-xl font-semibold tracking-tight"
                     style={{ color: TEXT }}
                   >
-                    {data.compliance_score}%
-                  </span>
+                    Compliance trend
+                  </h2>
 
-                  <div className="mb-1">
-                    <div className="flex items-center gap-1.5">
-                      {trendChange !== null && (
-                        <>
-                          {trendChange >= 0 ? (
-                            <TrendingUp
-                              size={14}
-                              strokeWidth={2.8}
-                              style={{ color: GREEN }}
-                            />
-                          ) : (
-                            <TrendingDown
-                              size={14}
-                              strokeWidth={2.8}
-                              style={{ color: RED }}
-                            />
-                          )}
+                  <p
+                    className="mt-1 max-w-xl text-xs leading-5"
+                    style={{ color: MUTED }}
+                  >
+                    Weekly compliance averages provide a high-level indication
+                    of organisational performance over time.
+                  </p>
+                </div>
 
-                          <span
-                            className="text-[11px] font-black"
-                            style={{
-                              color:
-                                trendChange >= 0 ? GREEN : RED,
-                            }}
-                          >
-                            {trendChange >= 0 ? "+" : ""}
-                            {trendChange} pts
-                          </span>
-                        </>
-                      )}
-                    </div>
-
+                <div className="flex items-center gap-5">
+                  <div>
                     <p
-                      className="mt-1 text-[9px] font-medium"
+                      className="text-xs font-semibold uppercase tracking-[0.14em]"
                       style={{ color: MUTED }}
                     >
-                      versus previous period
+                      Current
+                    </p>
+
+                    <p
+                      className="mt-1 text-lg font-semibold"
+                      style={{ color: TEXT }}
+                    >
+                      {data.compliance_score}%
+                    </p>
+                  </div>
+
+                  <div className="h-8 w-px" style={{ background: BORDER }} />
+
+                  <div>
+                    <p
+                      className="text-xs font-semibold uppercase tracking-[0.14em]"
+                      style={{ color: MUTED }}
+                    >
+                      Target
+                    </p>
+
+                    <p
+                      className="mt-1 text-lg font-semibold"
+                      style={{ color: AMBER }}
+                    >
+                      {data.compliance_target}%
                     </p>
                   </div>
                 </div>
+              </div>
 
-                <p
-                  className="mt-6 max-w-md text-[11px] leading-5"
-                  style={{ color: MUTED }}
-                >
-                  Organisation-wide compliance is currently{" "}
-                  <strong style={{ color: TEXT }}>
-                    {data.compliance_score >= data.compliance_target
-                      ? "above"
-                      : "below"}
-                  </strong>{" "}
-                  the {data.compliance_target}% governance target.
-                </p>
+              {chartData.length > 1 ? (
+                <div className="mt-5 h-[350px] w-full px-2 pb-4 sm:px-5">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={chartData}
+                      margin={{
+                        top: 20,
+                        right: 25,
+                        bottom: 5,
+                        left: -15,
+                      }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="2 5"
+                        stroke={BORDER}
+                        vertical={false}
+                      />
 
-                {/* Signal strip */}
+                      <XAxis
+                        dataKey="week"
+                        tick={{
+                          fontSize: 9,
+                          fill: MUTED,
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+
+                      <YAxis
+                        domain={[50, 100]}
+                        tick={{
+                          fontSize: 9,
+                          fill: MUTED,
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+
+                      <ReferenceLine
+                        y={data.compliance_target}
+                        stroke={AMBER}
+                        strokeDasharray="6 5"
+                        label={{
+                          value: `TARGET ${data.compliance_target}%`,
+                          position: "insideTopRight",
+                          fontSize: 8,
+                          fontWeight: 800,
+                          fill: AMBER,
+                        }}
+                      />
+
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: `1px solid ${BORDER}`,
+                          boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+                          fontSize: 10,
+                        }}
+                        labelStyle={{
+                          color: TEXT,
+                          fontWeight: 800,
+                        }}
+                        formatter={(value: number) => [
+                          `${value}%`,
+                          "Compliance",
+                        ]}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke={PLUM}
+                        strokeWidth={3}
+                        dot={false}
+                        activeDot={{
+                          r: 5,
+                          fill: PLUM,
+                        }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
                 <div
-                  className="mt-9 grid max-w-2xl grid-cols-3 border-y py-5"
-                  style={{ borderColor: BORDER }}
+                  className="mx-6 my-6 flex min-h-40 items-center justify-center rounded-2xl sm:mx-8"
+                  style={{ background: SOFT }}
                 >
-                  <Signal
-                    label="Compliance"
-                    value={`${data.compliance_score}%`}
-                    detail={`Target ${data.compliance_target}%`}
-                    color={health.color}
-                  />
+                  <div className="text-center">
+                    <Activity
+                      size={20}
+                      className="mx-auto"
+                      style={{ color: MUTED }}
+                    />
 
-                  <Signal
-                    label="Goals"
-                    value={`${data.goal_achievement_rate}%`}
-                    detail="Achievement rate"
-                    color={
-                      data.goal_achievement_rate >= 85
-                        ? GREEN
-                        : AMBER
-                    }
-                  />
+                    <p
+                      className="mt-3 text-sm font-semibold"
+                      style={{ color: TEXT }}
+                    >
+                      {trendError
+                        ? "Compliance trend unavailable"
+                        : "Building your performance trend"}
+                    </p>
 
-                  <Signal
-                    label="Retention"
-                    value={`${data.staff_retention_rate}%`}
-                    detail="Staff retention"
-                    color={
-                      data.staff_retention_rate >= 90
-                        ? GREEN
-                        : AMBER
-                    }
-                  />
+                    <p className="mt-1 text-xs" style={{ color: MUTED }}>
+                      {trendError
+                        ? "Refresh the overview to try again. The other figures remain available."
+                        : "More completed sessions will provide historical trend data."}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-        </section>
-
-        {/* ============================================================
-            TREND
-        ============================================================ */}
-        <section className="mt-8">
-          <SectionEyebrow
-            right={
-              chartData.length > 0 ? (
-                <span
-                  className="text-[9px] font-bold"
-                  style={{ color: MUTED }}
-                >
-                  Last 90 days
-                </span>
-              ) : null
-            }
-          >
-            Compliance performance
-          </SectionEyebrow>
-
-          <div
-            className="overflow-hidden rounded-[28px] border bg-white"
-            style={{ borderColor: BORDER }}
-          >
-            <div className="flex flex-wrap items-end justify-between gap-5 px-6 pt-7 sm:px-8">
-              <div>
-                <h2
-                  className="text-xl font-black tracking-tight"
-                  style={{ color: TEXT }}
-                >
-                  Is performance moving in the right direction?
-                </h2>
-
-                <p
-                  className="mt-1 max-w-xl text-[10px] leading-5"
-                  style={{ color: MUTED }}
-                >
-                  Weekly compliance averages provide a high-level
-                  indication of organisational performance over time.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-5">
-                <div>
-                  <p
-                    className="text-[8px] font-black uppercase tracking-[0.14em]"
-                    style={{ color: MUTED }}
-                  >
-                    Current
-                  </p>
-
-                  <p
-                    className="mt-1 text-lg font-black"
-                    style={{ color: TEXT }}
-                  >
-                    {data.compliance_score}%
-                  </p>
-                </div>
-
-                <div
-                  className="h-8 w-px"
-                  style={{ background: BORDER }}
-                />
-
-                <div>
-                  <p
-                    className="text-[8px] font-black uppercase tracking-[0.14em]"
-                    style={{ color: MUTED }}
-                  >
-                    Target
-                  </p>
-
-                  <p
-                    className="mt-1 text-lg font-black"
-                    style={{ color: AMBER }}
-                  >
-                    {data.compliance_target}%
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {chartData.length > 1 ? (
-              <div className="mt-5 h-[350px] w-full px-2 pb-4 sm:px-5">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartData}
-                    margin={{
-                      top: 20,
-                      right: 25,
-                      bottom: 5,
-                      left: -15,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="2 5"
-                      stroke={BORDER}
-                      vertical={false}
-                    />
-
-                    <XAxis
-                      dataKey="week"
-                      tick={{
-                        fontSize: 9,
-                        fill: MUTED,
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <YAxis
-                      domain={[50, 100]}
-                      tick={{
-                        fontSize: 9,
-                        fill: MUTED,
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <ReferenceLine
-                      y={data.compliance_target}
-                      stroke={AMBER}
-                      strokeDasharray="6 5"
-                      label={{
-                        value: `TARGET ${data.compliance_target}%`,
-                        position: "insideTopRight",
-                        fontSize: 8,
-                        fontWeight: 800,
-                        fill: AMBER,
-                      }}
-                    />
-
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: `1px solid ${BORDER}`,
-                        boxShadow:
-                          "0 10px 30px rgba(0,0,0,0.08)",
-                        fontSize: 10,
-                      }}
-                      labelStyle={{
-                        color: TEXT,
-                        fontWeight: 800,
-                      }}
-                      formatter={(value: number) => [
-                        `${value}%`,
-                        "Compliance",
-                      ]}
-                    />
-
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke={PLUM}
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{
-                        r: 5,
-                        fill: PLUM,
-                      }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div
-                className="mx-6 my-6 flex h-[280px] items-center justify-center rounded-2xl sm:mx-8"
-                style={{ background: SOFT }}
-              >
-                <div className="text-center">
-                  <Activity
-                    size={20}
-                    className="mx-auto"
-                    style={{ color: MUTED }}
-                  />
-
-                  <p
-                    className="mt-3 text-[11px] font-black"
-                    style={{ color: TEXT }}
-                  >
-                    Building your performance trend
-                  </p>
-
-                  <p
-                    className="mt-1 text-[9px]"
-                    style={{ color: MUTED }}
-                  >
-                    More completed sessions will provide historical
-                    trend data.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+          </section>
+        </div>
 
         {/* ============================================================
             GOVERNANCE SIGNALS
         ============================================================ */}
         <section className="mt-8">
-          <SectionEyebrow>
-            Executive signals
-          </SectionEyebrow>
+          <SectionEyebrow>Executive signals</SectionEyebrow>
 
           <div
-            className="grid overflow-hidden rounded-[28px] border bg-white lg:grid-cols-3"
+            className="grid overflow-hidden rounded-2xl border bg-white lg:grid-cols-3"
             style={{ borderColor: BORDER }}
           >
             {/* Workforce */}
-            <div className="p-6 sm:p-7 lg:border-r" style={{ borderColor: BORDER }}>
+            <div
+              className="p-6 sm:p-7 lg:border-r"
+              style={{ borderColor: BORDER }}
+            >
               <GovernanceMetric
                 icon={Users}
                 label="Workforce"
@@ -874,11 +891,7 @@ export default function MDExecutivePage() {
                     ? "Stable"
                     : `${data.workers_at_risk.length} at risk`
                 }
-                statusColor={
-                  data.workers_at_risk.length === 0
-                    ? GREEN
-                    : AMBER
-                }
+                statusColor={data.workers_at_risk.length === 0 ? GREEN : AMBER}
               />
 
               <div className="mt-6">
@@ -889,14 +902,9 @@ export default function MDExecutivePage() {
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.min(
-                        data.staff_retention_rate,
-                        100
-                      )}%`,
+                      width: `${Math.min(data.staff_retention_rate, 100)}%`,
                       background:
-                        data.staff_retention_rate >= 90
-                          ? GREEN
-                          : AMBER,
+                        data.staff_retention_rate >= 90 ? GREEN : AMBER,
                     }}
                   />
                 </div>
@@ -914,11 +922,7 @@ export default function MDExecutivePage() {
                 value={String(data.sessions_this_week)}
                 detail={`${data.active_participants} active participants receiving support`}
                 status={`${data.goal_achievement_rate}% goals`}
-                statusColor={
-                  data.goal_achievement_rate >= 85
-                    ? GREEN
-                    : AMBER
-                }
+                statusColor={data.goal_achievement_rate >= 85 ? GREEN : AMBER}
               />
 
               <div className="mt-6 flex items-center gap-3">
@@ -934,14 +938,14 @@ export default function MDExecutivePage() {
 
                 <div>
                   <p
-                    className="text-[9px] font-black uppercase tracking-wide"
+                    className="text-xs font-semibold uppercase tracking-wide"
                     style={{ color: MUTED }}
                   >
                     Goal achievement
                   </p>
 
                   <p
-                    className="mt-0.5 text-[11px] font-black"
+                    className="mt-0.5 text-sm font-semibold"
                     style={{ color: TEXT }}
                   >
                     {data.goal_achievement_rate}%
@@ -963,9 +967,7 @@ export default function MDExecutivePage() {
                     : "Below target"
                 }
                 statusColor={
-                  data.compliance_score >= data.compliance_target
-                    ? GREEN
-                    : RED
+                  data.compliance_score >= data.compliance_target ? GREEN : RED
                 }
               />
 
@@ -974,31 +976,23 @@ export default function MDExecutivePage() {
                   className="flex h-8 w-8 items-center justify-center rounded-lg"
                   style={{
                     background:
-                      data.incidents_this_month >= 3
-                        ? RED_SOFT
-                        : GREEN_SOFT,
-                    color:
-                      data.incidents_this_month >= 3
-                        ? RED
-                        : GREEN,
+                      data.incidents_this_month >= 3 ? RED_SOFT : GREEN_SOFT,
+                    color: data.incidents_this_month >= 3 ? RED : GREEN,
                   }}
                 >
-                  <AlertTriangle
-                    size={14}
-                    strokeWidth={2.4}
-                  />
+                  <AlertTriangle size={14} strokeWidth={2.4} />
                 </div>
 
                 <div>
                   <p
-                    className="text-[9px] font-black uppercase tracking-wide"
+                    className="text-xs font-semibold uppercase tracking-wide"
                     style={{ color: MUTED }}
                   >
                     Incidents
                   </p>
 
                   <p
-                    className="mt-0.5 text-[11px] font-black"
+                    className="mt-0.5 text-sm font-semibold"
                     style={{ color: TEXT }}
                   >
                     {data.incidents_this_month} this month
@@ -1013,18 +1007,16 @@ export default function MDExecutivePage() {
             COMPLIANCE DISTRIBUTION
         ============================================================ */}
         <section className="mt-8">
-          <SectionEyebrow>
-            Compliance composition
-          </SectionEyebrow>
+          <SectionEyebrow>Compliance composition</SectionEyebrow>
 
           <div
-            className="rounded-[28px] border bg-white p-6 sm:p-8"
+            className="rounded-2xl border bg-white p-6 sm:p-8"
             style={{ borderColor: BORDER }}
           >
             <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
               <div className="min-w-[210px]">
                 <p
-                  className="text-4xl font-black tracking-tight"
+                  className="text-4xl font-semibold tracking-tight"
                   style={{ color: TEXT }}
                 >
                   {data.team_compliance_breakdown.compliant +
@@ -1033,7 +1025,7 @@ export default function MDExecutivePage() {
                 </p>
 
                 <p
-                  className="mt-1 text-[10px] font-medium"
+                  className="mt-1 text-xs font-medium"
                   style={{ color: MUTED }}
                 >
                   monitored compliance records
@@ -1069,8 +1061,7 @@ export default function MDExecutivePage() {
                         <div
                           style={{
                             width: `${
-                              (data.team_compliance_breakdown.at_risk /
-                                total) *
+                              (data.team_compliance_breakdown.at_risk / total) *
                               100
                             }%`,
                             background: AMBER,
@@ -1080,8 +1071,7 @@ export default function MDExecutivePage() {
                         <div
                           style={{
                             width: `${
-                              (data.team_compliance_breakdown
-                                .non_compliant /
+                              (data.team_compliance_breakdown.non_compliant /
                                 total) *
                               100
                             }%`,
@@ -1096,9 +1086,7 @@ export default function MDExecutivePage() {
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                   <CompositionItem
                     label="Compliant"
-                    value={
-                      data.team_compliance_breakdown.compliant
-                    }
+                    value={data.team_compliance_breakdown.compliant}
                     color={GREEN}
                   />
 
@@ -1110,9 +1098,7 @@ export default function MDExecutivePage() {
 
                   <CompositionItem
                     label="Non-compliant"
-                    value={
-                      data.team_compliance_breakdown.non_compliant
-                    }
+                    value={data.team_compliance_breakdown.non_compliant}
                     color={RED}
                   />
                 </div>
@@ -1126,9 +1112,7 @@ export default function MDExecutivePage() {
         ============================================================ */}
         {data.common_issues.length > 0 && (
           <section className="mt-8">
-            <SectionEyebrow>
-              Recurring issues
-            </SectionEyebrow>
+            <SectionEyebrow>Recurring issues</SectionEyebrow>
 
             <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               {data.common_issues.slice(0, 6).map((issue) => (
@@ -1148,14 +1132,14 @@ export default function MDExecutivePage() {
                   </span>
 
                   <span
-                    className="min-w-0 flex-1 text-[10px] font-bold"
+                    className="min-w-0 flex-1 text-xs font-bold"
                     style={{ color: TEXT }}
                   >
                     {issue.issue}
                   </span>
 
                   <span
-                    className="text-[10px] font-black"
+                    className="text-xs font-semibold"
                     style={{ color: MUTED }}
                   >
                     {issue.count}
@@ -1168,10 +1152,7 @@ export default function MDExecutivePage() {
 
         {/* Footer */}
         <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-          <p
-            className="text-[9px] font-medium"
-            style={{ color: MUTED }}
-          >
+          <p className="text-xs font-medium" style={{ color: MUTED }}>
             CareCliQ executive governance view
           </p>
 
@@ -1181,15 +1162,12 @@ export default function MDExecutivePage() {
               style={{ background: health.color }}
             />
 
-            <span
-              className="text-[9px] font-bold"
-              style={{ color: MUTED }}
-            >
+            <span className="text-xs font-bold" style={{ color: MUTED }}>
               {health.label}
             </span>
           </div>
         </footer>
-      </main>
+      </div>
     </HubLayout>
   );
 }
@@ -1210,17 +1188,11 @@ function CompositionItem({
         style={{ background: color }}
       />
 
-      <span
-        className="text-[10px] font-bold"
-        style={{ color: TEXT }}
-      >
+      <span className="text-xs font-bold" style={{ color: TEXT }}>
         {label}
       </span>
 
-      <span
-        className="ml-auto text-[10px] font-black"
-        style={{ color }}
-      >
+      <span className="ml-auto text-xs font-semibold" style={{ color }}>
         {value}
       </span>
     </div>

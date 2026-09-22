@@ -1233,11 +1233,16 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
     ])
     formatted_text = "\n".join(formatted_lines)
 
+    from ..core.timezone import participant_timezone
+
     audit = {
         "audit_version": "1.0",
         "ndis_principle": "If it cannot be evidenced, it cannot be claimed.",
         "generated_at": generated_at,
         "formatted_text": formatted_text,
+        # Participant's branch zone — the signature/risk-ack timestamps below
+        # are shown in it, not the viewer's own branch.
+        "timezone": str(participant_timezone(participant_id, organization_id=session.get("organization_id"))),
         "session": {
             "id": session.get("id"),
             "date": session.get("session_date"),

@@ -1,246 +1,280 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
-import {
-  FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type ViewToken,
-} from "react-native";
+import React, { useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { ButtonHeight, Radius, Spacing } from "@/constants/layout";
-import { Typography } from "@/constants/typography";
+import { OnboardingIllustration } from "@/components/onboarding/OnboardingIllustration";
+import { AuthBrandHeader } from "@/components/auth/AuthBrandHeader";
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
-import * as Haptics from "@/lib/haptics";
-import type { TranslationKey } from "@/lib/i18n/translations";
 import { CCQ_ONBOARDING_DONE_KEY } from "@/lib/storage-keys";
-
-const SLIDES: {
-  icon: keyof typeof Feather.glyphMap;
-  titleKey: TranslationKey;
-  bodyKey: TranslationKey;
-}[] = [
+const features = [
   {
-    icon: "mic",
-    titleKey: "onboarding.slide1.title",
-    bodyKey: "onboarding.slide1.body",
+    icon: "calendar",
+    title: "onboarding.slide1.title",
+    body: "onboarding.slide1.body",
   },
   {
-    icon: "shield",
-    titleKey: "onboarding.slide2.title",
-    bodyKey: "onboarding.slide2.body",
+    icon: "edit-3",
+    title: "onboarding.slide2.title",
+    body: "onboarding.slide2.body",
   },
   {
-    icon: "grid",
-    titleKey: "onboarding.slide3.title",
-    bodyKey: "onboarding.slide3.body",
+    icon: "check-circle",
+    title: "onboarding.slide3.title",
+    body: "onboarding.slide3.body",
   },
-];
-
+] as const;
 export default function OnboardingScreen() {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const t = useT();
-  const { width } = useWindowDimensions();
-  const listRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
-  const [index, setIndex] = useState(0);
-  const [pagerHeight, setPagerHeight] = useState(0);
-  const last = index === SLIDES.length - 1;
-
-  const finish = async () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await AsyncStorage.setItem(CCQ_ONBOARDING_DONE_KEY, "true");
-    router.replace("/login" as never);
-  };
-
-  const goTo = useCallback(
-    (nextIndex: number) => {
-      const clamped = Math.max(0, Math.min(nextIndex, SLIDES.length - 1));
-      listRef.current?.scrollToIndex({ index: clamped, animated: true });
-      setIndex(clamped);
-    },
-    [],
-  );
-
-  const next = () => {
-    void Haptics.selectionAsync();
-    if (last) {
-      void finish();
-      return;
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const last = step === features.length - 1;
+  const feature = features[step];
+  function goTo(next: number) {
+    setStep(Math.max(0, Math.min(features.length - 1, next)));
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }
+  const [busy, setBusy] = useState(false);
+  async function continueTo(route: "/login" | "/activate-account") {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await AsyncStorage.setItem(CCQ_ONBOARDING_DONE_KEY, "true");
+    } catch {
+      /* Onboarding can be shown again if local storage is unavailable. */
     }
-    goTo(index + 1);
-  };
-
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const first = viewableItems[0];
-    if (first?.index != null) {
-      setIndex(first.index);
-    }
-  }).current;
-
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
-
-  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / width);
-    if (nextIndex !== index && nextIndex >= 0 && nextIndex < SLIDES.length) {
-      void Haptics.selectionAsync();
-      setIndex(nextIndex);
-    }
-  };
-
+    router.replace(route as never);
+  }
   return (
-    <View
-      style={[
-        styles.root,
-        {
-          backgroundColor: colors.background,
-          paddingTop: insets.top + 8,
-          paddingBottom: Math.max(insets.bottom, 16),
-        },
+    <ScrollView
+      ref={scrollRef}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={[
+        styles.page,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 20) },
       ]}
     >
-      <View style={[styles.topRow, { paddingHorizontal: 18 }]}>
-        {last ? (
-          <View style={styles.skipPlaceholder} />
-        ) : (
-          <Pressable onPress={() => void finish()} hitSlop={12} accessibilityRole="button">
-            <Text style={[styles.skip, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-              {t("onboarding.skip")}
-            </Text>
-          </Pressable>
-        )}
-      </View>
+      <View style={styles.content}>
+        <AuthBrandHeader taglineKey="auth.login.marketing.tagline" compact />
+        <View style={styles.progressRow}>
+          {step > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => goTo(step - 1)}
+              style={styles.textButton}
+            >
+              <Feather name="arrow-left" size={16} color={colors.primary} />
+              <Text style={[styles.buttonText, { color: colors.primary }]}>
+                {t("common.back")}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.navPlaceholder} />
+          )}
 
-      <View
-        style={styles.pager}
-        onLayout={(e) => setPagerHeight(e.nativeEvent.layout.height)}
-      >
-        {pagerHeight > 0 ? (
-          <FlatList
-            ref={listRef}
-            data={SLIDES}
-            keyExtractor={(item) => item.titleKey}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            bounces
-            onMomentumScrollEnd={onScrollEnd}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            style={{ flex: 1 }}
-            renderItem={({ item }) => (
-              <View style={[styles.slide, { width, height: pagerHeight }]}>
-                <View style={[styles.iconCircle, { backgroundColor: colors.soft }]}>
-                  <Feather name={item.icon} size={56} color={colors.primary} />
-                </View>
-                <Text style={[styles.title, { color: colors.foreground, ...Typography.display }]}>
-                  {t(item.titleKey)}
-                </Text>
-                <Text style={[styles.copy, { color: colors.mutedForeground, ...Typography.body }]}>
-                  {t(item.bodyKey)}
-                </Text>
-              </View>
-            )}
-          />
-        ) : null}
-      </View>
-
-      <View style={[styles.footer, { paddingHorizontal: 18 }]}>
-        <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.progressText, { color: colors.mutedForeground }]}
+          >
+            {t("onboarding.progress", {
+              step: step + 1,
+              total: features.length,
+            })}
+          </Text>
+          {!last ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => goTo(features.length - 1)}
+              style={styles.textButton}
+            >
+              <Text style={[styles.progressText, { color: colors.primary }]}>
+                {t("onboarding.skip")}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.navPlaceholder} />
+          )}
+        </View>
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={t("onboarding.progress", {
+            step: step + 1,
+            total: features.length,
+          })}
+          accessibilityValue={{ min: 1, max: features.length, now: step + 1 }}
+          style={styles.tracks}
+        >
+          {features.map((item, index) => (
             <View
-              key={i}
+              key={item.title}
               style={[
-                styles.dot,
+                styles.track,
                 {
-                  backgroundColor: i === index ? colors.accent : colors.soft,
+                  backgroundColor: index <= step ? colors.primary : colors.soft,
                 },
               ]}
             />
           ))}
         </View>
-
-        <Pressable
-          onPress={next}
-          style={[styles.cta, { backgroundColor: colors.primary, height: ButtonHeight.primary }]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.ctaText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
-            {last ? t("onboarding.getStarted") : t("onboarding.next")}
-          </Text>
-        </Pressable>
+        <View style={[styles.storyCard, { borderColor: colors.border }]}>
+          <View style={styles.illustration}>
+            <OnboardingIllustration step={step} />
+          </View>
+          <View
+            key={step}
+            accessibilityLiveRegion="polite"
+            style={styles.intro}
+          >
+            <Text
+              accessibilityRole="header"
+              style={[styles.title, { color: colors.foreground }]}
+            >
+              {t(feature.title)}
+            </Text>
+            <Text style={[styles.body, { color: colors.mutedForeground }]}>
+              {t(feature.body)}
+            </Text>
+          </View>
+          <View style={[styles.actions, { borderColor: colors.border }]}>
+            {!last ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => goTo(step + 1)}
+                style={[styles.button, { backgroundColor: colors.primary }]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: colors.primaryForeground },
+                  ]}
+                >
+                  {t("onboarding.next")}
+                </Text>
+                <Feather
+                  name="arrow-right"
+                  size={18}
+                  color={colors.primaryForeground}
+                />
+              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => void continueTo("/login")}
+                  style={[
+                    styles.button,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: busy ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.buttonText,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
+                    {t("auth.signup.signIn")}
+                  </Text>
+                  <Feather
+                    name="arrow-right"
+                    size={18}
+                    color={colors.primaryForeground}
+                  />
+                </Pressable>
+                <Text
+                  style={[styles.invite, { color: colors.mutedForeground }]}
+                >
+                  {t("auth.login.noAccount")}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => void continueTo("/activate-account")}
+                  style={[
+                    styles.button,
+                    {
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      opacity: busy ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.buttonText, { color: colors.primary }]}>
+                    {t("auth.login.createAccount")}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  page: { flexGrow: 1, paddingHorizontal: 24 },
+  content: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 12 },
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 44,
   },
-  topRow: {
-    alignItems: "flex-end",
-    minHeight: 28,
-  },
-  skipPlaceholder: { height: 28 },
-  skip: {
-    fontSize: 13,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-  },
-  pager: {
-    flex: 1,
-  },
-  slide: {
+  progressText: { fontFamily: FontFamily.interRegular, fontSize: 13 },
+  navPlaceholder: { width: 64 },
+  textButton: {
+    minWidth: 64,
+    minHeight: 44,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 18,
-    paddingHorizontal: 26,
+    gap: 6,
   },
-  iconCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    alignItems: "center",
-    justifyContent: "center",
+  tracks: { flexDirection: "row", gap: 6 },
+  track: { flex: 1, height: 2 },
+  storyCard: { gap: 22, paddingTop: 10 },
+  illustration: {
+    width: 220,
+    maxWidth: "100%",
+    aspectRatio: 1,
+    alignSelf: "center",
+    overflow: "hidden",
+    borderRadius: 8,
   },
-  title: {
-    textAlign: "center",
+  intro: { gap: 8 },
+  title: { fontFamily: FontFamily.interSemiBold, fontSize: 24, lineHeight: 31 },
+  body: { fontFamily: FontFamily.interRegular, fontSize: 15, lineHeight: 23 },
+  actions: {
+    gap: 10,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  copy: {
-    textAlign: "center",
-    maxWidth: 260,
-  },
-  footer: {
-    marginTop: Spacing[8],
-  },
-  dots: {
+  button: {
+    minHeight: 48,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "center",
-    gap: 7,
-    marginBottom: Spacing[16],
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  cta: {
-    borderRadius: Radius.pill,
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
   },
-  ctaText: {
-    fontSize: 14,
+  buttonText: { fontFamily: FontFamily.interSemiBold, fontSize: 15 },
+  invite: {
+    textAlign: "center",
+    fontFamily: FontFamily.interRegular,
+    fontSize: 13,
+    marginTop: 6,
   },
 });

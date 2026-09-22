@@ -30,6 +30,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .credential_status import live_status
 from .notification_service import _org_coordinator_user_ids, notify_worker
 from .supabase_client import get_supabase_admin
 from . import worker_training_service as training
@@ -84,7 +85,7 @@ def credentials_blocked(worker_ids: list[str]) -> set[str]:
         result = (
             get_supabase_admin()
             .table("credentials")
-            .select("user_id, credential_type, status")
+            .select("user_id, credential_type, status, expiry_date")
             .in_("user_id", worker_ids)
             .in_("credential_type", REQUIRED_CREDENTIAL_TYPES)
             .execute()
@@ -93,21 +94,35 @@ def credentials_blocked(worker_ids: list[str]) -> set[str]:
     except Exception as exc:
         if _is_missing_schema_error(exc):
             return set()
+        # Never swallow this into an empty set — the caller feeds the result
+        # straight into _clear_resolved_stage_flags(), which deletes every
+        # tracking row NOT in the returned set. A transient DB error read as
+        # "nobody is blocked" would mass-delete every worker's escalation
+        # clock for this stage. Raising lets run_onboarding_escalation_pass's
+        # per-org try/except skip this org for the pass instead, same as
+        # team_training_overdue_map already does.
         logger.warning("Credential block query failed: %s", exc)
-        return set()
+        raise
 
+    # live_status(), not the raw `status` column — nothing recomputes that
+    # column on a schedule, so a credential verified "valid" months ago with
+    # an expiry date now in the past would otherwise still read "valid"
+    # forever and never block/escalate.
     by_worker: dict[str, dict[str, str]] = {}
     for row in rows:
         uid = str(row.get("user_id") or "")
         ctype = row.get("credential_type")
         if uid and ctype:
-            by_worker.setdefault(uid, {})[ctype] = row.get("status")
+            by_worker.setdefault(uid, {})[ctype] = live_status(row.get("expiry_date"), row.get("status"))
 
     blocked: set[str] = set()
     for uid in worker_ids:
         statuses = by_worker.get(uid, {})
         for ctype in REQUIRED_CREDENTIAL_TYPES:
-            if statuses.get(ctype) in (None, "rejected"):
+            # "expired" needs the worker's action just like missing/rejected —
+            # a credential that lapsed after being verified is no different
+            # from one that was never submitted, from the worker's side.
+            if statuses.get(ctype) in (None, "rejected", "expired"):
                 blocked.add(uid)
                 break
     return blocked
@@ -131,7 +146,7 @@ def mandatory_credentials_approved(worker_ids: list[str]) -> set[str]:
         result = (
             get_supabase_admin()
             .table("credentials")
-            .select("user_id, credential_type, status")
+            .select("user_id, credential_type, status, expiry_date")
             .in_("user_id", worker_ids)
             .in_("credential_type", REQUIRED_CREDENTIAL_TYPES)
             .execute()
@@ -140,15 +155,23 @@ def mandatory_credentials_approved(worker_ids: list[str]) -> set[str]:
     except Exception as exc:
         if _is_missing_schema_error(exc):
             return set()
+        # See the matching comment in credentials_blocked() above — this
+        # feeds worker_pipeline_service's Active-stage auto-completion, so a
+        # transient error must not be misread as "credentials not approved."
         logger.warning("Credential approval query failed: %s", exc)
-        return set()
+        raise
 
+    # live_status(), not the raw column — see credentials_blocked() above.
+    # Without this, a mandatory credential that expired after being verified
+    # would keep reading "valid" forever, letting the worker stay (or get
+    # auto-promoted to) "Active" onboarding status with an expired mandatory
+    # credential on file.
     by_worker: dict[str, dict[str, str]] = {}
     for row in rows:
         uid = str(row.get("user_id") or "")
         ctype = row.get("credential_type")
         if uid and ctype:
-            by_worker.setdefault(uid, {})[ctype] = row.get("status")
+            by_worker.setdefault(uid, {})[ctype] = live_status(row.get("expiry_date"), row.get("status"))
 
     approved: set[str] = set()
     for uid in worker_ids:
@@ -194,7 +217,19 @@ def _upsert_stage_flags(organization_id: str, stage: str, blocked_worker_ids: se
 
 
 def _clear_resolved_stage_flags(organization_id: str, stage: str, blocked_worker_ids: set[str]) -> None:
-    """Delete tracking rows for workers no longer blocked on this stage."""
+    """Delete tracking rows for workers no longer blocked on this stage.
+
+    Restricted to escalated_at IS NULL: an already-escalated row is a
+    terminal audit record (it's what auto_deactivated_month counts), not
+    something this generic sweep should ever clear. Without this filter, a
+    worker who was just escalated (and so is now is_active=False, dropping
+    them out of the caller's worker_ids/blocked_worker_ids on every
+    subsequent pass) would have their own escalation record deleted on the
+    very next run, since they'd never appear "blocked" again once excluded
+    from consideration entirely. Reactivating a worker is handled
+    separately (see coordinator.py's activate_worker, which deletes their
+    rows explicitly) rather than through this resolution path.
+    """
     try:
         existing = (
             get_supabase_admin()
@@ -202,6 +237,7 @@ def _clear_resolved_stage_flags(organization_id: str, stage: str, blocked_worker
             .select("id, worker_id")
             .eq("organization_id", organization_id)
             .eq("stage", stage)
+            .is_("escalated_at", "null")
             .execute()
         )
         rows = existing.data or []
@@ -340,19 +376,28 @@ async def run_onboarding_escalation_pass() -> dict[str, int]:
         return {"reminders": 0, "escalations": 0}
 
     for org_id in org_ids:
-        workers = _onboarding_workers(org_id)
-        if not workers:
+        try:
+            workers = _onboarding_workers(org_id)
+            if not workers:
+                continue
+            worker_ids = [str(w["id"]) for w in workers]
+
+            cred_blocked = credentials_blocked(worker_ids)
+            _upsert_stage_flags(org_id, "credentials", cred_blocked)
+            _clear_resolved_stage_flags(org_id, "credentials", cred_blocked)
+
+            overdue_map = training.team_training_overdue_map(org_id)
+            training_blocked = {wid for wid in worker_ids if overdue_map.get(wid)}
+            _upsert_stage_flags(org_id, "training", training_blocked)
+            _clear_resolved_stage_flags(org_id, "training", training_blocked)
+        except Exception as exc:
+            # A transient failure (credentials_blocked/team_training_overdue_map
+            # now raise rather than silently reporting "nobody blocked" — see
+            # their docstrings) should skip this org for this pass, not abort
+            # every other org's processing nor fall through to the resolution
+            # sweep with wrong data.
+            logger.warning("Onboarding escalation pass failed for org %s: %s", org_id, exc)
             continue
-        worker_ids = [str(w["id"]) for w in workers]
-
-        cred_blocked = credentials_blocked(worker_ids)
-        _upsert_stage_flags(org_id, "credentials", cred_blocked)
-        _clear_resolved_stage_flags(org_id, "credentials", cred_blocked)
-
-        overdue_map = training.team_training_overdue_map(org_id)
-        training_blocked = {wid for wid in worker_ids if overdue_map.get(wid)}
-        _upsert_stage_flags(org_id, "training", training_blocked)
-        _clear_resolved_stage_flags(org_id, "training", training_blocked)
 
     reminded, escalated = await _process_due_reminders()
     return {"reminders": reminded, "escalations": escalated}

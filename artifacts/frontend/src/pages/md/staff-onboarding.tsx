@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useReAuth } from "@/hooks/useReAuth";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { getOnboardingAlerts } from "@/services/hubService";
@@ -860,7 +862,7 @@ function DroppableColumn<T>({
   return (
     <div
       ref={setNodeRef}
-      className="flex min-h-[410px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
+      className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
       style={{
         background: active ? "var(--cc-plum-soft)" : `${color}12`,
         opacity: disabled ? 0.5 : 1,
@@ -900,7 +902,7 @@ function StaticColumn<T>({
   const clampedPage = Math.min(page, totalPages - 1);
   const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
-    <div className="flex min-h-[410px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
+    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
       <ColumnHeading label={label} count={items.length} color={color} onOpenAll={onOpenAll} openAllTitle={openAllTitle} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
@@ -1613,7 +1615,20 @@ export default function StaffOnboardingBoard() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { requireReAuth, modal: reauthModal } = useReAuth();
-  const isHireManager = user?.role === "managing_director";
+  const isMD = user?.role === "managing_director";
+  const { hasCapability, grantFor } = useMyAccessGrants();
+  // Both hire-paperwork management and extend-offer/reject are distinct
+  // grantable capabilities, but they share this one board's UI — the
+  // backend independently re-checks the exact capability for each specific
+  // action (applicant_service.move_applicant_stage for offer/reject,
+  // employee_onboarding.py for hire paperwork), so a coordinator holding
+  // only one of the two sees slightly more UI affordance than they can act
+  // on, but can never actually perform the action they weren't granted.
+  const isHireManager = isMD || hasCapability("hire_paperwork") || hasCapability("applicant_offer_reject");
+  const hireGrant = !isMD ? (grantFor("hire_paperwork") ?? grantFor("applicant_offer_reject")) : undefined;
+  const hireGrantLabel = !isMD && grantFor("hire_paperwork") && grantFor("applicant_offer_reject")
+    ? "New-hire paperwork & extend offer/reject"
+    : hasCapability("hire_paperwork") ? "New-hire employment paperwork" : "Extend an offer / reject an applicant";
 
   const [openHireId, setOpenHireId] = useState<string | null>(null);
   const [openApplicantId, setOpenApplicantId] = useState<string | null>(null);
@@ -1776,6 +1791,7 @@ export default function StaffOnboardingBoard() {
   return (
     <>
       <div className="space-y-5 pb-10">
+        {hireGrant && <TemporaryAccessBanner grant={hireGrant} label={hireGrantLabel} />}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <button
@@ -1900,7 +1916,12 @@ export default function StaffOnboardingBoard() {
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => setOverStage((e.over?.id as ApplicantStage) ?? null)}
               >
-                <div className="flex gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory">
+                {/* items-start below lg: so an empty column isn't stretched to
+                    match a sibling full of cards — on a swipeable single-
+                    column-at-a-time mobile view that reads as one giant blank
+                    box. Desktop keeps the default stretch for uniform column
+                    heights across the visible row. */}
+                <div className="flex items-start gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory lg:items-stretch">
                   <DroppableColumn
                     id="interview"
                     label="Interview"
@@ -2055,7 +2076,7 @@ export default function StaffOnboardingBoard() {
       </Sheet>
 
       <Sheet open={!!selectedWorkerId} onOpenChange={(open) => { if (!open) { setSelectedWorkerId(null); setWorkerFullScreen(false); } }}>
-        <SheetContent side="right" className={`w-full overflow-y-auto p-6 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
+        <SheetContent side="right" className={`w-full overflow-y-auto p-4 pt-12 sm:p-6 sm:pt-12 ${workerFullScreen ? "sm:max-w-full" : "sm:max-w-4xl"}`} style={{ background: "var(--cc-bg)" }}>
           <SheetHeader className="sr-only">
             <SheetTitle>{selectedWorkerStats ? `${selectedWorkerStats.full_name} · staff profile` : "Staff profile"}</SheetTitle>
           </SheetHeader>

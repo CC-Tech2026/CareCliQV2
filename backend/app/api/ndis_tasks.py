@@ -107,15 +107,22 @@ async def record_task_completion(
                     "p_item_code": price_item_code,
                     "p_org_id": org_id,
                     "p_as_of_date": body.completion_date,
+                    # Hardcoded "national" — this org has no remote/very-remote
+                    # participants; revisit if that ever changes.
                     "p_location_type": "national",
                 }
             ).execute()
             
             if price_resp.data:
                 price_item = price_resp.data[0] if isinstance(price_resp.data, list) else price_resp.data
-                hourly_rate = float(price_item.get("effective_price", 0))
-                duration_hours = body.duration_minutes / 60.0
-                billed_amount = hourly_rate * duration_hours
+                rate = float(price_item.get("effective_price", 0))
+                # "E" (per-event) items are a flat fee regardless of duration —
+                # same distinction as shift_verification_service.verify_shift().
+                if str(price_item.get("unit") or "").upper() == "E":
+                    billed_amount = rate
+                else:
+                    duration_hours = body.duration_minutes / 60.0
+                    billed_amount = rate * duration_hours
         except Exception as e:
             # Log but continue - evidence still recorded
             print(f"Warning: Price lookup failed: {e}")

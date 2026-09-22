@@ -6,7 +6,13 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Calendar, Clock, Plus, Trash2, Check, X, ChevronDown,
+  Calendar,
+  Clock,
+  Plus,
+  Trash2,
+  Check,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import {
   getWorkerAvailability,
@@ -21,12 +27,12 @@ import { useToast } from "@/hooks/use-toast";
 import { TimePicker } from "@/components/ui/time-picker";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const PLUM   = "var(--cc-plum)";
-const CORAL  = "var(--cc-coral)";
-const TEXT   = "var(--cc-text)";
-const MUTED  = "var(--cc-muted)";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT   = "var(--cc-soft)";
+const SOFT = "var(--cc-soft)";
 
 const DAY_KEYS = [
   "coordinator.bulkShift.day.mon",
@@ -56,24 +62,36 @@ interface WorkerAvailabilityPanelProps {
   onClose?: () => void;
 }
 
-export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityPanelProps) {
+export function WorkerAvailabilityPanel({
+  worker,
+  onClose,
+}: WorkerAvailabilityPanelProps) {
   const { toast } = useToast();
   const { translate } = useAccessibility();
   const [tab, setTab] = useState<"availability" | "skills">("availability");
 
   // Availability
-  const { data: availData, isLoading: availLoading, refetch: refetchAvail } = useQuery({
+  const {
+    data: availData,
+    isLoading: availLoading,
+    isError: availError,
+    refetch: refetchAvail,
+  } = useQuery({
     queryKey: ["worker-availability", worker.id],
     queryFn: () => getWorkerAvailability(worker.id),
     staleTime: 60_000,
   });
 
-  const [availDays,   setAvailDays]   = useState<number[]>([1, 2, 3, 4, 5]);
-  const [startTime,   setStartTime]   = useState("08:00");
-  const [endTime,     setEndTime]     = useState("18:00");
-  const [maxHours,    setMaxHours]    = useState(40);
-  const [blackouts,   setBlackouts]   = useState<BlackoutDate[]>([]);
-  const [newBlackout, setNewBlackout] = useState({ start_date: "", end_date: "", reason: "" });
+  const [availDays, setAvailDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("18:00");
+  const [maxHours, setMaxHours] = useState(40);
+  const [blackouts, setBlackouts] = useState<BlackoutDate[]>([]);
+  const [newBlackout, setNewBlackout] = useState({
+    start_date: "",
+    end_date: "",
+    reason: "",
+  });
 
   useEffect(() => {
     if (availData) {
@@ -99,7 +117,12 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
       toast({ title: translate("coordinator.availability.saved") });
       refetchAvail();
     },
-    onError: (e: Error) => toast({ title: translate("coordinator.availability.saveFailed"), description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({
+        title: translate("coordinator.availability.saveFailed"),
+        description: e.message,
+        variant: "destructive",
+      }),
   });
 
   const addBlackout = () => {
@@ -108,10 +131,13 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
     setNewBlackout({ start_date: "", end_date: "", reason: "" });
   };
 
-  const removeBlackout = (i: number) => setBlackouts((prev) => prev.filter((_, idx) => idx !== i));
+  const removeBlackout = (i: number) =>
+    setBlackouts((prev) => prev.filter((_, idx) => idx !== i));
 
   const toggleDay = (d: number) =>
-    setAvailDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+    setAvailDays((prev) =>
+      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
+    );
 
   // Implied hours = selected days x the single start/end window (v1 model: one window
   // applies to every selected day, there's no per-day override yet) — surfaced against
@@ -142,25 +168,48 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
   const addSkillMut = useMutation({
     mutationFn: ({ skill, certified }: { skill: string; certified: boolean }) =>
       addWorkerSkill(worker.id, { skill, is_certified: certified }),
-    onSuccess: () => { refetchSkills(); setNewSkill(""); },
-    onError: (e: Error) => toast({ title: "Failed to add skill", description: e.message, variant: "destructive" }),
+    onSuccess: () => {
+      refetchSkills();
+      setNewSkill("");
+    },
+    onError: (e: Error) =>
+      toast({
+        title: "Failed to add skill",
+        description: e.message,
+        variant: "destructive",
+      }),
   });
 
   const removeSkillMut = useMutation({
     mutationFn: (skill: string) => removeWorkerSkill(worker.id, skill),
     onSuccess: () => refetchSkills(),
-    onError: (e: Error) => toast({ title: "Failed to remove skill", description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({
+        title: "Failed to remove skill",
+        description: e.message,
+        variant: "destructive",
+      }),
   });
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+    <div
+      className="rounded-2xl border bg-white shadow-sm overflow-hidden"
+      style={{ borderColor: BORDER }}
+    >
       {/* Header — only shown when this panel is used standalone (rostering modal), since
           WorkerDetail's own page header already shows the worker's name right above it. */}
       {onClose && (
-        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <div
+          className="flex items-center justify-between px-5 py-3"
+          style={{ borderBottom: `1px solid ${BORDER}` }}
+        >
           <div>
-            <h3 className="text-[15px] font-black" style={{ color: TEXT }}>{worker.full_name}</h3>
-            <p className="text-[11px]" style={{ color: MUTED }}>{translate("coordinator.availability.subtitle")}</p>
+            <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>
+              {worker.full_name}
+            </h3>
+            <p className="text-sm" style={{ color: MUTED }}>
+              {translate("coordinator.availability.subtitle")}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -178,12 +227,16 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
           than another row of top-level tabs. Purple (--cc-coral) is scoped to this control only;
           the page's real tabs and primary actions stay on the app's pink primary. */}
       <div className="px-5 pt-3 pb-1">
-        <div className="inline-flex gap-0.5 rounded-full p-0.5" style={{ background: SOFT }}>
+        <div
+          className="inline-flex gap-0.5 rounded-full p-0.5"
+          style={{ background: SOFT }}
+        >
           {(["availability", "skills"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className="rounded-full px-3 py-1 text-[11px] font-bold capitalize transition-colors"
+              aria-pressed={tab === t}
+              className="min-h-10 rounded-lg px-3 py-1 text-sm font-bold capitalize transition-colors"
               style={{
                 background: tab === t ? CORAL : "transparent",
                 color: tab === t ? "white" : MUTED,
@@ -195,12 +248,39 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
         </div>
       </div>
 
-      <div className="px-5 py-2.5 max-h-96 overflow-y-auto">
-        {tab === "availability" ? (
+      <div className="px-4 py-4 sm:px-5">
+        {tab === "availability" && availLoading ? (
+          <p role="status" className="py-4 text-sm" style={{ color: MUTED }}>
+            {translate("common.loading")}
+          </p>
+        ) : tab === "availability" && availError ? (
+          <div
+            role="alert"
+            className="space-y-3 rounded-lg border p-4"
+            style={{ borderColor: BORDER }}
+          >
+            <p className="text-sm">
+              Availability could not be loaded. Reload it before making changes.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetchAvail()}
+              className="min-h-10 rounded-lg border px-3 text-sm"
+              style={{ borderColor: BORDER }}
+            >
+              Retry availability
+            </button>
+          </div>
+        ) : tab === "availability" ? (
           <div className="space-y-3">
             {/* Days of week */}
             <div>
-              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.availableDays")}</p>
+              <p
+                className="text-sm font-semibold mb-1.5"
+                style={{ color: TEXT }}
+              >
+                {translate("coordinator.availability.availableDays")}
+              </p>
               <div className="flex gap-1.5 flex-wrap">
                 {DAY_KEYS.map((dayKey, i) => {
                   const val = i + 1;
@@ -209,7 +289,8 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                     <button
                       key={val}
                       onClick={() => toggleDay(val)}
-                      className="h-8 w-11 rounded-lg text-[11px] font-black"
+                      aria-pressed={active}
+                      className="h-11 w-11 rounded-lg text-sm font-semibold"
                       style={{
                         background: active ? CORAL : SOFT,
                         color: active ? "white" : MUTED,
@@ -224,44 +305,59 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
             </div>
 
             {/* Hours */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("coordinator.availability.dayStart")}</p>
+                <p
+                  className="text-sm font-semibold mb-1"
+                  style={{ color: TEXT }}
+                >
+                  {translate("coordinator.availability.dayStart")}
+                </p>
                 <TimePicker
                   value={startTime}
                   onChange={setStartTime}
-                  className="rounded-xl px-3 py-1.5 text-[12px]"
+                  className="rounded-xl px-3 py-1.5 text-sm"
                   style={{ borderColor: BORDER }}
                 />
               </div>
               <div>
-                <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("coordinator.availability.dayEnd")}</p>
+                <p
+                  className="text-sm font-semibold mb-1"
+                  style={{ color: TEXT }}
+                >
+                  {translate("coordinator.availability.dayEnd")}
+                </p>
                 <TimePicker
                   value={endTime}
                   onChange={setEndTime}
-                  className="rounded-xl px-3 py-1.5 text-[12px]"
+                  className="rounded-xl px-3 py-1.5 text-sm"
                   style={{ borderColor: BORDER }}
                 />
               </div>
-              <p className="text-[10px] mt-1 col-span-2" style={{ color: MUTED }}>
+              <p className="text-xs mt-1 col-span-2" style={{ color: MUTED }}>
                 Same window applies to every selected day.
               </p>
             </div>
 
             {/* Max hours */}
             <div>
-              <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("coordinator.availability.maxHours")}</p>
+              <p className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
+                {translate("coordinator.availability.maxHours")}
+              </p>
               <input
                 type="number"
                 min={1}
                 max={80}
                 value={maxHours}
                 onChange={(e) => setMaxHours(parseInt(e.target.value) || 40)}
-                className="w-28 rounded-xl border px-3 py-1.5 text-[12px] outline-none"
+                className="w-28 rounded-xl border px-3 py-1.5 text-sm outline-none"
                 style={{ borderColor: BORDER }}
               />
               {windowHours > 0 && availDays.length > 0 && (
-                <p className="text-[10px] mt-1" style={{ color: impliedMaxHours > maxHours ? CORAL : MUTED }}>
+                <p
+                  className="text-xs mt-1"
+                  style={{ color: impliedMaxHours > maxHours ? CORAL : MUTED }}
+                >
                   {impliedMaxHours > maxHours
                     ? `Selected days allow up to ${impliedMaxHours} hrs, capped at ${maxHours}.`
                     : `Selected days allow up to ${impliedMaxHours} hrs, within the ${maxHours} hr cap.`}
@@ -269,58 +365,104 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               )}
             </div>
 
-            {/* Blackout dates */}
+            {/* Unavailability */}
             <div>
-              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.blackoutDates")}</p>
+              <p
+                className="text-sm font-semibold mb-1.5"
+                style={{ color: TEXT }}
+              >
+                {translate("coordinator.availability.blackoutDates")}
+              </p>
+              <p className="mb-3 text-sm" style={{ color: MUTED }}>Dates this staff member is not available for shifts.</p>
               {blackouts.map((b, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border px-3 py-1 mb-1" style={{ borderColor: BORDER }}>
+                <div
+                  key={i}
+                  className="flex items-center justify-between rounded-lg border px-3 py-1 mb-1"
+                  style={{ borderColor: BORDER }}
+                >
                   <div>
-                    <p className="text-[11px] font-bold" style={{ color: TEXT }}>{b.start_date} – {b.end_date}</p>
-                    {b.reason && <p className="text-[10px]" style={{ color: MUTED }}>{b.reason}</p>}
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>
+                      {b.start_date} – {b.end_date}
+                    </p>
+                    {b.reason && (
+                      <p className="text-xs" style={{ color: MUTED }}>
+                        {b.reason}
+                      </p>
+                    )}
                   </div>
-                  <button onClick={() => removeBlackout(i)} className="rounded p-0.5 hover:bg-red-50">
+                  <button
+                    onClick={() => removeBlackout(i)}
+                    className="rounded p-0.5 hover:bg-red-50"
+                  >
                     <Trash2 size={11} style={{ color: CORAL }} />
                   </button>
                 </div>
               ))}
-              <div className="space-y-1 rounded-xl border p-2.5" style={{ borderColor: BORDER, background: SOFT }}>
-                <div className="grid grid-cols-2 gap-2">
-                  <input 
-                    type="date" 
-                    value={newBlackout.start_date} 
-                    onChange={(e) => setNewBlackout((b) => ({ ...b, start_date: e.target.value }))} 
-                    className="rounded-lg border px-2.5 py-1 text-[11px] outline-none"
-                    style={{ borderColor: BORDER }} 
-                    aria-label={translate("coordinator.availability.blackoutStart")}
+              <div
+                className="space-y-1 rounded-xl border p-2.5"
+                style={{ borderColor: BORDER, background: SOFT }}
+              >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <input
+                    type="date"
+                    value={newBlackout.start_date}
+                    onChange={(e) =>
+                      setNewBlackout((b) => ({
+                        ...b,
+                        start_date: e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border px-2.5 py-1 text-sm outline-none"
+                    style={{ borderColor: BORDER }}
+                    aria-label={translate(
+                      "coordinator.availability.blackoutStart",
+                    )}
                     title={translate("coordinator.availability.blackoutStart")}
                   />
-                  <input 
-                    type="date" 
-                    value={newBlackout.end_date} 
-                    onChange={(e) => setNewBlackout((b) => ({ ...b, end_date: e.target.value }))} 
-                    className="rounded-lg border px-2.5 py-1 text-[11px] outline-none"
-                    style={{ borderColor: BORDER }} 
-                    aria-label={translate("coordinator.availability.blackoutEnd")}
+                  <input
+                    type="date"
+                    value={newBlackout.end_date}
+                    onChange={(e) =>
+                      setNewBlackout((b) => ({
+                        ...b,
+                        end_date: e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border px-2.5 py-1 text-sm outline-none"
+                    style={{ borderColor: BORDER }}
+                    aria-label={translate(
+                      "coordinator.availability.blackoutEnd",
+                    )}
                     title={translate("coordinator.availability.blackoutEnd")}
                   />
                 </div>
                 <input
                   value={newBlackout.reason}
-                  onChange={(e) => setNewBlackout((b) => ({ ...b, reason: e.target.value }))}
-                  className="w-full rounded-lg border px-2.5 py-1 text-[11px] outline-none"
+                  onChange={(e) =>
+                    setNewBlackout((b) => ({ ...b, reason: e.target.value }))
+                  }
+                  className="w-full rounded-lg border px-2.5 py-1 text-sm outline-none"
                   style={{ borderColor: BORDER }}
-                  placeholder={translate("coordinator.availability.reasonOptional")}
-                  aria-label={translate("coordinator.availability.reasonOptional")}
+                  placeholder={translate(
+                    "coordinator.availability.reasonOptional",
+                  )}
+                  aria-label={translate(
+                    "coordinator.availability.reasonOptional",
+                  )}
                 />
                 <button
                   onClick={addBlackout}
                   disabled={!newBlackout.start_date || !newBlackout.end_date}
-                  className="flex items-center gap-1 rounded-lg px-3 py-1 text-[11px] font-bold text-white"
-                  style={{ background: PLUM, opacity: !newBlackout.start_date ? 0.5 : 1 }}
+                  className="flex items-center gap-1 rounded-lg px-3 py-1 text-sm font-bold text-white"
+                  style={{
+                    background: PLUM,
+                    opacity: !newBlackout.start_date ? 0.5 : 1,
+                  }}
                   title={translate("coordinator.availability.addDate")}
                   aria-label={translate("coordinator.availability.addDate")}
                 >
-                  <Plus size={10} /> {translate("coordinator.availability.addDate")}
+                  <Plus size={10} />{" "}
+                  {translate("coordinator.availability.addDate")}
                 </button>
               </div>
             </div>
@@ -328,10 +470,15 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
             <button
               onClick={() => saveMut.mutate()}
               disabled={saveMut.isPending}
-              className="rounded-xl px-4 py-1.5 text-[12px] font-black text-white"
-              style={{ background: PLUM, opacity: saveMut.isPending ? 0.65 : 1 }}
+              className="rounded-xl px-4 py-1.5 text-sm font-semibold text-white"
+              style={{
+                background: PLUM,
+                opacity: saveMut.isPending ? 0.65 : 1,
+              }}
             >
-              {saveMut.isPending ? translate("common.saving") : translate("coordinator.availability.saveAvailability")}
+              {saveMut.isPending
+                ? translate("common.saving")
+                : translate("coordinator.availability.saveAvailability")}
             </button>
           </div>
         ) : (
@@ -339,19 +486,36 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
             {/* Current skills — qualification-backed (solid purple, check icon) vs informal /
                 self-reported (outlined, no check) are visually distinct at a glance. */}
             <div>
-              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.certifiedSkills")}</p>
+              <p
+                className="text-sm font-semibold mb-1.5"
+                style={{ color: TEXT }}
+              >
+                {translate("coordinator.availability.certifiedSkills")}
+              </p>
               {skills.length === 0 ? (
-                <p className="text-[12px]" style={{ color: MUTED }}>{translate("coordinator.availability.noSkills")}</p>
+                <p className="text-sm" style={{ color: MUTED }}>
+                  {translate("coordinator.availability.noSkills")}
+                </p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {skills.map((s) => (
                     <span
                       key={s.skill}
-                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
-                      style={s.is_certified
-                        ? { background: "var(--cc-coral-soft)", color: CORAL }
-                        : { background: "transparent", color: MUTED, border: `1px dashed ${BORDER}` }}
-                      title={s.is_certified ? "Qualification-backed" : "Informal / self-reported"}
+                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold"
+                      style={
+                        s.is_certified
+                          ? { background: "var(--cc-coral-soft)", color: CORAL }
+                          : {
+                              background: "transparent",
+                              color: MUTED,
+                              border: `1px dashed ${BORDER}`,
+                            }
+                      }
+                      title={
+                        s.is_certified
+                          ? "Qualification-backed"
+                          : "Informal / self-reported"
+                      }
                     >
                       {s.is_certified && <Check size={9} />}
                       {s.skill}
@@ -371,21 +535,44 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
 
             {/* Add skill */}
             <div>
-              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.addSkill")}</p>
+              <p
+                className="text-sm font-semibold mb-1.5"
+                style={{ color: TEXT }}
+              >
+                {translate("coordinator.availability.addSkill")}
+              </p>
               <div className="flex gap-2">
                 <input
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate({ skill: newSkill.trim(), certified: newSkillCertified })}
-                  className="flex-1 rounded-xl border px-3 py-1.5 text-[12px] outline-none focus:border-[var(--cc-coral)]"
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    newSkill.trim() &&
+                    addSkillMut.mutate({
+                      skill: newSkill.trim(),
+                      certified: newSkillCertified,
+                    })
+                  }
+                  className="flex-1 rounded-xl border px-3 py-1.5 text-sm outline-none focus:border-[var(--cc-coral)]"
                   style={{ borderColor: BORDER }}
-                  placeholder={translate("coordinator.availability.skillPlaceholder")}
+                  placeholder={translate(
+                    "coordinator.availability.skillPlaceholder",
+                  )}
                 />
                 <button
-                  onClick={() => newSkill.trim() && addSkillMut.mutate({ skill: newSkill.trim(), certified: newSkillCertified })}
+                  onClick={() =>
+                    newSkill.trim() &&
+                    addSkillMut.mutate({
+                      skill: newSkill.trim(),
+                      certified: newSkillCertified,
+                    })
+                  }
                   disabled={!newSkill.trim() || addSkillMut.isPending}
-                  className="rounded-xl px-3 py-1.5 text-[12px] font-bold text-white"
-                  style={{ background: PLUM, opacity: !newSkill.trim() ? 0.5 : 1 }}
+                  className="rounded-xl px-3 py-1.5 text-sm font-bold text-white"
+                  style={{
+                    background: PLUM,
+                    opacity: !newSkill.trim() ? 0.5 : 1,
+                  }}
                   title="Add skill"
                   aria-label="Add skill"
                 >
@@ -393,11 +580,16 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                 </button>
               </div>
               <div className="mt-1 flex gap-1">
-                {([[true, "Qualification-backed"], [false, "Informal"]] as const).map(([val, label]) => (
+                {(
+                  [
+                    [true, "Qualification-backed"],
+                    [false, "Informal"],
+                  ] as const
+                ).map(([val, label]) => (
                   <button
                     key={label}
                     onClick={() => setNewSkillCertified(val)}
-                    className="rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors"
+                    className="rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                     style={{
                       background: newSkillCertified === val ? CORAL : SOFT,
                       color: newSkillCertified === val ? "white" : MUTED,
@@ -408,16 +600,25 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                 ))}
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {COMMON_SKILL_KEYS.filter((key) => !skills.some((ws) => ws.skill === translate(key))).slice(0, 6).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => addSkillMut.mutate({ skill: translate(key), certified: newSkillCertified })}
-                    className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-[var(--cc-coral-soft)]"
-                    style={{ borderColor: BORDER, color: MUTED }}
-                  >
-                    + {translate(key)}
-                  </button>
-                ))}
+                {COMMON_SKILL_KEYS.filter(
+                  (key) => !skills.some((ws) => ws.skill === translate(key)),
+                )
+                  .slice(0, 6)
+                  .map((key) => (
+                    <button
+                      key={key}
+                      onClick={() =>
+                        addSkillMut.mutate({
+                          skill: translate(key),
+                          certified: newSkillCertified,
+                        })
+                      }
+                      className="rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:bg-[var(--cc-coral-soft)]"
+                      style={{ borderColor: BORDER, color: MUTED }}
+                    >
+                      + {translate(key)}
+                    </button>
+                  ))}
               </div>
             </div>
           </div>

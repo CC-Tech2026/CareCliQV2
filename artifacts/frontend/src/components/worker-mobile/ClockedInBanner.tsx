@@ -1,15 +1,17 @@
 import { CheckCircle2 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { WM } from "@/lib/worker-mobile-tokens";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 
 type Props = {
   clockedInAt: string;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
-export function ClockedInBanner({ clockedInAt }: Props) {
+export function ClockedInBanner({ clockedInAt, tz }: Props) {
   let timeLabel = clockedInAt;
   try {
-    timeLabel = format(parseISO(clockedInAt), "h:mm a");
+    timeLabel = formatAppTimeWithZone(clockedInAt, tz);
   } catch {
     /* keep raw */
   }

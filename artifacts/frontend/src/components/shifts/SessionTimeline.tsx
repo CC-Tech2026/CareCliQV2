@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import { Camera, ChevronDown, ClipboardList, MessageCircle, Mic, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listMergedSessionEvidence, SESSION_NOTES_UPDATED_EVENT } from "@/lib/merge-session-evidence";
@@ -23,6 +23,8 @@ type Props = {
   onToggle?: () => void;
   /** Nested inside Goal-Linked Task Feed — flat divider style instead of a second card. */
   embedded?: boolean;
+  /** Participant's branch zone. */
+  tz?: string | null;
 };
 
 function buildEntries(
@@ -82,10 +84,12 @@ function TimelineRow({
   entry,
   translate,
   translateParams,
+  tz,
 }: {
   entry: TimelineEntry;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
+  tz?: string | null;
 }) {
   const isMedia = entry.kind === "photo" || entry.kind === "voice" || entry.kind === "file";
   const showVoiceTranscript = entry.kind === "voice" && Boolean(entry.preview);
@@ -99,7 +103,7 @@ function TimelineRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold" style={{ color: MUTED }}>
-            {format(parseISO(entry.time), "hh:mm a")}
+            {formatAppTimeWithZone(entry.time, tz)}
           </span>
           <span
             className="rounded-full bg-cc-soft px-2 py-0.5 text-[10px]"
@@ -140,6 +144,7 @@ export function SessionTimeline({
   open = false,
   onToggle,
   embedded = false,
+  tz,
 }: Props) {
   const { translate, translateParams } = useAccessibility();
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
@@ -218,7 +223,7 @@ export function SessionTimeline({
           ) : (
             <ul>
               {entries.map((entry) => (
-                <TimelineRow key={entry.id} entry={entry} translate={translate} translateParams={translateParams} />
+                <TimelineRow key={entry.id} entry={entry} translate={translate} translateParams={translateParams} tz={tz} />
               ))}
             </ul>
           )}

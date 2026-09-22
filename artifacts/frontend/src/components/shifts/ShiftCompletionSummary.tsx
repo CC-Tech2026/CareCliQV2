@@ -5,6 +5,7 @@ import type { ShiftSignature } from "@/services/complianceService";
 import { Button } from "@/components/ui/button";
 import { ShiftShareSheet } from "@/components/shifts/ShiftShareSheet";
 import { BORDER, MUTED, PLUM, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
@@ -75,7 +76,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
               {translate("shift.completion.safetyAck")}
             </dt>
             <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
-              {new Date(shift.risks_acknowledged_at).toLocaleString()}
+              {formatAppTimeWithZone(shift.risks_acknowledged_at, shift.timezone)}
               {shift.risks_acknowledged_by_name ? ` · ${shift.risks_acknowledged_by_name}` : ""}
             </dd>
           </div>
@@ -96,7 +97,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
               <p className="text-sm font-bold" style={{ color: TEXT }}>
                 {translateParams("shift.completion.signedBy", {
                   name: (shift.shift_signature as ShiftSignature).signer_name ?? translate("shift.completion.workerFallback"),
-                  date: new Date((shift.shift_signature as ShiftSignature).signed_at).toLocaleString(),
+                  date: formatAppTimeWithZone((shift.shift_signature as ShiftSignature).signed_at, shift.timezone),
                 })}
               </p>
             </dd>

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 
 
 COORDINATOR_ROLES = {"support_coordinator"}
@@ -320,6 +324,46 @@ def get_coordinator_team_ids(coordinator_user: dict, supabase) -> list[str]:
         return [str(row["id"]) for row in (all_workers.data or []) if row.get("id")]
     except Exception:
         return []
+
+
+def has_active_grant(user: Optional[dict], capability: str, supabase) -> bool:
+    """True if `user` currently holds a live, non-revoked, non-expired
+    access_grants row for `capability` in their own org.
+
+    Expiry is enforced live, here, on every call — `expires_at > now()` is
+    evaluated against the current time on each request, never a stored
+    status flag a background job could leave stale between runs. A revoked
+    grant (`revoked_at` set) is excluded outright regardless of `expires_at`,
+    so revocation takes effect on the very next request, not on next login.
+
+    Callers gate an MD-exclusive endpoint with
+    `is_managing_director(user) or has_active_grant(user, "capability_name", supabase)`
+    — an addition alongside the existing MD check, never a replacement.
+    """
+    user_id = get_user_id(user)
+    org_id = get_user_organization_id(user)
+    if not user_id or not org_id:
+        return False
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        result = (
+            supabase.table("access_grants")
+            .select("id")
+            .eq("granted_to_user_id", user_id)
+            .eq("organization_id", org_id)
+            .eq("capability", capability)
+            .is_("revoked_at", "null")
+            .gt("expires_at", now)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        # Fail closed on an access check — an error here must deny the
+        # MD-exclusive capability, never silently grant it — but log it so a
+        # real bug (as opposed to a genuinely absent grant) doesn't vanish.
+        logger.warning("has_active_grant check failed for capability=%s", capability, exc_info=True)
+        return False
 
 
 def get_org_id(request: Request) -> str:

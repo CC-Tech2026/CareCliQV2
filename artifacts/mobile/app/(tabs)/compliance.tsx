@@ -1,4 +1,5 @@
 import { FontFamily } from "@/constants/typography";
+import { getAppTimezone } from "@/lib/shift-utils";
 import { Feather } from "@expo/vector-icons";
 import React, {
   useCallback,
@@ -76,7 +77,8 @@ function trendLabel(
   total: number,
   t: ReturnType<typeof useT>,
 ): string {
-  if (value === new Date().toLocaleDateString("en-CA"))
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: getAppTimezone() }).format(new Date());
+  if (value === todayKey)
     return t("compliance.today");
   // Parse as local noon so date-only ISO strings don't shift a day in western timezones.
   const date = new Date(`${value}T12:00:00`);

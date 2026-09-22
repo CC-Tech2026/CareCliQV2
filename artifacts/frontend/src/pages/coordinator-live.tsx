@@ -24,6 +24,7 @@ import {
 import { getShiftMessages } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useLiveShiftsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -352,7 +353,7 @@ function ShiftChecklistSection({ checklist }: { checklist: LiveShift["checklist"
 }
 
 // ── Medications section ──────────────────────────────────────────────────────────
-function ShiftMedicationsSection({ medications }: { medications: LiveShift["medications"] }) {
+function ShiftMedicationsSection({ medications, tz }: { medications: LiveShift["medications"]; tz?: string | null }) {
   const { translate } = useAccessibility();
   if (medications.length === 0) {
     return <p className="text-[12px]" style={{ color: MUTED }}>{translate("coordinator.live.medications.empty")}</p>;
@@ -367,7 +368,7 @@ function ShiftMedicationsSection({ medications }: { medications: LiveShift["medi
             <div className="min-w-0">
               <p className="text-[12px] font-semibold truncate" style={{ color: TEXT }}>{med.name}</p>
               <p className="text-[10px]" style={{ color: MUTED }}>
-                {new Date(med.scheduled_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {formatAppTimeWithZone(med.scheduled_time, tz)}
               </p>
             </div>
             <span
@@ -433,7 +434,7 @@ function ShiftDetailPanel({
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.clockedIn")}</p>
-              <p style={{ color: TEXT }}>{shift.clocked_in_at ? new Date(shift.clocked_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : translate("common.emDash")}</p>
+              <p style={{ color: TEXT }}>{shift.clocked_in_at ? formatAppTimeWithZone(shift.clocked_in_at, shift.timezone) : translate("common.emDash")}</p>
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.elapsed")}</p>
@@ -456,7 +457,7 @@ function ShiftDetailPanel({
 
           <div>
             <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>{translate("coordinator.live.medications")}</p>
-            <ShiftMedicationsSection medications={shift.medications} />
+            <ShiftMedicationsSection medications={shift.medications} tz={shift.timezone} />
           </div>
 
           {shift.alerts.length > 0 && (

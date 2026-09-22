@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { SectionInfo } from "@/components/ui/section-info";
-import { format, parseISO } from "date-fns";
+import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Loader2,
   X, AlertTriangle, Clock, DollarSign,
@@ -23,9 +23,9 @@ const T3     = "#6A6A77";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-function safeDateTime(v?: string | null) {
+function safeDateTime(v?: string | null, tz?: string | null) {
   if (!v) return "N/A";
-  try { return format(parseISO(v), "d MMM yyyy, h:mm a"); }
+  try { return `${formatAppDate(v, tz)}, ${formatAppTimeWithZone(v, tz)}`; }
   catch { return v; }
 }
 
@@ -72,9 +72,14 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
 
   const verifyMutation = useMutation({
     mutationFn: () => confirmShiftVerification(item.shift_id, priceItemCode),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [orgId, "shift-verification-queue"] });
-      toast({ title: "Shift verified", description: "Budget deducted from the participant's plan." });
+      const warning = result.expected_item_warning || result.day_type_warning;
+      toast(
+        warning
+          ? { title: "Shift verified — check the price item", description: warning }
+          : { title: "Shift verified", description: "Budget deducted from the participant's plan." }
+      );
       onVerified();
     },
     onError: (err: unknown) => {
@@ -113,7 +118,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium" style={{ color: T3 }}>
             <Clock size={11} />
-            {safeDateTime(item.scheduled_start)} · scheduled {formatMinutes(hours_sanity.scheduled_minutes)}, actual {formatMinutes(hours_sanity.actual_minutes)}
+            {safeDateTime(item.scheduled_start, item.timezone)} · scheduled {formatMinutes(hours_sanity.scheduled_minutes)}, actual {formatMinutes(hours_sanity.actual_minutes)}
           </div>
         </div>
 
@@ -163,6 +168,17 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
         </div>
       )}
 
+      {item.expected_price_item_code && (
+        <div className="border-t px-5 py-2 text-[11px] font-medium" style={{ borderColor: BORDER, color: T3 }}>
+          Expected item: <span className="font-bold" style={{ color: T1 }}>{item.expected_price_item_code}</span>
+          {priceItemCode && priceItemCode !== item.expected_price_item_code && (
+            <span className="ml-1.5 inline-flex items-center gap-1 font-bold" style={{ color: "#B45309" }}>
+              <AlertTriangle size={10} /> different item selected
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 border-t px-5 py-3" style={{ borderColor: BORDER }}>
         <DollarSign size={13} style={{ color: T3 }} className="shrink-0" />
         <select
@@ -179,7 +195,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           {priceItems.map((p) => (
             <option key={p.item_code} value={p.item_code}>
               {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-              {p.price_national != null ? ` ($${(p.price_national / 100).toFixed(2)}/hr)` : ""}
+              {p.price_national != null ? ` ($${p.price_national.toFixed(2)}/hr)` : ""}
             </option>
           ))}
         </select>

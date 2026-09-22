@@ -345,7 +345,8 @@
       <div class="party-detail">
         {% if participant_ndis_number %}NDIS Number: {{ participant_ndis_number }}<br />{% endif %}
         {% if participant_dob %}Date of birth: {{ participant_dob }}<br />{% endif %}
-        {% if plan_start_date and plan_end_date %}Plan period: {{ plan_start_date }} &ndash; {{ plan_end_date }}{% endif %}
+        {% if plan_start_date and plan_end_date %}Plan period: {{ plan_start_date }} &ndash; {{ plan_end_date }}<br />{% endif %}
+        {% if care_coordinator_name %}Care Coordinator: {{ care_coordinator_name }}{% endif %}
       </div>
     </td>
   </tr>

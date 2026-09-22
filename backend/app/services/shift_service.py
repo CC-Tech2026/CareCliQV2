@@ -23,10 +23,11 @@ from .session_service import _prepare_session_payload
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 from ..core.timezone import (
-    APP_TIMEZONE,
     app_day_bounds_utc,
     app_today,
     parse_shift_datetime,
+    participant_timezone,
+    request_timezone,
     shift_local_date,
 )
 
@@ -328,16 +329,20 @@ def validate_shift_scheduled_today(
     scheduled_start: str,
     *,
     today: Optional[date] = None,
+    tz=None,
 ) -> None:
-    """Reject clock-in when the shift is not scheduled for today (CARECLIQV2-90)."""
+    """Reject clock-in when the shift is not scheduled for today (CARECLIQV2-90).
+
+    "Today" is the participant's branch day (``tz``); defaults to the
+    request zone."""
     if not scheduled_start:
         return
     try:
         start = parse_shift_datetime(scheduled_start)
-        shift_day = start.astimezone(APP_TIMEZONE).date()
+        shift_day = start.astimezone(tz or request_timezone()).date()
     except ValueError:
         return
-    if shift_day != (today or app_today()):
+    if shift_day != (today or app_today(tz)):
         raise ShiftNotScheduledToday("Shift not scheduled for today")
 
 
@@ -960,6 +965,9 @@ def _shift_card_payload(
         "participant_address": shift.get("participant_address"),
         "scheduled_start": scheduled_start,
         "scheduled_end": scheduled_end,
+        # Zone of the participant's branch — clients show times in it and
+        # label it when it differs from the viewer's own branch.
+        "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
         "duration_minutes": shift.get("duration_minutes"),
         "clocked_in_at": shift.get("clocked_in_at"),
         "clocked_out_at": shift.get("clocked_out_at"),
@@ -1034,6 +1042,7 @@ def _enrich_worker_shift_card(
     active_goals: Optional[list[dict[str, Any]]] = None,
     skip_db_lookups: bool = False,
     skip_briefing: bool = False,
+    prefetched_care_coordinator: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Hydrate list/detail cards with participant risks, goals, and completion metadata."""
     participant_id = str(shift.get("participant_id") or "")
@@ -1066,18 +1075,21 @@ def _enrich_worker_shift_card(
         if goals:
             payload["active_goals"] = goals
 
-    if prefetched_patient_risks:
+    if prefetched_patient_risks or prefetched_care_coordinator:
         profile = dict(payload.get("profile") or {})
-        emergency = _parse_emergency_contact(prefetched_patient_risks.get("emergency_contact"))
-        if emergency:
-            profile["emergency_contact"] = emergency
-        cm_name = (prefetched_patient_risks.get("case_manager_name") or "").strip()
-        if cm_name:
-            profile["case_manager"] = {
-                "name": cm_name,
-                "phone": prefetched_patient_risks.get("case_manager_phone"),
-                "email": prefetched_patient_risks.get("case_manager_email"),
-            }
+        if prefetched_patient_risks:
+            emergency = _parse_emergency_contact(prefetched_patient_risks.get("emergency_contact"))
+            if emergency:
+                profile["emergency_contact"] = emergency
+            cm_name = (prefetched_patient_risks.get("case_manager_name") or "").strip()
+            if cm_name:
+                profile["case_manager"] = {
+                    "name": cm_name,
+                    "phone": prefetched_patient_risks.get("case_manager_phone"),
+                    "email": prefetched_patient_risks.get("case_manager_email"),
+                }
+        if prefetched_care_coordinator:
+            profile["care_coordinator"] = prefetched_care_coordinator
         if profile:
             payload["profile"] = profile
 
@@ -1228,6 +1240,55 @@ def _enrich_shift_participant_context(payload: dict[str, Any], shift: dict[str, 
     payload.setdefault("context_synced_at", _now_iso())
 
 
+def _fetch_care_coordinator_id(participant_id: str, organization_id: str) -> Optional[str]:
+    """Best-effort standalone lookup of patients.care_coordinator_id — kept
+    separate from the main participant-context select so a not-yet-migrated
+    deployment can't lose unrelated fields via the legacy-fallback path."""
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("patients")
+            .select("care_coordinator_id")
+            .eq("id", participant_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        return rows[0].get("care_coordinator_id") if rows else None
+    except Exception:
+        return None
+
+
+def _resolve_care_coordinator(care_coordinator_id: Optional[str], organization_id: str) -> Optional[dict[str, Any]]:
+    """Resolve a care_coordinator_id into the {id, name, phone, email} shape
+    shift/participant payloads expose to the frontend. None when unset."""
+    if not care_coordinator_id:
+        return None
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("users")
+            .select("id, full_name, phone, email")
+            .eq("id", care_coordinator_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "id": row.get("id"),
+            "name": row.get("full_name"),
+            "phone": row.get("phone"),
+            "email": row.get("email"),
+        }
+    except Exception:
+        return None
+
+
 def _fetch_participant_context(participant_id: str, organization_id: str) -> dict[str, Any]:
     """Load read-only participant profile + preferences + context (CARECLIQV2-195/196/295)."""
     if not participant_id:
@@ -1273,6 +1334,12 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
     emergency = _parse_emergency_contact(row.get("emergency_contact"))
     next_of_kin = _parse_emergency_contact(row.get("next_of_kin"))
     context_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
+    # care_coordinator_id is looked up separately, not folded into select_cols
+    # above: that select already falls back wholesale to
+    # _fetch_participant_context_legacy() on any missing column, and bundling
+    # this new one in would silently drop case_manager/next_of_kin/gp/etc for
+    # any deployment that hasn't run migration 201 yet.
+    care_coordinator = _resolve_care_coordinator(_fetch_care_coordinator_id(participant_id, organization_id), organization_id)
 
     return {
         "profile": {
@@ -1287,6 +1354,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
                 "name": row.get("case_manager_name"),
                 "phone": row.get("case_manager_phone"),
             },
+            "care_coordinator": care_coordinator,
             "gp": {
                 "name": row.get("gp_name"),
                 "phone": row.get("gp_phone"),
@@ -1629,6 +1697,68 @@ def _batch_fetch_patient_risk_fields(
         return {}
 
 
+def _batch_fetch_care_coordinators(
+    shift_rows: list[dict[str, Any]],
+    organization_id: str,
+) -> dict[str, dict[str, Any]]:
+    """care_coordinator is snapshotted per-shift (not looked up live from the
+    participant), so this batches by shift id, then resolves the distinct
+    coordinator ids into {name, phone, email} with one users query. Kept as
+    its own independent query — see _fetch_care_coordinator_id for why."""
+    shift_ids = list({str(row.get("id")) for row in shift_rows if row.get("id")})
+    if not shift_ids or not organization_id:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shifts")
+            .select("id, care_coordinator_id")
+            .in_("id", shift_ids)
+            .eq("organization_id", organization_id)
+            .execute()
+        )
+        coordinator_id_by_shift = {
+            str(row.get("id")): row.get("care_coordinator_id")
+            for row in (resp.data or [])
+            if isinstance(row, dict) and row.get("id") and row.get("care_coordinator_id")
+        }
+    except Exception:
+        return {}
+
+    coordinator_ids = list({str(v) for v in coordinator_id_by_shift.values() if v})
+    if not coordinator_ids:
+        return {}
+    try:
+        users_resp = (
+            get_supabase_admin()
+            .table("users")
+            .select("id, full_name, phone, email")
+            .in_("id", coordinator_ids)
+            .eq("organization_id", organization_id)
+            .execute()
+        )
+        users_by_id = {
+            str(row.get("id")): row
+            for row in (users_resp.data or [])
+            if isinstance(row, dict) and row.get("id")
+        }
+    except Exception:
+        return {}
+
+    result: dict[str, dict[str, Any]] = {}
+    for shift_id, coordinator_id in coordinator_id_by_shift.items():
+        user = users_by_id.get(str(coordinator_id))
+        if not user:
+            continue
+        result[shift_id] = {
+            "id": user.get("id"),
+            "name": user.get("full_name"),
+            "phone": user.get("phone"),
+            "email": user.get("email"),
+        }
+    return result
+
+
 def build_worker_shift_cards(
     rows: list[dict[str, Any]],
     organization_id: str,
@@ -1664,6 +1794,7 @@ def build_worker_shift_cards(
     })
     allergies_map = _batch_fetch_allergies(participant_ids, organization_id)
     risk_map = _batch_fetch_patient_risk_fields(participant_ids, organization_id)
+    care_coordinator_map = _batch_fetch_care_coordinators(rows, organization_id)
     from .goals_service import fetch_active_goals_map_for_participants
 
     goals_map = fetch_active_goals_map_for_participants(participant_ids, organization_id)
@@ -1682,6 +1813,7 @@ def build_worker_shift_cards(
             prefetched_allergies=allergies_map.get(participant_id, []),
             prefetched_patient_risks=risk_map.get(participant_id, {}),
             active_goals=goals_map.get(participant_id, []),
+            prefetched_care_coordinator=care_coordinator_map.get(str(shift.get("id") or "")),
         ))
     return cards
 
@@ -2436,7 +2568,10 @@ def clock_in_shift(
 
     ensure_briefing_completed(shift, worker_id)
 
-    validate_shift_scheduled_today(str(shift.get("scheduled_start") or ""))
+    validate_shift_scheduled_today(
+        str(shift.get("scheduled_start") or ""),
+        tz=participant_timezone(shift, organization_id=organization_id),
+    )
     check_in_meta: dict[str, Any] = {}
     verification_distance: Optional[float] = None
     qr_code_id: Optional[str] = None
@@ -2904,7 +3039,7 @@ def start_shift_session(
 
     payload = _prepare_session_payload({
         "participant_id": str(participant_id),
-        "session_date": app_today(),
+        "session_date": app_today(participant_timezone(shift, organization_id=organization_id)),
         "duration_minutes": duration,
         "session_type": "support_work",
         "status": "draft",

@@ -26,11 +26,16 @@ from backend.app.services.chatbox import tools as chatbox_tools
 ADELAIDE = ZoneInfo("Australia/Adelaide")  # UTC+9:30 in August (no DST)
 
 
+MELBOURNE = ZoneInfo("Australia/Melbourne")  # UTC+10:00 in August
+
+
 @pytest.fixture(autouse=True)
 def _fixed_timezone():
+    """Asker's branch = Adelaide (the request zone); participants and
+    workers resolve to Adelaide unless a test overrides the lookup."""
     with patch.object(app_tz, "APP_TIMEZONE", ADELAIDE), \
-         patch.object(chatbox_blocks, "APP_TIMEZONE", ADELAIDE), \
-         patch.object(chatbox_tools, "APP_TIMEZONE", ADELAIDE), \
+         patch.object(chatbox_tools, "participant_timezone", lambda *a, **k: ADELAIDE), \
+         patch.object(chatbox_tools, "user_timezone", lambda *a, **k: ADELAIDE), \
          patch.object(chatbox_db.settings, "supabase_jwt_secret", "test-jwt-secret-" + "x" * 40):
         yield
 
@@ -197,3 +202,51 @@ async def test_rp_flag_count_uses_the_local_month_at_the_boundary():
         result, _ = await tool.coroutine()
 
     assert result["rp_flag_count_this_month"] == 1
+
+
+# ── Branches: a Melbourne participant seen from the Adelaide office ────
+
+
+def test_coverage_table_labels_rows_from_another_branch():
+    artifact = {
+        "timezone": "Australia/Adelaide",
+        "on_shift_now": [
+            {"worker_name": "A", "participant_name": "P-ADL", "timezone": "Australia/Adelaide",
+             "scheduled_start": "2026-08-24T07:30:00+00:00", "scheduled_end": "2026-08-24T13:30:00+00:00"},
+            {"worker_name": "B", "participant_name": "P-MEL", "timezone": "Australia/Melbourne",
+             "scheduled_start": "2026-08-24T07:30:00+00:00", "scheduled_end": "2026-08-24T13:30:00+00:00"},
+        ],
+    }
+    rows = chatbox_blocks._blocks_for_shift_coverage(artifact)[0]["rows"]
+    assert rows[0][3:] == ["05:00 PM", "11:00 PM"]           # same branch: no label
+    assert rows[1][3:] == ["05:30 PM AEST", "11:30 PM AEST"]  # other branch: labelled
+
+
+def test_format_local_can_label_the_zone():
+    assert chatbox_tools._format_local("2026-08-24T07:30:00+00:00", MELBOURNE, label_zone=True) == "24 Aug 2026, 05:30 PM AEST"
+
+
+@pytest.mark.asyncio
+async def test_progress_note_lookup_uses_the_participants_branch_day():
+    """A Melbourne participant's '25 Aug' is Melbourne midnight-to-midnight
+    (14:00 UTC), not Adelaide's (14:30 UTC) — even when asked from Adelaide."""
+    org_id = str(uuid.uuid4())
+    md = {"id": str(uuid.uuid4()), "organization_id": org_id, "role": "managing_director"}
+    participant = {"id": str(uuid.uuid4()), "full_name": "Mel Participant"}
+    captured: dict = {}
+
+    def _fake_query(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    with patch.object(chatbox_tools, "audit_service") as mock_audit, \
+         patch.object(chatbox_tools, "quill_client", return_value=MagicMock()), \
+         patch.object(chatbox_tools, "participant_timezone", lambda *a, **k: MELBOURNE), \
+         patch.object(chatbox_tools.participant_service, "get_participants_list_light", AsyncMock(return_value=[participant])), \
+         patch.object(chatbox_tools, "_execute_shift_query_with_legacy_fallback", side_effect=_fake_query):
+        mock_audit.log_action = AsyncMock()
+        tool = next(t for t in chatbox_tools.build_tools_for_user(md, "t") if t.name == "get_shift_progress_note")
+        await tool.coroutine(participant_name="Mel", shift_date="2026-08-25")
+
+    assert captured["start_date"] == "2026-08-24T14:00:00+00:00"
+    assert captured["end_date"] == "2026-08-25T13:59:59+00:00"

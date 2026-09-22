@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SectionInfo } from "@/components/ui/section-info";
 import { getOrgAcknowledgementContent, updateOrgAcknowledgementContent } from "@/services/coordinatorService";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -1135,6 +1136,8 @@ interface IncidentDetail {
   ndis_reportable?: boolean;
   ndis_reported_at?: string | null;
   participant_name?: string;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 }
 
 function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onClose: () => void }) {
@@ -1239,7 +1242,7 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
                   <p className="text-[13px] font-bold mb-0.5" style={{ color: CRITICAL }}>{translate("compliance.centre.incidents.ndisReportableBannerTitle")}</p>
                   {incident.ndis_reported_at ? (
                     <p className="text-[12px]" style={{ color: TEXT }}>
-                      {translate("compliance.centre.incidents.ndisReportedOn")} {new Date(incident.ndis_reported_at).toLocaleString()}
+                      {translate("compliance.centre.incidents.ndisReportedOn")} {formatAppTimeWithZone(incident.ndis_reported_at, incident.timezone)}
                     </p>
                   ) : (
                     <>
@@ -1275,7 +1278,7 @@ function IncidentDetailDrawer({ incidentId, onClose }: { incidentId: string; onC
                       <div className="min-w-0">
                         <p className="text-[12px] font-bold" style={{ color: TEXT }}>{formatAuditAction(entry.action_type)}</p>
                         <p className="text-[11px]" style={{ color: MUTED }}>
-                          {entry.actor_name} · {new Date(entry.created_at).toLocaleString()}
+                          {entry.actor_name} · {formatAppTimeWithZone(entry.created_at, incident?.timezone)}
                         </p>
                       </div>
                     </li>
@@ -1371,6 +1374,7 @@ function IncidentsPanel() {
                 notification_due_at: inc.notification_due_at,
                 overdue: inc.overdue,
                 auto_detected: true,
+                timezone: inc.timezone,
               }}
               typeLabel={typeLabel(inc.incident_type)}
               statusLabel={statusLabel(inc.status)}

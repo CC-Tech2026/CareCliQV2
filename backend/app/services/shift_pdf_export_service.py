@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.config import settings
+from ..core.timezone import coerce_timezone, request_timezone
 from .email_service import queue_email_job, send_email
 from .supabase_client import get_supabase_admin
 from .worker_shift_history_service import get_shift_history_detail
@@ -51,7 +52,9 @@ def _participant_display_id(detail: dict[str, Any]) -> str:
     return "—"
 
 
-def _format_ts(value: str | None) -> str:
+def _format_ts(value: str | None, tz_name: str | None = None) -> str:
+    """Wall-clock time in the shift's branch zone with its abbreviation
+    (e.g. '2026-08-24 17:00 ACST'). Falls back to the request zone."""
     if not value:
         return "—"
     text = str(value).replace("Z", "+00:00")
@@ -59,7 +62,8 @@ def _format_ts(value: str | None) -> str:
         dt = datetime.fromisoformat(text)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        zone = coerce_timezone(tz_name) or request_timezone()
+        return dt.astimezone(zone).strftime("%Y-%m-%d %H:%M %Z")
     except ValueError:
         return str(value)[:19]
 
@@ -240,11 +244,11 @@ def _build_shift_pdf(detail: dict[str, Any], org_id: str, *, signature_png: byte
         ["Worker", str(detail.get("worker_name") or "—")],
         [
             "Scheduled",
-            f"{_format_ts(detail.get('scheduled_start'))} – {_format_ts(detail.get('scheduled_end'))}",
+            f"{_format_ts(detail.get('scheduled_start'), detail.get('timezone'))} – {_format_ts(detail.get('scheduled_end'), detail.get('timezone'))}",
         ],
         [
             "Clock in / out",
-            f"{_format_ts(detail.get('clocked_in_at'))} – {_format_ts(detail.get('clocked_out_at'))}",
+            f"{_format_ts(detail.get('clocked_in_at'), detail.get('timezone'))} – {_format_ts(detail.get('clocked_out_at'), detail.get('timezone'))}",
         ],
         ["Duration", _format_duration(detail.get("duration_minutes"))],
         [

@@ -5,15 +5,16 @@ import mimetypes
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_managing_director
+from ..core.access import get_user_id, get_user_organization_id, has_active_grant, is_managing_director
 from ..core.security import get_current_user
 from ..services import vault_service
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/md-vault", tags=["md-vault"])
 
 
 def _require_md(user: dict) -> str:
-    if not is_managing_director(user):
+    if not is_managing_director(user) and not has_active_grant(user, "governance_vault", get_supabase_admin()):
         raise HTTPException(status_code=403, detail="Managing director access required.")
     org_id = get_user_organization_id(user)
     if not org_id:

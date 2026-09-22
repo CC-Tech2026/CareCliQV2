@@ -112,6 +112,7 @@ export default function MyShiftMessageOffice() {
               showHeader={false}
               variant="page"
               onSent={() => void loadHistory()}
+              tz={shift?.timezone}
             />
           </div>
         </div>

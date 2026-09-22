@@ -106,6 +106,7 @@ import {
   TEXT,
   avatarShouldPulse,
   formatDurationLabel,
+  formatShiftSchedule,
   formatShiftTimeRange,
   resolveActiveShiftTasks,
   hasIncompleteMandatoryTasks,
@@ -1019,13 +1020,14 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }
 
   if (shiftAccessDenied && offerSummary) {
-    const start = offerSummary.scheduled_start ? new Date(offerSummary.scheduled_start) : null;
     return (
       <div className="space-y-4 py-8">
         <div className="rounded-2xl border p-5" style={{ borderColor: BORDER }}>
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: PLUM }}>Shift offer</p>
           <p className="mt-1 text-lg font-black" style={{ color: TEXT }}>
-            {start ? start.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "Time TBC"}
+            {offerSummary.scheduled_start
+              ? formatShiftSchedule(offerSummary.scheduled_start, offerSummary.scheduled_end ?? undefined, offerSummary.timezone)
+              : "Time TBC"}
           </p>
           <p className="mt-1 text-sm font-semibold" style={{ color: MUTED }}>
             with {offerSummary.participant_first_name ?? "a participant"}
@@ -1866,6 +1868,7 @@ function ShiftWorkflow({
         open={timelineOpen}
         onToggle={() => setTimelineOpen(!timelineOpen)}
         embedded
+        tz={shift.timezone}
       />
     ) : null;
 
@@ -1983,7 +1986,7 @@ function ShiftWorkflow({
                 <ShiftStatusBadge visualState={visualState} onBreak={longShiftBreak?.onBreak} className="ml-auto" />
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
-                {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+                {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
                 {durationLabel ? `, ${durationLabel} scheduled` : ""}
               </p>
               {shift.participant_address && (
@@ -2181,6 +2184,7 @@ function ShiftWorkflow({
           acknowledged
           acknowledgedAt={shift.risks_acknowledged_at}
           acknowledgedByName={shift.risks_acknowledged_by_name}
+          tz={shift.timezone}
           ackChecked
           busy={false}
           onRequestAcknowledge={onRequestAcknowledge}
@@ -2211,6 +2215,7 @@ function ShiftWorkflow({
             incidentFormOpen={incidentFormOpen}
             onIncidentFormOpenChange={setIncidentFormOpen}
             onIncidentSubmitted={handleIncidentSubmitted}
+            tz={shift.timezone}
           />
         </div>
       )}

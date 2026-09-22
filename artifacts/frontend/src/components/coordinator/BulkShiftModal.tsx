@@ -6,6 +6,7 @@ import { useState } from "react";
 import { format, addDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   Calendar, Clock, Check, AlertTriangle, Loader2, X, Plus,
 } from "lucide-react";
@@ -17,8 +18,10 @@ import {
 } from "@/components/ui/select";
 import {
   bulkCreateShifts,
+  getParticipantPriceItemOptions,
   type BulkShiftResult,
   type WorkerStats,
+  type ShiftPriceItemOption,
 } from "@/services/coordinatorService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +83,16 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
   const [selectedDays,   setSelectedDays]   = useState<number[]>([0, 2, 4]); // Mon/Wed/Fri
   const [result,         setResult]         = useState<BulkShiftResult | null>(null);
   const [confirmed,      setConfirmed]      = useState(false);
+  const [expectedPriceItemCode, setExpectedPriceItemCode] = useState("");
+
+  const priceItemsQuery = useOrgQuery<ShiftPriceItemOption[]>(
+    [orgId, "participant-price-items", participantId],
+    {
+      queryFn: () => getParticipantPriceItemOptions(participantId),
+      enabled: !!participantId,
+      staleTime: 60_000,
+    }
+  );
 
   const toggleDay = (d: number) =>
     setSelectedDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
@@ -116,6 +129,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
         shift_type:        shiftType,
         worker_id:         workerId || undefined,
         confirm_conflicts: confirmConflicts,
+        expected_price_item_code: expectedPriceItemCode || undefined,
       }),
     onSuccess: (data) => {
       setResult(data);
@@ -134,6 +148,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
         setConfirmed(false);
         setParticipantId("");
         setWorkerId("");
+        setExpectedPriceItemCode("");
       }, 300);
     }
   }
@@ -241,6 +256,33 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     <SelectItem value="">{translate("coordinator.bulkShift.noAutoAssign")}</SelectItem>
                     {workers.map((w) => (
                       <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Expected NDIS item — applied to every occurrence this
+                  request generates; cross-checked (warn, not blocked)
+                  against whatever's actually picked when each shift is
+                  verified. */}
+              <div className="space-y-2">
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>
+                  Expected NDIS item <span className="font-normal">({translate("common.optional")})</span>
+                </label>
+                <Select
+                  value={expectedPriceItemCode || "__none__"}
+                  onValueChange={(val) => setExpectedPriceItemCode(val === "__none__" ? "" : val)}
+                  disabled={!participantId || priceItemsQuery.isLoading}
+                >
+                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                    <SelectValue placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None recorded</SelectItem>
+                    {(priceItemsQuery.data ?? []).map((p) => (
+                      <SelectItem key={p.item_code} value={p.item_code}>
+                        {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

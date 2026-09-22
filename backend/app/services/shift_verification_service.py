@@ -9,12 +9,13 @@ per completed shift, sourced from the real NDIS price catalogue.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
-from ..core.timezone import parse_shift_datetime
+from ..core.timezone import app_today, parse_shift_datetime, participant_timezone
 from . import ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
+from .schads_engine import _day_type, _get_public_holidays
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 
@@ -99,15 +100,19 @@ def _actual_minutes(shift: dict[str, Any]) -> Optional[float]:
 
 
 def _completion_date_for_shift(shift: dict[str, Any]) -> str:
+    """Calendar day the shift belongs to, in the participant's branch zone.
+    (Taking .date() of the UTC instant filed anything before ~9:30 AM
+    local under the previous day.)"""
+    tz = participant_timezone(shift, organization_id=shift.get("organization_id"))
     for key in ("scheduled_start", "clocked_out_at", "clocked_in_at", "created_at"):
         value = shift.get(key)
         if not value:
             continue
         try:
-            return parse_shift_datetime(value).date().isoformat()
+            return parse_shift_datetime(value).astimezone(tz).date().isoformat()
         except Exception:
             continue
-    return datetime.now(timezone.utc).date().isoformat()
+    return app_today(tz).isoformat()
 
 
 def _upsert_task_completions_for_verified_shift(
@@ -121,6 +126,7 @@ def _upsert_task_completions_for_verified_shift(
     billed_amount: float,
     actual_minutes: float,
     verified_at: str,
+    completion_date: str,
 ) -> list[dict[str, Any]]:
     shift_task_result = (
         supabase.table("shift_tasks")
@@ -164,7 +170,6 @@ def _upsert_task_completions_for_verified_shift(
     task_count = len(verified_task_ids)
     apportioned_minutes = max(1, int(round(actual_minutes / task_count))) if task_count else int(round(actual_minutes))
     apportioned_amount = round(billed_amount / task_count, 2) if task_count else round(billed_amount, 2)
-    completion_date = _completion_date_for_shift(shift)
 
     payload_template = {
         "shift_id": str(shift.get("id")),
@@ -324,7 +329,7 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
 _SHIFT_COLUMNS = (
     "id, organization_id, participant_id, participant_name, worker_id, "
     "scheduled_start, scheduled_end, clocked_in_at, clocked_out_at, "
-    "duration_minutes, status, session_id, tasks"
+    "duration_minutes, status, session_id, tasks, expected_price_item_code"
 )
 
 
@@ -393,6 +398,10 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 "clocked_out_at": shift.get("clocked_out_at"),
                 "duration_minutes": shift.get("duration_minutes"),
                 "checks": checks,
+                # Participant's branch zone — the coordinator verifies (and
+                # bills) this shift's times in it, not their own.
+                "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
+                "expected_price_item_code": shift.get("expected_price_item_code"),
             }
         )
     return out
@@ -414,6 +423,17 @@ async def list_price_item_options(shift_id: str, org_id: str) -> list[dict[str, 
         return []
 
     participant_id = shift_rows[0].get("participant_id")
+    if not participant_id:
+        return []
+    return await list_price_item_options_for_participant(str(participant_id), org_id)
+
+
+async def list_price_item_options_for_participant(participant_id: str, org_id: str) -> list[dict[str, Any]]:
+    """Candidate ndis_price_items rows for a participant's plan — same
+    filtering list_price_item_options uses for an existing shift, but keyed
+    directly by participant so a coordinator can record an expected item
+    before any shift exists yet."""
+    supabase = get_supabase_admin()
     allowed_categories: Optional[set[str]] = None
     if participant_id:
         plan = await get_plan_for_participant(str(participant_id))
@@ -486,6 +506,8 @@ async def verify_shift(
     if shift.get("status") != "completed":
         raise ValueError("Only completed shifts can be verified.")
 
+    completion_date = _completion_date_for_shift(shift)
+
     existing = (
         supabase.table("shift_verifications")
         .select("id")
@@ -503,9 +525,41 @@ async def verify_shift(
     if not plan:
         raise ValueError("Participant has no active NDIS plan — cannot deduct budget.")
 
-    price = await ndis_pricing_service.resolve_price(price_item_code, org_id)
+    # location_type intentionally omitted (defaults to "national") — this org
+    # has no remote/very-remote participants; revisit if that ever changes.
+    price = await ndis_pricing_service.resolve_price(
+        price_item_code, org_id, as_of_date=completion_date,
+    )
     if not price:
         raise ValueError(f"Price item '{price_item_code}' could not be resolved.")
+
+    day_type_warning: Optional[str] = None
+    try:
+        # schads_engine._day_type returns lowercase snake_case
+        # ("weekday"/"saturday"/"sunday"/"public_holiday"); ndis_price_items.day_type
+        # is free-text from the imported Price Guide (e.g. "Weekday", "Public Holiday")
+        # — normalise both before comparing so casing/spacing never triggers a
+        # false-positive warning.
+        actual_day_type = _day_type(date.fromisoformat(completion_date), _get_public_holidays(supabase))
+        expected_day_type_raw = price.get("day_type")
+        expected_day_type = (
+            str(expected_day_type_raw).strip().lower().replace(" ", "_") if expected_day_type_raw else None
+        )
+        if expected_day_type and actual_day_type and expected_day_type != actual_day_type:
+            day_type_warning = (
+                f"Selected item '{price_item_code}' is priced as {expected_day_type_raw}, "
+                f"but the shift's service date ({completion_date}) is a {actual_day_type.replace('_', ' ')}."
+            )
+    except Exception:
+        logger.warning("shift_verification: day-type check failed for shift %s", shift_id, exc_info=True)
+
+    expected_item_warning: Optional[str] = None
+    expected_price_item_code = shift.get("expected_price_item_code")
+    if expected_price_item_code and expected_price_item_code != price_item_code:
+        expected_item_warning = (
+            f"This shift was expected to be billed as '{expected_price_item_code}' "
+            f"but '{price_item_code}' was selected instead."
+        )
 
     category = resolve_price_item_budget_category(price)
     if not category:
@@ -514,17 +568,24 @@ async def verify_shift(
             f"(support_purpose and item code prefix both unrecognised) — cannot deduct budget."
         )
 
-    # ndis_price_items prices (and resolve_price's effective_price) are stored
-    # in cents — every other consumer (billing.tsx, NdisPriceEditor.tsx)
-    # divides by 100 at point of use; plan_budgets amounts are plain dollars.
-    hourly_rate = float(price.get("effective_price") or 0) / 100
+    # ndis_price_items prices (and resolve_price's effective_price) are plain
+    # dollar amounts — same convention as billing.tsx, NdisPriceEditor.tsx and
+    # billing_service.py; plan_budgets amounts are also plain dollars.
+    hourly_rate = float(price.get("effective_price") or 0)
     actual_minutes = _actual_minutes(shift)
     if actual_minutes is None or actual_minutes <= 0:
         raise ValueError(
             "Shift has no usable actual duration (clock times or duration_minutes "
             "is missing or invalid) — cannot bill. Check the shift record."
         )
-    billed_amount = round((actual_minutes / 60) * hourly_rate, 2)
+    # "E" (per-event) items are a flat fee regardless of how long the shift
+    # ran — e.g. a $735.80 establishment fee stays $735.80, not scaled by
+    # hours worked the way an "H" (hourly) item's rate is. actual_minutes is
+    # still tracked below for the shift's own duration record either way.
+    if str(price.get("unit") or "").upper() == "E":
+        billed_amount = round(hourly_rate, 2)
+    else:
+        billed_amount = round((actual_minutes / 60) * hourly_rate, 2)
 
     session = _get_session_for_shift(shift)
     checks = compute_verification_checks(shift, session)
@@ -590,9 +651,10 @@ async def verify_shift(
         billed_amount=billed_amount,
         actual_minutes=actual_minutes,
         verified_at=now,
+        completion_date=completion_date,
     )
 
-    return {
+    result: dict[str, Any] = {
         "verification": verification,
         "checks": checks,
         "billed_amount": billed_amount,
@@ -601,3 +663,8 @@ async def verify_shift(
         "new_used_amount": new_used,
         "task_completions": task_completions,
     }
+    if day_type_warning:
+        result["day_type_warning"] = day_type_warning
+    if expected_item_warning:
+        result["expected_item_warning"] = expected_item_warning
+    return result

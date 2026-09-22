@@ -8,6 +8,18 @@ import {
   reviewTrainingCompletion,
 } from "@/services/coordinatorService";
 
+function completedDate(value: string | null | undefined) {
+  if (!value) return "Date not recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date not recorded"
+    : new Intl.DateTimeFormat("en-AU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(date);
+}
+
 export function TrainingReviews() {
   const query = useOrgQuery(["training-completions", "pending"], {
     queryFn: getPendingTrainingCompletions,
@@ -41,7 +53,7 @@ export function TrainingReviews() {
     }
   }
   return (
-    <section className="space-y-3 rounded-2xl border bg-card p-5">
+    <section className="space-y-4 rounded-2xl border bg-card p-4 sm:p-5">
       <div>
         <h3 className="font-bold">
           Completion reviews{" "}
@@ -73,38 +85,49 @@ export function TrainingReviews() {
         </p>
       )}
       {query.data?.map((item) => (
-        <div key={item.id} className="space-y-3 rounded-xl border p-4">
+        <div
+          key={item.id}
+          className="grid min-w-0 gap-4 rounded-xl border p-4 lg:grid-cols-2"
+        >
           <div>
-            <h4 className="text-sm font-bold">
+            <h4 className="break-words text-sm font-semibold">
               {item.training_modules?.title ?? "Training completion"}
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
               {item.users?.full_name ?? "Worker"} · Completed{" "}
-              {item.completed_at}
+              {completedDate(item.completed_at)}
             </p>
             {item.note && <p className="mt-2 text-sm">{item.note}</p>}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
+          <div className="flex min-w-0 flex-col gap-2">
+            <label
+              htmlFor={`review-feedback-${item.id}`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Feedback for the worker
+            </label>
+            <textarea
+              id={`review-feedback-${item.id}`}
+              rows={2}
               aria-label={`Revision feedback for ${item.users?.full_name ?? "worker"}`}
               value={reasons[item.id] ?? ""}
               onChange={(e) =>
                 setReasons((prev) => ({ ...prev, [item.id]: e.target.value }))
               }
-              className="min-w-0 flex-1 rounded-lg border bg-background p-2 text-sm"
+              className="w-full min-w-0 resize-y rounded-lg border bg-background p-3 text-sm"
               placeholder="Feedback required to request revision"
             />
             <button
               disabled={busy || !reasons[item.id]?.trim()}
               onClick={() => void review(item.id, false)}
-              className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50"
+              className="min-h-11 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50"
             >
               Request revision
             </button>
             <button
               disabled={busy}
               onClick={() => void review(item.id, true)}
-              className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
             >
               Approve
             </button>

@@ -20,14 +20,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useShiftBriefing } from "@/hooks/worker/useShiftBriefing";
 import { useColors } from "@/hooks/useColors";
-import { APP_TIMEZONE } from "@/lib/shift-utils";
+import { getAppTimezone } from "@/lib/shift-utils";
 import { completeShiftBriefing } from "@/lib/worker-api";
 
 function formatNoteDate(value?: string | null): string {
   if (!value) return "";
   try {
     return new Date(value).toLocaleDateString("en-AU", {
-      timeZone: APP_TIMEZONE,
+      timeZone: getAppTimezone(),
       day: "numeric",
       month: "short",
       year: "numeric",

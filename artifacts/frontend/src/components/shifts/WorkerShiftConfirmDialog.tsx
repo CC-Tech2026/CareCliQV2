@@ -1,4 +1,3 @@
-import { format, parseISO } from "date-fns";
 import { CalendarDays } from "lucide-react";
 import {
   Dialog,
@@ -9,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatShiftBlockTime } from "@/components/shifts/ShiftCalendarDetailSheet";
+import { formatAppDate } from "@/lib/datetime";
 import type { CalendarShift } from "@/services/workerCalendarService";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -26,9 +26,9 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
   if (!shift) return null;
 
   const dateLabel = shift.scheduled_start
-    ? format(parseISO(shift.scheduled_start), "EEEE, d MMMM yyyy")
+    ? formatAppDate(shift.scheduled_start, shift.timezone, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     : translate("shift.confirm.thisDay");
-  const timeLabel = formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end);
+  const timeLabel = formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end, shift.timezone);
   const participant = shift.participant_name || translate("shift.confirm.yourParticipant");
   const schedule = timeLabel
     ? translateParams("shift.confirm.onDateAtTime", { date: dateLabel, time: timeLabel })

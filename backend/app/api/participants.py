@@ -785,6 +785,11 @@ class ShiftContextUpdate(BaseModel):
     preferred_name: Optional[str] = None
     case_manager_name: Optional[str] = None
     case_manager_phone: Optional[str] = None
+    # Structured reference to the participant's care coordinator (an
+    # internal support_coordinator/managing_director account) — distinct
+    # from case_manager_* above, which is the free-text NDIS plan-management
+    # billing contact and stays untouched by this field.
+    care_coordinator_id: Optional[str] = None
     gp_name: Optional[str] = None
     gp_phone: Optional[str] = None
     gp_practice: Optional[str] = None
@@ -860,12 +865,31 @@ async def update_shift_context(
     org_id = str(get_user_organization_id(current_user) or "")
     now = datetime.utcnow().isoformat() + "Z"
 
+    if body.care_coordinator_id:
+        coordinator = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("id", body.care_coordinator_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        if not coordinator or not coordinator.data or coordinator.data.get("role") not in (
+            "support_coordinator",
+            "managing_director",
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="care_coordinator_id must be an existing coordinator or managing director in this organization.",
+            )
+
     patient_fields = {
         k: v
         for k, v in {
             "preferred_name": body.preferred_name,
             "case_manager_name": body.case_manager_name,
             "case_manager_phone": body.case_manager_phone,
+            "care_coordinator_id": body.care_coordinator_id,
             "gp_name": body.gp_name,
             "gp_phone": body.gp_phone,
             "gp_practice": body.gp_practice,

@@ -4,6 +4,7 @@ import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord, SessionNoteType } from "@/services/sessionNotesService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { formatAppTimeWithZone } from "@/lib/datetime";
 
 const ATTACHMENT_RE = /^\[Attachment(?:\s+selected)?:\s*([^\]]+)\]$/i;
 
@@ -27,10 +28,10 @@ export function fileExtension(name: string) {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
 }
 
-export function noteTimestamp(note: SessionNoteRecord) {
+export function noteTimestamp(note: SessionNoteRecord, tz?: string | null) {
   const raw = note.auto_saved_at || note.created_at;
   if (!raw) return "";
-  return new Date(raw).toLocaleString();
+  return formatAppTimeWithZone(raw, tz);
 }
 
 export function noteSortTime(note: SessionNoteRecord) {

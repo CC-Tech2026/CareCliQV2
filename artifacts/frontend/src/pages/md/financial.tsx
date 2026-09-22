@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SectionInfo } from "@/components/ui/section-info";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useToast } from "@/hooks/use-toast";
+import { formatAppDate } from "@/lib/datetime";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -103,6 +104,8 @@ interface Invoice {
   service_category: "aged_care" | "disability" | null;
   created_at: string;
   pdf_url: string | null;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 }
 
 const INVOICE_STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
@@ -307,7 +310,7 @@ function InvoiceLedger() {
                       {PAYMENT_METHOD_LABEL[displayPaymentMethod(inv)] ?? displayPaymentMethod(inv)}
                     </td>
                     <td className="px-4 py-3.5 text-[11px] font-medium" style={{ color: MUTED }}>
-                      {new Date(inv.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                      {formatAppDate(inv.created_at, inv.timezone)}
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wide" style={{ background: meta.bg, color: meta.color }}>

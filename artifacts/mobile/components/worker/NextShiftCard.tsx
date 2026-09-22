@@ -50,7 +50,7 @@ export function NextShiftCard({ shift }: Props) {
               {shift.participant_name}
             </Text>
             <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
+              {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)}
             </Text>
           </View>
         </View>

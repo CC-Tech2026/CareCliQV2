@@ -20,6 +20,7 @@ import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys
 import { clearCachedSettings } from "@/lib/use-settings";
 import { clearSignature } from "@/lib/signature-store";
 import { clearAllSessionNoteStorage } from "@/lib/session-notes-storage";
+import { setAppTimezone } from "@/lib/datetime";
 import { deleteTaskEvidenceDb } from "@/lib/task-evidence-storage";
 import { deleteShiftOfflineDb } from "@/lib/shift-offline-queue";
 
@@ -56,6 +57,9 @@ export interface AuthUser {
   role_specific_profile_completed?: boolean;
   profile_photo_url?: string | null;
   organizationId?: string;
+  /** Office the user works from; times and "today" follow its zone. */
+  branchId?: string;
+  timezone?: string;
   is_active?: boolean;
   deactivation_reason?: DeactivationReason | null;
   deactivation_note?: string | null;
@@ -116,6 +120,8 @@ function mapAuthUser(data: { user: Record<string, unknown> }): AuthUser {
     account_type: (user.account_type as AccountType) || "independent_worker",
     onboarding_complete: Boolean(user.onboarding_complete ?? true),
     organizationId: user.organization_id ? String(user.organization_id) : undefined,
+    branchId: user.branch_id ? String(user.branch_id) : undefined,
+    timezone: typeof user.timezone === "string" && user.timezone ? user.timezone : undefined,
     email_verified: Boolean(user.email_verified ?? false),
     profile_completed: Boolean(user.profile_completed ?? user.onboarding_complete ?? false),
     onboarding_completed: Boolean(user.onboarding_completed ?? user.onboarding_complete ?? false),
@@ -147,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     _currentOrgId = initialUser?.organizationId ?? null;
     setQueryOrgId(_currentOrgId);
+    setAppTimezone(initialUser?.timezone);
     return initialUser;
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -155,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = newToken;
     _currentOrgId = newUser.organizationId ?? null;
     setQueryOrgId(_currentOrgId);
+    setAppTimezone(newUser.timezone);
     persistAuthSession(newToken, JSON.stringify(newUser), rememberDevice);
     setToken(newToken);
     setUser(newUser);
@@ -164,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = null;
     _currentOrgId = null;
     setQueryOrgId(null);
+    setAppTimezone(null);
     clearAppliedSupabaseSession();
     clearPresentedNotifications();
     clearAuthSessionStorage();
@@ -312,6 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         const fresh = mapAuthUser({ user: data.user });
         _currentOrgId = fresh.organizationId ?? null;
+        setAppTimezone(fresh.timezone);
         persistAuthSession(newToken, JSON.stringify(fresh), rememberDevice);
         setUser(fresh);
       }

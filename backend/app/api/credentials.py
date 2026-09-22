@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import re
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -12,9 +12,16 @@ from ..core.access import get_user_id, get_user_organization_id, has_org_wide_ac
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
 from ..services import audit_service
+from ..services.credential_status import live_status
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
 
 CREDENTIAL_FILES_BUCKET = "credential-files"
+# Recomputed fresh on every read (never persisted — see _with_signed_file_url),
+# so this only needs to outlive one page view, not a browsing session. These
+# are sensitive identity/screening documents; the storage_client default
+# (7 days) is far too long for that — mirrors the shorter, explicit
+# PROFILE_PHOTO_SIGNED_URL_SECONDS pattern already used in users.py.
+CREDENTIAL_FILE_SIGNED_URL_SECONDS = 60 * 60
 
 router = APIRouter(prefix="/credentials", tags=["credentials"])
 
@@ -59,17 +66,7 @@ class CredentialReviewBody(BaseModel):
 
 
 def _status_for(expiry_date: str | None, current: str = "pending_review") -> str:
-    if current in {"rejected", "pending_review"}:
-        return current
-    if not expiry_date:
-        return current if current in {"valid", "expiring", "expired"} else "valid"
-    expiry = date.fromisoformat(str(expiry_date)[:10])
-    today = date.today()
-    if expiry < today:
-        return "expired"
-    if (expiry - today).days <= 60:
-        return "expiring"
-    return "valid"
+    return live_status(expiry_date, current)
 
 
 def _with_signed_file_url(row: dict) -> dict:
@@ -77,7 +74,9 @@ def _with_signed_file_url(row: dict) -> dict:
     be a stale public link from before the bucket was locked down, or simply
     expired); always regenerate a fresh signed URL from file_path on read."""
     row = dict(row)
-    row["file_url"] = signed_storage_url(CREDENTIAL_FILES_BUCKET, row.get("file_path"))
+    row["file_url"] = signed_storage_url(
+        CREDENTIAL_FILES_BUCKET, row.get("file_path"), CREDENTIAL_FILE_SIGNED_URL_SECONDS
+    )
     return row
 
 
@@ -85,9 +84,17 @@ def _query_own(user: dict):
     return get_supabase_admin().table("credentials").select("*").eq("user_id", get_user_id(user))
 
 
-def _get_credential_for_user(credential_id: str, user: dict) -> dict:
+def _get_credential_for_user(credential_id: str, user: dict, *, owner_only: bool = False) -> dict:
+    """`owner_only=True` always scopes to the caller's own row, even for a
+    coordinator/MD who otherwise has org-wide access — required for the
+    self-service /me/{id} endpoints, which mutate by `.eq("user_id", ...)`
+    on the caller. Without this, a coordinator hitting one of those routes
+    for another worker's credential would pass this existence check (via
+    the org-wide branch below) but then have their update/delete/upload
+    silently match zero rows — a fabricated success. review_credential(),
+    the actual coordinator-facing action, still uses the org-wide branch."""
     query = get_supabase_admin().table("credentials").select("*").eq("id", credential_id)
-    if not has_org_wide_access(user):
+    if owner_only or not has_org_wide_access(user):
         query = query.eq("user_id", get_user_id(user))
     else:
         query = query.eq("organization_id", get_user_organization_id(user))
@@ -134,7 +141,7 @@ async def update_my_credential(
     body: CredentialBody,
     current_user: dict = Depends(get_current_user),
 ):
-    existing = _get_credential_for_user(credential_id, current_user)
+    existing = _get_credential_for_user(credential_id, current_user, owner_only=True)
     _check_screening_number(body)
     payload = body.model_dump(exclude_unset=True)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -155,7 +162,7 @@ async def update_my_credential(
         .eq("user_id", get_user_id(current_user))
         .execute()
     )
-    updated = result.data[0] if result.data else _get_credential_for_user(credential_id, current_user)
+    updated = result.data[0] if result.data else _get_credential_for_user(credential_id, current_user, owner_only=True)
     await audit_service.log_action(
         action_type="credential.updated",
         entity_type="credential",
@@ -170,7 +177,7 @@ async def update_my_credential(
 
 @router.delete("/me/{credential_id}", status_code=204)
 async def delete_my_credential(credential_id: str, current_user: dict = Depends(get_current_user)):
-    existing = _get_credential_for_user(credential_id, current_user)
+    existing = _get_credential_for_user(credential_id, current_user, owner_only=True)
     if existing.get("verified_at"):
         raise HTTPException(status_code=403, detail="Reviewed credentials cannot be deleted.")
     get_supabase_admin().table("credentials").delete().eq("id", credential_id).eq("user_id", get_user_id(current_user)).execute()
@@ -183,7 +190,7 @@ async def upload_my_credential_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    existing = _get_credential_for_user(credential_id, current_user)
+    existing = _get_credential_for_user(credential_id, current_user, owner_only=True)
     content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or ""
     if content_type not in ALLOWED_FILE_TYPES:
         raise HTTPException(status_code=422, detail="Credential file must be PDF or image.")

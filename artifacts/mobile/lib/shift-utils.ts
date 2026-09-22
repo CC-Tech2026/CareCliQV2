@@ -4,8 +4,64 @@ import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/lib/worker-api"
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
 export const SESSION_NOTE_MAX = 500;
 
+/**
+ * Timezone comes from the worker's branch (office) via /auth/me; shift
+ * rows carry their participant's branch zone as `timezone`. This constant
+ * is only the fallback before sign-in.
+ */
 export const APP_TIMEZONE =
   process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
+
+let userZone: string | null = null;
+
+export function isValidTimezone(zone: unknown): zone is string {
+  if (typeof zone !== "string" || !zone) return false;
+  try {
+    new Intl.DateTimeFormat("en-AU", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Set from the signed-in user's branch (AuthContext). */
+export function setAppTimezone(zone: string | null | undefined): void {
+  userZone = isValidTimezone(zone) ? zone : null;
+}
+
+/** The signed-in worker's branch zone, else the deployment default. */
+export function getAppTimezone(): string {
+  return userZone ?? APP_TIMEZONE;
+}
+
+function resolveZone(tz?: string | null): string {
+  return isValidTimezone(tz) ? tz : getAppTimezone();
+}
+
+/** Short zone name at that instant, e.g. "AEST" / "ACDT". */
+export function zoneAbbreviation(iso: string | Date, tz?: string | null): string {
+  try {
+    const d = typeof iso === "string" ? new Date(iso) : iso;
+    const part = new Intl.DateTimeFormat("en-AU", { timeZone: resolveZone(tz), timeZoneName: "short" })
+      .formatToParts(d)
+      .find((p) => p.type === "timeZoneName");
+    return part?.value ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** A record from another office — show its zone next to the time. */
+export function isOtherBranchZone(tz?: string | null): boolean {
+  return isValidTimezone(tz) && tz !== getAppTimezone();
+}
+
+/** " AEST" when the shift's branch differs from the worker's, else "". */
+export function zoneSuffix(iso?: string | null, tz?: string | null): string {
+  if (!iso || !isOtherBranchZone(tz)) return "";
+  const abbr = zoneAbbreviation(iso, tz);
+  return abbr ? ` ${abbr}` : "";
+}
 
 export const STATE_AVATAR_COLORS: Record<ShiftVisualState, string> = {
   scheduled: Brand.purple,
@@ -66,11 +122,11 @@ export function parseIsoMs(iso?: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, tz?: string | null): string {
   try {
     const d = new Date(iso);
     return d.toLocaleTimeString("en-AU", {
-      timeZone: APP_TIMEZONE,
+      timeZone: resolveZone(tz),
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
@@ -80,12 +136,38 @@ function formatTime(iso: string): string {
   }
 }
 
-export function formatShiftDate(iso?: string): string | null {
+/**
+ * e.g. "9:00 am AEST" — a time paired with its zone abbreviation, always
+ * shown (not just when it differs from the viewer's own branch). Records
+ * that matter for audit — shift times, medication administrations,
+ * progress notes, incidents — must never be ambiguous about which
+ * branch's clock they're on, regardless of who's looking.
+ */
+export function formatTimeWithZone(iso?: string | null, tz?: string | null): string {
+  if (!iso) return "";
+  return `${formatTime(iso, tz)} ${zoneAbbreviation(iso, tz)}`;
+}
+
+/** e.g. "12 Sep 2026" — the calendar date in the branch zone. */
+export function formatDateInZone(
+  iso?: string | null,
+  tz?: string | null,
+  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" },
+): string {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-AU", { ...opts, timeZone: resolveZone(tz) }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+export function formatShiftDate(iso?: string, tz?: string | null): string | null {
   if (!iso) return null;
   try {
     const d = new Date(iso);
     return d.toLocaleDateString("en-AU", {
-      timeZone: APP_TIMEZONE,
+      timeZone: resolveZone(tz),
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -95,13 +177,16 @@ export function formatShiftDate(iso?: string): string | null {
   }
 }
 
-export function formatShiftTimeRange(start?: string, end?: string): string {
+export function formatShiftTimeRange(start?: string, end?: string, tz?: string | null): string {
   if (!start) return "Time not set";
   try {
-    const date = formatShiftDate(start);
-    const s = formatTime(start);
-    const e = end ? formatTime(end) : null;
-    const time = e ? `${s} – ${e}` : s;
+    const date = formatShiftDate(start, tz);
+    const s = formatTime(start, tz);
+    const e = end ? formatTime(end, tz) : null;
+    // Always show the zone when the caller has one — an ambiguous time is
+    // exactly what caused the branch-timezone bug in the first place.
+    const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
+    const time = (e ? `${s} – ${e}` : s) + zone;
     return date ? `${date} · ${time}` : time;
   } catch {
     return start;

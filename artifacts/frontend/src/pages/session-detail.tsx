@@ -50,7 +50,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
@@ -59,6 +58,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
+import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import { scanNoteHighlights, buildHighlightedHtml, type Highlight } from "@/lib/note-scanner";
 
 // ---------------------------------------------------------------------------
@@ -415,6 +415,8 @@ export default function SessionDetail({ id }: { id?: string }) {
         } | null;
         risk_acknowledgement?: { acknowledged_by_name?: string | null; acknowledged_at?: string | null } | null;
         safety_acknowledgements?: Array<{ content_version?: number; acknowledged_at?: string }>;
+        /** Participant's branch zone. */
+        timezone?: string | null;
       }>;
     },
     enabled: Boolean(sessionId),
@@ -774,7 +776,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "var(--cc-text)" }}>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-slate-400" />
-              {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : translate("sessions.detail.noDate")}
+              {session.session_date ? formatAppDate(session.session_date, auditTrail?.timezone, { day: "numeric", month: "long", year: "numeric" }) : translate("sessions.detail.noDate")}
             </span>
             <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {session.duration_minutes || 0} min</span>
             <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-slate-400" /> {session.session_type}</span>
@@ -1032,7 +1034,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         {noteVersions.map((v) => (
                           <div key={v.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: "var(--cc-soft)" }}>
                             <p className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
-                              {v.is_current ? "Current version" : "Superseded"} · {format(parseISO(v.created_at), "d MMM yyyy, h:mm a")}
+                              {v.is_current ? "Current version" : "Superseded"} · {formatAppDate(v.created_at, auditTrail?.timezone)}, {formatAppTimeWithZone(v.created_at, auditTrail?.timezone)}
                               {v.created_during_shift ? " · flagged live during shift" : ""}
                             </p>
                             {v.validation_result?.warning_message && (
@@ -1198,7 +1200,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800">Signed off</span>
                       <span className="text-[10px] text-slate-500">
-                        {auditTrail.signature.signed_at ? new Date(auditTrail.signature.signed_at).toLocaleString() : "unknown time"}
+                        {auditTrail.signature.signed_at ? formatAppTimeWithZone(auditTrail.signature.signed_at, auditTrail.timezone) : "unknown time"}
                       </span>
                     </div>
                     <div className="flex flex-col gap-1">
@@ -1236,7 +1238,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <span className="font-medium text-slate-700 text-[11px]">
                       {auditTrail.risk_acknowledgement.acknowledged_by_name || "Worker"} ·{" "}
                       {auditTrail.risk_acknowledgement.acknowledged_at
-                        ? new Date(auditTrail.risk_acknowledgement.acknowledged_at).toLocaleDateString()
+                        ? formatAppTimeWithZone(auditTrail.risk_acknowledgement.acknowledged_at, auditTrail.timezone)
                         : ""}
                     </span>
                   </div>
@@ -1248,7 +1250,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <div className="space-y-1">
                       {auditTrail.safety_acknowledgements!.map((ack, i) => (
                         <p key={i} className="text-[11px] text-slate-700">
-                          v{ack.content_version} · {ack.acknowledged_at ? new Date(ack.acknowledged_at).toLocaleDateString() : ""}
+                          v{ack.content_version} · {ack.acknowledged_at ? formatAppTimeWithZone(ack.acknowledged_at, auditTrail.timezone) : ""}
                         </p>
                       ))}
                     </div>

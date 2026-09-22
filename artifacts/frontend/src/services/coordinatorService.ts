@@ -14,6 +14,10 @@ export type TeamMember = {
   last_login?: string;
   employee_id?: string | null;
   phone?: string | null;
+  address?: string | null;
+  suburb?: string | null;
+  emergency_contact?: Record<string, unknown> | string | null;
+  date_of_birth?: string | null;
   preferred_contact_method?: string | null;
   onboarding_completed?: boolean | null;
   profile_summary?: string | null;
@@ -23,6 +27,16 @@ export type TeamMember = {
   coordinator_id?: string | null;
   classification_id?: string | null;
   employment_type?: "casual" | "part_time" | "full_time" | null;
+  discipline?: string | null;
+  ahpra_registration_number?: string | null;
+  professional_indemnity_confirmed?: boolean | null;
+  business_name?: string | null;
+  profile_photo_url?: string | null;
+  preferred_language?: string | null;
+  account_type?: "independent_worker" | "small_provider" | null;
+  profile_completed?: boolean | null;
+  role_specific_profile_completed?: boolean | null;
+  matching_opt_in?: boolean | null;
 };
 
 export type WorkerStats = TeamMember & {
@@ -95,6 +109,8 @@ export type FlaggedSession = {
   review_note?: string;
   review_requested_by?: string;
   review_requested_at?: string;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type RevenueReport = {
@@ -575,6 +591,7 @@ export type AssignShiftPayload = {
   selected_task_ids?: string[];
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string;
+  expected_price_item_code?: string;
 };
 
 export type AssignShiftResult = {
@@ -591,6 +608,8 @@ export type WorkerCredentialStatusResponse = {
 };
 
 export type CoordinatorShiftRecord = {
+  /** IANA zone of the participant's branch — show times in it; label when it differs from the viewer's. */
+  timezone?: string | null;
   id: string;
   organization_id?: string;
   worker_id?: string;
@@ -761,6 +780,7 @@ export type BulkShiftPayload = {
   shift_type?: string;
   worker_id?: string;
   confirm_conflicts?: boolean;
+  expected_price_item_code?: string;
 };
 
 export type BulkShiftResult = {
@@ -923,6 +943,7 @@ export function createUnassignedShift(payload: {
   scheduled_end?: string;
   shift_type?: string;
   duty_type?: string;
+  expected_price_item_code?: string;
 }) {
   return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
     "/api/coordinator/shifts/unassigned",
@@ -1309,6 +1330,9 @@ export type LiveShift = {
     outcome?: string | null;
   }>;
   workflow_stage: "not_clocked_in" | "clocked_in" | "documenting" | "wrapping_up";
+  /** Participant's branch zone — label clock-in/medication times with it
+   * when it differs from the coordinator's own branch. */
+  timezone?: string | null;
 };
 
 export type CoordinatorAlert = {
@@ -1695,6 +1719,10 @@ export type ShiftVerificationQueueItem = {
   clocked_out_at?: string | null;
   duration_minutes?: number | null;
   checks: ShiftVerificationChecks;
+  /** Participant's branch zone. */
+  timezone?: string | null;
+  /** NDIS item code recorded when this shift was created, if any — cross-checked against whatever's picked here. */
+  expected_price_item_code?: string | null;
 };
 
 export type ShiftPriceItemOption = {
@@ -1717,6 +1745,8 @@ export type VerifyShiftResult = {
   hourly_rate_applied: number;
   support_category: string;
   new_used_amount: number;
+  day_type_warning?: string;
+  expected_item_warning?: string;
 };
 
 export function getShiftVerificationQueue() {
@@ -1726,6 +1756,15 @@ export function getShiftVerificationQueue() {
 export function getShiftPriceItemOptions(shiftId: string) {
   return jsonFetch<ShiftPriceItemOption[]>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/price-items`
+  );
+}
+
+/** Same candidate list as getShiftPriceItemOptions, keyed by participant
+ * instead of an existing shift — for picking an expected item at shift
+ * creation, before any shift exists yet. */
+export function getParticipantPriceItemOptions(participantId: string) {
+  return jsonFetch<ShiftPriceItemOption[]>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/price-items`
   );
 }
 
@@ -2116,6 +2155,8 @@ export type ComplianceIncidentRow = {
   ndis_reportable: boolean;
   notification_due_at?: string | null;
   overdue?: boolean;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 };
 
 export type ComplianceCentreIncidents = {

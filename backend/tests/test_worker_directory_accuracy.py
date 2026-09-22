@@ -13,11 +13,22 @@ so it never fails a run against an empty/unseeded database.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from backend.app.services.supabase_client import get_supabase_admin
 from backend.app.api.coordinator import _team, worker_stats
 from backend.app.api.dashboards import md_dashboard
+
+# Opt-in only — matches test_multitenant_isolation.py's INTEGRATION_REAL_DB=1
+# convention. Without this, CI (which has no reachable Supabase instance)
+# fails with a raw connection error instead of skipping: the doc-block above
+# already promised this gate, the code just never implemented it.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("INTEGRATION_REAL_DB") != "1",
+    reason="Live-DB test — set INTEGRATION_REAL_DB=1 with real Supabase credentials to run it.",
+)
 
 
 def _find_test_org() -> tuple[str, str, str] | None:

@@ -38,6 +38,8 @@ export type TravelExpense = {
   rejected_at?: string | null;
   rejection_reason?: string | null;
   correction_of_id?: string | null;
+  /** The worker's own branch zone. */
+  timezone?: string | null;
 };
 
 export function getShiftTransitDraft(shiftId: string) {

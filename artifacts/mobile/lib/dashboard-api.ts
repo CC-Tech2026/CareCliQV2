@@ -38,6 +38,8 @@ export type WorkerDashboard = {
 export type DashboardShiftSummary = {
   id: string;
   participant_id?: string;
+  /** IANA zone of the participant's branch. */
+  timezone?: string | null;
   participant_name: string;
   scheduled_start?: string;
   scheduled_end?: string;

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
+import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -104,8 +105,8 @@ function incidentTypeLabel(type: string, translate: (key: string) => string) {
   return key ? translate(key) : type;
 }
 
-function fmtDateTime(iso?: string) {
-  return iso ? format(parseISO(iso), "d MMM yyyy, h:mm a") : "Not recorded";
+function fmtDateTime(iso?: string, tz?: string | null) {
+  return iso ? `${formatAppDate(iso, tz)}, ${formatAppTimeWithZone(iso, tz)}` : "Not recorded";
 }
 
 /** Assembles NDIS Commission notification content from the incident record's existing
@@ -131,8 +132,8 @@ function buildNotificationContent(
     `Severity: ${severityLabel(incident.severity, translate)}`,
     "",
     "INCIDENT DETAILS",
-    `Date/time of incident: ${fmtDateTime(incident.incident_date)}`,
-    ...(incident.identified_at ? [`Date/time identified: ${fmtDateTime(incident.identified_at)}`] : []),
+    `Date/time of incident: ${fmtDateTime(incident.incident_date, incident.timezone)}`,
+    ...(incident.identified_at ? [`Date/time identified: ${fmtDateTime(incident.identified_at, incident.timezone)}`] : []),
     `Location: ${incident.location || "Not recorded"}${incident.location_type ? ` (${translate(`incidents.locationType.${incident.location_type}`)})` : ""}`,
     `Type: ${incidentTypeLabel(incident.incident_type, translate)}`,
     "",
@@ -210,6 +211,8 @@ interface Incident {
   worker_name?: string;
   pending_fields?: string[];
   pending_deadline_at?: string;
+  /** Participant's branch zone. */
+  timezone?: string | null;
 }
 
 const SUBJECT_TYPES = ["worker", "participant", "other"] as const;
@@ -1008,7 +1011,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               </p>
               <p className="font-medium text-cc-text">
                 {incident.incident_date
-                  ? format(parseISO(incident.incident_date), "d MMM yyyy")
+                  ? formatAppDate(incident.incident_date, incident.timezone)
                   : translate("common.emDash")}
               </p>
               <p className="text-[11px] mt-0.5 text-cc-muted">
@@ -1034,7 +1037,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             {incident.identified_at && (
               <div>
                 <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.identifiedAt")}</p>
-                <p className="text-cc-text">{format(parseISO(incident.identified_at), "d MMM yyyy, h:mm a")}</p>
+                <p className="text-cc-text">{fmtDateTime(incident.identified_at, incident.timezone)}</p>
               </div>
             )}
             {incident.location_type && (
@@ -1089,7 +1092,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                 <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisQscNotified")}</p>
                 <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
                   <CheckCircle2 size={13} />
-                  {format(parseISO(incident.ndis_reported_at), "d MMM yyyy, h:mm a")}
+                  {fmtDateTime(incident.ndis_reported_at, incident.timezone)}
                 </p>
               </div>
             )}
@@ -1100,7 +1103,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                   {incident.ndis_reportable_override ? translate("common.yes") : translate("common.no")}
                   {incident.ndis_reportable_override_reason ? ` — ${incident.ndis_reportable_override_reason}` : ""}
                   {incident.ndis_reportable_override_at
-                    ? ` (${format(parseISO(incident.ndis_reportable_override_at), "d MMM yyyy")})`
+                    ? ` (${formatAppDate(incident.ndis_reportable_override_at, incident.timezone)})`
                     : ""}
                 </p>
               </div>
@@ -1108,7 +1111,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             {incident.resolved_date && (
               <div>
                 <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.resolved")}</p>
-                <p className="text-cc-text">{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
+                <p className="text-cc-text">{formatAppDate(incident.resolved_date, incident.timezone)}</p>
               </div>
             )}
           </div>
@@ -1184,7 +1187,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                     </div>
                     {iv.interviewed_at && (
                       <p className="text-cc-muted text-[11px] mt-0.5">
-                        {format(parseISO(iv.interviewed_at), "d MMM yyyy, h:mm a")}
+                        {fmtDateTime(iv.interviewed_at, incident?.timezone)}
                       </p>
                     )}
                     {iv.notes && <p className="text-cc-text text-[12px] mt-1">{iv.notes}</p>}
@@ -1359,7 +1362,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               <span>{translate("incidents.detail.incidentReported")}</span>
               <span className="font-medium text-cc-text">
                 {incident.reported_date
-                  ? format(parseISO(incident.reported_date), "d MMM yyyy, h:mm a")
+                  ? fmtDateTime(incident.reported_date, incident.timezone)
                   : translate("common.emDash")}
               </span>
             </div>
@@ -1375,7 +1378,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               <div className="flex justify-between">
                 <span>{translate("incidents.detail.reportedToNdisQsc")}</span>
                 <span className="font-medium text-emerald-700">
-                  {format(parseISO(incident.ndis_reported_at), "d MMM yyyy")}
+                  {formatAppDate(incident.ndis_reported_at, incident.timezone)}
                 </span>
               </div>
             )}
@@ -1383,7 +1386,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               <div className="flex justify-between">
                 <span>{translate("incidents.detail.incidentResolved")}</span>
                 <span className="font-medium text-cc-text">
-                  {format(parseISO(incident.resolved_date), "d MMM yyyy")}
+                  {formatAppDate(incident.resolved_date, incident.timezone)}
                 </span>
               </div>
             )}

@@ -85,6 +85,8 @@ export type DashboardShiftSummary = {
   duration_minutes?: number;
   has_risk_alerts?: boolean;
   risks_acknowledged?: boolean;
+  /** Participant's branch zone — the backend already resolves this. */
+  timezone?: string | null;
 };
 
 export type DashboardActionItem = {

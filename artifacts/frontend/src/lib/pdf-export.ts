@@ -3,11 +3,14 @@ import autoTable from "jspdf-autotable";
 import { getStoredSignature } from "@/lib/signature-store";
 import { apiFetch } from "@/lib/api-fetch";
 import { getOrganizationBranding } from "@/services/organizationBrandingService";
+import { formatAppDate } from "@/lib/datetime";
 
 export interface AuditPayload {
   audit_version: string;
   ndis_principle: string;
   generated_at: string;
+  /** Participant's branch zone. */
+  timezone?: string | null;
   session: {
     id: string;
     date: string;
@@ -398,11 +401,7 @@ export function appendSessionToPDF(
 
   const s = data.session ?? {};
   const sessionDate = s.date
-    ? new Date(s.date).toLocaleDateString("en-AU", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
+    ? formatAppDate(s.date, data.timezone, { day: "numeric", month: "long", year: "numeric" })
     : "—";
 
   const sessionRows: [string, string][] = [

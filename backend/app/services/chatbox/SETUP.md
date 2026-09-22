@@ -162,13 +162,13 @@ judgment call left to the model. The LLM only ever chooses *which*
 pre-approved, pre-scoped function to call; it never decides *what* that
 function is allowed to touch.
 
-### B. The 18 tools
+### B. The 19 tools
 
-`backend/app/services/chatbox/tools.py` defines 18 tools, not 9 — the count
-below is current as of `develop` on 2026-09-14; an earlier description of
-this file undercounted it by 9 tools added since.
+`backend/app/services/chatbox/tools.py` defines 19 tools, not 9 — the count
+below is current as of `develop` on 2026-09-16; an earlier description of
+this file undercounted it by 10 tools added since.
 
-**12 structured data lookups:**
+**13 structured data lookups:**
 
 | Tool | Returns | Scope |
 |---|---|---|
@@ -176,6 +176,7 @@ this file undercounted it by 9 tools added since.
 | `get_incident_summary` | Total, open, critical severity, overdue-for-NDIS-reporting incidents | Org-wide for both roles |
 | `get_rp_flag_count` | Sessions flagged for restrictive practice this calendar month — deliberately distinct from incident_summary | Team for coordinators, org-wide for MDs |
 | `get_shift_coverage` | Who's on shift right now | Org-wide for both roles |
+| `get_shift_schedule` | Roster for a date range, any status (scheduled/completed/cancelled) — plain "what shifts does X have on Y" questions, distinct from the progress-note tools below which only match a *completed, documented* shift | Team for coordinators, org-wide for MDs |
 | `get_goal_achievement_rate` | % of participants with an active NDIS plan | Team for coordinators, org-wide for MDs |
 | `get_participant_count` / `get_participant_list` | Caseload size / names | Team for coordinators, org-wide for MDs |
 | `get_active_worker_count` / `get_active_worker_list` | Active support worker count / names | Team for coordinators, org-wide for MDs |

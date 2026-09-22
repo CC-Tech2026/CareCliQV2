@@ -10,6 +10,7 @@ from typing import Any
 from .shift_validation_service import compliance_score_band
 from .supabase_client import get_supabase_admin
 from .worker_shift_history_service import list_completed_shifts
+from ..core.timezone import app_today
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,7 @@ def _evaluate_badges(worker_id: str, organization_id: str, shift_rows: list[dict
             newly_unlocked.append("perfect_punctuality_10")
 
     try:
-        since = (date.today() - timedelta(days=30)).isoformat()
+        since = (app_today() - timedelta(days=30)).isoformat()
         inc_resp = (
             get_supabase_admin()
             .table("incidents")
@@ -234,7 +235,7 @@ def _evaluate_badges(worker_id: str, organization_id: str, shift_rows: list[dict
 
 
 def get_performance_dashboard(worker_id: str, organization_id: str) -> dict[str, Any]:
-    today = date.today()
+    today = app_today()
     window_start = today - timedelta(days=30)
     prior_start = today - timedelta(days=60)
 

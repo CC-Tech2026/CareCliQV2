@@ -12,9 +12,18 @@ from ..services.compliance_engine import (
     run_compliance_check,
 )
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
+from ..services.credential_status import live_status
 from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 import logging
+from ..core.timezone import app_today, participant_timezone, shift_local_date
+
+
+def _local_day(value) -> str:
+    """Calendar day of a timestamptz in the viewer's branch zone (slicing
+    the UTC string put early-morning incidents on the previous day)."""
+    local = shift_local_date(value)
+    return local.isoformat() if local else str(value or "")[:10]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/compliance", tags=["compliance"])
@@ -203,8 +212,8 @@ FIXED_CREDENTIAL_TYPES = [
 
 def _date_range(date_from: Optional[str], date_to: Optional[str]) -> tuple[str, str]:
     """Default to the last 30 days when no explicit range is supplied."""
-    since = date_from or (date.today() - timedelta(days=30)).isoformat()
-    until = date_to or date.today().isoformat()
+    since = date_from or (app_today() - timedelta(days=30)).isoformat()
+    until = date_to or app_today().isoformat()
     return since, until
 
 
@@ -214,7 +223,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     issues, and staff/participant snapshots. All real data, last 30 days."""
     org_id = _require_coordinator_org(current_user)
     supabase = get_supabase_admin()
-    since = (date.today() - timedelta(days=30)).isoformat()
+    since = (app_today() - timedelta(days=30)).isoformat()
 
     try:
         sessions_resp = (
@@ -280,17 +289,23 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
         crit_rows = []
 
     try:
-        warn_date = (date.today() + timedelta(days=30)).isoformat()
+        warn_date = (app_today() + timedelta(days=30)).isoformat()
         exp_resp = (
             supabase.table("credentials")
-            .select("id, user_id, credential_type, expiry_date")
+            .select("id, user_id, credential_type, expiry_date, status")
             .eq("organization_id", org_id)
-            .in_("status", ["expiring", "expired"])
+            # See coordinator.py's credential_alerts for why this can't filter
+            # on the raw `status` column — recomputed live below instead.
+            .not_.in_("status", ["rejected", "pending_review"])
             .lte("expiry_date", warn_date)
             .order("expiry_date")
             .execute()
         )
-        exp_rows = exp_resp.data or []
+        exp_rows = [
+            {**row, "status": live_status(row.get("expiry_date"), row.get("status"))}
+            for row in (exp_resp.data or [])
+        ]
+        exp_rows = [row for row in exp_rows if row["status"] in ("expiring", "expired")]
     except Exception:
         exp_rows = []
     seen_workers: set[str] = set()
@@ -342,14 +357,14 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
             "severity": "critical",
             "type": "incident",
             "label": f"Restrictive practice — {pname}",
-            "detail": str(r.get("incident_date") or "")[:10],
+            "detail": _local_day(r.get("incident_date")),
             "link": f"/incident/{r.get('id')}",
         })
     for r in exp_rows_dedup:
         wid = str(r.get("user_id") or "")
         wname = workers_by_id.get(wid, {}).get("full_name") or "Team member"
         try:
-            days_left = (date.fromisoformat(str(r["expiry_date"])[:10]) - date.today()).days
+            days_left = (date.fromisoformat(str(r["expiry_date"])[:10]) - app_today()).days
         except Exception:
             days_left = None
         urgent.append({
@@ -457,7 +472,7 @@ async def compliance_centre_staff(current_user: dict = Depends(get_current_user)
     status across the 8 fixed columns, avg session score, and RP flag status."""
     org_id = _require_coordinator_org(current_user)
     supabase = get_supabase_admin()
-    since = (date.today() - timedelta(days=30)).isoformat()
+    since = (app_today() - timedelta(days=30)).isoformat()
 
     try:
         users_resp = (
@@ -528,7 +543,7 @@ async def compliance_centre_staff(current_user: dict = Depends(get_current_user)
         except Exception as exc:
             logger.warning("compliance centre staff: incident fetch failed: %s", exc)
 
-    today = date.today()
+    today = app_today()
     rows = []
     total_expiring = 0
     total_action = 0
@@ -769,7 +784,7 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
     stats = await incident_service.get_incident_stats(org_id=org_id, current_user=current_user)
 
     try:
-        month_start = date.today().replace(day=1).isoformat()
+        month_start = app_today().replace(day=1).isoformat()
         inc_resp = (
             supabase.table("incidents")
             .select("id, participant_id, user_id, incident_type, description, status, severity, incident_date, ndis_reportable")
@@ -782,11 +797,11 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
     except Exception as exc:
         logger.warning("compliance centre incidents: fetch failed: %s", exc)
         rows = []
-        month_start = date.today().replace(day=1).isoformat()
+        month_start = app_today().replace(day=1).isoformat()
 
     resolved_this_month = sum(
         1 for r in rows
-        if r.get("status") == "closed" and str(r.get("incident_date") or "")[:10] >= month_start
+        if r.get("status") == "closed" and _local_day(r.get("incident_date")) >= month_start
     )
     rp_flags = sum(1 for r in rows if r.get("incident_type") == "restrictive_practice" and r.get("status") != "closed")
 
@@ -829,6 +844,7 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
             "ndis_reportable": r.get("ndis_reportable"),
             "notification_due_at": due_at.isoformat() if due_at else None,
             "overdue": bool(due_at and now > due_at),
+            "timezone": str(participant_timezone(r, organization_id=org_id)),
         })
 
     return {

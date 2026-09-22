@@ -29,21 +29,23 @@ export default function SettingsContactScreen() {
   });
 
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setPhone(profile?.phone?.trim() || "");
-  }, [profile?.phone]);
+    setAddress(profile?.address?.trim() || "");
+  }, [profile?.phone, profile?.address]);
 
   const handleSave = async () => {
-    const trimmed = phone.trim();
-    if (!trimmed) {
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) {
       showToast(t("settings.contact.phoneRequired"), "error");
       return;
     }
     setSaving(true);
     try {
-      await updateWorkerProfile({ phone: trimmed });
+      await updateWorkerProfile({ phone: trimmedPhone, address: address.trim() || null });
       await queryClient.invalidateQueries({ queryKey: ["users", "me"] });
       showToast(t("settings.contact.saved"), "success");
     } catch (err) {
@@ -85,6 +87,28 @@ export default function SettingsContactScreen() {
                 ]}
               />
             </View>
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                {t("settings.contact.address")}
+              </Text>
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder={t("settings.contact.addressPlaceholder")}
+                placeholderTextColor={colors.mutedForeground}
+                editable={!isLoading}
+                multiline
+                style={[
+                  styles.input,
+                  styles.addressInput,
+                  {
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+              />
+            </View>
             <SettingsSaveButton
               label={t("settings.contact.save")}
               saving={saving}
@@ -111,4 +135,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
+  addressInput: { minHeight: 72, textAlignVertical: "top" },
 });

@@ -1,6 +1,7 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +25,7 @@ import { usePreferences } from "@/context/PreferencesContext";
 import * as Haptics from "@/lib/haptics";
 import {
   authenticateWithBiometrics,
+  getAvailableBiometricKinds,
   canUseBiometricLogin,
   isBiometricHardwareAvailable,
   readBiometricCredentials,
@@ -36,7 +38,9 @@ const LOGIN_NETWORK_MAX_ATTEMPTS = 3;
 function isNetworkLoginError(err: unknown): boolean {
   if (err instanceof WorkerApiError && err.status === 0) return true;
   const msg = err instanceof Error ? err.message : String(err);
-  return /network request failed|failed to fetch|network error|timed out|econnrefused|enotfound/i.test(msg);
+  return /network request failed|failed to fetch|network error|timed out|econnrefused|enotfound/i.test(
+    msg,
+  );
 }
 
 async function withNetworkRetry<T>(attempt: () => Promise<T>): Promise<T> {
@@ -74,7 +78,12 @@ function AuthField({
   return (
     <View style={styles.field}>
       <View style={styles.fieldHeader}>
-        <Text style={[styles.fieldLabel, { color: auth.muted, fontFamily: "Inter_700Bold" }]}>
+        <Text
+          style={[
+            styles.fieldLabel,
+            { color: auth.muted, fontFamily: FontFamily.interBold },
+          ]}
+        >
           {label.toUpperCase()}
         </Text>
         {right}
@@ -86,7 +95,12 @@ function AuthField({
         ) : null}
       </View>
       {error ? (
-        <Text style={[styles.fieldError, { color: auth.error, fontFamily: "Inter_500Medium" }]}>
+        <Text
+          style={[
+            styles.fieldError,
+            { color: auth.error, fontFamily: FontFamily.interMedium },
+          ]}
+        >
           {error}
         </Text>
       ) : null}
@@ -109,7 +123,11 @@ function AuthCheckbox({
   const auth = getAuthColors(resolvedScheme);
 
   return (
-    <Pressable onPress={onToggle} disabled={disabled} style={styles.checkboxRow}>
+    <Pressable
+      onPress={onToggle}
+      disabled={disabled}
+      style={styles.checkboxRow}
+    >
       <View
         style={[
           styles.checkbox,
@@ -121,7 +139,12 @@ function AuthCheckbox({
       >
         {checked ? <Feather name="check" size={12} color="#FFFFFF" /> : null}
       </View>
-      <Text style={[styles.checkboxLabel, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
+      <Text
+        style={[
+          styles.checkboxLabel,
+          { color: auth.muted, fontFamily: FontFamily.interMedium },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -146,25 +169,35 @@ export default function LoginScreen() {
   const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [trustDevice, setTrustDevice] = useState(true);
-  const [pendingCreds, setPendingCreds] = useState<{ identifier: string; password: string } | null>(null);
+  const [pendingCreds, setPendingCreds] = useState<{
+    identifier: string;
+    password: string;
+  } | null>(null);
+  const passwordInput = useRef<TextInput>(null);
   const [biometricReady, setBiometricReady] = useState(false);
   const [biometricHardware, setBiometricHardware] = useState(false);
+  const [biometricKinds, setBiometricKinds] = useState<
+    ("face" | "fingerprint")[]
+  >([]);
 
   const mfaStep = Boolean(mfaChallenge);
-  const identifierOk = !validateLoginIdentifier(identifier) && identifier.trim().length > 0;
+  const identifierOk =
+    !validateLoginIdentifier(identifier) && identifier.trim().length > 0;
   const mfaComplete = mfaCode.length === 6;
 
   const refreshBiometric = useCallback(async () => {
-    const [ready, hardware] = await Promise.all([
+    const [ready, hardware, kinds] = await Promise.all([
       canUseBiometricLogin(),
       isBiometricHardwareAvailable(),
+      getAvailableBiometricKinds(),
     ]);
     setBiometricReady(ready);
     setBiometricHardware(hardware);
+    setBiometricKinds(kinds);
   }, []);
 
   useEffect(() => {
-    void refreshBiometric();
+    void refreshBiometric().catch(() => setBiometricReady(false));
   }, [refreshBiometric]);
 
   const finishAuthenticated = () => {
@@ -181,14 +214,20 @@ export default function LoginScreen() {
       setPasswordError(null);
       return;
     }
-    const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
+    const msg =
+      err instanceof Error
+        ? err.message
+        : t("auth.login.error.invalidCredentials");
     Alert.alert(t("auth.login.error.signInFailed"), msg);
     setPasswordError(null);
   };
 
   const handleSignIn = async () => {
+    if (busy) return;
     const idErr = validateLoginIdentifier(identifier);
-    const pwdErr = !password.trim() ? t("auth.login.error.passwordRequired") : null;
+    const pwdErr = !password.trim()
+      ? t("auth.login.error.passwordRequired")
+      : null;
     setIdentifierError(idErr);
     setPasswordError(pwdErr);
     if (idErr || pwdErr) return;
@@ -216,7 +255,9 @@ export default function LoginScreen() {
     }
   };
 
-  const handleBiometricLogin = async (preferred: "face" | "fingerprint" = "fingerprint") => {
+  const handleBiometricLogin = async (
+    preferred: "face" | "fingerprint" = "fingerprint",
+  ) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const method =
       preferred === "face"
@@ -246,13 +287,19 @@ export default function LoginScreen() {
         t("auth.login.biometricPrompt", { method }),
       );
       if (!ok) {
-        Alert.alert(t("auth.login.error.signInFailed"), t("auth.login.biometricCancelled"));
+        Alert.alert(
+          t("auth.login.error.signInFailed"),
+          t("auth.login.biometricCancelled"),
+        );
         setBusy(false);
         return;
       }
       const creds = await readBiometricCredentials();
       if (!creds) {
-        Alert.alert(t("auth.login.error.signInFailed"), t("auth.login.biometricMissingCreds"));
+        Alert.alert(
+          t("auth.login.error.signInFailed"),
+          t("auth.login.biometricMissingCreds"),
+        );
         setBusy(false);
         return;
       }
@@ -287,10 +334,17 @@ export default function LoginScreen() {
     setMfaCodeError(null);
 
     try {
-      await completeMfa(mfaChallenge, mfaCode.trim(), trustDevice, pendingCreds ?? undefined);
+      await completeMfa(
+        mfaChallenge,
+        mfaCode.trim(),
+        trustDevice,
+        pendingCreds ?? undefined,
+      );
       finishAuthenticated();
     } catch (err) {
-      setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
+      setMfaCodeError(
+        err instanceof Error ? err.message : t("auth.login.error.invalidMfa"),
+      );
     } finally {
       setBusy(false);
     }
@@ -313,7 +367,11 @@ export default function LoginScreen() {
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 36,
+          paddingHorizontal: 16,
+          paddingBottom: insets.bottom + 24,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <AuthBrandHeader taglineKey="auth.login.marketing.tagline" />
@@ -327,17 +385,25 @@ export default function LoginScreen() {
             },
           ]}
         >
-          <View style={styles.dragHandleWrap}>
-            <View style={[styles.dragHandle, { backgroundColor: auth.dragHandle }]} />
-          </View>
-
           <View style={styles.formBody}>
             <View style={styles.formIntro}>
-              <Text style={[styles.formTitle, { color: auth.text, fontFamily: "Inter_700Bold" }]}>
+              <Text
+                style={[
+                  styles.formTitle,
+                  { color: auth.text, fontFamily: FontFamily.interBold },
+                ]}
+              >
                 {mfaStep ? t("auth.login.mfaTitle") : t("auth.login.title")}
               </Text>
-              <Text style={[styles.formSubtitle, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
-                {mfaStep ? t("auth.login.mfaSubtitle") : t("auth.login.subtitle")}
+              <Text
+                style={[
+                  styles.formSubtitle,
+                  { color: auth.muted, fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {mfaStep
+                  ? t("auth.login.mfaSubtitle")
+                  : t("auth.login.subtitle")}
               </Text>
             </View>
 
@@ -345,20 +411,47 @@ export default function LoginScreen() {
               <View style={styles.formStack}>
                 <Pressable onPress={resetMfa} style={styles.backLink}>
                   <Feather name="arrow-left" size={14} color={auth.plum} />
-                  <Text style={[styles.backLinkText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                  <Text
+                    style={[
+                      styles.backLinkText,
+                      { color: auth.plum, fontFamily: FontFamily.interBold },
+                    ]}
+                  >
                     {t("auth.login.backToSignIn")}
                   </Text>
                 </Pressable>
 
-                <View style={[styles.infoCard, { borderColor: auth.inputBorder, backgroundColor: auth.inputBg }]}>
+                <View
+                  style={[
+                    styles.infoCard,
+                    {
+                      borderColor: auth.inputBorder,
+                      backgroundColor: auth.inputBg,
+                    },
+                  ]}
+                >
                   <Feather name="shield" size={18} color={auth.plum} />
-                  <Text style={[styles.infoText, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
+                  <Text
+                    style={[
+                      styles.infoText,
+                      { color: auth.muted, fontFamily: FontFamily.interMedium },
+                    ]}
+                  >
                     {t("auth.login.mfaInfo")}
                   </Text>
                 </View>
 
                 <View>
-                  <Text style={[styles.fieldLabel, { color: auth.muted, fontFamily: "Inter_700Bold", marginBottom: 12 }]}>
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {
+                        color: auth.muted,
+                        fontFamily: FontFamily.interBold,
+                        marginBottom: 12,
+                      },
+                    ]}
+                  >
                     {t("auth.login.verificationCode").toUpperCase()}
                   </Text>
                   <OtpInput
@@ -372,7 +465,15 @@ export default function LoginScreen() {
                     auth={auth}
                   />
                   {mfaCodeError ? (
-                    <Text style={[styles.fieldError, { color: auth.error, fontFamily: "Inter_500Medium" }]}>
+                    <Text
+                      style={[
+                        styles.fieldError,
+                        {
+                          color: auth.error,
+                          fontFamily: FontFamily.interMedium,
+                        },
+                      ]}
+                    >
                       {mfaCodeError}
                     </Text>
                   ) : null}
@@ -390,19 +491,32 @@ export default function LoginScreen() {
                   disabled={busy || !mfaComplete}
                   style={[
                     styles.submitBtn,
-                    { backgroundColor: auth.cta, opacity: busy || !mfaComplete ? 0.4 : 1 },
+                    {
+                      backgroundColor: auth.cta,
+                      opacity: busy || !mfaComplete ? 0.4 : 1,
+                    },
                   ]}
                 >
                   {busy ? (
                     <>
                       <ActivityIndicator color="#FFFFFF" size="small" />
-                      <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>
+                      <Text
+                        style={[
+                          styles.submitText,
+                          { fontFamily: FontFamily.interBold },
+                        ]}
+                      >
                         {t("auth.login.verifying")}
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>
+                      <Text
+                        style={[
+                          styles.submitText,
+                          { fontFamily: FontFamily.interBold },
+                        ]}
+                      >
                         {t("auth.login.verify")}
                       </Text>
                       <Feather name="arrow-right" size={16} color="#FFFFFF" />
@@ -418,6 +532,10 @@ export default function LoginScreen() {
                   valid={identifierOk && !identifierError}
                 >
                   <TextInput
+                    accessibilityLabel={t("auth.login.identifier")}
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInput.current?.focus()}
                     value={identifier}
                     onChangeText={(value) => {
                       setIdentifier(value);
@@ -433,10 +551,15 @@ export default function LoginScreen() {
                       styles.input,
                       {
                         backgroundColor: auth.inputBg,
-                        borderColor: identifierError ? auth.error : identifierOk ? auth.valid : auth.inputBorder,
+                        borderColor: identifierError
+                          ? auth.error
+                          : identifierOk
+                            ? auth.valid
+                            : auth.inputBorder,
                         color: auth.text,
-                        fontFamily: "Inter_500Medium",
-                        paddingRight: identifierOk && !identifierError ? 36 : 16,
+                        fontFamily: FontFamily.interMedium,
+                        paddingRight:
+                          identifierOk && !identifierError ? 36 : 16,
                       },
                     ]}
                   />
@@ -446,8 +569,19 @@ export default function LoginScreen() {
                   label={t("auth.login.password")}
                   error={passwordError}
                   right={
-                    <Pressable hitSlop={8} onPress={() => router.push("/forgot-password" as never)}>
-                      <Text style={[styles.forgotLink, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => router.push("/forgot-password" as never)}
+                    >
+                      <Text
+                        style={[
+                          styles.forgotLink,
+                          {
+                            color: auth.plum,
+                            fontFamily: FontFamily.interBold,
+                          },
+                        ]}
+                      >
                         {t("auth.login.forgotPassword")}
                       </Text>
                     </Pressable>
@@ -458,11 +592,19 @@ export default function LoginScreen() {
                       styles.passwordRow,
                       {
                         backgroundColor: auth.inputBg,
-                        borderColor: passwordError ? auth.error : auth.inputBorder,
+                        borderColor: passwordError
+                          ? auth.error
+                          : auth.inputBorder,
                       },
                     ]}
                   >
                     <TextInput
+                      ref={passwordInput}
+                      accessibilityLabel={t("auth.login.password")}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="go"
+                      onSubmitEditing={() => void handleSignIn()}
                       value={password}
                       onChangeText={(value) => {
                         setPassword(value);
@@ -473,10 +615,29 @@ export default function LoginScreen() {
                       secureTextEntry={!showPassword}
                       autoComplete="password"
                       editable={!busy}
-                      style={[styles.passwordInput, { color: auth.text, fontFamily: "Inter_500Medium" }]}
+                      style={[
+                        styles.passwordInput,
+                        {
+                          color: auth.text,
+                          fontFamily: FontFamily.interMedium,
+                        },
+                      ]}
                     />
-                    <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
-                      <Feather name={showPassword ? "eye-off" : "eye"} size={18} color={auth.muted} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t(
+                        showPassword
+                          ? "auth.password.hide"
+                          : "auth.password.show",
+                      )}
+                      onPress={() => setShowPassword((v) => !v)}
+                      style={styles.eyeBtn}
+                    >
+                      <Feather
+                        name={showPassword ? "eye-off" : "eye"}
+                        size={18}
+                        color={auth.muted}
+                      />
                     </Pressable>
                   </View>
                 </AuthField>
@@ -491,18 +652,31 @@ export default function LoginScreen() {
                 <Pressable
                   onPress={handleSignIn}
                   disabled={busy}
-                  style={[styles.submitBtn, { backgroundColor: auth.cta, opacity: busy ? 0.7 : 1 }]}
+                  style={[
+                    styles.submitBtn,
+                    { backgroundColor: auth.cta, opacity: busy ? 0.7 : 1 },
+                  ]}
                 >
                   {busy ? (
                     <>
                       <ActivityIndicator color="#FFFFFF" size="small" />
-                      <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>
+                      <Text
+                        style={[
+                          styles.submitText,
+                          { fontFamily: FontFamily.interBold },
+                        ]}
+                      >
                         {t("auth.login.signingIn")}
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>
+                      <Text
+                        style={[
+                          styles.submitText,
+                          { fontFamily: FontFamily.interBold },
+                        ]}
+                      >
                         {t("auth.login.submit")}
                       </Text>
                       <Feather name="arrow-right" size={16} color="#FFFFFF" />
@@ -510,47 +684,70 @@ export default function LoginScreen() {
                   )}
                 </Pressable>
 
-                <View style={styles.biometricStack}>
-                  <Pressable
-                    onPress={() => void handleBiometricLogin("face")}
-                    disabled={busy}
-                    style={[
-                      styles.biometricBtn,
-                      {
-                        borderColor: auth.inputBorder,
-                        backgroundColor: auth.inputBg,
-                        opacity: busy ? 0.55 : 1,
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons name="face-recognition" size={22} color={auth.plum} />
-                    <Text style={[styles.biometricText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                      {t("auth.login.useBiometric", { method: t("settings.biometric.face") })}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void handleBiometricLogin("fingerprint")}
-                    disabled={busy}
-                    style={[
-                      styles.biometricBtn,
-                      {
-                        borderColor: auth.inputBorder,
-                        backgroundColor: auth.inputBg,
-                        opacity: busy ? 0.55 : 1,
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons name="fingerprint" size={22} color={auth.plum} />
-                    <Text style={[styles.biometricText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-                      {t("auth.login.useBiometric", { method: t("settings.biometric.fingerprint") })}
-                    </Text>
-                  </Pressable>
-                </View>
+                {biometricReady &&
+                biometricHardware &&
+                biometricKinds.length > 0 ? (
+                  <View style={styles.biometricStack}>
+                    {biometricKinds.map((kind) => (
+                      <Pressable
+                        key={kind}
+                        accessibilityRole="button"
+                        onPress={() => void handleBiometricLogin(kind)}
+                        disabled={busy}
+                        style={[
+                          styles.biometricBtn,
+                          {
+                            borderColor: auth.inputBorder,
+                            backgroundColor: auth.inputBg,
+                            opacity: busy ? 0.55 : 1,
+                          },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            kind === "face" ? "face-recognition" : "fingerprint"
+                          }
+                          size={22}
+                          color={auth.plum}
+                        />
+                        <Text
+                          style={[
+                            styles.biometricText,
+                            {
+                              color: auth.plum,
+                              fontFamily: FontFamily.interBold,
+                            },
+                          ]}
+                        >
+                          {t("auth.login.useBiometric", {
+                            method: t(
+                              kind === "face"
+                                ? "settings.biometric.face"
+                                : "settings.biometric.fingerprint",
+                            ),
+                          })}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
 
-                <Pressable onPress={() => router.push("/signup" as never)}>
-                  <Text style={[styles.signupLine, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
+                <Pressable
+                  onPress={() => router.push("/activate-account" as never)}
+                >
+                  <Text
+                    style={[
+                      styles.signupLine,
+                      { color: auth.muted, fontFamily: FontFamily.interMedium },
+                    ]}
+                  >
                     {t("auth.login.noAccount")}{" "}
-                    <Text style={{ color: auth.plum, fontFamily: "Inter_700Bold" }}>
+                    <Text
+                      style={{
+                        color: auth.plum,
+                        fontFamily: FontFamily.interBold,
+                      }}
+                    >
                       {t("auth.login.createAccount")}
                     </Text>
                   </Text>
@@ -559,7 +756,12 @@ export default function LoginScreen() {
             )}
           </View>
 
-          <Text style={[styles.footer, { color: auth.footer, fontFamily: "Inter_500Medium" }]}>
+          <Text
+            style={[
+              styles.footer,
+              { color: auth.footer, fontFamily: FontFamily.interMedium },
+            ]}
+          >
             {t("auth.login.footer")}
           </Text>
         </View>
@@ -576,11 +778,13 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   formPanel: {
-    borderRadius: 28,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: 0,
     marginBottom: 16,
-    minHeight: 420,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
     overflow: "hidden",
   },
   dragHandleWrap: {
@@ -595,7 +799,7 @@ const styles = StyleSheet.create({
   },
   formBody: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 8,
   },
   formIntro: {
@@ -621,6 +825,8 @@ const styles = StyleSheet.create({
   },
   fieldHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 6,
@@ -638,10 +844,10 @@ const styles = StyleSheet.create({
     right: 12,
     top: 14,
     fontSize: 12,
-    fontFamily: "Inter_700Bold",
+    fontFamily: FontFamily.interBold,
   },
   input: {
-    height: 48,
+    minHeight: 48,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 16,
@@ -660,7 +866,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   eyeBtn: {
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   forgotLink: {
     fontSize: 12,

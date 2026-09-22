@@ -5,8 +5,8 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText,
+  BarChart2, BarChart3, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
+  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -29,6 +29,7 @@ import { getIncidentStats } from "@/services/incidentService";
 import { getOrganizationBranding, type OrganizationBranding } from "@/services/organizationBrandingService";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
 import {
   bottomNavLabelForHref,
   groupLabelForName,
@@ -134,6 +135,17 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
   ],
 };
 
+// ── Route-level delegated-access capabilities → their nav entry ──────────────
+// Mirrors the requiredCapability values wired into ProtectedRoute in App.tsx.
+// A coordinator holding an active grant for one of these sees it appended to
+// their sidebar under a "Temporary Access" group so it's actually discoverable
+// (the route itself already allows them in — this just makes it visible).
+const GRANT_NAV_ITEMS: Record<string, NavItem> = {
+  governance_vault: { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
+  executive_dashboard: { href: "/md/executive", label: "Strategic Insights", icon: BarChart3 },
+  onboarding_program_design: { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
+};
+
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
 const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
@@ -201,7 +213,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Reports",             description: "Session analytics & export",              href: "/reports",                         icon: FileBarChart2,   group: "pages",    roles: ["support_coordinator"] },
   { label: "My Shifts",           description: "Your scheduled & active shifts",          href: "/my-shifts",                       icon: Clock,           group: "pages",    roles: ["support_worker"] },
   { label: "My Clients",          description: "Your assigned participants",              href: "/my-clients",                      icon: UserRound,       group: "pages",    roles: ["support_worker"] },
-  { label: "My Availability",     description: "Set working hours & blackout dates",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
+  { label: "My Availability",     description: "Set working hours and unavailability",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
   { label: "My Compliance",       description: "Your training & credential status",       href: "/my-compliance",                   icon: ShieldCheck,     group: "pages",    roles: ["support_worker"] },
   { label: "Training",            description: "Assigned training modules & certifications", href: "/worker/training",              icon: GraduationCap,   group: "pages",    roles: ["support_worker"] },
   { label: "Policies",            description: "Organisation policies to read & acknowledge", href: "/worker-policies",              icon: FileText,        group: "pages",    roles: ["support_worker"] },
@@ -218,7 +230,7 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Live Monitor",        description: "Real-time shift & clock-in monitoring",    href: "/coordinator/rostering",           icon: Radio,           group: "features", roles: ["support_coordinator"] },
   { label: "Shift Verification",  description: "Verify completed shifts before billing",   href: "/coordinator/shift-verification",  icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
   { label: "Audit Pack",          description: "NDIS audit documentation & export",        href: "/audit-pack",                      icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
-  { label: "Worker Availability", description: "Team availability calendar & blackouts",  href: "/coordinator/rostering",           icon: UserCheck,       group: "features", roles: ["support_coordinator"] },
+  { label: "Worker Availability", description: "Team working hours and unavailability",  href: "/coordinator/rostering",           icon: UserCheck,       group: "features", roles: ["support_coordinator"] },
   { label: "Create Shift",        description: "Assign a new shift to a worker",          href: "/coordinator/rostering",           icon: Plus,            group: "features", roles: ["support_coordinator"] },
   { label: "Bulk Shifts",         description: "Create recurring shifts in bulk",          href: "/coordinator/rostering",           icon: CalendarDays,    group: "features", roles: ["support_coordinator"] },
   { label: "NDIS Goals",          description: "Participant goals & progress tracking",    href: "/patients",                        icon: Target,          group: "features", roles: ["support_coordinator"] },
@@ -391,7 +403,14 @@ function SidebarContents({
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
   const role = (user?.role ?? "support_worker") as NavRole;
-  const sections = SECTIONED_NAV[role] ?? SECTIONED_NAV.support_worker;
+  const baseSections = SECTIONED_NAV[role] ?? SECTIONED_NAV.support_worker;
+  const { hasCapability } = useMyAccessGrants();
+  const grantItems = Object.entries(GRANT_NAV_ITEMS)
+    .filter(([capability]) => hasCapability(capability))
+    .map(([, item]) => item);
+  const sections = grantItems.length > 0
+    ? [...baseSections, { group: "Temporary Access", items: grantItems }]
+    : baseSections;
 
   return (
     <div className="flex flex-col h-full select-none overflow-hidden">

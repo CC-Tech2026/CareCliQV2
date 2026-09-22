@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
   ArrowRight,
@@ -105,11 +105,7 @@ function getAuditStatus(
   return "pending";
 }
 
-function StatusPill({
-  status,
-}: {
-  status: AuditStatus;
-}) {
+function StatusPill({ status }: { status: AuditStatus }) {
   const config = {
     ready: {
       label: "Ready",
@@ -138,7 +134,7 @@ function StatusPill({
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black"
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
       style={{
         color: config.color,
         background: config.background,
@@ -167,7 +163,7 @@ function SectionHeader({
       <div>
         {eyebrow && (
           <p
-            className="mb-1 text-[9px] font-black uppercase tracking-[0.18em]"
+            className="mb-1 text-xs font-semibold uppercase tracking-[0.18em]"
             style={{ color: MUTED }}
           >
             {eyebrow}
@@ -175,7 +171,7 @@ function SectionHeader({
         )}
 
         <h2
-          className="text-[15px] font-black tracking-[-0.01em]"
+          className="text-[15px] font-semibold tracking-[-0.01em]"
           style={{ color: TEXT }}
         >
           {title}
@@ -183,7 +179,7 @@ function SectionHeader({
 
         {description && (
           <p
-            className="mt-1 max-w-2xl text-[11px] font-medium leading-relaxed"
+            className="mt-1 max-w-2xl text-sm font-medium leading-relaxed"
             style={{ color: MUTED }}
           >
             {description}
@@ -247,15 +243,12 @@ function ReadinessItem({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p
-          className="text-[12px] font-black"
-          style={{ color: TEXT }}
-        >
+        <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
           {label}
         </p>
 
         <p
-          className="mt-0.5 text-[10px] font-medium leading-relaxed"
+          className="mt-0.5 text-xs font-medium leading-relaxed"
           style={{ color: MUTED }}
         >
           {description}
@@ -263,7 +256,7 @@ function ReadinessItem({
       </div>
 
       <span
-        className="shrink-0 rounded-full px-2 py-1 text-[9px] font-black"
+        className="shrink-0 rounded-full px-2 py-1 text-xs font-semibold"
         style={{
           background: config.background,
           color: config.color,
@@ -283,18 +276,26 @@ export default function MDCompliancePage() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [trendError, setTrendError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setTrendError(false);
 
     Promise.all([
       apiFetch("/api/dashboard/managing-director").then((r) =>
         r.ok ? r.json() : Promise.reject(),
       ),
 
-      apiFetch("/api/dashboard/compliance-trend").then((r) =>
-        r.ok ? r.json() : { trend: [] },
-      ),
+      apiFetch("/api/dashboard/compliance-trend")
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .catch(() => {
+          if (!cancelled) setTrendError(true);
+          return { trend: [] };
+        }),
     ])
       .then(([md, tr]) => {
         if (cancelled) return;
@@ -312,7 +313,7 @@ export default function MDCompliancePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryKey]);
 
   const chartData = trend
     .filter((point) => point.avg_score !== null)
@@ -329,19 +330,13 @@ export default function MDCompliancePage() {
     const breakdown = data.team_compliance_breakdown;
 
     const total =
-      breakdown.compliant +
-      breakdown.at_risk +
-      breakdown.non_compliant;
+      breakdown.compliant + breakdown.at_risk + breakdown.non_compliant;
 
     const compliantPercent =
-      total > 0
-        ? Math.round((breakdown.compliant / total) * 100)
-        : 0;
+      total > 0 ? Math.round((breakdown.compliant / total) * 100) : 0;
 
     const atRiskPercent =
-      total > 0
-        ? Math.round((breakdown.at_risk / total) * 100)
-        : 0;
+      total > 0 ? Math.round((breakdown.at_risk / total) * 100) : 0;
 
     const highAlerts = data.org_alerts.filter(
       (alert) => alert.severity === "high",
@@ -385,16 +380,42 @@ export default function MDCompliancePage() {
         {/* -----------------------------------------------------------
             HEADER
         ------------------------------------------------------------ */}
-        <header className="flex items-center gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1
-              className="flex items-center gap-2 text-xl font-black tracking-[-0.025em]"
+              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
               style={{ color: TEXT }}
             >
               Audit & Compliance
               <SectionInfo text="Quality posture, risk signals, and audit readiness across the organisation." />
             </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-cc-muted">
+              Review compliance risks, evidence readiness and staff follow-up in
+              one place.
+            </p>
           </div>
+          <nav aria-label="Compliance actions" className="flex flex-wrap gap-2">
+            <Link
+              href="/md/vault"
+              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
+            >
+              Document vault
+            </Link>
+            <Link
+              href="/md/onboarding/training"
+              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
+            >
+              Competency & training
+            </Link>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => setRetryKey((key) => key + 1)}
+              className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </nav>
         </header>
 
         {loading ? (
@@ -417,7 +438,8 @@ export default function MDCompliancePage() {
           </div>
         ) : error || !data || !derived ? (
           <div
-            className="rounded-2xl border bg-white p-10 text-center"
+            role="alert"
+            className="rounded-2xl border bg-white p-6 text-center"
             style={{ borderColor: BORDER }}
           >
             <AlertTriangle
@@ -426,19 +448,20 @@ export default function MDCompliancePage() {
               style={{ color: "#9A5B0A" }}
             />
 
-            <p
-              className="font-black"
-              style={{ color: TEXT }}
-            >
+            <p className="font-semibold" style={{ color: TEXT }}>
               {translate("md.compliance.loadFailed")}
             </p>
 
-            <p
-              className="mt-1 text-[11px]"
-              style={{ color: MUTED }}
-            >
+            <p className="mt-1 text-sm" style={{ color: MUTED }}>
               We could not load the organisation quality data.
             </p>
+            <button
+              type="button"
+              onClick={() => setRetryKey((key) => key + 1)}
+              className="mt-4 min-h-11 rounded-lg border px-4 text-sm font-medium"
+            >
+              Try again
+            </button>
           </div>
         ) : (
           <>
@@ -456,9 +479,7 @@ export default function MDCompliancePage() {
                     className="absolute right-0 top-0 h-40 w-40 rounded-full opacity-40 blur-3xl"
                     style={{
                       background:
-                        derived.readiness === "ready"
-                          ? "#BFDDD1"
-                          : "#E4B9B6",
+                        derived.readiness === "ready" ? "#BFDDD1" : "#E4B9B6",
                     }}
                   />
 
@@ -471,22 +492,19 @@ export default function MDCompliancePage() {
                           color: PLUM,
                         }}
                       >
-                        <ShieldCheck
-                          size={18}
-                          strokeWidth={2.3}
-                        />
+                        <ShieldCheck size={18} strokeWidth={2.3} />
                       </div>
 
                       <div>
                         <p
-                          className="text-[9px] font-black uppercase tracking-[0.16em]"
+                          className="text-xs font-semibold uppercase tracking-[0.16em]"
                           style={{ color: MUTED }}
                         >
                           Current quality posture
                         </p>
 
                         <p
-                          className="text-[12px] font-black"
+                          className="text-[12px] font-semibold"
                           style={{ color: TEXT }}
                         >
                           Organisation compliance
@@ -497,11 +515,9 @@ export default function MDCompliancePage() {
                     <div className="mt-8 flex flex-wrap items-end gap-5">
                       <div>
                         <div
-                          className="text-[68px] font-black leading-[0.85] tracking-[-0.06em]"
+                          className="text-5xl font-semibold leading-[0.85] tracking-[-0.06em]"
                           style={{
-                            color: getScoreColor(
-                              data.compliance_score,
-                            ),
+                            color: getScoreColor(data.compliance_score),
                           }}
                         >
                           {data.compliance_score}
@@ -509,12 +525,10 @@ export default function MDCompliancePage() {
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">
-                          <StatusPill
-                            status={derived.readiness}
-                          />
+                          <StatusPill status={derived.readiness} />
 
                           <span
-                            className="text-[10px] font-bold"
+                            className="text-xs font-bold"
                             style={{ color: MUTED }}
                           >
                             Target {data.compliance_target}%
@@ -524,18 +538,17 @@ export default function MDCompliancePage() {
 
                       <div className="pb-1">
                         <p
-                          className="text-[13px] font-black"
+                          className="text-[13px] font-semibold"
                           style={{ color: TEXT }}
                         >
                           {getScoreLabel(data.compliance_score)}
                         </p>
 
                         <p
-                          className="mt-1 max-w-xs text-[11px] font-medium leading-relaxed"
+                          className="mt-1 max-w-xs text-sm font-medium leading-relaxed"
                           style={{ color: MUTED }}
                         >
-                          {data.compliance_score >=
-                          data.compliance_target
+                          {data.compliance_score >= data.compliance_target
                             ? "The organisation is currently operating at or above its compliance target."
                             : "The organisation is below target. Focus should remain on the highest-impact quality gaps."}
                         </p>
@@ -546,20 +559,19 @@ export default function MDCompliancePage() {
                     <div className="mt-8 max-w-xl">
                       <div className="mb-2 flex items-center justify-between">
                         <span
-                          className="text-[9px] font-black uppercase tracking-[0.12em]"
+                          className="text-xs font-semibold uppercase tracking-[0.12em]"
                           style={{ color: MUTED }}
                         >
                           Progress toward target
                         </span>
 
                         <span
-                          className="text-[10px] font-black"
+                          className="text-xs font-semibold"
                           style={{ color: TEXT }}
                         >
                           {Math.max(
                             0,
-                            data.compliance_target -
-                              data.compliance_score,
+                            data.compliance_target - data.compliance_score,
                           )}
                           pts to target
                         </span>
@@ -572,13 +584,8 @@ export default function MDCompliancePage() {
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
-                            width: `${Math.min(
-                              data.compliance_score,
-                              100,
-                            )}%`,
-                            background: getScoreColor(
-                              data.compliance_score,
-                            ),
+                            width: `${Math.min(data.compliance_score, 100)}%`,
+                            background: getScoreColor(data.compliance_score),
                           }}
                         />
                       </div>
@@ -595,7 +602,7 @@ export default function MDCompliancePage() {
                   }}
                 >
                   <p
-                    className="text-[9px] font-black uppercase tracking-[0.16em]"
+                    className="text-xs font-semibold uppercase tracking-[0.16em]"
                     style={{ color: MUTED }}
                   >
                     Where attention is going
@@ -611,14 +618,14 @@ export default function MDCompliancePage() {
                       <div className="flex-1">
                         <div className="flex justify-between">
                           <span
-                            className="text-[11px] font-bold"
+                            className="text-sm font-bold"
                             style={{ color: TEXT }}
                           >
                             Compliant
                           </span>
 
                           <span
-                            className="text-[11px] font-black"
+                            className="text-sm font-semibold"
                             style={{ color: TEXT }}
                           >
                             {derived.compliantPercent}%
@@ -649,14 +656,14 @@ export default function MDCompliancePage() {
                       <div className="flex-1">
                         <div className="flex justify-between">
                           <span
-                            className="text-[11px] font-bold"
+                            className="text-sm font-bold"
                             style={{ color: TEXT }}
                           >
                             At risk
                           </span>
 
                           <span
-                            className="text-[11px] font-black"
+                            className="text-sm font-semibold"
                             style={{ color: TEXT }}
                           >
                             {derived.atRiskPercent}%
@@ -687,14 +694,14 @@ export default function MDCompliancePage() {
                       <div className="flex-1">
                         <div className="flex justify-between">
                           <span
-                            className="text-[11px] font-bold"
+                            className="text-sm font-bold"
                             style={{ color: TEXT }}
                           >
                             Non-compliant
                           </span>
 
                           <span
-                            className="text-[11px] font-black"
+                            className="text-sm font-semibold"
                             style={{ color: TEXT }}
                           >
                             {data.team_compliance_breakdown.non_compliant}
@@ -742,14 +749,14 @@ export default function MDCompliancePage() {
 
                       <div>
                         <p
-                          className="text-[10px] font-black uppercase tracking-[0.1em]"
+                          className="text-xs font-semibold uppercase tracking-[0.1em]"
                           style={{ color: MUTED }}
                         >
                           Quality signal
                         </p>
 
                         <p
-                          className="mt-1 text-[11px] font-semibold leading-relaxed"
+                          className="mt-1 text-sm font-semibold leading-relaxed"
                           style={{ color: TEXT }}
                         >
                           {derived.highAlerts > 0
@@ -779,7 +786,7 @@ export default function MDCompliancePage() {
                   action={
                     <button
                       onClick={() => navigate("/md/staff")}
-                      className="hidden items-center gap-1 text-[10px] font-black sm:flex"
+                      className="hidden items-center gap-1 text-xs font-semibold sm:flex"
                       style={{ color: PLUM }}
                     >
                       Review staff
@@ -798,25 +805,22 @@ export default function MDCompliancePage() {
                       background: "#E9F5F0",
                     }}
                   >
-                    <CheckCircle2
-                      size={18}
-                      style={{ color: GREEN }}
-                    />
+                    <CheckCircle2 size={18} style={{ color: GREEN }} />
 
                     <div>
                       <p
-                        className="text-[12px] font-black"
+                        className="text-[12px] font-semibold"
                         style={{ color: "#0B5F44" }}
                       >
                         No immediate quality risks
                       </p>
 
                       <p
-                        className="mt-0.5 text-[10px] font-medium"
+                        className="mt-0.5 text-xs font-medium"
                         style={{ color: "#0F7B57" }}
                       >
-                        Current compliance signals are within expected
-                        operating range.
+                        Current compliance signals are within expected operating
+                        range.
                       </p>
                     </div>
                   </div>
@@ -830,21 +834,18 @@ export default function MDCompliancePage() {
                           background: "#FBEAE9",
                         }}
                       >
-                        <ShieldAlert
-                          size={16}
-                          style={{ color: RED }}
-                        />
+                        <ShieldAlert size={16} style={{ color: RED }} />
 
                         <div className="flex-1">
                           <p
-                            className="text-[11px] font-black"
+                            className="text-sm font-semibold"
                             style={{ color: TEXT }}
                           >
                             High-priority compliance alerts
                           </p>
 
                           <p
-                            className="mt-0.5 text-[10px] font-medium"
+                            className="mt-0.5 text-xs font-medium"
                             style={{ color: MUTED }}
                           >
                             {derived.highAlerts} alert
@@ -853,73 +854,53 @@ export default function MDCompliancePage() {
                           </p>
                         </div>
 
-                        <ChevronRight
-                          size={14}
-                          style={{ color: MUTED }}
-                        />
+                        <ChevronRight size={14} style={{ color: MUTED }} />
                       </div>
                     )}
 
-                    {derived.topIssues.slice(0, 3).map(
-                      (issue, index) => (
+                    {derived.topIssues.slice(0, 3).map((issue, index) => (
+                      <div
+                        key={`${issue.issue}-${index}`}
+                        className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
+                        style={{ borderColor: BORDER }}
+                      >
                         <div
-                          key={`${issue.issue}-${index}`}
-                          className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
-                          style={{ borderColor: BORDER }}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                          style={{
+                            background: index === 0 ? "#FBEAE9" : SOFT,
+                            color: index === 0 ? RED : PLUM,
+                          }}
                         >
-                          <div
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                            style={{
-                              background:
-                                index === 0
-                                  ? "#FBEAE9"
-                                  : SOFT,
-                              color:
-                                index === 0
-                                  ? RED
-                                  : PLUM,
-                            }}
-                          >
-                            <AlertTriangle
-                              size={14}
-                              strokeWidth={2.4}
-                            />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className="truncate text-[11px] font-black"
-                              style={{ color: TEXT }}
-                            >
-                              {issue.issue}
-                            </p>
-
-                            <p
-                              className="mt-0.5 text-[9px] font-medium"
-                              style={{ color: MUTED }}
-                            >
-                              Appeared {issue.count} times
-                            </p>
-                          </div>
-
-                          <span
-                            className="rounded-full px-2 py-1 text-[9px] font-black"
-                            style={{
-                              background:
-                                index === 0
-                                  ? "#FBEAE9"
-                                  : SOFT,
-                              color:
-                                index === 0
-                                  ? RED
-                                  : MUTED,
-                            }}
-                          >
-                            Priority {index + 1}
-                          </span>
+                          <AlertTriangle size={14} strokeWidth={2.4} />
                         </div>
-                      ),
-                    )}
+
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className="truncate text-sm font-semibold"
+                            style={{ color: TEXT }}
+                          >
+                            {issue.issue}
+                          </p>
+
+                          <p
+                            className="mt-0.5 text-xs font-medium"
+                            style={{ color: MUTED }}
+                          >
+                            Appeared {issue.count} times
+                          </p>
+                        </div>
+
+                        <span
+                          className="rounded-full px-2 py-1 text-xs font-semibold"
+                          style={{
+                            background: index === 0 ? "#FBEAE9" : SOFT,
+                            color: index === 0 ? RED : MUTED,
+                          }}
+                        >
+                          Priority {index + 1}
+                        </span>
+                      </div>
+                    ))}
 
                     {derived.attentionWorkers.length > 0 && (
                       <div
@@ -930,36 +911,30 @@ export default function MDCompliancePage() {
                         }}
                       >
                         <div className="flex items-center gap-2">
-                          <Users
-                            size={14}
-                            style={{ color: AMBER }}
-                          />
+                          <Users size={14} style={{ color: AMBER }} />
 
                           <p
-                            className="text-[10px] font-black"
+                            className="text-xs font-semibold"
                             style={{ color: TEXT }}
                           >
-                            {derived.attentionWorkers.length} workers
-                            below the 85% quality threshold
+                            {derived.attentionWorkers.length} workers below the
+                            85% quality threshold
                           </p>
                         </div>
 
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {derived.attentionWorkers.map(
-                            (worker) => (
-                              <span
-                                key={worker.id}
-                                className="rounded-full px-2 py-1 text-[9px] font-bold"
-                                style={{
-                                  background: SOFT,
-                                  color: MUTED,
-                                }}
-                              >
-                                {worker.full_name} ·{" "}
-                                {worker.compliance_score}%
-                              </span>
-                            ),
-                          )}
+                          {derived.attentionWorkers.map((worker) => (
+                            <span
+                              key={worker.id}
+                              className="rounded-full px-2 py-1 text-xs font-bold"
+                              style={{
+                                background: SOFT,
+                                color: MUTED,
+                              }}
+                            >
+                              {worker.full_name} · {worker.compliance_score}%
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -976,11 +951,7 @@ export default function MDCompliancePage() {
                   eyebrow="Governance"
                   title="Audit readiness"
                   description="Executive view of whether the organisation is ready to evidence compliance."
-                  action={
-                    <StatusPill
-                      status={derived.readiness}
-                    />
-                  }
+                  action={<StatusPill status={derived.readiness} />}
                 />
 
                 <div className="space-y-2">
@@ -1000,8 +971,7 @@ export default function MDCompliancePage() {
                     label="Compliance target"
                     description={`Organisation score against the ${data.compliance_target}% target.`}
                     status={
-                      data.compliance_score >=
-                      data.compliance_target
+                      data.compliance_score >= data.compliance_target
                         ? "ready"
                         : "attention"
                     }
@@ -1011,11 +981,7 @@ export default function MDCompliancePage() {
                     icon={AlertTriangle}
                     label="High-priority alerts"
                     description="Open alerts requiring executive review."
-                    status={
-                      derived.highAlerts === 0
-                        ? "ready"
-                        : "attention"
-                    }
+                    status={derived.highAlerts === 0 ? "ready" : "attention"}
                   />
 
                   <ReadinessItem
@@ -1038,6 +1004,15 @@ export default function MDCompliancePage() {
             {/* -------------------------------------------------------
                 COMPLIANCE TREND
             -------------------------------------------------------- */}
+            {trendError && (
+              <p
+                role="status"
+                className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted"
+              >
+                The compliance trend could not be loaded. Refresh to try again;
+                the other records remain available.
+              </p>
+            )}
             {chartData.length > 1 && (
               <section
                 className="rounded-2xl border bg-white p-5 shadow-sm"
@@ -1050,10 +1025,7 @@ export default function MDCompliancePage() {
                 />
 
                 <div className="h-[230px]">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
+                  <ResponsiveContainer width="100%" height="100%">
                     <LineChart
                       data={chartData}
                       margin={{
@@ -1063,15 +1035,12 @@ export default function MDCompliancePage() {
                         left: -20,
                       }}
                     >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke={BORDER}
-                      />
+                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
 
                       <XAxis
                         dataKey="week"
                         tick={{
-                          fontSize: 9,
+                          fontSize: 12,
                           fill: MUTED,
                         }}
                         axisLine={false}
@@ -1081,7 +1050,7 @@ export default function MDCompliancePage() {
                       <YAxis
                         domain={[50, 100]}
                         tick={{
-                          fontSize: 9,
+                          fontSize: 12,
                           fill: MUTED,
                         }}
                         axisLine={false}
@@ -1150,7 +1119,7 @@ export default function MDCompliancePage() {
                     />
 
                     <p
-                      className="text-[11px] font-black"
+                      className="text-sm font-semibold"
                       style={{ color: TEXT }}
                     >
                       No recurring issues detected
@@ -1159,26 +1128,22 @@ export default function MDCompliancePage() {
                 ) : (
                   <div className="space-y-3">
                     {derived.topIssues.map((issue, index) => {
-                      const max =
-                        derived.topIssues[0]?.count || 1;
+                      const max = derived.topIssues[0]?.count || 1;
 
-                      const width =
-                        (issue.count / max) * 100;
+                      const width = (issue.count / max) * 100;
 
                       return (
-                        <div
-                          key={`${issue.issue}-${index}`}
-                        >
+                        <div key={`${issue.issue}-${index}`}>
                           <div className="mb-1.5 flex items-center justify-between gap-3">
                             <span
-                              className="truncate text-[11px] font-bold"
+                              className="truncate text-sm font-bold"
                               style={{ color: TEXT }}
                             >
                               {issue.issue}
                             </span>
 
                             <span
-                              className="shrink-0 text-[10px] font-black"
+                              className="shrink-0 text-xs font-semibold"
                               style={{ color: MUTED }}
                             >
                               {issue.count} occurrences
@@ -1221,7 +1186,7 @@ export default function MDCompliancePage() {
                   action={
                     <button
                       onClick={() => navigate("/md/staff")}
-                      className="flex items-center gap-1 text-[10px] font-black"
+                      className="flex items-center gap-1 text-xs font-semibold"
                       style={{ color: PLUM }}
                     >
                       View staff
@@ -1231,101 +1196,97 @@ export default function MDCompliancePage() {
                 />
 
                 <div className="space-y-2">
-                  {derived.attentionWorkers
-                    .slice(0, 3)
-                    .map((worker) => (
+                  {derived.attentionWorkers.slice(0, 3).map((worker) => (
+                    <div
+                      key={`risk-${worker.id}`}
+                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
+                      style={{ borderColor: BORDER }}
+                    >
                       <div
-                        key={`risk-${worker.id}`}
-                        className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                        style={{ borderColor: BORDER }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
+                        style={{
+                          background: "#FBEAE9",
+                          color: RED,
+                        }}
                       >
-                        <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-[9px] font-black"
-                          style={{
-                            background: "#FBEAE9",
-                            color: RED,
-                          }}
-                        >
-                          {worker.full_name
-                            .split(" ")
-                            .map((name) => name[0])
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase()}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="truncate text-[11px] font-black"
-                            style={{ color: TEXT }}
-                          >
-                            {worker.full_name}
-                          </p>
-
-                          <p
-                            className="text-[9px] font-medium"
-                            style={{ color: MUTED }}
-                          >
-                            {worker.sessions} sessions
-                          </p>
-                        </div>
-
-                        <span
-                          className="text-[11px] font-black"
-                          style={{ color: RED }}
-                        >
-                          {worker.compliance_score}%
-                        </span>
+                        {worker.full_name
+                          .split(" ")
+                          .map((name) => name[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()}
                       </div>
-                    ))}
 
-                  {derived.strongestWorkers
-                    .slice(0, 2)
-                    .map((worker) => (
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="truncate text-sm font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {worker.full_name}
+                        </p>
+
+                        <p
+                          className="text-xs font-medium"
+                          style={{ color: MUTED }}
+                        >
+                          {worker.sessions} sessions
+                        </p>
+                      </div>
+
+                      <span
+                        className="text-sm font-semibold"
+                        style={{ color: RED }}
+                      >
+                        {worker.compliance_score}%
+                      </span>
+                    </div>
+                  ))}
+
+                  {derived.strongestWorkers.slice(0, 2).map((worker) => (
+                    <div
+                      key={`strong-${worker.id}`}
+                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
+                      style={{ borderColor: BORDER }}
+                    >
                       <div
-                        key={`strong-${worker.id}`}
-                        className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                        style={{ borderColor: BORDER }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
+                        style={{
+                          background: "#E9F5F0",
+                          color: GREEN,
+                        }}
                       >
-                        <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-[9px] font-black"
-                          style={{
-                            background: "#E9F5F0",
-                            color: GREEN,
-                          }}
-                        >
-                          {worker.full_name
-                            .split(" ")
-                            .map((name) => name[0])
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase()}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="truncate text-[11px] font-black"
-                            style={{ color: TEXT }}
-                          >
-                            {worker.full_name}
-                          </p>
-
-                          <p
-                            className="text-[9px] font-medium"
-                            style={{ color: MUTED }}
-                          >
-                            {worker.sessions} sessions
-                          </p>
-                        </div>
-
-                        <span
-                          className="text-[11px] font-black"
-                          style={{ color: GREEN }}
-                        >
-                          {worker.compliance_score}%
-                        </span>
+                        {worker.full_name
+                          .split(" ")
+                          .map((name) => name[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()}
                       </div>
-                    ))}
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="truncate text-sm font-semibold"
+                          style={{ color: TEXT }}
+                        >
+                          {worker.full_name}
+                        </p>
+
+                        <p
+                          className="text-xs font-medium"
+                          style={{ color: MUTED }}
+                        >
+                          {worker.sessions} sessions
+                        </p>
+                      </div>
+
+                      <span
+                        className="text-sm font-semibold"
+                        style={{ color: GREEN }}
+                      >
+                        {worker.compliance_score}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </section>
             </div>
@@ -1348,22 +1309,16 @@ export default function MDCompliancePage() {
                     color: PLUM,
                   }}
                 >
-                  <ShieldCheck
-                    size={16}
-                    strokeWidth={2.4}
-                  />
+                  <ShieldCheck size={16} strokeWidth={2.4} />
                 </div>
 
                 <div>
-                  <p
-                    className="text-[11px] font-black"
-                    style={{ color: TEXT }}
-                  >
+                  <p className="text-sm font-semibold" style={{ color: TEXT }}>
                     Executive quality decision
                   </p>
 
                   <p
-                    className="mt-0.5 max-w-2xl text-[10px] font-medium leading-relaxed"
+                    className="mt-0.5 max-w-2xl text-xs font-medium leading-relaxed"
                     style={{ color: MUTED }}
                   >
                     {derived.readiness === "ready"
@@ -1375,7 +1330,7 @@ export default function MDCompliancePage() {
 
               <button
                 onClick={() => navigate("/md/staff")}
-                className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[10px] font-black text-white transition-opacity hover:opacity-90"
+                className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: "var(--cc-cta)" }}
               >
                 Review quality team

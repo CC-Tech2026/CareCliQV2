@@ -13,10 +13,10 @@ from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
-from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+from ..core.timezone import parse_shift_datetime, participant_timezone
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.pattern_detection_service import (
     dismiss_pattern,
@@ -51,7 +51,17 @@ from ..services import (
     travel_expense_service,
 )
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
-from ..services.supabase_client import get_supabase_admin
+from ..services.credential_status import live_status
+from ..services.supabase_client import get_supabase_admin, signed_storage_url
+
+# Mirrors users.py's PROFILE_PHOTOS_BUCKET/PROFILE_PHOTO_SIGNED_URL_SECONDS —
+# kept as a local duplicate rather than imported from there: users.py pulls in
+# api/security.py -> device_security_service.py -> pyotp transitively, which
+# isolation-test CI installs a deliberately minimal, explicit dependency list
+# for and doesn't include (this constant pair is the only thing coordinator.py
+# actually needs from that module).
+PROFILE_PHOTOS_BUCKET = "profile-photos"
+PROFILE_PHOTO_SIGNED_URL_SECONDS = 60 * 60 * 24
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
@@ -89,9 +99,10 @@ def _require_coordinator(user: dict) -> str:
 # Same org_id-or-403 shape as _require_coordinator, but for the resources the
 # managing director should also read AND act on: worker-profile tabs (staff
 # detail, availability, skills, training assignment/review, onboarding
-# documents), NDIS goals/tasks, and pay/SCHADS oversight (classification,
-# shift pay preview, pay ledger — the MD is accountable for payroll too).
-# Rostering, shift assignment, messaging, and account-management actions stay
+# documents), NDIS goals/tasks, pay/SCHADS oversight (classification, shift
+# pay preview, pay ledger — the MD is accountable for payroll too), and
+# shift assign/reassign/unassign from the Master Schedule view. Rostering
+# creation, messaging, and account-management actions stay
 # _require_coordinator-only — those remain Coordinator's own operational
 # domain, not MD oversight.
 def _require_org_read(user: dict) -> str:
@@ -149,6 +160,9 @@ def _session_payload(session: dict) -> dict:
         "compliance_score": session.get("compliance_score"),
         "compliance_status": _score_status(session.get("compliance_score")),
         "translation_status": session.get("translation_status"),
+        # Participant's branch zone — clients show session_date and any
+        # review-flag timestamps in it.
+        "timezone": str(participant_timezone(session, organization_id=session.get("organization_id"))),
     }
 
 
@@ -234,9 +248,12 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
                 supabase.table("users")
                 .select(
                     "id, email, full_name, role, is_active, last_login, organization_id, "
-                    "preferred_contact_method, phone, onboarding_completed, "
-                    "profile_summary, profile_experience_years, coordinator_id, "
-                    "classification_id, employment_type"
+                    "preferred_contact_method, phone, address, suburb, emergency_contact, "
+                    "date_of_birth, onboarding_completed, profile_summary, profile_experience_years, "
+                    "coordinator_id, classification_id, employment_type, discipline, "
+                    "ahpra_registration_number, professional_indemnity_confirmed, business_name, "
+                    "profile_photo_path, preferred_language, account_type, profile_completed, "
+                    "role_specific_profile_completed, matching_opt_in"
                 )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
@@ -269,6 +286,10 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "employee_id": row.get("employee_id"),
             "preferred_contact_method": profile.get("preferred_contact_method"),
             "phone": profile.get("phone"),
+            "address": profile.get("address"),
+            "suburb": profile.get("suburb"),
+            "emergency_contact": profile.get("emergency_contact"),
+            "date_of_birth": profile.get("date_of_birth"),
             "onboarding_completed": profile.get("onboarding_completed"),
             "profile_summary": profile.get("profile_summary"),
             "profile_experience_years": profile.get("profile_experience_years"),
@@ -276,6 +297,21 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "induction_overdue": induction_map.get(str(row.get("user_id")), False),
             "classification_id": profile.get("classification_id"),
             "employment_type": profile.get("employment_type"),
+            "discipline": profile.get("discipline"),
+            "ahpra_registration_number": profile.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": profile.get("professional_indemnity_confirmed"),
+            "business_name": profile.get("business_name"),
+            # profile-photos is a private bucket — never trust a stored URL,
+            # always regenerate a fresh signed one from the path on read (see
+            # the identical comment in users.py::_select_profile).
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, profile.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
+            "preferred_language": profile.get("preferred_language"),
+            "account_type": profile.get("account_type"),
+            "profile_completed": profile.get("profile_completed"),
+            "role_specific_profile_completed": profile.get("role_specific_profile_completed"),
+            "matching_opt_in": profile.get("matching_opt_in"),
         })
     return output
 
@@ -305,8 +341,12 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             supabase.table("users")
             .select(
                 "id, email, full_name, role, is_active, last_login, organization_id, "
-                "preferred_contact_method, phone, onboarding_completed, coordinator_id, "
-                "classification_id, employment_type"
+                "preferred_contact_method, phone, address, suburb, emergency_contact, date_of_birth, "
+                "onboarding_completed, profile_summary, profile_experience_years, coordinator_id, "
+                "classification_id, employment_type, discipline, ahpra_registration_number, "
+                "professional_indemnity_confirmed, business_name, profile_photo_path, "
+                "preferred_language, account_type, profile_completed, "
+                "role_specific_profile_completed, matching_opt_in"
             )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "support_coordinator"])
@@ -334,6 +374,11 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "is_active": bool(row.get("is_active")),
             "joined_at": None,
             "last_login": row.get("last_login"),
+            "phone": row.get("phone"),
+            "address": row.get("address"),
+            "suburb": row.get("suburb"),
+            "emergency_contact": row.get("emergency_contact"),
+            "date_of_birth": row.get("date_of_birth"),
             "onboarding_completed": row.get("onboarding_completed"),
             "profile_summary": row.get("profile_summary"),
             "profile_experience_years": row.get("profile_experience_years"),
@@ -341,6 +386,18 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
             "induction_overdue": induction_map.get(str(row.get("id")), False),
             "classification_id": row.get("classification_id"),
             "employment_type": row.get("employment_type"),
+            "discipline": row.get("discipline"),
+            "ahpra_registration_number": row.get("ahpra_registration_number"),
+            "professional_indemnity_confirmed": row.get("professional_indemnity_confirmed"),
+            "business_name": row.get("business_name"),
+            "profile_photo_url": signed_storage_url(
+                PROFILE_PHOTOS_BUCKET, row.get("profile_photo_path"), PROFILE_PHOTO_SIGNED_URL_SECONDS
+            ),
+            "preferred_language": row.get("preferred_language"),
+            "account_type": row.get("account_type"),
+            "profile_completed": row.get("profile_completed"),
+            "role_specific_profile_completed": row.get("role_specific_profile_completed"),
+            "matching_opt_in": row.get("matching_opt_in"),
         })
     return output
 
@@ -448,11 +505,22 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
             supabase.table("credentials")
             .select("id, user_id, credential_type, title, expiry_date, status")
             .eq("organization_id", org_id)
-            .in_("status", ["expiring", "expired"])
+            # Excludes rejected/pending_review here (those were never approved,
+            # so they're not "an expiring valid credential"); the date filter
+            # then narrows to candidates, but the actual expiring/expired
+            # classification below is computed live — nothing recomputes the
+            # stored `status` column on a schedule, so a credential verified
+            # "valid" long ago with a since-passed expiry_date would otherwise
+            # never surface here at all.
+            .not_.in_("status", ["rejected", "pending_review"])
             .lte("expiry_date", warn_date)
             .execute()
         )
-        rows = result.data or []
+        rows = [
+            {**row, "status": live_status(row.get("expiry_date"), row.get("status"))}
+            for row in (result.data or [])
+        ]
+        rows = [row for row in rows if row["status"] in ("expiring", "expired")]
     except Exception:
         rows = []
 
@@ -935,6 +1003,21 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
 
+    try:
+        # Clear any onboarding_stage_reminders rows for this worker so the
+        # 3-day/14-day escalation clock restarts cleanly if they stall again.
+        # Without this, a worker reactivated before the resolution sweep next
+        # runs keeps their already-escalated row (escalated_at set) — which
+        # _upsert_stage_flags treats as "already tracked" (skips inserting a
+        # fresh one) and _process_due_reminders permanently ignores (it only
+        # considers escalated_at IS NULL) — silently disabling any future
+        # reminder/escalation for that stage for this worker.
+        supabase.table("onboarding_stage_reminders").delete().eq("worker_id", worker_id).eq(
+            "organization_id", org_id
+        ).execute()
+    except Exception as exc:
+        logger.warning("Failed to clear onboarding stage reminders for reactivated worker %s: %s", worker_id, exc)
+
     await audit_service.log_action(
         action_type="coordinator.worker.activated",
         entity_type="user",
@@ -966,12 +1049,12 @@ async def delete_worker_account(worker_id: str, current_user: dict = Depends(get
     deactivation (which both coordinators and MD can do), so it's gated to
     the managing director specifically. Queues the same pending deletion
     request record self-service deletion uses, for manual processing."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "delete_staff_account", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
-    supabase = get_supabase_admin()
     target = _require_target_support_worker(supabase, worker_id, org_id)
     result = privacy_service.request_worker_deletion_by_admin(worker_id, org_id)
     await audit_service.log_action(
@@ -995,13 +1078,13 @@ async def assign_coordinator(worker_id: str, body: AssignCoordinatorBody, curren
     dashboard/session-review/credential-alert purposes (users.coordinator_id).
     Not gated to support_coordinator like most team-management endpoints: this
     is org structure, an MD decision, not day-to-day coordinator work."""
-    if not is_managing_director(current_user):
+    supabase = get_supabase_admin()
+    if not is_managing_director(current_user) and not has_active_grant(current_user, "reassign_coordinator", supabase):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing director access required.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
 
-    supabase = get_supabase_admin()
     worker = (
         supabase.table("users")
         .select("id")
@@ -1498,6 +1581,13 @@ class AssignShiftBody(BaseModel):
     # flags it as supervised and records who's supervising.
     is_shadow_shift: bool = False
     shadow_of_worker_id: Optional[str] = None
+    # Care coordinator override — when omitted, defaults to the participant's
+    # own care_coordinator_id (see _resolve_care_coordinator_id).
+    care_coordinator_id: Optional[str] = None
+    # NDIS item code the coordinator expects this shift to be billed under —
+    # cross-checked (warn, not blocked) against whatever's actually chosen
+    # in verify_shift().
+    expected_price_item_code: Optional[str] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1570,10 +1660,35 @@ async def coordinator_shifts(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
 
+    # care_coordinator_id is fetched as its own best-effort query rather than
+    # folded into the main shifts select above: that select already has a
+    # two-tier legacy fallback (see _execute_shift_query_with_legacy_fallback),
+    # and bundling a third, newer column into the same all-or-nothing query
+    # would force deployments that haven't run migration 201 yet back onto
+    # the legacy tier, silently losing is_shadow_shift/shadow_of_worker_id too.
+    shift_ids = [str(r.get("id")) for r in rows if r.get("id")]
+    if shift_ids:
+        try:
+            cc_resp = (
+                supabase.table("shifts")
+                .select("id, care_coordinator_id")
+                .in_("id", shift_ids)
+                .execute()
+            )
+            care_coordinator_by_shift = {
+                str(r.get("id")): r.get("care_coordinator_id")
+                for r in (cc_resp.data or [])
+                if isinstance(r, dict) and r.get("id")
+            }
+        except Exception:
+            care_coordinator_by_shift = {}
+        for row in rows:
+            row["care_coordinator_id"] = care_coordinator_by_shift.get(str(row.get("id")))
+
     worker_ids = sorted({
         str(r.get(key))
         for r in rows
-        for key in ("worker_id", "shadow_of_worker_id")
+        for key in ("worker_id", "shadow_of_worker_id", "care_coordinator_id")
         if r.get(key)
     })
     participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
@@ -1624,9 +1739,20 @@ async def coordinator_shifts(
                 (workers_by_id.get(str(row.get("shadow_of_worker_id")), {}) or {}).get("full_name")
                 if row.get("shadow_of_worker_id") else None
             ),
+            "care_coordinator_name": (
+                (workers_by_id.get(str(row.get("care_coordinator_id")), {}) or {}).get("full_name")
+                if row.get("care_coordinator_id") else None
+            ),
+            "care_coordinator_email": (
+                (workers_by_id.get(str(row.get("care_coordinator_id")), {}) or {}).get("email")
+                if row.get("care_coordinator_id") else None
+            ),
             "participant_name": row.get("participant_name")
             or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
             or "Participant",
+            # Participant's branch zone; the roster labels it when it
+            # differs from the coordinator's own branch.
+            "timezone": str(participant_timezone(row, organization_id=org_id)),
         }
         for row in rows
     ]
@@ -1712,12 +1838,60 @@ def _insert_shift_with_legacy_fallback(supabase, payload: dict[str, Any]):
             raise
 
         # Legacy deployments may not yet have these columns on public.shifts.
+        # Drop this older set first and retry before also giving up on the
+        # newer care_coordinator_id column — a deployment missing
+        # shift_type/created_by shouldn't lose care_coordinator_id too just
+        # because both happened to go through the same fallback.
         fallback_payload = dict(payload)
         fallback_payload.pop("created_by", None)
         fallback_payload.pop("shift_type", None)
         fallback_payload.pop("is_shadow_shift", None)
         fallback_payload.pop("shadow_of_worker_id", None)
-        return supabase.table("shifts").insert(fallback_payload).execute()
+        fallback_payload.pop("expected_price_item_code", None)
+        try:
+            return supabase.table("shifts").insert(fallback_payload).execute()
+        except Exception as exc2:
+            if not _is_missing_schema_error(exc2):
+                raise
+            fallback_payload.pop("care_coordinator_id", None)
+            return supabase.table("shifts").insert(fallback_payload).execute()
+
+
+def _resolve_care_coordinator_id(
+    supabase, participant_id: str, org_id: str, override: Optional[str] = None
+) -> Optional[str]:
+    """Care coordinator to snapshot onto a new shift: an explicit override if
+    given and valid, else the participant's own care_coordinator_id."""
+    if override:
+        coordinator = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("id", override)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        if not coordinator or not coordinator.data or coordinator.data.get("role") not in (
+            "support_coordinator",
+            "managing_director",
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="care_coordinator_id must be an existing coordinator or managing director in this organization.",
+            )
+        return override
+    try:
+        participant = (
+            supabase.table("patients")
+            .select("care_coordinator_id")
+            .eq("id", participant_id)
+            .eq("organization_id", org_id)
+            .maybe_single()
+            .execute()
+        )
+        return (participant.data or {}).get("care_coordinator_id") if participant and participant.data else None
+    except Exception:
+        return None
 
 
 async def _check_worker_credentials(
@@ -2082,7 +2256,10 @@ async def assign_shift(
     try:
         shift_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        
+        care_coordinator_id = _resolve_care_coordinator_id(
+            supabase, body.participant_id, org_id, body.care_coordinator_id
+        )
+
         shift_payload = {
             "id": shift_id,
             "organization_id": org_id,
@@ -2101,6 +2278,8 @@ async def assign_shift(
             "updated_at": now,
             "is_shadow_shift": body.is_shadow_shift,
             "shadow_of_worker_id": body.shadow_of_worker_id if body.is_shadow_shift else None,
+            "care_coordinator_id": care_coordinator_id,
+            "expected_price_item_code": body.expected_price_item_code,
         }
 
         result = _insert_shift_with_legacy_fallback(supabase, shift_payload)
@@ -2245,8 +2424,11 @@ def _detect_worker_conflicts(
     shift_end: datetime,
     exclude_shift_id: str | None = None,
     is_sleepover: bool = False,
+    tz=None,
 ) -> list[dict]:
     """Return a list of conflict descriptions for a worker over a time window.
+    ``tz`` is the branch zone the shift is worked in (availability slots are
+    the worker's local day-of-week/time); defaults to the request zone.
 
     Checks:
     1. Existing shifts that overlap the window.
@@ -2359,7 +2541,7 @@ def _detect_worker_conflicts(
     # unavailable or preferred independent of blackout dates and shift overlaps.
     try:
         slot_status = worker_matching_service.availability_status_for_shift(
-            worker_id, shift_start.isoformat(), shift_end.isoformat()
+            worker_id, shift_start.isoformat(), shift_end.isoformat(), tz=tz
         )
         if slot_status == "unavailable":
             conflicts.append({
@@ -2844,7 +3026,7 @@ async def get_worker_conflicts(
     Also checks skill matching if participant_id is provided.
     Returns availability_status: 'available' | 'warning' | 'unavailable'.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     s_dt = _parse_dt(shift_start)
@@ -2915,7 +3097,8 @@ async def get_available_workers(
     skill_warnings_by_worker = _skill_warnings_batch(supabase, worker_ids, participant_id)
     try:
         preferred_by_worker = worker_matching_service.availability_statuses_for_shift_batch(
-            worker_ids, s_dt.isoformat(), e_dt.isoformat()
+            worker_ids, s_dt.isoformat(), e_dt.isoformat(),
+            tz=participant_timezone(participant_id, organization_id=org_id) if participant_id else None,
         )
     except Exception:
         preferred_by_worker = {}
@@ -2984,7 +3167,7 @@ async def assign_existing_shift(
     Returns 409 with conflict list if conflicts exist and confirm_conflicts=False.
     Returns 200 with updated shift + any conflicts on success.
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     # Fetch shift
@@ -3128,7 +3311,7 @@ async def unassign_existing_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Remove the assigned worker from a shift, returning it to 'unassigned' status."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
@@ -3379,19 +3562,22 @@ async def reassign_shift(
     current_user: dict = Depends(get_current_user),
 ):
     """Reassign a shift to a different worker. Same conflict checks as assign."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
 
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id") or "") != org_id:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # Reuse the assign endpoint logic
-    class _Body(BaseModel):
-        worker_id: str = body.new_worker_id
-        confirm_conflicts: bool = body.confirm_conflicts
-
-    return await assign_existing_shift(shift_id, _Body(), current_user)
+    # Reuse the assign endpoint logic. Built from the real ShiftAssignBody
+    # (not an ad-hoc stand-in) so it always carries every field
+    # assign_existing_shift reads — a hand-rolled subset here previously
+    # missed is_shadow_shift/shadow_of_worker_id and 500'd on every call.
+    return await assign_existing_shift(
+        shift_id,
+        ShiftAssignBody(worker_id=body.new_worker_id, confirm_conflicts=body.confirm_conflicts),
+        current_user,
+    )
 
 
 # ── POST /shifts/bulk ─────────────────────────────────────────────────────────
@@ -3406,6 +3592,9 @@ class BulkShiftBody(BaseModel):
     shift_type: str = "standard_support"
     worker_id: Optional[str] = None   # auto-assign if provided
     confirm_conflicts: bool = False
+    # Applied to every occurrence generated by this bulk request — see
+    # AssignShiftBody.expected_price_item_code.
+    expected_price_item_code: Optional[str] = None
 
 
 @router.post("/shifts/bulk")
@@ -3448,6 +3637,9 @@ async def bulk_create_shifts(
     created: list[dict] = []
     skipped: list[dict] = []
     conflicts_summary: list[dict] = []
+    # The coordinator types wall-clock times for the participant's office.
+    bulk_tz = participant_timezone(body.participant_id, organization_id=org_id)
+    care_coordinator_id = _resolve_care_coordinator_id(supabase, body.participant_id, org_id)
 
     for week in range(body.weeks):
         for dow in sorted(set(body.days_of_week)):
@@ -3456,11 +3648,11 @@ async def bulk_create_shifts(
             shift_date = first_day + timedelta(days=week * 7 + days_ahead)
             shift_start_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, sh, sm,
-                tzinfo=APP_TIMEZONE,
+                tzinfo=bulk_tz,
             ).astimezone(timezone.utc)
             shift_end_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, eh, em,
-                tzinfo=APP_TIMEZONE,
+                tzinfo=bulk_tz,
             ).astimezone(timezone.utc)
             if shift_end_dt <= shift_start_dt:
                 shift_end_dt += timedelta(days=1)
@@ -3468,7 +3660,7 @@ async def bulk_create_shifts(
             conflicts: list[dict] = []
             if body.worker_id:
                 conflicts = _detect_worker_conflicts(
-                    supabase, body.worker_id, org_id, shift_start_dt, shift_end_dt
+                    supabase, body.worker_id, org_id, shift_start_dt, shift_end_dt, tz=bulk_tz
                 )
                 hard = any(c["severity"] == "error" for c in conflicts)
                 if hard and not body.confirm_conflicts:
@@ -3494,6 +3686,8 @@ async def bulk_create_shifts(
                 "created_by": get_user_id(current_user),
                 "created_at": now_iso,
                 "updated_at": now_iso,
+                "care_coordinator_id": care_coordinator_id,
+                "expected_price_item_code": body.expected_price_item_code,
             }
             if body.worker_id:
                 payload["worker_id"] = body.worker_id
@@ -3545,6 +3739,7 @@ class CreateUnassignedShiftBody(BaseModel):
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
     duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs'
+    expected_price_item_code: Optional[str] = None
 
 
 @router.post("/shifts/unassigned")
@@ -3598,6 +3793,8 @@ async def create_unassigned_shift(
         "created_by": get_user_id(current_user),
         "created_at": now_iso,
         "updated_at": now_iso,
+        "care_coordinator_id": _resolve_care_coordinator_id(supabase, body.participant_id, org_id),
+        "expected_price_item_code": body.expected_price_item_code,
     }
     result = _insert_shift_with_legacy_fallback(supabase, payload)
     shift = (result.data or [None])[0] or payload
@@ -4479,6 +4676,10 @@ async def get_live_shifts(
             "checklist": checklist,
             "medications": medications,
             "workflow_stage": workflow_stage,
+            # Participant's branch zone; the live monitor labels clock-in/
+            # medication times with it when it differs from the coordinator's
+            # own branch (same pattern as /coordinator/shifts and shift_service).
+            "timezone": str(participant_timezone(shift, organization_id=org_id)),
         })
 
     return result
@@ -4678,7 +4879,7 @@ async def emergency_stop_shift(
         await _send_worker_notification(
             supabase, worker_id, org_id,
             "shift_unassigned", shift_id,
-            "⚠️ Emergency — Contact Coordinator",
+            "Emergency: Contact Coordinator",
             body.note,
         )
         # Also create a high-severity alert
@@ -5627,7 +5828,9 @@ class TrainingModuleLockBody(BaseModel):
 @router.patch("/training-modules/{module_id}/lock")
 async def set_training_module_lock(module_id: str, body: TrainingModuleLockBody,
                                    current_user: dict = Depends(get_current_user)):
-    if not is_managing_director(current_user):
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "lock_training_module", get_supabase_admin()
+    ):
         raise HTTPException(status_code=403, detail="Managing Director access required.")
     org_id = _require_org_read(current_user)
     from ..services.worker_training_service import update_training_module

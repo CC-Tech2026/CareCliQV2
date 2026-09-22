@@ -200,6 +200,7 @@ export type ParticipantRecord = {
   allied_health_id?: string | null;
   case_manager_name?: string | null;
   case_manager_phone?: string | null;
+  care_coordinator_id?: string | null;
   gp_name?: string | null;
   gp_phone?: string | null;
   gp_practice?: string | null;

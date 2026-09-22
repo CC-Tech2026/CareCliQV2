@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone, date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -20,6 +21,8 @@ from ..core.access import (
 from .supabase_client import get_supabase_admin, signed_storage_url
 from .organization_branding_service import get_letterhead
 
+logger = logging.getLogger(__name__)
+
 INVOICE_FILES_BUCKET = "invoice-files"
 
 
@@ -33,6 +36,7 @@ def _with_signed_pdf_url(invoice: dict) -> dict:
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
+from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
@@ -45,15 +49,15 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _as_of_date_from_due(due_date: Any) -> date:
-    if not due_date:
-        from ..core.timezone import app_today
-        return app_today()
-    try:
-        return date.fromisoformat(str(due_date)[:10])
-    except ValueError:
-        from ..core.timezone import app_today
-        return app_today()
+def _as_of_date_from_due(due_date: Any, participant_id: Any = None, org_id: Any = None) -> date:
+    """Date an invoice is billed as-of: its due date, else today in the
+    participant's branch zone."""
+    if due_date:
+        try:
+            return date.fromisoformat(str(due_date)[:10])
+        except ValueError:
+            pass
+    return app_today(participant_timezone(participant_id, organization_id=org_id))
 
 
 def _money_to_cents(value: Any) -> int:
@@ -144,9 +148,10 @@ async def _resolve_ndis_prices_for_invoice(
             if resolved:
                 # Lock this line to the resolved price item version
                 item["ndis_price_item_id"] = resolved.get("id")
+                catalogue_unit_amount_cents = _money_to_cents(resolved.get("effective_price", 0))
                 # Use resolved price if no unit_amount_cents was explicitly provided
                 if item.get("unit_amount_cents") is None and item.get("unit_amount") is None:
-                    item["unit_amount_cents"] = _money_to_cents(resolved.get("effective_price", 0))
+                    item["unit_amount_cents"] = catalogue_unit_amount_cents
                     # Recalculate line total with resolved price
                     quantity = Decimal(str(item.get("quantity") or "1"))
                     item["line_total_cents"] = int(
@@ -154,6 +159,24 @@ async def _resolve_ndis_prices_for_invoice(
                             Decimal("1"), rounding=ROUND_HALF_UP
                         )
                     )
+                else:
+                    # Client supplied an explicit amount for a catalogue-linked
+                    # item — respect it (don't silently override), but flag any
+                    # divergence from the resolved catalogue price so it's
+                    # visible on the invoice record rather than silently lost.
+                    supplied_cents = (
+                        item.get("unit_amount_cents")
+                        if item.get("unit_amount_cents") is not None
+                        else _money_to_cents(item.get("unit_amount") or 0)
+                    )
+                    if abs(int(supplied_cents) - catalogue_unit_amount_cents) > 1:
+                        item["catalogue_price_mismatch"] = True
+                        item["catalogue_unit_amount_cents"] = catalogue_unit_amount_cents
+                        logger.warning(
+                            "billing: invoice line item %s supplied amount %s cents diverges "
+                            "from catalogue price %s cents for org %s",
+                            item.get("item_code"), supplied_cents, catalogue_unit_amount_cents, org_id,
+                        )
         except HTTPException:
             raise
         except Exception as exc:
@@ -252,6 +275,8 @@ async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[
     for inv in invoices:
         pid = inv.get("participant_id")
         inv["service_category"] = category_by_id.get(str(pid)) if pid else None
+        # Participant's branch zone — clients show the invoice date in it.
+        inv["timezone"] = str(participant_timezone(inv, organization_id=inv.get("organization_id")))
     return invoices
 
 
@@ -424,7 +449,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
     billing_period_id = None
     participant_id = data.get("participant_id")
     if participant_id:
-        as_of = _as_of_date_from_due(data.get("due_date"))
+        as_of = _as_of_date_from_due(data.get("due_date"), participant_id, org_id)
         supabase = get_supabase_admin()
         participant_result = (
             supabase.table("patients")
@@ -562,7 +587,7 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         payload["finalized_at"] = _now_iso()
     if status_value == "paid" and not existing.get("paid_at"):
         payload["paid_at"] = _now_iso()
-        payload["payment_date"] = data.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
+        payload["payment_date"] = data.get("payment_date") or app_today().isoformat()
     if "payment_reference" in data:
         payload["payment_reference"] = data.get("payment_reference")
 
@@ -678,6 +703,24 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
                 "case_manager_name, case_manager_email, case_manager_phone"
             ).eq("id", invoice["participant_id"]).limit(1).execute()
             participant = (r.data or [{}])[0]
+        except Exception:
+            pass
+
+    # ── Care coordinator (informational only — never used for billed_to_*
+    # or plan_manager_* above, which stay driven by case_manager_* alone).
+    # Fetched as its own best-effort query, not folded into the participant
+    # select above, so a not-yet-migrated deployment can't lose participant
+    # name/NDIS number/plan-management fields over one missing column.
+    care_coordinator_name = ""
+    if invoice.get("participant_id"):
+        try:
+            cc = supabase.table("patients").select("care_coordinator_id").eq(
+                "id", invoice["participant_id"]
+            ).limit(1).execute()
+            cc_id = (cc.data or [{}])[0].get("care_coordinator_id")
+            if cc_id:
+                user_r = supabase.table("users").select("full_name").eq("id", cc_id).limit(1).execute()
+                care_coordinator_name = (user_r.data or [{}])[0].get("full_name") or ""
         except Exception:
             pass
 
@@ -872,6 +915,8 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "plan_manager_name": plan_manager_name,
         "plan_manager_email": plan_manager_email,
         "plan_management_instruction": "",
+        # Care coordinator — informational only, never a billing recipient
+        "care_coordinator_name": care_coordinator_name,
         # Note
         "invoice_notes": invoice.get("notes") or "",
         # Footer
@@ -945,7 +990,8 @@ async def get_revenue_report(user: dict) -> dict:
     total_outstanding = 0
 
     for inv in invoices:
-        month_key = str(inv.get("created_at") or "")[:7]
+        month_day = shift_local_date(inv.get("created_at"))
+        month_key = month_day.isoformat()[:7] if month_day else str(inv.get("created_at") or "")[:7]
         amount = int(inv.get("total_cents") or 0)
         total_billed += amount
         monthly[month_key]["billed"] += amount
