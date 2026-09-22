@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, AlertTriangle, Loader2, Siren } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Loader2, Siren, Clock } from "lucide-react";
 import { createIncident } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -73,6 +73,11 @@ const REPORTABLE_CATEGORIES = [
 
 const NDIS_REPORTABLE_TYPES = new Set(["abuse_neglect", "restrictive_practice"]);
 
+// "Fill it later" — the only fields that can be deferred instead of blocking submission.
+// Everything else on the form stays required at submit time.
+const DEFERRABLE_FIELDS = ["description", "participant_impact", "worker_actions", "injury_nature"] as const;
+type DeferrableField = (typeof DEFERRABLE_FIELDS)[number];
+
 function FormCard({ number, title, subtitle, children }: { number: number; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="cc-surface-card">
@@ -98,6 +103,54 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
     <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">
       {children} {required && <span className="text-red-500">*</span>}
     </Label>
+  );
+}
+
+function DeferrableTextarea({
+  field, label, required, placeholder, value, onChange, pending, onTogglePending, rows = 3, help,
+}: {
+  field: DeferrableField;
+  label: string;
+  required?: boolean;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  pending: boolean;
+  onTogglePending: (field: DeferrableField, v: boolean) => void;
+  rows?: number;
+  help?: string;
+}) {
+  const { translate } = useAccessibility();
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <FieldLabel required={required && !pending}>{label}</FieldLabel>
+        <label className="flex items-center gap-1.5 text-[11.5px] text-cc-muted cursor-pointer select-none">
+          <Checkbox checked={pending} onCheckedChange={(v) => onTogglePending(field, v === true)} />
+          <Clock size={11} />
+          {translate("incidents.new.fillItLater")}
+        </label>
+      </div>
+      {help && <p className="text-[12px] text-cc-muted mb-2">{help}</p>}
+      {pending ? (
+        <div
+          className="rounded-xl border border-dashed px-4 py-3 text-[12.5px] flex items-center gap-2"
+          style={{ borderColor: BORDER, color: "var(--cc-muted)" }}
+        >
+          <Clock size={13} className="shrink-0" />
+          {translate("incidents.new.fillItLaterNote")}
+        </div>
+      ) : (
+        <Textarea
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="text-[13px] resize-none rounded-xl"
+          style={{ borderColor: BORDER }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -143,6 +196,11 @@ export default function IncidentNew() {
 
   const [form, setForm] = useState(emptyForm);
   const [reportableCategories, setReportableCategories] = useState<string[]>([]);
+  const [pendingFields, setPendingFields] = useState<DeferrableField[]>([]);
+
+  function toggleDeferred(field: DeferrableField, deferred: boolean) {
+    setPendingFields((prev) => (deferred ? [...new Set([...prev, field])] : prev.filter((f) => f !== field)));
+  }
 
   const { data: participantsData } = useGetParticipants({});
   const participants = (participantsData as { data?: Array<{ id: string; full_name: string; ndis_number?: string | null }> } | undefined)?.data ?? [];
@@ -174,16 +232,20 @@ export default function IncidentNew() {
       toast({ title: translate("incidents.new.titleRequired"), variant: "destructive" });
       return;
     }
-    if (!form.description.trim()) {
+    if (!pendingFields.includes("description") && !form.description.trim()) {
       toast({ title: translate("incidents.new.descriptionRequired"), variant: "destructive" });
       return;
     }
-    if (participantHarmed && !form.injury_nature.trim()) {
+    if (participantHarmed && !pendingFields.includes("injury_nature") && !form.injury_nature.trim()) {
       toast({ title: translate("incidents.new.injuryNatureRequired"), variant: "destructive" });
       return;
     }
     if (participantHarmed && !form.injury_medical_attention) {
       toast({ title: translate("incidents.new.injuryMedicalAttentionRequired"), variant: "destructive" });
+      return;
+    }
+    if (!pendingFields.includes("worker_actions") && !form.worker_actions.trim()) {
+      toast({ title: translate("incidents.new.immediateActionsRequired"), variant: "destructive" });
       return;
     }
     if (!form.staff_declaration_name.trim()) {
@@ -196,11 +258,16 @@ export default function IncidentNew() {
     }
     setSaving(true);
     try {
+      const activePendingFields = pendingFields.filter(
+        (f) => f !== "injury_nature" || participantHarmed
+      );
       const data = await createIncident<{ id: string }>({
         ...form,
         participant_id: form.participant_id || undefined,
         participant_harmed: form.participant_harmed || undefined,
-        injury_nature: participantHarmed ? form.injury_nature || undefined : undefined,
+        injury_nature: participantHarmed
+          ? (pendingFields.includes("injury_nature") ? "" : form.injury_nature || undefined)
+          : undefined,
         injury_medical_attention: participantHarmed && form.injury_medical_attention
           ? (form.injury_medical_attention as "ambulance" | "hospital_self_transport" | "gp" | "none")
           : undefined,
@@ -211,9 +278,14 @@ export default function IncidentNew() {
         reportable_categories: reportableCategories.length ? reportableCategories : undefined,
         staff_declaration_name: form.staff_declaration_name,
         staff_declaration_signature: form.staff_declaration_signature,
+        pending_fields: activePendingFields.length ? activePendingFields : undefined,
         incident_date: new Date(form.incident_date).toISOString(),
       });
-      toast({ title: translate("incidents.new.logged") });
+      toast({
+        title: activePendingFields.length
+          ? translate("incidents.new.loggedWithPending")
+          : translate("incidents.new.logged"),
+      });
       navigate(`/incidents/${data.id}`);
     } catch {
       toast({ title: translate("incidents.new.logFailed"), variant: "destructive" });
@@ -408,17 +480,17 @@ export default function IncidentNew() {
               className="rounded-xl border p-4 space-y-4"
               style={{ borderColor: BORDER, background: "var(--cc-soft)" }}
             >
-              <div>
-                <FieldLabel required>{translate("incidents.new.injuryNature")}</FieldLabel>
-                <Textarea
-                  rows={2}
-                  value={form.injury_nature}
-                  onChange={(e) => set("injury_nature", e.target.value)}
-                  placeholder={translate("incidents.new.injuryNaturePlaceholder")}
-                  className="text-[13px] resize-none rounded-xl bg-white"
-                  style={{ borderColor: BORDER }}
-                />
-              </div>
+              <DeferrableTextarea
+                field="injury_nature"
+                label={translate("incidents.new.injuryNature")}
+                required
+                rows={2}
+                value={form.injury_nature}
+                onChange={(v) => set("injury_nature", v)}
+                placeholder={translate("incidents.new.injuryNaturePlaceholder")}
+                pending={pendingFields.includes("injury_nature")}
+                onTogglePending={toggleDeferred}
+              />
               <div>
                 <FieldLabel required>{translate("incidents.new.injuryMedicalAttention")}</FieldLabel>
                 <Select value={form.injury_medical_attention} onValueChange={(v) => set("injury_medical_attention", v)}>
@@ -438,44 +510,43 @@ export default function IncidentNew() {
 
         {/* SECTION 3 — Description */}
         <FormCard number={3} title={translate("incidents.new.section3Title")}>
-          <div>
-            <FieldLabel required>{translate("incidents.new.whatHappened")}</FieldLabel>
-            <p className="text-[12px] text-cc-muted mb-2">{translate("incidents.new.section3Help")}</p>
-            <Textarea
-              rows={5}
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder={translate("incidents.new.whatHappenedPlaceholder")}
-              className="text-[13px] resize-none rounded-xl"
-              style={{ borderColor: BORDER }}
-            />
-          </div>
-          <div>
-            <FieldLabel>{translate("incidents.new.participantImpact")}</FieldLabel>
-            <Textarea
-              rows={2}
-              value={form.participant_impact}
-              onChange={(e) => set("participant_impact", e.target.value)}
-              placeholder={translate("incidents.new.participantImpactPlaceholder")}
-              className="text-[13px] resize-none rounded-xl"
-              style={{ borderColor: BORDER }}
-            />
-          </div>
+          <DeferrableTextarea
+            field="description"
+            label={translate("incidents.new.whatHappened")}
+            required
+            rows={5}
+            value={form.description}
+            onChange={(v) => set("description", v)}
+            placeholder={translate("incidents.new.whatHappenedPlaceholder")}
+            help={translate("incidents.new.section3Help")}
+            pending={pendingFields.includes("description")}
+            onTogglePending={toggleDeferred}
+          />
+          <DeferrableTextarea
+            field="participant_impact"
+            label={translate("incidents.new.participantImpact")}
+            rows={2}
+            value={form.participant_impact}
+            onChange={(v) => set("participant_impact", v)}
+            placeholder={translate("incidents.new.participantImpactPlaceholder")}
+            pending={pendingFields.includes("participant_impact")}
+            onTogglePending={toggleDeferred}
+          />
         </FormCard>
 
         {/* SECTION 4 — Immediate Actions Taken */}
         <FormCard number={4} title={translate("incidents.new.section4Title")}>
-          <div>
-            <FieldLabel required>{translate("incidents.new.immediateActions")}</FieldLabel>
-            <Textarea
-              rows={3}
-              value={form.worker_actions}
-              onChange={(e) => set("worker_actions", e.target.value)}
-              placeholder={translate("incidents.new.immediateActionsPlaceholder")}
-              className="text-[13px] resize-none rounded-xl"
-              style={{ borderColor: BORDER }}
-            />
-          </div>
+          <DeferrableTextarea
+            field="worker_actions"
+            label={translate("incidents.new.immediateActions")}
+            required
+            rows={3}
+            value={form.worker_actions}
+            onChange={(v) => set("worker_actions", v)}
+            placeholder={translate("incidents.new.immediateActionsPlaceholder")}
+            pending={pendingFields.includes("worker_actions")}
+            onTogglePending={toggleDeferred}
+          />
           <div>
             <FieldLabel required>{translate("incidents.new.emergencyServicesCalled")}</FieldLabel>
             <div className="flex gap-5 mt-1">

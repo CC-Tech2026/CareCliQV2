@@ -1,0 +1,704 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Strix",
+          "informationUri": "https://strix.ai",
+          "rules": [
+            {
+              "id": "CWE-798",
+              "name": "Production Supabase Service Role Credentials Exposed in Version Control",
+              "shortDescription": {
+                "text": "Production Supabase Service Role Credentials Exposed in Version Control"
+              },
+              "fullDescription": {
+                "text": "Active production Supabase `service_role` credentials are committed to the repository in both `.env` and `.env.example` files. The exposed service role key provides unrestricted administrative access to the production database, completely bypassing Row-Level Security (RLS) policies that enforce multi-tenant isolation. Validation confirmed the credentials are active and the database contains production data including 25+ users, multiple organizations, and 45+ shifts."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Active production Supabase `service_role` credentials are committed to the repository in both `.env` and `.env.example` files. The exposed service role key provides unrestricted administrative access to the production database, completely bypassing Row-Level Security (RLS) policies that enforce multi-tenant isolation. Validation confirmed the credentials are active and the database contains production data including 25+ users, multiple organizations, and 45+ shifts.\n\nComplete compromise of the CareCliQV2 production database and all Protected Health Information (PHI). An attacker with these credentials can:\n\n- Read, modify, or delete **all data** across **all organizations** (multi-tenant isolation bypassed)\n- Access **all patient medical records**, session notes, medications, and incident reports\n- Exfiltrate **NDIS financial data**, billing records, invoices, and budgets  \n- Modify **audit logs** and **compliance records** to hide malicious activity\n- Create administrative accounts or escalate privileges\n- Delete the entire database or hold it for ransom\n- Inject malicious data into patient care workflows\n\nThe service role key bypasses all Row-Level Security policies, authentication checks, and application-layer authorization controls. This represents a complete security perimeter breach for a healthcare platform handling Australian Protected Health Information subject to Privacy Act 1988 and NDIS compliance requirements.\n\n**Immediate (within 1 hour):**\n\n1. **Rotate Supabase service role key** via Supabase Dashboard → Settings → API → Reset service_role secret\n2. **Rotate Supabase anon key** to prevent unauthorized read access\n3. **Update `.env` file** with new credentials on all deployment environments\n4. **Audit Supabase logs** (Dashboard → Logs) for unauthorized API access using the exposed key\n5. **Notify security/compliance team** for potential PHI breach investigation\n\n**Short-term (within 24 hours):**\n\n6. **Purge credentials from git history**:\n   ```bash\n   git filter-branch --force --index-filter \\\n     \"git rm --cached --ignore-unmatch .env.example\" \\\n     --prune-empty --tag-name-filter cat -- --all\n   ```\n7. **Replace `.env.example` with placeholder values**:\n   ```\n   SUPABASE_URL=https://your-project.supabase.co\n   SUPABASE_ANON_KEY=your-anon-key-here\n   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here\n   ```\n8. **Force push cleaned history** and notify all contributors to re-clone\n9. **Scan for public exposure** using GitHub secret scanning, GitGuardian, or TruffleHog\n\n**Long-term (within 1 week):**\n\n10. **Implement secrets management** (HashiCorp Vault, AWS Secrets Manager, or Doppler)\n11. **Add pre-commit hooks** with `gitleaks` or `trufflehog` to block credential commits\n12. **Enforce `.env` in `.gitignore`** with CI validation\n13. **Restrict service role key usage** to backend servers only (never in frontend/mobile)\n14. **Implement Supabase RLS policies** for defense-in-depth (already present but bypassed by service role)\n15. **Security training** on credential handling and the distinction between development/production secrets",
+                "markdown": "Active production Supabase `service_role` credentials are committed to the repository in both `.env` and `.env.example` files. The exposed service role key provides unrestricted administrative access to the production database, completely bypassing Row-Level Security (RLS) policies that enforce multi-tenant isolation. Validation confirmed the credentials are active and the database contains production data including 25+ users, multiple organizations, and 45+ shifts.\n\nComplete compromise of the CareCliQV2 production database and all Protected Health Information (PHI). An attacker with these credentials can:\n\n- Read, modify, or delete **all data** across **all organizations** (multi-tenant isolation bypassed)\n- Access **all patient medical records**, session notes, medications, and incident reports\n- Exfiltrate **NDIS financial data**, billing records, invoices, and budgets  \n- Modify **audit logs** and **compliance records** to hide malicious activity\n- Create administrative accounts or escalate privileges\n- Delete the entire database or hold it for ransom\n- Inject malicious data into patient care workflows\n\nThe service role key bypasses all Row-Level Security policies, authentication checks, and application-layer authorization controls. This represents a complete security perimeter breach for a healthcare platform handling Australian Protected Health Information subject to Privacy Act 1988 and NDIS compliance requirements.\n\n**Immediate (within 1 hour):**\n\n1. **Rotate Supabase service role key** via Supabase Dashboard → Settings → API → Reset service_role secret\n2. **Rotate Supabase anon key** to prevent unauthorized read access\n3. **Update `.env` file** with new credentials on all deployment environments\n4. **Audit Supabase logs** (Dashboard → Logs) for unauthorized API access using the exposed key\n5. **Notify security/compliance team** for potential PHI breach investigation\n\n**Short-term (within 24 hours):**\n\n6. **Purge credentials from git history**:\n   ```bash\n   git filter-branch --force --index-filter \\\n     \"git rm --cached --ignore-unmatch .env.example\" \\\n     --prune-empty --tag-name-filter cat -- --all\n   ```\n7. **Replace `.env.example` with placeholder values**:\n   ```\n   SUPABASE_URL=https://your-project.supabase.co\n   SUPABASE_ANON_KEY=your-anon-key-here\n   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here\n   ```\n8. **Force push cleaned history** and notify all contributors to re-clone\n9. **Scan for public exposure** using GitHub secret scanning, GitGuardian, or TruffleHog\n\n**Long-term (within 1 week):**\n\n10. **Implement secrets management** (HashiCorp Vault, AWS Secrets Manager, or Doppler)\n11. **Add pre-commit hooks** with `gitleaks` or `trufflehog` to block credential commits\n12. **Enforce `.env` in `.gitignore`** with CI validation\n13. **Restrict service role key usage** to backend servers only (never in frontend/mobile)\n14. **Implement Supabase RLS policies** for defense-in-depth (already present but bypassed by service role)\n15. **Security training** on credential handling and the distinction between development/production secrets"
+              },
+              "properties": {
+                "security-severity": "10.0",
+                "tags": [
+                  "security",
+                  "CWE-798",
+                  "stride:S",
+                  "stride:I"
+                ]
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/798.html"
+            },
+            {
+              "id": "CWE-613",
+              "name": "Session Tracking Bypass - Tokens Without JTI Bypass Revocation",
+              "shortDescription": {
+                "text": "Session Tracking Bypass - Tokens Without JTI Bypass Revocation"
+              },
+              "fullDescription": {
+                "text": "The session tracking mechanism in `device_security_service.py` accepts JWT tokens that lack a `jti` (JWT ID) claim as valid, bypassing session revocation controls. This allows tokens to remain valid even after logout, account suspension, or explicit session termination by administrators. Additionally, tokens with unknown JTI values (not present in the `user_sessions` table) are also accepted as valid."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "help": {
+                "text": "The session tracking mechanism in `device_security_service.py` accepts JWT tokens that lack a `jti` (JWT ID) claim as valid, bypassing session revocation controls. This allows tokens to remain valid even after logout, account suspension, or explicit session termination by administrators. Additionally, tokens with unknown JTI values (not present in the `user_sessions` table) are also accepted as valid.\n\n- **Persistent Unauthorized Access**: Tokens without JTI remain valid until expiration (up to 24 hours default, longer if configured), even after user logout\n- **Session Revocation Bypass**: Administrators cannot revoke access for compromised accounts if attacker uses JTI-less tokens\n- **Account Suspension Ineffective**: Suspended user accounts can continue accessing the system with pre-generated JTI-less tokens\n- **Audit Trail Gaps**: Sessions without JTI are not tracked in `user_sessions` table, leaving no audit record\n- **Concurrent Session Limits Bypass**: JTI-less tokens don't count toward concurrent session limits\n\n**Exploitation Scenario**: An attacker with a compromised account or ability to forge tokens (via the JWT secret vulnerability) creates tokens without JTI claims. Even if the account is subsequently suspended or all sessions revoked, these tokens remain functional.\n\n**IMMEDIATE:**\n\n1. **Enforce JTI Requirement**\n   \n   Reject tokens that lack a JTI claim at the validation layer.\n\n2. **Fail Secure on Unknown JTI**\n   \n   If a JTI is present but not found in `user_sessions`, reject the token rather than accepting it.\n\n**SHORT-TERM:**\n\n3. **Add Monitoring**\n   \n   Log and alert on tokens without JTI claims being used.\n\n4. **Audit Existing Tokens**\n   \n   Review if any legitimate flows create JTI-less tokens that need migration.\n\n**LONG-TERM:**\n\n5. **Session Database Constraints**\n   \n   Ensure all issued tokens have corresponding `user_sessions` entries created atomically.\n\n6. **Token Introspection Endpoint**\n   \n   Provide admin endpoint to inspect active sessions and force revocation.",
+                "markdown": "The session tracking mechanism in `device_security_service.py` accepts JWT tokens that lack a `jti` (JWT ID) claim as valid, bypassing session revocation controls. This allows tokens to remain valid even after logout, account suspension, or explicit session termination by administrators. Additionally, tokens with unknown JTI values (not present in the `user_sessions` table) are also accepted as valid.\n\n- **Persistent Unauthorized Access**: Tokens without JTI remain valid until expiration (up to 24 hours default, longer if configured), even after user logout\n- **Session Revocation Bypass**: Administrators cannot revoke access for compromised accounts if attacker uses JTI-less tokens\n- **Account Suspension Ineffective**: Suspended user accounts can continue accessing the system with pre-generated JTI-less tokens\n- **Audit Trail Gaps**: Sessions without JTI are not tracked in `user_sessions` table, leaving no audit record\n- **Concurrent Session Limits Bypass**: JTI-less tokens don't count toward concurrent session limits\n\n**Exploitation Scenario**: An attacker with a compromised account or ability to forge tokens (via the JWT secret vulnerability) creates tokens without JTI claims. Even if the account is subsequently suspended or all sessions revoked, these tokens remain functional.\n\n**IMMEDIATE:**\n\n1. **Enforce JTI Requirement**\n   \n   Reject tokens that lack a JTI claim at the validation layer.\n\n2. **Fail Secure on Unknown JTI**\n   \n   If a JTI is present but not found in `user_sessions`, reject the token rather than accepting it.\n\n**SHORT-TERM:**\n\n3. **Add Monitoring**\n   \n   Log and alert on tokens without JTI claims being used.\n\n4. **Audit Existing Tokens**\n   \n   Review if any legitimate flows create JTI-less tokens that need migration.\n\n**LONG-TERM:**\n\n5. **Session Database Constraints**\n   \n   Ensure all issued tokens have corresponding `user_sessions` entries created atomically.\n\n6. **Token Introspection Endpoint**\n   \n   Provide admin endpoint to inspect active sessions and force revocation."
+              },
+              "properties": {
+                "security-severity": "6.5",
+                "tags": [
+                  "security",
+                  "CWE-613",
+                  "stride:S"
+                ]
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/613.html"
+            },
+            {
+              "id": "CVE-2025-71329",
+              "name": "CVE-2025-71329 in image-size 1.2.1 (Denial of Service via crafted JXL/HEIF buffer)",
+              "shortDescription": {
+                "text": "CVE-2025-71329 in image-size 1.2.1 (Denial of Service via crafted JXL/HEIF buffer)"
+              },
+              "fullDescription": {
+                "text": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71329**, a denial of service vulnerability that allows attackers to permanently block the Node.js event loop. The vulnerability exists in the JXL and HEIF image parsers, where a specially crafted image buffer with a **zero-valued size field** in a recognized box-type triggers an infinite loop, causing the application to hang indefinitely."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71329**, a denial of service vulnerability that allows attackers to permanently block the Node.js event loop. The vulnerability exists in the JXL and HEIF image parsers, where a specially crafted image buffer with a **zero-valued size field** in a recognized box-type triggers an infinite loop, causing the application to hang indefinitely.\n\nAn attacker who can supply crafted image files to the application can trigger a permanent denial of service by causing the Node.js event loop to hang in an infinite loop. This affects the **React Native mobile application** build process via the Metro bundler, which uses `image-size` as a transitive dependency. While this primarily impacts the build/development pipeline rather than production runtime, it can block mobile app builds and updates.\n\nUpgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available) which includes the fix for the infinite loop vulnerability. Monitor the upstream issue at `github.com/image-size/image-size/pull/439` for patch availability. As a workaround, validate and sanitize image files before processing during builds.",
+                "markdown": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71329**, a denial of service vulnerability that allows attackers to permanently block the Node.js event loop. The vulnerability exists in the JXL and HEIF image parsers, where a specially crafted image buffer with a **zero-valued size field** in a recognized box-type triggers an infinite loop, causing the application to hang indefinitely.\n\nAn attacker who can supply crafted image files to the application can trigger a permanent denial of service by causing the Node.js event loop to hang in an infinite loop. This affects the **React Native mobile application** build process via the Metro bundler, which uses `image-size` as a transitive dependency. While this primarily impacts the build/development pipeline rather than production runtime, it can block mobile app builds and updates.\n\nUpgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available) which includes the fix for the infinite loop vulnerability. Monitor the upstream issue at `github.com/image-size/image-size/pull/439` for patch availability. As a workaround, validate and sanitize image files before processing during builds."
+              },
+              "properties": {
+                "security-severity": "7.5",
+                "tags": [
+                  "security",
+                  "CVE-2025-71329",
+                  "stride:T",
+                  "stride:I"
+                ]
+              }
+            },
+            {
+              "id": "CVE-2025-71330",
+              "name": "CVE-2025-71330 in image-size 1.2.1 (Denial of Service via crafted ICNS buffer)",
+              "shortDescription": {
+                "text": "CVE-2025-71330 in image-size 1.2.1 (Denial of Service via crafted ICNS buffer)"
+              },
+              "fullDescription": {
+                "text": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71330**, a denial of service vulnerability affecting the ICNS (Apple Icon) parser. Attackers can permanently block the Node.js event loop by supplying a specially crafted ICNS image buffer containing valid magic bytes and a **zero-valued entry length field**, triggering an infinite loop as the offset never advances."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71330**, a denial of service vulnerability affecting the ICNS (Apple Icon) parser. Attackers can permanently block the Node.js event loop by supplying a specially crafted ICNS image buffer containing valid magic bytes and a **zero-valued entry length field**, triggering an infinite loop as the offset never advances.\n\nSimilar to CVE-2025-71329, this vulnerability allows denial of service via crafted ICNS image files during the React Native build process. The Metro bundler processes image assets (including ICNS files on macOS builds) and will hang indefinitely if a malicious ICNS file is encountered. This can block mobile application builds, updates, and CI/CD pipelines.\n\nUpgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available). Implement image validation and sanitization in the build pipeline to reject malformed ICNS files. Consider restricting accepted image formats if ICNS support is not required.",
+                "markdown": "The `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71330**, a denial of service vulnerability affecting the ICNS (Apple Icon) parser. Attackers can permanently block the Node.js event loop by supplying a specially crafted ICNS image buffer containing valid magic bytes and a **zero-valued entry length field**, triggering an infinite loop as the offset never advances.\n\nSimilar to CVE-2025-71329, this vulnerability allows denial of service via crafted ICNS image files during the React Native build process. The Metro bundler processes image assets (including ICNS files on macOS builds) and will hang indefinitely if a malicious ICNS file is encountered. This can block mobile application builds, updates, and CI/CD pipelines.\n\nUpgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available). Implement image validation and sanitization in the build pipeline to reject malformed ICNS files. Consider restricting accepted image formats if ICNS support is not required."
+              },
+              "properties": {
+                "security-severity": "7.5",
+                "tags": [
+                  "security",
+                  "CVE-2025-71330",
+                  "stride:T",
+                  "stride:I"
+                ]
+              }
+            },
+            {
+              "id": "CVE-2024-23342",
+              "name": "CVE-2024-23342 in ecdsa 0.19.2 (Minerva timing attack vulnerability)",
+              "shortDescription": {
+                "text": "CVE-2024-23342 in ecdsa 0.19.2 (Minerva timing attack vulnerability)"
+              },
+              "fullDescription": {
+                "text": "The `ecdsa` package version **0.19.2** is vulnerable to **CVE-2024-23342**, a cryptographic timing attack known as the **Minerva attack**. This pure Python implementation of Elliptic Curve Cryptography exhibits timing side-channels during ECDSA signature operations, potentially allowing attackers to recover private keys through careful timing analysis of signature generation. The advisory notes that **no patched version exists** as of the CVE publication."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "The `ecdsa` package version **0.19.2** is vulnerable to **CVE-2024-23342**, a cryptographic timing attack known as the **Minerva attack**. This pure Python implementation of Elliptic Curve Cryptography exhibits timing side-channels during ECDSA signature operations, potentially allowing attackers to recover private keys through careful timing analysis of signature generation. The advisory notes that **no patched version exists** as of the CVE publication.\n\nThe application uses `python-jose[cryptography]` for JWT token generation and validation (`backend/app/core/security.py`), which transitively depends on the vulnerable `ecdsa` library. While the current JWT configuration uses **HS256 (HMAC-SHA256)** which does not use ECDSA, the vulnerable library is present and could be exploited if:\n\n1. The JWT algorithm is changed to ES256/ES384/ES512 (ECDSA-based algorithms)\n2. Other parts of the application use ECDSA for signature operations\n3. `python-jose` internally uses ECDSA for certificate validation or other operations\n\nIf ECDSA operations are performed, an attacker with the ability to observe signature generation timing (e.g., via network timing, shared infrastructure, or timing side-channels) could potentially recover the ECDSA private key through the Minerva attack, leading to complete cryptographic compromise.\n\n**Immediate:** Verify that no ECDSA-based JWT algorithms (ES256, ES384, ES512) are used in production. Confirm the current **HS256** configuration remains in place and is not user-configurable.\n\n**Medium-term:** Consider migrating from `python-jose` to `PyJWT` which uses the `cryptography` library's constant-time ECDSA implementation instead of the pure-Python `ecdsa` package. This eliminates the timing attack vulnerability.\n\n**Long-term:** Monitor for patched versions of `ecdsa` or upstream fixes in `python-jose` that replace the vulnerable dependency. Implement cryptographic algorithm allowlisting to prevent runtime algorithm changes to ECDSA-based schemes.",
+                "markdown": "The `ecdsa` package version **0.19.2** is vulnerable to **CVE-2024-23342**, a cryptographic timing attack known as the **Minerva attack**. This pure Python implementation of Elliptic Curve Cryptography exhibits timing side-channels during ECDSA signature operations, potentially allowing attackers to recover private keys through careful timing analysis of signature generation. The advisory notes that **no patched version exists** as of the CVE publication.\n\nThe application uses `python-jose[cryptography]` for JWT token generation and validation (`backend/app/core/security.py`), which transitively depends on the vulnerable `ecdsa` library. While the current JWT configuration uses **HS256 (HMAC-SHA256)** which does not use ECDSA, the vulnerable library is present and could be exploited if:\n\n1. The JWT algorithm is changed to ES256/ES384/ES512 (ECDSA-based algorithms)\n2. Other parts of the application use ECDSA for signature operations\n3. `python-jose` internally uses ECDSA for certificate validation or other operations\n\nIf ECDSA operations are performed, an attacker with the ability to observe signature generation timing (e.g., via network timing, shared infrastructure, or timing side-channels) could potentially recover the ECDSA private key through the Minerva attack, leading to complete cryptographic compromise.\n\n**Immediate:** Verify that no ECDSA-based JWT algorithms (ES256, ES384, ES512) are used in production. Confirm the current **HS256** configuration remains in place and is not user-configurable.\n\n**Medium-term:** Consider migrating from `python-jose` to `PyJWT` which uses the `cryptography` library's constant-time ECDSA implementation instead of the pure-Python `ecdsa` package. This eliminates the timing attack vulnerability.\n\n**Long-term:** Monitor for patched versions of `ecdsa` or upstream fixes in `python-jose` that replace the vulnerable dependency. Implement cryptographic algorithm allowlisting to prevent runtime algorithm changes to ECDSA-based schemes."
+              },
+              "properties": {
+                "security-severity": "7.4",
+                "tags": [
+                  "security",
+                  "CVE-2024-23342",
+                  "stride:T",
+                  "stride:I"
+                ]
+              }
+            }
+          ],
+          "version": "1.5.3"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "CWE-798",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Production Supabase Service Role Credentials Exposed in Version Control\n\nActive production Supabase `service_role` credentials are committed to the repository in both `.env` and `.env.example` files. The exposed service role key provides unrestricted administrative access to the production database, completely bypassing Row-Level Security (RLS) policies that enforce multi-tenant isolation. Validation confirmed the credentials are active and the database contains production data including 25+ users, multiple organizations, and 45+ shifts."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".env.example"
+                },
+                "region": {
+                  "startLine": 1,
+                  "endLine": 4,
+                  "snippet": {
+                    "text": "SUPABASE_URL=https://sndwllbtmguzduuazahd.supabase.co\nSUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuZHdsbGJ0bWd1emR1dWF6YWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNTMwMDEsImV4cCI6MjA5MjkyOTAwMX0.7noBuenXV9ezzdGsS4tnIeHCXAWo3kmtkL-ArLAOfqc\n# Frontend Realtime reads SUPABASE_URL + SUPABASE_ANON_KEY from this file (via vite.config.ts).\nSUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuZHdsbGJ0bWd1emR1dWF6YWhkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzM1MzAwMSwiZXhwIjoyMDkyOTI5MDAxfQ.q7TNU0TFTYgGQUnq03KaU2ay0bhINHPHaJaBO8Rbmck"
+                  }
+                }
+              },
+              "message": {
+                "text": "Production credentials in example file"
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": ".env.example",
+                  "kind": "endpoint"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": ".env.example"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1,
+                        "endLine": 4
+                      },
+                      "insertedContent": {
+                        "text": "SUPABASE_URL=https://your-project.supabase.co\nSUPABASE_ANON_KEY=your-anon-key-here\n# Frontend Realtime reads SUPABASE_URL + SUPABASE_ANON_KEY from this file (via vite.config.ts).\nSUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "**Immediate (within 1 hour):**\n\n1. **Rotate Supabase service role key** via Supabase Dashboard → Settings → API → Reset service_role secret\n2. **Rotate Supabase anon key** to prevent unauthorized read access\n3. **Update `.env` file** with new credentials on all deployment environments\n4. **Audit Supabase logs** (Dashboard → Logs) for unauthorized API access using the exposed key\n5. **Notify security/compliance team** for potential PHI breach investigation\n\n**Short-term (within 24 hours):**\n\n6. **Purge credentials from git history**:\n   ```bash\n   git filter-branch --force --index-filter \\\n     \"git rm --cached --ignore-unmatch .env.example\" \\\n     --prune-empty --tag-name-filter cat -- --all\n   ```\n7. **Replace `.env.example` with placeholder values**:\n   ```\n   SUPABASE_URL=https://your-project.supabase.co\n   SUPABASE_ANON_KEY=your-anon-key-here\n   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here\n   ```\n8. **Force push cleaned history** and notify all contributors to re-clone\n9. **Scan for public exposure** using GitHub secret scanning, GitGuardian, or TruffleHog\n\n**Long-term (within 1 week):**\n\n10. **Implement secrets management** (HashiCorp Vault, AWS Secrets Manager, or Doppler)\n11. **Add pre-commit hooks** with `gitleaks` or `trufflehog` to block credential commits\n12. **Enforce `.env` in `.gitignore`** with CI validation\n13. **Restrict service role key usage** to backend servers only (never in frontend/mobile)\n14. **Implement Supabase RLS policies** for defense-in-depth (already present but bypassed by service role)\n15. **Security training** on credential handling and the distinction between development/production secrets",
+                "markdown": "**Immediate (within 1 hour):**\n\n1. **Rotate Supabase service role key** via Supabase Dashboard → Settings → API → Reset service_role secret\n2. **Rotate Supabase anon key** to prevent unauthorized read access\n3. **Update `.env` file** with new credentials on all deployment environments\n4. **Audit Supabase logs** (Dashboard → Logs) for unauthorized API access using the exposed key\n5. **Notify security/compliance team** for potential PHI breach investigation\n\n**Short-term (within 24 hours):**\n\n6. **Purge credentials from git history**:\n   ```bash\n   git filter-branch --force --index-filter \\\n     \"git rm --cached --ignore-unmatch .env.example\" \\\n     --prune-empty --tag-name-filter cat -- --all\n   ```\n7. **Replace `.env.example` with placeholder values**:\n   ```\n   SUPABASE_URL=https://your-project.supabase.co\n   SUPABASE_ANON_KEY=your-anon-key-here\n   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here\n   ```\n8. **Force push cleaned history** and notify all contributors to re-clone\n9. **Scan for public exposure** using GitHub secret scanning, GitGuardian, or TruffleHog\n\n**Long-term (within 1 week):**\n\n10. **Implement secrets management** (HashiCorp Vault, AWS Secrets Manager, or Doppler)\n11. **Add pre-commit hooks** with `gitleaks` or `trufflehog` to block credential commits\n12. **Enforce `.env` in `.gitignore`** with CI validation\n13. **Restrict service role key usage** to backend servers only (never in frontend/mobile)\n14. **Implement Supabase RLS policies** for defense-in-depth (already present but bypassed by service role)\n15. **Security training** on credential handling and the distinction between development/production secrets"
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "dde8a3b39dd79774dec6b6d85b511f1654aebfbb50f84a3159a5a52725256648"
+          },
+          "properties": {
+            "security-severity": "10.0",
+            "strix_vuln_class_hash": "9ddf8b2f13705ad3fef6aa5848089f080cd1013457e84a4aa0c6778735d25512",
+            "strix": {
+              "id": "vuln-0001",
+              "severity": "critical",
+              "cvss": 10.0,
+              "timestamp": "2026-08-25 06:09:23 UTC",
+              "target": "/workspace/CareCliQV2",
+              "endpoint": ".env.example",
+              "cwe": "CWE-798",
+              "impact": "Complete compromise of the CareCliQV2 production database and all Protected Health Information (PHI). An attacker with these credentials can:\n\n- Read, modify, or delete **all data** across **all organizations** (multi-tenant isolation bypassed)\n- Access **all patient medical records**, session notes, medications, and incident reports\n- Exfiltrate **NDIS financial data**, billing records, invoices, and budgets  \n- Modify **audit logs** and **compliance records** to hide malicious activity\n- Create administrative accounts or escalate privileges\n- Delete the entire database or hold it for ransom\n- Inject malicious data into patient care workflows\n\nThe service role key bypasses all Row-Level Security policies, authentication checks, and application-layer authorization controls. This represents a complete security perimeter breach for a healthcare platform handling Australian Protected Health Information subject to Privacy Act 1988 and NDIS compliance requirements.",
+              "technical_analysis": "Supabase uses JWT-based authentication with two primary key types:\n\n1. **`anon` key** - Public key for client-side use, subject to Row-Level Security  \n2. **`service_role` key** - Administrative key that bypasses ALL security policies\n\nThe repository contains both keys committed to `.env` and `.env.example`:\n\n```bash\n# .env.example (lines 1-4)\nSUPABASE_URL=https://sndwllbtmguzduuazahd.supabase.co\nSUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\nSUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\nJWT decode reveals:\n- **Role**: `service_role` (full admin access)\n- **Project**: `sndwllbtmguzduuazahd` \n- **Issued**: January 2026\n- **Expires**: April 2036 (10-year validity)\n\nThe service role key grants PostgreSQL-level `service_role` privileges, documented by Supabase as:\n\n> \"The service role key bypasses Row Level Security. Never use it on the client side.\"\n\nSource: https://supabase.com/docs/guides/api#api-keys\n\nValidation confirmed production status by enumerating tables via PostgREST API:\n- `organizations` table: 2 records  \n- `users` table: 25 records\n- `shifts` table: 46 records\n\nThe same credentials exist in both `.env` (active development) and `.env.example` (version controlled template), indicating production keys are used as default values rather than placeholder examples.",
+              "remediation_steps": "**Immediate (within 1 hour):**\n\n1. **Rotate Supabase service role key** via Supabase Dashboard → Settings → API → Reset service_role secret\n2. **Rotate Supabase anon key** to prevent unauthorized read access\n3. **Update `.env` file** with new credentials on all deployment environments\n4. **Audit Supabase logs** (Dashboard → Logs) for unauthorized API access using the exposed key\n5. **Notify security/compliance team** for potential PHI breach investigation\n\n**Short-term (within 24 hours):**\n\n6. **Purge credentials from git history**:\n   ```bash\n   git filter-branch --force --index-filter \\\n     \"git rm --cached --ignore-unmatch .env.example\" \\\n     --prune-empty --tag-name-filter cat -- --all\n   ```\n7. **Replace `.env.example` with placeholder values**:\n   ```\n   SUPABASE_URL=https://your-project.supabase.co\n   SUPABASE_ANON_KEY=your-anon-key-here\n   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here\n   ```\n8. **Force push cleaned history** and notify all contributors to re-clone\n9. **Scan for public exposure** using GitHub secret scanning, GitGuardian, or TruffleHog\n\n**Long-term (within 1 week):**\n\n10. **Implement secrets management** (HashiCorp Vault, AWS Secrets Manager, or Doppler)\n11. **Add pre-commit hooks** with `gitleaks` or `trufflehog` to block credential commits\n12. **Enforce `.env` in `.gitignore`** with CI validation\n13. **Restrict service role key usage** to backend servers only (never in frontend/mobile)\n14. **Implement Supabase RLS policies** for defense-in-depth (already present but bypassed by service role)\n15. **Security training** on credential handling and the distinction between development/production secrets",
+              "poc": {
+                "description": "1. Extract Supabase credentials from repository at `/workspace/CareCliQV2/.env.example`\n2. Decode the `SUPABASE_SERVICE_ROLE_KEY` JWT to verify `role: service_role`\n3. Send authenticated request to Supabase PostgREST API with service role credentials\n4. Enumerate database tables to confirm production data exists\n5. Execute read-only count query to verify multi-tenant data without accessing PHI",
+                "script_available": true
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CWE-798",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "GCP API Key Exposed in Mobile Configuration File\n\nA Google Cloud Platform (GCP) API key for the Firebase project `carecliq-13c18` is hardcoded in the `google-services.json` configuration file within the repository. While validation confirms most GCP APIs are currently disabled for this key, it remains active and could be leveraged if APIs are enabled or for quota exhaustion attacks."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "artifacts/mobile/google-services.json"
+                },
+                "region": {
+                  "startLine": 13,
+                  "endLine": 17,
+                  "snippet": {
+                    "text": "\"api_key\": [\n        {\n          \"current_key\": \"AIzaSyAw2TedpturF3LWtExgC4Duojg6BN4AXRg\"\n        }\n      ],"
+                  }
+                }
+              },
+              "message": {
+                "text": "Exposed GCP API key"
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "artifacts/mobile/google-services.json",
+                  "kind": "endpoint"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "artifacts/mobile/google-services.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 13,
+                        "endLine": 17
+                      },
+                      "insertedContent": {
+                        "text": "\"api_key\": [\n        {\n          \"current_key\": \"YOUR-API-KEY-HERE\"\n        }\n      ],"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "**Immediate (within 24 hours):**\n\n1. **Rotate GCP API key** via GCP Console:\n   ```\n   GCP Console → APIs & Services → Credentials → \n   Select API key → Regenerate key\n   ```\n\n2. **Apply API key restrictions**:\n   - **Application restrictions**: Limit to Android app package `care.cliq2026`\n   - **API restrictions**: Restrict to only required APIs (Firebase, Translation, Speech-to-Text)\n   - **Referrer restrictions**: Add mobile app package fingerprints\n\n3. **Update mobile app configuration**:\n   - Replace `google-services.json` with new restricted key\n   - Rebuild and redeploy mobile application\n\n**Short-term (within 1 week):**\n\n4. **Remove sensitive config from repository**:\n   - Move `google-services.json` to `.gitignore`\n   - Store production config in CI/CD secrets or app distribution platform\n   - Provide example template with placeholder key:\n     ```json\n     {\n       \"api_key\": [{\"current_key\": \"YOUR-API-KEY-HERE\"}]\n     }\n     ```\n\n5. **Implement GCP API restrictions**:\n   - Enable only required APIs (Translation, Speech-to-Text) with minimal scopes\n   - Set up billing alerts to detect abuse\n   - Configure quota limits to prevent cost exploitation\n\n6. **Audit GCP project access**:\n   - Review IAM permissions for project `carecliq-13c18`\n   - Check API key usage logs for unauthorized requests\n   - Verify no other API keys are exposed\n\n**Long-term (within 1 month):**\n\n7. **Implement secrets management for mobile**:\n   - Use Firebase App Check to restrict API access to legitimate app instances\n   - Consider Firebase Remote Config for runtime configuration\n   - Implement certificate pinning for mobile API requests\n\n8. **Security scanning**:\n   - Add `google-services.json` to `.gitignore` enforcement\n   - Scan git history for other GCP/Firebase credentials\n   - Implement pre-commit hooks to block credential commits\n\n9. **Developer training**:\n   - Document proper handling of `google-services.json`\n   - Establish separate development/staging/production GCP projects\n   - Never commit production Firebase config to version control",
+                "markdown": "**Immediate (within 24 hours):**\n\n1. **Rotate GCP API key** via GCP Console:\n   ```\n   GCP Console → APIs & Services → Credentials → \n   Select API key → Regenerate key\n   ```\n\n2. **Apply API key restrictions**:\n   - **Application restrictions**: Limit to Android app package `care.cliq2026`\n   - **API restrictions**: Restrict to only required APIs (Firebase, Translation, Speech-to-Text)\n   - **Referrer restrictions**: Add mobile app package fingerprints\n\n3. **Update mobile app configuration**:\n   - Replace `google-services.json` with new restricted key\n   - Rebuild and redeploy mobile application\n\n**Short-term (within 1 week):**\n\n4. **Remove sensitive config from repository**:\n   - Move `google-services.json` to `.gitignore`\n   - Store production config in CI/CD secrets or app distribution platform\n   - Provide example template with placeholder key:\n     ```json\n     {\n       \"api_key\": [{\"current_key\": \"YOUR-API-KEY-HERE\"}]\n     }\n     ```\n\n5. **Implement GCP API restrictions**:\n   - Enable only required APIs (Translation, Speech-to-Text) with minimal scopes\n   - Set up billing alerts to detect abuse\n   - Configure quota limits to prevent cost exploitation\n\n6. **Audit GCP project access**:\n   - Review IAM permissions for project `carecliq-13c18`\n   - Check API key usage logs for unauthorized requests\n   - Verify no other API keys are exposed\n\n**Long-term (within 1 month):**\n\n7. **Implement secrets management for mobile**:\n   - Use Firebase App Check to restrict API access to legitimate app instances\n   - Consider Firebase Remote Config for runtime configuration\n   - Implement certificate pinning for mobile API requests\n\n8. **Security scanning**:\n   - Add `google-services.json` to `.gitignore` enforcement\n   - Scan git history for other GCP/Firebase credentials\n   - Implement pre-commit hooks to block credential commits\n\n9. **Developer training**:\n   - Document proper handling of `google-services.json`\n   - Establish separate development/staging/production GCP projects\n   - Never commit production Firebase config to version control"
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "7fff96ba363a5fd5426096c2bef2ccd148adef9d12433444f227426b55f8f775"
+          },
+          "properties": {
+            "security-severity": "6.5",
+            "strix_vuln_class_hash": "66c1753756f70974b89b785addd61926d21a384721ca0df163a49111df350c75",
+            "strix": {
+              "id": "vuln-0002",
+              "severity": "medium",
+              "cvss": 6.5,
+              "timestamp": "2026-08-25 06:10:38 UTC",
+              "target": "/workspace/CareCliQV2/artifacts/mobile/google-services.json",
+              "endpoint": "artifacts/mobile/google-services.json",
+              "cwe": "CWE-798",
+              "impact": "An attacker with access to the exposed GCP API key can:\n\n- **Quota exhaustion**: Make unlimited API requests to exhaust project quotas and cause denial of service\n- **Cost exploitation**: If billing is enabled and APIs are activated, generate significant GCP usage costs\n- **Service enumeration**: Probe which GCP/Firebase services are enabled for the project\n- **Firebase access**: Potentially access Firebase Dynamic Links, Cloud Messaging, or other Firebase-specific services\n- **Future risk**: If Translation API, Speech-to-Text, or other services are later enabled, the exposed key immediately grants access\n\nWhile current impact is limited (most APIs returned 403 \"not enabled\"), the key is **active and valid**. The risk escalates significantly if:\n1. Additional GCP APIs are enabled for the project\n2. The same key gains broader permissions through project configuration changes\n3. The key is used across multiple GCP projects (scope expansion)",
+              "technical_analysis": "The `google-services.json` file is a standard Firebase/GCP mobile SDK configuration file that contains API keys and project identifiers:\n\n```json\n{\n  \"project_info\": {\n    \"project_number\": \"73068767059\",\n    \"project_id\": \"carecliq-13c18\",\n    \"storage_bucket\": \"carecliq-13c18.firebasestorage.app\"\n  },\n  \"client\": [{\n    \"api_key\": [{\n      \"current_key\": \"AIzaSyAw2TedpturF3LWtExgC4Duojg6BN4AXRg\"\n    }]\n  }]\n}\n```\n\nGCP API keys are bearer tokens that authenticate requests to Google Cloud services. Unlike service account keys (JSON credentials with private keys), API keys:\n- Are **project-scoped** rather than account-scoped\n- Can be **restricted** to specific APIs, HTTP referrers, or IP addresses\n- Are typically **less sensitive** than service account keys, but still require protection\n\nValidation testing confirmed:\n- **Translation API**: 403 (API not enabled for project 73068767059)\n- **Speech-to-Text API**: 403 (API not enabled)  \n- **Firebase Dynamic Links**: 403 (requests blocked)\n\nHowever, the key format is valid and the project exists. The `.env.example` file references these same GCP services:\n\n```bash\n# .env.example lines 36-44\nGOOGLE_CLOUD_TRANSLATION_API_KEY=\n# GCP Console → APIs & Services → enable:\n#   1) Cloud Translation API\n#   2) Cloud Speech-to-Text API\n```\n\nThis indicates the application **intends to use** these APIs, suggesting the key may gain permissions in future deployments or if a developer enables the APIs during testing.",
+              "remediation_steps": "**Immediate (within 24 hours):**\n\n1. **Rotate GCP API key** via GCP Console:\n   ```\n   GCP Console → APIs & Services → Credentials → \n   Select API key → Regenerate key\n   ```\n\n2. **Apply API key restrictions**:\n   - **Application restrictions**: Limit to Android app package `care.cliq2026`\n   - **API restrictions**: Restrict to only required APIs (Firebase, Translation, Speech-to-Text)\n   - **Referrer restrictions**: Add mobile app package fingerprints\n\n3. **Update mobile app configuration**:\n   - Replace `google-services.json` with new restricted key\n   - Rebuild and redeploy mobile application\n\n**Short-term (within 1 week):**\n\n4. **Remove sensitive config from repository**:\n   - Move `google-services.json` to `.gitignore`\n   - Store production config in CI/CD secrets or app distribution platform\n   - Provide example template with placeholder key:\n     ```json\n     {\n       \"api_key\": [{\"current_key\": \"YOUR-API-KEY-HERE\"}]\n     }\n     ```\n\n5. **Implement GCP API restrictions**:\n   - Enable only required APIs (Translation, Speech-to-Text) with minimal scopes\n   - Set up billing alerts to detect abuse\n   - Configure quota limits to prevent cost exploitation\n\n6. **Audit GCP project access**:\n   - Review IAM permissions for project `carecliq-13c18`\n   - Check API key usage logs for unauthorized requests\n   - Verify no other API keys are exposed\n\n**Long-term (within 1 month):**\n\n7. **Implement secrets management for mobile**:\n   - Use Firebase App Check to restrict API access to legitimate app instances\n   - Consider Firebase Remote Config for runtime configuration\n   - Implement certificate pinning for mobile API requests\n\n8. **Security scanning**:\n   - Add `google-services.json` to `.gitignore` enforcement\n   - Scan git history for other GCP/Firebase credentials\n   - Implement pre-commit hooks to block credential commits\n\n9. **Developer training**:\n   - Document proper handling of `google-services.json`\n   - Establish separate development/staging/production GCP projects\n   - Never commit production Firebase config to version control",
+              "poc": {
+                "description": "1. Extract GCP API key from `artifacts/mobile/google-services.json`\n2. Attempt authenticated request to Google Cloud Translation API\n3. Observe 403 response indicating API not enabled, but key is valid\n4. Demonstrate that the key format is accepted by Google Cloud services",
+                "script_available": true
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CWE-798",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Critical: JWT Forgery via Publicly Known Secret - Complete Authentication Bypass\n\nThe application uses the SESSION_SECRET value from the publicly accessible `.env.example` file for JWT signing. An attacker who knows this secret (publicly available in the GitHub repository) can forge valid JWT tokens for any user with arbitrary privileges, completely bypassing authentication and multi-tenant isolation controls. This grants unauthorized access to all Protected Health Information (PHI) and Personal Identifying Information (PII) across all organizations in the system."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".env.example"
+                },
+                "region": {
+                  "startLine": 6,
+                  "endLine": 6
+                }
+              },
+              "message": {
+                "text": "Remove publicly-known secret"
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "backend/app/core/config.py"
+                },
+                "region": {
+                  "startLine": 73,
+                  "endLine": 82
+                }
+              },
+              "message": {
+                "text": "Add validation to reject .env.example secret"
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "All authenticated API endpoints (554 endpoints affected)",
+                  "kind": "endpoint"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": ".env.example"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 6,
+                        "endLine": 6
+                      },
+                      "insertedContent": {
+                        "text": "SESSION_SECRET=GENERATE_UNIQUE_SECRET_DO_NOT_USE_THIS_PLACEHOLDER"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "artifactLocation": {
+                    "uri": "backend/app/core/config.py"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 73,
+                        "endLine": 82
+                      },
+                      "insertedContent": {
+                        "text": "@field_validator(\"secret_key\")\n    @classmethod\n    def _require_real_secret_key(cls, v):\n        if not v or v == \"changeme-in-production\" or len(v) < 32:\n            raise ValueError(\n                \"SESSION_SECRET is missing, using the placeholder default, or too short \"\n                \"(need 32+ chars). Set a real generated value, e.g.: \"\n                \"python -c \\\"import secrets; print(secrets.token_urlsafe(32))\\\"\"\n            )\n        # Reject publicly-known .env.example secret\n        if v == \"base64:qiCY1VsmPnOOoFjTYBGr30pkaLEbtg9U+vxGnpFratU=\":\n            raise ValueError(\n                \"CRITICAL: SESSION_SECRET matches .env.example! Generate unique secret.\"\n            )\n        return v"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "**IMMEDIATE (Within 24 Hours):**\n\n1. Generate new secret: `python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`\n2. Update `SESSION_SECRET` in production environment variables (not in `.env.example`)\n3. Restart all backend services\n4. Force all users to re-authenticate\n5. Audit access logs for suspicious activity\n\n**SHORT-TERM (Within 1 Week):**\n\n6. Replace `.env.example` value with placeholder: `SESSION_SECRET=GENERATE_UNIQUE_SECRET_HERE`\n7. Add validation in `config.py` to explicitly reject the old `.env.example` value\n8. Document secret management procedures\n\n**LONG-TERM (Within 1 Month):**\n\n9. Implement periodic secret rotation\n10. Consider migrating to RS256 (asymmetric signing)\n11. Implement security monitoring for JWT anomalies\n12. Use Key Management Service (AWS Secrets Manager, Azure Key Vault)",
+                "markdown": "**IMMEDIATE (Within 24 Hours):**\n\n1. Generate new secret: `python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`\n2. Update `SESSION_SECRET` in production environment variables (not in `.env.example`)\n3. Restart all backend services\n4. Force all users to re-authenticate\n5. Audit access logs for suspicious activity\n\n**SHORT-TERM (Within 1 Week):**\n\n6. Replace `.env.example` value with placeholder: `SESSION_SECRET=GENERATE_UNIQUE_SECRET_HERE`\n7. Add validation in `config.py` to explicitly reject the old `.env.example` value\n8. Document secret management procedures\n\n**LONG-TERM (Within 1 Month):**\n\n9. Implement periodic secret rotation\n10. Consider migrating to RS256 (asymmetric signing)\n11. Implement security monitoring for JWT anomalies\n12. Use Key Management Service (AWS Secrets Manager, Azure Key Vault)"
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "b41b5eec985c6454ae1151cdb8bfed77cbc25bcef1079686496efd8d58bfa97e"
+          },
+          "properties": {
+            "security-severity": "10.0",
+            "strix_vuln_class_hash": "aacbaf767f21a0c4b783ec29e61249c8b25395232d9eb532857683eb45034955",
+            "strix": {
+              "id": "vuln-0003",
+              "severity": "critical",
+              "cvss": 10.0,
+              "timestamp": "2026-08-25 06:16:43 UTC",
+              "target": "local_code: /Users/spurtiratkal/CareCliQV2",
+              "endpoint": "All authenticated API endpoints (554 endpoints affected)",
+              "method": "GET",
+              "cwe": "CWE-798",
+              "impact": "**Complete System Compromise:**\n\n- **Authentication Bypass**: Attackers can create valid JWT tokens for any user without credentials\n- **Privilege Escalation**: Forge tokens with `role: \"support_coordinator\"` or `role: \"admin\"` for maximum privileges\n- **Multi-Tenant Isolation Bypass**: Set arbitrary `organization_id` claims to access any organization's data\n- **PHI/PII Exposure**: Access to all participant medical records, session notes, medications, incidents, compliance data\n- **Financial Data Access**: Access to NDIS billing records, invoices, budgets across all organizations\n- **Persistent Access**: Forged tokens valid for configurable duration (default 24 hours, exploitable up to years)\n- **Regulatory Impact**: Privacy Act 1988 (Australia), NDIS Quality and Safeguards Commission requirements\n\n**Data at Risk:**\n- Participant medical histories, diagnoses, medications\n- Session notes containing sensitive health information\n- NDIS funding plans and budgets\n- Restrictive practice records\n- Incident reports\n- User credentials and authentication data",
+              "technical_analysis": "## Root Cause\n\nThe application's JWT implementation uses an HMAC-SHA256 (HS256) symmetric signing algorithm with a secret key loaded from the `SESSION_SECRET` environment variable. The `.env.example` file in the repository root contains a concrete secret value that becomes the production JWT signing key when developers copy it to `.env`.\n\n## JWT Implementation\n\n```python\n# backend/app/core/security.py (lines 22-26)\ndef create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:\n    to_encode = data.copy()\n    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))\n    to_encode.update({\"exp\": expire})\n    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)\n```\n\nThe token contains critical security claims including `sub` (user ID), `email`, `role` (authorization level), and `organization_id` (multi-tenant boundary).\n\n## Attack Vector\n\nAttacker extracts `SESSION_SECRET` from public `.env.example`, crafts JWT with desired privileges, signs with known secret, and gains full access to any organization's data. The `organization_id` claim is the sole tenant isolation boundary and is trusted absolutely without secondary validation.",
+              "remediation_steps": "**IMMEDIATE (Within 24 Hours):**\n\n1. Generate new secret: `python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`\n2. Update `SESSION_SECRET` in production environment variables (not in `.env.example`)\n3. Restart all backend services\n4. Force all users to re-authenticate\n5. Audit access logs for suspicious activity\n\n**SHORT-TERM (Within 1 Week):**\n\n6. Replace `.env.example` value with placeholder: `SESSION_SECRET=GENERATE_UNIQUE_SECRET_HERE`\n7. Add validation in `config.py` to explicitly reject the old `.env.example` value\n8. Document secret management procedures\n\n**LONG-TERM (Within 1 Month):**\n\n9. Implement periodic secret rotation\n10. Consider migrating to RS256 (asymmetric signing)\n11. Implement security monitoring for JWT anomalies\n12. Use Key Management Service (AWS Secrets Manager, Azure Key Vault)",
+              "poc": {
+                "description": "1. Extract the `SESSION_SECRET` from the publicly accessible `.env.example` file\n2. Create JWT payload with attacker-controlled claims (user ID, elevated role, victim organization ID)\n3. Sign payload using extracted secret with HMAC-SHA256\n4. Send HTTP requests with forged token in Authorization header\n5. Observe successful authentication and access to protected resources",
+                "script_available": true
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CWE-613",
+          "ruleIndex": 1,
+          "level": "warning",
+          "message": {
+            "text": "Session Tracking Bypass - Tokens Without JTI Bypass Revocation\n\nThe session tracking mechanism in `device_security_service.py` accepts JWT tokens that lack a `jti` (JWT ID) claim as valid, bypassing session revocation controls. This allows tokens to remain valid even after logout, account suspension, or explicit session termination by administrators. Additionally, tokens with unknown JTI values (not present in the `user_sessions` table) are also accepted as valid."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "backend/app/services/device_security_service.py"
+                },
+                "region": {
+                  "startLine": 82,
+                  "endLine": 97
+                }
+              },
+              "message": {
+                "text": "Enforce JTI requirement and fail secure"
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "backend/app/core/security.py"
+                },
+                "region": {
+                  "startLine": 60,
+                  "endLine": 65
+                }
+              },
+              "message": {
+                "text": "Ensure JTI check always runs"
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "/api/*",
+                  "kind": "endpoint"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "backend/app/services/device_security_service.py"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 82,
+                        "endLine": 97
+                      },
+                      "insertedContent": {
+                        "text": "def is_session_active(session_jti: str | None) -> bool:\n    # SECURITY: Reject tokens without JTI - all tokens must be tracked\n    if not session_jti:\n        return False  # Missing JTI = invalid token\n    \n    try:\n        result = (\n            _admin()\n            .table(\"user_sessions\")\n            .select(\"revoked_at\")\n            .eq(\"session_jti\", session_jti)\n            .maybe_single()\n            .execute()\n        )\n        # SECURITY: Unknown JTI = session not in database = invalid\n        if not result or not result.data:\n            return False  # JTI not found = invalid token\n        \n        return result.data.get(\"revoked_at\") is None\n    except Exception:\n        # SECURITY: Fail secure on database errors\n        return False"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "artifactLocation": {
+                    "uri": "backend/app/core/security.py"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 60,
+                        "endLine": 65
+                      },
+                      "insertedContent": {
+                        "text": "# SECURITY: Always check session status (JTI now required)\n    if not dss.is_session_active(payload.get(\"jti\")):\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Session has ended or is invalid. Please sign in again.\",\n            headers={\"WWW-Authenticate\": \"Bearer\"},\n        )"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "**IMMEDIATE:**\n\n1. **Enforce JTI Requirement**\n   \n   Reject tokens that lack a JTI claim at the validation layer.\n\n2. **Fail Secure on Unknown JTI**\n   \n   If a JTI is present but not found in `user_sessions`, reject the token rather than accepting it.\n\n**SHORT-TERM:**\n\n3. **Add Monitoring**\n   \n   Log and alert on tokens without JTI claims being used.\n\n4. **Audit Existing Tokens**\n   \n   Review if any legitimate flows create JTI-less tokens that need migration.\n\n**LONG-TERM:**\n\n5. **Session Database Constraints**\n   \n   Ensure all issued tokens have corresponding `user_sessions` entries created atomically.\n\n6. **Token Introspection Endpoint**\n   \n   Provide admin endpoint to inspect active sessions and force revocation.",
+                "markdown": "**IMMEDIATE:**\n\n1. **Enforce JTI Requirement**\n   \n   Reject tokens that lack a JTI claim at the validation layer.\n\n2. **Fail Secure on Unknown JTI**\n   \n   If a JTI is present but not found in `user_sessions`, reject the token rather than accepting it.\n\n**SHORT-TERM:**\n\n3. **Add Monitoring**\n   \n   Log and alert on tokens without JTI claims being used.\n\n4. **Audit Existing Tokens**\n   \n   Review if any legitimate flows create JTI-less tokens that need migration.\n\n**LONG-TERM:**\n\n5. **Session Database Constraints**\n   \n   Ensure all issued tokens have corresponding `user_sessions` entries created atomically.\n\n6. **Token Introspection Endpoint**\n   \n   Provide admin endpoint to inspect active sessions and force revocation."
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "6a18909786aa3b75723e8473454181d26eb2704db6c19e32c0b6ae642b4c3b6b"
+          },
+          "properties": {
+            "security-severity": "6.5",
+            "strix_vuln_class_hash": "54f6c9dd70368d7a04ea8245505cbe3a079c75debc4a5c070db53f0a1d37932d",
+            "strix": {
+              "id": "vuln-0004",
+              "severity": "medium",
+              "cvss": 6.5,
+              "timestamp": "2026-08-25 06:17:54 UTC",
+              "target": "local_code: /Users/spurtiratkal/CareCliQV2",
+              "endpoint": "/api/*",
+              "method": "GET",
+              "cwe": "CWE-613",
+              "impact": "- **Persistent Unauthorized Access**: Tokens without JTI remain valid until expiration (up to 24 hours default, longer if configured), even after user logout\n- **Session Revocation Bypass**: Administrators cannot revoke access for compromised accounts if attacker uses JTI-less tokens\n- **Account Suspension Ineffective**: Suspended user accounts can continue accessing the system with pre-generated JTI-less tokens\n- **Audit Trail Gaps**: Sessions without JTI are not tracked in `user_sessions` table, leaving no audit record\n- **Concurrent Session Limits Bypass**: JTI-less tokens don't count toward concurrent session limits\n\n**Exploitation Scenario**: An attacker with a compromised account or ability to forge tokens (via the JWT secret vulnerability) creates tokens without JTI claims. Even if the account is subsequently suspended or all sessions revoked, these tokens remain functional.",
+              "technical_analysis": "## Vulnerable Code\n\n```python\n# backend/app/services/device_security_service.py\ndef is_session_active(session_jti: str | None) -> bool:\n    if not session_jti:\n        return True  # ← VULNERABILITY: Missing JTI accepted as valid\n    try:\n        result = (\n            _admin()\n            .table(\"user_sessions\")\n            .select(\"revoked_at\")\n            .eq(\"session_jti\", session_jti)\n            .maybe_single()\n            .execute()\n        )\n        if not result or not result.data:\n            return True  # ← VULNERABILITY: Unknown JTI accepted as valid\n        return result.data.get(\"revoked_at\") is None\n    except Exception:\n        return True  # ← VULNERABILITY: Errors treated as valid\n```\n\n## Root Cause\n\nThe function `is_session_active()` is called from `get_current_user()` in `backend/app/core/security.py`:\n\n```python\n# backend/app/core/security.py (lines 60-64)\nif payload.get(\"jti\") and not dss.is_session_active(payload.get(\"jti\")):\n    raise HTTPException(\n        status_code=status.HTTP_401_UNAUTHORIZED,\n        detail=\"Session has ended. Please sign in again.\",\n    )\n```\n\nThe check uses `payload.get(\"jti\")` which returns `None` if the claim is absent. The subsequent call to `is_session_active(None)` immediately returns `True`, accepting the token as valid.\n\n## Design Flaw\n\nThe implementation appears to treat JTI as optional for backward compatibility, but this creates a security gap:\n\n1. **JTI-less tokens bypass all session management**\n2. **Unknown JTIs are treated as valid** (assumes \"not revoked if not in database\")\n3. **Exception handling defaults to \"valid\"** rather than failing secure\n\n## Attack Vectors\n\n**Scenario 1: Persistent Access After Logout**\n```python\n# Attacker or malicious user creates token without JTI before logout\npayload = {\n    \"sub\": \"user-id\",\n    \"email\": \"user@test.com\",\n    \"role\": \"support_worker\",\n    # No \"jti\" claim\n    \"exp\": <24_hours_from_now>\n}\ntoken = jwt.encode(payload, secret, \"HS256\")\n# After logout, all sessions in user_sessions are revoked\n# But this JTI-less token still works for 24 hours\n```\n\n**Scenario 2: Account Suspension Bypass**\n```python\n# Admin suspends malicious user's account and revokes all sessions\n# Attacker continues using pre-generated JTI-less token\n# Token remains valid because it bypasses session checks\n```",
+              "remediation_steps": "**IMMEDIATE:**\n\n1. **Enforce JTI Requirement**\n   \n   Reject tokens that lack a JTI claim at the validation layer.\n\n2. **Fail Secure on Unknown JTI**\n   \n   If a JTI is present but not found in `user_sessions`, reject the token rather than accepting it.\n\n**SHORT-TERM:**\n\n3. **Add Monitoring**\n   \n   Log and alert on tokens without JTI claims being used.\n\n4. **Audit Existing Tokens**\n   \n   Review if any legitimate flows create JTI-less tokens that need migration.\n\n**LONG-TERM:**\n\n5. **Session Database Constraints**\n   \n   Ensure all issued tokens have corresponding `user_sessions` entries created atomically.\n\n6. **Token Introspection Endpoint**\n   \n   Provide admin endpoint to inspect active sessions and force revocation.",
+              "poc": {
+                "description": "1. Create a JWT token payload with all required claims (sub, email, role, organization_id, exp) but deliberately omit the `jti` claim\n2. Sign the token using the application's JWT secret\n3. Use the token to authenticate against protected API endpoints\n4. Observe that the token is accepted and grants access\n5. Simulate account suspension or session revocation in the database\n6. Verify that the JTI-less token continues to work while normal JTI-tracked tokens are correctly revoked",
+                "script_available": true
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CVE-2025-71329",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "CVE-2025-71329 in image-size 1.2.1 (Denial of Service via crafted JXL/HEIF buffer)\n\nThe `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71329**, a denial of service vulnerability that allows attackers to permanently block the Node.js event loop. The vulnerability exists in the JXL and HEIF image parsers, where a specially crafted image buffer with a **zero-valued size field** in a recognized box-type triggers an infinite loop, causing the application to hang indefinitely."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "SECURITY.md"
+                }
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "/workspace/CareCliQV2",
+                  "kind": "resource"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "e421901427559ff1ad538ba5dc59df909423b6e29fc89c66e90cf593fdb600df"
+          },
+          "properties": {
+            "security-severity": "7.5",
+            "strix_vuln_class_hash": "e8890f63629e080597eba549ac9b455739b0fda17f33a673a29ba50c64e4119a",
+            "synthetic_location": true,
+            "strix": {
+              "id": "vuln-0005",
+              "severity": "high",
+              "cvss": 7.5,
+              "timestamp": "2026-08-25 06:18:10 UTC",
+              "target": "/workspace/CareCliQV2",
+              "cve": "CVE-2025-71329",
+              "impact": "An attacker who can supply crafted image files to the application can trigger a permanent denial of service by causing the Node.js event loop to hang in an infinite loop. This affects the **React Native mobile application** build process via the Metro bundler, which uses `image-size` as a transitive dependency. While this primarily impacts the build/development pipeline rather than production runtime, it can block mobile app builds and updates.",
+              "remediation_steps": "Upgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available) which includes the fix for the infinite loop vulnerability. Monitor the upstream issue at `github.com/image-size/image-size/pull/439` for patch availability. As a workaround, validate and sanitize image files before processing during builds.",
+              "dependency_metadata": {
+                "package_name": "image-size",
+                "installed_version": "1.2.1",
+                "package_ecosystem": "npm",
+                "manifest_path": "pnpm-lock.yaml",
+                "introduced_by": "metro@0.83.3",
+                "dependency_path": "metro@0.83.3 > image-size@1.2.1",
+                "reachability": "imported",
+                "reachability_evidence": "The `image-size` package is imported and used by Metro bundler (confirmed transitive dependency in `pnpm-lock.yaml`). Metro is the React Native build tool that processes image assets during the bundling phase. However, direct application code does not import `image-size` — it is used exclusively by the build toolchain. Static search confirmed no direct imports: `rg \"image-size|imageSize\" -t web -l` returned no results in application source code."
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CVE-2025-71330",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "CVE-2025-71330 in image-size 1.2.1 (Denial of Service via crafted ICNS buffer)\n\nThe `image-size` package version **1.2.1** is vulnerable to **CVE-2025-71330**, a denial of service vulnerability affecting the ICNS (Apple Icon) parser. Attackers can permanently block the Node.js event loop by supplying a specially crafted ICNS image buffer containing valid magic bytes and a **zero-valued entry length field**, triggering an infinite loop as the offset never advances."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "SECURITY.md"
+                }
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "/workspace/CareCliQV2",
+                  "kind": "resource"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "a4d0b289d2bec3990c46c7165c2757acefc6d8476dbd12d7a6e2e12de13da58b"
+          },
+          "properties": {
+            "security-severity": "7.5",
+            "strix_vuln_class_hash": "4b94f37d8afdbf3e6480c1f536b808f7f53b9c37b05e2bdaec664984ad48bbfa",
+            "synthetic_location": true,
+            "strix": {
+              "id": "vuln-0006",
+              "severity": "high",
+              "cvss": 7.5,
+              "timestamp": "2026-08-25 06:18:25 UTC",
+              "target": "/workspace/CareCliQV2",
+              "cve": "CVE-2025-71330",
+              "impact": "Similar to CVE-2025-71329, this vulnerability allows denial of service via crafted ICNS image files during the React Native build process. The Metro bundler processes image assets (including ICNS files on macOS builds) and will hang indefinitely if a malicious ICNS file is encountered. This can block mobile application builds, updates, and CI/CD pipelines.",
+              "remediation_steps": "Upgrade the `metro` dependency chain to a version that resolves `image-size` to **2.0.3 or later** (when available). Implement image validation and sanitization in the build pipeline to reject malformed ICNS files. Consider restricting accepted image formats if ICNS support is not required.",
+              "dependency_metadata": {
+                "package_name": "image-size",
+                "installed_version": "1.2.1",
+                "package_ecosystem": "npm",
+                "manifest_path": "pnpm-lock.yaml",
+                "introduced_by": "metro@0.83.3",
+                "dependency_path": "metro@0.83.3 > image-size@1.2.1",
+                "reachability": "imported",
+                "reachability_evidence": "The `image-size` package is imported and used by Metro bundler (confirmed transitive dependency in `pnpm-lock.yaml`). Metro processes image assets during React Native bundling, including ICNS files for iOS/macOS builds. Static analysis confirmed no direct application code imports: `rg \"image-size|imageSize\" -t web -l` returned no results, indicating usage is limited to the build toolchain."
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "CVE-2024-23342",
+          "ruleIndex": 4,
+          "level": "error",
+          "message": {
+            "text": "CVE-2024-23342 in ecdsa 0.19.2 (Minerva timing attack vulnerability)\n\nThe `ecdsa` package version **0.19.2** is vulnerable to **CVE-2024-23342**, a cryptographic timing attack known as the **Minerva attack**. This pure Python implementation of Elliptic Curve Cryptography exhibits timing side-channels during ECDSA signature operations, potentially allowing attackers to recover private keys through careful timing analysis of signature generation. The advisory notes that **no patched version exists** as of the CVE publication."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "SECURITY.md"
+                }
+              }
+            },
+            {
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "/workspace/CareCliQV2",
+                  "kind": "resource"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "804ce5f0576ad9d455b4f00accb1277e55e973c63a212b8376d69243a4db976b"
+          },
+          "properties": {
+            "security-severity": "7.4",
+            "strix_vuln_class_hash": "8e790a0c1cc79b8b3afbe5d3224af8795503bea2e67ea69b838f5ec2295cfe1b",
+            "synthetic_location": true,
+            "strix": {
+              "id": "vuln-0007",
+              "severity": "high",
+              "cvss": 7.4,
+              "timestamp": "2026-08-25 06:18:53 UTC",
+              "target": "/workspace/CareCliQV2",
+              "cve": "CVE-2024-23342",
+              "impact": "The application uses `python-jose[cryptography]` for JWT token generation and validation (`backend/app/core/security.py`), which transitively depends on the vulnerable `ecdsa` library. While the current JWT configuration uses **HS256 (HMAC-SHA256)** which does not use ECDSA, the vulnerable library is present and could be exploited if:\n\n1. The JWT algorithm is changed to ES256/ES384/ES512 (ECDSA-based algorithms)\n2. Other parts of the application use ECDSA for signature operations\n3. `python-jose` internally uses ECDSA for certificate validation or other operations\n\nIf ECDSA operations are performed, an attacker with the ability to observe signature generation timing (e.g., via network timing, shared infrastructure, or timing side-channels) could potentially recover the ECDSA private key through the Minerva attack, leading to complete cryptographic compromise.",
+              "remediation_steps": "**Immediate:** Verify that no ECDSA-based JWT algorithms (ES256, ES384, ES512) are used in production. Confirm the current **HS256** configuration remains in place and is not user-configurable.\n\n**Medium-term:** Consider migrating from `python-jose` to `PyJWT` which uses the `cryptography` library's constant-time ECDSA implementation instead of the pure-Python `ecdsa` package. This eliminates the timing attack vulnerability.\n\n**Long-term:** Monitor for patched versions of `ecdsa` or upstream fixes in `python-jose` that replace the vulnerable dependency. Implement cryptographic algorithm allowlisting to prevent runtime algorithm changes to ECDSA-based schemes.",
+              "dependency_metadata": {
+                "package_name": "ecdsa",
+                "installed_version": "0.19.2",
+                "package_ecosystem": "pypi",
+                "manifest_path": "uv.lock",
+                "introduced_by": "python-jose@3.5.0",
+                "dependency_path": "python-jose@3.5.0 > ecdsa@0.19.2",
+                "reachability": "imported",
+                "reachability_evidence": "The `python-jose` library is imported and actively used in `backend/app/core/security.py:3` (`from jose import JWTError, jwt`). JWT operations are performed via `jwt.encode()` and `jwt.decode()` for authentication token generation and validation (lines 25, 30). \n\nHowever, the current configuration uses **HS256** algorithm (`backend/app/core/config.py:79`), which is HMAC-based and does not invoke the vulnerable `ecdsa` library. Static analysis confirmed no direct imports of `ecdsa`: `rg \"from ecdsa|import ecdsa\" --type py -l` returned no results.\n\nThe `ecdsa` package is pulled in as a transitive dependency by `python-jose` to support ES256/ES384/ES512 algorithms, but these ECDSA-based algorithms are not currently configured. Reachability classification is `imported` because while the parent library (`python-jose`) is actively used, the specific vulnerable code path (ECDSA signature operations) is not confirmed to be executed with the current HS256 configuration."
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "syntheticLocationCount": 3
+      }
+    }
+  ]
+}
