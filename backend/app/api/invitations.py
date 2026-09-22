@@ -19,9 +19,11 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from ..core.access import has_active_grant
@@ -34,6 +36,31 @@ from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
+
+# ---------------------------------------------------------------------------
+# Rate limiter for the public short-code lookup (10 attempts / 60s per IP).
+# short_code is only ~24 bits of entropy (6 hex chars) and a hit returns the
+# full invitation token — unlimited guessing would turn that weak code into
+# a way to obtain a strong (256-bit) token and self-accept someone else's
+# pending invite. Same pattern as auth.py's login rate limiter.
+# ---------------------------------------------------------------------------
+_lookup_attempts: dict[str, list[float]] = defaultdict(list)
+_LOOKUP_RATE_LIMIT_MAX = 10
+_LOOKUP_RATE_LIMIT_WINDOW = 60.0
+
+
+def _check_lookup_rate_limit(ip: str) -> None:
+    now = time.monotonic()
+    window_start = now - _LOOKUP_RATE_LIMIT_WINDOW
+    attempts = [t for t in _lookup_attempts[ip] if t > window_start]
+    _lookup_attempts[ip] = attempts
+    if len(attempts) >= _LOOKUP_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts — please wait 60 seconds",
+        )
+    _lookup_attempts[ip].append(now)
+
 
 COORDINATOR_ROLES = frozenset({"support_coordinator", "managing_director"})
 VALID_INVITE_ROLES = ("support_worker", "support_coordinator")
@@ -563,8 +590,10 @@ async def request_invite(body: InviteRequestBody):
 
 
 @router.get("/lookup/{code}")
-async def lookup_invite_code(code: str):
+async def lookup_invite_code(code: str, request: Request):
     """Public — resolve a 6-digit mobile join code to invite preview + token."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_lookup_rate_limit(client_ip)
     normalized = (code or "").strip()
     if len(normalized) != 6 or not normalized.isalnum():
         raise HTTPException(status_code=400, detail="Enter the 6-character invite code")
@@ -727,8 +756,10 @@ async def send_invite_code(token: str):
 
 
 @router.post("/{token}/verify-code")
-async def verify_invite_code(token: str, body: InviteVerifyCodeRequest):
+async def verify_invite_code(token: str, body: InviteVerifyCodeRequest, request: Request):
     """Public — verify the 6-digit code sent via send-code."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_lookup_rate_limit(client_ip)
     supabase = get_supabase_admin()
     invite = _get_valid_invite(supabase, token)
 
