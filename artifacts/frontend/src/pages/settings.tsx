@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
-import { changePassword, requestPasswordReset } from "@/services/userService";
+import { changePassword, requestPasswordReset, getMe } from "@/services/userService";
 import { NavLayoutCard } from "@/components/settings/NavLayoutSettings";
 import {
   PenLine,
@@ -104,6 +104,11 @@ import {
   removeOrganizationLogo,
   type OrganizationBranding,
 } from "@/services/organizationBrandingService";
+import {
+  getOrganizationAbbrevStatus,
+  checkOrganizationAbbrevAvailable,
+  setOrganizationAbbrev,
+} from "@/services/organizationAbbrevService";
 
 // ---------------------------------------------------------------------------
 // ABN validation: 11 digits only (optional field)
@@ -1217,6 +1222,13 @@ function OrganizationBrandingSection() {
   const [uploading, setUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Pre-existing orgs (created before the employee ID scheme) have no
+  // org_abbrev yet — this is a compulsory one-time retrofit, MD-only.
+  const [orgAbbrev, setOrgAbbrev] = useState<string | null>(null);
+  const [abbrevInput, setAbbrevInput] = useState("");
+  const [abbrevCheck, setAbbrevCheck] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const [savingAbbrev, setSavingAbbrev] = useState(false);
+
   useEffect(() => {
     getOrganizationBranding()
       .then((data) => {
@@ -1229,7 +1241,44 @@ function OrganizationBrandingSection() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getOrganizationAbbrevStatus()
+      .then((data) => setOrgAbbrev(data.org_abbrev))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const candidate = abbrevInput.trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(candidate)) {
+      setAbbrevCheck("idle");
+      return;
+    }
+    setAbbrevCheck("checking");
+    const timer = setTimeout(() => {
+      checkOrganizationAbbrevAvailable(candidate)
+        .then((data) => setAbbrevCheck(data.available ? "available" : "taken"))
+        .catch(() => setAbbrevCheck("idle"));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [abbrevInput]);
+
+  async function handleSaveAbbrev() {
+    const candidate = abbrevInput.trim().toUpperCase();
+    setSavingAbbrev(true);
+    try {
+      const result = await setOrganizationAbbrev(candidate);
+      setOrgAbbrev(result.org_abbrev);
+      toast({
+        title: "Organisation abbreviation set",
+        description: result.backfilled_count
+          ? `${result.backfilled_count} existing staff member${result.backfilled_count === 1 ? "" : "s"} were assigned an employee ID.`
+          : undefined,
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed"), description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setSavingAbbrev(false);
+    }
+  }
 
   const identityDirty = displayName !== identityPristine.displayName || accentColor !== identityPristine.accentColor;
   function handleCancelIdentity() {
@@ -1369,6 +1418,38 @@ function OrganizationBrandingSection() {
 
       <StickyActionBar visible={identityDirty} saving={saving} onSave={handleSave} onCancel={handleCancelIdentity} />
 
+      {orgAbbrev === null && (user?.role === "managing_director" || brandingGrant) && (
+        <PanelCard label="Organisation abbreviation">
+          <div className="space-y-1.5">
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>
+              4 letters, unique to your organisation — used in every staff member's employee ID
+              (e.g. SW003HARV). This can only be set once.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                value={abbrevInput}
+                onChange={(e) => setAbbrevInput(e.target.value.toUpperCase().slice(0, 4))}
+                placeholder="HARV"
+                className="max-w-[140px]"
+              />
+              <Button
+                size="sm"
+                onClick={handleSaveAbbrev}
+                disabled={abbrevCheck !== "available" || savingAbbrev}
+              >
+                {savingAbbrev ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                Save
+              </Button>
+            </div>
+            {abbrevCheck === "taken" && (
+              <p className="text-[11px] font-medium" style={{ color: "#DC2626" }}>
+                That abbreviation is already taken — try another.
+              </p>
+            )}
+          </div>
+        </PanelCard>
+      )}
+
       <NavLayoutCard />
     </Section>
   );
@@ -1418,6 +1499,14 @@ export default function Settings() {
   const [practCredentials, setPractCredentials] = useState("");
   const [isSavingPract, setIsSavingPract] = useState(false);
   const [practPristine, setPractPristine] = useState({ name: "", credentials: "" });
+
+  // -- Employee ID (read-only, auto-generated — see employee_id_service.py) ---
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  useEffect(() => {
+    getMe()
+      .then((profile) => setEmployeeId(profile.employee_id ?? null))
+      .catch(() => {});
+  }, []);
 
   // -- Provider Information state ---------------------------------------------
   const [businessName, setBusinessName] = useState("");
@@ -1969,6 +2058,15 @@ export default function Settings() {
                     </div>
                     <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
                   </div>
+
+                  {employeeId && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3" style={{ background: "var(--cc-soft)" }}>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>Employee ID</p>
+                        <p className="mt-0.5 text-[14px] font-bold tracking-wide" style={{ color: "var(--cc-text)" }}>{employeeId}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className={cn("grid grid-cols-1 gap-4", !isMD && "sm:grid-cols-2")}>
                     <div className={cn("space-y-1.5", isMD && "max-w-sm")}>
