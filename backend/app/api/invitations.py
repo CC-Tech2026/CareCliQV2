@@ -32,6 +32,7 @@ from ..core.security import create_access_token, get_current_user
 from ..api.security import require_recent_reauth
 from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
+from ..services.employee_id_service import generate_employee_id
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -997,6 +998,9 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         inviter_branch = member_branch_id(invite.get("invited_by"), org_id)
         if inviter_branch:
             member_row["branch_id"] = inviter_branch
+        employee_id = generate_employee_id(supabase, org_id, role)
+        if employee_id:
+            member_row["employee_id"] = employee_id
         supabase.table("organization_members").insert(member_row).execute()
     except Exception as e:
         logger.error("accept_invite organization_members insert error: %s", e)
