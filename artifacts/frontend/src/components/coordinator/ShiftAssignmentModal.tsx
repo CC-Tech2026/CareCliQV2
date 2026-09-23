@@ -17,6 +17,7 @@ import {
   getParticipantTasks,
   getAvailableWorkers,
   getParticipantPriceItemOptions,
+  getShiftPayEstimate,
   type WorkerStats,
   type NdisGoal,
   type ParticipantTask,
@@ -25,6 +26,7 @@ import {
   type AvailableWorker,
   type AvailabilityStatus,
   type ShiftPriceItemOption,
+  type PayEstimate,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -303,6 +305,23 @@ export function ShiftAssignmentModal({
       queryFn: () => getParticipantPriceItemOptions(selectedParticipantId),
       enabled: !!selectedParticipantId,
       staleTime: 60_000,
+    }
+  );
+
+  const isManagingDirector = user?.role === "managing_director";
+  const payEstimateQuery = useOrgQuery<PayEstimate>(
+    [orgId, "shift-pay-estimate", selectedWorkerId, scheduledStart, scheduledEnd, dutyType, isSleepover],
+    {
+      queryFn: () =>
+        getShiftPayEstimate({
+          workerId: selectedWorkerId,
+          scheduledStart: datetimeLocalValueToUtcIso(scheduledStart, participantZone),
+          scheduledEnd: datetimeLocalValueToUtcIso(scheduledEnd, participantZone),
+          dutyType,
+          isSleepover,
+        }),
+      enabled: isManagingDirector && !!selectedWorkerId && !!scheduledStart && !!scheduledEnd,
+      staleTime: 10_000,
     }
   );
 
@@ -814,17 +833,43 @@ export function ShiftAssignmentModal({
                   : activeDurationHours != null
                   ? selected.price_national * activeDurationHours
                   : null;
+                const payCents = payEstimateQuery.data?.pay_cents;
+                const payDollars = payCents != null ? payCents / 100 : null;
+                const margin = estimate != null && payDollars != null ? estimate - payDollars : null;
                 return (
-                  <p className="text-[12px] font-bold" style={{ color: TEXT }}>
-                    Estimated cost: {estimate != null ? `$${estimate.toFixed(2)}` : "—"}
-                    <span className="ml-1 font-normal" style={{ color: MUTED }}>
-                      {isFlat
-                        ? "(flat fee, not affected by shift duration)"
-                        : activeDurationHours != null
-                        ? `(${activeDurationHours}h × $${selected.price_national.toFixed(2)}/hr)`
-                        : "(set start and end time to estimate)"}
-                    </span>
-                  </p>
+                  <>
+                    <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                      Estimated NDIS billing: {estimate != null ? `$${estimate.toFixed(2)}` : "—"}
+                      <span className="ml-1 font-normal" style={{ color: MUTED }}>
+                        {isFlat
+                          ? "(flat fee, not affected by shift duration)"
+                          : activeDurationHours != null
+                          ? `(${activeDurationHours}h × $${selected.price_national.toFixed(2)}/hr)`
+                          : "(set start and end time to estimate)"}
+                      </span>
+                    </p>
+                    {isManagingDirector && selectedWorkerId && (
+                      <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                        {payEstimateQuery.isLoading ? (
+                          <span className="font-normal" style={{ color: MUTED }}>Loading worker pay estimate…</span>
+                        ) : payEstimateQuery.data?.reason ? (
+                          <span className="font-normal" style={{ color: MUTED }}>
+                            Worker pay estimate unavailable ({payEstimateQuery.data.reason.replace(/_/g, " ")})
+                          </span>
+                        ) : payDollars != null ? (
+                          <>
+                            Projected worker pay: ${payDollars.toFixed(2)}
+                            {margin != null && (
+                              <span className="ml-1 font-normal" style={{ color: margin < 0 ? "#DC2626" : MUTED }}>
+                                (margin: {margin < 0 ? "-" : ""}${Math.abs(margin).toFixed(2)}
+                                {margin < 0 ? " — this shift costs more than it bills" : ""})
+                              </span>
+                            )}
+                          </>
+                        ) : null}
+                      </p>
+                    )}
+                  </>
                 );
               })()}
               <p className="text-[11px]" style={{ color: MUTED }}>

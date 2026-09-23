@@ -13,7 +13,9 @@ import {
   getShiftVerificationQueue,
   getShiftPriceItemOptions,
   confirmShiftVerification,
+  getShiftMargin,
   type ShiftVerificationQueueItem,
+  type ShiftMargin,
 } from "@/services/coordinatorService";
 
 const PLUM   = "var(--cc-plum)";
@@ -67,6 +69,16 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
     {
       queryFn: () => getShiftPriceItemOptions(item.shift_id),
       staleTime: 60_000,
+    },
+  );
+
+  const isManagingDirector = user?.role === "managing_director";
+  const { data: margin, isLoading: marginLoading } = useOrgQuery<ShiftMargin>(
+    ["shift-margin", item.shift_id, priceItemCode],
+    {
+      queryFn: () => getShiftMargin(item.shift_id, priceItemCode),
+      enabled: isManagingDirector && !!priceItemCode,
+      staleTime: 10_000,
     },
   );
 
@@ -231,6 +243,29 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           Confirm Verified
         </button>
       </div>
+
+      {isManagingDirector && priceItemCode && (
+        <div className="border-t px-5 py-2 text-[11px] font-medium" style={{ borderColor: BORDER, color: T3 }}>
+          {marginLoading ? (
+            <span>Loading margin…</span>
+          ) : margin?.pay_reason ? (
+            <span>Margin unavailable ({margin.pay_reason.replace(/_/g, " ")})</span>
+          ) : margin ? (
+            <span>
+              Billed: <span className="font-bold" style={{ color: T1 }}>{margin.billed_cents != null ? `$${(margin.billed_cents / 100).toFixed(2)}` : "—"}</span>
+              {" · "}Worker pay: <span className="font-bold" style={{ color: T1 }}>${(margin.pay_cents / 100).toFixed(2)}</span>
+              {margin.margin_cents != null && (
+                <>
+                  {" · "}Margin:{" "}
+                  <span className="font-bold" style={{ color: margin.margin_cents < 0 ? "#DC2626" : T1 }}>
+                    {margin.margin_cents < 0 ? "-" : ""}${Math.abs(margin.margin_cents / 100).toFixed(2)}
+                  </span>
+                </>
+              )}
+            </span>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

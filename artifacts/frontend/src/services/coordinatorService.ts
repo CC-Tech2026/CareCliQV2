@@ -242,6 +242,48 @@ export function getShiftPayPreview(shiftId: string) {
   return jsonFetch<PayPreview>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/pay-preview`);
 }
 
+export type PayEstimate = {
+  pay_cents: number;
+  reason: string | null;
+};
+
+/** MD-only. Live SCHADS pay estimate for a shift that doesn't exist yet —
+ * for a projected margin while filling out the creation form. 403s for
+ * non-MDs; callers should only invoke this when the signed-in user is a
+ * managing_director. */
+export function getShiftPayEstimate(params: {
+  workerId: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  dutyType?: string;
+  isSleepover?: boolean;
+}) {
+  const qs = new URLSearchParams({
+    worker_id: params.workerId,
+    scheduled_start: params.scheduledStart,
+    scheduled_end: params.scheduledEnd,
+  });
+  if (params.dutyType) qs.set("duty_type", params.dutyType);
+  if (params.isSleepover) qs.set("is_sleepover", "true");
+  return jsonFetch<PayEstimate>(`/api/coordinator/shifts/pay-estimate?${qs.toString()}`);
+}
+
+export type ShiftMargin = {
+  shift_id: string;
+  billed_cents: number | null;
+  pay_cents: number;
+  margin_cents: number | null;
+  pay_reason: string | null;
+};
+
+/** MD-only. NDIS billed amount vs SCHADS worker pay for a real shift, given
+ * whichever price item is currently selected at verification. 403s for
+ * non-MDs. */
+export function getShiftMargin(shiftId: string, priceItemCode: string) {
+  const qs = new URLSearchParams({ price_item_code: priceItemCode });
+  return jsonFetch<ShiftMargin>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/margin?${qs.toString()}`);
+}
+
 export function markShiftSleepover(shiftId: string, payload: { sleepover_start: string; sleepover_end: string }) {
   return jsonFetch<{ shift_id: string }>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/sleepover`,

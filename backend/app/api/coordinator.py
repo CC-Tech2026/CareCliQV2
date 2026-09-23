@@ -3390,6 +3390,99 @@ async def shift_pay_preview(shift_id: str, current_user: dict = Depends(get_curr
     }
 
 
+@router.get("/shifts/pay-estimate")
+async def shift_pay_estimate(
+    worker_id: str,
+    scheduled_start: str,
+    scheduled_end: str,
+    duty_type: str = "disability_services",
+    is_sleepover: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """MD-only live SCHADS pay estimate for a shift that doesn't exist yet —
+    lets the shift-creation form project a margin (NDIS billing minus worker
+    pay) before the shift is saved. Deliberately separate from
+    /shifts/{shift_id}/pay-preview above, which any coordinator can already
+    call for a real shift (used by WorkerDetail.tsx) — that endpoint's
+    permission level is unchanged; this one is new and MD-gated because
+    worker pay rates are commercially sensitive.
+
+    Sleepover shifts can't be estimated here: schads_engine prices those from
+    real shift_segments rows, which only exist once the shift itself does —
+    reason is returned rather than an error.
+    """
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=403, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+
+    from ..services import schads_engine
+
+    synthetic_shift = {
+        # calculate_shift_pay requires a truthy id (used only to tag the
+        # returned, never-persisted components on dry_run) — this value is
+        # never written anywhere.
+        "id": "preview",
+        "worker_id": worker_id,
+        "organization_id": org_id,
+        "scheduled_start": scheduled_start,
+        "scheduled_end": scheduled_end,
+        "duty_type": duty_type,
+        "is_sleepover": is_sleepover,
+    }
+    result = schads_engine.calculate_shift_pay(synthetic_shift, dry_run=True)
+    return {"pay_cents": result["total_cents"], "reason": result["reason"]}
+
+
+@router.get("/shifts/{shift_id}/margin")
+async def shift_margin(
+    shift_id: str,
+    price_item_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """MD-only: NDIS billed amount vs SCHADS worker pay for a real shift,
+    given whichever price item the coordinator currently has selected in the
+    verification screen. Same billed-amount math as verify_shift() (flat fee
+    for unit "E", hours * rate otherwise) so the preview matches what
+    verifying would actually charge. Nothing is written — this only reads."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=403, detail="Managing director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required.")
+
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    from ..services import ndis_pricing_service, schads_engine
+    from ..services.shift_verification_service import _actual_minutes
+
+    completion_date = (shift.get("clocked_out_at") or shift.get("scheduled_end") or "")[:10]
+    price = await ndis_pricing_service.resolve_price(price_item_code, org_id, as_of_date=completion_date or None)
+    billed_cents = None
+    if price:
+        rate = float(price.get("effective_price") or 0)
+        if str(price.get("unit") or "").upper() == "E":
+            billed_cents = round(rate * 100)
+        else:
+            actual_minutes = _actual_minutes(shift)
+            if actual_minutes:
+                billed_cents = round((actual_minutes / 60) * rate * 100)
+
+    pay_result = schads_engine.calculate_shift_pay(shift, dry_run=True)
+    pay_cents = pay_result["total_cents"]
+
+    return {
+        "shift_id": shift_id,
+        "billed_cents": billed_cents,
+        "pay_cents": pay_cents,
+        "margin_cents": billed_cents - pay_cents if billed_cents is not None else None,
+        "pay_reason": pay_result["reason"],
+    }
+
+
 @router.get("/pay-ledger/{worker_id}")
 async def worker_pay_ledger(
     worker_id: str,
