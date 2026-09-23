@@ -59,10 +59,19 @@ async def resolve_price(
         }
         
         # Build query parameters for PostgREST
+        # valid_to is a half-open upper bound (see edit_item_price/
+        # load_price_schedule: the old row's valid_to is set to the new
+        # row's valid_from) — a row is current as-of a date if valid_to is
+        # NULL or strictly after that date. Without this, ordering by
+        # valid_from desc + limit 1 could return an already-expired row
+        # whenever a newer version exists but its valid_from is later than
+        # as_of_date (e.g. resolving a past shift's price after this
+        # item's rate has since changed again).
         query_params = {
             "item_code": f"eq.{item_code}",
             "organization_id": f"eq.{str(org_id)}",
             "valid_from": f"lte.{as_of_date.isoformat()}",
+            "or": f"(valid_to.is.null,valid_to.gt.{as_of_date.isoformat()})",
             "order": "valid_from.desc",
             "limit": "1",
         }
