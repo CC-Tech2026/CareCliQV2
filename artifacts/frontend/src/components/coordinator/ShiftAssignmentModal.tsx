@@ -28,6 +28,7 @@ import {
   type ShiftPriceItemOption,
   type PayEstimate,
 } from "@/services/coordinatorService";
+import { resolveNdisPrice, type NdisPriceResolution } from "@/services/ndisService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -321,6 +322,25 @@ export function ShiftAssignmentModal({
           isSleepover,
         }),
       enabled: isManagingDirector && !!selectedWorkerId && !!scheduledStart && !!scheduledEnd,
+      staleTime: 10_000,
+    }
+  );
+
+  // Resolves the expected item's price the same way verify_shift() will —
+  // as-of the shift's own scheduled date — rather than trusting whatever
+  // "currently active" price happened to be cached in the dropdown list.
+  // Those two agree in the common case, but can drift if the org loads a
+  // new price catalogue between now and when this shift is actually
+  // verified, which is exactly the kind of quiet mismatch worth avoiding.
+  const resolvedExpectedPriceQuery = useOrgQuery<NdisPriceResolution>(
+    [orgId, "resolve-ndis-price", expectedPriceItemCode, scheduledStart],
+    {
+      queryFn: () =>
+        resolveNdisPrice(
+          expectedPriceItemCode,
+          datetimeLocalValueToUtcIso(scheduledStart, participantZone).slice(0, 10),
+        ),
+      enabled: !!expectedPriceItemCode && !!scheduledStart,
       staleTime: 10_000,
     }
   );
@@ -825,13 +845,24 @@ export function ShiftAssignmentModal({
                 </SelectContent>
               </Select>
               {(() => {
-                const selected = (priceItemsQuery.data ?? []).find((p) => p.item_code === expectedPriceItemCode);
-                if (!selected || selected.price_national == null) return null;
-                const isFlat = selected.unit === "E";
+                if (!expectedPriceItemCode) return null;
+                if (!scheduledStart) {
+                  return (
+                    <p className="text-[12px]" style={{ color: MUTED }}>
+                      Set a start time to resolve this item's price as of that date.
+                    </p>
+                  );
+                }
+                if (resolvedExpectedPriceQuery.isLoading) {
+                  return <p className="text-[12px]" style={{ color: MUTED }}>Resolving price…</p>;
+                }
+                const resolved = resolvedExpectedPriceQuery.data;
+                if (!resolved) return null;
+                const isFlat = resolved.unit === "E";
                 const estimate = isFlat
-                  ? selected.price_national
+                  ? resolved.effective_price
                   : activeDurationHours != null
-                  ? selected.price_national * activeDurationHours
+                  ? resolved.effective_price * activeDurationHours
                   : null;
                 const payCents = payEstimateQuery.data?.pay_cents;
                 const payDollars = payCents != null ? payCents / 100 : null;
@@ -844,7 +875,7 @@ export function ShiftAssignmentModal({
                         {isFlat
                           ? "(flat fee, not affected by shift duration)"
                           : activeDurationHours != null
-                          ? `(${activeDurationHours}h × $${selected.price_national.toFixed(2)}/hr)`
+                          ? `(${activeDurationHours}h × $${resolved.effective_price.toFixed(2)}/hr, as of ${datetimeLocalValueToUtcIso(scheduledStart, participantZone).slice(0, 10)})`
                           : "(set start and end time to estimate)"}
                       </span>
                     </p>
