@@ -12,13 +12,76 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from .supabase_client import get_supabase_admin
-from ..core.access import get_user_id, get_user_organization_id, get_user_role
+from ..core.access import get_user_id, get_user_organization_id, get_user_role, is_super_admin
 from . import audit_service
 
 logger = logging.getLogger(__name__)
 
 
 # ── Price Resolution ───────────────────────────────────────────────────────
+
+def _query_price_table_sync(table: str, query_params: dict[str, str]) -> dict[str, Any] | None:
+    """Blocking PostgREST GET for one effective-dated price row. Runs in a thread pool."""
+    import requests
+    from ..core.config import settings
+
+    url = f"{settings.supabase_url}/rest/v1/{table}"
+    headers = {
+        "apikey": settings.supabase_service_role_key,  # PostgREST requires apikey header
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        response = requests.get(url, params=query_params, headers=headers, timeout=10)
+        if response.status_code != 200:
+            logger.warning(f"[resolve_price] Non-200 from {table}: {response.text}")
+            return None
+        data = response.json()
+        return data[0] if data else None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"[resolve_price] Request error querying {table}: {e}", exc_info=True)
+        return None
+
+
+def _effective_dated_filter(item_code: str, as_of_date: date) -> dict[str, str]:
+    # valid_to is a half-open upper bound (see edit_item_price/
+    # load_price_schedule/load_platform_price_schedule: the old row's
+    # valid_to is set to the new row's valid_from) — a row is current
+    # as-of a date if valid_to is NULL or strictly after that date.
+    # Without this, ordering by valid_from desc + limit 1 could return an
+    # already-expired row whenever a newer version exists but its
+    # valid_from is later than as_of_date.
+    return {
+        "item_code": f"eq.{item_code}",
+        "valid_from": f"lte.{as_of_date.isoformat()}",
+        "or": f"(valid_to.is.null,valid_to.gt.{as_of_date.isoformat()})",
+        "order": "valid_from.desc",
+        "limit": "1",
+    }
+
+
+def _compute_effective_price(item: dict[str, Any], location_type: str) -> tuple[Any, str]:
+    """Ported from the SQL resolve_ndis_price() function (since retired —
+    see backend/supabase/migrations/211_drop_resolve_ndis_price_function.sql):
+    remote/very_remote items fall back to a multiplier of price_national
+    (1.25x / 1.40x) when no explicit remote/very-remote price was loaded —
+    which is the common case, since both load_price_schedule() and
+    load_platform_price_schedule() always load price_remote/price_very_remote
+    as NULL by design. No org currently resolves at a non-"national"
+    location_type (every call site hardcodes or defaults to "national"),
+    but the capability must keep working the moment one does.
+    """
+    price_national = item.get("price_national")
+    if location_type == "remote":
+        if item.get("price_remote") is not None:
+            return item.get("price_remote"), "explicit"
+        return (price_national * 1.25 if price_national is not None else None), "calculated_multiplier"
+    if location_type == "very_remote":
+        if item.get("price_very_remote") is not None:
+            return item.get("price_very_remote"), "explicit"
+        return (price_national * 1.40 if price_national is not None else None), "calculated_multiplier"
+    return price_national, "explicit"
+
 
 async def resolve_price(
     item_code: str,
@@ -28,112 +91,50 @@ async def resolve_price(
 ) -> dict[str, Any] | None:
     """
     Resolve the effective price for an NDIS item at a point in time.
-    
+
+    Two-layer fallback:
+      1. The org's own ndis_price_items, but only a row with
+         is_override = true — a real negotiated rate the org set via
+         edit_item_price(). A bulk-loaded (is_override = false) org row
+         never wins here; it's treated as inheriting future platform
+         catalogue updates rather than permanently pinning the org to
+         whatever was loaded at import time.
+      2. Otherwise, platform_ndis_price_items — the centrally-maintained
+         catalogue, for that same date.
+
     Args:
         item_code: NDIS item code (e.g., "01_011_0107_1_1")
         org_id: Organization ID
         as_of_date: Date to resolve price as of (default: today) — can be date or ISO string
         location_type: "national", "remote", or "very_remote"
-    
+
     Returns:
-        Dict with id, item_code, name, price_national, price_remote, 
-        price_very_remote, effective_price, effective_price_source, etc.
-        Returns None if item not found or expired.
+        Dict with id, item_code, name, price_national, price_remote,
+        price_very_remote, effective_price, effective_price_source,
+        price_source ("organization_override" or "platform"), etc.
+        Returns None if no override and no platform row cover this date.
     """
-    import asyncio
-    import requests
-    from ..core.config import settings
-    
     if as_of_date is None:
         as_of_date = date.today()
     elif isinstance(as_of_date, str):
         as_of_date = date.fromisoformat(as_of_date)
 
-    # Use requests in a thread pool to avoid DNS issues in async context
-    def _query_db():
-        url = f"{settings.supabase_url}/rest/v1/ndis_price_items"
-        headers = {
-            "apikey": settings.supabase_service_role_key,  # PostgREST requires apikey header
-            "Authorization": f"Bearer {settings.supabase_service_role_key}",
-            "Content-Type": "application/json",
-        }
-        
-        # Build query parameters for PostgREST
-        # valid_to is a half-open upper bound (see edit_item_price/
-        # load_price_schedule: the old row's valid_to is set to the new
-        # row's valid_from) — a row is current as-of a date if valid_to is
-        # NULL or strictly after that date. Without this, ordering by
-        # valid_from desc + limit 1 could return an already-expired row
-        # whenever a newer version exists but its valid_from is later than
-        # as_of_date (e.g. resolving a past shift's price after this
-        # item's rate has since changed again).
-        query_params = {
-            "item_code": f"eq.{item_code}",
-            "organization_id": f"eq.{str(org_id)}",
-            "valid_from": f"lte.{as_of_date.isoformat()}",
-            "or": f"(valid_to.is.null,valid_to.gt.{as_of_date.isoformat()})",
-            "order": "valid_from.desc",
-            "limit": "1",
-        }
-        
-        logger.info(f"[resolve_price] Querying PostgREST: item_code={item_code}, org_id={org_id}, date={as_of_date}")
-        
-        try:
-            response = requests.get(url, params=query_params, headers=headers, timeout=10)
-            logger.info(f"[resolve_price] Status: {response.status_code}")
-            
-            if response.status_code != 200:
-                logger.warning(f"[resolve_price] Non-200 response: {response.text}")
-                return None
-            
-            data = response.json()
-            logger.info(f"[resolve_price] Got {len(data)} items from PostgREST")
-            
-            if not data:
-                logger.warning(f"[resolve_price] No items found")
-                return None
-            
-            logger.info(f"[resolve_price] Returning item: {data[0].get('item_code')}")
-            return data[0]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[resolve_price] Request error: {e}", exc_info=True)
-            return None
-        except Exception as e:
-            logger.error(f"[resolve_price] Unexpected error: {e}", exc_info=True)
-            return None
-    
-    item = await asyncio.to_thread(_query_db)
+    org_params = _effective_dated_filter(item_code, as_of_date)
+    org_params["organization_id"] = f"eq.{str(org_id)}"
+    org_params["is_override"] = "eq.true"
+
+    item = await asyncio.to_thread(_query_price_table_sync, "ndis_price_items", org_params)
+    price_source = "organization_override"
+
+    if not item:
+        platform_params = _effective_dated_filter(item_code, as_of_date)
+        item = await asyncio.to_thread(_query_price_table_sync, "platform_ndis_price_items", platform_params)
+        price_source = "platform"
 
     if not item:
         return None
 
-    # Determine effective price based on location type. Ported from the SQL
-    # resolve_ndis_price() function (backend/supabase/migrations/025_ndis_pricing_effective_dated.sql,
-    # since retired): remote/very_remote items fall back to a multiplier of
-    # price_national (1.25x / 1.40x) when no explicit remote/very-remote
-    # price was loaded — which is the common case, since load_price_schedule()
-    # always loads price_remote/price_very_remote as NULL by design. No org
-    # currently resolves at a non-"national" location_type (every call site
-    # hardcodes or defaults to "national"), but the capability must keep
-    # working the moment one does.
-    price_national = item.get("price_national")
-    if location_type == "remote":
-        if item.get("price_remote") is not None:
-            effective_price = item.get("price_remote")
-            effective_price_source = "explicit"
-        else:
-            effective_price = price_national * 1.25 if price_national is not None else None
-            effective_price_source = "calculated_multiplier"
-    elif location_type == "very_remote":
-        if item.get("price_very_remote") is not None:
-            effective_price = item.get("price_very_remote")
-            effective_price_source = "explicit"
-        else:
-            effective_price = price_national * 1.40 if price_national is not None else None
-            effective_price_source = "calculated_multiplier"
-    else:
-        effective_price = price_national
-        effective_price_source = "explicit"
+    effective_price, effective_price_source = _compute_effective_price(item, location_type)
 
     return {
         "id": item.get("id"),
@@ -146,6 +147,7 @@ async def resolve_price(
         "price_very_remote": item.get("price_very_remote"),
         "effective_price": effective_price,
         "effective_price_source": effective_price_source,
+        "price_source": price_source,
         "day_type": item.get("day_type"),
         "time_type": item.get("time_type"),
         "support_intensity": item.get("support_intensity"),
@@ -402,6 +404,200 @@ async def load_price_schedule(
         entity_id=schedule_id,
         user_id=user_id,
         organization_id=org_id,
+        after_state={
+            "financial_year": financial_year,
+            "effective_date": effective_date.isoformat(),
+            "source_document": source_document,
+            "items_loaded": len(items_to_insert),
+        },
+    )
+
+    return {
+        "schedule_id": schedule_id,
+        "financial_year": financial_year,
+        "effective_date": effective_date.isoformat(),
+        "items_loaded": len(items_to_insert),
+        "validation_errors": validation_errors,
+    }
+
+
+# ── Platform Reference Catalogue (Bulk Load) ───────────────────────────────
+
+async def load_platform_price_schedule(
+    user: dict,
+    source_json: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Load a complete NDIS pricing schedule into the platform-wide reference
+    catalogue (platform_ndis_price_items) — the thing CareCliQ, not any one
+    provider, keeps current. Same shape and validation as
+    load_price_schedule(), minus organization_id.
+
+    Args:
+        user: Current authenticated user (must be super_admin — this is a
+            CareCliQ-operated catalogue, not something a provider's own
+            coordinator loads)
+        source_json: Parsed NDIS Support Catalogue JSON (metadata +
+            support_categories, same format load_price_schedule() takes)
+
+    Returns:
+        Dict with schedule_id, items_loaded, validation_errors
+
+    Raises:
+        HTTPException if user not authorized, data validation fails, etc.
+    """
+    if not is_super_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only CareCliQ super admins can load the platform price catalogue.",
+        )
+
+    user_id = get_user_id(user)
+
+    # ── Extract metadata ───────────────────────────────
+    metadata = source_json.get("metadata", {})
+    financial_year = metadata.get("financial_year")
+    effective_date_str = metadata.get("effective_date")
+    source_document = metadata.get("source")
+    version_str = metadata.get("version", "")
+
+    if not all([financial_year, effective_date_str, source_document]):
+        raise HTTPException(
+            status_code=422,
+            detail="Source JSON must include financial_year, effective_date, source in metadata.",
+        )
+
+    try:
+        effective_date = datetime.fromisoformat(effective_date_str).date()
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid effective_date format: {effective_date_str}",
+        )
+
+    # ── Collect items ──────────────────────────────────────────
+    items_to_insert: list[dict[str, Any]] = []
+    validation_errors: list[str] = []
+
+    support_categories = source_json.get("support_categories", [])
+
+    for category in support_categories:
+        cat_num = category.get("category_number", "")
+        support_purpose = category.get("support_purpose", "")
+        reg_group = category.get("registration_group", "")
+
+        if support_purpose not in ("Core Supports", "Capacity Building"):
+            validation_errors.append(
+                f"Category {cat_num}: invalid support_purpose '{support_purpose}'"
+            )
+            continue
+
+        for item in category.get("items", []):
+            item_code = item.get("item_code", "").strip()
+            if not item_code:
+                validation_errors.append(
+                    f"Category {cat_num}: item missing item_code"
+                )
+                continue
+
+            price_national = item.get("price_national")
+            if price_national is None:
+                # Skip items without prices (e.g., items requiring quotes) —
+                # not an error, same as load_price_schedule().
+                continue
+
+            try:
+                price_national = float(price_national)
+                if price_national < 0:
+                    raise ValueError("Negative price")
+            except (ValueError, TypeError):
+                validation_errors.append(
+                    f"Item {item_code}: invalid price_national '{price_national}'"
+                )
+                continue
+
+            unit = (item.get("unit") or "H").upper()
+            if unit not in ("H", "E"):
+                validation_errors.append(f"Item {item_code}: invalid unit '{unit}'")
+                continue
+
+            items_to_insert.append({
+                "item_code": item_code,
+                "schedule_id": None,  # set after schedule row is created
+                "category_number": cat_num,
+                "support_purpose": support_purpose,
+                "registration_group": reg_group,
+                "name": item.get("name", ""),
+                "description": item.get("description", ""),
+                "unit": unit,
+                "price_national": price_national,
+                "price_remote": None,  # Always NULL on load, same as load_price_schedule()
+                "price_very_remote": None,
+                "day_type": item.get("day_type"),
+                "time_type": item.get("time_type"),
+                "support_intensity": item.get("support_intensity"),
+                "valid_from": effective_date.isoformat() + "T00:00:00Z",
+                "valid_to": None,
+            })
+
+    if validation_errors:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Validation errors in pricing data: {'; '.join(validation_errors[:5])}",
+        )
+
+    if not items_to_insert:
+        raise HTTPException(
+            status_code=422,
+            detail="No valid items found in pricing schedule.",
+        )
+
+    # ── Create schedule row ────────────────────────────────────
+    supabase = get_supabase_admin()
+
+    schedule_payload = {
+        "financial_year": financial_year,
+        "effective_date": effective_date.isoformat(),
+        "source_document": source_document,
+        "version": version_str,
+        "loaded_by": user_id,
+        "source_json": source_json,
+    }
+
+    schedule_result = supabase.table("platform_ndis_price_schedules").insert(schedule_payload).execute()
+    if not schedule_result.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create platform price schedule record.",
+        )
+
+    schedule_id = schedule_result.data[0]["id"]
+
+    # ── Close out prior active versions of these item codes ─────
+    incoming_item_codes = sorted({item["item_code"] for item in items_to_insert})
+    supabase.table("platform_ndis_price_items").update(
+        {"valid_to": effective_date.isoformat() + "T00:00:00Z"}
+    ).in_(
+        "item_code", incoming_item_codes
+    ).is_("valid_to", "null").execute()
+
+    for item in items_to_insert:
+        item["schedule_id"] = schedule_id
+
+    insert_result = supabase.table("platform_ndis_price_items").insert(items_to_insert).execute()
+    if not insert_result.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to insert platform pricing items.",
+        )
+
+    # ── Audit log ──────────────────────────────────────────────
+    await audit_service.log_action(
+        action_type="platform_ndis_schedule.loaded",
+        entity_type="platform_ndis_price_schedules",
+        entity_id=schedule_id,
+        user_id=user_id,
+        organization_id=None,
         after_state={
             "financial_year": financial_year,
             "effective_date": effective_date.isoformat(),

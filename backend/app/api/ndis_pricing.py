@@ -130,6 +130,29 @@ async def load_schedule(
     return LoadScheduleResponse(**result)
 
 
+@router.post("/platform-schedules/load", status_code=201)
+async def load_platform_schedule(
+    request_body: LoadScheduleRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user),
+) -> LoadScheduleResponse:
+    """
+    Load a schedule into the platform-wide reference catalogue
+    (platform_ndis_price_items) — CareCliQ's own centrally-maintained
+    rates, not any one provider's.
+
+    Requires recent re-authentication and super_admin role.
+    """
+    require_recent_reauth(http_request, current_user)
+
+    result = await ndis_pricing_service.load_platform_price_schedule(
+        user=current_user,
+        source_json=request_body.dict(),
+    )
+
+    return LoadScheduleResponse(**result)
+
+
 @router.get("/schedules")
 async def list_schedules(
     current_user: dict = Depends(get_current_user),
