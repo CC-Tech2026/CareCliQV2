@@ -3487,6 +3487,8 @@ async def shift_margin(
     from ..services.shift_verification_service import _actual_minutes
 
     completion_date = (shift.get("clocked_out_at") or shift.get("scheduled_end") or "")[:10]
+    # location_type intentionally omitted (defaults to "national") — this org
+    # has no remote/very-remote participants; revisit if that ever changes.
     price = await ndis_pricing_service.resolve_price(price_item_code, org_id, as_of_date=completion_date or None)
     billed_cents = None
     if price:
