@@ -13,6 +13,7 @@ from ..core.access import (
     can_access_participant,
     get_user_role,
     is_coordinator,
+    is_managing_director,
     is_support_worker,
     owner_payload,
     user_id,
@@ -400,8 +401,8 @@ async def create_participant(
 
     if not current_user or not user_id(current_user) or not organization_id(current_user):
         raise PermissionError("Authenticated organization membership is required")
-    if not is_coordinator(current_user):
-        raise PermissionError("Only support coordinators can create participants")
+    if not is_coordinator(current_user) and not is_managing_director(current_user):
+        raise PermissionError("Only support coordinators or the managing director can create participants")
 
     supabase = get_supabase_admin()
 

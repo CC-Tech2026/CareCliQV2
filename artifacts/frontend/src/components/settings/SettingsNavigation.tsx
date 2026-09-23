@@ -8,7 +8,7 @@ type NavigationItem<T extends string> = {
 };
 const GROUPS = [
   { title: "Personal", ids: ["account", "privacy", "accessibility"] },
-  { title: "Organisation", ids: ["provider", "branding", "billing", "team", "delegatedAccess"] },
+  { title: "Organisation", ids: ["provider", "branding", "billing", "branches", "team", "delegatedAccess"] },
   { title: "Preferences", ids: ["defaults", "compliance", "notifications"] },
   { title: "Help & feedback", ids: ["bugReport", "improvementFeedback"] },
 ];
