@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
@@ -445,9 +445,16 @@ async def edit_item_price(
         effective_date: Date when new price takes effect (default: today)
         reason: Audit trail reason for the change
     
+    Sets is_override=True, edited_by, and edited_at on the new row — this is
+    the one write path that marks a row as a provider's own negotiated rate
+    rather than an untouched bulk-loaded one.
+
     Returns:
-        Dict with old_version, new_version, schedule_id=None (signals manual edit)
-    
+        Dict with old_version, new_version, schedule_id=None (top-level
+        return value only — the stored row's own schedule_id is carried
+        forward from the version being edited, not cleared; is_override is
+        the reliable signal for "this was a manual edit", not schedule_id)
+
     Raises:
         HTTPException if validation fails, backdating conflicts with invoices, etc.
     """
@@ -601,6 +608,9 @@ async def edit_item_price(
             "support_intensity": current_row["support_intensity"],
             "valid_from": effective_date.isoformat() + "T00:00:00Z",
             "valid_to": None,
+            "is_override": True,
+            "edited_by": user_id,
+            "edited_at": datetime.now(timezone.utc).isoformat(),
         }
 
         insert_result = supabase.table("ndis_price_items").insert(new_row_payload).execute()
