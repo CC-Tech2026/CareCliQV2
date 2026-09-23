@@ -3390,6 +3390,29 @@ async def shift_pay_preview(shift_id: str, current_user: dict = Depends(get_curr
     }
 
 
+_SCHADS_DAY_LABELS: dict[str, str] = {
+    "base_pay": "Weekday",
+    "penalty_saturday": "Saturday",
+    "penalty_sunday": "Sunday",
+    "penalty_public_holiday": "Public Holiday",
+}
+
+
+def _schads_day_types(components: list[dict]) -> list[str]:
+    """Distinct day-type labels a shift was actually paid under, derived from
+    calculate_shift_pay()'s own component breakdown — not re-derived. Only
+    the day-classifying component types count; casual_loading, overtime_*,
+    sleepover_allowance and minimum_engagement_topup are rate modifiers, not
+    day classifications, and are excluded. A shift crossing midnight (or a
+    sleepover's active-work segments) can legitimately span more than one."""
+    seen: list[str] = []
+    for c in components:
+        label = _SCHADS_DAY_LABELS.get(c.get("component_type"))
+        if label and label not in seen:
+            seen.append(label)
+    return seen
+
+
 @router.get("/shifts/pay-estimate")
 async def shift_pay_estimate(
     worker_id: str,
@@ -3432,7 +3455,11 @@ async def shift_pay_estimate(
         "is_sleepover": is_sleepover,
     }
     result = schads_engine.calculate_shift_pay(synthetic_shift, dry_run=True)
-    return {"pay_cents": result["total_cents"], "reason": result["reason"]}
+    return {
+        "pay_cents": result["total_cents"],
+        "reason": result["reason"],
+        "day_types": _schads_day_types(result["components"]),
+    }
 
 
 @router.get("/shifts/{shift_id}/margin")
@@ -3477,7 +3504,9 @@ async def shift_margin(
     return {
         "shift_id": shift_id,
         "billed_cents": billed_cents,
+        "billed_day_type": price.get("day_type") if price else None,
         "pay_cents": pay_cents,
+        "pay_day_types": _schads_day_types(pay_result["components"]),
         "margin_cents": billed_cents - pay_cents if billed_cents is not None else None,
         "pay_reason": pay_result["reason"],
     }

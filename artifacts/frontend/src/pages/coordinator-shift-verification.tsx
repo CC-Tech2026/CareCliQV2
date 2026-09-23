@@ -251,18 +251,28 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           ) : margin?.pay_reason ? (
             <span>Margin unavailable ({margin.pay_reason.replace(/_/g, " ")})</span>
           ) : margin ? (
-            <span>
-              Billed: <span className="font-bold" style={{ color: T1 }}>{margin.billed_cents != null ? `$${(margin.billed_cents / 100).toFixed(2)}` : "—"}</span>
-              {" · "}Worker pay: <span className="font-bold" style={{ color: T1 }}>${(margin.pay_cents / 100).toFixed(2)}</span>
-              {margin.margin_cents != null && (
-                <>
-                  {" · "}Margin:{" "}
-                  <span className="font-bold" style={{ color: margin.margin_cents < 0 ? "#DC2626" : T1 }}>
-                    {margin.margin_cents < 0 ? "-" : ""}${Math.abs(margin.margin_cents / 100).toFixed(2)}
-                  </span>
-                </>
+            <>
+              <span>
+                Billed: <span className="font-bold" style={{ color: T1 }}>{margin.billed_cents != null ? `$${(margin.billed_cents / 100).toFixed(2)}` : "—"}</span>
+                {margin.billed_day_type && ` (${margin.billed_day_type})`}
+                {" · "}Worker pay: <span className="font-bold" style={{ color: T1 }}>${(margin.pay_cents / 100).toFixed(2)}</span>
+                {margin.pay_day_types.length > 0 && ` (${margin.pay_day_types.join(" + ")})`}
+                {margin.margin_cents != null && (
+                  <>
+                    {" · "}Margin:{" "}
+                    <span className="font-bold" style={{ color: margin.margin_cents < 0 ? "#DC2626" : T1 }}>
+                      {margin.margin_cents < 0 ? "-" : ""}${Math.abs(margin.margin_cents / 100).toFixed(2)}
+                    </span>
+                  </>
+                )}
+              </span>
+              {margin.billed_day_type && margin.pay_day_types.length > 0 && !margin.pay_day_types.includes(margin.billed_day_type) && (
+                <p className="mt-1 flex items-start gap-1 text-[11px] font-medium" style={{ color: "#B45309" }}>
+                  <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                  Billed as {margin.billed_day_type}, paid as {margin.pay_day_types.join(" + ")} — not a bug, NDIS and SCHADS classify day-types independently, but the margin above spans two different buckets.
+                </p>
               )}
-            </span>
+            </>
           ) : null}
         </div>
       )}

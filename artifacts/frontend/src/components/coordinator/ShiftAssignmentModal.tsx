@@ -867,6 +867,16 @@ export function ShiftAssignmentModal({
                 const payCents = payEstimateQuery.data?.pay_cents;
                 const payDollars = payCents != null ? payCents / 100 : null;
                 const margin = estimate != null && payDollars != null ? estimate - payDollars : null;
+                const ndisDayType = resolved.day_type;
+                const payDayTypes = payEstimateQuery.data?.day_types ?? [];
+                // NDIS day-type and SCHADS day-type are priced under
+                // completely independent rules (the NDIS Pricing Arrangements
+                // document is explicit that a support's day-type is not the
+                // worker's — that's set by the applicable Industry Award) —
+                // a shift billed as Saturday and paid as a weekday is
+                // legitimate, not a bug. Only flag it, never auto-reconcile it.
+                const dayTypeMismatch =
+                  !!ndisDayType && payDayTypes.length > 0 && !payDayTypes.includes(ndisDayType);
                 return (
                   <>
                     <p className="text-[12px] font-bold" style={{ color: TEXT }}>
@@ -877,6 +887,7 @@ export function ShiftAssignmentModal({
                           : activeDurationHours != null
                           ? `(${activeDurationHours}h × $${resolved.effective_price.toFixed(2)}/hr, as of ${datetimeLocalValueToUtcIso(scheduledStart, participantZone).slice(0, 10)})`
                           : "(set start and end time to estimate)"}
+                        {ndisDayType && ` — billed as ${ndisDayType}${resolved.time_type ? ` ${resolved.time_type}` : ""}`}
                       </span>
                     </p>
                     {isManagingDirector && selectedWorkerId && (
@@ -890,6 +901,11 @@ export function ShiftAssignmentModal({
                         ) : payDollars != null ? (
                           <>
                             Projected worker pay: ${payDollars.toFixed(2)}
+                            {payDayTypes.length > 0 && (
+                              <span className="ml-1 font-normal" style={{ color: MUTED }}>
+                                (paid as {payDayTypes.join(" + ")})
+                              </span>
+                            )}
                             {margin != null && (
                               <span className="ml-1 font-normal" style={{ color: margin < 0 ? "#DC2626" : MUTED }}>
                                 (margin: {margin < 0 ? "-" : ""}${Math.abs(margin).toFixed(2)}
@@ -898,6 +914,12 @@ export function ShiftAssignmentModal({
                             )}
                           </>
                         ) : null}
+                      </p>
+                    )}
+                    {isManagingDirector && dayTypeMismatch && (
+                      <p className="text-[11px] font-medium flex items-start gap-1" style={{ color: "#B45309" }}>
+                        <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                        Billed as {ndisDayType}, paid as {payDayTypes.join(" + ")} — not a bug, NDIS and SCHADS day-types are classified independently, but the margin above is comparing across two different buckets.
                       </p>
                     )}
                   </>

@@ -10,6 +10,8 @@ export type NdisPriceResolution = {
   price_very_remote: number | null;
   effective_price: number;
   effective_price_source: "explicit" | "calculated_multiplier";
+  day_type: string | null;
+  time_type: string | null;
 };
 
 export type NdisPriceSchedule = {

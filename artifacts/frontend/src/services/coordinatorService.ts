@@ -245,6 +245,12 @@ export function getShiftPayPreview(shiftId: string) {
 export type PayEstimate = {
   pay_cents: number;
   reason: string | null;
+  /** Distinct SCHADS day-type labels this shift was actually paid under
+   * (e.g. ["Weekday"], or ["Weekday", "Saturday"] if it crosses midnight
+   * into one) — read off calculate_shift_pay()'s own component breakdown,
+   * not re-derived. NDIS's day-type is priced independently and can
+   * legitimately differ. */
+  day_types: string[];
 };
 
 /** MD-only. Live SCHADS pay estimate for a shift that doesn't exist yet —
@@ -271,7 +277,12 @@ export function getShiftPayEstimate(params: {
 export type ShiftMargin = {
   shift_id: string;
   billed_cents: number | null;
+  /** The NDIS price item's own day-type (e.g. "Saturday") — independent of
+   * pay_day_types below; a shift can legitimately be billed under one and
+   * paid under another. */
+  billed_day_type: string | null;
   pay_cents: number;
+  pay_day_types: string[];
   margin_cents: number | null;
   pay_reason: string | null;
 };
