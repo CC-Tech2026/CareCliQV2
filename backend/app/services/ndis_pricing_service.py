@@ -92,7 +92,7 @@ async def resolve_price(
     """
     Resolve the effective price for an NDIS item at a point in time.
 
-    Two-layer fallback:
+    Three-tier fallback:
       1. The org's own ndis_price_items, but only a row with
          is_override = true — a real negotiated rate the org set via
          edit_item_price(). A bulk-loaded (is_override = false) org row
@@ -101,6 +101,15 @@ async def resolve_price(
          whatever was loaded at import time.
       2. Otherwise, platform_ndis_price_items — the centrally-maintained
          catalogue, for that same date.
+      3. Otherwise, the org's own ndis_price_items again, this time any
+         row regardless of is_override — this only fires for dates the
+         platform catalogue has no coverage for at all (typically a
+         historical date from before the platform catalogue existed).
+         Without this tier, a shift from before the platform catalogue's
+         earliest valid_from would resolve to nothing instead of whatever
+         the org actually had on record at the time — tier 2 is additive
+         for dates it covers, it must never retroactively erase history
+         for dates it doesn't.
 
     Args:
         item_code: NDIS item code (e.g., "01_011_0107_1_1")
@@ -111,25 +120,32 @@ async def resolve_price(
     Returns:
         Dict with id, item_code, name, price_national, price_remote,
         price_very_remote, effective_price, effective_price_source,
-        price_source ("organization_override" or "platform"), etc.
-        Returns None if no override and no platform row cover this date.
+        price_source ("organization_override", "platform", or
+        "organization_historical"), etc. Returns None if none of the
+        three tiers cover this date.
     """
     if as_of_date is None:
         as_of_date = date.today()
     elif isinstance(as_of_date, str):
         as_of_date = date.fromisoformat(as_of_date)
 
-    org_params = _effective_dated_filter(item_code, as_of_date)
-    org_params["organization_id"] = f"eq.{str(org_id)}"
-    org_params["is_override"] = "eq.true"
+    override_params = _effective_dated_filter(item_code, as_of_date)
+    override_params["organization_id"] = f"eq.{str(org_id)}"
+    override_params["is_override"] = "eq.true"
 
-    item = await asyncio.to_thread(_query_price_table_sync, "ndis_price_items", org_params)
+    item = await asyncio.to_thread(_query_price_table_sync, "ndis_price_items", override_params)
     price_source = "organization_override"
 
     if not item:
         platform_params = _effective_dated_filter(item_code, as_of_date)
         item = await asyncio.to_thread(_query_price_table_sync, "platform_ndis_price_items", platform_params)
         price_source = "platform"
+
+    if not item:
+        org_any_params = _effective_dated_filter(item_code, as_of_date)
+        org_any_params["organization_id"] = f"eq.{str(org_id)}"
+        item = await asyncio.to_thread(_query_price_table_sync, "ndis_price_items", org_any_params)
+        price_source = "organization_historical"
 
     if not item:
         return None
