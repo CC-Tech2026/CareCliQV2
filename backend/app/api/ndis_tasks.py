@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
+from ..services import ndis_pricing_service
 from ..services.recurring_task_scheduler import (
     schedule_recurring_tasks_for_period,
     list_task_instances_for_date,
@@ -101,20 +102,16 @@ async def record_task_completion(
     if price_item_code:
         # Resolve effective price for date
         try:
-            price_resp = supabase.rpc(
-                "resolve_ndis_price",
-                {
-                    "p_item_code": price_item_code,
-                    "p_org_id": org_id,
-                    "p_as_of_date": body.completion_date,
-                    # Hardcoded "national" — this org has no remote/very-remote
-                    # participants; revisit if that ever changes.
-                    "p_location_type": "national",
-                }
-            ).execute()
-            
-            if price_resp.data:
-                price_item = price_resp.data[0] if isinstance(price_resp.data, list) else price_resp.data
+            price_item = await ndis_pricing_service.resolve_price(
+                price_item_code,
+                org_id,
+                as_of_date=body.completion_date,
+                # Hardcoded "national" — this org has no remote/very-remote
+                # participants; revisit if that ever changes.
+                location_type="national",
+            )
+
+            if price_item:
                 rate = float(price_item.get("effective_price", 0))
                 # "E" (per-event) items are a flat fee regardless of duration —
                 # same distinction as shift_verification_service.verify_shift().

@@ -103,20 +103,38 @@ async def resolve_price(
             return None
     
     item = await asyncio.to_thread(_query_db)
-    
+
     if not item:
         return None
-    
-    # Determine effective price based on location type
-    price_field_map = {
-        "national": "price_national",
-        "remote": "price_remote",
-        "very_remote": "price_very_remote",
-    }
-    
-    price_field = price_field_map.get(location_type, "price_national")
-    effective_price = item.get(price_field) or item.get("price_national")
-    
+
+    # Determine effective price based on location type. Ported from the SQL
+    # resolve_ndis_price() function (backend/supabase/migrations/025_ndis_pricing_effective_dated.sql,
+    # since retired): remote/very_remote items fall back to a multiplier of
+    # price_national (1.25x / 1.40x) when no explicit remote/very-remote
+    # price was loaded — which is the common case, since load_price_schedule()
+    # always loads price_remote/price_very_remote as NULL by design. No org
+    # currently resolves at a non-"national" location_type (every call site
+    # hardcodes or defaults to "national"), but the capability must keep
+    # working the moment one does.
+    price_national = item.get("price_national")
+    if location_type == "remote":
+        if item.get("price_remote") is not None:
+            effective_price = item.get("price_remote")
+            effective_price_source = "explicit"
+        else:
+            effective_price = price_national * 1.25 if price_national is not None else None
+            effective_price_source = "calculated_multiplier"
+    elif location_type == "very_remote":
+        if item.get("price_very_remote") is not None:
+            effective_price = item.get("price_very_remote")
+            effective_price_source = "explicit"
+        else:
+            effective_price = price_national * 1.40 if price_national is not None else None
+            effective_price_source = "calculated_multiplier"
+    else:
+        effective_price = price_national
+        effective_price_source = "explicit"
+
     return {
         "id": item.get("id"),
         "item_code": item.get("item_code"),
@@ -127,7 +145,7 @@ async def resolve_price(
         "price_remote": item.get("price_remote"),
         "price_very_remote": item.get("price_very_remote"),
         "effective_price": effective_price,
-        "effective_price_source": "explicit",
+        "effective_price_source": effective_price_source,
         "day_type": item.get("day_type"),
         "time_type": item.get("time_type"),
         "support_intensity": item.get("support_intensity"),
