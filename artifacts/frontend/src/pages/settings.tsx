@@ -72,7 +72,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
-import { BranchesSection } from "@/components/branches/BranchesSection";
+import { BranchesSection, BranchStateSelect } from "@/components/branches/BranchesSection";
 import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Link } from "wouter";
@@ -1587,8 +1587,38 @@ export default function Settings() {
     }
   };
 
-  const { branches: branchList, byId: branchById, multiBranch: branchesMulti } = useBranches();
+  const { branches: branchList, byId: branchById, multiBranch: branchesMulti, headOffice, states: branchStates, isLoading: branchesLoading } = useBranches();
   const invalidateBranches = useInvalidateBranches();
+
+  // Single-office timezone picker — sets Head Office's state (and hence its
+  // timezone) directly, so a small provider with one office never has to
+  // learn "branches" as a concept. Multi-office providers still use the full
+  // Branches screen. Kept separate from the businessName/ABN save flow below
+  // since it hits a different endpoint (branches, not settings/provider).
+  const [locationState, setLocationState] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+  useEffect(() => {
+    if (headOffice) setLocationState(headOffice.state);
+  }, [headOffice?.id, headOffice?.state]);
+  const locationDirty = !!headOffice && locationState !== headOffice.state;
+  const handleSaveLocation = async () => {
+    if (!headOffice || !locationState) return;
+    setSavingLocation(true);
+    try {
+      const res = await apiFetch(`/api/branches/${headOffice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: locationState }),
+      });
+      if (!res.ok) throw new Error();
+      invalidateBranches();
+      toast({ title: "Business location updated" });
+    } catch {
+      toast({ title: "Could not update business location", variant: "destructive" });
+    } finally {
+      setSavingLocation(false);
+    }
+  };
 
   const handleChangeBranch = async (userId: string, branchId: string) => {
     if (!authToken || !branchId) return;
@@ -2323,6 +2353,34 @@ export default function Settings() {
                 </div>
               )}
             </PanelCard>
+
+            {/* Single-office timezone picker — hidden once a second branch
+                exists, since multi-office providers manage this from the
+                Branches screen instead (Settings → Branches). */}
+            {!branchesMulti && (
+              <PanelCard label="Business location">
+                {branchesLoading ? (
+                  <LoadingRow />
+                ) : (
+                  <div className="space-y-1.5 max-w-sm">
+                    <Label htmlFor="business-state" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>State</Label>
+                    <BranchStateSelect id="business-state" value={locationState} onChange={setLocationState} states={branchStates} />
+                    <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                      Sets the timezone your organisation runs on — shift times, billing periods, and "today" are all based on this.
+                      Setting up separate offices with different timezones comes later, in Branches.
+                    </p>
+                    {locationDirty && (
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => headOffice && setLocationState(headOffice.state)}>Cancel</Button>
+                        <Button size="sm" className="rounded-lg" disabled={savingLocation} onClick={handleSaveLocation}>
+                          {savingLocation ? "Saving…" : "Save"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </PanelCard>
+            )}
 
             <StickyActionBar visible={providerDirty} saving={isSavingProvider} onSave={handleSaveProvider} onCancel={handleCancelProvider} />
           </Section>

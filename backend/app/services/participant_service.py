@@ -13,6 +13,7 @@ from ..core.access import (
     can_access_participant,
     get_user_role,
     is_coordinator,
+    is_managing_director,
     is_support_worker,
     owner_payload,
     user_id,
@@ -400,8 +401,8 @@ async def create_participant(
 
     if not current_user or not user_id(current_user) or not organization_id(current_user):
         raise PermissionError("Authenticated organization membership is required")
-    if not is_coordinator(current_user):
-        raise PermissionError("Only support coordinators can create participants")
+    if not is_coordinator(current_user) and not is_managing_director(current_user):
+        raise PermissionError("Only support coordinators or the managing director can create participants")
 
     supabase = get_supabase_admin()
 
@@ -462,7 +463,13 @@ async def create_participant(
         return None
 
     participant_id = str(rows[0].get("id") or "")
-    if plan_payload and participant_id:
+    # plan_status always carries a default ("active"), so plan_payload is
+    # never truly empty — only create a plan when there's actual plan data
+    # (a caller with nothing yet, e.g. participant onboarding activation
+    # before any plan dates are captured, shouldn't get a placeholder plan
+    # that immediately fails ndis_plans.plan_start's NOT NULL constraint).
+    has_plan_data = any(k in plan_payload for k in ("plan_start", "plan_end", "total_funding"))
+    if has_plan_data and participant_id:
         from . import funding_service
 
         await funding_service.create_or_update_plan(participant_id, plan_payload, current_user)
