@@ -12,6 +12,7 @@ since it's also written by the post-activation profile-edit form.
 
 from __future__ import annotations
 
+import pathlib
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -20,10 +21,19 @@ from fastapi import HTTPException
 
 from ..schemas.participant import ParticipantCreate
 from . import participant_service
+from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
+from .organization_branding_service import get_letterhead
 from .supabase_client import get_supabase_admin
 
 TABLE = "participant_intakes"
 BUCKET = "participant-intake-files"
+_TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
+
+SERVICE_CATEGORY_LABELS = {"aged_care": "Aged Care", "disability": "Disability"}
+FUNDING_TYPE_LABELS = {"ndia_managed": "NDIA-managed", "plan_managed": "Plan-managed", "self_managed": "Self-managed"}
+SIGNING_REQUIRED_FIELDS = (
+    "provider_signed_name", "family_signed_name", "provider_signature_png", "family_signature_png",
+)
 
 STATUSES = (
     "enquiry", "screening", "declined", "withdrawn", "meet_greet",
@@ -213,6 +223,55 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
     return {"participant_id": participant["id"], "activated_at": _now()}
 
 
+def _render_service_agreement_pdf(intake: dict[str, Any]) -> tuple[str, bytes]:
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    org = get_letterhead(intake["organization_id"])
+    web_intake = intake.get("web_intake") or {}
+    context = {
+        "org": org,
+        "intake": {
+            **intake,
+            "date_of_birth": web_intake.get("date_of_birth"),
+            "service_category_label": SERVICE_CATEGORY_LABELS.get(intake.get("service_category"), "—"),
+            "funding_type_label": FUNDING_TYPE_LABELS.get(web_intake.get("funding_type")),
+        },
+        "provider_signature_png": intake.get("provider_signature_png"),
+        "family_signature_png": intake.get("family_signature_png"),
+        "generated_date": datetime.now(timezone.utc).strftime("%d %b %Y"),
+    }
+    env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=select_autoescape(["html"]))
+    template = env.get_template("participant_service_agreement.html")
+    html_str = template.render(**context)
+    pdf_bytes = render_html_to_pdf(html_str, base_url=str(_TEMPLATES_DIR))
+
+    safe_name = "".join(c for c in intake["full_name"] if c.isalnum() or c in " -_").strip().replace(" ", "_")
+    filename = f"service-agreement-{safe_name or intake['id']}.pdf"
+    return filename, pdf_bytes
+
+
+def _generate_and_store_service_agreement(intake: dict[str, Any]) -> dict[str, Any]:
+    """Called when a PATCH moves status to "signed" — bakes both typed names
+    and drawn signatures into an actual agreement PDF, so an MD no longer has
+    to print/sign/scan a paper copy. Overwrites any manually-uploaded document,
+    since the e-signature captured here is now the authoritative record."""
+    try:
+        filename, pdf_bytes = _render_service_agreement_pdf(intake)
+    except HtmlPdfRenderError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not generate the service agreement: {exc}")
+
+    supabase = get_supabase_admin()
+    path = f"{intake['organization_id']}/{intake['id']}/{uuid4().hex}.pdf"
+    try:
+        supabase.storage.from_(BUCKET).upload(path, pdf_bytes, {"content-type": "application/pdf", "upsert": "true"})
+        signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
+        url = signed.get("signedURL") or signed.get("signed_url")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Participant intake storage is not configured: {exc}")
+
+    return {"signed_document_path": path, "signed_document_url": url, "signed_document_name": filename}
+
+
 async def update_intake(
     intake_id: str,
     organization_id: str,
@@ -233,17 +292,25 @@ async def update_intake(
             raise HTTPException(status_code=409, detail="Only a signed or suspended intake can be made active.")
         if new_status == "inactive" and current_status != "active":
             raise HTTPException(status_code=409, detail="Only an active participant can be suspended.")
+        if new_status == "signed" and current_status != "awaiting_signatures":
+            raise HTTPException(status_code=409, detail="Only an intake awaiting signatures can be signed.")
 
     merged = {**existing, **patch}
     reason_field = REASON_FIELD_FOR_STATUS.get(new_status) if new_status else None
     if reason_field and not (merged.get(reason_field) or "").strip():
         raise HTTPException(status_code=422, detail=f"{reason_field.replace('_', ' ').capitalize()} is required.")
+    if new_status == "signed":
+        missing = [f for f in SIGNING_REQUIRED_FIELDS if not (merged.get(f) or "").strip()]
+        if missing:
+            raise HTTPException(status_code=422, detail=f"Missing before signing: {', '.join(missing)}.")
 
     update: dict[str, Any] = dict(patch)
     if new_status == "active":
         update.update(await _activate_side_effects(existing, merged, current_user))
     elif new_status == "inactive":
         update["suspended_at"] = _now()
+    elif new_status == "signed":
+        update.update(_generate_and_store_service_agreement(merged))
 
     update["updated_at"] = _now()
     resp = (

@@ -2357,7 +2357,7 @@ function IntakeDetail({
                         <div className="min-w-0">
                           <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
                           <p className="text-[11px] truncate" style={{ color: MUTED }}>
-                            {intake.signed_document_name || "Upload the physically-signed service agreement"}
+                            {intake.signed_document_name || "Generated automatically once both parties sign below — or upload your own instead"}
                           </p>
                         </div>
                       </div>
@@ -2366,7 +2366,7 @@ function IntakeDetail({
                           <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
                         )}
                         <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
-                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload"}
+                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload instead"}
                         </Button>
                       </div>
                     </div>

@@ -157,6 +157,55 @@ async def test_activate_creates_the_real_participant_record_and_links_it():
 
 
 @pytest.mark.asyncio
+async def test_sign_requires_awaiting_signatures_status():
+    existing = {"id": "i-1", "organization_id": "org-1", "status": "meet_greet", "full_name": "Sam"}
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):
+        with pytest.raises(HTTPException) as exc:
+            await svc.update_intake("i-1", "org-1", {"status": "signed"}, MD_USER)
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_sign_requires_both_names_and_both_signatures():
+    existing = {"id": "i-1", "organization_id": "org-1", "status": "awaiting_signatures", "full_name": "Sam"}
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):
+        with pytest.raises(HTTPException) as exc:
+            await svc.update_intake("i-1", "org-1", {
+                "status": "signed", "provider_signed_name": "Alex Director",
+            }, MD_USER)
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_sign_generates_and_stores_the_service_agreement_pdf():
+    existing = {
+        "id": "i-1", "organization_id": "org-1", "status": "awaiting_signatures", "full_name": "Sam Rivera",
+        "ndis_number": "1", "web_intake": {},
+    }
+    patch_body = {
+        "status": "signed",
+        "provider_signed_name": "Alex Director", "provider_signed_at": "2026-09-23T00:00:00Z",
+        "family_signed_name": "Sam Rivera", "family_signed_at": "2026-09-23T00:00:00Z",
+        "provider_signature_png": "data:image/png;base64,AAA", "family_signature_png": "data:image/png;base64,BBB",
+    }
+    updated_row = {**existing, **patch_body, "signed_document_url": "https://example.com/agreement.pdf"}
+    table = MagicMock()
+    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[updated_row])
+    supabase = MagicMock()
+    supabase.table.return_value = table
+
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing), \
+         patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase), \
+         patch("backend.app.services.participant_intake_service._render_service_agreement_pdf", return_value=("agreement.pdf", b"%PDF-fake")) as render_mock:
+        result = await svc.update_intake("i-1", "org-1", patch_body, MD_USER)
+
+    render_mock.assert_called_once()
+    assert result["signed_document_url"] == "https://example.com/agreement.pdf"
+    stored_update = table.update.call_args.args[0]
+    assert stored_update["signed_document_name"] == "agreement.pdf"
+
+
+@pytest.mark.asyncio
 async def test_reactivating_a_suspended_participant_does_not_create_a_duplicate_record():
     existing = {
         "id": "i-1", "organization_id": "org-1", "status": "inactive", "full_name": "Sam Rivera",
