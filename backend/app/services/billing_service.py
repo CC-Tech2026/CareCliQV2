@@ -561,6 +561,23 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
     status_value = data.get("status", existing.get("status"))
     if status_value not in INVOICE_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid invoice status.")
+    # A PDF render failure falls back to a placeholder with no line items —
+    # never let that be sent to a participant or plan manager looking like a
+    # real invoice. Regenerating a successful PDF clears the flag (see
+    # generate_invoice_pdf); this only blocks the transitions where the
+    # stored document is actually about to be relied on.
+    if (
+        status_value in {"finalized", "issued", "sent", "paid"}
+        and status_value != existing.get("status")
+        and existing.get("pdf_generation_failed")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This invoice's PDF failed to render and only a placeholder is stored. "
+                "Regenerate the PDF successfully before finalizing or sending this invoice."
+            ),
+        )
     payload: dict[str, Any] = {
         "recipient_name": data.get("recipient_name", existing.get("recipient_name")),
         "recipient_email": data.get("recipient_email", existing.get("recipient_email")),
@@ -663,14 +680,16 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
     return updated
 
 
-def _minimal_pdf_bytes(invoice: dict) -> bytes:
+def _minimal_pdf_bytes(invoice: dict, *, render_error: str | None = None) -> bytes:
     lines = [
-        "CareCliQ Invoice",
+        "*** PDF GENERATION FAILED - THIS IS NOT THE REAL INVOICE ***" if render_error else "CareCliQ Invoice",
         f"Invoice: {invoice.get('invoice_number', '')}",
         f"Recipient: {invoice.get('recipient_name', '')}",
         f"Status: {invoice.get('status', '')}",
         f"Total: {(invoice.get('total_cents') or 0) / 100:.2f} {invoice.get('currency') or 'AUD'}",
     ]
+    if render_error:
+        lines.append("Contact support before sending this invoice - line items are not shown above.")
     text = "\\n".join(lines).replace("(", "\\(").replace(")", "\\)")
     stream = f"BT /F1 12 Tf 72 740 Td ({text}) Tj ET"
     pdf = (
@@ -929,12 +948,23 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
     invoice = await get_invoice(invoice_id, user)
     supabase = get_supabase_admin()
 
+    render_error: str | None = None
     try:
         from . import invoice_service as _inv_svc
         template_data = _build_template_data(invoice, supabase)
         pdf_bytes = _inv_svc.render_invoice_pdf(template_data)
-    except Exception:
-        pdf_bytes = _minimal_pdf_bytes(invoice)
+    except Exception as exc:
+        # A provider must never be able to send a participant or plan
+        # manager a five-line placeholder without knowing that's what
+        # they're sending — log the real cause, and mark the invoice row
+        # itself so finalize/send are blocked until it's regenerated
+        # successfully (see update_invoice's pdf_generation_failed check).
+        logger.exception(
+            "Invoice PDF render failed for invoice %s (org %s) — falling back to placeholder PDF",
+            invoice_id, invoice.get("organization_id"),
+        )
+        render_error = str(exc)[:500]
+        pdf_bytes = _minimal_pdf_bytes(invoice, render_error=render_error)
 
     path = f"{invoice['organization_id']}/{invoice['id']}/{invoice['invoice_number']}.pdf"
     supabase = get_supabase_admin()
@@ -951,20 +981,35 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
         # pdf_url is intentionally not stored — invoice-files is a private bucket, so
         # the URL must be a freshly-signed one generated at read time (see
         # _with_signed_pdf_url), never a persisted link that can outlive its signature.
-        .update({"pdf_path": path, "pdf_url": None, "updated_at": _now_iso()})
+        .update({
+            "pdf_path": path,
+            "pdf_url": None,
+            "updated_at": _now_iso(),
+            "pdf_generation_failed": render_error is not None,
+            "pdf_generation_error": render_error,
+        })
         .eq("id", invoice_id)
         .eq("organization_id", invoice["organization_id"])
         .execute()
     )
     updated = result.data[0] if result.data else {**invoice, "pdf_path": path}
     await audit_service.log_action(
-        action_type="invoice.pdf_generated",
+        action_type="invoice.pdf_generation_failed" if render_error else "invoice.pdf_generated",
         entity_type="invoice",
         entity_id=invoice_id,
         user_id=get_user_id(user),
         organization_id=invoice.get("organization_id"),
-        after_state={"pdf_path": path},
+        after_state={"pdf_path": path, "pdf_generation_failed": render_error is not None, "pdf_generation_error": render_error},
     )
+    if render_error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The invoice PDF template failed to render, so a placeholder was stored instead "
+                "of the real invoice. Contact support before sending this invoice. "
+                f"Error: {render_error}"
+            ),
+        )
     return _with_signed_pdf_url(updated)
 
 
