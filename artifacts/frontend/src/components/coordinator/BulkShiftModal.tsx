@@ -16,6 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   bulkCreateShifts,
   getParticipantPriceItemOptions,
@@ -269,28 +270,30 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
                   Expected NDIS item <span className="font-normal">({translate("common.optional")})</span>
                 </label>
-                <Select
+                <SearchableSelect
                   value={expectedPriceItemCode || "__none__"}
                   onValueChange={(val) => setExpectedPriceItemCode(val === "__none__" ? "" : val)}
+                  placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"}
+                  searchPlaceholder="Search by name or item code…"
+                  emptyText={translate("common.noResults")}
                   disabled={!participantId || priceItemsQuery.isLoading}
-                >
-                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None recorded</SelectItem>
-                    {(priceItemsQuery.data ?? []).map((p) => (
-                      <SelectItem key={p.item_code} value={p.item_code}>
-                        {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-                        {p.price_national != null
-                          ? p.unit === "E"
-                            ? ` ($${p.price_national.toFixed(2)} flat)`
-                            : ` ($${p.price_national.toFixed(2)}/hr)`
-                          : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: "__none__", label: "None recorded", keywords: "none recorded" },
+                    ...(priceItemsQuery.data ?? []).map((p) => {
+                      const name = p.name || p.support_purpose || "Unnamed item";
+                      const priceSuffix = p.price_national != null
+                        ? p.unit === "E"
+                          ? ` ($${p.price_national.toFixed(2)} flat)`
+                          : ` ($${p.price_national.toFixed(2)}/hr)`
+                        : "";
+                      return {
+                        value: p.item_code,
+                        label: `${p.item_code}: ${name}${priceSuffix}`,
+                        keywords: `${p.item_code} ${name}`,
+                      };
+                    }),
+                  ]}
+                />
                 {(() => {
                   const selected = (priceItemsQuery.data ?? []).find((p) => p.item_code === expectedPriceItemCode);
                   if (!selected || selected.price_national == null) return null;

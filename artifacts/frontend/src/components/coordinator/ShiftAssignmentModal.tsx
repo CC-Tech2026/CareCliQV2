@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type ReactNode } from "react";
+﻿import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -48,15 +48,10 @@ import {
 import {
   Sheet, SheetContent, SheetTitle,
 } from "@/components/ui/sheet";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-  Popover, PopoverContent, PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
-} from "@/components/ui/command";
-import {
-  Check, CheckCircle2, AlertTriangle, Loader2, User2,
-  CalendarClock, ShieldCheck, CheckSquare, ChevronDown,
+  CheckCircle2, AlertTriangle, Loader2, User2,
+  CalendarClock, ShieldCheck, CheckSquare,
 } from "lucide-react";
 
 const PLUM   = "var(--cc-plum)";
@@ -65,95 +60,6 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
-
-type SearchableOption = {
-  value: string;
-  label: string;
-  keywords?: string;
-};
-
-function SearchableSelect({
-  value,
-  onValueChange,
-  options,
-  placeholder,
-  searchPlaceholder,
-  emptyText,
-  renderTrigger,
-  renderOption,
-}: {
-  value: string;
-  onValueChange: (value: string) => void;
-  options: SearchableOption[];
-  placeholder: string;
-  searchPlaceholder: string;
-  emptyText: string;
-  renderTrigger?: (selected: SearchableOption | undefined) => ReactNode;
-  renderOption?: (option: SearchableOption, selected: boolean) => ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen} modal>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-xl border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm outline-none focus:ring-1 focus:ring-ring"
-          style={{ borderColor: BORDER }}
-        >
-          <span className={cn("truncate", !selected && "text-cc-muted")}>
-            {renderTrigger
-              ? renderTrigger(selected)
-              : selected?.label ?? placeholder}
-          </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="z-[100] w-[var(--radix-popover-trigger-width)] p-0"
-        align="start"
-        style={{ borderColor: BORDER }}
-      >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => {
-                const isSelected = option.value === value;
-                return (
-                  <CommandItem
-                    key={option.value}
-                    value={option.keywords ?? option.label}
-                    onSelect={() => {
-                      onValueChange(option.value);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
-                      {renderOption
-                        ? renderOption(option, isSelected)
-                        : option.label}
-                    </span>
-                    <Check
-                      className={cn(
-                        "ml-2 h-4 w-4 shrink-0",
-                        isSelected ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 const SHIFT_TYPE_KEYS: Record<string, string> = {
   standard_support: "coordinator.bulkShift.shiftType.standardSupport",
@@ -822,28 +728,30 @@ export function ShiftAssignmentModal({
                 Expected NDIS item
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate("common.optional")}</span>
               </label>
-              <Select
+              <SearchableSelect
                 value={expectedPriceItemCode || "__none__"}
                 onValueChange={(val) => setExpectedPriceItemCode(val === "__none__" ? "" : val)}
+                placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"}
+                searchPlaceholder="Search by name or item code…"
+                emptyText={translate("common.noResults")}
                 disabled={priceItemsQuery.isLoading}
-              >
-                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                  <SelectValue placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None recorded</SelectItem>
-                  {(priceItemsQuery.data ?? []).map((p) => (
-                    <SelectItem key={p.item_code} value={p.item_code}>
-                      {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-                      {p.price_national != null
-                        ? p.unit === "E"
-                          ? ` ($${p.price_national.toFixed(2)} flat)`
-                          : ` ($${p.price_national.toFixed(2)}/hr)`
-                        : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={[
+                  { value: "__none__", label: "None recorded", keywords: "none recorded" },
+                  ...(priceItemsQuery.data ?? []).map((p) => {
+                    const name = p.name || p.support_purpose || "Unnamed item";
+                    const priceSuffix = p.price_national != null
+                      ? p.unit === "E"
+                        ? ` ($${p.price_national.toFixed(2)} flat)`
+                        : ` ($${p.price_national.toFixed(2)}/hr)`
+                      : "";
+                    return {
+                      value: p.item_code,
+                      label: `${p.item_code}: ${name}${priceSuffix}`,
+                      keywords: `${p.item_code} ${name}`,
+                    };
+                  }),
+                ]}
+              />
               {(() => {
                 if (!expectedPriceItemCode) return null;
                 if (!scheduledStart) {
