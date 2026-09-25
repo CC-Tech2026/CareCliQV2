@@ -70,6 +70,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
         { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
         { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
+        { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
         { href: "/billing",               label: "Invoices",           icon: CreditCard   },
         { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
@@ -174,10 +175,11 @@ function isActive(location: string, href: string) {
   // Legacy route alias: /patients matches /participants
   if (href === "/patients" && location.startsWith("/participants")) return true;
   // Schedule: all coordinator scheduling sub-routes roll up to /coordinator/rostering
+  // (shift-verification has its own direct sidebar entry, so it's excluded here —
+  // otherwise both it and Schedule would highlight at once)
   if (href === "/coordinator/rostering" &&
     (location.startsWith("/coordinator/live") ||
      location.startsWith("/coordinator/monitor") ||
-     location.startsWith("/coordinator/shift-verification") ||
      location.startsWith("/coordinator/travel") ||
      location.startsWith("/approvals"))) return true;
   // Quality & Compliance: audit-pack rolls up to /compliance
