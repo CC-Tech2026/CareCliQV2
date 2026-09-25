@@ -293,6 +293,64 @@ async def list_invoices(user: dict, status_filter: str | None = None) -> list[di
     return await _enrich_with_service_category(supabase, invoices)
 
 
+async def list_ready_to_invoice(user: dict) -> list[dict]:
+    """Verified task completions with no invoice yet, grouped by participant
+    and calendar month — surfaces what's waiting to be billed so a
+    coordinator doesn't have to remember to check each participant/period by
+    hand. Still just a nudge: creating the invoice itself stays the
+    coordinator's own reviewed action via POST /invoices, same as today."""
+    _require_billing_role(user)
+    org_id = _require_org(user)
+    supabase = get_supabase_admin()
+
+    result = (
+        supabase.table("task_completions")
+        .select("participant_id, completion_date, billed_amount")
+        .eq("organization_id", org_id)
+        .eq("status", "verified")
+        .is_("invoice_id", "null")
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        return []
+
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        participant_id = row.get("participant_id")
+        month = str(row.get("completion_date") or "")[:7]  # "YYYY-MM"
+        if not participant_id or len(month) != 7:
+            continue
+        key = (str(participant_id), month)
+        group = groups.setdefault(key, {"count": 0, "total_cents": 0})
+        group["count"] += 1
+        group["total_cents"] += _money_to_cents(row.get("billed_amount") or 0)
+
+    participant_ids = list({key[0] for key in groups})
+    participants_result = (
+        supabase.table("patients")
+        .select("id, full_name")
+        .in_("id", participant_ids)
+        .execute()
+    )
+    names_by_id = {str(p["id"]): p.get("full_name") for p in (participants_result.data or [])}
+
+    out: list[dict[str, Any]] = []
+    for (participant_id, month), agg in groups.items():
+        period_start = date.fromisoformat(f"{month}-01")
+        _, period_end = billing_period_service.period_bounds_for_date(period_start)
+        out.append({
+            "participant_id": participant_id,
+            "participant_name": names_by_id.get(participant_id) or "Unknown participant",
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "completions_count": agg["count"],
+            "total_cents": agg["total_cents"],
+        })
+    out.sort(key=lambda r: r["period_start"])
+    return out
+
+
 async def get_invoice(invoice_id: str, user: dict) -> dict:
     _require_billing_role(user)
     supabase = get_supabase_admin()

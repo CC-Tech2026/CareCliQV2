@@ -17,7 +17,9 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getRevenueReport,
   getParticipantCurrentBillingPeriod,
+  getReadyToInvoice,
   planManagementTypeLabel,
+  type ReadyToInvoiceEntry,
 } from "@/services/coordinatorService";
 import {
   resolveNdisPrice,
@@ -172,6 +174,15 @@ export default function Billing() {
     },
   );
 
+  const readyToInvoiceQuery = useOrgQuery<ReadyToInvoiceEntry[]>(
+    ["billing", "ready-to-invoice"],
+    {
+      queryFn: getReadyToInvoice,
+      enabled: canInvoice,
+      staleTime: 60_000,
+    },
+  );
+
   function routingRecipient(
     participant: Record<string, unknown>,
     lockedType?: string | null,
@@ -231,6 +242,17 @@ export default function Billing() {
         recipient_email: routed.recipient_email,
       }));
     }
+  }
+
+  async function prefillFromReady(entry: ReadyToInvoiceEntry) {
+    await onParticipantChange(entry.participant_id);
+    setForm((prev) => ({
+      ...prev,
+      generate_from_verified_tasks: true,
+      period_start: entry.period_start,
+      period_end: entry.period_end,
+    }));
+    setShowInvoiceForm(true);
   }
 
   const totalOutstanding = useMemo(
@@ -363,6 +385,7 @@ export default function Billing() {
         period_end: "",
       }));
       setResolvedPrice(null);
+      if (form.generate_from_verified_tasks) void readyToInvoiceQuery.refetch();
       toast({
         title: translate("billing.toast.draftCreated"),
         description: inv.invoice_number,
@@ -548,6 +571,41 @@ export default function Billing() {
             icon={<Check />}
           />
         </KpiGrid>
+
+        {/* ── Ready to invoice — verified shifts with no invoice yet ──────────── */}
+        {canInvoice &&
+          !readyToInvoiceQuery.isLoading &&
+          (readyToInvoiceQuery.data ?? []).length > 0 && (
+            <Card title={`Ready to invoice (${readyToInvoiceQuery.data!.length})`}>
+              <div className="space-y-2">
+                {readyToInvoiceQuery.data!.map((entry) => (
+                  <div
+                    key={`${entry.participant_id}-${entry.period_start}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-cc-text">
+                        {entry.participant_name}
+                      </p>
+                      <p className="text-xs text-cc-muted">
+                        {entry.completions_count} verified{" "}
+                        {entry.completions_count === 1 ? "shift" : "shifts"} ·{" "}
+                        {entry.period_start} to {entry.period_end} ·{" "}
+                        {cents(entry.total_cents)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0 rounded-xl"
+                      onClick={() => void prefillFromReady(entry)}
+                    >
+                      Create invoice
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
         {/* ── Main grid: form + register ─────────────────────────────────────── */}
         <div

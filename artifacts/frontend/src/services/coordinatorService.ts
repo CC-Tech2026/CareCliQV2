@@ -481,6 +481,22 @@ export function getParticipantCurrentBillingPeriod(participantId: string) {
   );
 }
 
+export type ReadyToInvoiceEntry = {
+  participant_id: string;
+  participant_name: string;
+  period_start: string;
+  period_end: string;
+  completions_count: number;
+  total_cents: number;
+};
+
+/** Verified shifts with no invoice yet, grouped by participant + month —
+ * lets the billing page surface what's waiting instead of the coordinator
+ * having to check each participant by hand. */
+export function getReadyToInvoice() {
+  return jsonFetch<ReadyToInvoiceEntry[]>("/api/billing/invoices/ready-to-invoice");
+}
+
 export function planManagementTypeLabel(
   value: string | null | undefined,
   translate: (key: string) => string,

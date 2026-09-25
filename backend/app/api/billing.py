@@ -90,6 +90,14 @@ async def list_invoices(
     return await billing_service.list_invoices(current_user, status)
 
 
+@router.get("/invoices/ready-to-invoice")
+async def get_ready_to_invoice(current_user: dict = Depends(get_current_user)):
+    """Verified, uninvoiced task completions grouped by participant/period —
+    what's waiting to be billed, so the billing page can surface it instead
+    of requiring the coordinator to check each participant by hand."""
+    return await billing_service.list_ready_to_invoice(current_user)
+
+
 @router.post("/invoices", status_code=201)
 async def create_invoice(
     body: InvoiceCreate,
