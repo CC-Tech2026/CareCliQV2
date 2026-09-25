@@ -379,6 +379,12 @@ export function ShiftAssignmentModal({
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Section: Who */}
+          <div className="space-y-5">
+          <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+            {translate("coordinator.shiftAssign.sectionWho")}
+          </p>
+
           {/* Worker */}
           <div className="space-y-2">
             <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
@@ -615,9 +621,16 @@ export function ShiftAssignmentModal({
               </div>
             </div>
           )}
+          </div>
 
-          {/* Shift type */}
+          {/* Section: Shift details */}
           {!hasGoalsTasksError && (
+            <div className="space-y-5 pt-6" style={{ borderTop: `1px solid ${BORDER}` }}>
+            <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+              {translate("coordinator.shiftAssign.sectionShiftDetails")}
+            </p>
+
+            {/* Shift type */}
             <div className="space-y-2">
               <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.shiftType")}</label>
               <Select value={shiftType} onValueChange={setShiftType}>
@@ -631,11 +644,9 @@ export function ShiftAssignmentModal({
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          {/* SCHADS duty type - drives minimum-engagement pay rules, separate
-              from the NDIS-facing shift type above. */}
-          {!hasGoalsTasksError && (
+            {/* SCHADS duty type - drives minimum-engagement pay rules, separate
+                from the NDIS-facing shift type above. */}
             <div className="space-y-2">
               <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.dutyType")}</label>
               <Select value={dutyType} onValueChange={setDutyType}>
@@ -648,10 +659,8 @@ export function ShiftAssignmentModal({
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          {/* Date & time */}
-          {!hasGoalsTasksError && (
+            {/* Date & time */}
             <div className="space-y-3">
               <div className="space-y-2">
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
@@ -675,54 +684,60 @@ export function ShiftAssignmentModal({
                 />
               </div>
             </div>
-          )}
 
-          {/* Task selection */}
-          {!hasGoalsTasksError && goalsTasksValid && (tasksQuery.data ?? []).length > 0 && (
-            <div className="space-y-2">
-              <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.tasksOptional")}</label>
-              <p className="text-[11px]" style={{ color: MUTED }}>
-                Select tasks for the worker to complete during this shift
-              </p>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {(goalsQuery.data ?? []).map((goal) => {
-                  const goalTasks = (tasksQuery.data ?? []).filter((t) => t.goal_id === goal.id);
-                  if (goalTasks.length === 0) return null;
-                  return (
-                    <div key={goal.id} className="space-y-1.5">
-                      <p className="text-[11px] font-bold" style={{ color: TEXT }}>
-                        {goal.name}
-                      </p>
-                      {goalTasks.map((task) => (
-                        <label key={task.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            checked={selectedTaskIds.includes(task.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedTaskIds((ids) => [...ids, task.id]);
-                              } else {
-                                setSelectedTaskIds((ids) => ids.filter((id) => id !== task.id));
-                              }
-                            }}
-                            className="rounded"
-                          />
-                          <span className="text-[12px]" style={{ color: TEXT }}>
-                            {task.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  );
-                })}
+            {/* Task selection */}
+            {goalsTasksValid && (tasksQuery.data ?? []).length > 0 && (
+              <div className="space-y-2">
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.tasksOptional")}</label>
+                <p className="text-[11px]" style={{ color: MUTED }}>
+                  Select tasks for the worker to complete during this shift
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {(goalsQuery.data ?? []).map((goal) => {
+                    const goalTasks = (tasksQuery.data ?? []).filter((t) => t.goal_id === goal.id);
+                    if (goalTasks.length === 0) return null;
+                    return (
+                      <div key={goal.id} className="space-y-1.5">
+                        <p className="text-[11px] font-bold" style={{ color: TEXT }}>
+                          {goal.name}
+                        </p>
+                        {goalTasks.map((task) => (
+                          <label key={task.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
+                            <input
+                              type="checkbox"
+                              checked={selectedTaskIds.includes(task.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedTaskIds((ids) => [...ids, task.id]);
+                                } else {
+                                  setSelectedTaskIds((ids) => ids.filter((id) => id !== task.id));
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <span className="text-[12px]" style={{ color: TEXT }}>
+                              {task.name}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+            )}
             </div>
           )}
 
+          {/* Section: Billing & pay */}
           {/* Expected NDIS item — recorded now, cross-checked against
               whatever's actually picked when the coordinator verifies this
               shift later (a mismatch warns but doesn't block). */}
           {!hasGoalsTasksError && selectedParticipantId && (
+            <div className="space-y-5 pt-6" style={{ borderTop: `1px solid ${BORDER}` }}>
+            <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+              {translate("coordinator.shiftAssign.sectionBilling")}
+            </p>
             <div className="space-y-2">
               <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
                 Expected NDIS item
@@ -837,81 +852,91 @@ export function ShiftAssignmentModal({
                 What this shift should be billed under. If a different item is picked at verification, the coordinator sees a warning — it won't block them.
               </p>
             </div>
-          )}
-
-          {/* Credential status */}
-          {selectedWorkerId && !hasGoalsTasksError && (
-            <div
-              className="rounded-xl border p-3.5"
-              style={{
-                borderColor: hasBlock ? "#FECACA" : hasExpiring ? "#FDE68A" : "#BBF7D0",
-                background:  hasBlock ? "#FFF1F1" : hasExpiring ? "#FFFBEB" : "#F0FDF4",
-              }}
-            >
-              <div className="flex items-start gap-2.5">
-                {credStatusQuery.isLoading ? (
-                  <Loader2 size={14} className="mt-0.5 animate-spin" style={{ color: MUTED }} />
-                ) : hasBlock ? (
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" style={{ color: "#DC2626" }} />
-                ) : (
-                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: credColor }} />
-                )}
-                <div>
-                  <p className="text-[12px] font-black" style={{ color: credColor }}>{credLabel}</p>
-                  {credStatus?.warning && (
-                    <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{credStatus.warning}</p>
-                  )}
-                  {(credStatus?.missing_credentials ?? []).length > 0 && (
-                    <div className="mt-2 space-y-0.5">
-                      {credStatus!.missing_credentials.slice(0, 4).map((c) => (
-                        <p key={c} className="text-[11px] font-medium" style={{ color: "#991B1B" }}>✗ {c}</p>
-                      ))}
-                    </div>
-                  )}
-                  {workerAlerts.length > 0 && !hasBlock && (
-                    <div className="mt-2 space-y-0.5">
-                      {workerAlerts.slice(0, 3).map((a) => (
-                        <p key={`${a.credential_id ?? a.credential_type}`} className="text-[11px]" style={{ color: "#92400E" }}>
-                          {a.title || a.credential_type || translate("coordinator.shiftAssign.credential")} ({a.status})
-                          {a.expiry_date ? ` (${translateParams("coordinator.shiftAssign.expires", { date: a.expiry_date })})` : ""}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
 
-          {/* Summary */}
-          {selectedParticipant && scheduledStart && !hasGoalsTasksError && (
-            <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
-              <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>{translate("coordinator.shiftAssign.shiftSummary")}</p>
-              <div className="space-y-1.5 text-[12px]">
-                {([
-                  [translate("common.worker"),      selectedWorkerData?.full_name ?? translate("coordinator.shiftAssign.unassigned")],
-                  [translate("common.participant"), selectedParticipant.full_name],
-                  [translate("coordinator.shiftAssign.type"),        translate(SHIFT_TYPE_KEYS[shiftType] ?? shiftType)],
-                  [translate("coordinator.shiftAssign.start"),       `${format(new Date(datetimeLocalValueToUtcIso(scheduledStart, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledStart, participantZone), participantZone)}`],
-                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), `${format(new Date(datetimeLocalValueToUtcIso(scheduledEnd, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledEnd, participantZone), participantZone)}`] as [string, string]] : []),
-                  ...(selectedTaskIds.length > 0
-                    ? [[
-                        translate("coordinator.shiftAssign.tasksOptional").split(" (")[0],
-                        translateParams("coordinator.shiftAssign.tasksSelected", { count: String(selectedTaskIds.length) }),
-                      ]]
-                    : []),
-                ] as [string, string][]).map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between gap-4">
-                    <span style={{ color: MUTED }}>{label}</span>
-                    <span
-                      className="font-bold text-right"
-                      style={{ color: label === "Worker" && !selectedWorkerData ? MUTED : TEXT }}
-                    >
-                      {value}
-                    </span>
+          {/* Section: Review */}
+          {!hasGoalsTasksError && (selectedWorkerId || (selectedParticipant && scheduledStart)) && (
+            <div className="space-y-5 pt-6" style={{ borderTop: `1px solid ${BORDER}` }}>
+            <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+              {translate("coordinator.shiftAssign.sectionReview")}
+            </p>
+
+            {/* Credential status */}
+            {selectedWorkerId && (
+              <div
+                className="rounded-xl border p-3.5"
+                style={{
+                  borderColor: hasBlock ? "#FECACA" : hasExpiring ? "#FDE68A" : "#BBF7D0",
+                  background:  hasBlock ? "#FFF1F1" : hasExpiring ? "#FFFBEB" : "#F0FDF4",
+                }}
+              >
+                <div className="flex items-start gap-2.5">
+                  {credStatusQuery.isLoading ? (
+                    <Loader2 size={14} className="mt-0.5 animate-spin" style={{ color: MUTED }} />
+                  ) : hasBlock ? (
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" style={{ color: "#DC2626" }} />
+                  ) : (
+                    <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: credColor }} />
+                  )}
+                  <div>
+                    <p className="text-[12px] font-black" style={{ color: credColor }}>{credLabel}</p>
+                    {credStatus?.warning && (
+                      <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{credStatus.warning}</p>
+                    )}
+                    {(credStatus?.missing_credentials ?? []).length > 0 && (
+                      <div className="mt-2 space-y-0.5">
+                        {credStatus!.missing_credentials.slice(0, 4).map((c) => (
+                          <p key={c} className="text-[11px] font-medium" style={{ color: "#991B1B" }}>✗ {c}</p>
+                        ))}
+                      </div>
+                    )}
+                    {workerAlerts.length > 0 && !hasBlock && (
+                      <div className="mt-2 space-y-0.5">
+                        {workerAlerts.slice(0, 3).map((a) => (
+                          <p key={`${a.credential_id ?? a.credential_type}`} className="text-[11px]" style={{ color: "#92400E" }}>
+                            {a.title || a.credential_type || translate("coordinator.shiftAssign.credential")} ({a.status})
+                            {a.expiry_date ? ` (${translateParams("coordinator.shiftAssign.expires", { date: a.expiry_date })})` : ""}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
               </div>
+            )}
+
+            {/* Summary */}
+            {selectedParticipant && scheduledStart && (
+              <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>{translate("coordinator.shiftAssign.shiftSummary")}</p>
+                <div className="space-y-1.5 text-[12px]">
+                  {([
+                    [translate("common.worker"),      selectedWorkerData?.full_name ?? translate("coordinator.shiftAssign.unassigned")],
+                    [translate("common.participant"), selectedParticipant.full_name],
+                    [translate("coordinator.shiftAssign.type"),        translate(SHIFT_TYPE_KEYS[shiftType] ?? shiftType)],
+                    [translate("coordinator.shiftAssign.start"),       `${format(new Date(datetimeLocalValueToUtcIso(scheduledStart, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledStart, participantZone), participantZone)}`],
+                    ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), `${format(new Date(datetimeLocalValueToUtcIso(scheduledEnd, participantZone)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledEnd, participantZone), participantZone)}`] as [string, string]] : []),
+                    ...(selectedTaskIds.length > 0
+                      ? [[
+                          translate("coordinator.shiftAssign.tasksOptional").split(" (")[0],
+                          translateParams("coordinator.shiftAssign.tasksSelected", { count: String(selectedTaskIds.length) }),
+                        ]]
+                      : []),
+                  ] as [string, string][]).map(([label, value]) => (
+                    <div key={label} className="flex items-center justify-between gap-4">
+                      <span style={{ color: MUTED }}>{label}</span>
+                      <span
+                        className="font-bold text-right"
+                        style={{ color: label === "Worker" && !selectedWorkerData ? MUTED : TEXT }}
+                      >
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
           )}
         </div>
