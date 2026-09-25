@@ -15,6 +15,7 @@ from ..models.billing_period import (
     normalize_plan_management_type,
     plan_management_type_label,
 )
+from . import service_agreement_service
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,20 @@ def period_bounds_for_date(as_of: date) -> tuple[date, date]:
 
 
 def resolve_participant_plan_management_type(participant: dict[str, Any]) -> Optional[str]:
-    """Read current plan management type from a participant row."""
+    """Read current plan management type — the active service agreement's
+    declared type if the participant has one (that's the actual source of
+    record now, see service_agreement_service.py's module docstring),
+    falling back to patients.plan_management_type for participants with no
+    service agreement on file yet (true for effectively everyone as of
+    2026-09-25 — this table is brand new)."""
+    participant_id = participant.get("id")
+    organization_id = participant.get("organization_id")
+    if participant_id and organization_id:
+        agreement = service_agreement_service.get_active_service_agreement(
+            str(participant_id), str(organization_id)
+        )
+        if agreement and agreement.get("plan_management_type"):
+            return normalize_plan_management_type(str(agreement["plan_management_type"]))
     raw = participant.get("plan_management_type")
     return normalize_plan_management_type(str(raw) if raw is not None else None)
 
