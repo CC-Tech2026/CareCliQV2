@@ -454,7 +454,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
         participant_result = (
             supabase.table("patients")
             .select(
-                "id, organization_id, full_name, email, plan_management_type, plan_management, "
+                "id, organization_id, full_name, email, plan_management_type, "
                 "case_manager_name, case_manager_email, case_manager_phone"
             )
             .eq("id", str(participant_id))
