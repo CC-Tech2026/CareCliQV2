@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { SectionInfo } from "@/components/ui/section-info";
 import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Loader2,
@@ -90,7 +89,7 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
       toast(
         warning
           ? { title: "Shift verified — check the price item", description: warning }
-          : { title: "Shift verified", description: "Budget deducted from the participant's plan." }
+          : { title: "Shift verified", description: "Ready to invoice below." }
       );
       onVerified();
     },
@@ -297,61 +296,50 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
   );
 }
 
-export default function CoordinatorShiftVerification() {
+/** Completed shifts awaiting verification — lives on the Billing page, right
+ * above "Ready to invoice", so verifying a shift and seeing it flow into an
+ * invoice happen on one page instead of two disconnected ones. */
+export function ShiftVerificationPanel({ onVerified }: { onVerified?: () => void }) {
   const { data: items = [], isLoading, refetch } = useOrgQuery(["shift-verification-queue"], {
     queryFn: getShiftVerificationQueue,
     staleTime: 30_000,
   });
 
-  return (
-    <div className="space-y-6 pb-10">
-      <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
-          Schedule
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
-          Shift Verification
-          <SectionInfo text="Review completed shifts before they're finalised: check timing, tasks, and notes are all in order." />
-        </h1>
-        <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
-          {isLoading
-            ? "Loading completed shifts…"
-            : `${items.length} completed shift${items.length === 1 ? "" : "s"} awaiting verification`}
-        </p>
-      </div>
-
-      {isLoading && (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
-              <div className="space-y-2">
-                <div className="h-4 w-48 rounded bg-[#E8E8EA]" />
-                <div className="h-3 w-32 rounded bg-[#E8E8EA]" />
-              </div>
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
+            <div className="space-y-2">
+              <div className="h-4 w-48 rounded bg-[#E8E8EA]" />
+              <div className="h-3 w-32 rounded bg-[#E8E8EA]" />
             </div>
-          ))}
-        </div>
-      )}
-
-      {!isLoading && items.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border bg-white py-20 text-center shadow-sm" style={{ borderColor: BORDER }}>
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: SOFT }}>
-            <CheckCircle2 size={32} style={{ color: PLUM }} />
           </div>
-          <h2 className="text-xl font-black dark:text-white" style={{ color: T1 }}>All caught up</h2>
-          <p className="mt-2 max-w-xs text-sm font-medium dark:text-white" style={{ color: T3 }}>
-            No completed shifts are waiting on verification right now.
-          </p>
-        </div>
-      )}
+        ))}
+      </div>
+    );
+  }
 
-      {!isLoading && items.length > 0 && (
-        <div className="space-y-4">
-          {items.map((item) => (
-            <ShiftVerificationCard key={item.shift_id} item={item} onVerified={() => refetch()} />
-          ))}
-        </div>
-      )}
+  if (items.length === 0) {
+    return (
+      <p className="rounded-xl border px-4 py-3 text-sm font-medium" style={{ borderColor: BORDER, color: T3, background: SOFT }}>
+        No completed shifts are waiting on verification right now.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {items.map((item) => (
+        <ShiftVerificationCard
+          key={item.shift_id}
+          item={item}
+          onVerified={() => {
+            void refetch();
+            onVerified?.();
+          }}
+        />
+      ))}
     </div>
   );
 }

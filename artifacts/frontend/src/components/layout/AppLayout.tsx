@@ -70,7 +70,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/coordinator/rostering", label: "Schedule",           icon: CalendarDays },
         { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
         { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
-        { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
         { href: "/billing",               label: "Invoices",           icon: CreditCard   },
         { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
@@ -175,8 +174,6 @@ function isActive(location: string, href: string) {
   // Legacy route alias: /patients matches /participants
   if (href === "/patients" && location.startsWith("/participants")) return true;
   // Schedule: all coordinator scheduling sub-routes roll up to /coordinator/rostering
-  // (shift-verification has its own direct sidebar entry, so it's excluded here —
-  // otherwise both it and Schedule would highlight at once)
   if (href === "/coordinator/rostering" &&
     (location.startsWith("/coordinator/live") ||
      location.startsWith("/coordinator/monitor") ||
@@ -230,7 +227,6 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Onboarding",          description: "Worker & participant onboarding flows",   href: "/md/onboarding",                   icon: GraduationCap,   group: "pages",    roles: ["managing_director"] },
   // ── Features & deep links ─────────────────────────────────────────────────
   { label: "Live Monitor",        description: "Real-time shift & clock-in monitoring",    href: "/coordinator/rostering",           icon: Radio,           group: "features", roles: ["support_coordinator"] },
-  { label: "Shift Verification",  description: "Verify completed shifts before billing",   href: "/coordinator/shift-verification",  icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
   { label: "Audit Pack",          description: "NDIS audit documentation & export",        href: "/audit-pack",                      icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
   { label: "Worker Availability", description: "Team working hours and unavailability",  href: "/coordinator/rostering",           icon: UserCheck,       group: "features", roles: ["support_coordinator"] },
   { label: "Create Shift",        description: "Assign a new shift to a worker",          href: "/coordinator/rostering",           icon: Plus,            group: "features", roles: ["support_coordinator"] },

@@ -1,7 +1,7 @@
 /**
  * Archetype 5 — Board (dense operational surfaces)
  *
- * Used by: coordinator-rostering, coordinator-live, coordinator-shift-verification.
+ * Used by: coordinator-rostering, coordinator-live.
  *
  * Anatomy:
  *   - Full-width (no max-width cap, no context rail).

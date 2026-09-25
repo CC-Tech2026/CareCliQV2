@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { NdisPriceEditor } from "@/components/NdisPriceEditor";
 import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
+import { ShiftVerificationPanel } from "@/components/coordinator/ShiftVerificationPanel";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
 const PLUM = "var(--cc-plum)";
@@ -571,6 +572,15 @@ export default function Billing() {
             icon={<Check />}
           />
         </KpiGrid>
+
+        {/* ── Awaiting verification — completed shifts, one step before they
+              can be invoiced. Lives here (not a separate page) so verifying a
+              shift and seeing it become invoiceable happen in one place. ──── */}
+        {canInvoice && (
+          <Card title="Awaiting verification">
+            <ShiftVerificationPanel onVerified={() => void readyToInvoiceQuery.refetch()} />
+          </Card>
+        )}
 
         {/* ── Ready to invoice — verified shifts with no invoice yet ──────────── */}
         {canInvoice &&
