@@ -138,7 +138,11 @@ export default function Billing() {
 
   const [form, setForm] = useState({
     participant_id: "",
-    generate_from_verified_tasks: false,
+    // Billing from verified shifts is the common path now that the pipeline
+    // works end to end — default to it so opening the form doesn't drop a
+    // coordinator into blank manual item-code/unit-amount/quantity fields
+    // they have to remember to opt out of every time.
+    generate_from_verified_tasks: true,
     period_start: "",
     period_end: "",
     service_date: "",
@@ -204,6 +208,26 @@ export default function Billing() {
     };
   }
 
+  /** Current calendar month as YYYY-MM-DD bounds — fallback period when a
+   * participant has no "ready to invoice" entry to copy dates from (e.g.
+   * their shifts haven't been verified yet, but a coordinator still wants
+   * to set up the invoice period ahead of time). */
+  function currentMonthBounds() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return { period_start: iso(start), period_end: iso(end) };
+  }
+
+  function defaultPeriodFor(participantId: string) {
+    const ready = (readyToInvoiceQuery.data ?? []).find(
+      (entry) => entry.participant_id === participantId,
+    );
+    if (ready) return { period_start: ready.period_start, period_end: ready.period_end };
+    return currentMonthBounds();
+  }
+
   async function onParticipantChange(value: string) {
     if (value === "__none__") {
       setForm((prev) => ({
@@ -219,14 +243,16 @@ export default function Billing() {
       setForm((prev) => ({ ...prev, participant_id: value }));
       return;
     }
+    const period = form.generate_from_verified_tasks ? defaultPeriodFor(value) : {};
     try {
-      const period = await getParticipantCurrentBillingPeriod(value);
+      const currentPeriod = await getParticipantCurrentBillingPeriod(value);
       const lockedType =
-        period.open_period?.locked_plan_management_type ??
-        period.current_plan_management_type;
+        currentPeriod.open_period?.locked_plan_management_type ??
+        currentPeriod.current_plan_management_type;
       const routed = routingRecipient(participant, lockedType);
       setForm((prev) => ({
         ...prev,
+        ...period,
         participant_id: value,
         recipient_name: routed.recipient_name,
         recipient_email: routed.recipient_email,
@@ -238,6 +264,7 @@ export default function Billing() {
       );
       setForm((prev) => ({
         ...prev,
+        ...period,
         participant_id: value,
         recipient_name: routed.recipient_name,
         recipient_email: routed.recipient_email,
@@ -668,13 +695,19 @@ export default function Billing() {
                       <input
                         type="checkbox"
                         checked={form.generate_from_verified_tasks}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const autoPeriod =
+                            checked && form.participant_id && !form.period_start
+                              ? defaultPeriodFor(form.participant_id)
+                              : {};
                           setForm({
                             ...form,
-                            generate_from_verified_tasks: e.target.checked,
-                            item_code: e.target.checked ? "" : form.item_code,
-                          })
-                        }
+                            ...autoPeriod,
+                            generate_from_verified_tasks: checked,
+                            item_code: checked ? "" : form.item_code,
+                          });
+                        }}
                         className="mt-0.5"
                       />
                       <div className="space-y-1">
