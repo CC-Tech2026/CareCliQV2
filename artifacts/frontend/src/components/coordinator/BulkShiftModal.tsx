@@ -279,19 +279,25 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                   disabled={!participantId || priceItemsQuery.isLoading}
                   options={[
                     { value: "__none__", label: "None recorded", keywords: "none recorded" },
-                    ...(priceItemsQuery.data ?? []).map((p) => {
-                      const name = p.name || p.support_purpose || "Unnamed item";
-                      const priceSuffix = p.price_national != null
-                        ? p.unit === "E"
-                          ? ` ($${p.price_national.toFixed(2)} flat)`
-                          : ` ($${p.price_national.toFixed(2)}/hr)`
-                        : "";
-                      return {
-                        value: p.item_code,
-                        label: `${p.item_code}: ${name}${priceSuffix}`,
-                        keywords: `${p.item_code} ${name}`,
-                      };
-                    }),
+                    ...[...(priceItemsQuery.data ?? [])]
+                      .sort((a, b) =>
+                        (a.category_number ?? "").localeCompare(b.category_number ?? "")
+                        || a.item_code.localeCompare(b.item_code)
+                      )
+                      .map((p) => {
+                        const name = p.name || p.support_purpose || "Unnamed item";
+                        const priceSuffix = p.price_national != null
+                          ? p.unit === "E"
+                            ? ` ($${p.price_national.toFixed(2)} flat)`
+                            : ` ($${p.price_national.toFixed(2)}/hr)`
+                          : "";
+                        return {
+                          value: p.item_code,
+                          label: `${p.item_code}: ${name}${priceSuffix}`,
+                          keywords: `${p.item_code} ${name}`,
+                          group: p.category_label ?? (p.category_number ? `Category ${p.category_number}` : "Other"),
+                        };
+                      }),
                   ]}
                 />
                 {(() => {

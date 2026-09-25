@@ -222,16 +222,33 @@ function ShiftVerificationCard({ item, onVerified }: { item: ShiftVerificationQu
           <option value="">
             {priceItemsLoading ? "Loading price items…" : "Select a price item…"}
           </option>
-          {priceItems.map((p) => (
-            <option key={p.item_code} value={p.item_code}>
-              {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-              {p.price_national != null
-                ? p.unit === "E"
-                  ? ` ($${p.price_national.toFixed(2)} flat)`
-                  : ` ($${p.price_national.toFixed(2)}/hr)`
-                : ""}
-            </option>
-          ))}
+          {(() => {
+            const sorted = [...priceItems].sort((a, b) =>
+              (a.category_number ?? "").localeCompare(b.category_number ?? "")
+              || a.item_code.localeCompare(b.item_code)
+            );
+            const groups = new Map<string, typeof sorted>();
+            for (const p of sorted) {
+              const label = p.category_label ?? (p.category_number ? `Category ${p.category_number}` : "Other");
+              const bucket = groups.get(label);
+              if (bucket) bucket.push(p);
+              else groups.set(label, [p]);
+            }
+            return [...groups.entries()].map(([label, items]) => (
+              <optgroup key={label} label={label}>
+                {items.map((p) => (
+                  <option key={p.item_code} value={p.item_code}>
+                    {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
+                    {p.price_national != null
+                      ? p.unit === "E"
+                        ? ` ($${p.price_national.toFixed(2)} flat)`
+                        : ` ($${p.price_national.toFixed(2)}/hr)`
+                      : ""}
+                  </option>
+                ))}
+              </optgroup>
+            ));
+          })()}
         </select>
         <button
           onClick={() => verifyMutation.mutate()}

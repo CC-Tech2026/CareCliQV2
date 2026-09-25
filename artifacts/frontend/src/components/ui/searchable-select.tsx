@@ -10,6 +10,10 @@ export type SearchableOption = {
   value: string;
   label: string;
   keywords?: string;
+  /** Optional group heading. Options sharing a group render together under
+   * one heading, in order of the group's first appearance; options with no
+   * group render in a single unheaded group, same as before grouping existed. */
+  group?: string;
 };
 
 /** Single-select combobox: a Select-like trigger that opens a filterable
@@ -39,6 +43,13 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
+  const groups = new Map<string | undefined, SearchableOption[]>();
+  for (const option of options) {
+    const bucket = groups.get(option.group);
+    if (bucket) bucket.push(option);
+    else groups.set(option.group, [option]);
+  }
+
   return (
     <Popover open={open && !disabled} onOpenChange={(next) => setOpen(disabled ? false : next)} modal>
       <PopoverTrigger asChild>
@@ -65,33 +76,35 @@ export function SearchableSelect({
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => {
-                const isSelected = option.value === value;
-                return (
-                  <CommandItem
-                    key={option.value}
-                    value={option.keywords ?? option.label}
-                    onSelect={() => {
-                      onValueChange(option.value);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
-                      {renderOption
-                        ? renderOption(option, isSelected)
-                        : option.label}
-                    </span>
-                    <Check
-                      className={cn(
-                        "ml-2 h-4 w-4 shrink-0",
-                        isSelected ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
+            {[...groups.entries()].map(([groupName, groupOptions]) => (
+              <CommandGroup key={groupName ?? "__ungrouped__"} heading={groupName}>
+                {groupOptions.map((option) => {
+                  const isSelected = option.value === value;
+                  return (
+                    <CommandItem
+                      key={option.value}
+                      value={option.keywords ?? option.label}
+                      onSelect={() => {
+                        onValueChange(option.value);
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                        {renderOption
+                          ? renderOption(option, isSelected)
+                          : option.label}
+                      </span>
+                      <Check
+                        className={cn(
+                          "ml-2 h-4 w-4 shrink-0",
+                          isSelected ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>

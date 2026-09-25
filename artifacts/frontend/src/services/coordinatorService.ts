@@ -1785,6 +1785,11 @@ export type ShiftPriceItemOption = {
   unit?: string | null;
   support_purpose?: string | null;
   support_category?: string | null;
+  // The real NDIS Support Category (e.g. "01" / "Assistance with Daily
+  // Life") — finer-grained than support_category's core/capacity/capital
+  // split, for grouping a long item list by category.
+  category_number?: string | null;
+  category_label?: string | null;
   day_type?: string | null;
   time_type?: string | null;
   support_intensity?: string | null;

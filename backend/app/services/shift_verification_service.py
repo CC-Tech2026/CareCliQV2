@@ -12,6 +12,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
+from ..core.ndis_categories import support_category_number_label
 from ..core.timezone import app_today, parse_shift_datetime, participant_timezone
 from . import ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
@@ -448,7 +449,7 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
     items_result = (
         supabase.table("ndis_price_items")
         .select(
-            "item_code, name, description, unit, support_purpose, day_type, "
+            "item_code, name, description, unit, support_purpose, category_number, day_type, "
             "time_type, support_intensity, price_national, price_remote, price_very_remote"
         )
         .eq("organization_id", org_id)
@@ -462,6 +463,7 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
         category = resolve_price_item_budget_category(item)
         if allowed_categories is not None and category not in allowed_categories:
             continue
+        category_number = item.get("category_number")
         out.append(
             {
                 "item_code": item.get("item_code"),
@@ -470,6 +472,12 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
                 "unit": item.get("unit"),
                 "support_purpose": item.get("support_purpose"),
                 "support_category": category,
+                # The real NDIS Support Category (e.g. "01" / "Assistance with
+                # Daily Life") — finer-grained than support_category's 3-bucket
+                # split above, for grouping the picker so 357 items across 13
+                # categories aren't one flat list.
+                "category_number": category_number,
+                "category_label": support_category_number_label(category_number),
                 "day_type": item.get("day_type"),
                 "time_type": item.get("time_type"),
                 "support_intensity": item.get("support_intensity"),
