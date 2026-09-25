@@ -578,7 +578,9 @@ export default function Billing() {
               shift and seeing it become invoiceable happen in one place. ──── */}
         {canInvoice && (
           <Card title="Awaiting verification">
-            <ShiftVerificationPanel onVerified={() => void readyToInvoiceQuery.refetch()} />
+            <div className="max-h-[420px] overflow-y-auto pr-1">
+              <ShiftVerificationPanel onVerified={() => void readyToInvoiceQuery.refetch()} />
+            </div>
           </Card>
         )}
 
@@ -587,7 +589,7 @@ export default function Billing() {
           !readyToInvoiceQuery.isLoading &&
           (readyToInvoiceQuery.data ?? []).length > 0 && (
             <Card title={`Ready to invoice (${readyToInvoiceQuery.data!.length})`}>
-              <div className="space-y-2">
+              <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
                 {readyToInvoiceQuery.data!.map((entry) => (
                   <div
                     key={`${entry.participant_id}-${entry.period_start}`}
