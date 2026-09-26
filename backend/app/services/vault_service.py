@@ -159,7 +159,7 @@ def _patient_name_map(org_id: str) -> dict[str, str]:
     def compute() -> dict[str, str]:
         try:
             resp = (
-                get_supabase_admin().table("patients")
+                get_supabase_admin().table("participants")
                 .select("id, full_name")
                 .eq("organization_id", org_id)
                 .execute()

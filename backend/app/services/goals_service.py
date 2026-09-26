@@ -96,7 +96,7 @@ async def _participant_org_id(participant_id: str) -> Optional[str]:
     try:
         result = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("organization_id")
             .eq("id", participant_id)
             .limit(1)

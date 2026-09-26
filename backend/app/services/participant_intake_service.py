@@ -2,7 +2,7 @@
 Meet & Greet -> Service Agreement -> Active/Inactive. Mirrors the
 Applicants Board (applicant_service.py) — one board/detail record per
 pipeline card, with the "active" transition creating a real row in the
-existing `patients` table via participant_service.create_participant
+existing `participants` table via participant_service.create_participant
 rather than duplicating participant fields here.
 
 Date of birth lives inside `web_intake` (jsonb), matching the frontend's
@@ -223,16 +223,51 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
     return {"participant_id": participant["id"], "activated_at": _now()}
 
 
+def _format_display_date(value: str | None) -> str | None:
+    """Renders an ISO date (no time component) as "23 Sep 2026" for display
+    on the generated PDF."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%d %b %Y")
+    except ValueError:
+        return value
+
+
+def _format_display_datetime(value: str | None, tz) -> str | None:
+    """Renders an ISO timestamp in the org's own timezone as
+    "23 Sep 2026, 2:43 pm" — the raw UTC ISO string (with milliseconds and
+    a +00:00 offset) isn't something a participant should have to read on a
+    signed document, and showing it in UTC would be the wrong clock anyway
+    for an org outside that timezone."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if tz is not None:
+            dt = dt.astimezone(tz)
+        return dt.strftime("%d %b %Y, %-I:%M %p")
+    except ValueError:
+        return value
+
+
 def _render_service_agreement_pdf(intake: dict[str, Any]) -> tuple[str, bytes]:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+    from ..core.timezone import head_office_timezone
+
     org = get_letterhead(intake["organization_id"])
+    tz = head_office_timezone(intake["organization_id"])
     web_intake = intake.get("web_intake") or {}
     context = {
         "org": org,
         "intake": {
             **intake,
-            "date_of_birth": web_intake.get("date_of_birth"),
+            "date_of_birth": _format_display_date(web_intake.get("date_of_birth")),
+            "plan_start_date": _format_display_date(intake.get("plan_start_date")),
+            "plan_end_date": _format_display_date(intake.get("plan_end_date")),
+            "provider_signed_at": _format_display_datetime(intake.get("provider_signed_at"), tz),
+            "family_signed_at": _format_display_datetime(intake.get("family_signed_at"), tz),
             "service_category_label": SERVICE_CATEGORY_LABELS.get(intake.get("service_category"), "—"),
             "funding_type_label": FUNDING_TYPE_LABELS.get(web_intake.get("funding_type")),
         },

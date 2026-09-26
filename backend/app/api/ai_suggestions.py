@@ -200,7 +200,7 @@ async def verify_participant_access(
     participant_id: str, user: dict, supabase_client
 ) -> None:
     """Verify user has access to participant (org-scoped)"""
-    result = supabase_client.table("patients").select(
+    result = supabase_client.table("participants").select(
         "organization_id"
     ).eq("id", participant_id).single().execute()
     
@@ -217,7 +217,7 @@ async def get_participant_context(
     """
     
     # Get participant info
-    participant = await supabase_client.table("patients").select(
+    participant = await supabase_client.table("participants").select(
         "id, full_name, ndis_number, disabilities, allergies, chronic_conditions"
     ).eq("id", participant_id).single().execute()
     

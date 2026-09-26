@@ -140,7 +140,10 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
-  { id: "branches",      labelKey: "settings.nav.branches",          icon: MapPin, mdOnly: true },
+  // "branches" intentionally left out of NAV_ITEMS for now — multi-office
+  // management is deferred; single-office providers use the "Business
+  // location" picker on the Provider tab instead. BranchesSection and the
+  // /api/branches backend are untouched, just not linked from the sidebar.
   { id: "delegatedAccess", labelKey: "settings.nav.delegatedAccess", icon: Clock, mdOnly: true },
 ];
 

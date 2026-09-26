@@ -352,7 +352,7 @@ def _fetch_patient_risk_fields(participant_id: str, organization_id: str) -> dic
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(
                 "allergies, medical_alerts, current_conditions, behaviour_support_plan, "
                 "risk_triggers, risk_management_plan"
@@ -1241,13 +1241,13 @@ def _enrich_shift_participant_context(payload: dict[str, Any], shift: dict[str, 
 
 
 def _fetch_care_coordinator_id(participant_id: str, organization_id: str) -> Optional[str]:
-    """Best-effort standalone lookup of patients.care_coordinator_id — kept
+    """Best-effort standalone lookup of participants.care_coordinator_id — kept
     separate from the main participant-context select so a not-yet-migrated
     deployment can't lose unrelated fields via the legacy-fallback path."""
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("care_coordinator_id")
             .eq("id", participant_id)
             .eq("organization_id", organization_id)
@@ -1294,7 +1294,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
     if not participant_id:
         return {}
     synced_at = _now_iso()
-    # Note: visit_notes / health_flags live on shifts, not patients.
+    # Note: visit_notes / health_flags live on shifts, not participants.
     select_cols = (
         "id, full_name, preferred_name, ndis_number, date_of_birth, phone, email, "
         "communication_preferences, allergies, primary_disability, "
@@ -1308,7 +1308,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(select_cols)
             .eq("id", participant_id)
             .eq("organization_id", organization_id)
@@ -1395,7 +1395,7 @@ def _fetch_participant_context_legacy(participant_id: str, organization_id: str)
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(
                 "id, full_name, ndis_number, date_of_birth, phone, email, "
                 "communication_preferences, allergies, primary_disability, "
@@ -1675,7 +1675,7 @@ def _batch_fetch_patient_risk_fields(
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(
                 "id, allergies, medical_alerts, current_conditions, behaviour_support_plan, "
                 "risk_triggers, risk_management_plan, emergency_contact, "
@@ -2948,7 +2948,7 @@ def _participant_exists_in_org(participant_id: str, org_id: str) -> bool:
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("id")
             .eq("id", participant_id)
             .eq("organization_id", org_id)
@@ -3000,7 +3000,7 @@ def start_shift_session(
     """Create (or return) a draft session for a clocked-in shift.
 
     Shift ownership proves the worker may document this participant even when
-    patients.assigned_worker_id / practitioner_allocations are not synced yet.
+    participants.assigned_worker_id / practitioner_allocations are not synced yet.
     """
     shift = get_shift_by_id(shift_id)
     if not shift:

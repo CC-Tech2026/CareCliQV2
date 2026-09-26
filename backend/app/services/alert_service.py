@@ -17,7 +17,7 @@ async def get_all_alerts(
 ) -> List[dict]:
     supabase = get_supabase_admin()
     try:
-        query = supabase.table(TABLE).select("*, patients(full_name)").order("created_at", desc=True).limit(limit)
+        query = supabase.table(TABLE).select("*, participants(full_name)").order("created_at", desc=True).limit(limit)
         if org_id:
             query = query.eq("organization_id", org_id)
         if user_id and not org_wide:
@@ -37,7 +37,7 @@ async def get_unread_alerts(
 ) -> List[dict]:
     supabase = get_supabase_admin()
     try:
-        query = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", "false").order("created_at", desc=True)
+        query = supabase.table(TABLE).select("*, participants(full_name)").eq("is_read", "false").order("created_at", desc=True)
         if org_id:
             query = query.eq("organization_id", org_id)
         if user_id and not org_wide:
@@ -82,7 +82,7 @@ def _normalize(row: dict) -> dict:
     if not row:
         return row
     out = dict(row)
-    patient = out.pop("patients", None)
+    patient = out.pop("participants", None)
     if patient and isinstance(patient, dict):
         out["participant_name"] = patient.get("full_name", "")
     if "patient_id" in out and "participant_id" not in out:

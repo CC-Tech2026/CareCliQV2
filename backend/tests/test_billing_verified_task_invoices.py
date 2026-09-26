@@ -28,7 +28,7 @@ async def test_create_invoice_can_generate_from_verified_task_completions():
 
     def table_side_effect(name: str):
         table = MagicMock()
-        if name == "patients":
+        if name == "participants":
             table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
                 data=[participant_row]
             )

@@ -1716,7 +1716,7 @@ async def coordinator_shifts(
     if participant_ids:
         try:
             participants_resp = (
-                supabase.table("patients")
+                supabase.table("participants")
                 .select("id, full_name")
                 .in_("id", participant_ids)
                 .eq("organization_id", org_id)
@@ -1882,7 +1882,7 @@ def _resolve_care_coordinator_id(
         return override
     try:
         participant = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("care_coordinator_id")
             .eq("id", participant_id)
             .eq("organization_id", org_id)
@@ -2178,7 +2178,7 @@ async def assign_shift(
 
     # Verify participant exists and belongs to organization
     try:
-        participant_resp = supabase.table("patients").select(
+        participant_resp = supabase.table("participants").select(
             "id, full_name, ndis_number"
         ).eq("id", body.participant_id).eq("organization_id", org_id).execute()
         
@@ -2391,7 +2391,7 @@ async def get_worker_clients(worker_id: str, current_user: dict = Depends(get_cu
         patient_ids = [r["patient_id"] for r in (allocs.data or []) if r.get("patient_id")]
         if not patient_ids:
             return []
-        patients = supabase.table("patients").select("id, full_name, ndis_number, plan_status").in_("id", patient_ids).eq("organization_id", org_id).execute()
+        patients = supabase.table("participants").select("id, full_name, ndis_number, plan_status").in_("id", patient_ids).eq("organization_id", org_id).execute()
         return patients.data or []
     except Exception:
         return []
@@ -3740,7 +3740,7 @@ async def bulk_create_shifts(
 
     # Resolve participant
     p_resp = (
-        supabase.table("patients")
+        supabase.table("participants")
         .select("id, full_name")
         .eq("id", body.participant_id)
         .eq("organization_id", org_id)
@@ -3876,7 +3876,7 @@ async def create_unassigned_shift(
     supabase = get_supabase_admin()
 
     p_resp = (
-        supabase.table("patients")
+        supabase.table("participants")
         .select("id, full_name")
         .eq("id", body.participant_id)
         .eq("organization_id", org_id)
@@ -5111,7 +5111,7 @@ async def list_goals_missing_support_category(
     try:
         resp = (
             supabase.table("ndis_goals")
-            .select("id, participant_id, name, goal_area, plan_id, status, created_at, patients(full_name)")
+            .select("id, participant_id, name, goal_area, plan_id, status, created_at, participants(full_name)")
             .eq("organization_id", org_id)
             .is_("support_category", "null")
             .eq("status", "active")
@@ -5121,7 +5121,7 @@ async def list_goals_missing_support_category(
         rows = resp.data or []
         out: list[dict[str, Any]] = []
         for row in rows:
-            patient = row.get("patients") or {}
+            patient = row.get("participants") or {}
             out.append({
                 "id": row.get("id"),
                 "participant_id": row.get("participant_id"),

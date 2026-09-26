@@ -826,7 +826,7 @@ def test_fetch_participant_context_shapes_payload():
         )
 
         def table_router(name):
-            if name == "patients":
+            if name == "participants":
                 return patients_table
             if name == "participant_allergies":
                 return allergies_table
