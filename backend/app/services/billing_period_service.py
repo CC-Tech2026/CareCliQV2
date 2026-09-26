@@ -43,9 +43,10 @@ def resolve_participant_plan_management_type(participant: dict[str, Any]) -> Opt
     """Read current plan management type — the active service agreement's
     declared type if the participant has one (that's the actual source of
     record now, see service_agreement_service.py's module docstring),
-    falling back to patients.plan_management_type for participants with no
-    service agreement on file yet (true for effectively everyone as of
-    2026-09-25 — this table is brand new)."""
+    falling back to participants.plan_management_type (patients, before
+    migration 218's rename) for participants with no service agreement on
+    file yet (true for effectively everyone as of 2026-09-25 — this table
+    is brand new)."""
     participant_id = participant.get("id")
     organization_id = participant.get("organization_id")
     if participant_id and organization_id:

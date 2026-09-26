@@ -113,9 +113,10 @@ def get_active_service_agreement(
     Deliberately fails soft (returns None) rather than raising: this is
     called from resolve_participant_plan_management_type() on every billing
     period lookup org-wide, which already treats "no active agreement" as
-    "fall back to patients.plan_management_type" — any lookup failure
-    (table not yet migrated, transient error) should degrade to that same
-    safe fallback, not take down billing for every participant."""
+    "fall back to participants.plan_management_type" (patients, pre-
+    migration 218's rename) — any lookup failure (table not yet migrated,
+    transient error) should degrade to that same safe fallback, not take
+    down billing for every participant."""
     as_of = as_of or date.today()
     try:
         supabase = get_supabase_admin()
@@ -133,7 +134,7 @@ def get_active_service_agreement(
     except Exception:
         logger.warning(
             "Could not look up active service agreement for participant %s — "
-            "falling back to patients.plan_management_type",
+            "falling back to participants.plan_management_type",
             participant_id,
             exc_info=True,
         )
