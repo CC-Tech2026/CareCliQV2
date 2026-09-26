@@ -2,7 +2,7 @@
 Meet & Greet -> Service Agreement -> Active/Inactive. Mirrors the
 Applicants Board (applicant_service.py) — one board/detail record per
 pipeline card, with the "active" transition creating a real row in the
-existing `patients` table via participant_service.create_participant
+existing `participants` table via participant_service.create_participant
 rather than duplicating participant fields here.
 
 Date of birth lives inside `web_intake` (jsonb), matching the frontend's

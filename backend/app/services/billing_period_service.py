@@ -155,7 +155,7 @@ def get_or_open_billing_period(
     if participant is None:
         patient_result = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(
                 "id, organization_id, full_name, email, plan_management_type, "
                 "case_manager_name, case_manager_email, case_manager_phone"
@@ -267,7 +267,7 @@ def get_current_billing_period_view(
     if participant is None:
         patient_result = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("id, organization_id, plan_management_type")
             .eq("id", participant_id)
             .limit(1)

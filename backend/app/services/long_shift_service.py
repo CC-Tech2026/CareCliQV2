@@ -1697,7 +1697,7 @@ def get_audit_engagement_pack(
         wid = sess.get("worker_id")
         if pid:
             try:
-                presp = get_supabase_admin().table("patients").select("full_name").eq("id", pid).limit(1).execute()
+                presp = get_supabase_admin().table("participants").select("full_name").eq("id", pid).limit(1).execute()
                 participant = (presp.data or [{}])[0].get("full_name")
             except Exception:
                 pass

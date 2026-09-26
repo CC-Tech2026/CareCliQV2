@@ -33,7 +33,7 @@ from .access_log_service import (
 
 logger = logging.getLogger(__name__)
 
-TABLE = "patients"
+TABLE = "participants"
 
 _PLAN_FIELD_MAP = {
     "plan_start_date": "plan_start",
@@ -48,7 +48,7 @@ async def _sync_plan_fields_from_payload(
     payload: dict,
     current_user: Optional[dict] = None,
 ) -> dict:
-    """Route plan mirror edits to ndis_plans instead of patients."""
+    """Route plan mirror edits to ndis_plans instead of participants."""
     plan_payload: dict = {}
     for patient_key, plan_key in _PLAN_FIELD_MAP.items():
         if patient_key in payload:

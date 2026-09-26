@@ -69,7 +69,7 @@ async def test_update_shift_context_updates_patient_and_allergies():
     supabase = MagicMock()
 
     def _table(name: str):
-        if name == "patients":
+        if name == "participants":
             return patients_table
         if name == "participant_allergies":
             return allergies_table
@@ -164,7 +164,7 @@ def test_patch_shift_context_http_updates_and_returns_context():
     supabase = MagicMock()
 
     def _table(name: str):
-        if name == "patients":
+        if name == "participants":
             return patients_table
         if name == "participant_allergies":
             return allergies_table

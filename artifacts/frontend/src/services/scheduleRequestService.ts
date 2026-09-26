@@ -19,7 +19,7 @@ export type ScheduleRequest = {
   preferred_shift?: {
     participant_id: string;
     preferred_days: number[];
-    patients?: { full_name: string };
+    participants?: { full_name: string };
   };
   shift_swap?: {
     shift_id: string;

@@ -123,7 +123,7 @@ async def get_my_participants(user: dict = Depends(get_current_user)):
         if not patient_ids:
             return []
         result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("id, full_name, ndis_number, plan_status, date_of_birth")
             .in_("id", patient_ids)
             .execute()
@@ -198,7 +198,7 @@ async def list_assignments(
         patient_ids = list({r["patient_id"] for r in rows if r.get("patient_id")})
         if patient_ids:
             p_result = (
-                supabase.table("patients")
+                supabase.table("participants")
                 .select("id, full_name, ndis_number")
                 .in_("id", patient_ids)
                 .execute()

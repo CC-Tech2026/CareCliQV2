@@ -319,7 +319,7 @@ def _load_name_maps(
     if participant_ids:
         try:
             resp = (
-                supabase.table("patients")
+                supabase.table("participants")
                 .select("id, full_name")
                 .eq("organization_id", org_id)
                 .in_("id", list(participant_ids))

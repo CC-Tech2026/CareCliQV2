@@ -32,7 +32,7 @@ _USERS_COLUMNS_BANNER = """
 
 _BIOLOGICAL_SEX_BANNER = """
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  MIGRATION REQUIRED — patients.biological_sex column missing             ║
+║  MIGRATION REQUIRED — participants.biological_sex column missing         ║
 ║  Run backend/supabase_setup.sql in your Supabase SQL editor.            ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
@@ -88,7 +88,7 @@ async def _apply_startup_migrations():
         _PROBES = [
             ("sessions_notes",       "sessions",                "activities_performed, outcomes, participant_response, progress_toward_goals", "sessions: structured note columns OK",  "sessions: structured note columns missing"),
             ("sessions_rp",          "sessions",                "restrictive_practice_detected, compliance_flags",                             None,                                    None),
-            ("biological_sex",       "patients",                "biological_sex",                                                              "patients.biological_sex column OK",     _BIOLOGICAL_SEX_BANNER),
+            ("biological_sex",       "participants",            "biological_sex",                                                              "participants.biological_sex column OK", _BIOLOGICAL_SEX_BANNER),
             ("users_onboarding",     "users",                   "account_type, onboarding_complete, organization_id",                          "users: onboarding columns OK",          _USERS_COLUMNS_BANNER),
             ("session_messages",     "session_messages",        "id, session_id, message_type, content",                                       "session_messages table OK",             _SESSION_MESSAGES_BANNER),
             ("organizations",        "organizations",           "id, owner_user_id, organization_name",                                        "organizations table OK",                "organizations table missing — run backend/supabase_patch_missing_tables.sql"),
@@ -96,7 +96,7 @@ async def _apply_startup_migrations():
             ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
             ("ndis_goals",           "ndis_goals",              "id, participant_id, organization_id, name, status",                           "ndis_goals table OK",                   "ndis_goals table missing — run backend/supabase/migrations/044_realtime_goals_settings.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
-            ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
+            ("upcoming_review_date", "participants",            "upcoming_review_date",                                                        "participants.upcoming_review_date column OK", "participants.upcoming_review_date missing — run backend/supabase_setup.sql"),
             ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
             ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
             ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),

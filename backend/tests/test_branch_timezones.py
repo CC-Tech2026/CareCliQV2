@@ -84,7 +84,7 @@ def _db(fail: bool = False) -> FakeSupabase:
             {"user_id": USER_ADL, "organization_id": ORG, "branch_id": HEAD_OFFICE},
             {"user_id": USER_MEL, "organization_id": ORG, "branch_id": MELB_BRANCH},
         ],
-        "patients": [
+        "participants": [
             {"id": PARTICIPANT_MEL, "organization_id": ORG, "branch_id": MELB_BRANCH},
         ],
     }, fail=fail)

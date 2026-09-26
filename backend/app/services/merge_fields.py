@@ -53,7 +53,7 @@ def _load_participant(organization_id: str, patient_id: str | None) -> dict[str,
         return None
     resp = (
         get_supabase_admin()
-        .table("patients")
+        .table("participants")
         .select(_PARTICIPANT_COLUMNS)
         .eq("id", patient_id)
         .eq("organization_id", organization_id)

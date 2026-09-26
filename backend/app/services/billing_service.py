@@ -264,7 +264,7 @@ async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[
         return invoices
     try:
         result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("id, service_category")
             .in_("id", participant_ids)
             .execute()
@@ -328,7 +328,7 @@ async def list_ready_to_invoice(user: dict) -> list[dict]:
 
     participant_ids = list({key[0] for key in groups})
     participants_result = (
-        supabase.table("patients")
+        supabase.table("participants")
         .select("id, full_name")
         .in_("id", participant_ids)
         .execute()
@@ -369,7 +369,7 @@ async def _verify_invoice_scope(user: dict, data: dict) -> None:
     participant_id = data.get("participant_id")
     if participant_id:
         participant_result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("*")
             .eq("id", participant_id)
             .limit(1)
@@ -392,7 +392,7 @@ async def _verify_invoice_scope(user: dict, data: dict) -> None:
         participant = None
         if session and session.get("patient_id"):
             participant_result = (
-                supabase.table("patients")
+                supabase.table("participants")
                 .select("*")
                 .eq("id", session["patient_id"])
                 .limit(1)
@@ -417,7 +417,7 @@ def _single_matching_participant(org_id: str, recipient_name: str) -> dict[str, 
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("id, full_name")
             .eq("organization_id", org_id)
             .ilike("full_name", text)
@@ -510,7 +510,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
         as_of = _as_of_date_from_due(data.get("due_date"), participant_id, org_id)
         supabase = get_supabase_admin()
         participant_result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select(
                 "id, organization_id, full_name, email, plan_management_type, "
                 "case_manager_name, case_manager_email, case_manager_phone"
@@ -775,7 +775,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
     participant: dict = {}
     if invoice.get("participant_id"):
         try:
-            r = supabase.table("patients").select(
+            r = supabase.table("participants").select(
                 "full_name, ndis_number, date_of_birth, address, plan_management_type, "
                 "case_manager_name, case_manager_email, case_manager_phone"
             ).eq("id", invoice["participant_id"]).limit(1).execute()
@@ -791,7 +791,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
     care_coordinator_name = ""
     if invoice.get("participant_id"):
         try:
-            cc = supabase.table("patients").select("care_coordinator_id").eq(
+            cc = supabase.table("participants").select("care_coordinator_id").eq(
                 "id", invoice["participant_id"]
             ).limit(1).execute()
             cc_id = (cc.data or [{}])[0].get("care_coordinator_id")

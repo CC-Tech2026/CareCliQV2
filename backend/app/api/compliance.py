@@ -336,7 +336,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     participants_by_id: dict[str, dict] = {}
     if participant_ids:
         try:
-            presp = supabase.table("patients").select("id, full_name").in_("id", list(participant_ids)).execute()
+            presp = supabase.table("participants").select("id, full_name").in_("id", list(participant_ids)).execute()
             participants_by_id = {str(p["id"]): p for p in (presp.data or [])}
         except Exception:
             pass
@@ -432,7 +432,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     participant_names: dict[str, str] = {}
     if all_participant_ids:
         try:
-            presp2 = supabase.table("patients").select("id, full_name").in_("id", list(all_participant_ids)).execute()
+            presp2 = supabase.table("participants").select("id, full_name").in_("id", list(all_participant_ids)).execute()
             participant_names = {str(p["id"]): p.get("full_name") for p in (presp2.data or [])}
         except Exception:
             pass
@@ -605,7 +605,7 @@ async def compliance_centre_participants(
 
     try:
         patients_resp = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("id, full_name, ndis_number, plan_status, ndis_plan_id")
             .eq("organization_id", org_id)
             .execute()
@@ -811,7 +811,7 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
     worker_names: dict[str, str] = {}
     if participant_ids:
         try:
-            presp = supabase.table("patients").select("id, full_name").in_("id", list(participant_ids)).execute()
+            presp = supabase.table("participants").select("id, full_name").in_("id", list(participant_ids)).execute()
             participant_names = {str(p["id"]): p.get("full_name") for p in (presp.data or [])}
         except Exception:
             pass

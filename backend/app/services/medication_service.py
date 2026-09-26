@@ -969,7 +969,7 @@ def list_org_medications(organization_id: str, participant_id: str | None = None
         query = (
             get_supabase_admin()
             .table("medications")
-            .select("*, patients(full_name)")
+            .select("*, participants(full_name)")
             .eq("organization_id", organization_id)
         )
         if participant_id:
@@ -982,7 +982,7 @@ def list_org_medications(organization_id: str, participant_id: str | None = None
 
     rows = resp.data or []
     for row in rows:
-        patient = row.pop("patients", None) or {}
+        patient = row.pop("participants", None) or {}
         row["participant_name"] = patient.get("full_name")
         # Participant's branch zone; clients show this medication's own
         # times in it, labelled when it differs from the viewer's own branch.

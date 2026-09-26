@@ -21,7 +21,7 @@ def _table_with_patient_match(rows: list[dict]) -> MagicMock:
 
     def _table(name):
         table = MagicMock()
-        if name == "patients":
+        if name == "participants":
             table.select.return_value.eq.return_value.ilike.return_value.execute.return_value = MagicMock(data=rows)
         elif name == "invoices":
             table.insert.return_value.execute.return_value = MagicMock(
@@ -78,7 +78,7 @@ async def test_invoice_with_explicit_participant_id_is_never_blocked_by_the_name
 
     def _table(name):
         table = MagicMock()
-        if name == "patients":
+        if name == "participants":
             table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
                 data=[participant_row],
             )
