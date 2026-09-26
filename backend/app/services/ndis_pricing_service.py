@@ -763,21 +763,31 @@ async def edit_item_price(
     cutoff_date = date.today() - __import__("datetime").timedelta(days=grace_period_days)
 
     if effective_date < cutoff_date:
-        # Check for invoices using this item in the overlapping period
-        invoice_check = supabase.table("invoices").select(
-            "id, created_at"
-        ).eq(
-            "ndis_price_item_id", current_id
-        ).gte(
-            "created_at", effective_date.isoformat() + "T00:00:00Z"
-        ).limit(1).execute()
+        # invoices has no per-line FK to a specific ndis_price_items row —
+        # line_items is a JSONB blob on the invoice itself, not normalised
+        # rows (confirmed live: invoices.ndis_price_item_id doesn't exist and
+        # never has; this queried it unconditionally, so any edit backdated
+        # past the grace period has always raised an unhandled 42703 here,
+        # not the intended 409). task_completions is the correct live join:
+        # price_item_code + invoice_id (set once actually invoiced) records
+        # exactly what was billed, for which item, and when.
+        invoice_check = (
+            supabase.table("task_completions")
+            .select("id, invoice_id")
+            .eq("organization_id", str(org_id))
+            .eq("price_item_code", item_code)
+            .not_.is_("invoice_id", "null")
+            .gte("completion_date", effective_date.isoformat())
+            .limit(1)
+            .execute()
+        )
 
         if invoice_check.data:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     f"Cannot apply price change retroactively to {effective_date.isoformat()}. "
-                    f"Invoices exist using this item from that period. "
+                    f"Invoiced task completions exist using this item from that period. "
                     f"Contact support to manually adjust or void affected invoices."
                 ),
             )
