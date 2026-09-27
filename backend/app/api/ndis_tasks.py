@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..core.access import has_org_wide_access
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
 from ..services import ndis_pricing_service
@@ -33,9 +34,9 @@ router = APIRouter(prefix="/ndis-tasks", tags=["ndis-tasks"])
 
 
 def _require_coordinator(current_user: dict) -> str:
-    """Require coordinator role and return org_id."""
-    if current_user.get("role") != "support_coordinator":
-        raise HTTPException(status_code=403, detail="Coordinator role required")
+    """Require coordinator or managing-director role and return org_id."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Coordinator or managing director role required")
     org_id = current_user.get("organization_id")
     if not org_id:
         raise HTTPException(status_code=400, detail="User has no organization")

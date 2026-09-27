@@ -12,7 +12,7 @@ import json
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-REPORT_ROLES = {"support_coordinator"}
+REPORT_ROLES = {"support_coordinator", "managing_director"}
 
 
 def _require_report_access(current_user: dict) -> None:

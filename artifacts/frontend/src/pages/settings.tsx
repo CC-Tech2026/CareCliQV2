@@ -123,15 +123,15 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
-const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOrMdOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
   { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
   { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "privacy",       labelKey: "settings.nav.privacy",           icon: Shield      },
-  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
-  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
+  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOrMdOnly: true },
+  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOrMdOnly: true },
   { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
   // improvementFeedback and delegatedAccess stay strictly MD-only — neither
   // is in the delegated-access capability catalog (product feedback to the
@@ -1479,7 +1479,7 @@ export default function Settings() {
   const isMD = user?.role === "managing_director";
   const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
   const visibleNavItems = NAV_ITEMS.filter((item) =>
-    (!item.coordinatorOnly || isCoordinator) &&
+    (!item.coordinatorOrMdOnly || isCoordinator || isMD) &&
     (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
   );
 
@@ -1547,7 +1547,7 @@ export default function Settings() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const fetchTeam = useCallback(async () => {
-    if (!isCoordinator || !authToken) return;
+    if ((!isCoordinator && !isMD) || !authToken) return;
     setLoadingTeam(true);
     try {
       const [membersRes, invitesRes] = await Promise.all([
@@ -1561,7 +1561,7 @@ export default function Settings() {
     } finally {
       setLoadingTeam(false);
     }
-  }, [isCoordinator, authToken]);
+  }, [isCoordinator, isMD, authToken]);
 
   useEffect(() => {
     if (activeSection === "team") fetchTeam();
@@ -2600,12 +2600,12 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* -- Notifications section (coordinator only) ----------------------- */}
-        {activeSection === "notifications" && isCoordinator && (
+        {/* -- Notifications section (coordinator + managing director) ------- */}
+        {activeSection === "notifications" && (isCoordinator || isMD) && (
           <NotificationsSection />
         )}
 
-        {activeSection === "team" && isCoordinator && (
+        {activeSection === "team" && (isCoordinator || isMD) && (
           <Section
             title={translate("settings.team.title")}
             description={translate("settings.team.subtitle")}

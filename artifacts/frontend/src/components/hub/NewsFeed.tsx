@@ -114,7 +114,10 @@ const BLANK_FORM = { title: "", body: "", severity: "info" as Severity, category
 export function NewsFeed() {
   const { translate } = useAccessibility();
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  // Name kept as-is (used throughout this file) but now also true for
+  // managing_director — hub.py's create/delete announcement endpoints
+  // already allow both roles, this just matches the gate to that.
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
 
   const [items,       setItems]       = useState<Announcement[] | null>(null);
   const [loading,     setLoading]     = useState(true);

@@ -650,22 +650,22 @@ function Router() {
         )}
       </Route>
 
-      {/* ── Compliance — support coordinator only ────────────────────────── */}
+      {/* ── Compliance — support coordinator + managing director ─────────── */}
       <Route path="/compliance">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* ── Reports — support coordinator + allied health ────────────────── */}
+      {/* ── Reports — support coordinator + managing director + allied health ── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>

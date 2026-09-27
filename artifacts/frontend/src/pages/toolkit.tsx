@@ -88,7 +88,10 @@ export default function Toolkit() {
   const { toast } = useToast();
   const { translate } = useAccessibility();
   const queryClient = useQueryClient();
-  const isCoordinator = user?.role === "support_coordinator";
+  // Name kept as-is (used throughout this file) but now also true for
+  // managing_director — the /api/toolkit/team, /restock-requests etc.
+  // endpoints already allow both roles, this just matches the gate to that.
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
   const orgId = user?.organizationId ?? "__no_org__";
   const baseKey = isCoordinator ? ["toolkit", "team"] : ["toolkit", "me"];
   const { data, isLoading, error } = useOrgQuery(baseKey, {

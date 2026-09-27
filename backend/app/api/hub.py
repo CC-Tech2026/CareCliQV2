@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import app_today, shift_local_date
 from ..schemas.incident import NDIS_NOTIFICATION_HOURS
@@ -21,8 +21,8 @@ def _get_org_id(user: dict) -> str | None:
 
 
 def _require_coordinator(user: dict) -> str:
-    if not is_coordinator_role(user):
-        raise HTTPException(status_code=403, detail="Only coordinators can perform this action.")
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=403, detail="Only coordinators and managing directors can perform this action.")
     org_id = _get_org_id(user)
     if not org_id:
         raise HTTPException(status_code=403, detail="Organisation membership required.")

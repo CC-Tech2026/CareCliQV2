@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from ..core.access import get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..services import session_service, participant_service, funding_service, ai_service, shift_service, incident_service
 from ..services.incident_notification_service import compute_notification_due_at
@@ -30,8 +30,8 @@ router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 
 def _require_coordinator_org(current_user: dict) -> str:
-    if not is_coordinator_role(current_user):
-        raise HTTPException(status_code=403, detail="Only support coordinators can access the compliance centre.")
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Only support coordinators and managing directors can access the compliance centre.")
     org_id = get_user_organization_id(current_user)
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization found for this user.")

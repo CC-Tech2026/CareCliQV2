@@ -282,10 +282,10 @@ async def health_check():
 @app.get("/api/system/migration-status")
 async def migration_status_endpoint(current_user: dict = Depends(get_current_user)):
     """Return current migration state so operators can verify schema readiness."""
-    if current_user.get("role") != "support_coordinator":
+    if current_user.get("role") not in {"support_coordinator", "managing_director"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only support coordinators can view migration status",
+            detail="Only support coordinators and managing directors can view migration status",
         )
     return {
         "biological_sex_column_missing":              migration_state.biological_sex_column_missing,

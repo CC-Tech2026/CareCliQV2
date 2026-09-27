@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..services import shift_verification_service
 
@@ -17,8 +17,8 @@ router = APIRouter(prefix="/coordinator", tags=["coordinator"])
 
 
 def _require_coordinator(user: dict) -> str:
-    if not is_coordinator_role(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support coordinator access required.")
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support coordinator or managing director access required.")
     org_id = get_user_organization_id(user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")

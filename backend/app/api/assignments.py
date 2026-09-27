@@ -4,11 +4,11 @@ Links participants to support workers / allied health professionals via the
 practitioner_allocations junction table.
 
 Endpoints:
-  GET    /api/assignments                — list assignments (coordinator: org, worker: own)
-  POST   /api/assignments                — assign participant to worker (coordinator only)
-  DELETE /api/assignments/{id}           — remove/deactivate assignment (coordinator only)
+  GET    /api/assignments                — list assignments (coordinator/MD: org, worker: own)
+  POST   /api/assignments                — assign participant to worker (coordinator/MD only)
+  DELETE /api/assignments/{id}           — remove/deactivate assignment (coordinator/MD only)
   GET    /api/assignments/my-participants — participants assigned to current user
-  GET    /api/assignments/workers        — list workers in the org (coordinator only)
+  GET    /api/assignments/workers        — list workers in the org (coordinator/MD only)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,8 +25,6 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 TABLE = "practitioner_allocations"
 
-_COORDINATOR_ROLES = frozenset({"support_coordinator"})
-
 _VALID_ROLE_TYPES = frozenset({
     "support_worker", "allied_health", "primary_ot", "supervisor"
 })
@@ -39,10 +37,10 @@ class AssignmentCreate(BaseModel):
 
 
 def _require_coordinator(user: dict) -> None:
-    if user.get("role") not in _COORDINATOR_ROLES:
+    if not has_org_wide_access(user):
         raise HTTPException(
             status_code=403,
-            detail="Only support coordinators can manage participant assignments.",
+            detail="Only support coordinators and managing directors can manage participant assignments.",
         )
 
 
