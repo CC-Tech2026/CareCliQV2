@@ -200,10 +200,12 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> None:
     # same event can arrive more than once. Recording the event id first and
     # bailing on a duplicate-key conflict means every handler below stays
     # simple (no per-handler dedup logic needed) - migration 162.
+    recorded = False
     try:
         get_supabase_admin().table("stripe_webhook_events").insert({
             "stripe_event_id": event_id, "event_type": event_type,
         }).execute()
+        recorded = True
     except Exception as exc:
         if "duplicate key" in str(exc).lower() or "23505" in str(exc):
             logger.info("Stripe webhook %s (%s) already processed - skipping", event_id, event_type)
@@ -219,6 +221,24 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> None:
     data = event["data"]["object"].to_dict()
     logger.info("Stripe webhook received: %s", event_type)
 
+    try:
+        _dispatch_event(event_type, data)
+    except Exception:
+        # The event id was recorded above, before processing. Left in place,
+        # Stripe's retry of this failed delivery would be skipped as a
+        # duplicate - for a signup that means a customer who paid but never
+        # gets an organisation or invite. Forget it so the retry reprocesses.
+        if recorded:
+            try:
+                get_supabase_admin().table("stripe_webhook_events").delete().eq(
+                    "stripe_event_id", event_id
+                ).execute()
+            except Exception as cleanup_exc:
+                logger.error("Could not clear failed webhook event %s for retry: %s", event_id, cleanup_exc)
+        raise
+
+
+def _dispatch_event(event_type: str, data: dict[str, Any]) -> None:
     if event_type == "checkout.session.completed":
         _handle_checkout_completed(data)
     elif event_type == "customer.subscription.updated":
@@ -294,7 +314,16 @@ def _create_org_from_signup(session: dict[str, Any]) -> None:
         .execute()
     )
     if existing.data:
-        logger.info("Signup webhook replay for existing org (customer=%s) — skipping org creation", customer_id)
+        # The org was created but an earlier attempt may have failed before
+        # the founding invite was stored - finish that step, or the customer
+        # has paid with no way in (and reconcile/resend can't help, since
+        # both need either no org or an existing invite).
+        org_id = existing.data[0]["organization_id"]
+        if _has_founding_invite(org_id):
+            logger.info("Signup webhook replay for existing org (customer=%s) — skipping org creation", customer_id)
+        else:
+            logger.warning("Org %s exists with no founding invite — sending it now", org_id)
+            _send_founding_md_invite(org_id=org_id, email=email, organization_name=organization_name)
         return
 
     org_resp = supabase.table("organizations").insert({
@@ -318,6 +347,19 @@ def _create_org_from_signup(session: dict[str, Any]) -> None:
     org_id = org_resp.data[0]["organization_id"]
 
     _send_founding_md_invite(org_id=org_id, email=email, organization_name=organization_name)
+
+
+def _has_founding_invite(org_id: str) -> bool:
+    resp = (
+        get_supabase_admin()
+        .table("invitations")
+        .select("id")
+        .eq("organization_id", org_id)
+        .eq("role", "managing_director")
+        .limit(1)
+        .execute()
+    )
+    return bool(resp.data)
 
 
 def _send_founding_md_invite(*, org_id: str, email: str, organization_name: str) -> None:
@@ -447,8 +489,9 @@ def reconcile_signup_session(session_id: str) -> bool:
     """Manually replay org creation for one signup Checkout session - the
     support-runbook action for "customer says they paid but got no email",
     made real instead of a written procedure. Returns False if the session
-    isn't a completed signup session or an org already exists for it
-    (safe to call again - _create_org_from_signup's own guard handles that)."""
+    isn't a completed signup session. Safe to call again:
+    _create_org_from_signup never creates a second org, and only sends the
+    founding invite if one was never stored."""
     session = stripe.checkout.Session.retrieve(session_id).to_dict()
     if session.get("status") != "complete" or (session.get("metadata") or {}).get("signup") != "true":
         return False

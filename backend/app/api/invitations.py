@@ -1035,9 +1035,12 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # ------------------------------------------------------------------
     if role == "managing_director":
         try:
+            # organization_id, not id - filtering organizations by `id` is
+            # unreliable via PostgREST here (organization_branding_service.py),
+            # and org_id came from the webhook's organization_id anyway.
             supabase.table("organizations").update(
                 {"owner_user_id": user_id}
-            ).eq("id", org_id).is_("owner_user_id", "null").execute()
+            ).eq("organization_id", org_id).is_("owner_user_id", "null").execute()
         except Exception as e:
             logger.warning("accept_invite owner_user_id backfill error (non-critical): %s", e)
 
