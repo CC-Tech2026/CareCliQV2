@@ -27,7 +27,7 @@
 CREATE OR REPLACE FUNCTION public.resolve_ndis_price(
     p_item_code text,
     p_org_id uuid,
-    p_as_of_date date DEFAULT CURRENT_DATE,
+    p_as_of_date date,
     p_location_type text DEFAULT 'national'
 )
 RETURNS TABLE (
@@ -44,65 +44,51 @@ RETURNS TABLE (
     day_type text,
     time_type text,
     support_intensity text,
-    support_purpose text
-) AS $$
-DECLARE
-    v_row RECORD;
-    v_effective_price numeric;
-    v_source text;
+    support_purpose text,
+    category_number text,
+    registration_group text
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path TO 'public', 'extensions'
+AS $function$
 BEGIN
-    -- Find current version valid as of p_as_of_date. valid_to is a
-    -- half-open upper bound: NULL or strictly after p_as_of_date means
-    -- current; anything else is an expired version and must be excluded.
-    SELECT * INTO v_row
-    FROM public.ndis_price_items
-    WHERE item_code = p_item_code
-      AND organization_id = p_org_id
-      AND valid_from::date <= p_as_of_date
-      AND (valid_to::date IS NULL OR valid_to::date > p_as_of_date)
-    ORDER BY valid_from DESC
-    LIMIT 1;
-
-    IF v_row IS NULL THEN
-        RETURN;
-    END IF;
-
-    IF p_location_type = 'remote' THEN
-        IF v_row.price_remote IS NOT NULL THEN
-            v_effective_price := v_row.price_remote;
-            v_source := 'explicit';
-        ELSE
-            v_effective_price := v_row.price_national * 1.25;
-            v_source := 'calculated_multiplier';
-        END IF;
-    ELSIF p_location_type = 'very_remote' THEN
-        IF v_row.price_very_remote IS NOT NULL THEN
-            v_effective_price := v_row.price_very_remote;
-            v_source := 'explicit';
-        ELSE
-            v_effective_price := v_row.price_national * 1.40;
-            v_source := 'calculated_multiplier';
-        END IF;
-    ELSE
-        v_effective_price := v_row.price_national;
-        v_source := 'explicit';
-    END IF;
-
     RETURN QUERY
     SELECT
-        v_row.id,
-        v_row.item_code,
-        v_row.name,
-        v_row.description,
-        v_row.unit,
-        v_row.price_national,
-        v_row.price_remote,
-        v_row.price_very_remote,
-        v_effective_price,
-        v_source,
-        v_row.day_type,
-        v_row.time_type,
-        v_row.support_intensity,
-        v_row.support_purpose;
+        npi.id,
+        npi.item_code,
+        npi.name,
+        npi.description,
+        npi.unit,
+        npi.price_national,
+        npi.price_remote,
+        npi.price_very_remote,
+        CASE
+            WHEN p_location_type = 'national' THEN npi.price_national
+            WHEN p_location_type = 'remote' THEN COALESCE(npi.price_remote, npi.price_national)
+            WHEN p_location_type = 'very_remote' THEN COALESCE(npi.price_very_remote, npi.price_national)
+            ELSE npi.price_national
+        END AS effective_price,
+        CASE
+            WHEN p_location_type = 'national' AND npi.price_national IS NOT NULL THEN 'explicit'
+            WHEN p_location_type = 'remote' AND npi.price_remote IS NOT NULL THEN 'explicit'
+            WHEN p_location_type = 'remote' AND npi.price_remote IS NULL AND npi.price_national IS NOT NULL THEN 'calculated_multiplier'
+            WHEN p_location_type = 'very_remote' AND npi.price_very_remote IS NOT NULL THEN 'explicit'
+            WHEN p_location_type = 'very_remote' AND npi.price_very_remote IS NULL AND npi.price_national IS NOT NULL THEN 'calculated_multiplier'
+            ELSE 'explicit'
+        END AS effective_price_source,
+        npi.day_type,
+        npi.time_type,
+        npi.support_intensity,
+        npi.support_purpose,
+        npi.category_number,
+        npi.registration_group
+    FROM public.ndis_price_items AS npi
+    WHERE npi.item_code = p_item_code
+      AND npi.organization_id = p_org_id
+      AND npi.valid_from <= p_as_of_date
+      AND (npi.valid_to IS NULL OR npi.valid_to > p_as_of_date)
+    ORDER BY npi.valid_from DESC
+    LIMIT 1;
 END;
-$$ LANGUAGE plpgsql STABLE;
+$function$;

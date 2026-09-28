@@ -153,6 +153,25 @@ async def load_platform_schedule(
     return LoadScheduleResponse(**result)
 
 
+@router.get("/current-catalogue")
+async def current_catalogue(
+    current_user: dict = Depends(get_current_user),
+) -> list[dict]:
+    """
+    The full current NDIS price catalogue as this org would actually resolve
+    it today — an org override where one exists, the platform catalogue
+    otherwise, an org's own item where the platform doesn't carry it at all.
+    Read-only, for browsing/search; not paginated (catalogue is a few hundred
+    rows at most).
+    """
+    org_id = current_user.get("organization_id")
+    if not org_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="User must belong to an organization.")
+
+    return await ndis_pricing_service.list_current_price_items(org_id)
+
+
 @router.get("/schedules")
 async def list_schedules(
     current_user: dict = Depends(get_current_user),

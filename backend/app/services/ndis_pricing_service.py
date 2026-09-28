@@ -215,6 +215,61 @@ async def list_organization_categories(org_id: UUID | str) -> list[dict[str, Any
     return sorted(seen.values(), key=lambda c: c["category_number"])
 
 
+_CATALOGUE_FIELDS = (
+    "item_code", "name", "description", "unit", "price_national", "price_remote",
+    "price_very_remote", "day_type", "time_type", "support_intensity",
+    "support_purpose", "category_number", "registration_group", "valid_from", "valid_to",
+)
+_CATALOGUE_SELECT = ", ".join(_CATALOGUE_FIELDS)
+
+
+async def list_current_price_items(org_id: UUID | str) -> list[dict[str, Any]]:
+    """The full current catalogue as this org would actually resolve it today —
+    a bulk view of the same three-tier logic resolve_price() applies one item
+    at a time: an org's own is_override=true row wins for that item_code,
+    otherwise the platform catalogue's current version, otherwise (an item
+    the platform doesn't carry at all) whatever active row the org itself
+    has. Read-only; nothing here writes anything.
+    """
+    supabase = get_supabase_admin()
+
+    org_result = (
+        supabase.table("ndis_price_items")
+        .select(_CATALOGUE_SELECT + ", is_override")
+        .eq("organization_id", str(org_id))
+        .is_("valid_to", "null")
+        .execute()
+    )
+    org_rows = org_result.data if isinstance(org_result.data, list) else []
+
+    platform_result = (
+        supabase.table("platform_ndis_price_items")
+        .select(_CATALOGUE_SELECT)
+        .is_("valid_to", "null")
+        .execute()
+    )
+    platform_rows = platform_result.data if isinstance(platform_result.data, list) else []
+
+    merged: dict[str, dict[str, Any]] = {}
+    for row in platform_rows:
+        code = row.get("item_code")
+        if not code:
+            continue
+        merged[code] = {**row, "source": "platform"}
+
+    for row in org_rows:
+        code = row.get("item_code")
+        if not code:
+            continue
+        is_override = bool(row.get("is_override"))
+        if is_override or code not in merged:
+            entry = {field: row.get(field) for field in _CATALOGUE_FIELDS}
+            entry["source"] = "organization_override" if is_override else "organization"
+            merged[code] = entry
+
+    return sorted(merged.values(), key=lambda i: str(i.get("item_code") or ""))
+
+
 async def get_item_history(
     item_code: str,
     org_id: UUID | str,

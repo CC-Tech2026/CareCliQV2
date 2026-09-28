@@ -40,6 +40,27 @@ export type NdisPriceItem = {
   edited_by: string | null;
   edited_at: string | null;
 };
+export type NdisCatalogueItem = {
+  valid_from?: string | null;
+  valid_to?: string | null;
+  item_code: string;
+  name: string;
+  description: string | null;
+  unit: string;
+  price_national: number | null;
+  price_remote: number | null;
+  price_very_remote: number | null;
+  day_type: string | null;
+  time_type: string | null;
+  support_intensity: string | null;
+  support_purpose: string | null;
+  category_number: string | null;
+  registration_group: string | null;
+  /** "platform" (centrally-maintained), "organization_override" (this org's
+   * own negotiated rate), or "organization" (an item the platform catalogue
+   * doesn't carry at all). */
+  source: "platform" | "organization_override" | "organization";
+};
 
 export type LoadScheduleResponse = {
   schedule_id: string;
@@ -72,29 +93,48 @@ export function resolveNdisPrice(
 ) {
   return jsonFetch<NdisPriceResolution>("/api/ndis-pricing/resolve", {
     method: "POST",
-    body: JSON.stringify({ item_code: itemCode, as_of_date: asOfDate, location_type: locationType }),
+    body: JSON.stringify({
+      item_code: itemCode,
+      as_of_date: asOfDate,
+      location_type: locationType,
+    }),
   });
+}
+
+/**
+ * The full current NDIS price catalogue as this org would actually resolve
+ * it today (org override > platform catalogue > org's own item where the
+ * platform doesn't carry it). Read-only, for browsing/search.
+ */
+export function listCurrentNdisCatalogue() {
+  return jsonFetch<NdisCatalogueItem[]>("/api/ndis-pricing/current-catalogue");
 }
 
 /**
  * Get version history for an NDIS item (for audit trail review).
  */
 export function getNdisItemHistory(itemCode: string, limit = 10) {
-  return jsonFetch<NdisPriceItem[]>(`/api/ndis-pricing/items/${encodeURIComponent(itemCode)}/history?limit=${limit}`);
+  return jsonFetch<NdisPriceItem[]>(
+    `/api/ndis-pricing/items/${encodeURIComponent(itemCode)}/history?limit=${limit}`,
+  );
 }
 
 /**
  * List all price schedules for the organization (newest first).
  */
 export function listNdisPriceSchedules(limit = 20) {
-  return jsonFetch<NdisPriceSchedule[]>(`/api/ndis-pricing/schedules?limit=${limit}`);
+  return jsonFetch<NdisPriceSchedule[]>(
+    `/api/ndis-pricing/schedules?limit=${limit}`,
+  );
 }
 
 /**
  * Get details of a specific price schedule.
  */
 export function getNdisPriceSchedule(scheduleId: string) {
-  return jsonFetch<NdisPriceSchedule>(`/api/ndis-pricing/schedules/${scheduleId}`);
+  return jsonFetch<NdisPriceSchedule>(
+    `/api/ndis-pricing/schedules/${scheduleId}`,
+  );
 }
 
 /**
@@ -120,14 +160,17 @@ export function editNdisItemPrice(
   priceRemote?: number | null,
   priceVeryRemote?: number | null,
 ) {
-  return jsonFetch<EditItemPriceResponse>(`/api/ndis-pricing/items/${encodeURIComponent(itemCode)}/edit`, {
-    method: "POST",
-    body: JSON.stringify({
-      price_national: priceNational,
-      price_remote: priceRemote,
-      price_very_remote: priceVeryRemote,
-      effective_date: effectiveDate,
-      reason,
-    }),
-  });
+  return jsonFetch<EditItemPriceResponse>(
+    `/api/ndis-pricing/items/${encodeURIComponent(itemCode)}/edit`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        price_national: priceNational,
+        price_remote: priceRemote,
+        price_very_remote: priceVeryRemote,
+        effective_date: effectiveDate,
+        reason,
+      }),
+    },
+  );
 }
