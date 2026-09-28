@@ -9,6 +9,13 @@ import {
   Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
@@ -821,17 +828,36 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
 
         {/* ── Right zone: notifications + profile ── */}
         <div className="flex items-center gap-1.5 px-4 shrink-0">
-          {/* Theme toggle */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
-            aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
-            className="h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-150 hover:bg-black/8 hover:text-[var(--cc-coral)]"
-            style={{ color: MUTED }}
-          >
-            {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
-          </button>
+          {/* Theme picker — the current appearance is shown on the trigger. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title={translate("accessibility.theme")}
+                aria-label={translate("accessibility.theme")}
+                className="h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-150 hover:bg-black/8 hover:text-[var(--cc-coral)]"
+                style={{ color: MUTED }}
+              >
+                {isDark ? <Moon size={15} strokeWidth={2} /> : <Sun size={15} strokeWidth={2} />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-36 p-1.5">
+              <DropdownMenuRadioGroup
+                value={isDark ? "dark" : "light"}
+                onValueChange={(mode) => setThemeMode(mode as "light" | "dark")}
+                aria-label={translate("accessibility.theme")}
+              >
+                <DropdownMenuRadioItem value="light" className="gap-2.5 py-2">
+                  <Sun size={15} aria-hidden />
+                  {translate("layout.theme.lightMode")}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark" className="gap-2.5 py-2">
+                  <Moon size={15} aria-hidden />
+                  {translate("layout.theme.darkMode")}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {!isWorker
             ? <NotificationBell onClick={() => setNotifOpen(true)} />
