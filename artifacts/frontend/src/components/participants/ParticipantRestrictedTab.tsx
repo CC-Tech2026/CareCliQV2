@@ -45,7 +45,7 @@ export function ParticipantRestrictedTab({
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
       </div>
       <p className="text-[12px] text-orange-700/80 leading-relaxed">
-        This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
+        This section contains restricted information visible only to support coordinators and the managing director. Handle in accordance with the participant's privacy consent and NDIS guidelines.
       </p>
       {isLoading ? (
         <div className="space-y-3">

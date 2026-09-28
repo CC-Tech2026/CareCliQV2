@@ -2308,7 +2308,7 @@ export const en: Dict = {
   "patients.budget.byCategory": "By Support Category",
   "patients.budget.categoryUsage": "{used} used · {remaining} left of {allocated}",
   "patients.restricted.title": "Restricted Clinical Records",
-  "patients.restricted.coordinatorOnly": "Coordinator Only",
+  "patients.restricted.coordinatorOnly": "Restricted",
   "patients.restricted.save": "Save Clinical Records",
   "patients.shiftContext.title": "Worker Shift Context",
   "patients.shiftContext.coordinatorAuthoring": "Coordinator Authoring",
