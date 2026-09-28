@@ -5036,7 +5036,7 @@ async def get_coordinator_notifications(
     current_user: dict = Depends(get_current_user),
 ):
     """Get alerts/notifications for the coordinator's current organisation only."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         q = (
@@ -5060,7 +5060,7 @@ async def mark_coordinator_notification_read(
     current_user: dict = Depends(get_current_user),
 ):
     """Mark a specific alert as read."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).execute()
@@ -5074,7 +5074,7 @@ async def mark_all_coordinator_notifications_read(
     current_user: dict = Depends(get_current_user),
 ):
     """Mark all alerts as read for this organization."""
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).execute()

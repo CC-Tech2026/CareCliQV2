@@ -37,6 +37,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
+import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import {
   getOrganizationBranding,
   type OrganizationBranding,
@@ -202,7 +203,15 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const profileRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
-  const isDark = resolvedTheme === "dark";
+  // Source of truth is the saved preference (what setThemeMode writes), with
+  // next-themes / the <html> class as fallbacks. Relying on resolvedTheme alone
+  // left isDark stuck at false, so the toggle always re-applied "dark".
+  const isDark = prefs?.theme_mode
+    ? prefs.theme_mode === "dark"
+    : resolvedTheme
+      ? resolvedTheme === "dark"
+      : typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const [notifOpen, setNotifOpen] = useState(false);
   const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
 
   const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
@@ -392,14 +401,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
           {/* Executive Control Group */}
           <div className="flex items-center gap-2" ref={profileRef}>
-            <button
-              type="button"
-              className="relative flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell size={17} />
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full ring-2 ring-[var(--cc-surface)]" style={{ background: "var(--cc-status-danger)" }} />
-            </button>
+            <NotificationBell onClick={() => setNotifOpen(true)} />
 
             {/* HubLayout is also shared with coordinators (e.g. /hub, /md/staff-onboarding)
                 and the Calendar page itself is MD-only (App.tsx), so the button only
@@ -827,6 +829,12 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         <main className={`mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 ${bottombarMode ? "pb-32" : ""}`}>
           {children}
         </main>
+      )}
+      {notifOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setNotifOpen(false)} />
+          <NotificationPanel onClose={() => setNotifOpen(false)} />
+        </>
       )}
     </div>
   );
