@@ -8,7 +8,6 @@ import {
   BarChart2, BarChart3, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
   Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -394,7 +393,7 @@ function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, incidentOpenCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
-  isDark, toggleTheme, branding,
+  branding,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; incidentOpenCount: number;
@@ -402,7 +401,6 @@ function SidebarContents({
   onNav?: () => void; onLogout: () => void;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
-  isDark: boolean; toggleTheme: () => void;
   branding?: OrganizationBranding;
 }) {
   const compact = !isDrawer && collapsed;
@@ -681,12 +679,10 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
     userRole === "managing_director" ? "/md/compliance"  :
     "/compliance";
 
-  const { setThemeMode } = useAccessibility();
-  const { resolvedTheme } = useTheme();
-  const isDark =
-    resolvedTheme === "dark" ||
-    (!resolvedTheme && typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
-  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
+  const { prefs, setThemeMode } = useAccessibility();
+  // Read from the same local-first state updated by the picker. This avoids a
+  // second click while next-themes synchronises its resolvedTheme value.
+  const isDark = prefs?.theme_mode === "dark";
 
   const navSections   = SECTIONED_NAV[userRole as NavRole]   ?? SECTIONED_NAV.support_worker;
   const topbarQuicknav = TOPBAR_QUICKNAV[userRole as NavRole] ?? TOPBAR_QUICKNAV.support_worker;
@@ -706,7 +702,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
 
   const sharedProps = {
     location, collapsed, alertCount, incidentOpenCount, displayName, displayRole, initials,
-    onLogout: logout, translate, translateParams, isDark, toggleTheme, branding,
+    onLogout: logout, translate, translateParams, branding,
   };
 
   // Short role label for pill
