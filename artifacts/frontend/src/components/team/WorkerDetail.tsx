@@ -16,15 +16,9 @@ import {
   Trash2,
   Mail,
   Phone,
-  MapPin,
-  IdCard,
-  Hourglass,
   AlertCircle,
   ShieldCheck,
   Sparkles,
-  CalendarDays,
-  LogIn,
-  MessageCircle,
   ArrowRight,
   TrendingUp,
   MoreHorizontal,
@@ -35,22 +29,11 @@ import {
   Copy,
   ClipboardCheck,
   KeyRound,
-  ChevronUp,
   ChevronDown,
   ChevronRight,
   Maximize2,
   Minimize2,
   Star,
-  User,
-  HeartHandshake,
-  CalendarClock,
-  Cake,
-  PhoneCall,
-  Stethoscope,
-  Building2,
-  FileCheck,
-  Languages,
-  Briefcase,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -195,22 +178,6 @@ const ALL_WORKER_DETAIL_TABS: WorkerDetailTab[] = [
   "induction",
 ];
 
-const TAB_DESCRIPTION: Record<WorkerDetailTab, string> = {
-  overview: "Personal information, work arrangements and account preferences.",
-  personal: "Personal information, work arrangements and account preferences.",
-  shifts: "Review completed shifts, documentation and delivery quality.",
-  participants:
-    "View current participant assignments and previous care relationships.",
-  availability:
-    "Review regular working hours, time off and scheduling preferences.",
-  documents: "Find employment records, references and other staff documents.",
-  credentials:
-    "Check required credentials, review evidence and track expiry dates.",
-  training:
-    "Assign learning, review submissions and follow up on overdue training.",
-  induction: "Track the first-day checklist and mandatory induction progress.",
-};
-
 function ProfileLoadError({
   label,
   retry,
@@ -230,18 +197,6 @@ function ProfileLoadError({
     </div>
   );
 }
-
-const TAB_ICON: Record<WorkerDetailTab, typeof User> = {
-  overview: User,
-  personal: User,
-  shifts: CalendarDays,
-  participants: HeartHandshake,
-  documents: FileText,
-  credentials: ShieldCheck,
-  availability: CalendarClock,
-  training: GraduationCap,
-  induction: ClipboardCheck,
-};
 
 /** Mandatory credential types every worker is expected to have on file. */
 export const REQUIRED_CREDENTIAL_TYPES = [
@@ -278,12 +233,48 @@ const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
  * would show a worker as fully ready on this screen while the MD's
  * Worker Onboarding Pipeline board simultaneously keeps them in
  * "Screening & Credentials", for the exact same underlying data. */
+const CREDENTIAL_STATUS_RANK: Record<string, number> = {
+  valid: 0,
+  expiring: 1,
+  pending_review: 2,
+};
+
+/** The record that counts for each credential type when a worker has more
+ * than one (e.g. an expired Working With Children Check plus its renewal).
+ * Prefers a valid record, matching the backend's rostering check
+ * (credential_verification_service: any valid record of a type satisfies
+ * it), then expiring, then awaiting review, then the latest expiry. Every
+ * screen reads credentials through this, so the header, To do list and
+ * Credentials tab can't disagree about the same worker again. */
+export function currentCredentialsByType(
+  credentials: Credential[],
+): Map<string, Credential> {
+  const byType = new Map<string, Credential>();
+  for (const c of credentials) {
+    const current = byType.get(c.credential_type);
+    if (!current) {
+      byType.set(c.credential_type, c);
+      continue;
+    }
+    const rank = (x: Credential) => CREDENTIAL_STATUS_RANK[x.status] ?? 3;
+    if (
+      rank(c) < rank(current) ||
+      (rank(c) === rank(current) &&
+        (c.expiry_date ?? "") > (current.expiry_date ?? ""))
+    ) {
+      byType.set(c.credential_type, c);
+    }
+  }
+  return byType;
+}
+
 export function isWorkerCredentialsComplete(
   credentials: Credential[],
   workerId: string,
 ): boolean {
-  const workerCreds = credentials.filter((c) => c.user_id === workerId);
-  const byType = new Map(workerCreds.map((c) => [c.credential_type, c]));
+  const byType = currentCredentialsByType(
+    credentials.filter((c) => c.user_id === workerId),
+  );
   return REQUIRED_CREDENTIAL_TYPES.every(
     (type) => byType.get(type)?.status === "valid",
   );
@@ -458,58 +449,6 @@ export function ContactLink({
   );
 }
 
-/** Compact radial score ring, matching the Compliance Centre header's ring pattern. Animates
- * from zero on first mount only (not on re-renders) and honours prefers-reduced-motion. */
-function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
-  const reduceMotion = useReducedMotion();
-  const color = complianceColour(score);
-  const r = (size - 6) / 2;
-  const circ = 2 * Math.PI * r;
-  return (
-    <div
-      className="relative shrink-0"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-90"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={SOFT}
-          strokeWidth="4"
-        />
-        <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="4"
-          strokeDasharray={circ}
-          strokeLinecap="round"
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: circ * (1 - score / 100) }}
-          transition={
-            reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }
-          }
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[11px] font-semibold" style={{ color }}>
-          {Math.round(score)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 type ReadinessLevel = "good" | "warning" | "danger";
 type TopReason = { level: "warning" | "danger"; label: string } | null;
 
@@ -548,73 +487,85 @@ function computeTopReason(
   return null;
 }
 
-/** Unifies the compliance ring + onboarding pill + credentials pill into one "can I roster
- * this person" answer, with a single most-urgent blocking reason and an action to fix it. */
+/** Answers the coordinator's first question about a worker, "can I roster
+ * this person?", in words: a headline, the most urgent reason, and a link to
+ * where it's fixed. The documentation score lives in the stat strip instead:
+ * it used to sit in this box as "Readiness 74%" next to "2/8 credentials",
+ * reading as if the two were the same measurement. */
 function ReadinessSummary({
   worker,
-  topReason,
-  credentialsComplete,
-  translate,
-  onAction,
+  onboardingPending,
+  missingCredentialCount,
+  credentialsTotal,
+  onReview,
 }: {
   worker: WorkerStats;
-  topReason: TopReason;
-  credentialsComplete: boolean;
-  translate: (k: string) => string;
-  onAction: () => void;
+  onboardingPending: boolean;
+  missingCredentialCount: number;
+  credentialsTotal: number;
+  onReview: (tab: WorkerDetailTab) => void;
 }) {
-  // The ring's percentage and a blocking-reason fraction (e.g. credentials 1/8) are two
-  // different measurements — one score, one count — and used to sit side by side with no
-  // stated relationship, reading as if they should match (they don't: 1/8 isn't 68%). The
-  // message now states explicitly that the percentage is the overall readiness score and
-  // names whatever's currently blocking it as a separate, clearly-labelled reason.
-  const level: ReadinessLevel = topReason?.level ?? "good";
-  const actionLabel = !credentialsComplete
-    ? translate("team.detail.completeCredentials")
-    : null;
-
-  const levelColor =
+  let level: ReadinessLevel = "good";
+  let headline = "Ready to roster";
+  let detail = "Required credentials and training are up to date.";
+  let action: { label: string; tab: WorkerDetailTab } | null = null;
+  if (worker.training_overdue) {
+    level = "danger";
+    headline = "Not ready to roster";
+    detail = "Mandatory training is overdue.";
+    action = { label: "Review training", tab: "training" };
+  } else if (onboardingPending) {
+    level = "warning";
+    headline = "Not ready to roster";
+    detail = "Onboarding checklist is not finished yet.";
+    action = { label: "View profile", tab: "personal" };
+  } else if (missingCredentialCount > 0) {
+    level = "warning";
+    headline = "Not ready to roster";
+    detail = `${missingCredentialCount} of ${credentialsTotal} required credentials missing or not yet valid.`;
+    action = { label: "Review credentials", tab: "credentials" };
+  } else if (worker.flagged_count > 0) {
+    level = "warning";
+    detail = `${worker.flagged_count} session${worker.flagged_count === 1 ? "" : "s"} flagged for review.`;
+    action = { label: "Review shifts", tab: "shifts" };
+  }
+  const color =
     level === "good"
       ? "var(--cc-status-success)"
       : level === "warning"
         ? "var(--cc-status-warning)"
         : "var(--cc-status-danger)";
-  const score = worker.avg_compliance;
-  const message =
-    score != null
-      ? topReason
-        ? `Readiness ${Math.round(score)}% · ${topReason.label}`
-        : `Readiness ${Math.round(score)}%`
-      : (topReason?.label ?? translate("team.detail.readyToRoster"));
-  const a11yText = message;
+  const Icon = level === "good" ? CheckCircle2 : AlertCircle;
 
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border px-3 py-2"
+      className="flex items-start gap-2.5 rounded-xl px-3.5 py-3"
       style={{
-        background: SURFACE,
-        borderColor: levelColor,
-        boxShadow: CARD_SHADOW,
+        background:
+          level === "good"
+            ? "var(--cc-status-success-bg)"
+            : level === "warning"
+              ? "var(--cc-status-warning-bg)"
+              : "var(--cc-status-danger-bg)",
       }}
       role="status"
-      aria-label={a11yText}
     >
-      {score != null && <ScoreRing score={score} />}
+      <Icon size={17} className="mt-0.5 shrink-0" style={{ color }} />
       <div className="min-w-0">
-        <p
-          className="text-[12px] font-bold leading-tight"
-          style={{ color: levelColor }}
-        >
-          {message}
+        <p className="text-sm font-semibold" style={{ color: TEXT }}>
+          {headline}
         </p>
-        {actionLabel && (
+        <p className="mt-0.5 text-xs leading-5" style={{ color: TEXT }}>
+          {detail}
+        </p>
+        {action && (
           <button
             type="button"
-            onClick={onAction}
-            className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded"
+            onClick={() => onReview(action.tab)}
+            className="mt-1 inline-flex min-h-8 items-center gap-1 rounded text-xs font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ color: PLUM, outlineColor: PLUM }}
           >
-            {actionLabel} <ArrowRight size={11} />
+            {action.label} <ArrowRight size={12} />
           </button>
         )}
       </div>
@@ -642,7 +593,6 @@ export function WorkerDetail({
   onDeleteAccount,
   fullScreen,
   onToggleFullScreen,
-  scrollContext = "panel",
 }: {
   worker: WorkerStats;
   onBack: () => void;
@@ -661,7 +611,9 @@ export function WorkerDetail({
   onDeleteAccount?: () => void;
   /** Optional — only set when this profile is rendered inside a Sheet whose
    * parent controls the panel width (e.g. md/staff.tsx). */
-  /** Page profiles leave room for the portal header; panels use their own scroll area. */
+  /** No longer changes layout: both the portal page and a Sheet scroll inside
+   * their own container, so the section tabs stick at its top either way.
+   * Still accepted so existing callers don't need to change. */
   scrollContext?: "page" | "panel";
   fullScreen?: boolean;
   onToggleFullScreen?: () => void;
@@ -729,10 +681,11 @@ export function WorkerDetail({
   // two separately-maintained filters) — and both now require strictly
   // "valid", matching isWorkerCredentialsComplete and the backend's actual
   // pipeline gate.
+  const currentCredentials = currentCredentialsByType(workerCredentials);
   const credentialStatusByType = new Map(
     REQUIRED_CREDENTIAL_TYPES.map((type) => [
       type,
-      workerCredentials.find((c) => c.credential_type === type)?.status,
+      currentCredentials.get(type)?.status,
     ]),
   );
   const credentialsCompleteCount = REQUIRED_CREDENTIAL_TYPES.filter(
@@ -787,24 +740,49 @@ export function WorkerDetail({
         : undefined,
   };
 
-  const statCells: { label: string; value: string | number; color?: string }[] =
-    [
-      { label: translate("team.col.sessions"), value: worker.total_sessions },
-      {
-        label: translate("team.col.thisWeek"),
-        value: worker.sessions_this_week,
-      },
-      { label: translate("team.detail.draftCount"), value: worker.draft_count },
-      {
-        label: translate("team.detail.flaggedCount"),
-        value: worker.flagged_count,
-        color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
-      },
-    ];
+  const statCells: {
+    label: string;
+    value: string | number;
+    hint: string;
+    color?: string;
+  }[] = [
+    {
+      label: "Total sessions",
+      value: worker.total_sessions,
+      hint: "Every session this worker has recorded",
+    },
+    {
+      label: "This week",
+      value: worker.sessions_this_week,
+      hint: "Sessions in the last 7 days",
+    },
+    {
+      label: "Documentation score",
+      value:
+        worker.avg_compliance != null
+          ? `${Math.round(worker.avg_compliance)}%`
+          : "Not scored",
+      hint: "Average compliance score of this worker's session notes",
+      color:
+        worker.avg_compliance != null
+          ? complianceColour(worker.avg_compliance)
+          : MUTED,
+    },
+    {
+      label: "Notes in draft",
+      value: worker.draft_count,
+      hint: "Session notes not yet submitted or scored",
+    },
+    {
+      label: "Flagged for review",
+      value: worker.flagged_count,
+      hint: "Sessions flagged for a coordinator to review",
+      color: worker.flagged_count > 0 ? "var(--cc-status-danger)" : undefined,
+    },
+  ];
   const avatar = avatarColor(worker.full_name || "?");
 
-  const hasQuickActions =
-    onAssignShift ||
+  const hasMenuActions =
     onAssignClient ||
     onReminder ||
     onDeactivate ||
@@ -820,7 +798,7 @@ export function WorkerDetail({
           : "w-full min-w-0 space-y-4"
       }
     >
-      {/* Back + quick actions - pr-8 keeps the "..." trigger clear of a Sheet's
+      {/* Back + actions - pr-8 keeps the "..." trigger clear of a Sheet's
           own built-in close (X) button, which sits fixed top-right whenever
           this panel is opened inside one (e.g. md/staff.tsx). */}
       <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
@@ -837,31 +815,37 @@ export function WorkerDetail({
             <button
               type="button"
               onClick={onToggleFullScreen}
-              className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-black/5"
-              style={{ borderColor: BORDER, color: PLUM }}
+              className="hidden lg:flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors hover:bg-black/5"
+              style={{ borderColor: BORDER, color: TEXT }}
             >
               {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
               {fullScreen ? "Exit full screen" : "Full screen"}
             </button>
           )}
-          {hasQuickActions && (
+          {/* Rostering is the most common thing a coordinator does from a
+              worker's profile, so it isn't hidden in the overflow menu. */}
+          {onAssignShift && worker.is_active !== false && (
+            <Button
+              type="button"
+              onClick={onAssignShift}
+              className="min-h-10 gap-1.5 rounded-lg text-white"
+              style={{ background: PLUM }}
+            >
+              <Clock size={14} /> {translate("team.assignShift")}
+            </Button>
+          )}
+          {hasMenuActions && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="min-h-11 min-w-11 rounded-lg p-2 transition-colors hover:bg-black/5"
-                  style={{ color: MUTED }}
-                  aria-label={`Actions for ${worker.full_name}`}
+                  className="min-h-10 min-w-10 rounded-lg border p-2 transition-colors hover:bg-black/5"
+                  style={{ color: TEXT, borderColor: BORDER }}
+                  aria-label={`More actions for ${worker.full_name}`}
                 >
                   <MoreHorizontal size={18} />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onAssignShift && (
-                  <DropdownMenuItem onClick={onAssignShift}>
-                    <Clock size={13} className="mr-1.5" />{" "}
-                    {translate("team.assignShift")}
-                  </DropdownMenuItem>
-                )}
                 {onAssignClient && (
                   <DropdownMenuItem onClick={onAssignClient}>
                     <Link2 size={13} className="mr-1.5" />{" "}
@@ -925,111 +909,87 @@ export function WorkerDetail({
           boxShadow: CARD_SHADOW,
         }}
       >
-        <div
-          className={`flex flex-wrap items-start gap-3 ${fullScreen ? "p-4 sm:p-5" : "p-4 sm:p-5"}`}
-        >
-          <div
-            className={`${fullScreen ? "h-14 w-14 text-xl" : "h-14 w-14 text-xl"} rounded-full shrink-0 flex items-center justify-center overflow-hidden font-semibold shadow-sm`}
-            style={{ background: avatar.bg, color: avatar.fg }}
-          >
-            {worker.profile_photo_url ? (
-              <img
-                src={worker.profile_photo_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              (worker.full_name || "?").charAt(0).toUpperCase()
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2
-                className={`${fullScreen ? "text-2xl" : "text-lg"} font-semibold break-words`}
-                style={{ color: TEXT }}
-              >
-                {worker.full_name}
-              </h2>
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{
-                  background:
-                    worker.is_active !== false
-                      ? "var(--cc-status-success-bg)"
-                      : "var(--cc-status-danger-bg)",
-                  color:
-                    worker.is_active !== false
-                      ? "var(--cc-status-success)"
-                      : "var(--cc-status-danger)",
-                }}
-              >
-                {worker.is_active !== false
-                  ? translate("team.status.active")
-                  : translate("team.status.inactive")}
-              </span>
-              {onboardingPending && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                  style={{
-                    borderColor: "var(--cc-status-warning)",
-                    color: "var(--cc-status-warning)",
-                  }}
-                >
-                  <Hourglass size={10} />{" "}
-                  {translate("team.detail.onboardingPending")}
-                </span>
-              )}
-              {worker.training_overdue && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "var(--cc-status-danger-bg)",
-                    color: "var(--cc-status-danger)",
-                  }}
-                >
-                  <AlertCircle size={10} />{" "}
-                  {translate("team.detail.trainingOverdue")}
-                </span>
-              )}
-            </div>
-            <p className="text-xs mt-1 capitalize" style={{ color: MUTED }}>
-              {(worker.role || "").replace(/_/g, " ")}
-              <span className="mx-1.5">·</span>
-              <span className="font-bold" style={{ color: TEXT }}>
-                {worker.employee_id || worker.id.slice(0, 8)}
-              </span>
-            </p>
+        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3.5">
             <div
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs"
-              style={{ color: MUTED }}
+              className="h-14 w-14 text-xl rounded-full shrink-0 flex items-center justify-center overflow-hidden font-semibold"
+              style={{ background: avatar.bg, color: avatar.fg }}
             >
-              {worker.email && (
-                <ContactLink
-                  icon={Mail}
-                  value={worker.email}
-                  href={`mailto:${worker.email}`}
+              {worker.profile_photo_url ? (
+                <img
+                  src={worker.profile_photo_url}
+                  alt=""
+                  className="h-full w-full object-cover"
                 />
-              )}
-              {worker.phone && (
-                <ContactLink
-                  icon={Phone}
-                  value={worker.phone}
-                  href={`tel:${worker.phone.replace(/\s/g, "")}`}
-                />
+              ) : (
+                (worker.full_name || "?").charAt(0).toUpperCase()
               )}
             </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2
+                  className={`${fullScreen ? "text-2xl" : "text-xl"} font-semibold break-words`}
+                  style={{ color: TEXT }}
+                >
+                  {worker.full_name}
+                </h2>
+                <span
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    background:
+                      worker.is_active !== false
+                        ? "var(--cc-status-success-bg)"
+                        : "var(--cc-status-danger-bg)",
+                    color:
+                      worker.is_active !== false
+                        ? "var(--cc-status-success)"
+                        : "var(--cc-status-danger)",
+                  }}
+                >
+                  {worker.is_active !== false
+                    ? translate("team.status.active")
+                    : translate("team.status.inactive")}
+                </span>
+              </div>
+              <p className="mt-0.5 text-sm" style={{ color: MUTED }}>
+                <span className="capitalize">
+                  {(worker.role || "").replace(/_/g, " ")}
+                </span>
+                <span className="mx-1.5">·</span>
+                Employee ID{" "}
+                <span className="font-semibold" style={{ color: TEXT }}>
+                  {worker.employee_id || "not assigned"}
+                </span>
+              </p>
+              <div
+                className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+                style={{ color: MUTED }}
+              >
+                {worker.email && (
+                  <ContactLink
+                    icon={Mail}
+                    value={worker.email}
+                    href={`mailto:${worker.email}`}
+                  />
+                )}
+                {worker.phone && (
+                  <ContactLink
+                    icon={Phone}
+                    value={worker.phone}
+                    href={`tel:${worker.phone.replace(/\s/g, "")}`}
+                  />
+                )}
+              </div>
+            </div>
           </div>
-          <div
-            className="w-full min-w-0 border-t pt-3 xl:w-auto xl:max-w-sm xl:border-t-0 xl:pt-0"
-            style={{ borderColor: BORDER }}
-          >
+          <div className="w-full min-w-0 lg:w-80 lg:shrink-0">
             {credentialsKnown ? (
               <ReadinessSummary
                 worker={worker}
-                topReason={topReason}
-                credentialsComplete={credentialsComplete}
-                translate={translate}
-                onAction={() => setTab("credentials")}
+                onboardingPending={onboardingPending}
+                missingCredentialCount={missingCredentialTypes.length}
+                credentialsTotal={REQUIRED_CREDENTIAL_TYPES.length}
+                onReview={(next) => selectProfileTab(next)}
               />
             ) : (
               <div
@@ -1054,126 +1014,98 @@ export function WorkerDetail({
           </div>
         </div>
 
-        {/* At-a-glance stat strip */}
-        <div
-          className="grid grid-cols-2 sm:grid-cols-4 divide-x"
-          style={{ borderTop: `1px solid ${BORDER}`, borderColor: BORDER }}
+        {/* At-a-glance stat strip: labels spell out what each number
+            counts, so "Drafts"/"Flagged" don't need decoding. */}
+        <dl
+          className="grid grid-cols-2 border-t sm:grid-cols-5"
+          style={{ borderColor: BORDER }}
         >
-          {statCells.map((cell) => (
+          {statCells.map((cell, index) => (
             <div
               key={cell.label}
-              className={fullScreen ? "px-3 py-2.5" : "px-3 py-2.5"}
+              title={cell.hint}
+              className={`px-4 py-3 ${index % 2 === 1 ? "border-l" : ""} ${index > 0 ? "sm:border-l" : ""} ${index > 1 ? "border-t sm:border-t-0" : ""} ${index === statCells.length - 1 && statCells.length % 2 === 1 ? "col-span-2 sm:col-span-1" : ""}`}
               style={{ borderColor: BORDER }}
             >
-              <p
-                className="text-[10px] font-bold uppercase tracking-wide"
-                style={{ color: MUTED }}
-              >
+              <dt className="text-xs" style={{ color: MUTED }}>
                 {cell.label}
-              </p>
-              <p
-                className={`${fullScreen ? "text-lg" : "text-base"} font-semibold tabular-nums mt-0.5`}
+              </dt>
+              <dd
+                className={`${fullScreen ? "text-xl" : "text-lg"} mt-0.5 font-semibold tabular-nums`}
                 style={{ color: cell.color ?? TEXT }}
               >
                 {cell.value}
-              </p>
+              </dd>
             </div>
           ))}
-        </div>
+        </dl>
       </div>
 
-      {/* Keep section navigation within the profile's existing scroll container. */}
+      {/* Horizontal section tabs: one row (scrolls sideways on a phone)
+          instead of a tall side menu whose longer labels wrapped onto three
+          lines. Sticky so switching section never needs a scroll back up. */}
       <div
         ref={sectionsRef}
-        className={`flex flex-col gap-5 scroll-mt-[var(--profile-nav-top)] lg:flex-row lg:items-start ${scrollContext === "page" ? "[--profile-nav-top:90px] lg:[--profile-nav-top:152px]" : "[--profile-nav-top:12px]"}`}
+        className="space-y-4 scroll-mt-[var(--profile-nav-top)] [--profile-nav-top:0px]"
       >
-        <div className="sticky top-[var(--profile-nav-top)] z-20 w-full rounded-xl border border-cc-border bg-[var(--cc-bg)] p-3 shadow-sm lg:hidden">
-          <label
-            htmlFor={`worker-section-${worker.id}`}
-            className="mb-1.5 block text-xs font-medium text-cc-muted"
-          >
-            Profile section
-          </label>
-          <select
-            id={`worker-section-${worker.id}`}
-            value={tab}
-            onChange={(e) =>
-              selectProfileTab(e.target.value as WorkerDetailTab)
-            }
-            className="h-11 w-full min-w-0 rounded-lg border border-cc-border bg-transparent px-3 text-sm font-medium text-cc-text"
-          >
-            {ALL_WORKER_DETAIL_TABS.map((t) => (
-              <option key={t} value={t}>
-                {translate(`team.detail.tab.${t}`)}
-                {tabBadges[t] ? ` (${tabBadges[t]?.text})` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div
-          role="navigation"
+        <nav
           aria-label="Worker profile sections"
-          className={`sticky top-[var(--profile-nav-top)] hidden max-h-[calc(100dvh-var(--profile-nav-top)-24px)] shrink-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-cc-border bg-[var(--cc-surface)] p-2 [scrollbar-width:thin] lg:flex ${fullScreen ? "lg:w-52" : "lg:w-48"}`}
+          className="sticky top-[var(--profile-nav-top)] z-20 border-b bg-[var(--cc-bg)]"
+          style={{ borderColor: BORDER }}
         >
-          {ALL_WORKER_DETAIL_TABS.map((t) => {
-            const badge = tabBadges[t];
-            const badgeColor =
-              badge?.severity === "danger"
-                ? "var(--cc-status-danger)"
-                : badge?.severity === "warning"
-                  ? "var(--cc-status-warning)"
-                  : MUTED;
-            const badgeBg =
-              badge?.severity === "danger"
-                ? "var(--cc-status-danger-bg)"
-                : badge?.severity === "warning"
-                  ? "var(--cc-status-warning-bg)"
-                  : SOFT;
-            const active = tab === t;
-            const Icon = TAB_ICON[t];
-            return (
-              <button
-                key={t}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() => selectProfileTab(t)}
-                className="relative flex min-h-11 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03]"
-                style={{
-                  background: active ? SOFT : "transparent",
-                  color: active ? TEXT : MUTED,
-                  outlineColor: PLUM,
-                }}
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
-                    style={{
-                      background: active ? PLUM : SOFT,
-                      color: active ? "#fff" : MUTED,
-                    }}
-                  >
-                    <Icon size={13} />
-                  </span>
-                  <span className="min-w-0 break-words leading-5">
-                    {translate(
-                      `team.detail.tab.${t}` as "team.detail.tab.overview",
-                    )}
-                  </span>
-                </span>
-                {badge && (
-                  <span
-                    className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                    style={{ background: badgeBg, color: badgeColor }}
-                  >
-                    {badge.text}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+          <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ALL_WORKER_DETAIL_TABS.map((t) => {
+              const badge = tabBadges[t];
+              const badgeColor =
+                badge?.severity === "danger"
+                  ? "var(--cc-status-danger)"
+                  : badge?.severity === "warning"
+                    ? "var(--cc-status-warning)"
+                    : MUTED;
+              const badgeBg =
+                badge?.severity === "danger"
+                  ? "var(--cc-status-danger-bg)"
+                  : badge?.severity === "warning"
+                    ? "var(--cc-status-warning-bg)"
+                    : SOFT;
+              const active = tab === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => selectProfileTab(t)}
+                  className="relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg px-3 text-sm font-medium transition-colors hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
+                  style={{
+                    color: active ? TEXT : MUTED,
+                    outlineColor: PLUM,
+                  }}
+                >
+                  {translate(
+                    `team.detail.tab.${t}` as "team.detail.tab.overview",
+                  )}
+                  {badge && (
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                      style={{ background: badgeBg, color: badgeColor }}
+                    >
+                      {badge.text}
+                    </span>
+                  )}
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full"
+                      style={{ background: PLUM }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
 
-        <div className="w-full min-w-0 flex-1 [overflow-wrap:anywhere]">
+        <div className="w-full min-w-0 [overflow-wrap:anywhere]">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${worker.id}-${tab}`}
@@ -1184,19 +1116,15 @@ export function WorkerDetail({
               exit={{ opacity: 0 }}
               transition={{ duration: reduceProfileMotion ? 0 : 0.15 }}
             >
-              <header className="mb-5 border-b border-cc-border pb-4">
-                <h2 className="text-xl font-semibold tracking-tight text-cc-text">
-                  {translate(`team.detail.tab.${tab}`)}
-                </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-cc-muted">
-                  {TAB_DESCRIPTION[tab]}
-                </p>
-              </header>
+              {/* The tab bar already names the section; this heading is for
+                  screen readers and in-page navigation only. */}
+              <h2 className="sr-only">{translate(`team.detail.tab.${tab}`)}</h2>
               {(tab === "personal" || tab === "overview") && (
                 <PersonalInfoTab
                   worker={worker}
                   translate={translate}
                   missingCredentialTypes={missingCredentialTypes}
+                  credentialStatusByType={credentialStatusByType}
                   statusKnown={
                     credentialsKnown &&
                     !trainingQuery.isLoading &&
@@ -1247,58 +1175,39 @@ export function WorkerDetail({
   );
 }
 
+/** A label over its value. Plain rows rather than an icon circle on every
+ * field: the icons repeated the label and made a mostly-empty profile look
+ * busier than a complete one. */
 function DetailRow({
   label,
   value,
-  icon,
-  tone,
   emptyText,
 }: {
   label: string;
   value?: string | null;
-  icon: typeof FileText;
-  tone?: "success" | "warning";
-  /** Shown, in muted italic, when value is empty — a designed empty state instead of "N/A". */
+  /** Shown, muted, when value is empty: a designed empty state instead of "N/A". */
   emptyText?: string;
 }) {
-  const color =
-    tone === "success"
-      ? "var(--cc-status-success)"
-      : tone === "warning"
-        ? "var(--cc-status-warning)"
-        : MUTED;
-  const bg =
-    tone === "success"
-      ? "var(--cc-status-success-bg)"
-      : tone === "warning"
-        ? "var(--cc-status-warning-bg)"
-        : SOFT;
   return (
     <div
-      className="flex min-w-0 items-start gap-3 px-4 py-3 sm:[&:last-child:nth-child(odd)]:col-span-2"
+      className="min-w-0 px-4 py-3 sm:[&:last-child:nth-child(odd)]:col-span-2"
       style={{ background: SURFACE }}
     >
-      <IconBadge icon={icon} color={color} bg={bg} />
-      <div className="min-w-0 flex-1">
+      <p className="text-xs" style={{ color: MUTED }}>
+        {label}
+      </p>
+      {value ? (
         <p
-          className="text-[10px] font-bold uppercase tracking-wide"
-          style={{ color: MUTED }}
+          className="mt-0.5 break-words text-sm font-medium"
+          style={{ color: TEXT }}
         >
-          {label}
+          {value}
         </p>
-        {value ? (
-          <p
-            className="break-words text-sm font-medium mt-0.5"
-            style={{ color: TEXT }}
-          >
-            {value}
-          </p>
-        ) : (
-          <p className="text-sm italic mt-0.5" style={{ color: MUTED }}>
-            {emptyText}
-          </p>
-        )}
-      </div>
+      ) : (
+        <p className="mt-0.5 text-sm" style={{ color: MUTED }}>
+          {emptyText}
+        </p>
+      )}
     </div>
   );
 }
@@ -1456,6 +1365,7 @@ function PersonalInfoTab({
   worker,
   translate,
   missingCredentialTypes,
+  credentialStatusByType,
   trainingPendingCount,
   onJumpToTab,
 }: {
@@ -1463,6 +1373,7 @@ function PersonalInfoTab({
   worker: WorkerStats;
   translate: (k: string) => string;
   missingCredentialTypes: string[];
+  credentialStatusByType: Map<string, string | undefined>;
   trainingPendingCount: number;
   onJumpToTab: (tab: WorkerDetailTab, credentialType?: string) => void;
 }) {
@@ -1494,119 +1405,122 @@ function PersonalInfoTab({
     ? CHECKLIST_LABELS[currentStepKey]
     : undefined;
 
-  const [nextStepsOpen, setNextStepsOpen] = useState(false);
-
-  const nextSteps: { label: string; onClick?: () => void }[] = [];
+  type NextStep = {
+    label: string;
+    status: string;
+    tone: "warning" | "danger";
+    onClick?: () => void;
+  };
+  const nextSteps: NextStep[] = [];
   if (onboardingPending) {
     nextSteps.push({
-      label: currentStepLabel
-        ? `Onboarding: currently on "${currentStepLabel}"`
-        : "Onboarding checklist not yet complete",
+      label: "Onboarding checklist",
+      status: currentStepLabel ? `On "${currentStepLabel}"` : "Not finished",
+      tone: "warning",
     });
   }
   // One row per missing credential, each linking straight to that credential's row in the
-  // Credentials tab — not one block of text with a single generic "go to tab" arrow.
+  // Credentials tab, and saying why it's listed (not on file, expired, awaiting review).
   for (const type of missingCredentialTypes) {
+    const style = statusStyle(credentialStatusByType.get(type) ?? "missing");
     nextSteps.push({
       label: credentialLabel(type),
+      status: style.label,
+      tone: style.color === "var(--cc-status-danger)" ? "danger" : "warning",
       onClick: () => onJumpToTab("credentials", type),
     });
   }
   if (worker.training_overdue) {
     nextSteps.push({
-      label: "Mandatory training is overdue",
+      label: "Mandatory training",
+      status: "Overdue",
+      tone: "danger",
       onClick: () => onJumpToTab("training"),
     });
   }
   if (trainingPendingCount > 0) {
     nextSteps.push({
-      label: `${trainingPendingCount} training completion${trainingPendingCount !== 1 ? "s" : ""} awaiting your review`,
+      label: `${trainingPendingCount} training completion${trainingPendingCount !== 1 ? "s" : ""}`,
+      status: "Awaiting your review",
+      tone: "warning",
       onClick: () => onJumpToTab("training"),
     });
   }
 
   return (
     <div className="space-y-4">
-      {/* Concrete, clickable next steps instead of a generic "needs attention" status —
-          each row names the actual gap and jumps straight to where it's fixed. Collapsible
-          since once reviewed it's mostly reference, not something to keep taking up space. */}
+      {/* Concrete, clickable to-do list instead of a generic "needs attention"
+          status: each row names the gap, says why (not on file, expired...)
+          and jumps straight to where it's fixed. Always open, since this is
+          the first thing a coordinator needs from the profile. */}
       {nextSteps.length > 0 ? (
-        <div
-          className="rounded-xl border overflow-hidden"
-          style={{
-            borderColor: "var(--cc-status-warning)",
-            background: "var(--cc-status-warning-bg)",
-          }}
+        <section
+          aria-label="To do"
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: BORDER, background: SURFACE }}
         >
-          <button
-            type="button"
-            aria-expanded={nextStepsOpen}
-            onClick={() => setNextStepsOpen((v) => !v)}
-            className="flex w-full items-center justify-between gap-2 px-4 py-3"
+          <div
+            className="flex items-center justify-between gap-2 border-b px-4 py-3"
+            style={{ borderColor: BORDER }}
           >
-            <span className="flex items-center gap-2">
-              <AlertCircle
-                size={15}
-                style={{ color: "var(--cc-status-warning)" }}
-              />
-              <span
-                className="text-[11px] font-semibold uppercase tracking-wide"
-                style={{ color: "var(--cc-status-warning)" }}
-              >
-                Next steps ({nextSteps.length})
-              </span>
+            <h3 className="text-sm font-semibold" style={{ color: TEXT }}>
+              To do
+            </h3>
+            <span className="text-xs" style={{ color: MUTED }}>
+              {nextSteps.length} item{nextSteps.length === 1 ? "" : "s"}
             </span>
-            {nextStepsOpen ? (
-              <ChevronUp
-                size={14}
-                style={{ color: "var(--cc-status-warning)" }}
-              />
-            ) : (
-              <ChevronDown
-                size={14}
-                style={{ color: "var(--cc-status-warning)" }}
-              />
-            )}
-          </button>
-          {nextStepsOpen && (
-            <div
-              className="divide-y"
-              style={{ borderColor: "var(--cc-status-warning)" }}
-            >
-              {nextSteps.map((step) =>
-                step.onClick ? (
-                  <button
-                    key={step.label}
-                    type="button"
-                    onClick={step.onClick}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-black/[0.03]"
-                  >
+          </div>
+          <ul className="divide-y" style={{ borderColor: BORDER }}>
+            {nextSteps.map((step) => {
+              const color =
+                step.tone === "danger"
+                  ? "var(--cc-status-danger)"
+                  : "var(--cc-status-warning)";
+              const content = (
+                <>
+                  <span className="flex min-w-0 items-center gap-2.5">
                     <span
-                      className="text-sm font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {step.label}
-                    </span>
-                    <ArrowRight
-                      size={14}
-                      className="shrink-0"
-                      style={{ color: "var(--cc-status-warning)" }}
+                      aria-hidden="true"
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: color }}
                     />
-                  </button>
-                ) : (
-                  <div key={step.label} className="px-4 py-3">
                     <span
-                      className="text-sm font-semibold"
+                      className="text-sm font-medium"
                       style={{ color: TEXT }}
                     >
                       {step.label}
                     </span>
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-        </div>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color }}>
+                      {step.status}
+                    </span>
+                    {step.onClick && (
+                      <ChevronRight size={15} style={{ color: MUTED }} />
+                    )}
+                  </span>
+                </>
+              );
+              return (
+                <li key={step.label} style={{ borderColor: BORDER }}>
+                  {step.onClick ? (
+                    <button
+                      type="button"
+                      onClick={step.onClick}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-black/[0.03]"
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-2.5">
+                      {content}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : statusKnown ? (
         <div
           className="rounded-xl border p-4 flex items-center gap-2.5"
@@ -1653,32 +1567,29 @@ function PersonalInfoTab({
       <section
         className="overflow-hidden rounded-xl border"
         style={{ borderColor: BORDER, background: SURFACE }}
-        aria-label="Personal details"
+        aria-label="Contact and personal details"
       >
         <h3
           className="border-b px-4 py-3 text-sm font-semibold text-cc-text"
           style={{ borderColor: BORDER }}
         >
-          Personal details
+          Contact & personal details
         </h3>
         <div
           className="grid gap-px sm:grid-cols-2"
           style={{ background: BORDER }}
         >
           <DetailRow
-            icon={MapPin}
             label="Address"
             value={worker.address ?? undefined}
             emptyText="Not on file"
           />
           <DetailRow
-            icon={MapPin}
             label="Suburb"
             value={worker.suburb ?? undefined}
             emptyText="Not on file"
           />
           <DetailRow
-            icon={Cake}
             label="Date of birth"
             value={
               worker.date_of_birth
@@ -1688,7 +1599,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={PhoneCall}
             label="Emergency contact"
             value={
               emergencyContactDisplay(
@@ -1700,16 +1610,9 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={MessageCircle}
             label={translate("team.detail.preferredContact")}
             value={worker.preferred_contact_method}
             emptyText={translate("team.detail.contactNotSet")}
-          />
-          <DetailRow
-            icon={IdCard}
-            label="Employee ID"
-            value={worker.employee_id ?? undefined}
-            emptyText="Not assigned"
           />
         </div>
       </section>
@@ -1728,25 +1631,21 @@ function PersonalInfoTab({
           style={{ background: BORDER, borderColor: BORDER }}
         >
           <DetailRow
-            icon={Stethoscope}
             label="Discipline"
             value={worker.discipline ?? undefined}
             emptyText="Not on file"
           />
           <DetailRow
-            icon={ShieldCheck}
             label="AHPRA registration"
             value={worker.ahpra_registration_number ?? undefined}
             emptyText="Not on file"
           />
           <DetailRow
-            icon={Building2}
             label="Business name"
             value={worker.business_name ?? undefined}
             emptyText="Not on file"
           />
           <DetailRow
-            icon={FileCheck}
             label="Professional indemnity"
             value={
               worker.professional_indemnity_confirmed == null
@@ -1769,13 +1668,11 @@ function PersonalInfoTab({
           style={{ background: BORDER, borderColor: BORDER }}
         >
           <DetailRow
-            icon={CalendarDays}
             label={translate("team.detail.joined")}
             value={worker.joined_at ? safeFormat(worker.joined_at) : undefined}
             emptyText={translate("team.detail.noJoinDate")}
           />
           <DetailRow
-            icon={LogIn}
             label={translate("team.detail.lastLogin")}
             value={
               worker.last_login
@@ -1785,7 +1682,6 @@ function PersonalInfoTab({
             emptyText={translate("team.detail.noLoginYet")}
           />
           <DetailRow
-            icon={ClipboardCheck}
             label={translate("team.detail.onboardingStatus")}
             value={
               worker.onboarding_completed == null
@@ -1797,7 +1693,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={Languages}
             label="Preferred language"
             value={
               LANGUAGE_LABELS[worker.preferred_language ?? ""] ??
@@ -1807,7 +1702,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={Briefcase}
             label="Account type"
             value={
               ACCOUNT_TYPE_LABELS[worker.account_type ?? ""] ??
@@ -1817,7 +1711,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={ClipboardCheck}
             label="Profile completed"
             value={
               worker.profile_completed == null
@@ -1829,7 +1722,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={ClipboardCheck}
             label="Role-specific profile completed"
             value={
               worker.role_specific_profile_completed == null
@@ -1841,7 +1733,6 @@ function PersonalInfoTab({
             emptyText="Not on file"
           />
           <DetailRow
-            icon={Sparkles}
             label="Matching opt-in"
             value={
               worker.matching_opt_in == null
@@ -2349,33 +2240,21 @@ function DocumentsTab({
 
   return (
     <div className="space-y-4">
-      {/* Summary strip — same pattern as every other tab. No "expiring within 30 days" count:
-          these documents (offer letters, references, correspondence) have no expiry concept in
-          this data model at all, not just none set, so that clause never applies here. */}
-      <div
-        className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
-        style={{ background: SOFT, color: TEXT }}
-      >
+      {/* Heading with the count and what belongs here, and one Add button.
+          This used to be a separate "0 documents" banner above a second
+          heading, with a second Add button in the empty state as well. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-lg font-semibold">
-            {documentsQuery.isLoading
-              ? "Loading documents"
-              : documentsQuery.isError
-                ? "Documents unavailable"
-                : `${documents.length} document${documents.length !== 1 ? "s" : ""}`}
-          </p>
-          <p className="text-xs font-bold mt-0.5" style={{ color: MUTED }}>
-            General storage: offer letters, references, correspondence
-          </p>
-        </div>
-        <FileText size={22} style={{ color: MUTED }} />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <FileText size={16} style={{ color: PLUM }} />
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
             {translate("team.documents.title")}
+            {!documentsQuery.isLoading && !documentsQuery.isError && (
+              <span className="ml-1.5 font-normal" style={{ color: MUTED }}>
+                ({documents.length})
+              </span>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+            Offer letters, references and correspondence. These don't expire.
           </p>
         </div>
         <Button
@@ -2450,17 +2329,9 @@ function DocumentsTab({
               className="mx-auto mb-2"
               style={{ color: MUTED }}
             />
-            <p className="text-sm font-bold" style={{ color: MUTED }}>
+            <p className="text-sm font-medium" style={{ color: TEXT }}>
               {translate("team.documents.empty")}
             </p>
-            <Button
-              variant="navy"
-              size="sm"
-              className="mt-4 gap-1.5 rounded-xl"
-              onClick={() => setAddOpen(true)}
-            >
-              <Plus size={13} /> {translate("team.documents.add")}
-            </Button>
           </div>
         )}
 
@@ -2737,7 +2608,7 @@ function CredentialsTab({
   const { requireReAuth, modal } = useReAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
-  const byType = new Map(credentials.map((c) => [c.credential_type, c]));
+  const byType = currentCredentialsByType(credentials);
   const rows = REQUIRED_CREDENTIAL_TYPES.map((type) => ({
     type,
     credential: byType.get(type) ?? null,
@@ -2745,15 +2616,24 @@ function CredentialsTab({
   const extras = credentials.filter(
     (c) => !REQUIRED_CREDENTIAL_TYPES.includes(c.credential_type),
   );
-  const allRows = [
-    ...rows,
-    ...extras.map((c) => ({ type: c.credential_type, credential: c })),
-  ];
   const needsAttention = (credential: Credential | null) =>
     !credential ||
     credential.status !== "valid" ||
     (credential.credential_type === "ndis_screening" &&
       isScreeningRecheckDue(credential));
+  // Anything needing action first, so the list reads as a to-do rather than
+  // making the coordinator scan past valid credentials to find the gaps.
+  const allRows = [
+    ...rows,
+    ...extras.map((c) => ({ type: c.credential_type, credential: c })),
+  ].sort(
+    (a, b) =>
+      Number(needsAttention(b.credential)) -
+      Number(needsAttention(a.credential)),
+  );
+  const attentionCount = allRows.filter((row) =>
+    needsAttention(row.credential),
+  ).length;
   const visibleRows = attentionOnly
     ? allRows.filter((row) => needsAttention(row.credential))
     : allRows;
@@ -2844,12 +2724,12 @@ function CredentialsTab({
         style={{ background: stripBg, color: stripColor }}
       >
         <div>
-          <p className="text-lg font-semibold">
-            {credentialsCompleteCount} / {total} complete
+          <p className="text-base font-semibold" style={{ color: TEXT }}>
+            {credentialsCompleteCount} of {total} required credentials valid
           </p>
-          <p className="text-xs font-bold mt-0.5">
-            {topReason
-              ? topReason.label
+          <p className="mt-0.5 text-sm" style={{ color: TEXT }}>
+            {attentionCount > 0
+              ? `${attentionCount} need${attentionCount === 1 ? "s" : ""} attention. Verify uploads awaiting review, or remind the worker to upload what's missing.`
               : translate("team.detail.credentialsComplete")}
           </p>
         </div>
@@ -2868,8 +2748,7 @@ function CredentialsTab({
             onChange={(event) => setAttentionOnly(event.target.checked)}
             className="h-4 w-4 accent-[var(--cc-plum)]"
           />
-          Needs attention (
-          {allRows.filter((row) => needsAttention(row.credential)).length})
+          Only show items needing attention ({attentionCount})
         </label>
         <p role="status" className="text-xs text-cc-muted">
           {visibleRows.length} of {allRows.length} credentials
@@ -2937,7 +2816,8 @@ function CredentialsTab({
                           ? `#${credential.credential_number}`
                           : null,
                         credential.issuer,
-                        credential.expiry_date
+                        // A valid credential shows its expiry on the right.
+                        credential.expiry_date && credential.status !== "valid"
                           ? `Expires ${safeFormat(credential.expiry_date)}`
                           : null,
                       ]
@@ -3151,30 +3031,48 @@ function TrainingTab({
 
   return (
     <div className="space-y-4">
-      {!assignmentsQuery.isLoading && !assignmentsQuery.isError && (
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[
-            { label: "In progress", value: inProgress.length },
-            { label: "Overdue", value: overdueCount },
-            {
-              label: "Awaiting review",
-              value: history.filter(
-                (item) => item.status === "awaiting_confirmation",
-              ).length,
-            },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-xl border border-cc-border bg-[var(--cc-surface)] px-4 py-3"
-            >
-              <dt className="text-xs text-cc-muted">{label}</dt>
-              <dd className="mt-1 text-xl font-semibold tabular-nums text-cc-text">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      {/* One divided strip rather than three identical cards, and only once
+          there's training to count: three zeros above "No training assigned
+          yet" said the same thing twice. */}
+      {!assignmentsQuery.isLoading &&
+        !assignmentsQuery.isError &&
+        (recommendations.length > 0 || history.length > 0) && (
+          <dl
+            className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border"
+            style={{ borderColor: BORDER, background: SURFACE }}
+          >
+            {[
+              { label: "In progress", value: inProgress.length },
+              {
+                label: "Overdue",
+                value: overdueCount,
+                color: overdueCount > 0 ? "var(--cc-status-danger)" : TEXT,
+              },
+              {
+                label: "Awaiting your review",
+                value: history.filter(
+                  (item) => item.status === "awaiting_confirmation",
+                ).length,
+              },
+            ].map(({ label, value, color }) => (
+              <div
+                key={label}
+                className="px-4 py-3"
+                style={{ borderColor: BORDER }}
+              >
+                <dt className="text-xs" style={{ color: MUTED }}>
+                  {label}
+                </dt>
+                <dd
+                  className="mt-0.5 text-lg font-semibold tabular-nums"
+                  style={{ color: color ?? TEXT }}
+                >
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
       {!assignmentsQuery.isLoading &&
         !assignmentsQuery.isError &&
         overdueCount > 0 && (
@@ -3457,30 +3355,27 @@ function InductionTab({
 
   return (
     <div className="space-y-4">
-      <div
-        className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
-        style={{ background: stripBg, color: stripColor }}
-      >
-        <div>
-          <p className="text-lg font-semibold">
-            {progressQuery.isLoading
-              ? "Loading induction"
-              : progressQuery.isError
-                ? "Induction unavailable"
-                : `${mandatoryComplete} / ${mandatoryTotal} mandatory complete`}
-          </p>
-          <p className="text-xs font-bold mt-0.5">
-            {progressQuery.isLoading || progressQuery.isError
-              ? "Progress will appear when the checklist is available"
-              : mandatoryTotal === 0
-                ? "No induction items set up yet"
-                : allDone
-                  ? "Induction complete"
-                  : "Induction in progress"}
-          </p>
-        </div>
-        {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
-      </div>
+      {/* Progress summary only once there's a checklist to measure: "0 / 0
+          mandatory complete" with a warning icon read as the worker falling
+          behind, when really nothing has been set up yet. */}
+      {!progressQuery.isLoading &&
+        !progressQuery.isError &&
+        mandatoryTotal > 0 && (
+          <div
+            className="flex items-center justify-between gap-3 rounded-xl px-5 py-4"
+            style={{ background: stripBg, color: stripColor }}
+          >
+            <div>
+              <p className="text-base font-semibold" style={{ color: TEXT }}>
+                {mandatoryComplete} of {mandatoryTotal} mandatory items complete
+              </p>
+              <p className="mt-0.5 text-sm" style={{ color: TEXT }}>
+                {allDone ? "Induction complete." : "Induction in progress."}
+              </p>
+            </div>
+            {allDone ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+          </div>
+        )}
 
       {progressQuery.isLoading && (
         <p className="text-sm" style={{ color: MUTED }}>
@@ -3519,8 +3414,8 @@ function InductionTab({
               className="mx-auto mb-2"
               style={{ color: MUTED }}
             />
-            <p className="text-sm font-bold" style={{ color: MUTED }}>
-              No induction items configured for this organisation yet.
+            <p className="text-sm font-medium" style={{ color: TEXT }}>
+              Your organisation hasn't set up an induction checklist yet.
             </p>
           </div>
         )}
@@ -3644,19 +3539,26 @@ function ShiftsTab({
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p
-              className="text-[10px] font-semibold uppercase tracking-wide"
-              style={{ color: MUTED }}
-            >
-              Last 30 days
+            <p className="text-xs" style={{ color: MUTED }}>
+              Documentation score, last 30 days
             </p>
-            <p className="mt-1 text-2xl font-semibold" style={{ color: TEXT }}>
-              {dashboard?.average_score_30d != null
-                ? `${Math.round(dashboard.average_score_30d)}%`
-                : "N/A"}
-            </p>
+            {/* No score yet: say so plainly rather than a large "N/A" with a
+                "Steady" trend badge and the worker-facing "build your trend"
+                line (that sentence is written for the worker's own view). */}
+            {dashboard?.average_score_30d != null ? (
+              <p
+                className="mt-1 text-2xl font-semibold"
+                style={{ color: TEXT }}
+              >
+                {Math.round(dashboard.average_score_30d)}%
+              </p>
+            ) : (
+              <p className="mt-1 text-sm" style={{ color: TEXT }}>
+                No scored shifts in the last 30 days.
+              </p>
+            )}
           </div>
-          {dashboard?.trend && (
+          {dashboard?.trend && dashboard.average_score_30d != null && (
             <div className="text-right">
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
@@ -3680,7 +3582,7 @@ function ShiftsTab({
             </div>
           )}
         </div>
-        {dashboard?.trend?.sentence && (
+        {dashboard?.trend?.sentence && dashboard.average_score_30d != null && (
           <p className="mt-2 text-xs" style={{ color: MUTED }}>
             {dashboard.trend.sentence}
           </p>
@@ -3747,8 +3649,8 @@ function ShiftsTab({
                 <span
                   key={b.key}
                   title={b.description}
-                  className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                  style={{ background: "var(--cc-plum-soft)", color: PLUM }}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                  style={{ background: SOFT, color: TEXT }}
                 >
                   {b.title}
                 </span>
@@ -3773,11 +3675,11 @@ function ShiftsTab({
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
             Completed shifts
           </p>
-          <span className="text-xs font-bold" style={{ color: MUTED }}>
-            {historyQuery.isLoading || historyQuery.isError
-              ? "Not available"
-              : shifts.length}
-          </span>
+          {!historyQuery.isLoading && !historyQuery.isError && (
+            <span className="text-xs" style={{ color: MUTED }}>
+              {shifts.length} shift{shifts.length === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
         {historyQuery.isLoading ? (
           <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>

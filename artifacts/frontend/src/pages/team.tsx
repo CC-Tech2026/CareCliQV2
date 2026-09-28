@@ -543,7 +543,9 @@ export default function Team() {
     <IndexTemplate>
       {detailWorker ? (
         <>
-          <IndexHeader title={translate("team.title")} />
+          {/* No separate "Workers" page title here: the profile's own
+              "Back to Workers" link and the worker's name already say where
+              you are, and a second heading pushed the profile down. */}
           {!isMD && delegatedGrantFor("delete_staff_account") && (
             <TemporaryAccessBanner grant={delegatedGrantFor("delete_staff_account")!} label="Delete a staff account" />
           )}

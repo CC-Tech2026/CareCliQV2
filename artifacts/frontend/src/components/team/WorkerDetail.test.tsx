@@ -7,7 +7,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { ShiftAuditPanel, WorkerDetail } from "./WorkerDetail";
+import {
+  ShiftAuditPanel,
+  WorkerDetail,
+  currentCredentialsByType,
+} from "./WorkerDetail";
 import type { WorkerStats } from "@/services/coordinatorService";
 const state = vi.hoisted(() => ({
   role: "managing_director",
@@ -97,14 +101,11 @@ it.each(["managing_director", "support_coordinator"])(
       screen.getByRole("heading", { name: worker.full_name }),
     ).toBeTruthy();
     expect(screen.getByRole("link", { name: worker.email })).toBeTruthy();
-    expect(
-      screen
-        .getByRole("button", { name: /Next steps/ })
-        .getAttribute("aria-expanded"),
-    ).toBe("false");
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Profile section" }),
-      { target: { value: "availability" } },
+    // Missing credentials are listed up front, not behind a collapsed toggle.
+    expect(screen.getByRole("region", { name: "To do" })).toBeTruthy();
+    expect(screen.getByText("Not ready to roster")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "team.detail.tab.availability" }),
     );
     expect(await screen.findByText("Availability editor")).toBeTruthy();
   },
@@ -115,7 +116,7 @@ it("does not present a failed credential lookup as missing credentials", () => {
   expect(screen.getByRole("alert").textContent).toContain(
     "Credential status could not be loaded",
   );
-  expect(screen.queryByRole("button", { name: /Next steps/ })).toBeNull();
+  expect(screen.queryByRole("region", { name: "To do" })).toBeNull();
   expect(screen.queryByText(/^Nothing outstanding/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Retry credentials" }));
   expect(state.refetch).toHaveBeenCalledOnce();
@@ -124,9 +125,9 @@ it("resets the section when a different worker is opened", async () => {
   const { rerender } = render(
     <WorkerDetail worker={worker} onBack={() => {}} />,
   );
-  fireEvent.change(screen.getByRole("combobox", { name: "Profile section" }), {
-    target: { value: "availability" },
-  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "team.detail.tab.availability" }),
+  );
   rerender(
     <WorkerDetail
       worker={{ ...worker, id: "worker-2", full_name: "Sam Taylor" }}
@@ -135,12 +136,10 @@ it("resets the section when a different worker is opened", async () => {
   );
   await waitFor(() =>
     expect(
-      (
-        screen.getByRole("combobox", {
-          name: "Profile section",
-        }) as HTMLSelectElement
-      ).value,
-    ).toBe("personal"),
+      screen
+        .getByRole("button", { name: "team.detail.tab.personal" })
+        .getAttribute("aria-current"),
+    ).toBe("page"),
   );
 });
 
@@ -178,14 +177,14 @@ it("returns to the section start only when navigation happens below it", () => {
   sections.scrollIntoView = scrollIntoView;
   const rect = vi.spyOn(sections, "getBoundingClientRect");
   rect.mockReturnValue({ top: 200 } as DOMRect);
-  fireEvent.change(screen.getByRole("combobox", { name: "Profile section" }), {
-    target: { value: "availability" },
-  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "team.detail.tab.availability" }),
+  );
   expect(scrollIntoView).not.toHaveBeenCalled();
   rect.mockReturnValue({ top: -400 } as DOMRect);
-  fireEvent.change(screen.getByRole("combobox", { name: "Profile section" }), {
-    target: { value: "personal" },
-  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "team.detail.tab.personal" }),
+  );
   expect(scrollIntoView).toHaveBeenCalledWith({
     block: "start",
     behavior: "instant",
@@ -266,10 +265,10 @@ it("keeps missing credentials visible while filtering out valid credentials", ()
     <WorkerDetail worker={worker} initialTab="credentials" onBack={() => {}} />,
   );
   expect(screen.getByText("First Aid")).toBeTruthy();
-  fireEvent.click(screen.getByRole("checkbox", { name: /Needs attention/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /needing attention/ }));
   expect(screen.queryByText("First Aid")).toBeNull();
   expect(screen.getByText("CPR")).toBeTruthy();
-  fireEvent.click(screen.getByRole("checkbox", { name: /Needs attention/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /needing attention/ }));
   expect(screen.getByText("First Aid")).toBeTruthy();
 });
 
@@ -341,3 +340,30 @@ it.each([
     expect(state.refetch).toHaveBeenCalledOnce();
   },
 );
+
+it("counts a renewed credential as valid whichever record comes first", () => {
+  const expired = {
+    id: "old",
+    user_id: "worker-1",
+    credential_type: "wwcc",
+    status: "expired",
+    expiry_date: "2025-01-25",
+  };
+  const renewed = {
+    id: "new",
+    user_id: "worker-1",
+    credential_type: "wwcc",
+    status: "valid",
+    expiry_date: "2029-01-25",
+  };
+  for (const order of [
+    [expired, renewed],
+    [renewed, expired],
+  ]) {
+    expect(
+      currentCredentialsByType(
+        order as Parameters<typeof currentCredentialsByType>[0],
+      ).get("wwcc")?.id,
+    ).toBe("new");
+  }
+});
