@@ -176,7 +176,7 @@ export default function WorkerTrainingPage() {
     (row) =>
       (row.module.title + " " + (row.module.description ?? ""))
         .toLowerCase()
-        .includes(search.toLowerCase()) &&
+        .includes(search.trim().toLowerCase()) &&
       (statusFilter === "all" ||
         (statusFilter === "locked"
           ? row.module.is_locked
@@ -517,7 +517,7 @@ export default function WorkerTrainingPage() {
                   </span>
                 </h2>
                 <label
-                  className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2"
+                  className="flex w-full items-center gap-2 rounded-xl border bg-card px-3 py-2 focus-within:ring-2 focus-within:ring-primary/30 sm:w-auto"
                   style={{ borderColor: BORDER }}
                 >
                   <Search size={16} style={{ color: MUTED }} />
@@ -526,7 +526,7 @@ export default function WorkerTrainingPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search your learning"
-                    className="w-48 bg-transparent text-sm outline-none"
+                    className="min-w-0 w-full bg-transparent text-sm outline-none sm:w-48"
                   />
                 </label>
               </div>
@@ -555,6 +555,18 @@ export default function WorkerTrainingPage() {
                   </button>
                 ))}
               </div>
+              {(search || statusFilter !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setStatusFilter("all");
+                  }}
+                  className="inline-flex h-9 items-center rounded-lg border px-3 text-xs font-semibold hover:bg-muted"
+                >
+                  Clear filters
+                </button>
+              )}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredRows.map((row) => {
                   const meta = rowStatusMeta(row);

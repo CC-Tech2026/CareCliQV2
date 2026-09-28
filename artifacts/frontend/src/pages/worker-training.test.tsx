@@ -172,7 +172,9 @@ describe("worker learning experience", () => {
     mount();
     fireEvent.click(screen.getByText("Safe support"));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1, name: "Safe support" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Safe support" }),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("Search training modules")).toBeNull();
     expect(screen.getByText("This module is being updated")).toBeTruthy();
     expect(screen.getByText("Updating our guidelines")).toBeTruthy();
@@ -191,4 +193,28 @@ describe("worker learning experience", () => {
       screen.getByRole("button", { name: "Open Workplace guidelines" }),
     ).toBeTruthy();
   });
+});
+
+it("clears search and status together and ignores surrounding spaces", () => {
+  mount();
+  fireEvent.change(screen.getByLabelText("Search training modules"), {
+    target: { value: "  Safe support  " },
+  });
+  expect(
+    screen.queryByText("No modules match your search or status filter."),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Completed" }));
+  expect(
+    screen.getByText("No modules match your search or status filter."),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(
+    (screen.getByLabelText("Search training modules") as HTMLInputElement)
+      .value,
+  ).toBe("");
+  expect(
+    screen
+      .getByRole("button", { name: "All status" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
 });

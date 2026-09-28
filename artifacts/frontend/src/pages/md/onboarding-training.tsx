@@ -2051,6 +2051,7 @@ function ModulesTab({
         visibleModules.length === 0 && (
           <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             No modules match your search and filter.
+            <button type="button" onClick={() => { setSearch(""); setFilter("all"); }} className="mx-auto mt-3 block rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-muted">Clear filters</button>
           </p>
         )}
     </div>

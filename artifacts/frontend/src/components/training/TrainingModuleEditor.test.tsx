@@ -111,7 +111,7 @@ describe("director module workspace", () => {
     fireEvent.change(screen.getByLabelText("Module title"), {
       target: { value: "Updated course" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save module" }));
     await waitFor(() => expect(updateTrainingModule).toHaveBeenCalled());
     expect(saved).not.toHaveBeenCalled();
     expect(updateTrainingModule).toHaveBeenCalledWith(
@@ -136,7 +136,7 @@ describe("director module workspace", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "Manage training module" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Use #FED7AA cover colour" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save module" }));
     await waitFor(() => expect(updateTrainingModule).toHaveBeenCalledWith("module", expect.objectContaining({ cover_color: "#FED7AA", cover_path: null })));
   });
 });

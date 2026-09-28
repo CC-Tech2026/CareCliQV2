@@ -127,7 +127,7 @@ export function WorkerResourceLibrary({
         </p>
       </section>
       <div className="flex flex-wrap gap-3">
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-4 py-3">
+        <label className="flex min-w-0 basis-full sm:basis-auto flex-1 items-center gap-2 rounded-xl border bg-card px-4 py-3 focus-within:ring-2 focus-within:ring-primary/30">
           <Search size={17} className="text-muted-foreground" />
           <input
             aria-label="Search resources"
@@ -151,6 +151,18 @@ export function WorkerResourceLibrary({
           ))}
         </select>
       </div>
+      {(search || category !== "all") && (
+        <button
+          type="button"
+          onClick={() => {
+            setSearch("");
+            setCategory("all");
+          }}
+          className="inline-flex h-9 items-center rounded-lg border px-3 text-xs font-semibold hover:bg-muted"
+        >
+          Clear resource filters
+        </button>
+      )}
       <section className="space-y-3">
         <h3 className="font-bold">
           Guidelines & shared resources{" "}
@@ -231,9 +243,15 @@ export function WorkerResourceLibrary({
                     {module.title}
                   </p>
                 </div>
-                {safeMaterialUrl(resource.access_url || resource.external_url) ? (
+                {safeMaterialUrl(
+                  resource.access_url || resource.external_url,
+                ) ? (
                   <a
-                    href={safeMaterialUrl(resource.access_url || resource.external_url)!}
+                    href={
+                      safeMaterialUrl(
+                        resource.access_url || resource.external_url,
+                      )!
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`Open ${resource.title}`}

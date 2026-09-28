@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Pencil, Trash2, Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,13 +28,20 @@ export function TrainingMaterialsEditor({
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [type, setType] = useState<TrainingResource["resource_type"]>("pdf");
+  const titleInput = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState("");
+  const original = resources.find((r) => r.id === editing);
+  const dirty =
+    title !== (original?.title ?? "") ||
+    url !== (original?.external_url ?? "") ||
+    type !== (original?.resource_type ?? "pdf");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
   useEffect(() => {
-    onDirtyChange?.(!!title.trim() || !!url.trim());
-  }, [title, url, onDirtyChange]);
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const { toast } = useToast();
   const { user } = useAuth();
   const client = useQueryClient();
@@ -45,9 +52,23 @@ export function TrainingMaterialsEditor({
       queryKey: [user?.organizationId, "worker", "training-modules"],
     });
   }
+  function reset() {
+    setEditing(null);
+    setTitle("");
+    setUrl("");
+    setType("pdf");
+    setError("");
+  }
+  function canDiscard() {
+    return !dirty || window.confirm("Discard unsaved material changes?");
+  }
+  useEffect(() => {
+    if (editing) titleInput.current?.focus();
+  }, [editing]);
   async function save() {
-    if (!title.trim() || !safeMaterialUrl(url) || busy) return;
+    if (!title.trim() || !safeMaterialUrl(url.trim()) || busy) return;
     setBusy(true);
+    setError("");
     try {
       const resource = await saveTrainingResource(
         moduleId,
@@ -66,30 +87,27 @@ export function TrainingMaterialsEditor({
           ? resources.map((r) => (r.id === editing ? resource : r))
           : [...resources, resource],
       );
-      setEditing(null);
-      setTitle("");
-      setUrl("");
+      reset();
       toast({ title: "Material saved" });
     } catch (error) {
-      toast({
-        title: "Could not save material",
-        description: error instanceof Error ? error.message : "Try again.",
-        variant: "destructive",
-      });
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Could not save material. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
   }
   async function remove(resource: TrainingResource) {
+    if (busy) return;
     if (!window.confirm(`Remove “${resource.title}” from this module?`)) return;
     setBusy(true);
     try {
       await deleteTrainingResource(moduleId, resource.id);
       changed(resources.filter((r) => r.id !== resource.id));
       if (editing === resource.id) {
-        setEditing(null);
-        setTitle("");
-        setUrl("");
+        reset();
       }
     } catch {
       toast({ title: "Could not remove material", variant: "destructive" });
@@ -137,8 +155,10 @@ export function TrainingMaterialsEditor({
             <button
               disabled={busy}
               aria-label={`Edit ${r.title}`}
-              className="p-2"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border hover:bg-muted"
               onClick={() => {
+                if (r.id === editing || !canDiscard()) return;
+                setError("");
                 setEditing(r.id);
                 setTitle(r.title);
                 setUrl(r.external_url ?? "");
@@ -173,6 +193,7 @@ export function TrainingMaterialsEditor({
         <label className="block text-xs font-semibold">
           Material title
           <input
+            ref={titleInput}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="mt-1 w-full rounded-lg border bg-background p-2 text-sm"
@@ -208,6 +229,14 @@ export function TrainingMaterialsEditor({
             Enter a complete http:// or https:// URL.
           </p>
         )}
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:col-span-2"
+          >
+            {error} Your changes are kept here for retry.
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-3 sm:col-span-2">
           <button
             type="button"
@@ -218,17 +247,15 @@ export function TrainingMaterialsEditor({
             <Plus size={13} />
             {busy ? "Saving…" : editing ? "Save material" : "Add material"}
           </button>
-          {editing && (
+          {(editing || dirty) && (
             <button
               type="button"
               className="inline-flex h-10 items-center justify-center rounded-xl border px-4 text-xs font-semibold"
               onClick={() => {
-                setEditing(null);
-                setTitle("");
-                setUrl("");
+                if (canDiscard()) reset();
               }}
             >
-              Cancel edit
+              {editing ? "Cancel edit" : "Clear draft"}
             </button>
           )}
         </div>
