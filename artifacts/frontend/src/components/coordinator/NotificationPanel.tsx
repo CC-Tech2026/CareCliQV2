@@ -105,7 +105,7 @@ function AlertRow({
 }
 
 // ── Main panel with filters and search ──────────────────────────────────────────
-export function NotificationPanel({ onClose }: { onClose: () => void }) {
+export function NotificationPanel({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
@@ -115,7 +115,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: alerts = [], isLoading } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 45_000 });
+  const { data: alerts = [], isLoading, isError, refetch } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 45_000 });
 
   const filteredAlerts = useMemo(() => {
     let result = alerts;
@@ -141,17 +141,17 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
 
   const readMut = useMutation({
     mutationFn: markNotificationRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["coordinator-notifications", orgId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications", orgId] }),
   });
 
   const readAllMut = useMutation({
     mutationFn: markAllNotificationsRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["coordinator-notifications", orgId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications", orgId] }),
   });
 
   return (
     <div
-      className="fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"
+      className={embedded ? "flex min-h-0 flex-1 flex-col" : "fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"}
       style={{ background: "var(--cc-bg)", borderLeft: `1px solid ${BORDER}` }}
     >
       {/* Header */}
@@ -195,6 +195,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
             <Search size={14} className="absolute left-3 top-2.5" style={{ color: MUTED }} />
             <input
               type="text"
+              aria-label="Search notifications"
               placeholder={translate("coordinator.notifications.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -248,6 +249,8 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
+      {isError && <div role="alert" className="p-5 text-sm">Notifications could not be loaded. <button className="min-h-11 font-semibold text-cc-plum underline" onClick={() => refetch()}>Try again</button></div>}
+      {(readMut.isError || readAllMut.isError) && <p role="alert" className="px-5 py-2 text-sm text-red-700">Could not mark notifications as read. Please try again.</p>}
       {/* List */}
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
@@ -256,7 +259,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!isLoading && filteredAlerts.length === 0 && (
+        {!isLoading && !isError && filteredAlerts.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Bell size={32} style={{ color: BORDER }} />
             <p className="text-[13px] font-semibold" style={{ color: MUTED }}>
@@ -265,7 +268,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!isLoading &&
+        {!isLoading && !isError &&
           filteredAlerts.map((alert) => (
             <AlertRow
               key={alert.id}
@@ -284,13 +287,14 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: alerts = [] } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80, unread_only: true }), refetchInterval: 60_000, enabled: !!user });
+  const { data: alerts = [] } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 60_000, enabled: !!user });
 
-  const unread = alerts.length;
+  const unread = alerts.filter(alert => !alert.is_read).length;
 
   return (
     <button
-      className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
+      aria-label="Notifications"
+      className="relative min-h-11 min-w-11 p-2 rounded-full hover:bg-black/5 transition-colors"
       onClick={onClick}
       title={translate("coordinator.notifications.title")}
     >

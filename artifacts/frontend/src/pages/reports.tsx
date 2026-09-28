@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { DirectorReportsHome, DIRECTOR_REPORTS } from "@/components/reports/DirectorReportsHome";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
@@ -125,7 +127,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-      <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: `${PLUM}0D` }}>
+      <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: SOFT }}>
         <Icon size={22} style={{ color: PLUM }} />
       </div>
       <p className="text-[14px] font-bold" style={{ color: T1 }}>{title}</p>
@@ -262,7 +264,7 @@ const TABS = [
   { id: "templates",  labelKey: "reports.tabs.templates",  icon: Layout           },
   { id: "export",     labelKey: "reports.tabs.export",     icon: FileDown         },
 ] as const;
-type TabId = typeof TABS[number]["id"];
+type TabId = typeof TABS[number]["id"] | "clinical";
 
 // -----------------------------------------------------------------------------
 // 1. DOCUMENTATION HUB
@@ -391,9 +393,16 @@ function SessionReportsSection() {
   const { translate } = useAccessibility();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const { data: sessions = [], isLoading } = useGetSessions({ limit: 200 });
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [search, filter, dateFrom, dateTo]);
+  const { data: sessions = [], isLoading, isError, refetch } = useGetSessions({ limit: 200 });
 
   const filtered = useMemo(() => (sessions as any[]).filter(s => {
+    const day = String(s.session_date || "").slice(0,10);
+    if ((dateFrom && day < dateFrom) || (dateTo && day > dateTo)) return false;
+    if (filter !== "all" && filter !== "draft" && s.compliance_score == null) return false;
     if (filter === "compliant"     && scoreLabel(s.compliance_score) !== "Compliant")     return false;
     if (filter === "at_risk"       && scoreLabel(s.compliance_score) !== "At Risk")        return false;
     if (filter === "non_compliant" && scoreLabel(s.compliance_score) !== "Non-Compliant") return false;
@@ -404,14 +413,17 @@ function SessionReportsSection() {
         (s.session_type ?? "").toLowerCase().includes(q);
     }
     return true;
-  }).sort((a: any, b: any) => new Date(b.session_date).getTime() - new Date(a.session_date).getTime()), [sessions, filter, search]);
+  }).sort((a: any, b: any) => new Date(b.session_date).getTime() - new Date(a.session_date).getTime()), [sessions, filter, search, dateFrom, dateTo]);
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-end gap-3"><label className="text-sm">Shift dates from<Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label className="text-sm">Shift dates to<Input type="date" min={dateFrom || undefined} value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><Button variant="outline" onClick={() => {setDateFrom(""); setDateTo(""); setSearch(""); setFilter("all");}}>Clear filters</Button></div>
+      <p className="text-sm text-cc-muted">Filters apply to up to 200 loaded shift records. For a historical export, choose a date range in the participant profile export panel.</p>
+      {dateFrom && dateTo && dateFrom > dateTo && <p role="alert" className="text-sm text-red-700">The end date must be on or after the start date.</p>}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T3 }} />
-          <Input placeholder={translate("reports.sessions.search")} value={search} onChange={e => setSearch(e.target.value)}
+          <Input aria-label="Search shift reports" placeholder={translate("reports.sessions.search")} value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -426,12 +438,12 @@ function SessionReportsSection() {
       </div>
 
       <Card>
-        {isLoading
+        {isError ? <div role="alert" className="p-5">Shift reports could not be loaded. <Button variant="link" onClick={() => refetch()}>Try again</Button></div> : isLoading
           ? <div className="p-6 space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
           : filtered.length === 0
           ? <EmptyState icon={FileText} title={translate("reports.sessions.empty")} sub={translate("reports.sessions.emptyHint")} />
           : <div className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((s: any) => (
+              {filtered.slice((page - 1) * 10, page * 10).map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
                   <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
                     <div className="shrink-0 w-20 text-center hidden sm:block">
@@ -458,35 +470,42 @@ function SessionReportsSection() {
 // -----------------------------------------------------------------------------
 // 3. INCIDENT REPORTS
 // -----------------------------------------------------------------------------
-function IncidentReportsSection() {
+export function IncidentReportsSection() {
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
-  const { data: incidents = [], isLoading } = useOrgQuery<any[]>(["incidents"], { queryFn: () => apiFetch<any[]>("/incidents") });
-  const { data: stats } = useOrgQuery<any>(["incident-stats"], { queryFn: () => apiFetch<any>("/incidents/stats") });
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [search]);
+  const { data: incidents = [], isLoading, isError, refetch } = useOrgQuery<any[]>(["incidents"], { queryFn: () => apiFetch<any[]>("/incidents") });
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: retryStats } = useOrgQuery<any>(["incident-stats"], { queryFn: () => apiFetch<any>("/incidents/stats") });
 
   const filtered = useMemo(() => (incidents as any[]).filter(i => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (i.title ?? "").toLowerCase().includes(q) || (i.participant_name ?? "").toLowerCase().includes(q);
+  return (i.title ?? "").toLowerCase().includes(q) || (i.participant_name ?? "").toLowerCase().includes(q);
   }), [incidents, search]);
 
   const open     = (incidents as any[]).filter(i => i.status !== "closed" && i.status !== "resolved").length;
   const critical = (incidents as any[]).filter(i => i.severity === "critical").length;
+
+    if (isError) return <div role="alert" className="rounded-xl border border-cc-border p-5"><h2 className="font-semibold">Incident reports unavailable</h2><p className="mt-2 text-sm text-cc-muted">We could not load the incident register. Please try again.</p><Button variant="outline" className="mt-3" onClick={() => {refetch(); retryStats();}}>Try again</Button></div>;
+  if (isLoading) return <div role="status" className="space-y-3"><p className="text-sm text-cc-muted">Loading incident reports...</p><Skeleton className="h-24 rounded-xl" /></div>;
+
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={T3}      />
         <StatCard label={translate("reports.hub.openIncidents")}     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   />
-        <StatCard label={translate("reports.incidents.ndisReportable")}    value={stats?.ndis_pending ?? 0}          icon={AlertTriangle} color="#EA580C"   />
+        <StatCard label={translate("reports.incidents.ndisReportable")}    value={statsLoading ? "Loading..." : statsError ? "Unavailable" : stats?.ndis_pending ?? "Not recorded"}          icon={AlertTriangle} color="#EA580C"   />
         <StatCard label={translate("reports.incidents.critical")}  value={critical}                           icon={Siren}         color="#DC2626"   />
       </div>
 
-      <div className="flex items-center gap-3">
+      {statsError && <p role="alert" className="text-sm text-cc-muted">Incident summary unavailable. The register below is still available. <Button variant="link" onClick={() => retryStats()}>Retry summary</Button></p>}
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T3 }} />
-          <Input placeholder={translate("reports.incidents.search")} value={search} onChange={e => setSearch(e.target.value)}
+          <Input aria-label="Search incident reports" placeholder={translate("reports.incidents.search")} value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
         <Button variant="navy" onClick={() => navigate("/incidents/new")} size="sm" className="shrink-0">
@@ -500,7 +519,7 @@ function IncidentReportsSection() {
           : filtered.length === 0
           ? <EmptyState icon={CheckCircle2} title={translate("reports.incidents.empty")} sub={translate("reports.incidents.emptyHint")} />
           : <div className="divide-y" style={{ borderColor: BORDER }}>
-              {filtered.map((inc: any) => (
+              {filtered.slice((Math.min(page, Math.max(1, Math.ceil(filtered.length / 10))) - 1) * 10, Math.min(page, Math.max(1, Math.ceil(filtered.length / 10))) * 10).map((inc: any) => (
                 <Link key={inc.id} href={`/incidents/${inc.id}`}>
                   <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
                     <div className="flex-1 min-w-0">
@@ -1150,11 +1169,14 @@ function ExportCentreSection() {
 // MAIN PAGE
 // -----------------------------------------------------------------------------
 export default function Reports() {
+  const { user } = useAuth();
+  const isDirector = user?.role === "managing_director";
   const { translate } = useAccessibility();
   const [activeTab, setActiveTab] = useState<TabId>("hub");
 
   const SECTION_MAP: Record<TabId, React.ReactNode> = {
     hub:        <HubSection />,
+    clinical:   <ClinicalReportGenerator />,
     sessions:   <SessionReportsSection />,
     incidents:  <IncidentReportsSection />,
     notes:      <ParticipantNotesSection />,
@@ -1164,6 +1186,14 @@ export default function Reports() {
     templates:  <TemplatesSection />,
     export:     <ExportCentreSection />,
   };
+
+  if (isDirector) {
+    const current = DIRECTOR_REPORTS.find(report => report.id === activeTab);
+    return <div className="min-w-0 space-y-5 pb-8">
+      <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-cc-muted">Management reporting</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-cc-text sm:text-3xl">{activeTab === "hub" ? "Reports & insights" : current?.title || "Reports"}</h1><p className="mt-2 max-w-2xl text-sm text-cc-muted">{activeTab === "hub" ? "Organisation-wide records for reviewing service delivery, quality and financial performance." : current?.description}</p></div>{activeTab !== "hub" && <Button variant="outline" className="min-h-11" onClick={() => setActiveTab("hub")}>Back to report library</Button>}</header>
+      {activeTab === "hub" ? <DirectorReportsHome onOpen={id => setActiveTab(id as TabId)} /> : <section className="min-w-0" aria-label={current?.title}>{SECTION_MAP[activeTab]}</section>}
+    </div>;
+  }
 
   const activeTab_ = TABS.find(t => t.id === activeTab)!;
 

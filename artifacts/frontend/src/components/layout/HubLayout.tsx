@@ -1,3 +1,6 @@
+import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { ManagementPageSearch } from "./ManagementPageSearch";
 ﻿import { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -37,7 +40,6 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
-import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import {
   getOrganizationBranding,
   type OrganizationBranding,
@@ -52,7 +54,9 @@ import { SEED_COMPLAINTS } from "@/pages/onboard-participant";
 // yet), so this won't move as complaints get addressed within a session —
 // same local-state limitation as the rest of the onboarding build.
 const NAV_BADGE_COUNTS: Record<string, number> = {
-  "/onboard-participant/complaints": SEED_COMPLAINTS.filter((c) => c.status === "open").length,
+  "/onboard-participant/complaints": SEED_COMPLAINTS.filter(
+    (c) => c.status === "open",
+  ).length,
 };
 
 /** Small count pill shown after a nav item's label, when it has an open count. */
@@ -71,7 +75,12 @@ function NavCountBadge({ count }: { count: number }) {
 /** Collapsed-sidebar equivalent — no room for a number, just a dot. */
 function NavCountDot({ count }: { count: number }) {
   if (count <= 0) return null;
-  return <span className="absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "#DC2626" }} />;
+  return (
+    <span
+      className="absolute top-1 right-1 h-2 w-2 rounded-full"
+      style={{ background: "#DC2626" }}
+    />
+  );
 }
 
 const MD_NAV_GROUPS = [
@@ -80,14 +89,23 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
       { href: "/md/executive", label: "Strategic Insights", icon: BarChart3 },
+      { href: "/reports", label: "Reports & insights", icon: BarChart3 },
     ],
   },
   {
     label: "Operations & Care",
     items: [
       { href: "/md/schedule", label: "Master Schedule", icon: CalendarDays },
-      { href: "/md/service-delivery", label: "Delivery Quality", icon: ClipboardCheck },
-      { href: "/onboard-participant/active", label: "Participants", icon: HeartHandshake },
+      {
+        href: "/md/service-delivery",
+        label: "Delivery Quality",
+        icon: ClipboardCheck,
+      },
+      {
+        href: "/onboard-participant/active",
+        label: "Participants",
+        icon: HeartHandshake,
+      },
     ],
   },
   {
@@ -96,23 +114,45 @@ const MD_NAV_GROUPS = [
       { href: "/md/staff", label: "Staff", icon: Users },
       { href: "/billing", label: "NDIS invoices", icon: DollarSign },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
-      { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
+      {
+        href: "/md/onboarding/training",
+        label: "Competency & Training",
+        icon: GraduationCap,
+      },
       { href: "/md/tags", label: "Matching Tags", icon: Tags },
     ],
   },
   {
     label: "Oversight & Risk",
     items: [
-      { href: "/md/compliance", label: "Audit & Compliance", icon: ShieldCheck },
+      {
+        href: "/md/compliance",
+        label: "Audit & Compliance",
+        icon: ShieldCheck,
+      },
       { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
-      { href: "/incidents", label: "Critical Incidents", icon: AlertTriangle },
-      { href: "/onboard-participant/complaints", label: "Participant Complaints", icon: Mail },
-      { href: "/feedback-reports", label: "Feedback & Reports", icon: MessageSquareWarning },
+      { href: "/incidents", label: "Incident reporting", icon: AlertTriangle },
+      {
+        href: "/onboard-participant/complaints",
+        label: "Participant Complaints",
+        icon: Mail,
+      },
+      {
+        href: "/feedback-reports",
+        label: "Feedback & Reports",
+        icon: MessageSquareWarning,
+      },
     ],
   },
   {
     label: "Finance",
-    items: [{ href: "/md/financial", label: "Financial Governance", icon: DollarSign }],
+    items: [
+      {
+        href: "/md/financial",
+        label: "Financial Governance",
+        icon: DollarSign,
+      },
+    ],
   },
 ] as const;
 
@@ -168,11 +208,20 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const navIsDark = !!prefs?.nav_color && isDarkHex(prefs.nav_color);
   const navText = navIsDark ? "rgba(255,255,255,0.85)" : "var(--cc-muted)";
   const navTextHover = navIsDark ? "#FFFFFF" : "var(--cc-text)";
-  const navHoverBg = navIsIndigoNight ? "rgba(108,99,255,0.14)" : navIsDark ? "rgba(255,255,255,0.10)" : "var(--cc-soft)";
-  const navActiveBg = navIsIndigoNight ? "#6C63FF" : navIsDark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
+  const navHoverBg = navIsIndigoNight
+    ? "rgba(108,99,255,0.14)"
+    : navIsDark
+      ? "rgba(255,255,255,0.10)"
+      : "var(--cc-soft)";
+  const navActiveBg = navIsIndigoNight
+    ? "#6C63FF"
+    : navIsDark
+      ? "rgba(255,255,255,0.18)"
+      : "var(--cc-plum)";
 
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeGroupHover, setActiveGroupHover] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -192,7 +241,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   // all drive it the same way.
   const [navAutoHidden, setNavAutoHidden] = useState(false);
   const lastScrollY = useRef(0);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
   const [brandingLoaded, setBrandingLoaded] = useState(false);
   // Tracks the specific URL that failed, not a plain boolean - so a fresh
@@ -217,17 +268,20 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     observer.observe(root, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, [prefs?.theme_mode, resolvedTheme]);
-  const [notifOpen, setNotifOpen] = useState(false);
   const setTheme = (mode: "light" | "dark") => {
     setThemeMode(mode);
     setIsDark(mode === "dark");
   };
 
-  const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
+  const displayName =
+    user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials = getInitials(displayName);
 
   const toggleGroup = (groupLabel: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [groupLabel]: !prev[groupLabel] }));
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [groupLabel]: !prev[groupLabel],
+    }));
   };
 
   // Auto-hide the floating Command Deck dock (topbar or bottombar mode) as
@@ -267,7 +321,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         setSidebarCollapsed(true);
       } else {
         setSidebarCollapsed(false);
-        setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, next)));
+        setSidebarWidth(
+          Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, next)),
+        );
       }
     }
     function onUp() {
@@ -291,7 +347,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
         setProfileOpen(false);
       }
       if (navRef.current && !navRef.current.contains(event.target as Node)) {
@@ -340,7 +399,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const organisationDisplay = branding?.display_name || orgName || translate("hub.orgFallback");
+  const organisationDisplay =
+    branding?.display_name || orgName || translate("hub.orgFallback");
 
   return (
     <div
@@ -357,7 +417,6 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             arriving here after signing in doesn't feel like a different app. */}
         <div className="h-[3px] w-full" style={{ background: "#7C3AED" }} />
         <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between px-4 sm:px-6">
-
           {/* Brand & Organization Badge */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
@@ -365,7 +424,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                 // Reserve the exact footprint so nothing shifts once the
                 // branding fetch resolves - no flash of one logo swapping
                 // for another a moment later.
-                <div className="h-9 w-9 shrink-0 rounded-lg" style={{ background: "var(--cc-soft)" }} />
+                <div
+                  className="h-9 w-9 shrink-0 rounded-lg"
+                  style={{ background: "var(--cc-soft)" }}
+                />
               ) : branding?.logo_url && branding.logo_url !== erroredLogoUrl ? (
                 <img
                   src={branding.logo_url}
@@ -379,9 +441,18 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               <span className="hidden h-5 w-px bg-[var(--cc-border)] sm:block" />
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-black tracking-tight">{organisationDisplay}</span>
+                  <span className="text-sm font-black tracking-tight">
+                    {organisationDisplay}
+                  </span>
                   {isMD && (
-                    <span className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(124,58,237,0.1)", color: "#7C3AED", borderColor: "rgba(124,58,237,0.1)" }}>
+                    <span
+                      className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        background: "rgba(124,58,237,0.1)",
+                        color: "#7C3AED",
+                        borderColor: "rgba(124,58,237,0.1)",
+                      }}
+                    >
                       Governance
                     </span>
                   )}
@@ -390,27 +461,12 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Quick Search */}
-          <div className="hidden max-w-md flex-1 md:block px-6">
-            <div className="relative flex items-center">
-              <Search size={15} className="absolute left-3.5 text-[var(--cc-muted)]" />
-              <input
-                type="text"
-                placeholder="Search metrics, reports, audit logs..."
-                className="w-full rounded-xl border border-[var(--cc-border)] bg-[var(--cc-soft)] py-2.5 pl-10 pr-14 text-[13px] font-medium placeholder:text-[var(--cc-muted)] focus:border-[var(--cc-plum)] focus:bg-[var(--cc-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum-soft)] transition-all"
-              />
-              <kbd
-                className="pointer-events-none absolute right-3 rounded-md border px-1.5 py-0.5 text-[10px] font-bold"
-                style={{ borderColor: "var(--cc-border)", color: "var(--cc-muted)", background: "var(--cc-surface)" }}
-              >
-                ⌘K
-              </kbd>
-            </div>
-          </div>
+          {isMD && <div className="max-w-md md:flex-1 md:px-6"><ManagementPageSearch groups={MD_NAV_GROUPS} /></div>}
 
           {/* Executive Control Group */}
           <div className="flex items-center gap-2" ref={profileRef}>
-            <NotificationBell onClick={() => setNotifOpen(true)} />
+            <NotificationBell onClick={() => setNotificationsOpen(true)} />
+              <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Organisation alerts and updates</SheetDescription></SheetHeader>{notificationsOpen && <NotificationPanel embedded onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
 
             {/* HubLayout is also shared with coordinators (e.g. /hub, /md/staff-onboarding)
                 and the Calendar page itself is MD-only (App.tsx), so the button only
@@ -472,9 +528,16 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setProfileOpen((prev) => !prev)}
               className="flex items-center gap-2 rounded-full p-1 border border-transparent hover:border-[var(--cc-border)] hover:bg-[var(--cc-soft)]/60 transition-all"
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm" style={{ background: "var(--cc-plum)" }}>
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm"
+                style={{ background: "var(--cc-plum)" }}
+              >
                 {user?.profile_photo_url ? (
-                  <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={user.profile_photo_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   initials
                 )}
@@ -490,7 +553,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               <div className="absolute right-4 top-14 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-3 py-2 border-b border-[var(--cc-border)]">
                   <p className="text-xs font-bold">{displayName}</p>
-                  <p className="text-[11px] text-[var(--cc-muted)] truncate">{user?.email}</p>
+                  <p className="text-[11px] text-[var(--cc-muted)] truncate">
+                    {user?.email}
+                  </p>
                 </div>
                 <div className="py-1">
                   <Link
@@ -541,12 +606,17 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <div
             ref={navRef}
             className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
-            style={{ borderColor: "rgba(124,58,237,0.15)", background: navBackground, boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
+            style={{
+              borderColor: "rgba(124,58,237,0.15)",
+              background: navBackground,
+              boxShadow:
+                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+            }}
           >
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
                 const hasActiveRoute = group.items.some((item) =>
-                  isRouteActive(location, item.href)
+                  isRouteActive(location, item.href),
                 );
 
                 return (
@@ -559,7 +629,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       type="button"
                       onClick={() =>
                         setActiveGroupHover(
-                          activeGroupHover === group.label ? null : group.label
+                          activeGroupHover === group.label ? null : group.label,
                         )
                       }
                       style={{
@@ -569,7 +639,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
                       className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
-                        hasActiveRoute ? "shadow-md" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
+                        hasActiveRoute
+                          ? "shadow-md"
+                          : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
                       }`}
                     >
                       <span>{group.label}</span>
@@ -607,7 +679,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <Icon size={16} />
                                 <span>{item.label}</span>
-                                <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                <NavCountBadge
+                                  count={NAV_BADGE_COUNTS[item.href] ?? 0}
+                                />
                               </Link>
                             );
                           })}
@@ -648,7 +722,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       >
                         <Icon size={18} />
                         <span>{item.label}</span>
-                        <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                        <NavCountBadge
+                          count={NAV_BADGE_COUNTS[item.href] ?? 0}
+                        />
                       </Link>
                     );
                   })}
@@ -669,11 +745,18 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <div
             ref={navRef}
             className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
-            style={{ borderColor: "rgba(124,58,237,0.15)", background: navBackground, boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)" }}
+            style={{
+              borderColor: "rgba(124,58,237,0.15)",
+              background: navBackground,
+              boxShadow:
+                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+            }}
           >
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
-                const hasActiveRoute = group.items.some((item) => isRouteActive(location, item.href));
+                const hasActiveRoute = group.items.some((item) =>
+                  isRouteActive(location, item.href),
+                );
 
                 return (
                   <div
@@ -684,7 +767,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       onClick={() =>
-                        setActiveGroupHover(activeGroupHover === group.label ? null : group.label)
+                        setActiveGroupHover(
+                          activeGroupHover === group.label ? null : group.label,
+                        )
                       }
                       style={{
                         background: hasActiveRoute ? navActiveBg : undefined,
@@ -693,7 +778,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
                       className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
-                        hasActiveRoute ? "shadow-md" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
+                        hasActiveRoute
+                          ? "shadow-md"
+                          : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
                       }`}
                     >
                       <ChevronUp
@@ -731,7 +818,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                               >
                                 <Icon size={16} />
                                 <span>{item.label}</span>
-                                <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                <NavCountBadge
+                                  count={NAV_BADGE_COUNTS[item.href] ?? 0}
+                                />
                               </Link>
                             );
                           })}
@@ -748,7 +837,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Canvas Area */}
       {isMD && sidebarMode ? (
-        <div className="mx-auto flex max-w-[1600px] items-start gap-0 px-4 py-4 sm:px-6">
+        <div
+          className={`mx-auto flex items-start gap-0 py-4 ${location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`}
+        >
           <aside
             className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border lg:block ${
               sidebarDragging ? "" : "transition-[width] duration-200"
@@ -757,7 +848,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               width: sidebarCollapsed ? 72 : sidebarWidth,
               background: navBackground,
               borderColor: "rgba(124,58,237,0.15)",
-              boxShadow: "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+              boxShadow:
+                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
             }}
           >
             {/* Drag handle — grab and pull to resize, or drag past the snap
@@ -772,21 +864,42 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             >
               <div
                 className="h-10 w-1 rounded-full transition-colors group-hover:opacity-100"
-                style={{ background: sidebarDragging ? "var(--cc-plum)" : "var(--cc-border)", opacity: sidebarDragging ? 1 : 0.6 }}
+                style={{
+                  background: sidebarDragging
+                    ? "var(--cc-plum)"
+                    : "var(--cc-border)",
+                  opacity: sidebarDragging ? 1 : 0.6,
+                }}
               />
             </div>
 
-            <div className={sidebarCollapsed ? "flex flex-col items-center px-2 py-4" : "flex flex-col p-4"}>
+            <div
+              className={
+                sidebarCollapsed
+                  ? "flex flex-col items-center px-2 py-4"
+                  : "flex flex-col p-4"
+              }
+            >
               <button
                 type="button"
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
-                style={{ color: navText, ["--nav-hover-bg" as string]: navHoverBg, ["--nav-text-hover" as string]: navTextHover }}
+                style={{
+                  color: navText,
+                  ["--nav-hover-bg" as string]: navHoverBg,
+                  ["--nav-text-hover" as string]: navTextHover,
+                }}
                 className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)] ${
                   sidebarCollapsed ? "" : "self-end"
                 }`}
-                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={
+                  sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                }
               >
-                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen size={18} />
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
               </button>
 
               <nav className={sidebarCollapsed ? "space-y-3" : "space-y-5"}>
@@ -811,7 +924,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       )}
 
                       {!isGroupCollapsed && (
-                        <div className={sidebarCollapsed ? "space-y-2" : "space-y-1"}>
+                        <div
+                          className={
+                            sidebarCollapsed ? "space-y-2" : "space-y-1"
+                          }
+                        >
                           {group.items.map((item) => {
                             const active = isRouteActive(location, item.href);
                             const Icon = item.icon;
@@ -820,7 +937,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                               <Link
                                 key={item.href}
                                 href={item.href}
-                                title={sidebarCollapsed ? item.label : undefined}
+                                title={
+                                  sidebarCollapsed ? item.label : undefined
+                                }
                                 style={{
                                   background: active ? navActiveBg : undefined,
                                   color: active ? "#FFFFFF" : navText,
@@ -837,10 +956,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 {!sidebarCollapsed ? (
                                   <>
                                     <span>{item.label}</span>
-                                    <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                    <NavCountBadge
+                                      count={NAV_BADGE_COUNTS[item.href] ?? 0}
+                                    />
                                   </>
                                 ) : (
-                                  <NavCountDot count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                                  <NavCountDot
+                                    count={NAV_BADGE_COUNTS[item.href] ?? 0}
+                                  />
                                 )}
                               </Link>
                             );
@@ -854,18 +977,18 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             </div>
           </aside>
 
-          <main className="min-w-0 flex-1 px-0 py-2 lg:px-6">{children}</main>
+          <main
+            className={`min-w-0 flex-1 px-0 py-2 ${location === "/billing" ? "lg:px-3" : "lg:px-6"}`}
+          >
+            {children}
+          </main>
         </div>
       ) : (
-        <main className={`mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 ${bottombarMode ? "pb-32" : ""}`}>
+        <main
+          className={`mx-auto ${location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "pb-32" : ""}`}
+        >
           {children}
         </main>
-      )}
-      {notifOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setNotifOpen(false)} />
-          <NotificationPanel onClose={() => setNotifOpen(false)} />
-        </>
       )}
     </div>
   );

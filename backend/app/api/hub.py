@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
-from ..core.timezone import app_today, shift_local_date
+from ..core.timezone import app_today, shift_local_date, request_timezone
 from ..schemas.incident import NDIS_NOTIFICATION_HOURS
 from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
@@ -348,6 +348,8 @@ async def _unfilled_shift_alerts(org_id: str) -> list[dict]:
 
     alerts: list[dict] = []
     for row in rows:
+        if row.get("status") in ("cancelled", "completed"):
+            continue
         worker_id = row.get("worker_id")
         if worker_id not in (None, _UNASSIGNED_PLACEHOLDER_ID) and row.get("status") != "unassigned":
             continue
@@ -355,14 +357,18 @@ async def _unfilled_shift_alerts(org_id: str) -> list[dict]:
             start = datetime.fromisoformat(str(row.get("scheduled_start")).replace("Z", "+00:00"))
         except Exception:
             continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
         hours_until = (start - now).total_seconds() / 3600
+        local_start = start.astimezone(request_timezone())
+        start_label = local_start.strftime("%I:%M%p").lstrip("0").lower()
         participant = row.get("participant_name") or "Unnamed participant"
         alerts.append({
             "id": f"unfilled-shift-{row.get('id')}",
             "title": f"Unfilled shift: {participant}",
-            "detail": f"No worker assigned. Starts {start.strftime('%A')} at {start.strftime('%-I:%M%p').lower()}.",
+            "detail": f"No worker assigned. Starts {local_start.strftime('%A')} at {start_label}.",
             "severity": "critical" if hours_until <= 24 else "high",
-            "due_date": start.date().isoformat(),
+            "due_date": local_start.date().isoformat(),
             "affected_staff": [],
             "action_label": "Assign Worker",
             "source": "shifts",
@@ -483,15 +489,16 @@ async def _participant_quiet_alerts(
             detail = (
                 f"Last session {last}, {days_since} days ago."
                 if days_since is not None
-                else "No session has ever been recorded for this participant."
+                else "No session found in the recent records reviewed. Check the participant profile for earlier records or other contact."
             )
             title = (
-                f"{name}: no contact in {days_since} days"
+                f"{name}: no recorded session in {days_since} days"
                 if days_since is not None
-                else f"{name}: no session on record"
+                else f"{name}: check recent contact"
             )
             alerts.append({
                 "id": f"quiet-{pid}",
+                "participant_id": pid,
                 "title": title,
                 "detail": detail,
                 "severity": "critical" if (days_since or 999) >= threshold_days * 2 else "high",
@@ -505,7 +512,7 @@ async def _participant_quiet_alerts(
     alerts.sort(key=lambda a: a["_days_since"], reverse=True)
     for a in alerts:
         a.pop("_days_since", None)
-    return alerts[:10]
+    return alerts
 
 
 @router.get("/care-alerts")

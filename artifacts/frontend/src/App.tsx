@@ -660,13 +660,13 @@ function Router() {
       {/* ── Reports — support coordinator + managing director + allied health ── */}
       <Route path="/reports">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
-          <AppLayout><Reports /></AppLayout>
+          <RoleAwareShell><Reports /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
-          <AppLayout><Reports /></AppLayout>
+          <RoleAwareShell><Reports /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

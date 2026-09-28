@@ -83,7 +83,9 @@ function AlertRow({
   routeForSource: (source: string | undefined) => string;
 }) {
   const { color, soft } = severityColors(alert.severity);
-  const go = () => onNavigate(routeForSource(alert.source));
+  const go = () => onNavigate(alert.source === "participants" && alert.participant_id
+    ? `/patients?id=${encodeURIComponent(alert.participant_id)}&tab=overview`
+    : routeForSource(alert.source));
   return (
     // A plain div (not <button>) so the title/detail text stays selectable and
     // copyable - wrapping the whole row in a <button> blocked click-drag text

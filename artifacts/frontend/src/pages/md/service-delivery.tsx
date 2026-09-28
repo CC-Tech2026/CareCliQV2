@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
   ArrowRight,
@@ -41,6 +41,11 @@ const priorities: Record<string, number> = {
   positive: 4,
 };
 function destination(alert: HubComplianceAlert) {
+  if (alert.source === "participants" && alert.participant_id)
+    return {
+      href: `/patients?id=${encodeURIComponent(alert.participant_id)}&tab=overview`,
+      label: "View participant",
+    };
   if (alert.source === "shifts")
     return { href: "/md/schedule", label: "Review schedule" };
   if (alert.source === "participants")
@@ -65,6 +70,8 @@ export default function MDServiceDeliveryPage() {
   const [area, setArea] = useState("all");
   const [priority, setPriority] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [area, priority, search]);
   const alerts = query.data ?? [];
   const known = !query.isLoading && !query.isError && query.data !== undefined;
   const filtered = alerts
@@ -75,7 +82,12 @@ export default function MDServiceDeliveryPage() {
           alert.category === "urgent" ||
           alert.severity === "critical" ||
           alert.severity === "high") &&
-        [alert.title, alert.detail, ...(alert.affected_staff ?? [])]
+        [
+          alert.title,
+          alert.detail,
+          alert.participant_id,
+          ...(alert.affected_staff ?? []),
+        ]
           .join(" ")
           .toLowerCase()
           .includes(search.trim().toLowerCase()),
@@ -85,6 +97,9 @@ export default function MDServiceDeliveryPage() {
         Number(b.category === "urgent") - Number(a.category === "urgent") ||
         (priorities[a.severity] ?? 5) - (priorities[b.severity] ?? 5),
     );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
+  const currentPage = Math.min(page, pageCount);
+  const visible = filtered.slice((currentPage - 1) * 10, currentPage * 10);
   function clearFilters() {
     setArea("all");
     setPriority("all");
@@ -179,7 +194,7 @@ export default function MDServiceDeliveryPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search names or concerns"
+                    placeholder="Search names, participant IDs or concerns"
                     className="min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface py-2 pl-9 pr-3 text-sm text-cc-text"
                   />
                 </span>
@@ -251,7 +266,7 @@ export default function MDServiceDeliveryPage() {
             </div>
           ) : (
             <ul className="divide-y divide-cc-border">
-              {filtered.map((alert) => {
+              {visible.map((alert) => {
                 const action = destination(alert);
                 const urgent =
                   alert.category === "urgent" ||
@@ -313,7 +328,40 @@ export default function MDServiceDeliveryPage() {
               })}
             </ul>
           )}
+          {known && filtered.length > 10 && (
+            <nav
+              aria-label="Care alert pages"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-cc-border p-4"
+            >
+              <p role="status" className="text-sm text-cc-muted">
+                Page {currentPage} of {pageCount}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(currentPage - 1)}
+                  className="min-h-11 rounded-lg border border-cc-border px-4 text-sm text-cc-plum disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={currentPage === pageCount}
+                  onClick={() => setPage(currentPage + 1)}
+                  className="min-h-11 rounded-lg border border-cc-border px-4 text-sm text-cc-plum disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          )}
         </section>
+        <p className="text-xs leading-5 text-cc-muted">
+          Contact and documentation alerts use up to 2,000 recent session
+          records. A missing session does not confirm that no contact occurred.
+          Check the participant record before following up.
+        </p>
         <nav aria-label="Care management" className="flex flex-wrap gap-2">
           {[
             ["Participants", "/patients"],

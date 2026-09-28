@@ -68,3 +68,46 @@ it("shows a neutral empty state without declaring care quality complete", () => 
   render(<MDServiceDeliveryPage />);
   expect(screen.getByText("No care alerts returned")).toBeTruthy();
 });
+
+it("opens the identified participant profile directly", () => {
+  mocks.data = [
+    {
+      id: "quiet-1",
+      participant_id: "participant-123",
+      title: "Alex: check contact",
+      detail: "Review records",
+      source: "participants",
+      severity: "high",
+    },
+  ];
+  render(<MDServiceDeliveryPage />);
+  expect(
+    screen.getByRole("link", { name: "View participant" }).getAttribute("href"),
+  ).toBe("/patients?id=participant-123&tab=overview");
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Search care alerts" }),
+    { target: { value: "participant-123" } },
+  );
+  expect(screen.getByText("Alex: check contact")).toBeTruthy();
+});
+it("paginates alerts and resets the page after filtering", () => {
+  mocks.data = Array.from({ length: 12 }, (_, i) => ({
+    id: String(i),
+    title: `Concern ${i}`,
+    detail: "Review records",
+    source: "participants",
+    severity: "high",
+  }));
+  render(<MDServiceDeliveryPage />);
+  expect(screen.queryByText("Concern 11")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(screen.getByText("Concern 11")).toBeTruthy();
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Search care alerts" }),
+    { target: { value: "Concern 0" } },
+  );
+  expect(screen.getByText("Concern 0")).toBeTruthy();
+  expect(
+    screen.queryByRole("navigation", { name: "Care alert pages" }),
+  ).toBeNull();
+});
