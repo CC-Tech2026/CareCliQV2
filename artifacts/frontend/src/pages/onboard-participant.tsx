@@ -4,7 +4,7 @@ import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle, UserRound,
+  SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
 import { writeWaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -27,6 +27,8 @@ import {
 } from "@/services/participantIntakeService";
 import { SignatureCanvas, useSignatureCanvasState } from "@/components/shifts/SignatureCanvas";
 import { useBranches } from "@/hooks/useBranches";
+import { ParticipantRecordCards } from "@/components/participants/ParticipantRecordCards";
+import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -903,7 +905,6 @@ function ParticipantProfilePage({
   onUpdate: (patch: Partial<Intake>) => void;
 }) {
   const { toast } = useToast();
-  const [, navigate] = useLocation();
   const [intakeFormEditing, setIntakeFormEditing] = useState(false);
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
   const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
@@ -979,20 +980,6 @@ function ParticipantProfilePage({
               {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
               {intake.activated_at && <p className="text-xs" style={{ color: MUTED }}>Active since {formatDate(intake.activated_at)}</p>}
             </div>
-            {/* This board holds what was captured at intake. Everything since
-                (care and medical details, medications, goals, budgets, the
-                service agreement's supports, shifts, compliance, notes) lives
-                on the participant's full profile. */}
-            {intake.participant_id && (
-              <Button
-                type="button"
-                className="mt-4 w-full gap-1.5 rounded-lg text-white"
-                style={{ background: PLUM }}
-                onClick={() => navigate(`/patients?id=${encodeURIComponent(intake.participant_id!)}&tab=overview`)}
-              >
-                <UserRound size={14} /> Open full profile
-              </Button>
-            )}
 
             {intake.status === "inactive" && intake.suspended_reason && (
               <div className="mt-4 rounded-lg p-3" style={{ background: WARNING_BG }}>
@@ -1071,8 +1058,21 @@ function ParticipantProfilePage({
                 <Field label="Family signed by" value={intake.family_signed_name} editing={false} />
                 <Field label="Activated" value={formatDate(intake.activated_at)} editing={false} />
               </div>
+              {/* The signed agreement's schedule of supports (hours, rate,
+                  funding), terms and the signed PDF, once the participant
+                  record exists. */}
+              {intake.participant_id && (
+                <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
+                  <ParticipantServiceAgreementSection participantId={intake.participant_id} />
+                </div>
+              )}
             </IntakeFormSection>
           )}
+
+          {/* Everything recorded since activation: care team, health and
+              medications, support preferences, worker briefing, goals and
+              funding — same card design as the intake sections above. */}
+          {intake.participant_id && <ParticipantRecordCards participantId={intake.participant_id} />}
         </div>
       </div>
     </div>
