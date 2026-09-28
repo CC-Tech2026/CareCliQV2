@@ -102,6 +102,90 @@ def list_service_agreements(participant_id: str, organization_id: str) -> list[d
     return result.data or []
 
 
+SIGNED_DOCUMENT_URL_SECONDS = 60 * 60
+
+
+def list_service_agreements_for_profile(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+    """list_service_agreements() plus what the participant profile shows:
+    each support line's NDIS item name, unit and standard (platform) rate,
+    and — on the most recent agreement — the signed Service Agreement PDF
+    from the participant's onboarding record, with who signed it and when.
+    Enrichment is best-effort: a lookup failure leaves the field None rather
+    than failing the whole list."""
+    agreements = list_service_agreements(participant_id, organization_id)
+    if not agreements:
+        return agreements
+    supabase = get_supabase_admin()
+
+    codes = sorted({
+        str(s["support_item_code"])
+        for a in agreements
+        for s in (a.get("service_agreement_supports") or [])
+        if s.get("support_item_code")
+    })
+    items: dict[str, dict[str, Any]] = {}
+    if codes:
+        try:
+            rows = (
+                supabase.table("platform_ndis_price_items")
+                .select("item_code, name, unit, price_national, valid_from")
+                .in_("item_code", codes)
+                .order("valid_from", desc=True)
+                .execute()
+                .data
+                or []
+            )
+            for row in rows:
+                items.setdefault(str(row["item_code"]), row)  # newest price first
+        except Exception:
+            logger.warning("Support item lookup failed for participant %s", participant_id, exc_info=True)
+    for agreement in agreements:
+        for support in agreement.get("service_agreement_supports") or []:
+            item = items.get(str(support.get("support_item_code")))
+            support["item_name"] = item.get("name") if item else None
+            support["unit"] = item.get("unit") if item else None
+            support["standard_rate"] = item.get("price_national") if item else None
+
+    signed_document = None
+    try:
+        from .participant_intake_service import BUCKET as INTAKE_BUCKET
+
+        intake = (
+            supabase.table("participant_intakes")
+            .select(
+                "signed_document_path, signed_document_name, provider_signed_name, provider_signed_at, "
+                "family_signed_name, family_signed_at"
+            )
+            .eq("organization_id", organization_id)
+            .eq("participant_id", participant_id)
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if intake and intake[0].get("signed_document_path"):
+            row = intake[0]
+            signed = supabase.storage.from_(INTAKE_BUCKET).create_signed_url(
+                row["signed_document_path"], SIGNED_DOCUMENT_URL_SECONDS
+            )
+            signed_document = {
+                "name": row.get("signed_document_name"),
+                "url": signed.get("signedURL") or signed.get("signed_url"),
+                "provider_signed_name": row.get("provider_signed_name"),
+                "provider_signed_at": row.get("provider_signed_at"),
+                "family_signed_name": row.get("family_signed_name"),
+                "family_signed_at": row.get("family_signed_at"),
+            }
+    except Exception:
+        logger.warning("Signed agreement lookup failed for participant %s", participant_id, exc_info=True)
+
+    # list_service_agreements() orders newest start_date first.
+    for index, agreement in enumerate(agreements):
+        agreement["signed_document"] = signed_document if index == 0 else None
+    return agreements
+
+
 def get_active_service_agreement(
     participant_id: str, organization_id: str, *, as_of: Optional[date] = None
 ) -> Optional[dict[str, Any]]:

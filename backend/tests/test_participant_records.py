@@ -126,3 +126,22 @@ def test_invoice_summary_counts_only_billed_invoices_in_period():
         summary = service.invoice_summary(USER, "p-1", date(2026, 7, 1), date(2027, 6, 30))
         query.return_value.gte.return_value.lt.return_value.in_.assert_called_once_with("status", list(service.BILLED_STATUSES))
         assert summary == {"count": 3, "total_cents": 13000, "unpaid_cents": 3000, "overdue_count": 1, "currency": "AUD"}
+
+def test_profile_agreements_add_item_names_and_signed_document():
+    from backend.app.services import service_agreement_service as sas
+    agreements = [
+        {"id": "new", "start_date": "2026-07-01", "service_agreement_supports": [{"support_item_code": "01_011_0107_1_1"}]},
+        {"id": "old", "start_date": "2025-07-01", "service_agreement_supports": []},
+    ]
+    db = MagicMock()
+    prices = db.table.return_value.select.return_value.in_.return_value.order.return_value.execute.return_value
+    prices.data = [{"item_code": "01_011_0107_1_1", "name": "Self-Care Weekday", "unit": "H", "price_national": 73.58}]
+    intake = db.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value
+    intake.data = [{"signed_document_path": "org/i/doc.pdf", "signed_document_name": "doc.pdf", "provider_signed_name": "Patience MD", "family_signed_name": "Mia"}]
+    db.storage.from_.return_value.create_signed_url.return_value = {"signedURL": "https://signed/doc.pdf"}
+    with patch.object(sas, "list_service_agreements", return_value=agreements), patch.object(sas, "get_supabase_admin", return_value=db):
+        result = sas.list_service_agreements_for_profile("p-1", "org-1")
+    support = result[0]["service_agreement_supports"][0]
+    assert (support["item_name"], support["standard_rate"]) == ("Self-Care Weekday", 73.58)
+    assert result[0]["signed_document"]["url"] == "https://signed/doc.pdf"
+    assert result[1]["signed_document"] is None

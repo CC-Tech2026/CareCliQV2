@@ -61,7 +61,7 @@ async def list_participant_service_agreements(
 ):
     participant = await _require_coordinator_participant(participant_id, current_user)
     org_id = get_user_organization_id(current_user) or str(participant.get("organization_id") or "")
-    return service_agreement_service.list_service_agreements(participant_id, org_id)
+    return service_agreement_service.list_service_agreements_for_profile(participant_id, org_id)
 
 
 @router.post("/participants/{participant_id}/service-agreements", status_code=201)

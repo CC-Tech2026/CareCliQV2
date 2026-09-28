@@ -18,6 +18,7 @@ import {
   type BillingPeriodCurrent,
 } from "@/services/coordinatorService";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import type { ParticipantRecord, BudgetSummary } from "@/pages/patients";
 
 interface ParticipantOverviewTabProps {
@@ -112,6 +113,7 @@ export function ParticipantOverviewTab({
   const { translate } = useAccessibility();
 
   const notSet = translate("patients.notSet");
+  const { user } = useAuth();
   const emergencyContact = emergencyContactDisplay(
     participant.emergency_contact ?? undefined,
   );
@@ -132,8 +134,14 @@ export function ParticipantOverviewTab({
         ),
     },
   );
+  // A coordinator's own worker-stats list is team-scoped and doesn't include
+  // herself, so when she is this participant's care coordinator fall back to
+  // her own name instead of showing "Not set".
   const careCoordinator = participant.care_coordinator_id
-    ? coordinators.find((c) => c.id === participant.care_coordinator_id)
+    ? (coordinators.find((c) => c.id === participant.care_coordinator_id) ??
+      (user?.id === participant.care_coordinator_id
+        ? { full_name: user.full_name }
+        : undefined))
     : undefined;
 
   return (

@@ -12,6 +12,7 @@ import {
 import { ParticipantRecordsTab } from "@/components/participants/ParticipantRecordsTab";
 import { ParticipantInvoiceSummary } from "@/components/participants/ParticipantInvoiceSummary";
 import { ParticipantInvoicesPanel } from "@/components/participants/ParticipantInvoicesPanel";
+import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -1586,6 +1587,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 categoryBudgets={categoryBudgets}
               />
             </details>
+            {isCoordinator && (
+              <details open className="rounded-xl border border-cc-border p-4">
+                <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">Service agreement</summary>
+                <div className="pt-2">
+                  <ParticipantServiceAgreementSection participantId={id} />
+                </div>
+              </details>
+            )}
           </>
         )}
 
