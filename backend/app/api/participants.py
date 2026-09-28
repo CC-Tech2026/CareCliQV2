@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from typing import Optional, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
+from pydantic import BaseModel, Field
 
 from ..core.access import has_org_wide_access
 from ..core.security import get_current_user
@@ -734,6 +734,98 @@ async def update_restricted_clinical(
         return result.data[0] if result.data else update_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+
+
+
+class ParticipantRecordsExport(BaseModel):
+    sections: list[Literal["details", "plan", "support", "allergies", "goals", "contacts"]] = Field(default_factory=list, max_length=6)
+    invoice_ids: list[str] = Field(default_factory=list, max_length=25)
+    format: Literal["pdf", "zip"] = "zip"
+    # Period export: every linked invoice created in the period (instead of
+    # hand-picked invoice_ids) and/or a shift history summary for the period.
+    all_invoices: bool = False
+    invoice_status: Optional[Literal["draft", "finalized", "issued", "sent", "paid", "overdue", "void", "cancelled"]] = None
+    include_shifts: bool = False
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+
+
+@router.get("/{participant_id}/invoices")
+async def participant_invoices(
+    participant_id: str,
+    page: int = Query(default=1, ge=1),
+    search: str = Query(default="", max_length=100),
+    invoice_status: Optional[Literal["draft", "finalized", "issued", "sent", "paid", "overdue", "void", "cancelled"]] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services import billing_service, participant_records_service
+    billing_service._require_billing_role(current_user)
+    await _require_participant_access(participant_id, current_user)
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="The end date must be on or after the start date.")
+    query = participant_records_service.invoice_query(current_user, participant_id)
+    if invoice_status:
+        query = query.eq("status", invoice_status)
+    if search.strip():
+        term = search.strip().replace("%", "").replace("_", "")
+        query = query.ilike("invoice_number", f"%{term}%")
+    if date_from:
+        query = query.gte("created_at", f"{date_from.isoformat()}T00:00:00Z")
+    if date_to:
+        from datetime import timedelta
+        query = query.lt("created_at", f"{(date_to + timedelta(days=1)).isoformat()}T00:00:00Z")
+    rows = query.order("created_at", desc=True).order("id").range((page - 1) * 25, page * 25).execute().data or []
+    return {"invoices": rows[:25], "has_more": len(rows) > 25}
+
+
+@router.get("/{participant_id}/invoices/summary")
+async def participant_invoice_summary(
+    participant_id: str,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services import billing_service, participant_records_service
+    billing_service._require_billing_role(current_user)
+    await _require_participant_access(participant_id, current_user)
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="The end date must be on or after the start date.")
+    return participant_records_service.invoice_summary(current_user, participant_id, date_from, date_to)
+
+
+@router.post("/{participant_id}/records-export")
+async def export_participant_records(participant_id: str, body: ParticipantRecordsExport, current_user: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    from ..services import billing_service, participant_records_service
+    from ..services.participant_profile_export_service import ParticipantProfileExportError
+    # Profile and shift history are coordinator records; invoices are only
+    # checked (MD or invoicing grant) inside export_records when requested.
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    try:
+        filename, content, media_type = await participant_records_service.export_records(
+            current_user,
+            participant_id,
+            body.sections,
+            body.invoice_ids,
+            body.format,
+            all_invoices=body.all_invoices,
+            invoice_status=body.invoice_status,
+            include_shifts=body.include_shifts,
+            date_from=body.date_from,
+            date_to=body.date_to,
+        )
+    except ParticipantProfileExportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Participant records export failed")
+        raise HTTPException(status_code=502, detail="The export could not be prepared. No files were downloaded. Try again or check the invoice PDFs.")
+    return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
 
 
 @router.get("/{participant_id}/export")

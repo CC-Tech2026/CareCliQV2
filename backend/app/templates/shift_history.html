@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shift History — {{ participant.full_name or "Participant" }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #1a1a1a; background: #fff; }
+    @page { size: A4; margin: 12mm 14mm 22mm 14mm; }
+    #page-footer {
+      position: fixed; bottom: -16mm; left: 0; right: 0;
+      font-size: 7pt; color: #94a3b8; text-align: center;
+      border-top: 1px solid #e2e8f0; padding-top: 4px;
+    }
+    .header-wrap {
+      background: #f8f9fa; border-bottom: 3px solid {{ org.brand_accent_color }};
+      padding: 12px 14px; margin-bottom: 14px; width: 100%;
+    }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .hdr-left { vertical-align: top; width: 55%; padding-right: 14px; }
+    .hdr-right { vertical-align: top; text-align: right; }
+    .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
+    .provider-name { font-size: 12pt; font-weight: bold; color: {{ org.brand_accent_color }}; }
+    .doc-type { font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+    .doc-meta { font-size: 8.5pt; color: #475569; line-height: 1.75; margin-top: 5px; }
+    .doc-meta b { color: #1a1a1a; }
+    .participant-strip {
+      background: #f8f9fa; border: 1px solid #e2e8f0;
+      border-left: 3px solid {{ org.brand_accent_color }};
+      padding: 10px 14px; margin-bottom: 14px;
+    }
+    .participant-name { font-size: 14pt; font-weight: bold; margin-bottom: 4px; }
+    .participant-detail { font-size: 8.5pt; color: #334155; line-height: 1.75; }
+    .year-title {
+      font-size: 8pt; font-weight: bold; color: #fff; background: {{ org.brand_accent_color }};
+      text-transform: uppercase; letter-spacing: 0.8px; padding: 5px 10px; margin: 10px 0 0 0;
+    }
+    .shift-table { width: 100%; border-collapse: collapse; }
+    .shift-table th {
+      text-align: left; font-size: 7pt; color: #64748b; text-transform: uppercase;
+      letter-spacing: 0.6px; padding: 5px 8px; border-bottom: 1px solid #e2e8f0;
+    }
+    .shift-table td { padding: 5px 8px; font-size: 8.5pt; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .num { text-align: right; }
+    .empty-note { font-size: 8.5pt; color: #94a3b8; font-style: italic; padding: 8px 0; }
+    .note { font-size: 7.5pt; color: #64748b; margin-top: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<div id="page-footer">
+  {{ org.provider_name }}{% if org.abn %} | ABN: {{ org.abn }}{% endif %} | Confidential | Page <pdf:pagenumber />
+</div>
+
+<div class="header-wrap">
+  <table class="header-table">
+    <tr>
+      <td class="hdr-left">
+        {% if org.logo_url %}<img class="logo-img" src="{{ org.logo_url }}" alt="{{ org.provider_name }}" />{% endif %}
+        <div class="provider-name">{{ org.provider_name or "Organisation" }}</div>
+      </td>
+      <td class="hdr-right">
+        <div class="doc-type">SHIFT HISTORY</div>
+        <div class="doc-meta">
+          Period: <b>{{ period_label }}</b><br />
+          Generated: <b>{{ generated.generated_at }}</b>
+        </div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div class="participant-strip">
+  <div class="participant-name">{{ participant.full_name or "—" }}</div>
+  <div class="participant-detail">
+    {{ shift_count }} shift{{ "" if shift_count == 1 else "s" }} &nbsp;&middot;&nbsp;
+    {{ total_hours }} recorded hours
+  </div>
+</div>
+
+{% if not years %}
+<p class="empty-note">No shifts were recorded for this participant in this period.</p>
+{% endif %}
+
+{% for year in years %}
+<div class="year-title">{{ year.label }} &nbsp;&middot;&nbsp; {{ year.shifts|length }} shift{{ "" if year.shifts|length == 1 else "s" }} &nbsp;&middot;&nbsp; {{ year.hours }} hours</div>
+<table class="shift-table">
+  <tr>
+    <th style="width: 18%">Date</th>
+    <th style="width: 32%">Shift type</th>
+    <th style="width: 24%">Worker</th>
+    <th style="width: 12%" class="num">Duration</th>
+    <th style="width: 14%">Status</th>
+  </tr>
+  {% for shift in year.shifts %}
+  <tr>
+    <td>{{ shift.date }}</td>
+    <td>{{ shift.type }}</td>
+    <td>{{ shift.worker }}</td>
+    <td class="num">{{ shift.duration }}</td>
+    <td>{{ shift.status }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+
+<p class="note">
+  Summary only. Progress notes, clinical documents and photos are not included in this export.
+</p>
+
+</body>
+</html>

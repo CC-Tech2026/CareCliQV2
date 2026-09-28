@@ -75,9 +75,15 @@ def _load_allergies(organization_id: str, participant_id: str) -> list[dict[str,
     return resp.data or []
 
 
-async def render_participant_profile_pdf(org_id: str, participant_id: str) -> tuple[str, bytes]:
+PROFILE_SECTIONS = {"details", "plan", "support", "allergies", "goals", "contacts"}
+
+
+async def render_participant_profile_pdf(org_id: str, participant_id: str, sections: list[str] | None = None) -> tuple[str, bytes]:
     """Returns (filename, pdf_bytes). Raises ParticipantProfileExportError if
     the participant doesn't belong to org_id or rendering fails."""
+    selected = PROFILE_SECTIONS if sections is None else set(sections)
+    if not selected or not selected <= PROFILE_SECTIONS:
+        raise ParticipantProfileExportError("Choose valid profile sections to export.")
     context = resolve_merge_context(org_id, participant_id=participant_id)
     if not context.get("participant"):
         raise ParticipantProfileExportError("Participant not found for this organisation")
@@ -85,8 +91,9 @@ async def render_participant_profile_pdf(org_id: str, participant_id: str) -> tu
     context["participant"]["emergency_contact"] = _format_emergency_contact(
         context["participant"].get("emergency_contact")
     )
-    context["goals"] = _load_goals(org_id, participant_id)
-    context["allergies"] = _load_allergies(org_id, participant_id)
+    context["export_sections"] = selected
+    context["goals"] = _load_goals(org_id, participant_id) if "goals" in selected else []
+    context["allergies"] = _load_allergies(org_id, participant_id) if "allergies" in selected else []
 
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape

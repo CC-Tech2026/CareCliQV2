@@ -5,11 +5,13 @@ import {
   getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
   getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
   getParticipantBillingPeriods, getParticipantCurrentBillingPeriod, planManagementTypeLabel,
-  getTaskTemplates, exportParticipantProfile,
+  getTaskTemplates,
   type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
   type BillingPeriod, type TaskTemplate as DbTaskTemplate, type TaskTemplatesResponse,
 } from "@/services/coordinatorService";
-import { triggerBlobDownload } from "@/lib/vaultZip";
+import { ParticipantRecordsTab } from "@/components/participants/ParticipantRecordsTab";
+import { ParticipantInvoiceSummary } from "@/components/participants/ParticipantInvoiceSummary";
+import { ParticipantInvoicesPanel } from "@/components/participants/ParticipantInvoicesPanel";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -102,6 +104,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
 // ---------------------------------------------------------------------------
@@ -614,8 +617,7 @@ function EditParticipantPanel({
     <div>
       <Button size="sm" variant="outline" className="h-9 gap-1.5 text-[12px] shrink-0" onClick={() => setOpen(true)}>
         <Edit className="h-3.5 w-3.5 shrink-0" />
-        <span className="hidden min-[380px]:inline">{translate("common.edit")}</span>
-        <span className="min-[380px]:hidden">Edit</span>
+        <span>Edit personal details</span>
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
@@ -984,7 +986,7 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile";
+type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile" | "records";
 
 function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void }) {
   const { translate, translateParams } = useAccessibility();
@@ -1175,23 +1177,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
     }
   }, [restrictedQuery.data]);
   const { toast: toastFn } = useToast();
-  const [isExportingProfile, setIsExportingProfile] = useState(false);
-  const handleExportProfile = async () => {
-    setIsExportingProfile(true);
-    try {
-      const { filename, blob } = await exportParticipantProfile(id);
-      triggerBlobDownload(blob, filename);
-      toastFn({ title: "Profile exported", description: "The participant profile PDF has downloaded." });
-    } catch (err) {
-      toastFn({
-        title: "Couldn't export profile",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExportingProfile(false);
-    }
-  };
+  const [exportOpen, setExportOpen] = useState(initialTab === "records");
+  const handleExportProfile = () => setExportOpen(true);
+  const [invoicesOpen, setInvoicesOpen] = useState(false);
   const saveRestricted = useMutation({
     mutationFn: async () => {
       const res = await apiFetch(`/api/participants/${id}/restricted-clinical`, {
@@ -1209,8 +1197,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
     onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
   const [careProfileSection, setCareProfileSection] = useState<"context" | "clinical">("context");
-  const [planGoalsSection, setPlanGoalsSection] = useState<"plan" | "goals">("plan");
-  const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab === "records" ? "overview" : initialTab ?? "overview");
 
   // Keep ?id=&tab= in sync with what's actually on screen, replacing (not
   // pushing) so tab clicks don't pollute history - browser back only needs
@@ -1371,13 +1359,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
     .toUpperCase();
 
   const TABS = [
-    { id: "overview"   as const, label: translate("patients.tab.overview"),   shortLabel: "Overview",  icon: UserCircle   },
-    { id: "plan_goals" as const, label: "Plan & Goals", shortLabel: "Plan", icon: DollarSign },
-    { id: "sessions"   as const, label: "Shift History",                       shortLabel: "Shifts",    icon: CalendarDays },
-    { id: "compliance" as const, label: translate("patients.tab.compliance"),  shortLabel: "Compliance", icon: ShieldCheck  },
-    ...(isCoordinator ? [{ id: "care_profile"  as const, label: "Care Profile", shortLabel: "Care",     icon: ClipboardList  }] : []),
-    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Easy Capture",  shortLabel: "Meetings", icon: Mic, isNew: true }] : []),
+    { id: "overview" as const, label: "Overview", shortLabel: "Overview", icon: UserCircle },
+    ...(isCoordinator ? [{ id: "care_profile" as const, label: "Care", shortLabel: "Care", icon: Heart }] : []),
+    { id: "plan_goals" as const, label: "Plan & goals", shortLabel: "Plan", icon: Target },
+    { id: "sessions" as const, label: "Shift history", shortLabel: "Shifts", icon: CalendarDays },
+    { id: "compliance" as const, label: "Compliance", shortLabel: "Compliance", icon: ShieldCheck },
+    ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Meetings & notes", shortLabel: "Meetings", icon: MessageSquare }] : []),
   ];
+
 
   return (
     <div className="flex flex-col min-h-full">
@@ -1440,24 +1429,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               <button
                 type="button"
                 onClick={handleExportProfile}
-                disabled={isExportingProfile}
+
                 className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
                 style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
               >
-                {isExportingProfile ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-                {isExportingProfile ? "Exporting…" : "Export profile"}
+                <FileDown size={13} />
+                Export records
               </button>
             )}
-            <EditParticipantPanel
-              participant={participant}
-              hasPlan={hasPlan}
-              onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
-            />
-            <SetupPlanPanel
-              participantId={id}
-              budget={budget}
-              onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
-            />
           </div>
           {/* Header collapse toggle */}
           <button
@@ -1505,24 +1484,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 <button
                   type="button"
                   onClick={handleExportProfile}
-                  disabled={isExportingProfile}
+
                   className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
                   style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
                 >
-                  {isExportingProfile ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-                  {isExportingProfile ? "Exporting…" : "Export profile"}
+                  <FileDown size={13} />
+                  Export records
                 </button>
               )}
-              <EditParticipantPanel
-                participant={participant}
-                hasPlan={hasPlan}
-                onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
-              />
-              <SetupPlanPanel
-                participantId={id}
-                budget={budget}
-                onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
-              />
             </div>
           </>
         )}
@@ -1545,6 +1514,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
+                aria-current={active ? "page" : undefined}
                 className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold transition-opacity min-h-[44px]"
                 style={{
                   borderRadius: active ? "14px 14px 0 0" : "0",
@@ -1561,14 +1531,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 </span>
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
-                {"isNew" in tab && tab.isNew && (
-                  <span
-                    className="rounded-full px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white"
-                    style={{ background: "var(--cc-coral)" }}
-                  >
-                    New
-                  </span>
-                )}
               </button>
             );
           })}
@@ -1588,47 +1550,32 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
             billingPeriodCurrent={billingPeriodCurrentQuery.data}
             billingPeriodCurrentLoading={billingPeriodCurrentQuery.isLoading}
             billingPeriodHistory={billingPeriodsQuery.data?.items}
-            onEditContacts={() => {
-              setCareProfileSection("context");
-              setActiveTab("care_profile");
-            }}
+            editAction={isCoordinator ? (<EditParticipantPanel
+              participant={participant}
+              hasPlan={hasPlan}
+              onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
+            />) : undefined}
+            onViewPlan={() => setActiveTab("plan_goals")}
+            onEditContacts={() => setContactsOpen(true)}
+            invoiceSummary={isCoordinator ? <ParticipantInvoiceSummary participantId={id} onViewAll={() => setInvoicesOpen(true)} /> : undefined}
           />
         )}
 
         {activeTab === "plan_goals" && (
           <>
-            {/* Segmented section switcher */}
-            <div className="flex rounded-xl overflow-hidden border mb-5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
-              <button type="button" onClick={() => setPlanGoalsSection("plan")}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
-                style={{
-                  background: planGoalsSection === "plan" ? "var(--cc-bg)" : "transparent",
-                  color: planGoalsSection === "plan" ? "var(--cc-text)" : "var(--cc-muted)",
-                  boxShadow: planGoalsSection === "plan" ? "var(--cc-card-shadow)" : "none",
-                  margin: planGoalsSection === "plan" ? 3 : 0,
-                  borderRadius: planGoalsSection === "plan" ? "0.6rem" : 0,
-                }}
-              >
-                <DollarSign size={14} strokeWidth={1.8} />
-                Plan &amp; Budget
-              </button>
-              <button type="button" onClick={() => setPlanGoalsSection("goals")}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
-                style={{
-                  background: planGoalsSection === "goals" ? "var(--cc-bg)" : "transparent",
-                  color: planGoalsSection === "goals" ? "var(--cc-text)" : "var(--cc-muted)",
-                  boxShadow: planGoalsSection === "goals" ? "var(--cc-card-shadow)" : "none",
-                  margin: planGoalsSection === "goals" ? 3 : 0,
-                  borderRadius: planGoalsSection === "goals" ? "0.6rem" : 0,
-                }}
-              >
-                <Target size={14} strokeWidth={1.8} />
-                Goals &amp; Tasks
-              </button>
-            </div>
-
-            {planGoalsSection === "plan" && (
+            <details open className="rounded-xl border border-cc-border p-4">
+              <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">Plan details & funding</summary>
               <ParticipantPlanTab
+                editAction={isCoordinator ? (<SetupPlanPanel
+              participantId={id}
+              budget={budget}
+              onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
+            />) : undefined}
+                planDetails={<dl className="mb-4 grid gap-3 text-sm sm:grid-cols-2">{[
+                  ["Plan period", participant.plan_start_date ? safeFormat(participant.plan_start_date) + " to " + safeFormat(participant.plan_end_date) : "Not recorded"],
+                  ["Plan status", participant.plan_status || "Not recorded"],
+                  ["Plan management", planManagementTypeLabel(participant.plan_management_type, translate)],
+                ].map(([label, value]) => <div key={label}><dt className="text-cc-muted">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>}
                 budget={budget}
                 isLoading={budgetQuery.isLoading}
                 totalBudget={totalBudget}
@@ -1638,12 +1585,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 hasCategoryBudgets={hasCategoryBudgets}
                 categoryBudgets={categoryBudgets}
               />
-            )}
+            </details>
           </>
         )}
 
         {/* GOALS & TASKS (inside Plan & Goals tab) */}
-        {activeTab === "plan_goals" && planGoalsSection === "goals" && isCoordinator && (() => {
+        {activeTab === "plan_goals" && isCoordinator && (() => {
           const AREA_COLORS: Record<string, { bg: string; color: string; label: string }> = {
             daily_living: { bg: "#EFF6FF", color: "#1D4ED8", label: "Daily Living" },
             community:    { bg: "#F0FDF4", color: "#15803D", label: "Community"    },
@@ -2609,45 +2556,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
         )}
 
         {activeTab === "care_profile" && isCoordinator && (
-          <div className="space-y-0">
-            {/* Segmented section switcher */}
-            <div className="flex rounded-xl overflow-hidden border mb-6" style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)" }}>
-              <button
-                type="button"
-                onClick={() => setCareProfileSection("context")}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
-                style={{
-                  background: careProfileSection === "context" ? "var(--cc-bg)" : "transparent",
-                  color: careProfileSection === "context" ? "var(--cc-text)" : "var(--cc-muted)",
-                  boxShadow: careProfileSection === "context" ? "var(--cc-card-shadow)" : "none",
-                  margin: careProfileSection === "context" ? 3 : 0,
-                  borderRadius: careProfileSection === "context" ? "0.6rem" : 0,
-                }}
-              >
-                <Users size={14} strokeWidth={1.8} />
-                Worker Shift Context
-              </button>
-              <button
-                type="button"
-                onClick={() => setCareProfileSection("clinical")}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-[13px] font-semibold transition-all duration-150"
-                style={{
-                  background: careProfileSection === "clinical" ? "var(--cc-bg)" : "transparent",
-                  color: careProfileSection === "clinical" ? "var(--cc-text)" : "var(--cc-muted)",
-                  boxShadow: careProfileSection === "clinical" ? "var(--cc-card-shadow)" : "none",
-                  margin: careProfileSection === "clinical" ? 3 : 0,
-                  borderRadius: careProfileSection === "clinical" ? "0.6rem" : 0,
-                }}
-              >
-                <Lock size={14} strokeWidth={1.8} />
-                Clinical Records
-              </button>
-            </div>
-
-            {careProfileSection === "context" && (
-              <ParticipantShiftContextTab participantId={id} />
-            )}
-            {careProfileSection === "clinical" && (
+          <div className="space-y-4">
+            <details open={careProfileSection === "context"} className="rounded-xl border border-cc-border p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Daily support & care contacts</summary><ParticipantShiftContextTab participantId={id} /></details>
+            <details open={careProfileSection === "clinical"} className="rounded-xl border border-cc-border p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Medications & clinical records</summary>
               <div className="space-y-3">
                 <ParticipantMedicationsPanel participantId={id} />
                 <ParticipantClinicalRecordEditor participantId={id} />
@@ -2659,12 +2570,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                   isSaving={saveRestricted.isPending}
                 />
               </div>
-            )}
+            </details>
           </div>
         )}
 
       </div>
 
+      {isCoordinator && <Sheet open={exportOpen} onOpenChange={setExportOpen}><SheetContent className="flex w-full flex-col p-0 sm:max-w-3xl"><SheetHeader className="border-b border-cc-border p-5 pr-12"><SheetTitle>Export records</SheetTitle><SheetDescription>Download profile, shift history and invoices for {participant.full_name} as one PDF or ZIP.</SheetDescription></SheetHeader><ParticipantRecordsTab key={id} participantId={id} participantName={participant.full_name} /></SheetContent></Sheet>}
+      {isCoordinator && <Sheet open={invoicesOpen} onOpenChange={setInvoicesOpen}><SheetContent className="flex w-full flex-col p-0 sm:max-w-2xl"><SheetHeader className="border-b border-cc-border p-5 pr-12"><SheetTitle>Invoices</SheetTitle><SheetDescription>Invoices for {participant.full_name}. Pick a financial year or any period, open a PDF, or tick several to download together.</SheetDescription></SheetHeader><ParticipantInvoicesPanel key={id} participantId={id} /></SheetContent></Sheet>}
+      {isCoordinator && <Sheet open={contactsOpen} onOpenChange={setContactsOpen}><SheetContent className="w-full overflow-y-auto sm:max-w-2xl"><SheetHeader><SheetTitle>Care contacts & support details</SheetTitle></SheetHeader><ParticipantShiftContextEditor participantId={id} onSaved={() => { participantQuery.refetch(); onRefreshList(); }} /></SheetContent></Sheet>}
       {isCoordinator && (
         <ShiftAssignmentModal
           open={shiftModalOpen}

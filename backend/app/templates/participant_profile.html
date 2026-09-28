@@ -209,6 +209,7 @@
 <!-- ── PARTICIPANT STRIP ───────────────────────────────────────────────── -->
 <div class="participant-strip">
   <div class="participant-name">{{ participant.full_name or "—" }}{% if participant.preferred_name %} ({{ participant.preferred_name }}){% endif %}</div>
+  {% if 'details' in export_sections %}
   <div class="participant-detail">
     {% if participant.ndis_number %}NDIS Number: {{ participant.ndis_number }} &nbsp;&middot;&nbsp; {% endif %}
     {% if participant.date_of_birth %}Date of birth: {{ participant.date_of_birth }}{% endif %}
@@ -216,8 +217,10 @@
     {% if participant.phone %}{{ participant.phone }}{% endif %}{% if participant.phone and participant.email %} &nbsp;&middot;&nbsp; {% endif %}{% if participant.email %}{{ participant.email }}{% endif %}
     {% if participant.address %}<br />{{ participant.address }}{% endif %}
   </div>
+{% endif %}
 </div>
 
+{% if 'plan' in export_sections %}
 <!-- ── NDIS PLAN ──────────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">NDIS Plan</div>
@@ -250,6 +253,8 @@
   {% endif %}
 </div>
 
+{% endif %}
+{% if 'support' in export_sections %}
 <!-- ── SUPPORT NEEDS ──────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Support Needs</div>
@@ -291,6 +296,8 @@
   {% endif %}
 </div>
 
+{% endif %}
+{% if 'allergies' in export_sections %}
 <!-- ── ALLERGIES ──────────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Allergies</div>
@@ -306,6 +313,8 @@
   {% endif %}
 </div>
 
+{% endif %}
+{% if 'goals' in export_sections %}
 <!-- ── ACTIVE GOALS ───────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Active Goals</div>
@@ -326,6 +335,8 @@
   {% endif %}
 </div>
 
+{% endif %}
+{% if 'contacts' in export_sections %}
 <!-- ── CONTACTS ───────────────────────────────────────────────────────── -->
 <div class="section">
   <div class="section-title">Contacts</div>
@@ -365,6 +376,7 @@
   </table>
 </div>
 
+{% endif %}
 <!-- ── DOCUMENT FOOTER ────────────────────────────────────────────────── -->
 <div class="doc-footer">
   <table>
