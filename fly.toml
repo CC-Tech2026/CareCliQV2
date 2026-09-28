@@ -8,6 +8,11 @@ primary_region = 'syd'
 [build]
   dockerfile = 'backend/Dockerfile'
 
+[deploy]
+  # Applies any new SQL files in backend/supabase/migrations before the new
+  # version goes live. See backend/scripts/migrate.py.
+  release_command = 'python -m backend.scripts.migrate'
+
 [env]
   TZ = 'Australia/Adelaide'
   APP_TIMEZONE = 'Australia/Adelaide'

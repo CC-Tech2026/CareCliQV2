@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml uv.lock pytest.ini ./
 RUN uv sync --frozen --no-dev --no-install-project
+# Postgres driver for backend/scripts/migrate.py (runs as Fly release_command)
+RUN uv pip install --python /app/.venv/bin/python "psycopg[binary]>=3.1"
 
 COPY backend ./backend
 COPY main.py ./main.py
